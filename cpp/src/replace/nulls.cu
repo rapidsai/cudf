@@ -44,11 +44,13 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 namespace {  // anonymous
 

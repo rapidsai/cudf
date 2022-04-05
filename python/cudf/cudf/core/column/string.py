@@ -3537,10 +3537,19 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        data, index = libstrings.findall(self._column, pat, flags)
-        return self._return_or_inplace(
-            cudf.core.frame.Frame(data, index), expand=expand
-        )
+        if expand:
+            warnings.warn(
+                "The expand parameter is deprecated and will be removed in a "
+                "future version. Set expand=False to match future behavior.",
+                FutureWarning,
+            )
+            data, index = libstrings.findall(self._column, pat, flags)
+            return self._return_or_inplace(
+                cudf.core.frame.Frame(data, index), expand=expand
+            )
+        else:
+            data = libstrings.findall_record(self._column, pat, flags)
+            return self._return_or_inplace(data, expand=expand)
 
     def isempty(self) -> SeriesOrIndex:
         """
@@ -5196,7 +5205,7 @@ class StringColumn(column.ColumnBase):
                 result_col,
                 sep=cudf.Scalar(""),
                 na_rep=cudf.Scalar(None, "str"),
-            )[0]
+            ).element_indexing(0)
         else:
             return result_col
 
@@ -5423,7 +5432,11 @@ class StringColumn(column.ColumnBase):
         )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            res = self.fillna(df._data["new"][df._data["old"].isnull()][0])
+            res = self.fillna(
+                df._data["new"]
+                .apply_boolean_mask(df._data["old"].isnull())
+                .element_indexing(0)
+            )
             df = df.dropna(subset=["old"])
         else:
             res = self

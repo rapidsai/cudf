@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,10 +26,16 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/optional.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
 
 #include <memory>
 #include <type_traits>

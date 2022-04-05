@@ -1823,7 +1823,33 @@ def test_string_count(data, pat, flags):
     assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
 
 
-def test_string_findall():
+@pytest.mark.parametrize(
+    "pat, flags",
+    [
+        ("Monkey", 0),
+        ("on", 0),
+        ("b", 0),
+        ("on$", 0),
+        ("on$", re.MULTILINE),
+        ("o.*k", re.DOTALL),
+    ],
+)
+def test_string_findall(pat, flags):
+    test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
+    ps = pd.Series(test_data)
+    gs = cudf.Series(test_data)
+
+    # TODO: Update this test to remove "expand=False" when removing the expand
+    # parameter from Series.str.findall.
+    assert_eq(
+        ps.str.findall(pat, flags), gs.str.findall(pat, flags, expand=False)
+    )
+
+
+@pytest.mark.filterwarnings("ignore:The expand parameter is deprecated")
+def test_string_findall_expand_True():
+    # TODO: Remove this test when removing the expand parameter from
+    # Series.str.findall.
     test_data = ["Lion", "Monkey", "Rabbit", "Don\nkey"]
     ps = pd.Series(test_data)
     gs = cudf.Series(test_data)

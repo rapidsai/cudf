@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,16 +27,6 @@ import java.util.Optional;
 
 public class NvcompTest {
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
-
-  @Test
-  void testLZ4RoundTripViaLZ4DecompressorSync() {
-    lz4RoundTrip(false);
-  }
-
-  @Test
-  void testLZ4RoundTripViaLZ4DecompressorAsync() {
-    lz4RoundTrip(true);
-  }
 
   @Test
   void testBatchedLZ4RoundTripAsync() {
@@ -132,92 +122,6 @@ public class NvcompTest {
     } catch (Throwable t) {
       closeBuffer(devBuffer);
       throw new RuntimeException(t);
-    }
-  }
-
-  private void lz4RoundTrip(boolean useAsync) {
-    final Cuda.Stream stream = Cuda.DEFAULT_STREAM;
-    final long chunkSize = 64 * 1024;
-    final int numElements = 10 * 1024 * 1024 + 1;
-    long[] data = new long[numElements];
-    for (int i = 0; i < numElements; ++i) {
-      data[i] = i;
-    }
-
-    DeviceMemoryBuffer tempBuffer = null;
-    DeviceMemoryBuffer compressedBuffer = null;
-    DeviceMemoryBuffer uncompressedBuffer = null;
-    try (ColumnVector v = ColumnVector.fromLongs(data)) {
-      BaseDeviceMemoryBuffer inputBuffer = v.getDeviceBufferFor(BufferType.DATA);
-      final long uncompressedSize = inputBuffer.getLength();
-      log.debug("Uncompressed size is {}", uncompressedSize);
-
-      LZ4Compressor.Configuration compressConf =
-          LZ4Compressor.configure(chunkSize, uncompressedSize);
-      Assertions.assertTrue(compressConf.getMetadataBytes() > 0);
-      log.debug("Using {} temporary space for lz4 compression", compressConf.getTempBytes());
-      tempBuffer = DeviceMemoryBuffer.allocate(compressConf.getTempBytes());
-      log.debug("lz4 compressed size estimate is {}", compressConf.getMaxCompressedBytes());
-
-      compressedBuffer = DeviceMemoryBuffer.allocate(compressConf.getMaxCompressedBytes());
-
-      long startTime = System.nanoTime();
-      long compressedSize;
-      if (useAsync) {
-        try (DeviceMemoryBuffer devCompressedSizeBuffer = DeviceMemoryBuffer.allocate(8);
-             HostMemoryBuffer hostCompressedSizeBuffer = HostMemoryBuffer.allocate(8)) {
-          LZ4Compressor.compressAsync(devCompressedSizeBuffer, inputBuffer, CompressionType.CHAR,
-              chunkSize, tempBuffer, compressedBuffer, stream);
-          hostCompressedSizeBuffer.copyFromDeviceBufferAsync(devCompressedSizeBuffer, stream);
-          stream.sync();
-          compressedSize = hostCompressedSizeBuffer.getLong(0);
-        }
-      } else {
-        compressedSize = LZ4Compressor.compress(inputBuffer, CompressionType.CHAR, chunkSize,
-            tempBuffer, compressedBuffer, stream);
-      }
-      double duration = (System.nanoTime() - startTime) / 1000.0;
-      log.info("Compressed with lz4 to {} in {} us", compressedSize, duration);
-
-      tempBuffer.close();
-      tempBuffer = null;
-
-      try (LZ4Decompressor.Configuration decompressConf =
-               LZ4Decompressor.configure(compressedBuffer, stream)) {
-        final long tempSize = decompressConf.getTempBytes();
-
-        log.debug("Using {} temporary space for lz4 compression", tempSize);
-        tempBuffer = DeviceMemoryBuffer.allocate(tempSize);
-
-        final long outSize = decompressConf.getUncompressedBytes();
-        Assertions.assertEquals(inputBuffer.getLength(), outSize);
-
-        uncompressedBuffer = DeviceMemoryBuffer.allocate(outSize);
-
-        LZ4Decompressor.decompressAsync(compressedBuffer, decompressConf, tempBuffer,
-            uncompressedBuffer, stream);
-
-        try (ColumnVector v2 = new ColumnVector(
-            DType.INT64,
-            numElements,
-            Optional.empty(),
-            uncompressedBuffer,
-            null,
-            null);
-             HostColumnVector hv2 = v2.copyToHost()) {
-          uncompressedBuffer = null;
-          for (int i = 0; i < numElements; ++i) {
-            long val = hv2.getLong(i);
-            if (val != i) {
-              Assertions.fail("Expected " + i + " at " + i + " found " + val);
-            }
-          }
-        }
-      }
-    } finally {
-      closeBuffer(tempBuffer);
-      closeBuffer(compressedBuffer);
-      closeBuffer(uncompressedBuffer);
     }
   }
 }

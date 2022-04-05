@@ -73,5 +73,6 @@ class Column:
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace=False
     ) -> Optional[ColumnBase]: ...
+    # TODO: The val parameter should be Scalar, not ScalarLike
     @staticmethod
     def from_scalar(val: ScalarLike, size: int) -> ColumnBase: ...

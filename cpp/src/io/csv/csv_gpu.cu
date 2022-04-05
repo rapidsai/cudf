@@ -38,7 +38,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
 #include <thrust/detail/copy.h>
+#include <thrust/remove.h>
 #include <thrust/transform.h>
 
 #include <type_traits>

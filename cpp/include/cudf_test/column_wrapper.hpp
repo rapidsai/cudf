@@ -37,6 +37,8 @@
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>

@@ -25,6 +25,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/execution_policy.h>
+
 namespace {
 
 struct dispatch_is_not_nan {
