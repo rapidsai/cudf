@@ -341,14 +341,7 @@ def test_series_column_iter_error():
     ):
         gs.iteritems()
 
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            f"{gs._column.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
-            f"if you wish to iterate over the values."
-        ),
-    ):
+    with pytest.raises(TypeError):
         iter(gs._column)
 
 

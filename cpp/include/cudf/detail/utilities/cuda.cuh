@@ -127,12 +127,12 @@ cudf::size_type elements_per_thread(Kernel kernel,
 
   // calculate theoretical occupancy
   int max_blocks = 0;
-  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
+  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
 
   int device = 0;
-  CUDA_TRY(cudaGetDevice(&device));
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
   int num_sms = 0;
-  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
+  CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
   int per_thread = total_size / (max_blocks * num_sms * block_size);
   return std::clamp(per_thread, 1, max_per_thread);
 }

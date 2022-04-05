@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 ########################
 # cuDF Version Updater #
 ########################

@@ -96,7 +96,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
             arg = list(arg)
-        data = self._frame._column[arg]
+        data = self._frame._get_elements_from_column(arg)
 
         if (
             isinstance(data, (dict, list))
