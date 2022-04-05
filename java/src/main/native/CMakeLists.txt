@@ -52,10 +52,12 @@ message(VERBOSE "CUDF_JNI: Build with static Arrow library: ${CUDF_JNI_ARROW_STA
 message(VERBOSE "CUDF_JNI: Link with libcudf statically: ${CUDF_JNI_LIBCUDF_STATIC}")
 
 set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
-if(DEFINED ENV{CUDF_CPP_BUILD_DIR})
-  set(CUDF_CPP_BUILD_DIR "$ENV{CUDF_CPP_BUILD_DIR}")
-else()
-  set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+if(NOT DEFINED CUDF_CPP_BUILD_DIR)
+  if(DEFINED ENV{CUDF_CPP_BUILD_DIR})
+    set(CUDF_CPP_BUILD_DIR "$ENV{CUDF_CPP_BUILD_DIR}")
+  else()
+    set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+  endif()
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
