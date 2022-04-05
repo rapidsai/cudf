@@ -9166,8 +9166,14 @@ def test_dataframe_pct_change(data, periods, fill_method):
 @pytest.mark.parametrize(
     ("key, value"),
     [
-        (([0], ["x", "y"]), [10, 20],),
-        (([0, 2], ["x", "y"]), [[10, 30], [20, 40]],),
+        (
+            ([0], ["x", "y"]),
+            [10, 20],
+        ),
+        (
+            ([0, 2], ["x", "y"]),
+            [[10, 30], [20, 40]],
+        ),
     ],
 )
 def test_dataframe_loc_inplace_update(key, value):
@@ -9181,7 +9187,8 @@ def test_dataframe_loc_inplace_update(key, value):
 
 
 @pytest.mark.parametrize(
-    ("key, value"), [([0], [10, 20]), ([0, 2], [[10, 30], [20, 40]])],
+    ("key, value"),
+    [([0], [10, 20]), ([0, 2], [[10, 30], [20, 40]])],
 )
 def test_dataframe_iloc_inplace_update(key, value):
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
@@ -9194,10 +9201,12 @@ def test_dataframe_iloc_inplace_update(key, value):
 
 
 @pytest.mark.parametrize(
-    "loc_key", [([0, 2], ["x", "y"])],
+    "loc_key",
+    [([0, 2], ["x", "y"])],
 )
 @pytest.mark.parametrize(
-    "iloc_key", [[0, 2]],
+    "iloc_key",
+    [[0, 2]],
 )
 @pytest.mark.parametrize(
     ("data, index"),

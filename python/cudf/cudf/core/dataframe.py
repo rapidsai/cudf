@@ -455,15 +455,19 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
-        columns_df = self._frame._get_columns_by_index(key[1])
+        columns_df = self._frame._from_data(
+            self._frame._data.select_by_index(key[1]), self._frame._index
+        )
 
+        template = Template(
+            "shape mismatch: value array of shape $value1 could "
+            "not be broadcast to indexing result of shape "
+            "$value2"
+        )
         if isinstance(value, cudf.DataFrame):
             if value.shape != self._frame.iloc[key[0]].shape:
                 raise ValueError(
-                    Template(
-                        "shape mismatch: value array of shape $value1 could \
-                        not be broadcast to indexing result of shape $value2"
-                    ).substitute(
+                    template.substitute(
                         value1=value.shape,
                         value2=self._frame.loc[key[0]].shape,
                     )
@@ -478,10 +482,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             value = value.reshape((-1, value.shape[0]))
             if value.shape != self._frame.iloc[key[0]].shape:
                 raise ValueError(
-                    Template(
-                        "shape mismatch: value array of shape $value1 could \
-                        not be broadcast to indexing result of shape $value2"
-                    ).substitute(
+                    template.substitute(
                         value1=value.shape,
                         value2=self._frame.loc[key[0]].shape,
                     )
@@ -1156,6 +1157,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         6  6  6  6
         8  8  8  8
         """
+        # breakpoint()
         if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
             return self._get_columns_by_label(arg, downcast=True)
 
