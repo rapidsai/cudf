@@ -1590,7 +1590,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           if (!host_bfr) {
             host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
                                                 uint8_t* ptr = nullptr;
-                                                CUDF_CUDA_TRYA_TRY(cudaMallocHost(&ptr, size));
+                                                CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
                                                 return ptr;
                                               }(max_chunk_bfr_size),
                                               cudaFreeHost};
