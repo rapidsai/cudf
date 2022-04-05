@@ -130,9 +130,9 @@ const character_flags_table_type* get_character_flags_table()
 {
   return d_character_codepoint_flags.find_or_initialize([&](void) {
     character_flags_table_type* table = nullptr;
-    CUDA_TRY(cudaMemcpyToSymbol(
+    CUDF_CUDA_TRY(cudaMemcpyToSymbol(
       character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
-    CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_codepoint_flags));
+    CUDF_CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_codepoint_flags));
     return table;
   });
 }
@@ -144,9 +144,9 @@ const character_cases_table_type* get_character_cases_table()
 {
   return d_character_cases_table.find_or_initialize([&](void) {
     character_cases_table_type* table = nullptr;
-    CUDA_TRY(cudaMemcpyToSymbol(
+    CUDF_CUDA_TRY(cudaMemcpyToSymbol(
       character_cases_table, g_character_cases_table, sizeof(g_character_cases_table)));
-    CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_cases_table));
+    CUDF_CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_cases_table));
     return table;
   });
 }
@@ -158,9 +158,9 @@ const special_case_mapping* get_special_case_mapping_table()
 {
   return d_special_case_mappings.find_or_initialize([&](void) {
     special_case_mapping* table = nullptr;
-    CUDA_TRY(cudaMemcpyToSymbol(
+    CUDF_CUDA_TRY(cudaMemcpyToSymbol(
       character_special_case_mappings, g_special_case_mappings, sizeof(g_special_case_mappings)));
-    CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_special_case_mappings));
+    CUDF_CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_special_case_mappings));
     return table;
   });
 }

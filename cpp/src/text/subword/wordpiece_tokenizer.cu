@@ -457,7 +457,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                                                      num_code_points,
                                                                      device_token_ids.data(),
                                                                      device_tokens_per_word.data());
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   cudf::detail::grid_1d const grid_mark{static_cast<cudf::size_type>(num_strings + 1),
                                         THREADS_PER_BLOCK};
@@ -469,7 +469,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                                          device_start_word_indices,
                                                          device_end_word_indices,
                                                          num_strings);
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   // check for special tokens and adjust indices
   thrust::for_each_n(
@@ -512,7 +512,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
       num_words,
       device_token_ids.data(),
       device_tokens_per_word.data());
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   // Repurpose the input array for the token ids. In the worst case, each code point ends up being a
   // token so this will always have enough memory to store the contiguous tokens.
