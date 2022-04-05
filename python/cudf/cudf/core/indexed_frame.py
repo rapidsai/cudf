@@ -1173,9 +1173,9 @@ class IndexedFrame(Frame):
 
             # argsort the `by` column
             return self._gather(
-                self._get_columns_by_label(columns)._get_sorted_inds(
-                    ascending=not largest
-                )[:n],
+                self._get_columns_by_label(columns)
+                ._get_sorted_inds(ascending=not largest)
+                .slice(*slice(None, n).indices(len(self))),
                 keep_index=True,
                 check_bounds=False,
             )
@@ -1186,9 +1186,11 @@ class IndexedFrame(Frame):
 
             if n <= 0:
                 # Empty slice.
-                indices = indices[0:0]
+                indices = indices.slice(0, 0)
             else:
-                indices = indices[: -n - 1 : -1]
+                indices = indices.slice(
+                    *slice(None, -n - 1, -1).indices(len(self))
+                )
             return self._gather(indices, keep_index=True, check_bounds=False)
         else:
             raise ValueError('keep must be either "first", "last"')
@@ -1808,7 +1810,9 @@ class IndexedFrame(Frame):
             return self.copy()
 
         pd_offset = pd.tseries.frequencies.to_offset(offset)
-        to_search = op(pd.Timestamp(self._index._column[idx]), pd_offset)
+        to_search = op(
+            pd.Timestamp(self._index._column.element_indexing(idx)), pd_offset
+        )
         if (
             idx == 0
             and not isinstance(pd_offset, pd.tseries.offsets.Tick)
