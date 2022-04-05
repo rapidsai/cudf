@@ -19,8 +19,12 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "io/statistics/statistics.cuh"
+#include "thrust/iterator/counting_iterator.h"
 #include "writer_impl.hpp"
 
+#include <cuda_runtime_api.h>
+#include <driver_types.h>
 #include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 
@@ -54,8 +58,9 @@
 #include <numeric>
 #include <utility>
 
+#include <cooperative_groups.h>
+#include <cooperative_groups/memcpy_async.h>
 #include <cuda/std/limits>
-
 namespace cudf {
 namespace io {
 namespace detail {

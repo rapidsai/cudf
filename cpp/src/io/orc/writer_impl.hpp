@@ -447,6 +447,8 @@ class writer::impl {
   // statistics data saved between calls to write before a close writes out the statistics
   persisted_statistics persisted_stripe_statistics;
 
+  persisted_statistics persisted_stripe_statistics;
+
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;
 };
