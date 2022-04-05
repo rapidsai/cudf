@@ -3723,16 +3723,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def applymap(
         self, func: Callable, na_action: str | None = None, **kwargs
     ) -> DataFrame:
+
         """
         Apply a function to a Dataframe elementwise.
         This method applies a function that accepts and returns a scalar
         to every element of a DataFrame.
+
         Parameters
         ----------
         func : callable
             Python function, returns a single value from a single value.
         na_action : {None, 'ignore'}, default None
-            If ``ignore``, propagate NaN values, without passing them to func.
+            If 'ignore', propagate NaN values, without passing them to func.
 
         Returns
         -------
@@ -3741,7 +3743,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
 
         if kwargs:
-            raise ValueError(
+            raise NotImplementedError(
                 "DataFrame.applymap does not yet support **kwargs."
             )
 
