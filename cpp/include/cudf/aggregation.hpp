@@ -47,6 +47,7 @@ class aggregation_finalizer;
 /**
  * @brief Tie-breaker method to use for ranking the column.
  *
+ * @see cudf::make_rank_aggregation for more details.
  * @ingroup column_sort
  */
 enum class rank_method : int32_t {
@@ -346,7 +347,7 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *
  * Note:
  *  1. This method could work faster with the rows that are presorted by the group keys and order_by
- * columns.
+ *     columns.
  *  2. `RANK` aggregations are not compatible with exclusive scans.
  *  3. All rank methods except AVERAGE method and percentage=True returns size_type column.
  *     For AVERAGE method and percentage=True, the return type is double column.
@@ -411,7 +412,7 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * @param null_handling  flag to include nulls during ranking. If nulls are not included,
  * corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements for column
- * @param percentage flag to convert ranks to percentage in range (0,1}
+ * @param percentage flag to convert ranks to percentage in range (0,1]
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_rank_aggregation(rank_method method,

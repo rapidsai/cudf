@@ -186,7 +186,7 @@ std::unique_ptr<table> stable_sort_by_key(
  * included, corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements
  * for column
- * @param percentage flag to convert ranks to percentage in range (0,1}
+ * @param percentage flag to convert ranks to percentage in range (0,1]
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> A column of containing the rank of the each
  * element of the column of `input`. The output column type will be `size_type`

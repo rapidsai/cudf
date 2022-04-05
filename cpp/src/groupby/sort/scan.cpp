@@ -143,18 +143,13 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                                           rmm::mr::get_current_device_resource()));
 
   auto rank_scan = [&]() {
-    if (rank_agg._method == rank_method::MIN) {
-      return detail::min_rank_scan;
-    } else if (rank_agg._method == rank_method::MAX) {
-      return detail::max_rank_scan;
-    } else if (rank_agg._method == rank_method::FIRST) {
-      return detail::first_rank_scan;
-    } else if (rank_agg._method == rank_method::DENSE) {
-      return detail::dense_rank_scan;
-    } else if (rank_agg._method == rank_method::AVERAGE) {
-      return detail::average_rank_scan;
-    } else {
-      CUDF_FAIL("Unsupported rank method in groupby scan");
+    switch (rank_agg._method) {
+      case rank_method::FIRST: return detail::first_rank_scan;
+      case rank_method::AVERAGE: return detail::average_rank_scan;
+      case rank_method::DENSE: return detail::dense_rank_scan;
+      case rank_method::MIN: return detail::min_rank_scan;
+      case rank_method::MAX: return detail::max_rank_scan;
+      default: CUDF_FAIL("Unsupported rank method in groupby scan");
     }
   }();
   auto result = rank_scan(get_grouped_values(),
