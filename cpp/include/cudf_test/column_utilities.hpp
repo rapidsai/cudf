@@ -183,7 +183,8 @@ template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   thrust::host_vector<T> host_data(c.size());
-  CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
+  CUDF_CUDA_TRY(
+    cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
   return {host_data, bitmask_to_host(c)};
 }
 
@@ -206,7 +207,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 
   auto host_rep_types = thrust::host_vector<Rep>(c.size());
 
-  CUDA_TRY(cudaMemcpy(
+  CUDF_CUDA_TRY(cudaMemcpy(
     host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDeviceToHost));
 
   auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };

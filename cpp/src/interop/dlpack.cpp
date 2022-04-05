@@ -144,7 +144,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   // Make sure the current device ID matches the Tensor's device ID
   if (tensor.device.device_type != kDLCPU) {
     int device_id = 0;
-    CUDA_TRY(cudaGetDevice(&device_id));
+    CUDF_CUDA_TRY(cudaGetDevice(&device_id));
     CUDF_EXPECTS(tensor.device.device_id == device_id, "DLTensor device ID must be current device");
   }
 
@@ -184,11 +184,11 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   for (auto& col : columns) {
     col = make_numeric_column(dtype, num_rows, mask_state::UNALLOCATED, stream, mr);
 
-    CUDA_TRY(cudaMemcpyAsync(col->mutable_view().head<void>(),
-                             reinterpret_cast<void*>(tensor_data),
-                             bytes,
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(col->mutable_view().head<void>(),
+                                  reinterpret_cast<void*>(tensor_data),
+                                  bytes,
+                                  cudaMemcpyDefault,
+                                  stream.value()));
 
     tensor_data += col_stride;
   }
@@ -234,7 +234,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
     tensor.strides[1] = num_rows;
   }
 
-  CUDA_TRY(cudaGetDevice(&tensor.device.device_id));
+  CUDF_CUDA_TRY(cudaGetDevice(&tensor.device.device_id));
   tensor.device.device_type = kDLCUDA;
 
   // If there is only one column, then a 1D tensor can just copy the pointer
@@ -254,11 +254,11 @@ DLManagedTensor* to_dlpack(table_view const& input,
 
   auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data);
   for (auto const& col : input) {
-    CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<void*>(tensor_data),
-                             get_column_data(col),
-                             stride_bytes,
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<void*>(tensor_data),
+                                  get_column_data(col),
+                                  stride_bytes,
+                                  cudaMemcpyDefault,
+                                  stream.value()));
     tensor_data += stride_bytes;
   }
 

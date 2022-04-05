@@ -97,7 +97,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
   // Handle empty inputs
   if (t.num_rows() == 0) {
-    CUDA_TRY(cudaMemsetAsync(result_out, 0, values.num_rows() * sizeof(size_type), stream.value()));
+    CUDF_CUDA_TRY(
+      cudaMemsetAsync(result_out, 0, values.num_rows() * sizeof(size_type), stream.value()));
     return result;
   }
 
