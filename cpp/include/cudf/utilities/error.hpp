@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #pragma once
 
 #include <cuda.h>
@@ -99,7 +115,7 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  * cudaSuccess, invokes cudaGetLastError() to clear the error and throws an
  * exception detailing the CUDA error that occurred
  */
-#define CUDA_TRY(call)                                            \
+#define CUDF_CUDA_TRY(call)                                       \
   do {                                                            \
     cudaError_t const status = (call);                            \
     if (cudaSuccess != status) {                                  \
@@ -122,12 +138,12 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  * asynchronous kernel launch.
  */
 #ifndef NDEBUG
-#define CHECK_CUDA(stream)                   \
-  do {                                       \
-    CUDA_TRY(cudaStreamSynchronize(stream)); \
-    CUDA_TRY(cudaPeekAtLastError());         \
+#define CHECK_CUDA(stream)                        \
+  do {                                            \
+    CUDF_CUDA_TRY(cudaStreamSynchronize(stream)); \
+    CUDF_CUDA_TRY(cudaPeekAtLastError());         \
   } while (0);
 #else
-#define CHECK_CUDA(stream) CUDA_TRY(cudaPeekAtLastError());
+#define CHECK_CUDA(stream) CUDF_CUDA_TRY(cudaPeekAtLastError());
 #endif
 /** @} */

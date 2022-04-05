@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ rmm::device_buffer create_null_mask(size_type size,
 
   if (state != mask_state::UNINITIALIZED) {
     uint8_t fill_value = (state == mask_state::ALL_VALID) ? 0xff : 0x00;
-    CUDA_TRY(cudaMemsetAsync(
+    CUDF_CUDA_TRY(cudaMemsetAsync(
       static_cast<bitmask_type*>(mask.data()), fill_value, mask_size, stream.value()));
   }
 

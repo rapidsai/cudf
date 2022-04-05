@@ -170,13 +170,13 @@ size_type inplace_bitmask_binop(
   rmm::device_uvector<bitmask_type const*> d_masks(masks.size(), stream, mr);
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
 
-  CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
     d_masks.data(), masks.data(), masks.size_bytes(), cudaMemcpyHostToDevice, stream.value()));
-  CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
-                           masks_begin_bits.data(),
-                           masks_begin_bits.size_bytes(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(d_begin_bits.data(),
+                                masks_begin_bits.data(),
+                                masks_begin_bits.size_bytes(),
+                                cudaMemcpyHostToDevice,
+                                stream.value()));
 
   auto constexpr block_size = 256;
   cudf::detail::grid_1d config(dest_mask.size(), block_size);
@@ -298,25 +298,25 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
 
   // Allocate temporary memory.
   size_t temp_storage_bytes{0};
-  CUDA_TRY(cub::DeviceSegmentedReduce::Sum(nullptr,
-                                           temp_storage_bytes,
-                                           num_set_bits_in_word,
-                                           d_bit_counts.begin(),
-                                           num_ranges,
-                                           first_word_indices,
-                                           last_word_indices,
-                                           stream.value()));
+  CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Sum(nullptr,
+                                                temp_storage_bytes,
+                                                num_set_bits_in_word,
+                                                d_bit_counts.begin(),
+                                                num_ranges,
+                                                first_word_indices,
+                                                last_word_indices,
+                                                stream.value()));
   rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
 
   // Perform segmented reduction.
-  CUDA_TRY(cub::DeviceSegmentedReduce::Sum(d_temp_storage.data(),
-                                           temp_storage_bytes,
-                                           num_set_bits_in_word,
-                                           d_bit_counts.begin(),
-                                           num_ranges,
-                                           first_word_indices,
-                                           last_word_indices,
-                                           stream.value()));
+  CUDF_CUDA_TRY(cub::DeviceSegmentedReduce::Sum(d_temp_storage.data(),
+                                                temp_storage_bytes,
+                                                num_set_bits_in_word,
+                                                d_bit_counts.begin(),
+                                                num_ranges,
+                                                first_word_indices,
+                                                last_word_indices,
+                                                stream.value()));
 
   CHECK_CUDA(stream.value());
 

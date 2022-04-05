@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,14 +36,14 @@ TEST(ExpectsTest, TryCatch)
 
 TEST(CudaTryTest, Error)
 {
-  CUDA_EXPECT_THROW_MESSAGE(CUDA_TRY(cudaErrorLaunchFailure),
+  CUDA_EXPECT_THROW_MESSAGE(CUDF_CUDA_TRY(cudaErrorLaunchFailure),
                             "cudaErrorLaunchFailure unspecified launch failure");
 }
-TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDA_TRY(cudaSuccess)); }
+TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDF_CUDA_TRY(cudaSuccess)); }
 
 TEST(CudaTryTest, TryCatch)
 {
-  CUDA_EXPECT_THROW_MESSAGE(CUDA_TRY(cudaErrorMemoryAllocation),
+  CUDA_EXPECT_THROW_MESSAGE(CUDF_CUDA_TRY(cudaErrorMemoryAllocation),
                             "cudaErrorMemoryAllocation out of memory");
 }
 

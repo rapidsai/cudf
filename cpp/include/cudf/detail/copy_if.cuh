@@ -254,10 +254,10 @@ struct scatter_gather_functor {
     if (output.nullable()) {
       // Have to initialize the output mask to all zeros because we may update
       // it with atomicOr().
-      CUDA_TRY(cudaMemsetAsync(static_cast<void*>(output.null_mask()),
-                               0,
-                               cudf::bitmask_allocation_size_bytes(output.size()),
-                               stream.value()));
+      CUDF_CUDA_TRY(cudaMemsetAsync(static_cast<void*>(output.null_mask()),
+                                    0,
+                                    cudf::bitmask_allocation_size_bytes(output.size()),
+                                    stream.value()));
     }
 
     auto output_device_view = cudf::mutable_column_device_view::create(output, stream);
