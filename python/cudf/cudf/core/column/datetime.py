@@ -280,6 +280,7 @@ class DatetimeColumn(column.ColumnBase):
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
+        self._is_viewed_by_array = True
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),

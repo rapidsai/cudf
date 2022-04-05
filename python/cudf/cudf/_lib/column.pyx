@@ -585,7 +585,7 @@ cdef class Column:
         return Column.from_unique_ptr(move(c_result))
 
     @property
-    def spillable(self):
+    def _is_viewed_by_libcudf(self):
         cdef weak_ptr[int] wp
         cdef cpp_list[weak_ptr[int]].iterator i
 
@@ -596,4 +596,4 @@ cdef class Column:
                 i = self._xs.erase(i)
             else:
                 preincrement(i)
-        return False if self._xs.size() else True
+        return True if self._xs.size() else False
