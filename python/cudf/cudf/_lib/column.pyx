@@ -588,6 +588,8 @@ cdef class Column:
     def spillable(self):
         cdef weak_ptr[int] wp
         cdef cpp_list[weak_ptr[int]].iterator i
+
+        # remove any expired weak_ptrs:
         i = self._xs.begin()
         while i != self._xs.end():
             if (dereference(i).use_count() == 0):
