@@ -214,9 +214,11 @@ def to_datetime(
                             current_col = current_col.astype(dtype="float64")
 
                     factor = cudf.Scalar(
-                        column.datetime._numpy_to_pandas_conversion[u]
+                        column.datetime._unit_to_nanoseconds_conversion[u]
                         / (
-                            column.datetime._numpy_to_pandas_conversion["s"]
+                            column.datetime._unit_to_nanoseconds_conversion[
+                                "s"
+                            ]
                             if np.datetime_data(col.dtype)[0] == "s"
                             else 1
                         )
@@ -291,7 +293,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
     if col.dtype.kind in ("f"):
         if unit not in (None, "ns"):
             factor = cudf.Scalar(
-                column.datetime._numpy_to_pandas_conversion[unit]
+                column.datetime._unit_to_nanoseconds_conversion[unit]
             )
             col = col * factor
 
@@ -318,8 +320,8 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
     if col.dtype.kind in ("i"):
         if unit in ("D", "h", "m"):
             factor = cudf.Scalar(
-                column.datetime._numpy_to_pandas_conversion[unit]
-                / column.datetime._numpy_to_pandas_conversion["s"]
+                column.datetime._unit_to_nanoseconds_conversion[unit]
+                / column.datetime._unit_to_nanoseconds_conversion["s"]
             )
             col = col * factor
 
