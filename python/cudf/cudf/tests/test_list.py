@@ -369,6 +369,29 @@ def test_contains_null_search_key(data, expect):
 
 
 @pytest.mark.parametrize(
+    "data, scalar",
+    [
+        (
+            [[9, 0, 2], [], [1, None, 0]],
+            "x",
+        ),
+        (
+            [["z", "y", None], None, [None, "x"]],
+            5,
+        ),
+    ],
+)
+def test_contains_invalid(data, scalar):
+    sr = cudf.Series(data)
+    with pytest.raises(
+        TypeError,
+        match="Type/Scale of search key does not "
+        "match list column element type.",
+    ):
+        sr.list.contains(scalar)
+
+
+@pytest.mark.parametrize(
     "data, scalar, expect",
     [
         (
@@ -404,7 +427,7 @@ def test_contains_null_search_key(data, expect):
         ),
     ],
 )
-def test_index_scalar(data, scalar, expect):
+def test_index(data, scalar, expect):
     sr = cudf.Series(data)
     expect = cudf.Series(expect, dtype="int32")
     got = sr.list.index(cudf.Scalar(scalar, sr.dtype.element_type))

@@ -16,7 +16,7 @@ from cudf._lib.lists import (
     count_elements,
     drop_list_duplicates,
     extract_element,
-    index_of_scalar,
+    index_of,
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
@@ -398,23 +398,17 @@ class ListMethods(ColumnMethods):
             )
         except RuntimeError as e:
             if (
-                "Type/Scale of search key does not"
-                "match list column element type" in str(e)
+                "Type/Scale of search key does not "
+                "match list column element type." in str(e)
             ):
-                raise TypeError(
-                    "Type/Scale of search key does not"
-                    "match list column element type"
-                ) from e
+                raise TypeError(str(e)) from e
             raise
-        else:
-            return res
+        return res
 
     def index(self, search_key: ScalarLike) -> ParentType:
         search_key = cudf.Scalar(search_key)
         try:
-            res = self._return_or_inplace(
-                index_of_scalar(self._column, search_key)
-            )
+            res = self._return_or_inplace(index_of(self._column, search_key))
         except RuntimeError as e:
             if (
                 "Type/Scale of search key does not "
@@ -422,8 +416,7 @@ class ListMethods(ColumnMethods):
             ):
                 raise TypeError(str(e)) from e
             raise
-        else:
-            return res
+        return res
 
     @property
     def leaves(self) -> ParentType:
