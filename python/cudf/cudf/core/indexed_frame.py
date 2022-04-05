@@ -2749,11 +2749,11 @@ class IndexedFrame(Frame):
     @docutils.doc_apply(
         doc_binop_template.format(
             operation="Addition",
-            op_name="add",
+            op_name="radd",
             equivalent_op="other + frame",
             df_op_example=textwrap.dedent(
                 """
-                >>> df.add(1)
+                >>> df.radd(1)
                         angles  degrees
                 circle          1      361
                 triangle        4      181
@@ -2762,7 +2762,7 @@ class IndexedFrame(Frame):
             ),
             ser_op_example=textwrap.dedent(
                 """
-                >>> a.add(b)
+                >>> a.radd(b)
                 a       2
                 b    <NA>
                 c    <NA>
@@ -2937,7 +2937,7 @@ class IndexedFrame(Frame):
                 d    <NA>
                 e    <NA>
                 dtype: int64
-                >>> a.multiply(b, fill_value=0)
+                >>> a.rmul(b, fill_value=0)
                 a       1
                 b       0
                 c       0
@@ -3019,7 +3019,7 @@ class IndexedFrame(Frame):
                 d    <NA>
                 e    <NA>
                 dtype: int64
-                >>> a.mod(b, fill_value=0)
+                >>> a.rmod(b, fill_value=0)
                 a             0
                 b             0
                 c             0
@@ -3308,14 +3308,14 @@ class IndexedFrame(Frame):
             ),
             ser_op_example=textwrap.dedent(
                 """
-                >>> a.rtruediv(b)
+                >>> a.eq(b)
                 a    True
                 b    <NA>
                 c    <NA>
                 d    <NA>
                 e    <NA>
                 dtype: bool
-                >>> a.rtruediv(b, fill_value=0)
+                >>> a.eq(b, fill_value=0)
                 a    True
                 b   False
                 c   False
