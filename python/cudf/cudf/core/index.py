@@ -777,7 +777,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             not ascending and self._step > 0
         ):
             indices = indices[::-1]
-            return indices
+        return indices
 
     def where(self, cond, other=None, inplace=False):
         return self._as_int64().where(cond, other, inplace)
