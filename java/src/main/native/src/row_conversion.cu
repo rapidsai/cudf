@@ -1766,9 +1766,9 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
     std::optional<rmm::device_uvector<strings_column_view::offset_iterator>> variable_width_offsets,
     rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr) {
   int device_id;
-  CUDA_TRY(cudaGetDevice(&device_id));
+  CUDF_CUDA_TRY(cudaGetDevice(&device_id));
   int total_shmem_in_bytes;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
       cudaDeviceGetAttribute(&total_shmem_in_bytes, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
 
 #ifndef __CUDA_ARCH__ // __host__ code.
@@ -2097,9 +2097,9 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
   auto const num_rows = input.parent().size();
 
   int device_id;
-  CUDA_TRY(cudaGetDevice(&device_id));
+  CUDF_CUDA_TRY(cudaGetDevice(&device_id));
   int total_shmem_in_bytes;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
       cudaDeviceGetAttribute(&total_shmem_in_bytes, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
 
 #ifndef __CUDA_ARCH__ // __host__ code.

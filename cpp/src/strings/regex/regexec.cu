@@ -135,7 +135,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   }
 
   // copy flat prog to device memory
-  CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
     d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice, stream.value()));
 
   // build deleter to cleanup device memory
