@@ -40,10 +40,7 @@ from cudf._lib.types cimport (
 
 from cudf.core.dtypes import ListDtype
 
-from cudf._lib.cpp.lists.contains cimport (
-    contains,
-    index_of as cpp_index_of
-)
+from cudf._lib.cpp.lists.contains cimport contains, index_of as cpp_index_of
 from cudf._lib.cpp.lists.extract cimport extract_list_element
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
