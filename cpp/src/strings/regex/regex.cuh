@@ -62,7 +62,7 @@ constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 11);
  *
  * This class holds the unique data for any regex CCLASS instruction.
  */
-struct reclass_device {
+struct alignas(16) reclass_device {
   int32_t builtins{};
   int32_t count{};
   char32_t const* literals{};

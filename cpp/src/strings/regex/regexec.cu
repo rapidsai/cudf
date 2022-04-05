@@ -65,7 +65,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   auto const classes_count = h_prog.classes_count();
   auto const starts_count  = h_prog.starts_count();
 
-  // compute size of each section; make sure each is aligned appropriately
+  // compute size of each section
   auto insts_size    = insts_count * sizeof(_insts[0]);
   auto startids_size = starts_count * sizeof(_startinst_ids[0]);
   auto classes_size  = classes_count * sizeof(_classes[0]);

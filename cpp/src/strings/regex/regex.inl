@@ -93,7 +93,7 @@ struct alignas(8) relist {
 
  private:
   int16_t size{};
-  int16_t masksize{};
+  int16_t masksize;
   int32_t reserved;
   int2* ranges;       // pair per instruction
   int16_t* inst_ids;  // one per instruction
