@@ -115,30 +115,6 @@ std::unique_ptr<column> matches_re(
   return regex_dispatcher(*d_prog, contains_dispatch_fn{*d_prog, true}, input, stream, mr);
 }
 
-}  // namespace detail
-
-// external APIs
-
-std::unique_ptr<column> contains_re(strings_column_view const& strings,
-                                    std::string const& pattern,
-                                    regex_flags const flags,
-                                    rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::contains_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
-}
-
-std::unique_ptr<column> matches_re(strings_column_view const& strings,
-                                   std::string const& pattern,
-                                   regex_flags const flags,
-                                   rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::matches_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
-}
-
-namespace detail {
-
 std::unique_ptr<column> count_re(strings_column_view const& input,
                                  std::string const& pattern,
                                  regex_flags const flags,
@@ -161,7 +137,25 @@ std::unique_ptr<column> count_re(strings_column_view const& input,
 
 }  // namespace detail
 
-// external API
+// external APIs
+
+std::unique_ptr<column> contains_re(strings_column_view const& strings,
+                                    std::string const& pattern,
+                                    regex_flags const flags,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::contains_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> matches_re(strings_column_view const& strings,
+                                   std::string const& pattern,
+                                   regex_flags const flags,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::matches_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
+}
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,
                                  std::string const& pattern,
