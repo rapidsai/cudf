@@ -1,3 +1,5 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 from numba import cuda
 from numba.np import numpy_support
 

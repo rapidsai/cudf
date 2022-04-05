@@ -432,11 +432,11 @@ class concurrent_unordered_map {
 
       m_hashtbl_values = m_allocator.allocate(m_capacity, stream);
     }
-    CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values,
-                             other.m_hashtbl_values,
-                             m_capacity * sizeof(value_type),
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values,
+                                  other.m_hashtbl_values,
+                                  m_capacity * sizeof(value_type),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
   }
 
   void clear_async(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
@@ -460,10 +460,10 @@ class concurrent_unordered_map {
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
 
     if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
-      CUDA_TRY(cudaMemPrefetchAsync(
+      CUDF_CUDA_TRY(cudaMemPrefetchAsync(
         m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream.value()));
     }
-    CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream.value()));
+    CUDF_CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream.value()));
   }
 
   /**
@@ -532,8 +532,8 @@ class concurrent_unordered_map {
 
       if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
         int dev_id = 0;
-        CUDA_TRY(cudaGetDevice(&dev_id));
-        CUDA_TRY(cudaMemPrefetchAsync(
+        CUDF_CUDA_TRY(cudaGetDevice(&dev_id));
+        CUDF_CUDA_TRY(cudaMemPrefetchAsync(
           m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream.value()));
       }
     }
@@ -543,6 +543,6 @@ class concurrent_unordered_map {
         m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
     }
 
-    CUDA_TRY(cudaGetLastError());
+    CUDF_CHECK_CUDA(stream.value());
   }
 };

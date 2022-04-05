@@ -10,8 +10,12 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf._typing import Dtype
-from cudf.api.types import _is_scalar_or_zero_d_array
+from cudf._typing import Dtype, ScalarLike
+from cudf.api.types import (
+    _is_scalar_or_zero_d_array,
+    is_bool_dtype,
+    is_integer_dtype,
+)
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
@@ -359,3 +363,23 @@ class SingleColumnFrame(Frame, NotIterable):
         if self._column.null_count == len(self):
             return 0
         return self._column.distinct_count(dropna=dropna)
+
+    def _get_elements_from_column(self, arg) -> Union[ScalarLike, ColumnBase]:
+        # A generic method for getting elements from a column that supports a
+        # wide range of different inputs. This method should only used where
+        # _absolutely_ necessary, since in almost all cases a more specific
+        # method can be used e.g. element_indexing or slice.
+        if _is_scalar_or_zero_d_array(arg):
+            return self._column.element_indexing(int(arg))
+        elif isinstance(arg, slice):
+            start, stop, stride = arg.indices(len(self))
+            return self._column.slice(start, stop, stride)
+        else:
+            arg = as_column(arg)
+            if len(arg) == 0:
+                arg = as_column([], dtype="int32")
+            if is_integer_dtype(arg.dtype):
+                return self._column.take(arg)
+            if is_bool_dtype(arg.dtype):
+                return self._column.apply_boolean_mask(arg)
+            raise NotImplementedError(f"Unknown indexer {type(arg)}")

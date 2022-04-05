@@ -1123,7 +1123,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
       if (nvcomp_integration::is_stable_enabled()) {
         snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
       } else {
-        CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
+        CUDF_CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
       }
       break;
     default: break;
@@ -1136,11 +1136,11 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
-  CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
-                           d_chunks_in_batch.data(),
-                           d_chunks_in_batch.flat_view().size_bytes(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
+                                d_chunks_in_batch.data(),
+                                d_chunks_in_batch.flat_view().size_bytes(),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
   stream.synchronize();
 }
 
@@ -1579,28 +1579,28 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           // we still need to do a (much smaller) memcpy for the statistics.
           if (ck.ck_stat_size != 0) {
             column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
-            CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
-                                     dev_bfr,
-                                     ck.ck_stat_size,
-                                     cudaMemcpyDeviceToHost,
-                                     stream.value()));
+            CUDF_CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
+                                          dev_bfr,
+                                          ck.ck_stat_size,
+                                          cudaMemcpyDeviceToHost,
+                                          stream.value()));
             stream.synchronize();
           }
         } else {
           if (!host_bfr) {
             host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
                                                 uint8_t* ptr = nullptr;
-                                                CUDA_TRY(cudaMallocHost(&ptr, size));
+                                                CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
                                                 return ptr;
                                               }(max_chunk_bfr_size),
                                               cudaFreeHost};
           }
           // copy the full data
-          CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
-                                   dev_bfr,
-                                   ck.ck_stat_size + ck.compressed_size,
-                                   cudaMemcpyDeviceToHost,
-                                   stream.value()));
+          CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
+                                        dev_bfr,
+                                        ck.ck_stat_size + ck.compressed_size,
+                                        cudaMemcpyDeviceToHost,
+                                        stream.value()));
           stream.synchronize();
           out_sink_[p]->host_write(host_bfr.get() + ck.ck_stat_size, ck.compressed_size);
           if (ck.ck_stat_size != 0) {

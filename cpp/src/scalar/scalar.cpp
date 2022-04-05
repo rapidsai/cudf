@@ -114,7 +114,7 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 {
   std::string result;
   result.resize(_data.size());
-  CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
     &result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream.value()));
   stream.synchronize();
   return result;
