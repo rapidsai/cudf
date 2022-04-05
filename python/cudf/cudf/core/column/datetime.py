@@ -25,7 +25,7 @@ from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column, string
-from cudf.core.column.timedelta import _numpy_to_pandas_conversion
+from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils.utils import _fillna_natwise
 
 if PANDAS_GE_120:
@@ -369,7 +369,7 @@ class DatetimeColumn(column.ColumnBase):
             self.as_numerical.std(
                 skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
             )
-            * _numpy_to_pandas_conversion[self.time_unit],
+            * _unit_to_nanoseconds_conversion[self.time_unit],
         )
 
     def median(self, skipna: bool = None) -> pd.Timestamp:
@@ -441,6 +441,7 @@ class DatetimeColumn(column.ColumnBase):
             # well-defined if this operation was not invoked via reflection.
             elif other_is_timedelta and not reflect:
                 out_dtype = _resolve_mixed_dtypes(lhs, rhs, "datetime64")
+
         if out_dtype is None:
             return NotImplemented
 

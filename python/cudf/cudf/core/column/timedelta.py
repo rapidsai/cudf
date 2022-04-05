@@ -25,14 +25,14 @@ _dtype_to_format_conversion = {
     "timedelta64[s]": "%D days %H:%M:%S",
 }
 
-_numpy_to_pandas_conversion = {
+_unit_to_nanoseconds_conversion = {
     "ns": 1,
-    "us": 1000,
-    "ms": 1000000,
-    "s": 1000000000,
-    "m": 60000000000,
-    "h": 3600000000000,
-    "D": 86400000000000,
+    "us": 1_000,
+    "ms": 1_000_000,
+    "s": 1_000_000_000,
+    "m": 60_000_000_000,
+    "h": 3_600_000_000_000,
+    "D": 86_400_000_000_000,
 }
 
 
@@ -399,61 +399,73 @@ class TimeDeltaColumn(ColumnBase):
             data={
                 "days": self
                 // cudf.Scalar(
-                    np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")
+                    np.timedelta64(_unit_to_nanoseconds_conversion["D"], "ns")
                 ),
                 "hours": (
                     self
                     % cudf.Scalar(
-                        np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")
+                        np.timedelta64(
+                            _unit_to_nanoseconds_conversion["D"], "ns"
+                        )
                     )
                 )
                 // cudf.Scalar(
-                    np.timedelta64(_numpy_to_pandas_conversion["h"], "ns")
+                    np.timedelta64(_unit_to_nanoseconds_conversion["h"], "ns")
                 ),
                 "minutes": (
                     self
                     % cudf.Scalar(
-                        np.timedelta64(_numpy_to_pandas_conversion["h"], "ns")
+                        np.timedelta64(
+                            _unit_to_nanoseconds_conversion["h"], "ns"
+                        )
                     )
                 )
                 // cudf.Scalar(
-                    np.timedelta64(_numpy_to_pandas_conversion["m"], "ns")
+                    np.timedelta64(_unit_to_nanoseconds_conversion["m"], "ns")
                 ),
                 "seconds": (
                     self
                     % cudf.Scalar(
-                        np.timedelta64(_numpy_to_pandas_conversion["m"], "ns")
+                        np.timedelta64(
+                            _unit_to_nanoseconds_conversion["m"], "ns"
+                        )
                     )
                 )
                 // cudf.Scalar(
-                    np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
+                    np.timedelta64(_unit_to_nanoseconds_conversion["s"], "ns")
                 ),
                 "milliseconds": (
                     self
                     % cudf.Scalar(
-                        np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
+                        np.timedelta64(
+                            _unit_to_nanoseconds_conversion["s"], "ns"
+                        )
                     )
                 )
                 // cudf.Scalar(
-                    np.timedelta64(_numpy_to_pandas_conversion["ms"], "ns")
+                    np.timedelta64(_unit_to_nanoseconds_conversion["ms"], "ns")
                 ),
                 "microseconds": (
                     self
                     % cudf.Scalar(
-                        np.timedelta64(_numpy_to_pandas_conversion["ms"], "ns")
+                        np.timedelta64(
+                            _unit_to_nanoseconds_conversion["ms"], "ns"
+                        )
                     )
                 )
                 // cudf.Scalar(
-                    np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
+                    np.timedelta64(_unit_to_nanoseconds_conversion["us"], "ns")
                 ),
                 "nanoseconds": (
                     self
                     % cudf.Scalar(
-                        np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
+                        np.timedelta64(
+                            _unit_to_nanoseconds_conversion["us"], "ns"
+                        )
                     )
                 )
                 // cudf.Scalar(
-                    np.timedelta64(_numpy_to_pandas_conversion["ns"], "ns")
+                    np.timedelta64(_unit_to_nanoseconds_conversion["ns"], "ns")
                 ),
             },
             index=index,
@@ -469,7 +481,7 @@ class TimeDeltaColumn(ColumnBase):
         NumericalColumn
         """
         return self // cudf.Scalar(
-            np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")
+            np.timedelta64(_unit_to_nanoseconds_conversion["D"], "ns")
         )
 
     @property
@@ -489,10 +501,10 @@ class TimeDeltaColumn(ColumnBase):
         return (
             self
             % cudf.Scalar(
-                np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")
+                np.timedelta64(_unit_to_nanoseconds_conversion["D"], "ns")
             )
         ) // cudf.Scalar(
-            np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
+            np.timedelta64(_unit_to_nanoseconds_conversion["s"], "ns")
         )
 
     @property
@@ -510,9 +522,9 @@ class TimeDeltaColumn(ColumnBase):
         # division operation to extract the number of microseconds.
 
         return (
-            self % np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
+            self % np.timedelta64(_unit_to_nanoseconds_conversion["s"], "ns")
         ) // cudf.Scalar(
-            np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
+            np.timedelta64(_unit_to_nanoseconds_conversion["us"], "ns")
         )
 
     @property
@@ -533,10 +545,10 @@ class TimeDeltaColumn(ColumnBase):
         return (
             self
             % cudf.Scalar(
-                np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
+                np.timedelta64(_unit_to_nanoseconds_conversion["us"], "ns")
             )
         ) // cudf.Scalar(
-            np.timedelta64(_numpy_to_pandas_conversion["ns"], "ns")
+            np.timedelta64(_unit_to_nanoseconds_conversion["ns"], "ns")
         )
 
 
