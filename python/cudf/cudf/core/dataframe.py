@@ -341,6 +341,11 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 )
             self._frame._data.insert(key[1], new_col)
         else:
+            template = Template(
+                "shape mismatch: value array of shape $value1 could "
+                "not be broadcast to indexing result of shape "
+                "$value2"
+            )
             if isinstance(value, (cupy.ndarray, np.ndarray)):
                 value_df = DataFrame(value)
                 if value_df.shape[1] != columns_df.shape[1]:
@@ -350,12 +355,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         )
                     else:
                         raise ValueError(
-                            Template(
-                                "shape mismatch: value array of shape $value1 could \
-                                not be broadcast to indexing result of shape \
-                                $value2"
-                            ).substitute(
-                                value1=value_df.shape, value2=columns_df.shape,
+                            template.substitute(
+                                value1=value_df.shape,
+                                value2=columns_df.shape,
                             )
                         )
                 else:
@@ -366,18 +368,15 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 if isinstance(value, cudf.DataFrame):
                     if value.shape != self._frame.loc[key[0]].shape:
                         raise ValueError(
-                            Template(
-                                "shape mismatch: value array of shape $value1 could \
-                                not be broadcast to indexing result of shape \
-                                $value2"
-                            ).substitute(
+                            template.substitute(
                                 value1=value.shape,
                                 value2=self._frame.loc[key[0]].shape,
                             )
                         )
                     value_column_names = set(value._column_names)
+                    scatter_map = _indices_from_labels(self._frame, key[0])
                     for col in columns_df._column_names:
-                        columns_df[col][key[0]] = (
+                        columns_df[col][scatter_map] = (
                             value._data[col]
                             if col in value_column_names
                             else cudf.NA
@@ -387,17 +386,14 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     value = value.reshape((-1, value.shape[0]))
                     if value.shape != self._frame.loc[key[0]].shape:
                         raise ValueError(
-                            Template(
-                                "shape mismatch: value array of shape $value1 could \
-                                not be broadcast to indexing result of shape \
-                                $value2"
-                            ).substitute(
+                            template.substitute(
                                 value1=value.shape,
                                 value2=self._frame.loc[key[0]].shape,
                             )
                         )
+                    scatter_map = _indices_from_labels(self._frame, key[0])
                     for i, col in enumerate(columns_df._column_names):
-                        self._frame._data[col][key[0]] = value[:, i]
+                        self._frame._data[col][scatter_map] = value[:, i]
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
