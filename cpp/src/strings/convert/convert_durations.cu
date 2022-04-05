@@ -153,11 +153,11 @@ struct format_compiler {
 
     // create program in device memory
     d_items.resize(items.size(), stream);
-    CUDA_TRY(cudaMemcpyAsync(d_items.data(),
-                             items.data(),
-                             items.size() * sizeof(items[0]),
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
+                                  items.data(),
+                                  items.size() * sizeof(items[0]),
+                                  cudaMemcpyHostToDevice,
+                                  stream.value()));
   }
 
   format_item const* compiled_format_items() { return d_items.data(); }

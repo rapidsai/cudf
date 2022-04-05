@@ -70,7 +70,7 @@ struct launcher {
     thrust::transform(
       rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), output_view.begin<Tout>(), F{});
 
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
 
     return output;
   }
