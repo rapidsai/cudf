@@ -139,7 +139,7 @@ void materialize_bitmask(column_view const& left_col,
     }
   }
 
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 struct side_index_generator {
@@ -212,7 +212,7 @@ index_vector generate_merged_indices(table_view const& left_table,
                   ineq_op);
   }
 
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   return merged_indices;
 }

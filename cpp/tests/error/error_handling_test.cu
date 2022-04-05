@@ -47,17 +47,17 @@ TEST(CudaTryTest, TryCatch)
                             "cudaErrorMemoryAllocation out of memory");
 }
 
-TEST(StreamCheck, success) { EXPECT_NO_THROW(CHECK_CUDA(0)); }
+TEST(StreamCheck, success) { EXPECT_NO_THROW(CUDF_CHECK_CUDA(0)); }
 
 namespace {
 // Some silly kernel that will cause an error
 void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 }  // namespace
 
-// In a release build and without explicit synchronization, CHECK_CUDA may
+// In a release build and without explicit synchronization, CUDF_CHECK_CUDA may
 // or may not fail on erroneous asynchronous CUDA calls. Invoke
 // cudaStreamSynchronize to guarantee failure on error. In a non-release build,
-// CHECK_CUDA deterministically fails on erroneous asynchronous CUDA
+// CUDF_CHECK_CUDA deterministically fails on erroneous asynchronous CUDA
 // calls.
 TEST(StreamCheck, FailedKernel)
 {
@@ -67,7 +67,7 @@ TEST(StreamCheck, FailedKernel)
 #ifdef NDEBUG
   stream.synchronize();
 #endif
-  EXPECT_THROW(CHECK_CUDA(stream.value()), cudf::cuda_error);
+  EXPECT_THROW(CUDF_CHECK_CUDA(stream.value()), cudf::cuda_error);
 }
 
 TEST(StreamCheck, CatchFailedKernel)
@@ -78,7 +78,7 @@ TEST(StreamCheck, CatchFailedKernel)
 #ifndef NDEBUG
   stream.synchronize();
 #endif
-  CUDA_EXPECT_THROW_MESSAGE(CHECK_CUDA(stream.value()),
+  CUDA_EXPECT_THROW_MESSAGE(CUDF_CHECK_CUDA(stream.value()),
                             "cudaErrorInvalidConfiguration "
                             "invalid configuration argument");
 }

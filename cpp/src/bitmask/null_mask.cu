@@ -146,7 +146,7 @@ void set_null_mask(bitmask_type* bitmask,
     cudf::detail::grid_1d config(number_of_mask_words, 256);
     set_null_mask_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
       static_cast<bitmask_type*>(bitmask), begin_bit, end_bit, valid, number_of_mask_words);
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
   }
 }
 
@@ -220,7 +220,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const* mask,
     cudf::detail::grid_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
       static_cast<bitmask_type*>(dest_mask.data()), mask, begin_bit, end_bit, number_of_mask_words);
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
   }
   return dest_mask;
 }

@@ -158,12 +158,12 @@ void generate_input_tables(key_type* const build_tbl,
 
   init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates.data(), num_states);
 
-  CHECK_CUDA(0);
+  CUDF_CHECK_CUDA(0);
 
   init_build_tbl<key_type, size_type><<<num_sms * num_blocks_init_build_tbl, block_size>>>(
     build_tbl, build_tbl_size, multiplicity, devStates.data(), num_states);
 
-  CHECK_CUDA(0);
+  CUDF_CHECK_CUDA(0);
 
   auto const rand_max = std::numeric_limits<key_type>::max();
 
@@ -177,5 +177,5 @@ void generate_input_tables(key_type* const build_tbl,
                                                           devStates.data(),
                                                           num_states);
 
-  CHECK_CUDA(0);
+  CUDF_CHECK_CUDA(0);
 }

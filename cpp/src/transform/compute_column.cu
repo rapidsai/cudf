@@ -125,7 +125,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
       <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
         *table_device, device_expression_data, *mutable_output_device);
   }
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
   return output_column;
 }
 

@@ -138,12 +138,12 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  * asynchronous kernel launch.
  */
 #ifndef NDEBUG
-#define CHECK_CUDA(stream)                        \
+#define CUDF_CHECK_CUDA(stream)                   \
   do {                                            \
     CUDF_CUDA_TRY(cudaStreamSynchronize(stream)); \
     CUDF_CUDA_TRY(cudaPeekAtLastError());         \
   } while (0);
 #else
-#define CHECK_CUDA(stream) CUDF_CUDA_TRY(cudaPeekAtLastError());
+#define CUDF_CHECK_CUDA(stream) CUDF_CUDA_TRY(cudaPeekAtLastError());
 #endif
 /** @} */

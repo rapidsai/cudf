@@ -183,7 +183,7 @@ size_type inplace_bitmask_binop(
   offset_bitmask_binop<block_size>
     <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
       op, dest_mask, d_masks, d_begin_bits, mask_size_bits, d_counter.data());
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
   return d_counter.value(stream);
 }
 
@@ -318,7 +318,7 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                                 last_word_indices,
                                                 stream.value()));
 
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   // Adjust counts in segment boundaries (if segments are not word-aligned).
   constexpr size_type block_size{256};
@@ -350,7 +350,7 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                       });
   }
 
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
   return d_bit_counts;
 }
 
