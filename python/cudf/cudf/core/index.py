@@ -155,6 +155,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
+    spillable = False
+
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     _range: range
