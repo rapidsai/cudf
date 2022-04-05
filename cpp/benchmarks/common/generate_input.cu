@@ -88,10 +88,10 @@ T get_distribution_mean(distribution_params<T> const& dist)
 }
 
 /**
- *  Computes the average element size in a column, given the data profile.
+ * @brief Computes the average element size in a column, given the data profile.
  *
- * Random distribution paramters like average string length and maximum list nesting level affect
- * the element size of non-fixed width columns. For lists and structs, `avg_element_size` is called
+ * Random distribution parameters like average string length and maximum list nesting level affect
+ * the element size of non-fixed-width columns. For lists and structs, `avg_element_size` is called
  * recursively to determine the size of nested columns.
  */
 size_t avg_element_size(data_profile const& profile, cudf::data_type dtype);
@@ -577,7 +577,7 @@ int num_direct_parents(int num_lvls, int num_leaf_columns)
   // Minimum number of children columns for any column in the hierarchy
   int const num_children_min = std::floor(num_children_avg);
   // Maximum number of children columns for any column in the hierarchy
-  int const num_children_max = std::ceil(num_children_avg);
+  int const num_children_max = num_children_min + 1;
 
   // Minimum number of columns needed so that their number of children does not exceed the maximum
   int const min_for_current_nesting = std::ceil((double)num_leaf_columns / num_children_max);
