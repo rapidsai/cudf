@@ -93,7 +93,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         "min",
     }
 
-    _is_viewed_by_array = False
+    _is_viewed_by_pyobject = False
 
     def as_frame(self) -> "cudf.core.frame.Frame":
         """
@@ -1158,7 +1158,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def spillable(self):
-        return not (self._is_viewed_by_libcudf or self._is_viewed_by_array)
+        return not (self._is_viewed_by_libcudf or self._is_viewed_by_pyobject)
 
 
 def column_empty_like(

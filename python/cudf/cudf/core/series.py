@@ -1616,12 +1616,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
         """  # noqa: E501
+        self._column._is_viewed_by_pyobject = True
         return self._column.data
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def nullmask(self):
         """The gpu buffer for the null-mask"""
+        self._column._is_viewed_by_pyobject = True
         return cudf.Series(self._column.nullmask)
 
     @_cudf_nvtx_annotate

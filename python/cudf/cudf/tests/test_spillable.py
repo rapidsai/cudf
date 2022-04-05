@@ -37,3 +37,12 @@ def test_cupy():
     s = cudf.Series([1, 2, 3])
     _ = cp.asarray(s)
     assert s.spillable is False
+
+
+def test_buffer_nullmask():
+    s = cudf.Series([1, 2, None])
+    _ = s.data
+    assert s.spillable is False
+    s = cudf.Series([1, 2, None])
+    _ = s.nullmask
+    assert s.spillable is False
