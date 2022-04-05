@@ -1,7 +1,8 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, weak_ptr
+from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport device_buffer
 
@@ -34,3 +35,5 @@ cdef class Column:
     cdef Column from_column_view(column_view, object)
 
     cdef size_type compute_null_count(self) except? 0
+
+    cdef vector[weak_ptr[int]] _xs

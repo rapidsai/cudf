@@ -14,7 +14,7 @@ from cudf.core.buffer import Buffer
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp cimport bool
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr, weak_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -72,7 +72,6 @@ cdef class Column:
         object null_count=None,
         object children=()
     ):
-
         self._size = size
         self._distinct_count = {}
         self._dtype = dtype
@@ -372,7 +371,7 @@ cdef class Column:
         self._children = None
         self._data = None
 
-        return mutable_column_view(
+        cdef mutable_column_view out = mutable_column_view(
             dtype,
             self.size,
             data,
@@ -380,6 +379,8 @@ cdef class Column:
             c_null_count,
             offset,
             children)
+        self._xs.push_back(<weak_ptr[int]>(out._x))
+        return out
 
     cdef column_view view(self) except *:
         null_count = self.null_count
@@ -416,7 +417,7 @@ cdef class Column:
 
         cdef libcudf_types.size_type c_null_count = null_count
 
-        return column_view(
+        cdef column_view out = column_view(
             dtype,
             self.size,
             data,
@@ -424,6 +425,9 @@ cdef class Column:
             c_null_count,
             offset,
             children)
+
+        self._xs.push_back(<weak_ptr[int]>(out._x))
+        return out
 
     @staticmethod
     cdef Column from_unique_ptr(unique_ptr[column] c_col):
@@ -577,3 +581,12 @@ cdef class Column:
         with nogil:
             c_result = move(cpp_make_column_from_scalar(c_val[0], size))
         return Column.from_unique_ptr(move(c_result))
+
+    @property
+    def spillable(self):
+        # return True if this Column is spillable
+        cdef weak_ptr[int] wp
+        for wp in self._xs:
+            if wp.use_count() > 0:
+                return False
+        return True

@@ -1,6 +1,7 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
+from libcpp.memory cimport shared_ptr
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type
@@ -65,6 +66,7 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         size_type offset() except +
         size_type num_children() except +
         column_view child(size_type) except +
+        shared_ptr[int] _x
 
     cdef cppclass mutable_column_view:
         mutable_column_view() except +
@@ -118,3 +120,4 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         size_type offset() except +
         size_type num_children() except +
         mutable_column_view& child(size_type) except +
+        shared_ptr[int] _x

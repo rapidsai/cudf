@@ -5300,6 +5300,10 @@ class Frame(BinaryOperand, Scannable):
 
         return libcudf.filling.repeat(columns, repeats)
 
+    @property
+    def spillable(self):
+        return all(col.spillable for col in self._data.columns)
+
 
 @_cudf_nvtx_annotate
 def _get_replacement_values_for_columns(
