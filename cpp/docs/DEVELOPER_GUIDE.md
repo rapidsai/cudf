@@ -373,7 +373,7 @@ namespace detail{
     void external_function(..., rmm::cuda_stream_view stream){
         // Implementation uses the stream with async APIs.
         rmm::device_buffer buff(...,stream);
-       CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
+        CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
         kernel<<<..., stream>>>(...);
         thrust::algorithm(rmm::exec_policy(stream), ...);
     }
