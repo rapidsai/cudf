@@ -318,8 +318,6 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                                 last_word_indices,
                                                 stream.value()));
 
-  CUDF_CHECK_CUDA(stream.value());
-
   // Adjust counts in segment boundaries (if segments are not word-aligned).
   constexpr size_type block_size{256};
   cudf::detail::grid_1d grid(num_ranges, block_size);
