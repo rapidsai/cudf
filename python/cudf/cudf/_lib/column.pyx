@@ -12,8 +12,10 @@ from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import Buffer
 
 from cpython.buffer cimport PyObject_CheckBuffer
+from cython.operator cimport dereference, preincrement
 from libc.stdint cimport uintptr_t
 from libcpp cimport bool
+from libcpp.list cimport list as cpp_list
 from libcpp.memory cimport make_unique, unique_ptr, weak_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -584,9 +586,12 @@ cdef class Column:
 
     @property
     def spillable(self):
-        # return True if this Column is spillable
         cdef weak_ptr[int] wp
-        for wp in self._xs:
-            if wp.use_count() > 0:
-                return False
-        return True
+        cdef cpp_list[weak_ptr[int]].iterator i
+        i = self._xs.begin()
+        while i != self._xs.end():
+            if (dereference(i).use_count() == 0):
+                i = self._xs.erase(i)
+            else:
+                preincrement(i)
+        return False if self._xs.size() else True
