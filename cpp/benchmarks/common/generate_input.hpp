@@ -379,15 +379,15 @@ class data_profile {
     CUDF_EXPECTS(max_depth > 0, "List depth must be positive");
     list_dist_desc.max_depth = max_depth;
   }
-  
+
   void set_list_type(cudf::type_id type) { list_dist_desc.element_type = type; }
-  
+
   void set_struct_depth(cudf::size_type max_depth)
   {
     CUDF_EXPECTS(max_depth > 0, "Struct depth must be positive");
     struct_dist_desc.max_depth = max_depth;
   }
-  
+
   void set_struct_types(std::vector<cudf::type_id> const& types)
   {
     CUDF_EXPECTS(
