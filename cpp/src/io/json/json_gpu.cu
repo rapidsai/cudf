@@ -703,7 +703,7 @@ void convert_json_to_columns(parse_options_view const& opts,
                                                                                valid_fields,
                                                                                num_valid_fields);
 
-  CUDF_CUDA_TRY(cudaGetLastError());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 /**
@@ -772,7 +772,7 @@ void collect_keys_info(parse_options_view const& options,
   collect_keys_info_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, keys_cnt, keys_info);
 
-  CUDF_CUDA_TRY(cudaGetLastError());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 }  // namespace gpu

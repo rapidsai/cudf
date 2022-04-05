@@ -543,6 +543,6 @@ class concurrent_unordered_map {
         m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
     }
 
-    CUDF_CUDA_TRY(cudaGetLastError());
+    CUDF_CHECK_CUDA(stream.value());
   }
 };

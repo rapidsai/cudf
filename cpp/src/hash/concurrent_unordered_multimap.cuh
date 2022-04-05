@@ -584,7 +584,7 @@ class concurrent_unordered_multimap {
     if (init) {
       init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
         m_hashtbl_values, m_hashtbl_size, unused_key, unused_element);
-      CUDF_CUDA_TRY(cudaGetLastError());
+      CUDF_CHECK_CUDA(stream.value());
     }
   }
 };
