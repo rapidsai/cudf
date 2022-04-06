@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/strings/string_view.hpp>
@@ -37,7 +38,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
@@ -219,20 +219,18 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto grouped_keys = helper().sorted_keys(rmm::cuda_stream_default, mr);
+  auto const stream = rmm::cuda_stream_default;
+  auto grouped_keys = helper().sorted_keys(stream, mr);
 
-  auto const& group_offsets = helper().group_offsets(rmm::cuda_stream_default);
-  std::vector<size_type> group_offsets_vector(group_offsets.size());
-  thrust::copy(thrust::device_pointer_cast(group_offsets.begin()),
-               thrust::device_pointer_cast(group_offsets.end()),
-               group_offsets_vector.begin());
+  auto const& group_offsets       = helper().group_offsets(stream);
+  auto const group_offsets_vector = cudf::detail::make_std_vector_sync(group_offsets, stream);
 
-  if (values.num_columns()) {
+  if (not values.is_empty()) {
     auto grouped_values = cudf::detail::gather(values,
-                                               helper().key_sort_order(rmm::cuda_stream_default),
+                                               helper().key_sort_order(stream),
                                                cudf::out_of_bounds_policy::DONT_CHECK,
                                                cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                               rmm::cuda_stream_default,
+                                               stream,
                                                mr);
     return groupby::groups{
       std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};

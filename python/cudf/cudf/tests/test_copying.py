@@ -1,4 +1,4 @@
-from __future__ import division, print_function
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd

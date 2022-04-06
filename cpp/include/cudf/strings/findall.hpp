@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
@@ -47,14 +48,48 @@ namespace strings {
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param strings Strings instance for this operation.
+ * @param input Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<table> findall_re(
-  strings_column_view const& strings,
+std::unique_ptr<table> findall(
+  strings_column_view const& input,
   std::string const& pattern,
+  regex_flags const flags             = regex_flags::DEFAULT,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a lists column of strings for each matching occurrence of the
+ * regex pattern within each string.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ["bunny", "rabbit", "hare", "dog"]
+ * r = findall_record(s, "[ab]"")
+ * r is now a lists column like:
+ *  [ ["b"]
+ *    ["a","b","b"]
+ *    ["a"]
+ *    null ]
+ * @endcode
+ *
+ * A null output row results if the pattern is not found in the corresponding row
+ * input string.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
+ * @param input Strings instance for this operation.
+ * @param pattern Regex pattern to match within each string.
+ * @param flags Regex flags for interpreting special characters in the pattern.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New lists column of strings.
+ */
+std::unique_ptr<column> findall_record(
+  strings_column_view const& input,
+  std::string const& pattern,
+  regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

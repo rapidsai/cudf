@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ struct interleave_columns_functor {
 };
 
 template <typename T>
-struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cudf::list_view>>> {
+struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::list_view>>> {
   std::unique_ptr<column> operator()(table_view const& lists_columns,
                                      bool create_mask,
                                      rmm::cuda_stream_view stream,
@@ -64,7 +64,7 @@ struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cu
 };
 
 template <typename T>
-struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cudf::struct_view>>> {
+struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>> {
   std::unique_ptr<cudf::column> operator()(table_view const& structs_columns,
                                            bool create_mask,
                                            rmm::cuda_stream_view stream,
@@ -131,7 +131,7 @@ struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cu
 };
 
 template <typename T>
-struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
+struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>> {
   std::unique_ptr<cudf::column> operator()(table_view const& strings_columns,
                                            bool create_mask,
                                            rmm::cuda_stream_view stream,
@@ -214,7 +214,7 @@ struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cu
 };
 
 template <typename T>
-struct interleave_columns_impl<T, typename std::enable_if_t<cudf::is_fixed_width<T>()>> {
+struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
   std::unique_ptr<cudf::column> operator()(table_view const& input,
                                            bool create_mask,
                                            rmm::cuda_stream_view stream,

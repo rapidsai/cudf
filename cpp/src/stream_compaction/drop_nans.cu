@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,14 +29,14 @@ namespace {
 
 struct dispatch_is_not_nan {
   template <typename T>
-  std::enable_if_t<std::is_floating_point<T>::value, bool> __device__
+  std::enable_if_t<std::is_floating_point_v<T>, bool> __device__
   operator()(cudf::column_device_view col_device_view, cudf::size_type i)
   {
     return col_device_view.is_valid(i) ? not std::isnan(col_device_view.element<T>(i)) : true;
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_floating_point<T>::value, bool> __device__
+  std::enable_if_t<not std::is_floating_point_v<T>, bool> __device__
   operator()(cudf::column_device_view, cudf::size_type)
   {
     return true;

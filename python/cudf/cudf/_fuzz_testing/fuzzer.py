@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import datetime
 import json
@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 
 
-class Fuzzer(object):
+class Fuzzer:
     def __init__(
         self,
         target,

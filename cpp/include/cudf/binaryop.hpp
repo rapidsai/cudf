@@ -45,7 +45,7 @@ enum class binary_operator : int32_t {
   PMOD,                  ///< positive modulo operator
                          ///< If remainder is negative, this returns (remainder + divisor) % divisor
                          ///< else, it returns (dividend % divisor)
-  PYMOD,                 ///< operator % but following python's sign rules for negatives
+  PYMOD,                 ///< operator % but following Python's sign rules for negatives
   POW,                   ///< lhs ^ rhs
   LOG_BASE,              ///< logarithm to the base
   ATAN2,                 ///< 2-argument arctangent

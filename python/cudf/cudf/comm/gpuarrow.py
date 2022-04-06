@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 from collections import OrderedDict
 from collections.abc import Sequence
 
@@ -58,7 +58,7 @@ class GpuArrowReader(Sequence):
         return dc
 
 
-class GpuArrowNodeReader(object):
+class GpuArrowNodeReader:
     def __init__(self, table, index):
         self._table = table
         self._field = table.schema[index]

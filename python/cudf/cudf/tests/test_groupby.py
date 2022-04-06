@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import datetime
 import itertools
@@ -82,11 +82,6 @@ def make_frame(
         ).astype("datetime64[ns]")
 
     return df
-
-
-def get_nelem():
-    for elem in [2, 3, 1000]:
-        yield elem
 
 
 @pytest.fixture
@@ -1096,7 +1091,7 @@ def test_groupby_cumcount():
     )
 
 
-@pytest.mark.parametrize("nelem", get_nelem())
+@pytest.mark.parametrize("nelem", [2, 3, 1000])
 @pytest.mark.parametrize("as_index", [True, False])
 @pytest.mark.parametrize(
     "agg", ["min", "max", "idxmin", "idxmax", "mean", "count"]

@@ -80,6 +80,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
   private static final File TEST_DECIMAL_PARQUET_FILE = TestUtils.getResourceAsFile("decimal.parquet");
+  private static final File TEST_ALL_TYPES_PLAIN_AVRO_FILE = TestUtils.getResourceAsFile("alltypes_plain.avro");
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
 
@@ -639,6 +640,65 @@ public class TableTest extends CudfTestBase {
           DType.FLOAT32
       };
       assertTableTypes(expectedTypes, table);
+    }
+  }
+
+  @Test
+  void testReadAvro() {
+    AvroOptions opts = AvroOptions.builder()
+        .includeColumn("bool_col")
+        .includeColumn("int_col")
+        .includeColumn("timestamp_col")
+        .build();
+
+    try (Table expected = new Table.TestBuilder()
+        .column(true, false, true, false, true, false, true, false)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+            1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+        .build();
+        Table table = Table.readAvro(opts, TEST_ALL_TYPES_PLAIN_AVRO_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadAvroBuffer() throws IOException{
+    AvroOptions opts = AvroOptions.builder()
+        .includeColumn("bool_col")
+        .includeColumn("timestamp_col")
+        .build();
+
+    byte[] buffer = Files.readAllBytes(TEST_ALL_TYPES_PLAIN_AVRO_FILE.toPath());
+    int bufferLen = buffer.length;
+    try (Table expected = new Table.TestBuilder()
+        .column(true, false, true, false, true, false, true, false)
+        .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+            1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+        .build();
+        Table table = Table.readAvro(opts, buffer, 0, bufferLen)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadAvroFull() {
+    try (Table expected = new Table.TestBuilder()
+        .column(4, 5, 6, 7, 2, 3, 0, 1)
+        .column(true, false, true, false, true, false, true, false)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(0L, 10L, 0L, 10L, 0L, 10L, 0L, 10L)
+        .column(0.0f, 1.100000023841858f, 0.0f, 1.100000023841858f, 0.0f, 1.100000023841858f, 0.0f, 1.100000023841858f)
+        .column(0.0d, 10.1d, 0.0d, 10.1d, 0.0d, 10.1d, 0.0d, 10.1d)
+        .column("03/01/09", "03/01/09", "04/01/09", "04/01/09", "02/01/09", "02/01/09", "01/01/09", "01/01/09")
+        .column("0", "1", "0", "1", "0", "1", "0", "1")
+        .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+            1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+        .build();
+        Table table = Table.readAvro(TEST_ALL_TYPES_PLAIN_AVRO_FILE)) {
+      assertTablesAreEqual(expected, table);
     }
   }
 
@@ -2381,6 +2441,222 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testMixedLeftSemiJoinGatherMap() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8)
+             .build();
+         GatherMap map = Table.mixedLeftSemiJoinGatherMap(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testMixedLeftSemiJoinGatherMapNulls() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0, 7, 8)
+             .build();
+         GatherMap map = Table.mixedLeftSemiJoinGatherMap(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testMixedLeftSemiJoinGatherMapWithSize() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftSemiJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      try (GatherMap map = Table.mixedLeftSemiJoinGatherMap(leftKeys, rightKeys, left, right,
+          condition, NullEquality.UNEQUAL, sizeInfo)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
+  void testMixedLeftSemiJoinGatherMapNullsWithSize() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0, 7, 8)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftSemiJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      try (GatherMap map = Table.mixedLeftSemiJoinGatherMap(leftKeys, rightKeys, left, right,
+          condition, NullEquality.EQUAL, sizeInfo)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
+  void testMixedLeftAntiJoinGatherMap() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 3, 4, 5, 6, 9)
+             .build();
+         GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testMixedLeftAntiJoinGatherMapNulls() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4, 5, 6, 9)
+             .build();
+         GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
+      verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testMixedLeftAntiJoinGatherMapWithSize() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 3, 4, 5, 6, 9)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftAntiJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      try (GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
+          condition, NullEquality.UNEQUAL, sizeInfo)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
+  void testMixedLeftAntiJoinGatherMapNullsWithSize() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4, 5, 6, 9)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftAntiJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      try (GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
+          condition, NullEquality.EQUAL, sizeInfo)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
   void testLeftSemiJoinGatherMap() {
     try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
          Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
@@ -3714,8 +3990,8 @@ public class TableTest extends CudfTestBase {
   @Test
   void testGroupByScan() {
     try (Table t1 = new Table.TestBuilder()
-        .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
-        .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
+        .column(  "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2") // GBY Key#0
+        .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)  // GBY Key#1
         .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
         .column(  -9, null,   -5,   0,     4,    4,    8,    2,    2,    2, null)
         .build()) {
@@ -3729,16 +4005,18 @@ public class TableTest extends CudfTestBase {
               GroupByScanAggregation.min().onColumn(2),
               GroupByScanAggregation.max().onColumn(2),
               GroupByScanAggregation.rank().onColumn(3),
-              GroupByScanAggregation.denseRank().onColumn(3));
+              GroupByScanAggregation.denseRank().onColumn(3),
+              GroupByScanAggregation.percentRank().onColumn(3));
            Table expected = new Table.TestBuilder()
-               .column( "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
+               .column(  "1",  "1",  "1",  "1",  "1",  "1",  "1",  "2",  "2",  "2",  "2")
                .column(   0,    1,    3,    3,    5,    5,    5,    5,    5,    5,    5)
                .column(12.0, 14.0, 13.0, 30.0, 17.0, 34.0, null, null, 11.0, null, 21.0)
                .column(   0,    0,    0,    1,    0,    1,    2,    0,    1,    2,    3) // odd why is this not 1 based?
                .column(12.0, 14.0, 13.0, 13.0, 17.0, 17.0, null, null, 11.0, null, 10.0)
                .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0, null, null, 11.0, null, 11.0)
-               .column(1, 1, 1, 2, 1, 1, 3, 1, 1, 1, 4)
-               .column(1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 2)
+               .column(   1,    1,    1,    2,    1,    1,    3,    1,    1,    1,    4)
+               .column(   1,    1,    1,    2,    1,    1,    2,    1,    1,    1,    2)
+               .column( 0.0,  0.0,  0.0,  1.0,  0.0,  0.0,  1.0,  0.0,  0.0,  0.0,  1.0)
                .build()) {
         assertTablesAreEqual(expected, result);
       }
@@ -3867,6 +4145,97 @@ public class TableTest extends CudfTestBase {
                  Arrays.asList(100d, 150d, 160d)
          )) {
       assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testCreateTDigestReduction() {
+    try (Table t1 = new Table.TestBuilder()
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+         Scalar tdigest = t1.getColumn(0)
+            .reduce(ReductionAggregation.createTDigest(1000), DType.STRUCT)) {
+      assertEquals(DType.STRUCT, tdigest.getType());
+
+      try (CloseableArray columns = CloseableArray.wrap(tdigest.getChildrenFromStructScalar())) {
+        assertEquals(3, columns.size());
+        try (HostColumnVector centroids = ((ColumnView) columns.get(0)).copyToHost();
+           HostColumnVector min = ((ColumnView) columns.get(1)).copyToHost();
+           HostColumnVector max = ((ColumnView) columns.get(2)).copyToHost()) {
+          assertEquals(DType.LIST, centroids.getType());
+          assertEquals(DType.FLOAT64, min.getType());
+          assertEquals(DType.FLOAT64, max.getType());
+          assertEquals(1, min.getRowCount());
+          assertEquals(1, max.getRowCount());
+          assertEquals(70, min.getDouble(0));
+          assertEquals(160, max.getDouble(0));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMergeTDigestReduction() {
+    StructType centroidStruct = new StructType(false,
+            new BasicType(false, DType.FLOAT64), // mean
+            new BasicType(false, DType.FLOAT64)); // weight
+
+    ListType centroidList = new ListType(false, centroidStruct);
+
+    StructType tdigestType = new StructType(false,
+            centroidList,
+            new BasicType(false, DType.FLOAT64), // min
+            new BasicType(false, DType.FLOAT64)); // max
+
+    try (ColumnVector tdigests = ColumnVector.fromStructs(tdigestType,
+            new StructData(Arrays.asList(
+                    new StructData(1.0, 100.0),
+                    new StructData(2.0, 50.0)),
+                    1.0, // min
+                    2.0), // max
+            new StructData(Arrays.asList(
+                    new StructData(3.0, 200.0),
+                    new StructData(4.0, 99.0)),
+                    3.0, // min
+                    4.0)); // max
+      Scalar merged = tdigests.reduce(ReductionAggregation.mergeTDigest(1000), DType.STRUCT)) {
+
+      assertEquals(DType.STRUCT, merged.getType());
+      try (CloseableArray columns = CloseableArray.wrap(merged.getChildrenFromStructScalar())) {
+        assertEquals(3, columns.size());
+        try (HostColumnVector centroids = ((ColumnView) columns.get(0)).copyToHost();
+             HostColumnVector min = ((ColumnView) columns.get(1)).copyToHost();
+             HostColumnVector max = ((ColumnView) columns.get(2)).copyToHost()) {
+          assertEquals(3, columns.size());
+          assertEquals(DType.LIST, centroids.getType());
+          assertEquals(DType.FLOAT64, min.getType());
+          assertEquals(DType.FLOAT64, max.getType());
+          assertEquals(1, min.getRowCount());
+          assertEquals(1, max.getRowCount());
+          assertEquals(1.0, min.getDouble(0));
+          assertEquals(4.0, max.getDouble(0));
+          assertEquals(1, centroids.rows);
+
+          List list = centroids.getList(0);
+          assertEquals(4, list.size());
+
+          StructData data = (StructData) list.get(0);
+          assertEquals(1.0, data.dataRecord.get(0));
+          assertEquals(100.0, data.dataRecord.get(1));
+
+          data = (StructData) list.get(1);
+          assertEquals(2.0, data.dataRecord.get(0));
+          assertEquals(50.0, data.dataRecord.get(1));
+
+          data = (StructData) list.get(2);
+          assertEquals(3.0, data.dataRecord.get(0));
+          assertEquals(200.0, data.dataRecord.get(1));
+
+          data = (StructData) list.get(3);
+          assertEquals(4.0, data.dataRecord.get(0));
+          assertEquals(99.0, data.dataRecord.get(1));
+        }
+      }
     }
   }
 

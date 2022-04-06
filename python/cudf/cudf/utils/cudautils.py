@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
 from pickle import dumps
 
 import cachetools
@@ -218,7 +219,7 @@ def make_cache_key(udf, sig):
     codebytes = udf.__code__.co_code
     constants = udf.__code__.co_consts
     if udf.__closure__ is not None:
-        cvars = tuple([x.cell_contents for x in udf.__closure__])
+        cvars = tuple(x.cell_contents for x in udf.__closure__)
         cvarbytes = dumps(cvars)
     else:
         cvarbytes = b""

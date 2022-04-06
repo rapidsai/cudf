@@ -1,10 +1,10 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import itertools
 from collections.abc import MutableMapping
-from functools import reduce
+from functools import cached_property, reduce
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -20,7 +20,6 @@ import pandas as pd
 
 import cudf
 from cudf.core import column
-from cudf.utils.utils import cached_property
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
@@ -343,6 +342,26 @@ class ColumnAccessor(MutableMapping):
                     return self._select_by_label_with_wildcard(key)
             return self._select_by_label_grouped(key)
 
+    def get_labels_by_index(self, index: Any) -> tuple:
+        """Get the labels corresponding to the provided column indices.
+
+        Parameters
+        ----------
+        index : integer, integer slice, or list-like of integers
+            The column indexes.
+
+        Returns
+        -------
+        tuple
+        """
+        if isinstance(index, slice):
+            start, stop, step = index.indices(len(self._data))
+            return self.names[start:stop:step]
+        elif pd.api.types.is_integer(index):
+            return (self.names[index],)
+        else:
+            return tuple(self.names[i] for i in index)
+
     def select_by_index(self, index: Any) -> ColumnAccessor:
         """
         Return a ColumnAccessor composed of the columns
@@ -356,13 +375,7 @@ class ColumnAccessor(MutableMapping):
         -------
         ColumnAccessor
         """
-        if isinstance(index, slice):
-            start, stop, step = index.indices(len(self._data))
-            keys = self.names[start:stop:step]
-        elif pd.api.types.is_integer(index):
-            keys = [self.names[index]]
-        else:
-            keys = (self.names[i] for i in index)
+        keys = self.get_labels_by_index(index)
         data = {k: self._data[k] for k in keys}
         return self.__class__(
             data, multiindex=self.multiindex, level_names=self.level_names,
@@ -523,14 +536,19 @@ class ColumnAccessor(MutableMapping):
                 raise IndexError(
                     f"Too many levels: Index has only 1 level, not {level+1}"
                 )
+
             if isinstance(mapper, Mapping):
-                new_names = (
+                new_col_names = [
                     mapper.get(col_name, col_name) for col_name in self.keys()
-                )
+                ]
             else:
-                new_names = (mapper(col_name) for col_name in self.keys())
+                new_col_names = [mapper(col_name) for col_name in self.keys()]
+
+            if len(new_col_names) != len(set(new_col_names)):
+                raise ValueError("Duplicate column names are not allowed")
+
             ca = ColumnAccessor(
-                dict(zip(new_names, self.values())),
+                dict(zip(new_col_names, self.values())),
                 level_names=self.level_names,
                 multiindex=self.multiindex,
             )

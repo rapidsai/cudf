@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,7 +153,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 
   // Create tokenizer
   wordpiece_tokenizer tokenizer(
-    vocab_table, max_rows_tensor, max_sequence_length, stride, do_truncate, do_lower_case, stream);
+    vocab_table, max_rows_tensor, max_sequence_length, stride, do_truncate, do_lower_case);
   // Run tokenizer
   auto const tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
   // assign output components

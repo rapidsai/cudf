@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -39,6 +39,9 @@ public class ColumnWriterOptions {
     this.childColumnOptions =
         (ColumnWriterOptions[]) builder.children.toArray(new ColumnWriterOptions[0]);
   }
+
+  // The sentinel value of unknown precision (default value)
+  public static int UNKNOWN_PRECISION = -1;
 
   /**
    * Constructor used for list
@@ -103,7 +106,7 @@ public class ColumnWriterOptions {
 
     protected ColumnWriterOptions withTimestamp(String name, boolean isInt96,
                                                 boolean isNullable) {
-      return new ColumnWriterOptions(name, isInt96, 0, isNullable);
+      return new ColumnWriterOptions(name, isInt96, UNKNOWN_PRECISION, isNullable);
     }
 
     /**
@@ -243,7 +246,7 @@ public class ColumnWriterOptions {
 
   public ColumnWriterOptions(String columnName, boolean isNullable) {
     this.isTimestampTypeInt96 = false;
-    this.precision = 0;
+    this.precision = UNKNOWN_PRECISION;
     this.isNullable = isNullable;
     this.columnName = columnName;
   }

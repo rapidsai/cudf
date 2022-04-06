@@ -14,8 +14,10 @@ from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils import ioutils
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 
+@_cudf_nvtx_annotate
 def _write_parquet(
     df,
     paths,
@@ -73,6 +75,7 @@ def _write_parquet(
 
 # Logic chosen to match: https://arrow.apache.org/
 # docs/_modules/pyarrow/parquet.html#write_to_dataset
+@_cudf_nvtx_annotate
 def write_to_dataset(
     df,
     root_path,
@@ -161,6 +164,7 @@ def write_to_dataset(
 
 
 @ioutils.doc_read_parquet_metadata()
+@_cudf_nvtx_annotate
 def read_parquet_metadata(path):
     """{docstring}"""
 
@@ -173,6 +177,7 @@ def read_parquet_metadata(path):
     return num_rows, num_row_groups, col_names
 
 
+@_cudf_nvtx_annotate
 def _process_dataset(
     paths, fs, filters=None, row_groups=None, categorical_partitions=True,
 ):
@@ -308,6 +313,7 @@ def _process_dataset(
 
 
 @ioutils.doc_read_parquet()
+@_cudf_nvtx_annotate
 def read_parquet(
     filepath_or_buffer,
     engine="cudf",
@@ -409,7 +415,7 @@ def read_parquet(
     # (There is a good chance this was not the intention)
     if engine != "cudf":
         warnings.warn(
-            "Using CPU via PyArrow to read Parquet dataset."
+            "Using CPU via PyArrow to read Parquet dataset. "
             "This option is both inefficient and unstable!"
         )
         if filters is not None:
@@ -435,6 +441,7 @@ def read_parquet(
     )
 
 
+@_cudf_nvtx_annotate
 def _parquet_to_frame(
     paths_or_buffers,
     *args,
@@ -502,6 +509,7 @@ def _parquet_to_frame(
     )
 
 
+@_cudf_nvtx_annotate
 def _read_parquet(
     filepaths_or_buffers,
     engine,
@@ -535,6 +543,7 @@ def _read_parquet(
 
 
 @ioutils.doc_to_parquet()
+@_cudf_nvtx_annotate
 def to_parquet(
     df,
     path,
@@ -556,7 +565,7 @@ def to_parquet(
 
     if engine == "cudf":
         # Ensure that no columns dtype is 'category'
-        for col in df.columns:
+        for col in df._column_names:
             if partition_cols is None or col not in partition_cols:
                 if df[col].dtype.name == "category":
                     raise ValueError(
@@ -646,6 +655,7 @@ def _generate_filename():
     return uuid4().hex + ".parquet"
 
 
+@_cudf_nvtx_annotate
 def _get_partitioned(
     df,
     root_path,
@@ -689,6 +699,7 @@ ParquetWriter = libparquet.ParquetWriter
 
 
 class ParquetDatasetWriter:
+    @_cudf_nvtx_annotate
     def __init__(
         self,
         path,
@@ -765,6 +776,7 @@ class ParquetDatasetWriter:
         self.path_cw_map: Dict[str, int] = {}
         self.filename = None
 
+    @_cudf_nvtx_annotate
     def write_table(self, df):
         """
         Write a dataframe to the file/dataset
@@ -821,6 +833,7 @@ class ParquetDatasetWriter:
         self.path_cw_map.update({k: new_cw_idx for k in new_paths})
         self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
+    @_cudf_nvtx_annotate
     def close(self, return_metadata=False):
         """
         Close all open files and optionally return footer metadata as a binary

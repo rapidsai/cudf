@@ -16,6 +16,7 @@ import pytest
 
 import cudf
 from cudf.io.orc import ORCWriter
+from cudf.testing import assert_frame_equal
 from cudf.testing._utils import (
     assert_eq,
     gen_rand_series,
@@ -93,7 +94,7 @@ def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
         path, engine=engine, columns=columns, use_index=use_index
     )
 
-    assert_eq(expect, got, check_categorical=False)
+    assert_frame_equal(cudf.from_pandas(expect), got, check_categorical=False)
 
 
 def test_orc_reader_filenotfound(tmpdir):
@@ -384,11 +385,13 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
         else:
             print(type(excpr).__name__)
 
-    expect = orcfile.read(columns=columns).to_pandas()
-    cudf.from_pandas(expect).to_orc(gdf_fname.strpath, compression=compression)
-    got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
+    expect = cudf.from_pandas(orcfile.read(columns=columns).to_pandas())
+    expect.to_orc(gdf_fname.strpath, compression=compression)
+    got = cudf.from_pandas(
+        pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
+    )
 
-    assert_eq(expect, got)
+    assert_frame_equal(expect, got)
 
 
 @pytest.mark.parametrize("stats_freq", ["NONE", "STRIPE", "ROWGROUP"])
@@ -405,11 +408,11 @@ def test_orc_writer_statistics_frequency(datadir, tmpdir, stats_freq):
         else:
             print(type(excpr).__name__)
 
-    expect = orcfile.read().to_pandas()
-    cudf.from_pandas(expect).to_orc(gdf_fname.strpath, statistics=stats_freq)
-    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+    expect = cudf.from_pandas(orcfile.read().to_pandas())
+    expect.to_orc(gdf_fname.strpath, statistics=stats_freq)
+    got = cudf.from_pandas(pa.orc.ORCFile(gdf_fname).read().to_pandas())
 
-    assert_eq(expect, got)
+    assert_frame_equal(expect, got)
 
 
 @pytest.mark.parametrize("stats_freq", ["NONE", "STRIPE", "ROWGROUP"])
@@ -492,8 +495,7 @@ def test_chunked_orc_writer(
     writer.close()
 
     got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
-
-    assert_eq(expect, got)
+    assert_frame_equal(cudf.from_pandas(expect), cudf.from_pandas(got))
 
 
 @pytest.mark.parametrize(
@@ -550,7 +552,7 @@ def test_orc_writer_sliced(tmpdir):
     df_select = df.iloc[1:3]
 
     df_select.to_orc(cudf_path)
-    assert_eq(cudf.read_orc(cudf_path), df_select.reset_index(drop=True))
+    assert_eq(cudf.read_orc(cudf_path), df_select)
 
 
 @pytest.mark.parametrize(
@@ -792,7 +794,8 @@ def test_orc_bool_encode_fail():
 
     # Also validate data
     pdf = pa.orc.ORCFile(buffer).read().to_pandas()
-    assert_eq(okay_df, pdf)
+
+    assert_eq(okay_df.to_pandas(nullable=True), pdf)
 
 
 def test_nanoseconds_overflow():
@@ -838,7 +841,12 @@ def test_empty_string_columns(data):
     got_df = cudf.read_orc(buffer)
 
     assert_eq(expected, got_df)
-    assert_eq(expected_pdf, got_df)
+    assert_eq(
+        expected_pdf,
+        got_df.to_pandas(nullable=True)
+        if expected_pdf["string"].dtype == pd.StringDtype()
+        else got_df,
+    )
 
 
 @pytest.mark.parametrize("scale", [-3, 0, 3])

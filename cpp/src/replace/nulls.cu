@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,8 +62,9 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
                                       char* chars,
                                       cudf::size_type* valid_counter)
 {
-  cudf::size_type nrows = input.size();
-  cudf::size_type i     = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::size_type nrows                = input.size();
+  cudf::thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::thread_index_type const stride = blockDim.x * gridDim.x;
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
@@ -98,7 +99,7 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
       if (nonzero_output) std::memcpy(chars + offsets[i], out.data(), out.size_bytes());
     }
 
-    i += blockDim.x * gridDim.x;
+    i += stride;
     active_mask = __ballot_sync(active_mask, i < nrows);
   }
 
@@ -114,8 +115,9 @@ __global__ void replace_nulls(cudf::column_device_view input,
                               cudf::mutable_column_device_view output,
                               cudf::size_type* output_valid_count)
 {
-  cudf::size_type nrows = input.size();
-  cudf::size_type i     = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::size_type nrows                = input.size();
+  cudf::thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::thread_index_type const stride = blockDim.x * gridDim.x;
 
   uint32_t active_mask = 0xffffffff;
   active_mask          = __ballot_sync(active_mask, i < nrows);
@@ -141,7 +143,7 @@ __global__ void replace_nulls(cudf::column_device_view input,
       }
     }
 
-    i += blockDim.x * gridDim.x;
+    i += stride;
     active_mask = __ballot_sync(active_mask, i < nrows);
   }
   if (replacement_has_nulls) {
@@ -247,6 +249,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
 
   std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
     sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
+
   auto offsets_view = offsets->mutable_view();
 
   auto const bytes =
@@ -297,8 +300,7 @@ struct replace_nulls_functor {
  *        `replace_nulls` with the appropriate data types.
  */
 struct replace_nulls_scalar_kernel_forwarder {
-  template <typename col_type,
-            typename std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
+  template <typename col_type, std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            cudf::scalar const& replacement,
                                            rmm::cuda_stream_view stream,

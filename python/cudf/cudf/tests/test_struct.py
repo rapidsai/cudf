@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -203,6 +203,14 @@ def test_dataframe_to_struct():
 
     # check that a copy was made:
     df["a"][0] = 5
+    assert_eq(got, expect)
+
+    # check that a non-string (but convertible to string) named column can be
+    # converted to struct
+    df = cudf.DataFrame([[1, 2], [3, 4]], columns=[(1, "b"), 0])
+    expect = cudf.Series([{"(1, 'b')": 1, "0": 2}, {"(1, 'b')": 3, "0": 4}])
+    with pytest.warns(UserWarning, match="will be casted"):
+        got = df.to_struct()
     assert_eq(got, expect)
 
 

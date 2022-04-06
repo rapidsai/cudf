@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,7 +216,7 @@ struct ConvertFunctor {
    * It is handled here rather than within convertStrToValue() as that function
    * is used by other types (ex. timestamp) that aren't 'booleable'.
    */
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* output_column,
@@ -240,7 +240,7 @@ struct ConvertFunctor {
    * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* out_buffer,
@@ -258,8 +258,7 @@ struct ConvertFunctor {
    * (including wrapper types) that is not covered by above.
    */
   template <typename T,
-            typename std::enable_if_t<!std::is_floating_point<T>::value and
-                                      !std::is_integral<T>::value>* = nullptr>
+            std::enable_if_t<!std::is_floating_point_v<T> and !std::is_integral_v<T>>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* output_column,

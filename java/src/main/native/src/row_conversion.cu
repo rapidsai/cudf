@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -34,15 +35,20 @@
 #include <rmm/exec_policy.hpp>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <type_traits>
 
 #include "row_conversion.hpp"
 
-#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
-#include <cuda/barrier>
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
+#define ASYNC_MEMCPY_SUPPORTED
 #endif
+
+#if !defined(__CUDA_ARCH__) || defined(ASYNC_MEMCPY_SUPPORTED)
+#include <cuda/barrier>
+#endif // #if !defined(__CUDA_ARCH__) || defined(ASYNC_MEMCPY_SUPPORTED)
 
 #include <algorithm>
 #include <cstdarg>
@@ -50,11 +56,11 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <tuple>
 
 constexpr auto JCUDF_ROW_ALIGNMENT = 8;
 
-#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 constexpr auto NUM_TILES_PER_KERNEL_FROM_ROWS = 2;
 constexpr auto NUM_TILES_PER_KERNEL_TO_ROWS = 2;
 constexpr auto NUM_TILES_PER_KERNEL_LOADED = 2;
@@ -63,18 +69,28 @@ constexpr auto NUM_VALIDITY_TILES_PER_KERNEL_LOADED = 2;
 
 constexpr auto MAX_BATCH_SIZE = std::numeric_limits<cudf::size_type>::max();
 
+constexpr auto NUM_STRING_ROWS_PER_BLOCK = 16;
+constexpr auto MAX_STRING_BLOCKS = MAX_BATCH_SIZE;
+
+constexpr auto NUM_THREADS = 256;
+constexpr auto NUM_VALIDITY_THREADS_PER_TILE = 32;
+
 // needed to suppress warning about cuda::barrier
 #pragma nv_diag_suppress static_var_with_dynamic_init
-#endif
 
 using namespace cudf;
 using detail::make_device_uvector_async;
 using rmm::device_uvector;
+
+#ifdef ASYNC_MEMCPY_SUPPORTED
+using cuda::aligned_size_t;
+#else
+template <std::size_t> using aligned_size_t = size_t; // Local stub for cuda::aligned_size_t.
+#endif // ASYNC_MEMCPY_SUPPORTED
+
 namespace cudf {
 namespace jni {
 namespace detail {
-
-#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 
 /************************************************************************
  * This module converts data from row-major to column-major and from column-major
@@ -154,6 +170,11 @@ struct tile_info {
 
   __device__ inline size_type get_shared_row_size(size_type const *const col_offsets,
                                                   size_type const *const col_sizes) const {
+    // this calculation is invalid if there are holes in the data such as a variable-width column.
+    // It is wrong in a safe way in that it will say this row size is larger than it should be, so
+    // we are not losing data we are just not as efficient as we could be with shared memory. This
+    // may be a problem if the tile is computed without regard to variable width offset/length sizes
+    // in that we overrun shared memory.
     return util::round_up_unsafe(col_offsets[end_col] + col_sizes[end_col] - col_offsets[start_col],
                                  JCUDF_ROW_ALIGNMENT);
   }
@@ -170,9 +191,9 @@ struct tile_info {
  *
  */
 struct row_batch {
-  size_type num_bytes;                   // number of bytes in this batch
-  size_type row_count;                   // number of rows in the batch
-  device_uvector<size_type> row_offsets; // offsets column of output cudf column
+  size_type num_bytes;                     // number of bytes in this batch
+  size_type row_count;                     // number of rows in the batch
+  device_uvector<offset_type> row_offsets; // offsets column of output cudf column
 };
 
 /**
@@ -180,15 +201,90 @@ struct row_batch {
  *
  */
 struct batch_data {
-  device_uvector<size_type> batch_row_offsets;      // offset column of returned cudf column
+  device_uvector<size_type> batch_row_offsets;      // offsets to each row in incoming data
   device_uvector<size_type> d_batch_row_boundaries; // row numbers for the start of each batch
   std::vector<size_type>
       batch_row_boundaries;           // row numbers for the start of each batch: 0, 1500, 2700
   std::vector<row_batch> row_batches; // information about each batch such as byte count
 };
 
-struct row_offset_functor {
-  row_offset_functor(size_type fixed_width_only_row_size)
+/**
+ * @brief builds row size information for tables that contain strings
+ *
+ * @param tbl table from which to compute row size information
+ * @param fixed_width_and_validity_size size of fixed-width and validity data in this table
+ * @param stream cuda stream on which to operate
+ * @return pair of device vector of size_types of the row sizes of the table and a device vector of
+ * offsets into the string column
+ */
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<strings_column_view::offset_iterator>>
+build_string_row_offsets(table_view const &tbl, size_type fixed_width_and_validity_size,
+                         rmm::cuda_stream_view stream) {
+  auto const num_rows = tbl.num_rows();
+  rmm::device_uvector<size_type> d_row_sizes(num_rows, stream);
+  thrust::uninitialized_fill(rmm::exec_policy(stream), d_row_sizes.begin(), d_row_sizes.end(), 0);
+
+  auto d_offsets_iterators = [&]() {
+    std::vector<strings_column_view::offset_iterator> offsets_iterators;
+    auto offsets_iter = thrust::make_transform_iterator(
+        tbl.begin(), [](auto const &col) -> strings_column_view::offset_iterator {
+          if (!is_fixed_width(col.type())) {
+            CUDF_EXPECTS(col.type().id() == type_id::STRING, "only string columns are supported!");
+            return strings_column_view(col).offsets_begin();
+          } else {
+            return nullptr;
+          }
+        });
+    std::copy_if(offsets_iter, offsets_iter + tbl.num_columns(),
+                 std::back_inserter(offsets_iterators),
+                 [](auto const &offset_ptr) { return offset_ptr != nullptr; });
+    return make_device_uvector_async(offsets_iterators, stream);
+  }();
+
+  auto const num_columns = static_cast<size_type>(d_offsets_iterators.size());
+
+  thrust::for_each(rmm::exec_policy(stream), thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(num_columns * num_rows),
+                   [d_offsets_iterators = d_offsets_iterators.data(), num_columns, num_rows,
+                    d_row_sizes = d_row_sizes.data()] __device__(auto element_idx) {
+                     auto const row = element_idx % num_rows;
+                     auto const col = element_idx / num_rows;
+                     auto const val =
+                         d_offsets_iterators[col][row + 1] - d_offsets_iterators[col][row];
+                     atomicAdd(&d_row_sizes[row], val);
+                   });
+
+  // transform the row sizes to include fixed width size and alignment
+  thrust::transform(rmm::exec_policy(stream), d_row_sizes.begin(), d_row_sizes.end(),
+                    d_row_sizes.begin(), [fixed_width_and_validity_size] __device__(auto row_size) {
+                      return util::round_up_unsafe(fixed_width_and_validity_size + row_size,
+                                                   JCUDF_ROW_ALIGNMENT);
+                    });
+
+  return {std::move(d_row_sizes), std::move(d_offsets_iterators)};
+}
+
+/**
+ * @brief functor to return the offset of a row in a table with string columns
+ *
+ */
+struct string_row_offset_functor {
+  string_row_offset_functor(device_span<size_type> _d_row_offsets)
+      : d_row_offsets(_d_row_offsets){};
+
+  __device__ inline size_type operator()(int row_number, int) const {
+    return d_row_offsets[row_number];
+  }
+
+  device_span<size_type> d_row_offsets;
+};
+
+/**
+ * @brief functor to return the offset of a row in a table with only fixed-width columns
+ *
+ */
+struct fixed_width_row_offset_functor {
+  fixed_width_row_offset_functor(size_type fixed_width_only_row_size)
       : _fixed_width_only_row_size(fixed_width_only_row_size){};
 
   __device__ inline size_type operator()(int row_number, int tile_row_start) const {
@@ -197,8 +293,6 @@ struct row_offset_functor {
 
   size_type _fixed_width_only_row_size;
 };
-
-#endif // !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 
 /**
  * @brief Copies data from row-based JCUDF format to column-based cudf format.
@@ -460,7 +554,11 @@ __global__ void copy_to_rows_fixed_width_optimized(
   }
 }
 
-#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
+#ifdef ASYNC_MEMCPY_SUPPORTED
+#define MEMCPY(dst, src, size, barrier) cuda::memcpy_async(dst, src, size, barrier)
+#else
+#define MEMCPY(dst, src, size, barrier) memcpy(dst, src, size)
+#endif // ASYNC_MEMCPY_SUPPORTED
 
 /**
  * @brief copy data from cudf columns into JCUDF format, which is row-based
@@ -498,14 +596,15 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
   extern __shared__ int8_t shared_data[];
   int8_t *shared[stages_count] = {shared_data, shared_data + shmem_used_per_tile};
 
+#ifdef ASYNC_MEMCPY_SUPPORTED
   __shared__ cuda::barrier<cuda::thread_scope_block> tile_barrier[NUM_TILES_PER_KERNEL_LOADED];
   if (group.thread_rank() == 0) {
     for (int i = 0; i < NUM_TILES_PER_KERNEL_LOADED; ++i) {
       init(&tile_barrier[i], group.size());
     }
   }
-
   group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
 
   auto const tiles_remaining =
       std::min(static_cast<uint>(tile_infos.size()) - blockIdx.x * NUM_TILES_PER_KERNEL_TO_ROWS,
@@ -523,12 +622,18 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
       auto const num_elements_in_tile = num_fetch_cols * num_fetch_rows;
       auto const fetch_tile_row_size = fetch_tile.get_shared_row_size(col_offsets, col_sizes);
       auto const starting_column_offset = col_offsets[fetch_tile.start_col];
+#ifdef ASYNC_MEMCPY_SUPPORTED
       auto &fetch_barrier = tile_barrier[fetch_index % NUM_TILES_PER_KERNEL_LOADED];
-
       // wait for the last use of the memory to be completed
       if (fetch_index >= NUM_TILES_PER_KERNEL_LOADED) {
         fetch_barrier.arrive_and_wait();
       }
+#else
+      // wait for the last use of the memory to be completed
+      if (fetch_index >= NUM_TILES_PER_KERNEL_LOADED) {
+        group.sync();
+      }
+#endif // ASYNC_MEMCPY_SUPPORTED
 
       // to do the copy we need to do n column copies followed by m element copies OR
       // we have to do m element copies followed by r row copies. When going from column
@@ -542,6 +647,10 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
         auto const relative_col = el / num_fetch_rows;
         auto const relative_row = el % num_fetch_rows;
         auto const absolute_col = relative_col + fetch_tile.start_col;
+        if (input_data[absolute_col] == nullptr) {
+          // variable-width data
+          continue;
+        }
         auto const absolute_row = relative_row + fetch_tile.start_row;
         auto const col_size = col_sizes[absolute_col];
         auto const col_offset = col_offsets[absolute_col];
@@ -553,27 +662,30 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
         // copy the element from global memory
         switch (col_size) {
           case 2:
-            cuda::memcpy_async(&shared_buffer_base[shared_offset], input_src,
-                               cuda::aligned_size_t<2>(col_size), fetch_barrier);
+            MEMCPY(&shared_buffer_base[shared_offset], input_src, aligned_size_t<2>(col_size),
+                   fetch_barrier);
             break;
           case 4:
-            cuda::memcpy_async(&shared_buffer_base[shared_offset], input_src,
-                               cuda::aligned_size_t<4>(col_size), fetch_barrier);
+            MEMCPY(&shared_buffer_base[shared_offset], input_src, aligned_size_t<4>(col_size),
+                   fetch_barrier);
             break;
           case 8:
-            cuda::memcpy_async(&shared_buffer_base[shared_offset], input_src,
-                               cuda::aligned_size_t<8>(col_size), fetch_barrier);
+            MEMCPY(&shared_buffer_base[shared_offset], input_src, aligned_size_t<8>(col_size),
+                   fetch_barrier);
             break;
           default:
-            cuda::memcpy_async(&shared_buffer_base[shared_offset], input_src, col_size,
-                               fetch_barrier);
+            MEMCPY(&shared_buffer_base[shared_offset], input_src, col_size, fetch_barrier);
             break;
         }
       }
     }
 
+#ifdef ASYNC_MEMCPY_SUPPORTED
     auto &processing_barrier = tile_barrier[processing_index % NUM_TILES_PER_KERNEL_LOADED];
     processing_barrier.arrive_and_wait();
+#else
+    group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
 
     auto const tile = tile_infos[blockIdx.x * NUM_TILES_PER_KERNEL_TO_ROWS + processing_index];
     auto const tile_row_size = tile.get_shared_row_size(col_offsets, col_sizes);
@@ -597,16 +709,19 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
       auto const input_src = &shared[processing_index % stages_count]
                                     [tile_row_size * relative_row + relative_chunk_offset];
 
-      cuda::memcpy_async(output_dest, input_src,
-                         cuda::aligned_size_t<bytes_per_chunk>(bytes_per_chunk),
-                         processing_barrier);
+      MEMCPY(output_dest, input_src, aligned_size_t<bytes_per_chunk>{bytes_per_chunk},
+             processing_barrier);
     }
   }
 
+#ifdef ASYNC_MEMCPY_SUPPORTED
   // wait on the last copies to complete
   for (uint i = 0; i < std::min(stages_count, tiles_remaining); ++i) {
     tile_barrier[i].arrive_and_wait();
   }
+#else
+  group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
 }
 
 /**
@@ -647,6 +762,8 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
       std::min(static_cast<uint>(tile_infos.size()) - blockIdx.x * NUM_VALIDITY_TILES_PER_KERNEL,
                static_cast<uint>(NUM_VALIDITY_TILES_PER_KERNEL));
 
+#ifdef ASYNC_MEMCPY_SUPPORTED
+  // Initialize cuda barriers for each tile.
   __shared__ cuda::barrier<cuda::thread_scope_block>
       shared_tile_barriers[NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
   if (group.thread_rank() == 0) {
@@ -654,12 +771,16 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
       init(&shared_tile_barriers[i], group.size());
     }
   }
-
   group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
 
   for (int validity_tile = 0; validity_tile < tiles_remaining; ++validity_tile) {
     if (validity_tile >= NUM_VALIDITY_TILES_PER_KERNEL_LOADED) {
+#ifdef ASYNC_MEMCPY_SUPPORTED
       shared_tile_barriers[validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED].arrive_and_wait();
+#else
+      group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
     }
     int8_t *this_shared_tile = shared_tiles[validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
     auto tile = tile_infos[blockIdx.x * NUM_VALIDITY_TILES_PER_KERNEL + validity_tile];
@@ -667,8 +788,10 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
     auto const num_tile_cols = tile.num_cols();
     auto const num_tile_rows = tile.num_rows();
 
-    auto const num_sections_x = util::div_rounding_up_unsafe(num_tile_cols, 32);
-    auto const num_sections_y = util::div_rounding_up_unsafe(num_tile_rows, 32);
+    auto const num_sections_per_block = NUM_VALIDITY_THREADS_PER_TILE;
+
+    auto const num_sections_x = util::div_rounding_up_unsafe(num_tile_cols, num_sections_per_block);
+    auto const num_sections_y = util::div_rounding_up_unsafe(num_tile_rows, num_sections_per_block);
     auto const validity_data_row_length = util::round_up_unsafe(
         util::div_rounding_up_unsafe(num_tile_cols, CHAR_BIT), JCUDF_ROW_ALIGNMENT);
     auto const total_sections = num_sections_x * num_sections_y;
@@ -683,22 +806,24 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
       // convert to rows and cols
       auto const section_x = my_section_idx % num_sections_x;
       auto const section_y = my_section_idx / num_sections_x;
-      auto const relative_col = section_x * 32 + lane_id;
-      auto const relative_row = section_y * 32;
+      auto const relative_col = section_x * NUM_VALIDITY_THREADS_PER_TILE + lane_id;
+      auto const relative_row = section_y * NUM_VALIDITY_THREADS_PER_TILE;
       auto const absolute_col = relative_col + tile.start_col;
       auto const absolute_row = relative_row + tile.start_row;
-      auto const participation_mask = __ballot_sync(0xFFFFFFFF, absolute_col < num_columns);
+      auto const participating = absolute_col < num_columns && absolute_row < num_rows;
+      auto const participation_mask = __ballot_sync(0xFFFFFFFF, participating);
 
-      if (absolute_col < num_columns) {
+      if (participating) {
         auto my_data = input_nm[absolute_col] != nullptr ?
-                           input_nm[absolute_col][absolute_row / 32] :
+                           input_nm[absolute_col][absolute_row / NUM_VALIDITY_THREADS_PER_TILE] :
                            std::numeric_limits<uint32_t>::max();
 
         // every thread that is participating in the warp has 4 bytes, but it's column-based
         // data and we need it in row-based. So we shuffle the bits around with ballot_sync to
         // make the bytes we actually write.
         bitmask_type dw_mask = 1;
-        for (int i = 0; i < 32 && relative_row + i < num_rows; ++i, dw_mask <<= 1) {
+        for (int i = 0; i < NUM_VALIDITY_THREADS_PER_TILE && relative_row + i < num_rows;
+             ++i, dw_mask <<= 1) {
           auto validity_data = __ballot_sync(participation_mask, my_data & dw_mask);
           // lead thread in each warp writes data
           auto const validity_write_offset =
@@ -722,8 +847,10 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
     auto const row_bytes = util::div_rounding_up_unsafe(num_tile_cols, CHAR_BIT);
     auto const chunks_per_row = util::div_rounding_up_unsafe(row_bytes, bytes_per_chunk);
     auto const total_chunks = chunks_per_row * tile.num_rows();
+#ifdef ASYNC_MEMCPY_SUPPORTED
     auto &processing_barrier =
         shared_tile_barriers[validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
+#endif // ASYNC_MEMCPY_SUPPORTED
     auto const tail_bytes = row_bytes % bytes_per_chunk;
     auto const row_batch_start =
         tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
@@ -740,18 +867,79 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
           &this_shared_tile[validity_data_row_length * relative_row + relative_chunk_offset];
 
       if (tail_bytes > 0 && col_chunk == chunks_per_row - 1)
-        cuda::memcpy_async(output_dest, input_src, tail_bytes, processing_barrier);
+        MEMCPY(output_dest, input_src, tail_bytes, processing_barrier);
       else
-        cuda::memcpy_async(output_dest, input_src,
-                           cuda::aligned_size_t<bytes_per_chunk>(bytes_per_chunk),
-                           processing_barrier);
+        MEMCPY(output_dest, input_src, aligned_size_t<bytes_per_chunk>(bytes_per_chunk),
+               processing_barrier);
     }
   }
 
+#ifdef ASYNC_MEMCPY_SUPPORTED
   // wait for last tiles of data to arrive
   for (int validity_tile = 0;
        validity_tile < tiles_remaining % NUM_VALIDITY_TILES_PER_KERNEL_LOADED; ++validity_tile) {
     shared_tile_barriers[validity_tile].arrive_and_wait();
+  }
+#else
+  group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
+}
+
+/**
+ * @brief kernel to copy string data to JCUDF row format
+ *
+ * @tparam RowOffsetIter iterator for row offsets into the destination data
+ * @param num_rows number of rows in this portion of the table
+ * @param num_variable_columns number of columns of variable-width data
+ * @param variable_input_data variable width data column pointers
+ * @param variable_col_output_offsets output offset information for variable-width columns
+ * @param variable_col_offsets input offset information for variable-width columns
+ * @param fixed_width_row_size offset to variable-width data in a row
+ * @param row_offsets offsets for each row in output data
+ * @param batch_row_offset row start for this batch
+ * @param output_data pointer to output data for this batch
+ *
+ */
+template <typename RowOffsetIter>
+__global__ void copy_strings_to_rows(size_type const num_rows, size_type const num_variable_columns,
+                                     int8_t const **variable_input_data,
+                                     size_type const *variable_col_output_offsets,
+                                     size_type const **variable_col_offsets,
+                                     size_type fixed_width_row_size, RowOffsetIter row_offsets,
+                                     size_type const batch_row_offset, int8_t *output_data) {
+  // Each block will take a group of rows controlled by NUM_STRING_ROWS_PER_BLOCK.
+  // Each warp will copy a row at a time. The base thread will first go through column data and
+  // fill out offset/length information for the column. Then all threads of the warp will
+  // participate in the memcpy of the string data.
+  auto my_block = cooperative_groups::this_thread_block();
+  auto my_tile = cooperative_groups::tiled_partition<32>(my_block);
+#ifdef ASYNC_MEMCPY_SUPPORTED
+  cuda::barrier<cuda::thread_scope_block> block_barrier;
+#endif
+
+  auto const start_row =
+      blockIdx.x * NUM_STRING_ROWS_PER_BLOCK + my_tile.meta_group_rank() + batch_row_offset;
+  auto const end_row =
+      std::min(num_rows, static_cast<size_type>(start_row + NUM_STRING_ROWS_PER_BLOCK));
+
+  for (int row = start_row; row < end_row; row += my_tile.meta_group_size()) {
+    auto offset = fixed_width_row_size; // initial offset to variable-width data
+    auto const base_row_offset = row_offsets(row, 0);
+    for (int col = 0; col < num_variable_columns; ++col) {
+      auto const string_start_offset = variable_col_offsets[col][row];
+      auto const string_length = variable_col_offsets[col][row + 1] - string_start_offset;
+      if (my_tile.thread_rank() == 0) {
+        // write the offset/length to column
+        uint32_t *output_dest = reinterpret_cast<uint32_t *>(
+            &output_data[base_row_offset + variable_col_output_offsets[col]]);
+        output_dest[0] = offset;
+        output_dest[1] = string_length;
+      }
+      auto string_output_dest = &output_data[base_row_offset + offset];
+      auto string_output_src = &variable_input_data[col][string_start_offset];
+      MEMCPY(string_output_dest, string_output_src, string_length, block_barrier);
+      offset += string_length;
+    }
   }
 }
 
@@ -793,14 +981,16 @@ __global__ void copy_from_rows(const size_type num_rows, const size_type num_col
   extern __shared__ int8_t shared_data[];
   int8_t *shared[stages_count] = {shared_data, shared_data + shmem_used_per_tile};
 
+#ifdef ASYNC_MEMCPY_SUPPORTED
+  // Initialize cuda barriers for each tile.
   __shared__ cuda::barrier<cuda::thread_scope_block> tile_barrier[NUM_TILES_PER_KERNEL_LOADED];
   if (group.thread_rank() == 0) {
     for (int i = 0; i < NUM_TILES_PER_KERNEL_LOADED; ++i) {
       init(&tile_barrier[i], group.size());
     }
   }
-
   group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
 
   auto tiles_remaining =
       std::min(static_cast<uint>(tile_infos.size()) - blockIdx.x * NUM_TILES_PER_KERNEL_FROM_ROWS,
@@ -817,30 +1007,38 @@ __global__ void copy_from_rows(const size_type num_rows, const size_type num_col
       auto const fetch_tile_start_row = fetch_tile.start_row;
       auto const starting_col_offset = col_offsets[fetch_tile.start_col];
       auto const fetch_tile_row_size = fetch_tile.get_shared_row_size(col_offsets, col_sizes);
-      auto &fetch_barrier = tile_barrier[fetch_index % NUM_TILES_PER_KERNEL_LOADED];
       auto const row_batch_start =
           fetch_tile.batch_number == 0 ? 0 : batch_row_boundaries[fetch_tile.batch_number];
-
+#ifdef ASYNC_MEMCPY_SUPPORTED
+      auto &fetch_barrier = tile_barrier[fetch_index % NUM_TILES_PER_KERNEL_LOADED];
       // if we have fetched all buffers, we need to wait for processing
       // to complete on them before we can use them again
       if (fetch_index > NUM_TILES_PER_KERNEL_LOADED) {
         fetch_barrier.arrive_and_wait();
       }
+#else
+      if (fetch_index >= NUM_TILES_PER_KERNEL_LOADED) {
+        group.sync();
+      }
+#endif // ASYNC_MEMCPY_SUPPORTED
 
       for (auto row = fetch_tile_start_row + static_cast<int>(threadIdx.x);
            row <= fetch_tile.end_row; row += blockDim.x) {
         auto shared_offset = (row - fetch_tile_start_row) * fetch_tile_row_size;
         // copy the data
-        cuda::memcpy_async(&shared[fetch_index % stages_count][shared_offset],
-                           &input_data[row_offsets(row, row_batch_start) + starting_col_offset],
-                           fetch_tile_row_size, fetch_barrier);
+        MEMCPY(&shared[fetch_index % stages_count][shared_offset],
+               &input_data[row_offsets(row, row_batch_start) + starting_col_offset],
+               fetch_tile_row_size, fetch_barrier);
       }
     }
 
+#ifdef ASYNC_MEMCPY_SUPPORTED
     auto &processing_barrier = tile_barrier[processing_index % NUM_TILES_PER_KERNEL_LOADED];
-
     // ensure our data is ready
     processing_barrier.arrive_and_wait();
+#else
+    group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
 
     auto const tile = tile_infos[blockIdx.x * NUM_TILES_PER_KERNEL_FROM_ROWS + processing_index];
     auto const rows_in_tile = tile.num_rows();
@@ -868,15 +1066,19 @@ __global__ void copy_from_rows(const size_type num_rows, const size_type num_col
       int8_t *shmem_src = &shared[processing_index % stages_count][shared_memory_offset];
       int8_t *dst = &output_data[absolute_col][absolute_row * column_size];
 
-      cuda::memcpy_async(dst, shmem_src, column_size, processing_barrier);
+      MEMCPY(dst, shmem_src, column_size, processing_barrier);
     }
     group.sync();
   }
 
+#ifdef ASYNC_MEMCPY_SUPPORTED
   // wait on the last copies to complete
   for (uint i = 0; i < std::min(stages_count, tiles_remaining); ++i) {
     tile_barrier[i].arrive_and_wait();
   }
+#else
+  group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
 }
 
 /**
@@ -917,6 +1119,8 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
       std::min(static_cast<uint>(tile_infos.size()) - blockIdx.x * NUM_VALIDITY_TILES_PER_KERNEL,
                static_cast<uint>(NUM_VALIDITY_TILES_PER_KERNEL));
 
+#ifdef ASYNC_MEMCPY_SUPPORTED
+  // Initialize cuda barriers for each tile.
   __shared__ cuda::barrier<cuda::thread_scope_block>
       shared_tile_barriers[NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
   if (group.thread_rank() == 0) {
@@ -924,13 +1128,17 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
       init(&shared_tile_barriers[i], group.size());
     }
   }
-
   group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
 
   for (int validity_tile = 0; validity_tile < tiles_remaining; ++validity_tile) {
     if (validity_tile >= NUM_VALIDITY_TILES_PER_KERNEL_LOADED) {
+#ifdef ASYNC_MEMCPY_SUPPORTED
       auto const validity_index = validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED;
       shared_tile_barriers[validity_index].arrive_and_wait();
+#else
+      group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
     }
     int8_t *this_shared_tile = shared_tiles[validity_tile % 2];
     auto const tile = tile_infos[blockIdx.x * NUM_VALIDITY_TILES_PER_KERNEL + validity_tile];
@@ -938,7 +1146,7 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
     auto const tile_start_row = tile.start_row;
     auto const num_tile_cols = tile.num_cols();
     auto const num_tile_rows = tile.num_rows();
-    constexpr auto rows_per_read = 32;
+    constexpr auto rows_per_read = NUM_VALIDITY_THREADS_PER_TILE;
     auto const num_sections_x = util::div_rounding_up_safe(num_tile_cols, CHAR_BIT);
     auto const num_sections_y = util::div_rounding_up_safe(num_tile_rows, rows_per_read);
     auto const validity_data_col_length = num_sections_y * 4; // words to bytes
@@ -991,9 +1199,11 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
     auto const col_bytes = util::div_rounding_up_unsafe(num_tile_rows, CHAR_BIT);
     auto const chunks_per_col = util::div_rounding_up_unsafe(col_bytes, bytes_per_chunk);
     auto const total_chunks = chunks_per_col * num_tile_cols;
+    auto const tail_bytes = col_bytes % bytes_per_chunk;
+#ifdef ASYNC_MEMCPY_SUPPORTED
     auto &processing_barrier =
         shared_tile_barriers[validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
-    auto const tail_bytes = col_bytes % bytes_per_chunk;
+#endif // ASYNC_MEMCPY_SUPPORTED
 
     for (auto i = threadIdx.x; i < total_chunks; i += blockDim.x) {
       // determine source address of my chunk
@@ -1001,20 +1211,21 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
       auto const row_chunk = i % chunks_per_col;
       auto const absolute_col = relative_col + tile_start_col;
       auto const relative_chunk_byte_offset = row_chunk * bytes_per_chunk;
-      auto const output_dest = output_nm[absolute_col] + word_index(tile_start_row) + row_chunk * 2;
+      auto output_dest = reinterpret_cast<int8_t *>(output_nm[absolute_col] +
+                                                    word_index(tile_start_row) + row_chunk * 2);
       auto const input_src =
           &this_shared_tile[validity_data_col_length * relative_col + relative_chunk_byte_offset];
 
       if (tail_bytes > 0 && row_chunk == chunks_per_col - 1) {
-        cuda::memcpy_async(output_dest, input_src, tail_bytes, processing_barrier);
+        MEMCPY(output_dest, input_src, tail_bytes, processing_barrier);
       } else {
-        cuda::memcpy_async(output_dest, input_src,
-                           cuda::aligned_size_t<bytes_per_chunk>(bytes_per_chunk),
-                           processing_barrier);
+        MEMCPY(output_dest, input_src, aligned_size_t<bytes_per_chunk>(bytes_per_chunk),
+               processing_barrier);
       }
     }
   }
 
+#ifdef ASYNC_MEMCPY_SUPPORTED
   // wait for last tiles of data to arrive
   auto const num_tiles_to_wait = tiles_remaining > NUM_VALIDITY_TILES_PER_KERNEL_LOADED ?
                                      NUM_VALIDITY_TILES_PER_KERNEL_LOADED :
@@ -1022,9 +1233,10 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
   for (int validity_tile = 0; validity_tile < num_tiles_to_wait; ++validity_tile) {
     shared_tile_barriers[validity_tile].arrive_and_wait();
   }
+#else
+  group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
 }
-
-#endif // !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 
 /**
  * @brief Calculate the dimensions of the kernel for fixed width only columns.
@@ -1158,7 +1370,18 @@ static inline int32_t compute_fixed_width_layout(std::vector<data_type> const &s
   return util::round_up_unsafe(at_offset, JCUDF_ROW_ALIGNMENT);
 }
 
-#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
+/**
+ * @brief column sizes and column start offsets for a table
+ */
+struct column_info_s {
+  size_type fixed_width_size_per_row;
+  std::vector<size_type> fixed_width_column_starts;
+  std::vector<size_type> fixed_width_column_sizes;
+  std::vector<size_type> variable_width_column_starts;
+
+  column_info_s &operator=(column_info_s const &other) = delete;
+  column_info_s &operator=(column_info_s &&other) = delete;
+};
 
 /**
  * @brief Compute information about a table such as bytes per row and offsets.
@@ -1171,33 +1394,43 @@ static inline int32_t compute_fixed_width_layout(std::vector<data_type> const &s
  * @return size of the fixed_width data portion of a row.
  */
 template <typename iterator>
-static size_type compute_column_information(iterator begin, iterator end,
-                                            std::vector<size_type> &column_starts,
-                                            std::vector<size_type> &column_sizes) {
+column_info_s compute_column_information(iterator begin, iterator end) {
   size_type fixed_width_size_per_row = 0;
+  std::vector<size_type> fixed_width_column_starts;
+  std::vector<size_type> fixed_width_column_sizes;
+  std::vector<size_type> variable_width_column_starts;
+
   for (auto cv = begin; cv != end; ++cv) {
     auto col_type = std::get<0>(*cv);
-    bool nested_type = is_compound(col_type);
+    bool const compound_type = is_compound(col_type);
 
     // a list or string column will write a single uint64
     // of data here for offset/length
-    auto col_size = nested_type ? 8 : size_of(col_type);
+    auto const col_size = compound_type ? sizeof(uint32_t) + sizeof(uint32_t) : size_of(col_type);
 
-    // align size for this type
-    size_type const alignment_needed = col_size; // They are the same for fixed width types
+    // align size for this type - They are the same for fixed width types and 4 bytes for variable
+    // width length/offset combos
+    size_type const alignment_needed = compound_type ? __alignof(uint32_t) : col_size;
     fixed_width_size_per_row = util::round_up_unsafe(fixed_width_size_per_row, alignment_needed);
-    column_starts.push_back(fixed_width_size_per_row);
-    column_sizes.push_back(col_size);
+    if (compound_type) {
+      variable_width_column_starts.push_back(fixed_width_size_per_row);
+    } else {
+      fixed_width_column_starts.push_back(fixed_width_size_per_row);
+      fixed_width_column_sizes.push_back(col_size);
+    }
     fixed_width_size_per_row += col_size;
   }
 
+  // add validity offset to the end of fixed_width offsets
   auto validity_offset = fixed_width_size_per_row;
-  column_starts.push_back(validity_offset);
+  fixed_width_column_starts.push_back(validity_offset);
 
-  return util::round_up_unsafe(
-      fixed_width_size_per_row +
-          util::div_rounding_up_safe(static_cast<size_type>(std::distance(begin, end)), CHAR_BIT),
-      JCUDF_ROW_ALIGNMENT);
+  // validity is byte-aligned in the JCUDF format
+  fixed_width_size_per_row +=
+      util::div_rounding_up_safe(static_cast<size_type>(std::distance(begin, end)), CHAR_BIT);
+
+  return {fixed_width_size_per_row, std::move(fixed_width_column_starts),
+          std::move(fixed_width_column_sizes), std::move(variable_width_column_starts)};
 }
 
 /**
@@ -1246,8 +1479,9 @@ build_validity_tile_infos(size_type const &num_columns, size_type const &num_row
       }
       int const tile_height = std::min(row_stride, rows_left_in_batch);
 
-      validity_tile_infos.emplace_back(detail::tile_info{
-          col, row, std::min(col + column_stride - 1, num_columns - 1), row + tile_height - 1});
+      validity_tile_infos.emplace_back(
+          detail::tile_info{col, row, std::min(col + column_stride - 1, num_columns - 1),
+                            row + tile_height - 1, current_tile_row_batch});
       row += tile_height;
       rows_left_in_batch -= tile_height;
     }
@@ -1512,79 +1746,72 @@ void determine_tiles(std::vector<size_type> const &column_sizes,
   }
 }
 
-#endif // #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
-
-} // namespace detail
-
-std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource *mr) {
-#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
-  auto const num_columns = tbl.num_columns();
-  auto const num_rows = tbl.num_rows();
-
-  auto const fixed_width_only = std::all_of(
-      tbl.begin(), tbl.end(), [](column_view const &c) { return is_fixed_width(c.type()); });
-
+/**
+ * @brief convert cudf table into JCUDF row format
+ *
+ * @tparam offsetFunctor functor type for offset functor
+ * @param tbl table to convert to JCUDF row format
+ * @param batch_info information about the batches of data
+ * @param offset_functor functor that returns the starting offset of each row
+ * @param column_info information about incoming columns
+ * @param variable_width_offsets optional vector of offsets for variable-with columns
+ * @param stream stream used
+ * @param mr selected memory resource for returned data
+ * @return vector of list columns containing byte columns of the JCUDF row data
+ */
+template <typename offsetFunctor>
+std::vector<std::unique_ptr<column>> convert_to_rows(
+    table_view const &tbl, batch_data &batch_info, offsetFunctor offset_functor,
+    column_info_s const &column_info,
+    std::optional<rmm::device_uvector<strings_column_view::offset_iterator>> variable_width_offsets,
+    rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr) {
   int device_id;
   CUDA_TRY(cudaGetDevice(&device_id));
   int total_shmem_in_bytes;
   CUDA_TRY(
       cudaDeviceGetAttribute(&total_shmem_in_bytes, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
 
+#ifndef __CUDA_ARCH__ // __host__ code.
   // Need to reduce total shmem available by the size of barriers in the kernel's shared memory
   total_shmem_in_bytes -=
       sizeof(cuda::barrier<cuda::thread_scope_block>) * NUM_TILES_PER_KERNEL_LOADED;
+#endif // __CUDA_ARCH__
+
   auto const shmem_limit_per_tile = total_shmem_in_bytes / NUM_TILES_PER_KERNEL_LOADED;
 
-  // break up the work into tiles, which are a starting and ending row/col #.
-  // this tile size is calculated based on the shared memory size available
-  // we want a single tile to fill up the entire shared memory space available
-  // for the transpose-like conversion.
+  auto const num_rows = tbl.num_rows();
 
-  // There are two different processes going on here. The GPU conversion of the data
-  // and the writing of the data into the list of byte columns that are a maximum of
-  // 2 gigs each due to offset maximum size. The GPU conversion portion has to understand
-  // this limitation because the column must own the data inside and as a result it must be
-  // a distinct allocation for that column. Copying the data into these final buffers would
-  // be prohibitively expensive, so care is taken to ensure the GPU writes to the proper buffer.
-  // The tiles are broken at the boundaries of specific rows based on the row sizes up
-  // to that point. These are row batches and they are decided first before building the
-  // tiles so the tiles can be properly cut around them.
+  auto const fixed_width_only = !variable_width_offsets.has_value();
+
+  auto select_columns = [](auto const &tbl, auto column_predicate) {
+    std::vector<column_view> cols;
+    std::copy_if(tbl.begin(), tbl.end(), std::back_inserter(cols),
+                 [&](auto c) { return column_predicate(c); });
+    return table_view(cols);
+  };
+
+  // build fixed_width table view with only fixed-width columns
+  auto fixed_width_table =
+      fixed_width_only ? tbl :
+                         select_columns(tbl, [](auto col) { return !is_compound(col.type()); });
+
+  auto const num_fixed_width_columns = fixed_width_table.num_columns();
+  auto dev_col_sizes = make_device_uvector_async(column_info.fixed_width_column_sizes, stream);
+  auto dev_col_starts = make_device_uvector_async(column_info.fixed_width_column_starts, stream);
 
   // Get the pointers to the input columnar data ready
+  auto data_begin = thrust::make_transform_iterator(fixed_width_table.begin(), [](auto const &c) {
+    return is_compound(c.type()) ? nullptr : c.template data<int8_t>();
+  });
+  std::vector<int8_t const *> input_data(data_begin, data_begin + num_fixed_width_columns);
 
-  auto data_begin = thrust::make_transform_iterator(
-      tbl.begin(), [](auto const &c) { return c.template data<int8_t>(); });
-  std::vector<int8_t const *> input_data(data_begin, data_begin + tbl.num_columns());
-
+  // validity code handles variable and fixed-width data, so give it everything
   auto nm_begin =
       thrust::make_transform_iterator(tbl.begin(), [](auto const &c) { return c.null_mask(); });
   std::vector<bitmask_type const *> input_nm(nm_begin, nm_begin + tbl.num_columns());
 
-  auto dev_input_data = make_device_uvector_async(input_data, stream, mr);
-  auto dev_input_nm = make_device_uvector_async(input_nm, stream, mr);
-
-  std::vector<size_type> column_sizes;  // byte size of each column
-  std::vector<size_type> column_starts; // offset of column inside a row including alignment
-  column_sizes.reserve(num_columns);
-  column_starts.reserve(num_columns + 1); // we add a final offset for validity data start
-
-  auto schema_column_iter =
-      thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                      [&tbl](auto i) -> std::tuple<data_type, column_view const> {
-                                        return {tbl.column(i).type(), tbl.column(i)};
-                                      });
-
-  auto const fixed_width_size_per_row = detail::compute_column_information(
-      schema_column_iter, schema_column_iter + num_columns, column_starts, column_sizes);
-
-  auto dev_col_sizes = make_device_uvector_async(column_sizes, stream, mr);
-  auto dev_col_starts = make_device_uvector_async(column_starts, stream, mr);
-
-  // total encoded row size. This includes fixed-width data, validity, and variable-width data.
-  auto row_size_iter = thrust::make_constant_iterator<uint64_t>(fixed_width_size_per_row);
-  auto batch_info = detail::build_batches(num_rows, row_size_iter, fixed_width_only, stream, mr);
+  auto dev_input_data = make_device_uvector_async(input_data, stream);
+  auto dev_input_nm = make_device_uvector_async(input_nm, stream);
 
   // the first batch always exists unless we were sent an empty table
   auto const first_batch_size = batch_info.row_batches[0].row_count;
@@ -1604,7 +1831,8 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
 
   int info_count = 0;
   detail::determine_tiles(
-      column_sizes, column_starts, first_batch_size, num_rows, shmem_limit_per_tile,
+      column_info.fixed_width_column_sizes, column_info.fixed_width_column_starts, first_batch_size,
+      num_rows, shmem_limit_per_tile,
       [&gpu_batch_row_boundaries = batch_info.d_batch_row_boundaries, &info_count,
        &stream](int const start_col, int const end_col, int const tile_height) {
         int i = detail::compute_tile_counts(gpu_batch_row_boundaries, tile_height, stream);
@@ -1616,7 +1844,8 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
   int tile_offset = 0;
 
   detail::determine_tiles(
-      column_sizes, column_starts, first_batch_size, num_rows, shmem_limit_per_tile,
+      column_info.fixed_width_column_sizes, column_info.fixed_width_column_starts, first_batch_size,
+      num_rows, shmem_limit_per_tile,
       [&gpu_batch_row_boundaries = batch_info.d_batch_row_boundaries, &gpu_tile_infos, num_rows,
        &tile_offset, stream](int const start_col, int const end_col, int const tile_height) {
         tile_offset += detail::build_tiles(
@@ -1626,29 +1855,69 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
 
   // blast through the entire table and convert it
   dim3 blocks(util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_TO_ROWS));
-  dim3 threads(256);
+  dim3 threads(NUM_THREADS);
 
+  // build validity tiles for ALL columns, variable and fixed width.
   auto validity_tile_infos = detail::build_validity_tile_infos(
-      num_columns, num_rows, shmem_limit_per_tile, batch_info.row_batches);
+      tbl.num_columns(), num_rows, shmem_limit_per_tile, batch_info.row_batches);
 
   auto dev_validity_tile_infos = make_device_uvector_async(validity_tile_infos, stream);
   dim3 validity_blocks(
       util::div_rounding_up_unsafe(validity_tile_infos.size(), NUM_VALIDITY_TILES_PER_KERNEL));
-  dim3 validity_threads(std::min(validity_tile_infos.size() * 32, 128lu));
+  dim3 validity_threads(
+      std::min(validity_tile_infos.size() * NUM_VALIDITY_THREADS_PER_TILE, 128lu));
 
-  detail::row_offset_functor offset_functor(fixed_width_size_per_row);
+  auto const validity_offset = column_info.fixed_width_column_starts.back();
 
   detail::copy_to_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
-      num_rows, num_columns, shmem_limit_per_tile, gpu_tile_infos, dev_input_data.data(),
-      dev_col_sizes.data(), dev_col_starts.data(), offset_functor,
+      num_rows, num_fixed_width_columns, shmem_limit_per_tile, gpu_tile_infos,
+      dev_input_data.data(), dev_col_sizes.data(), dev_col_starts.data(), offset_functor,
       batch_info.d_batch_row_boundaries.data(),
       reinterpret_cast<int8_t **>(dev_output_data.data()));
 
+  // note that validity gets the entire table and not the fixed-width portion
   detail::copy_validity_to_rows<<<validity_blocks, validity_threads, total_shmem_in_bytes,
                                   stream.value()>>>(
-      num_rows, num_columns, shmem_limit_per_tile, offset_functor,
-      batch_info.d_batch_row_boundaries.data(), dev_output_data.data(), column_starts.back(),
+      num_rows, tbl.num_columns(), shmem_limit_per_tile, offset_functor,
+      batch_info.d_batch_row_boundaries.data(), dev_output_data.data(), validity_offset,
       dev_validity_tile_infos, dev_input_nm.data());
+
+  if (!fixed_width_only) {
+    // build table view for variable-width data only
+    auto variable_width_table =
+        select_columns(tbl, [](auto col) { return is_compound(col.type()); });
+
+    CUDF_EXPECTS(!variable_width_table.is_empty(), "No variable-width columns when expected!");
+    CUDF_EXPECTS(variable_width_offsets.has_value(), "No variable width offset data!");
+
+    auto variable_data_begin =
+        thrust::make_transform_iterator(variable_width_table.begin(), [](auto const &c) {
+          strings_column_view scv{c};
+          return is_compound(c.type()) ? scv.chars().template data<int8_t>() : nullptr;
+        });
+    std::vector<int8_t const *> variable_width_input_data(
+        variable_data_begin, variable_data_begin + variable_width_table.num_columns());
+
+    auto dev_variable_input_data = make_device_uvector_async(variable_width_input_data, stream);
+    auto dev_variable_col_output_offsets =
+        make_device_uvector_async(column_info.variable_width_column_starts, stream);
+
+    dim3 string_threads(NUM_THREADS);
+    for (uint i = 0; i < batch_info.row_batches.size(); i++) {
+      auto const batch_row_offset = batch_info.batch_row_boundaries[i];
+      auto const batch_num_rows = batch_info.row_batches[i].row_count;
+
+      dim3 string_blocks(
+          std::min(MAX_STRING_BLOCKS,
+                   util::div_rounding_up_unsafe(batch_num_rows, NUM_STRING_ROWS_PER_BLOCK)));
+
+      detail::copy_strings_to_rows<<<string_blocks, string_threads, 0, stream.value()>>>(
+          batch_num_rows, variable_width_table.num_columns(), dev_variable_input_data.data(),
+          dev_variable_col_output_offsets.data(), variable_width_offsets->data(),
+          column_info.fixed_width_size_per_row, offset_functor, batch_row_offset,
+          reinterpret_cast<int8_t *>(output_data[i]));
+    }
+  }
 
   // split up the output buffer into multiple buffers based on row batch sizes
   // and create list of byte columns
@@ -1670,10 +1939,78 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
                  });
 
   return ret;
-#else
-  CUDF_FAIL("Column to row conversion optimization requires volta or later hardware.");
-  return {};
-#endif // #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
+}
+
+} // namespace detail
+
+/**
+ * @brief convert a cudf table to JCUDF row format
+ *
+ * @param tbl incoming table to convert
+ * @param stream stream to use for operations
+ * @param mr memory resource used for returned data
+ * @return vector of list columns containing byte columns of the JCUDF row data
+ */
+std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource *mr) {
+  auto const num_columns = tbl.num_columns();
+  auto const num_rows = tbl.num_rows();
+
+  auto const fixed_width_only = std::all_of(
+      tbl.begin(), tbl.end(), [](column_view const &c) { return is_fixed_width(c.type()); });
+
+  // break up the work into tiles, which are a starting and ending row/col #.
+  // this tile size is calculated based on the shared memory size available
+  // we want a single tile to fill up the entire shared memory space available
+  // for the transpose-like conversion.
+
+  // There are two different processes going on here. The GPU conversion of the data
+  // and the writing of the data into the list of byte columns that are a maximum of
+  // 2 gigs each due to offset maximum size. The GPU conversion portion has to understand
+  // this limitation because the column must own the data inside and as a result it must be
+  // a distinct allocation for that column. Copying the data into these final buffers would
+  // be prohibitively expensive, so care is taken to ensure the GPU writes to the proper buffer.
+  // The tiles are broken at the boundaries of specific rows based on the row sizes up
+  // to that point. These are row batches and they are decided first before building the
+  // tiles so the tiles can be properly cut around them.
+
+  auto schema_column_iter = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0), [&tbl](auto i) -> std::pair<data_type, column_view const> {
+        return {tbl.column(i).type(), tbl.column(i)};
+      });
+
+  auto column_info =
+      detail::compute_column_information(schema_column_iter, schema_column_iter + num_columns);
+  auto const fixed_width_size_per_row = column_info.fixed_width_size_per_row;
+  if (fixed_width_only) {
+    // total encoded row size. This includes fixed-width data and validity only. It does not include
+    // variable-width data since it isn't copied with the fixed-width and validity kernel.
+    auto row_size_iter = thrust::make_constant_iterator<uint64_t>(
+        util::round_up_unsafe(fixed_width_size_per_row, JCUDF_ROW_ALIGNMENT));
+
+    auto batch_info = detail::build_batches(num_rows, row_size_iter, fixed_width_only, stream, mr);
+
+    detail::fixed_width_row_offset_functor offset_functor(
+        util::round_up_unsafe(fixed_width_size_per_row, JCUDF_ROW_ALIGNMENT));
+
+    return detail::convert_to_rows(tbl, batch_info, offset_functor, std::move(column_info),
+                                   std::nullopt, stream, mr);
+  } else {
+    auto offset_data = detail::build_string_row_offsets(tbl, fixed_width_size_per_row, stream);
+    auto &row_sizes = std::get<0>(offset_data);
+
+    auto row_size_iter = cudf::detail::make_counting_transform_iterator(
+        0, detail::row_size_functor(num_rows, row_sizes.data(), 0));
+
+    auto batch_info = detail::build_batches(num_rows, row_size_iter, fixed_width_only, stream, mr);
+
+    detail::string_row_offset_functor offset_functor(batch_info.batch_row_offsets);
+
+    return detail::convert_to_rows(tbl, batch_info, offset_functor, std::move(column_info),
+                                   std::make_optional(std::move(std::get<1>(offset_data))), stream,
+                                   mr);
+  }
 }
 
 std::vector<std::unique_ptr<column>>
@@ -1737,11 +2074,19 @@ convert_to_rows_fixed_width_optimized(table_view const &tbl, rmm::cuda_stream_vi
   }
 }
 
+/**
+ * @brief convert from JCUDF row format to cudf columns
+ *
+ * @param input vector of list columns containing byte columns of the JCUDF row data
+ * @param schema incoming schema of the data
+ * @param stream stream to use for compute
+ * @param mr memory resource for returned data
+ * @return cudf table of the data
+ */
 std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
                                          std::vector<data_type> const &schema,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource *mr) {
-#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
   // verify that the types are what we expect
   column_view child = input.child();
   auto const list_type = child.type().id();
@@ -1757,26 +2102,27 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
   CUDA_TRY(
       cudaDeviceGetAttribute(&total_shmem_in_bytes, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
 
+#ifndef __CUDA_ARCH__ // __host__ code.
   // Need to reduce total shmem available by the size of barriers in the kernel's shared memory
   total_shmem_in_bytes -=
       sizeof(cuda::barrier<cuda::thread_scope_block>) * NUM_TILES_PER_KERNEL_LOADED;
-  int shmem_limit_per_tile = total_shmem_in_bytes / NUM_TILES_PER_KERNEL_LOADED;
+#endif // __CUDA_ARCH__
 
-  std::vector<size_type> column_starts;
-  std::vector<size_type> column_sizes;
+  int shmem_limit_per_tile = total_shmem_in_bytes / NUM_TILES_PER_KERNEL_LOADED;
 
   auto iter = thrust::make_transform_iterator(thrust::make_counting_iterator(0), [&schema](auto i) {
     return std::make_tuple(schema[i], nullptr);
   });
+  auto column_info = detail::compute_column_information(iter, iter + num_columns);
   auto const fixed_width_size_per_row =
-      detail::compute_column_information(iter, iter + num_columns, column_starts, column_sizes);
+      util::round_up_unsafe(column_info.fixed_width_size_per_row, JCUDF_ROW_ALIGNMENT);
 
   // Ideally we would check that the offsets are all the same, etc. but for now
   // this is probably fine
   CUDF_EXPECTS(fixed_width_size_per_row * num_rows == child.size(),
                "The layout of the data appears to be off");
-  auto dev_col_starts = make_device_uvector_async(column_starts, stream, mr);
-  auto dev_col_sizes = make_device_uvector_async(column_sizes, stream, mr);
+  auto dev_col_starts = make_device_uvector_async(column_info.fixed_width_column_starts, stream);
+  auto dev_col_sizes = make_device_uvector_async(column_info.fixed_width_column_sizes, stream);
 
   // Allocate the columns we are going to write into
   std::vector<std::unique_ptr<column>> output_columns;
@@ -1796,8 +2142,8 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
   row_batches.push_back(
       {detail::row_batch{child.size(), num_rows, device_uvector<size_type>(0, stream)}});
 
-  auto dev_output_data = make_device_uvector_async(output_data, stream, mr);
-  auto dev_output_nm = make_device_uvector_async(output_nm, stream, mr);
+  auto dev_output_data = make_device_uvector_async(output_data, stream);
+  auto dev_output_nm = make_device_uvector_async(output_nm, stream);
 
   // only ever get a single batch when going from rows, so boundaries
   // are 0, num_rows
@@ -1809,19 +2155,21 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
                     [num_rows] __device__(auto i) { return i == 0 ? 0 : num_rows; });
 
   int info_count = 0;
-  detail::determine_tiles(column_sizes, column_starts, num_rows, num_rows, shmem_limit_per_tile,
-                          [&gpu_batch_row_boundaries, &info_count,
-                           &stream](int const start_col, int const end_col, int const tile_height) {
-                            info_count += detail::compute_tile_counts(gpu_batch_row_boundaries,
-                                                                      tile_height, stream);
-                          });
+  detail::determine_tiles(
+      column_info.fixed_width_column_sizes, column_info.fixed_width_column_starts, num_rows,
+      num_rows, shmem_limit_per_tile,
+      [&gpu_batch_row_boundaries, &info_count, &stream](int const start_col, int const end_col,
+                                                        int const tile_height) {
+        info_count += detail::compute_tile_counts(gpu_batch_row_boundaries, tile_height, stream);
+      });
 
   // allocate space for tiles
   device_uvector<detail::tile_info> gpu_tile_infos(info_count, stream);
 
   int tile_offset = 0;
   detail::determine_tiles(
-      column_sizes, column_starts, num_rows, num_rows, shmem_limit_per_tile,
+      column_info.fixed_width_column_sizes, column_info.fixed_width_column_starts, num_rows,
+      num_rows, shmem_limit_per_tile,
       [&gpu_batch_row_boundaries, &gpu_tile_infos, num_rows, &tile_offset,
        stream](int const start_col, int const end_col, int const tile_height) {
         tile_offset += detail::build_tiles(
@@ -1830,7 +2178,7 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
       });
 
   dim3 blocks(util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_FROM_ROWS));
-  dim3 threads(std::min(std::min(256, shmem_limit_per_tile / 8), static_cast<int>(child.size())));
+  dim3 threads(NUM_THREADS);
 
   auto validity_tile_infos =
       detail::build_validity_tile_infos(num_columns, num_rows, shmem_limit_per_tile, row_batches);
@@ -1840,9 +2188,10 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
   dim3 validity_blocks(
       util::div_rounding_up_unsafe(validity_tile_infos.size(), NUM_VALIDITY_TILES_PER_KERNEL));
 
-  dim3 validity_threads(std::min(validity_tile_infos.size() * 32, 128lu));
+  dim3 validity_threads(
+      std::min(validity_tile_infos.size() * NUM_VALIDITY_THREADS_PER_TILE, 128lu));
 
-  detail::row_offset_functor offset_functor(fixed_width_size_per_row);
+  detail::fixed_width_row_offset_functor offset_functor(fixed_width_size_per_row);
 
   detail::copy_from_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
       num_rows, num_columns, shmem_limit_per_tile, offset_functor, gpu_batch_row_boundaries.data(),
@@ -1852,13 +2201,10 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
   detail::copy_validity_from_rows<<<validity_blocks, validity_threads, total_shmem_in_bytes,
                                     stream.value()>>>(
       num_rows, num_columns, shmem_limit_per_tile, offset_functor, gpu_batch_row_boundaries.data(),
-      dev_output_nm.data(), column_starts.back(), dev_validity_tile_infos, child.data<int8_t>());
+      dev_output_nm.data(), column_info.fixed_width_column_starts.back(), dev_validity_tile_infos,
+      child.data<int8_t>());
 
   return std::make_unique<table>(std::move(output_columns));
-#else
-  CUDF_FAIL("Row to column conversion optimization requires volta or later hardware.");
-  return {};
-#endif // #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 }
 
 std::unique_ptr<table> convert_from_rows_fixed_width_optimized(

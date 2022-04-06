@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -426,7 +426,7 @@ struct typesAtomicCASImpl<T, 8> {
  * @returns The old value at `address`
  */
 template <typename T, typename BinaryOp>
-typename std::enable_if_t<cudf::is_numeric<T>(), T> __forceinline__ __device__
+std::enable_if_t<cudf::is_numeric<T>(), T> __forceinline__ __device__
 genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 {
   auto fun = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{};
@@ -435,7 +435,7 @@ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 
 // specialization for cudf::detail::timestamp types
 template <typename T, typename BinaryOp>
-typename std::enable_if_t<cudf::is_timestamp<T>(), T> __forceinline__ __device__
+std::enable_if_t<cudf::is_timestamp<T>(), T> __forceinline__ __device__
 genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 {
   using R = typename T::rep;
@@ -448,7 +448,7 @@ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 
 // specialization for cudf::detail::duration types
 template <typename T, typename BinaryOp>
-typename std::enable_if_t<cudf::is_duration<T>(), T> __forceinline__ __device__
+std::enable_if_t<cudf::is_duration<T>(), T> __forceinline__ __device__
 genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 {
   using R = typename T::rep;
@@ -616,7 +616,7 @@ __forceinline__ __device__ T atomicCAS(T* address, T compare, T val)
  *
  * @returns The old value at `address`
  */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
 __forceinline__ __device__ T atomicAnd(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
@@ -637,7 +637,7 @@ __forceinline__ __device__ T atomicAnd(T* address, T val)
  *
  * @returns The old value at `address`
  */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
 __forceinline__ __device__ T atomicOr(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
@@ -658,7 +658,7 @@ __forceinline__ __device__ T atomicOr(T* address, T val)
  *
  * @returns The old value at `address`
  */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
 __forceinline__ __device__ T atomicXor(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});

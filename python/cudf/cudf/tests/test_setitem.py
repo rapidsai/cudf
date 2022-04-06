@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -33,9 +33,14 @@ def test_dataframe_setitem_scaler_bool():
     assert_eq(df, gdf)
 
 
-@pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
+@pytest.mark.parametrize(
+    "df",
+    [pd.DataFrame({"a": [1, 2, 3]}), pd.DataFrame({"a": ["x", "y", "z"]})],
+)
 @pytest.mark.parametrize("arg", [["a"], "a", "b"])
-@pytest.mark.parametrize("value", [-10, pd.DataFrame({"a": [-1, -2, -3]})])
+@pytest.mark.parametrize(
+    "value", [-10, pd.DataFrame({"a": [-1, -2, -3]}), "abc"]
+)
 def test_dataframe_setitem_columns(df, arg, value):
     gdf = cudf.from_pandas(df)
     cudf_replace_value = value
@@ -185,6 +190,33 @@ def test_column_set_equal_length_object_by_mask():
     data[bool_col] = replace_data
 
     assert_eq(cudf.Series(data), cudf.Series([100, 0, 300, 1, 500]))
+
+
+def test_column_set_unequal_length_object_by_mask():
+    data = [1, 2, 3, 4, 5]
+    replace_data_1 = [8, 9]
+    replace_data_2 = [8, 9, 10, 11]
+    mask = [True, True, False, True, False]
+
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+    assert_exceptions_equal(
+        psr.__setitem__,
+        gsr.__setitem__,
+        ([mask, replace_data_1], {}),
+        ([mask, replace_data_1], {}),
+        compare_error_message=False,
+    )
+
+    psr = pd.Series(data)
+    gsr = cudf.Series(data)
+    assert_exceptions_equal(
+        psr.__setitem__,
+        gsr.__setitem__,
+        ([mask, replace_data_2], {}),
+        ([mask, replace_data_2], {}),
+        compare_error_message=False,
+    )
 
 
 def test_categorical_setitem_invalid():

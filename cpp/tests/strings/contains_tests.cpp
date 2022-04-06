@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <tests/strings/utilities.h>
 
 #include <algorithm>
 #include <vector>
@@ -239,15 +239,42 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
 
 TEST_F(StringsContainsTests, OctalTest)
 {
-  cudf::test::strings_column_wrapper strings({"AZ", "B", "CDAZEY", ""});
+  cudf::test::strings_column_wrapper strings({"A3", "B", "CDA3EY", ""});
   auto strings_view = cudf::strings_column_view(strings);
   cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 1, 0});
   auto results = cudf::strings::contains_re(strings_view, "\\101");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  results = cudf::strings::contains_re(strings_view, "\\101Z");
+  results = cudf::strings::contains_re(strings_view, "\\1013");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  results = cudf::strings::contains_re(strings_view, "D*\\101\\132");
+  results = cudf::strings::contains_re(strings_view, "D*\\101\\063");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsContainsTests, HexTest)
+{
+  std::vector<char> ascii_chars(  // all possible matchable chars
+    {thrust::make_counting_iterator<char>(0), thrust::make_counting_iterator<char>(127)});
+  auto const count = static_cast<cudf::size_type>(ascii_chars.size());
+  std::vector<cudf::offset_type> offsets(
+    {thrust::make_counting_iterator<cudf::offset_type>(0),
+     thrust::make_counting_iterator<cudf::offset_type>(0) + count + 1});
+  auto d_chars   = cudf::detail::make_device_uvector_sync(ascii_chars);
+  auto d_offsets = cudf::detail::make_device_uvector_sync(offsets);
+  auto input     = cudf::make_strings_column(d_chars, d_offsets);
+
+  auto strings_view = cudf::strings_column_view(input->view());
+  for (auto ch : ascii_chars) {
+    std::stringstream str;
+    str << "\\x" << std::setfill('0') << std::setw(2) << std::hex << static_cast<int32_t>(ch);
+    std::string pattern = str.str();
+
+    auto results = cudf::strings::contains_re(strings_view, pattern);
+    // only one element in the input should match ch
+    auto true_dat = cudf::detail::make_counting_transform_iterator(
+      0, [ch](auto idx) { return ch == static_cast<char>(idx); });
+    cudf::test::fixed_width_column_wrapper<bool> expected(true_dat, true_dat + count);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
 }
 
 TEST_F(StringsContainsTests, EmbeddedNullCharacter)
@@ -272,6 +299,15 @@ TEST_F(StringsContainsTests, EmbeddedNullCharacter)
   results  = cudf::strings::contains_re(strings_view, "J\\0B");
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 0, 0, 0, 0, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+}
+
+TEST_F(StringsContainsTests, Errors)
+{
+  cudf::test::strings_column_wrapper input({"3", "33"});
+  auto strings_view = cudf::strings_column_view(input);
+
+  EXPECT_THROW(cudf::strings::contains_re(strings_view, "(3?)+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::contains_re(strings_view, "3?+"), cudf::logic_error);
 }
 
 TEST_F(StringsContainsTests, CountTest)

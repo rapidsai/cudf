@@ -17,9 +17,7 @@ from cudf.api import types as types
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -128,9 +126,7 @@ def test_is_categorical_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, True),
@@ -235,9 +231,7 @@ def test_is_numeric_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -342,9 +336,7 @@ def test_is_integer_dtype(obj, expect):
         (int(), True),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -450,9 +442,7 @@ def test_is_integer(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -557,9 +547,7 @@ def test_is_string_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -664,9 +652,7 @@ def test_is_datetime_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -771,9 +757,7 @@ def test_is_list_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -881,9 +865,7 @@ def test_is_struct_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -988,9 +970,7 @@ def test_is_decimal_dtype(obj, expect):
         int(),
         float(),
         complex(),
-        str(),
         "",
-        r"",
         object(),
         # Base Python types.
         bool,
@@ -1070,9 +1050,7 @@ def test_pandas_agreement(obj):
         int(),
         float(),
         complex(),
-        str(),
         "",
-        r"",
         object(),
         # Base Python types.
         bool,

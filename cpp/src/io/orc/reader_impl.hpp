@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,7 +223,6 @@ class reader::impl {
   bool _use_np_dtypes{true};
   std::vector<std::string> _decimal_cols_as_float;
   std::vector<std::string> decimal128_columns;
-  bool is_decimal128_enabled{true};
   data_type _timestamp_type{type_id::EMPTY};
   reader_column_meta _col_meta{};
 };

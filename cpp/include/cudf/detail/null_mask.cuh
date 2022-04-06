@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -32,6 +33,7 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 
 #include <algorithm>
 #include <iterator>
@@ -279,7 +281,8 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                                     OffsetIterator first_bit_indices_end,
                                                     OffsetIterator last_bit_indices_begin,
                                                     count_bits_policy count_bits,
-                                                    rmm::cuda_stream_view stream)
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   auto const num_ranges =
     static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
@@ -329,14 +332,15 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
     // set bits from the length of the segment.
     auto segments_begin =
       thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
-    auto segments_size = thrust::transform_iterator(segments_begin, [] __device__(auto segment) {
-      auto const begin = thrust::get<0>(segment);
-      auto const end   = thrust::get<1>(segment);
-      return end - begin;
-    });
+    auto segment_length_iterator =
+      thrust::transform_iterator(segments_begin, [] __device__(auto const& segment) {
+        auto const begin = thrust::get<0>(segment);
+        auto const end   = thrust::get<1>(segment);
+        return end - begin;
+      });
     thrust::transform(rmm::exec_policy(stream),
-                      segments_size,
-                      segments_size + num_ranges,
+                      segment_length_iterator,
+                      segment_length_iterator + num_ranges,
                       d_bit_counts.data(),
                       d_bit_counts.data(),
                       [] __device__(auto segment_size, auto segment_bit_count) {
@@ -438,7 +442,8 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                        first_bit_indices_end,
                                        last_bit_indices_begin,
                                        count_bits,
-                                       stream);
+                                       stream,
+                                       rmm::mr::get_current_device_resource());
 
   // Copy the results back to the host.
   return make_std_vector_sync(d_bit_counts, stream);
@@ -499,6 +504,80 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
     return std::vector<size_type>(num_segments, 0);
   }
   return detail::segmented_count_unset_bits(bitmask, indices_begin, indices_end, stream);
+}
+
+/**
+ * @brief Create an output null mask whose validity is determined by the
+ * validity of any/all elements of segments of an input null mask.
+ *
+ * @tparam OffsetIterator Random-access input iterator type.
+ * @param bitmask Null mask residing in device memory whose segments will be
+ * reduced into a new mask.
+ * @param first_bit_indices_begin Random-access input iterator to the beginning
+ * of a sequence of indices of the first bit in each segment (inclusive).
+ * @param first_bit_indices_end Random-access input iterator to the end of a
+ * sequence of indices of the first bit in each segment (inclusive).
+ * @param last_bit_indices_begin Random-access input iterator to the beginning
+ * of a sequence of indices of the last bit in each segment (exclusive).
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
+ * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
+ * the reduction is valid if any element in the segment is valid.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned buffer's device memory.
+ * @return A pair containing the reduced null mask and number of nulls.
+ */
+template <typename OffsetIterator>
+std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
+  bitmask_type const* bitmask,
+  OffsetIterator first_bit_indices_begin,
+  OffsetIterator first_bit_indices_end,
+  OffsetIterator last_bit_indices_begin,
+  null_policy null_handling,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  auto const segments_begin =
+    thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
+  auto const segment_length_iterator =
+    thrust::make_transform_iterator(segments_begin, [] __device__(auto const& segment) {
+      auto const begin = thrust::get<0>(segment);
+      auto const end   = thrust::get<1>(segment);
+      return end - begin;
+    });
+
+  auto const num_segments =
+    static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
+
+  if (bitmask == nullptr) {
+    return cudf::detail::valid_if(
+      segment_length_iterator,
+      segment_length_iterator + num_segments,
+      [] __device__(auto const& length) { return length > 0; },
+      stream,
+      mr);
+  }
+
+  auto const segment_valid_counts =
+    cudf::detail::segmented_count_bits(bitmask,
+                                       first_bit_indices_begin,
+                                       first_bit_indices_end,
+                                       last_bit_indices_begin,
+                                       cudf::detail::count_bits_policy::SET_BITS,
+                                       stream,
+                                       rmm::mr::get_current_device_resource());
+  auto const length_and_valid_count =
+    thrust::make_zip_iterator(segment_length_iterator, segment_valid_counts.begin());
+  return cudf::detail::valid_if(
+    length_and_valid_count,
+    length_and_valid_count + num_segments,
+    [null_handling] __device__(auto const& length_and_valid_count) {
+      auto const length      = thrust::get<0>(length_and_valid_count);
+      auto const valid_count = thrust::get<1>(length_and_valid_count);
+      return (length > 0) and
+             ((null_handling == null_policy::EXCLUDE) ? valid_count > 0 : valid_count == length);
+    },
+    stream,
+    mr);
 }
 
 }  // namespace detail

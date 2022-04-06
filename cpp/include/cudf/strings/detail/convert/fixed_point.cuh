@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <cudf/fixed_point/temporary.hpp>
 
 #include <thrust/optional.h>
 #include <thrust/pair.h>
@@ -150,9 +152,11 @@ __device__ DecimalType parse_decimal(char const* iter, char const* iter_end, int
   exp_ten += exp_offset;
 
   // shift the output value based on the exp_ten and the scale values
-  value = exp_ten < scale
-            ? value / static_cast<UnsignedDecimalType>(exp10(static_cast<double>(scale - exp_ten)))
-            : value * static_cast<UnsignedDecimalType>(exp10(static_cast<double>(exp_ten - scale)));
+  auto const shift_adjust =
+    abs(scale - exp_ten) > cuda::std::numeric_limits<UnsignedDecimalType>::digits10
+      ? cuda::std::numeric_limits<UnsignedDecimalType>::max()
+      : numeric::detail::exp10<UnsignedDecimalType>(abs(scale - exp_ten));
+  value = exp_ten < scale ? value / shift_adjust : value * shift_adjust;
 
   return static_cast<DecimalType>(value) * (sign == 0 ? 1 : sign);
 }

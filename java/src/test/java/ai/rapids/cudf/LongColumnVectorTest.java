@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -38,46 +39,71 @@ public class LongColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testArrayAllocation() {
-    try (HostColumnVector longColumnVector = HostColumnVector.fromLongs(2L, 3L, 5L)) {
-      assertFalse(longColumnVector.hasNulls());
-      assertEquals(longColumnVector.getLong(0), 2);
-      assertEquals(longColumnVector.getLong(1), 3);
-      assertEquals(longColumnVector.getLong(2), 5);
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
+      assertEquals(cv.getLong(0), 2);
+      assertEquals(cv.getLong(1), 3);
+      assertEquals(cv.getLong(2), 5);
+    };
+    try (HostColumnVector lcv = HostColumnVector.fromLongs(2L, 3L, 5L)) {
+      verify.accept(lcv);
+    }
+    try (HostColumnVector lcv = ColumnBuilderHelper.fromLongs(true,2L, 3L, 5L)) {
+      verify.accept(lcv);
     }
   }
 
   @Test
   public void testUnsignedArrayAllocation() {
-    try (HostColumnVector longColumnVector = HostColumnVector.fromUnsignedLongs(
-        0xfedcba9876543210L, 0x8000000000000000L, 5L)) {
-      assertFalse(longColumnVector.hasNulls());
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
       assertEquals(Long.toUnsignedString(0xfedcba9876543210L),
-          Long.toUnsignedString(longColumnVector.getLong(0)));
+          Long.toUnsignedString(cv.getLong(0)));
       assertEquals(Long.toUnsignedString(0x8000000000000000L),
-          Long.toUnsignedString(longColumnVector.getLong(1)));
-      assertEquals(5L, longColumnVector.getLong(2));
+          Long.toUnsignedString(cv.getLong(1)));
+      assertEquals(5L, cv.getLong(2));
+    };
+    try (HostColumnVector lcv = HostColumnVector.fromUnsignedLongs(
+        0xfedcba9876543210L, 0x8000000000000000L, 5L)) {
+      verify.accept(lcv);
+    }
+    try (HostColumnVector lcv = ColumnBuilderHelper.fromLongs(false,
+        0xfedcba9876543210L, 0x8000000000000000L, 5L)) {
+      verify.accept(lcv);
     }
   }
 
   @Test
   public void testUpperIndexOutOfBoundsException() {
-    try (HostColumnVector longColumnVector = HostColumnVector.fromLongs(2L, 3L, 5L)) {
-      assertThrows(AssertionError.class, () -> longColumnVector.getLong(3));
-      assertFalse(longColumnVector.hasNulls());
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertThrows(AssertionError.class, () -> cv.getLong(3));
+      assertFalse(cv.hasNulls());
+    };
+    try (HostColumnVector lcv = HostColumnVector.fromLongs(2L, 3L, 5L)) {
+      verify.accept(lcv);
+    }
+    try (HostColumnVector lcv = ColumnBuilderHelper.fromLongs(true, 2L, 3L, 5L)) {
+      verify.accept(lcv);
     }
   }
 
   @Test
   public void testLowerIndexOutOfBoundsException() {
-    try (HostColumnVector longColumnVector = HostColumnVector.fromLongs(2L, 3L, 5L)) {
-      assertFalse(longColumnVector.hasNulls());
-      assertThrows(AssertionError.class, () -> longColumnVector.getLong(-1));
+    Consumer<HostColumnVector> verify = (cv) -> {
+      assertFalse(cv.hasNulls());
+      assertThrows(AssertionError.class, () -> cv.getLong(-1));
+    };
+    try (HostColumnVector lcv = HostColumnVector.fromLongs(2L, 3L, 5L)) {
+      verify.accept(lcv);
+    }
+    try (HostColumnVector lcv = ColumnBuilderHelper.fromLongs(true, 2L, 3L, 5L)) {
+      verify.accept(lcv);
     }
   }
 
   @Test
   public void testAddingNullValues() {
-    try (HostColumnVector cv = HostColumnVector.fromBoxedLongs(2L, 3L, 4L, 5L, 6L, 7L, null, null)) {
+    Consumer<HostColumnVector> verify = (cv) -> {
       assertTrue(cv.hasNulls());
       assertEquals(2, cv.getNullCount());
       for (int i = 0; i < 6; i++) {
@@ -85,13 +111,19 @@ public class LongColumnVectorTest extends CudfTestBase {
       }
       assertTrue(cv.isNull(6));
       assertTrue(cv.isNull(7));
+    };
+    try (HostColumnVector lcv = HostColumnVector.fromBoxedLongs(2L, 3L, 4L, 5L, 6L, 7L, null, null)) {
+      verify.accept(lcv);
+    }
+    try (HostColumnVector lcv = ColumnBuilderHelper.fromBoxedLongs(true,
+        2L, 3L, 4L, 5L, 6L, 7L, null, null)) {
+      verify.accept(lcv);
     }
   }
 
   @Test
   public void testAddingUnsignedNullValues() {
-    try (HostColumnVector cv = HostColumnVector.fromBoxedUnsignedLongs(
-        2L, 3L, 4L, 5L, 0xfedcba9876543210L, 0x8000000000000000L, null, null)) {
+    Consumer<HostColumnVector> verify = (cv) -> {
       assertTrue(cv.hasNulls());
       assertEquals(2, cv.getNullCount());
       for (int i = 0; i < 6; i++) {
@@ -103,6 +135,14 @@ public class LongColumnVectorTest extends CudfTestBase {
           Long.toUnsignedString(cv.getLong(5)));
       assertTrue(cv.isNull(6));
       assertTrue(cv.isNull(7));
+    };
+    try (HostColumnVector lcv = HostColumnVector.fromBoxedUnsignedLongs(
+        2L, 3L, 4L, 5L, 0xfedcba9876543210L, 0x8000000000000000L, null, null)) {
+      verify.accept(lcv);
+    }
+    try (HostColumnVector lcv = ColumnBuilderHelper.fromBoxedLongs(false,
+        2L, 3L, 4L, 5L, 0xfedcba9876543210L, 0x8000000000000000L, null, null)) {
+      verify.accept(lcv);
     }
   }
 

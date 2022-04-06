@@ -1,3 +1,5 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import operator
 
 from numba import types
@@ -133,8 +135,8 @@ def typeof_masked(val, c):
 class MaskedConstructor(ConcreteTemplate):
     key = api.Masked
     units = ["ns", "ms", "us", "s"]
-    datetime_cases = set(types.NPDatetime(u) for u in units)
-    timedelta_cases = set(types.NPTimedelta(u) for u in units)
+    datetime_cases = {types.NPDatetime(u) for u in units}
+    timedelta_cases = {types.NPTimedelta(u) for u in units}
     cases = [
         nb_signature(MaskedType(t), t, types.boolean)
         for t in (
