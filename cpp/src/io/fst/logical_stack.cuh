@@ -76,11 +76,6 @@ struct StackOpToUnsigned {
 };
 
 template <>
-struct StackOpToUnsigned<1U> {
-  using UnsignedT = uint8_t;
-};
-
-template <>
 struct StackOpToUnsigned<2U> {
   using UnsignedT = uint16_t;
 };
