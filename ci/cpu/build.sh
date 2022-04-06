@@ -31,7 +31,9 @@ cd "$WORKSPACE"
 
 # If nightly build, append current YYMMDD to version
 if [[ "$BUILD_MODE" = "branch" && "$SOURCE_BRANCH" = branch-* ]] ; then
-  export VERSION_SUFFIX=`date +%y%m%d`
+  export VERSION_SUFFIX="$(date +%y%m%d)"
+else
+  export VERSION_SUFFIX=""
 fi
 
 ################################################################################
@@ -63,6 +65,9 @@ conda list --show-channel-urls
 
 # FIX Added to deal with Anancoda SSL verification issues during conda builds
 conda config --set ssl_verify False
+
+#FIXME: Remove
+mamba install -y boa
 
 ################################################################################
 # BUILD - Conda package builds
@@ -97,16 +102,7 @@ fi
 
 if [ "$BUILD_CUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for cudf"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
-
-  gpuci_logger "Build conda pkg for dask-cudf"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
-
-  gpuci_logger "Build conda pkg for cudf_kafka"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
-
-  gpuci_logger "Build conda pkg for custreamz"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 fi
 ################################################################################
 # UPLOAD - Conda packages

@@ -1,71 +1,162 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
-{% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set py_version=environ.get('CONDA_PY', 36) %}
-{% set cuda_version='.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
-{% set cuda_major=cuda_version.split('.')[0] %}
+{% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
+{% set py_version = environ.get('CONDA_PY', 36) %}
+{% set cuda_version = '.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
+{% set cuda_major = cuda_version.split('.')[0] %}
 
 package:
-  name: cudf
-  version: {{ version }}
+  name: cudf-split
 
 source:
   git_url: ../../..
 
-build:
-  number: {{ GIT_DESCRIBE_NUMBER }}
-  string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
-  script_env:
-    - VERSION_SUFFIX
-    - PARALLEL_LEVEL
-    - CC
-    - CXX
-    - CUDAHOSTCXX
-  # libcudf's run_exports pinning is looser than we would like
-  ignore_run_exports:
-    - libcudf
-
-requirements:
-  build:
-    - protobuf
-    - python
-    - cython >=0.29,<0.30
-    - setuptools
-    - numba >=0.54
-    - dlpack>=0.5,<0.6.0a0
-    - pyarrow 7.0.0 *cuda
-    - libcudf {{ version }}
-    - rmm {{ minor_version }}
-    - cudatoolkit {{ cuda_version }}
-  run:
-    - protobuf
-    - python
-    - typing_extensions
-    - pandas >=1.0,<1.4.0dev0
-    - cupy >=9.5.0,<11.0.0a0
-    - numba >=0.54
-    - numpy
-    - {{ pin_compatible('pyarrow', max_pin='x.x.x') }} *cuda
-    - libcudf {{ version }}
-    - fastavro >=0.22.0
-    - {{ pin_compatible('rmm', max_pin='x.x') }}
-    - fsspec>=0.6.0
-    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
-    - nvtx >=0.2.1
-    - packaging
-    - cachetools
-    - ptxcompiler  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
-    - cuda-python >=11.5,<12.0
-test:                                   # [linux64]
-  requires:                             # [linux64]
-    - cudatoolkit {{ cuda_version }}.*  # [linux64]
-  imports:                              # [linux64]
-    - cudf                              # [linux64]
-
-about:
-  home: http://rapids.ai/
-  license: Apache-2.0
-  license_family: Apache
-  license_file: LICENSE
-  summary: cuDF GPU DataFrame core library
+outputs:
+  - name: cudf
+    version: {{ version }}
+    script: build_cudf.sh
+    build:
+      number: {{ GIT_DESCRIBE_NUMBER }}
+      string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      script_env: &script_env
+        - CC
+        - CUDAHOSTCXX
+        - CXX
+        - PARALLEL_LEVEL
+        - VERSION_SUFFIX
+      ignore_run_exports:
+        - libcudf
+    requirements:
+      host:
+        - cython {{ cython_version }}
+        - libcudf {{ version }}
+        - numpy
+        - pyarrow {{ pyarrow_version }}
+        - python
+        - rmm {{ minor_version }}
+        - setuptools
+      run:
+        - cachetools
+        - cuda-python {{ cuda_python_version }}
+        - cupy {{ cupy_version }}
+        - fastavro {{ fastavro_version }}
+        - fsspec {{ fsspec_version }}
+        - libcudf {{ version }}
+        - numba {{ numba_version }}
+        - nvtx {{ nvtx_version }}
+        - packaging
+        - pandas {{ pandas_version }}
+        - protobuf
+        - ptxcompiler  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
+        - python
+        - typing_extensions
+        - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+        - {{ pin_compatible('pyarrow', max_pin='x.x.x') }} *cuda
+        - {{ pin_compatible('rmm', max_pin='x.x') }}
+        - {{ pin_compatible('numpy') }}
+    test:                                   # [linux64]
+      requires:                             # [linux64]
+        - cudatoolkit {{ cuda_version }}.*  # [linux64]
+      imports:                              # [linux64]
+        - cudf                              # [linux64]
+    about:
+      home: http://rapids.ai/
+      license: Apache-2.0
+      license_family: Apache
+      license_file: LICENSE
+      summary: cuDF GPU DataFrame core library
+  - name: cudf_kafka
+    version: {{ version }}
+    script: build_cudf_kafka.sh
+    build:
+      number: {{ GIT_DESCRIBE_NUMBER }}
+      string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      script_env: *script_env
+    requirements:
+      host:
+        - cython {{ cython_version }}
+        - libcudf_kafka {{ version }}
+        - python
+        - setuptools
+        - {{ pin_subpackage('cudf', exact=True) }}
+      run:
+        - libcudf_kafka {{ version }}
+        - python
+        - python-confluent-kafka {{ python_confluent_kafka_version }}
+        - {{ pin_subpackage('cudf', exact=True) }}
+    test:                                   # [linux64]
+      requires:                             # [linux64]
+        - cudatoolkit {{ cuda_version }}.*  # [linux64]
+      imports:                              # [linux64]
+        - cudf_kafka                        # [linux64]
+    about:
+      home: http://rapids.ai/
+      license: Apache-2.0
+      license_family: Apache
+      license_file: LICENSE
+      summary: libcudf_kafka library
+  - name: custreamz
+    version: {{ version }}
+    script: build_custreamz.sh
+    build:
+      number: {{ GIT_DESCRIBE_NUMBER }}
+      string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      script_env: *script_env
+    requirements:
+      host:
+        - python
+        - python-confluent-kafka {{ python_confluent_kafka_version }}
+        - {{ pin_subpackage('cudf_kafka', exact=True) }}
+      run:
+        - dask {{ dask_version }}
+        - distributed {{ distributed_version }}
+        - python
+        - python-confluent-kafka {{ python_confluent_kafka_version }}
+        - streamz
+        - {{ pin_subpackage('cudf', exact=True) }}
+        - {{ pin_subpackage('cudf_kafka', exact=True) }}
+    test:                                   # [linux64]
+      requires:                             # [linux64]
+        - cudatoolkit {{ cuda_version }}.*  # [linux64]
+      imports:                              # [linux64]
+        - custreamz                         # [linux64]
+    about:
+      home: http://rapids.ai/
+      license: Apache-2.0
+      license_family: Apache
+      license_file: LICENSE
+      summary: cuStreamz library
+  - name: dask-cudf
+    version: {{ version }}
+    script: build_dask_cudf.sh
+    build:
+      number: {{ GIT_DESCRIBE_NUMBER }}
+      string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      script_env: *script_env
+    requirements:
+      host:
+        - cudatoolkit {{ cuda_version }}
+        - dask {{ dask_version }}
+        - distributed {{ distributed_version }}
+        - pandas {{ pandas_version }}
+        - python
+        - {{ pin_subpackage('cudf', exact=True) }}
+      run:
+        - dask {{ dask_version }}
+        - distributed {{ distributed_version }}
+        - pandas {{ pandas_version }}
+        - python
+        - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+        - {{ pin_subpackage('cudf', exact=True) }}
+    test:                                   # [linux64]
+      requires:                             # [linux64]
+        - cudatoolkit {{ cuda_version }}.*  # [linux64]
+      imports:                              # [linux64]
+        - dask_cudf                         # [linux64]
+    about:
+      home: http://rapids.ai/
+      license: Apache-2.0
+      license_family: Apache
+      license_file: LICENSE
+      summary: dask-cudf library
