@@ -323,7 +323,7 @@ class writer::impl {
    * @param segmentation stripe and rowgroup ranges
    * @return The statistic information
    */
-  intermediate_statistics gather_statistic_blobs(statistics_freq statistics_freq,
+  intermediate_statistics gather_statistic_blobs(statistics_freq const statistics_freq,
                                                  orc_table_view const& orc_table,
                                                  file_segmentation const& segmentation);
 
@@ -336,8 +336,8 @@ class writer::impl {
    * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
    * @return The encoded statistic blobs
    */
-  encoded_statistics finish_statistic_blobs(int num_columns,
-                                            int num_stripes,
+  encoded_statistics finish_statistic_blobs(int const num_columns,
+                                            int const num_stripes,
                                             writer::impl::persisted_statistics& incoming_stats);
 
   /**

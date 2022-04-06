@@ -1250,9 +1250,10 @@ writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
 
     auto d_file_stats_merge = stats_merge.device_ptr(num_stripe_blobs);
     cudaMemcpyAsync(d_file_stats_merge,
-               file_stats_merge.data(),
-               num_file_blobs * sizeof(statistics_merge_group),
-               cudaMemcpyHostToDevice, stream);
+                    file_stats_merge.data(),
+                    num_file_blobs * sizeof(statistics_merge_group),
+                    cudaMemcpyHostToDevice,
+                    stream);
 
     auto file_stat_chunks = stat_chunks.data() + num_stripe_blobs;
     detail::merge_group_statistics<detail::io_file_format::ORC>(
@@ -2055,7 +2056,7 @@ void writer::impl::write(table_view const& table)
         std::move(intermediate_stats.stripe_stat_merge));
       persisted_stripe_statistics.stats_desc = std::move(intermediate_stats.stats_desc);
     }
-    
+
     // Write stripes
     std::vector<std::future<void>> write_tasks;
     for (size_t stripe_id = 0; stripe_id < stripes.size(); ++stripe_id) {
