@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,16 +78,18 @@ class istream_data_chunk_reader : public data_chunk_reader {
   {
     // create an event to track the completion of the last device-to-host copy.
     for (std::size_t i = 0; i < _tickets.size(); i++) {
-      CUDA_TRY(cudaEventCreate(&(_tickets[i].event)));
+      CUDF_CUDA_TRY(cudaEventCreate(&(_tickets[i].event)));
     }
   }
 
   ~istream_data_chunk_reader()
   {
     for (std::size_t i = 0; i < _tickets.size(); i++) {
-      CUDA_TRY(cudaEventDestroy(_tickets[i].event));
+      CUDF_CUDA_TRY(cudaEventDestroy(_tickets[i].event));
     }
   }
+
+  void skip_bytes(std::size_t size) override { _datastream->ignore(size); };
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
                                                     rmm::cuda_stream_view stream) override
@@ -99,7 +101,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
     _next_ticket_idx = (_next_ticket_idx + 1) % _tickets.size();
 
     // synchronize on the last host-to-device copy, so we don't clobber the host buffer.
-    CUDA_TRY(cudaEventSynchronize(h_ticket.event));
+    CUDF_CUDA_TRY(cudaEventSynchronize(h_ticket.event));
 
     // resize the host buffer as necessary to contain the requested number of bytes
     if (h_ticket.buffer.size() < read_size) { h_ticket.buffer.resize(read_size); }
@@ -114,7 +116,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
     auto chunk = rmm::device_uvector<char>(read_size, stream);
 
     // copy the host-pinned data on to device
-    CUDA_TRY(cudaMemcpyAsync(  //
+    CUDF_CUDA_TRY(cudaMemcpyAsync(  //
       chunk.data(),
       h_ticket.buffer.data(),
       read_size,
@@ -122,7 +124,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
       stream.value()));
 
     // record the host-to-device copy.
-    CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
+    CUDF_CUDA_TRY(cudaEventRecord(h_ticket.event, stream.value()));
 
     // return the view over device memory so it can be processed.
     return std::make_unique<device_uvector_data_chunk>(std::move(chunk));
@@ -142,6 +144,12 @@ class istream_data_chunk_reader : public data_chunk_reader {
 class device_span_data_chunk_reader : public data_chunk_reader {
  public:
   device_span_data_chunk_reader(device_span<char const> data) : _data(data) {}
+
+  void skip_bytes(std::size_t read_size) override
+  {
+    if (read_size > _data.size() - _position) { read_size = _data.size() - _position; }
+    _position += read_size;
+  };
 
   std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t read_size,
                                                     rmm::cuda_stream_view stream) override

@@ -1,12 +1,15 @@
 #!/bin/bash
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 ##############################################
 # cuDF CPU conda build script for CI         #
 ##############################################
 set -e
 
 # Set path and build parallel level
-export PATH=/opt/conda/bin:/usr/local/cuda/bin:$PATH
+# FIXME: PATH variable shouldn't be necessary.
+# This should be removed once we either stop using the `remote-docker-plugin`
+# or the following issue is addressed: https://github.com/gpuopenanalytics/remote-docker-plugin/issues/47
+export PATH=/usr/local/gcc9/bin:/opt/conda/bin:/usr/local/cuda/bin:$PATH
 export PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 
 # Set home to the job's workspace
@@ -31,10 +34,6 @@ if [[ "$BUILD_MODE" = "branch" && "$SOURCE_BRANCH" = branch-* ]] ; then
   export VERSION_SUFFIX=`date +%y%m%d`
 fi
 
-export CMAKE_CUDA_COMPILER_LAUNCHER="sccache"
-export CMAKE_CXX_COMPILER_LAUNCHER="sccache"
-export CMAKE_C_COMPILER_LAUNCHER="sccache"
-
 ################################################################################
 # SETUP - Check environment
 ################################################################################
@@ -46,9 +45,10 @@ gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
-# Remove rapidsai-nightly channel if we are building main branch
+# Remove `rapidsai-nightly` & `dask/label/dev` channel if we are building main branch
 if [ "$SOURCE_BRANCH" = "main" ]; then
   conda config --system --remove channels rapidsai-nightly
+  conda config --system --remove channels dask/label/dev
 fi
 
 gpuci_logger "Check compiler versions"
@@ -93,16 +93,6 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
       cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
       cp "$LIBCUDF_BUILD_DIR/ninja.log" "$WORKSPACE/build-metrics/ninja.log"
   fi
-
-  gpuci_logger "Build conda pkg for libcudf_kafka"
-  gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf_kafka $CONDA_BUILD_ARGS
-  mkdir -p ${CONDA_BLD_DIR}/libcudf_kafka/work
-  cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf_kafka/work
-
-  gpuci_logger "Building libcudf examples"
-  gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf_example $CONDA_BUILD_ARGS
-  mkdir -p ${CONDA_BLD_DIR}/libcudf_example/work
-  cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf_example/work
 fi
 
 if [ "$BUILD_CUDF" == '1' ]; then

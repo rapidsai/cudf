@@ -33,9 +33,14 @@ def test_dataframe_setitem_scaler_bool():
     assert_eq(df, gdf)
 
 
-@pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
+@pytest.mark.parametrize(
+    "df",
+    [pd.DataFrame({"a": [1, 2, 3]}), pd.DataFrame({"a": ["x", "y", "z"]})],
+)
 @pytest.mark.parametrize("arg", [["a"], "a", "b"])
-@pytest.mark.parametrize("value", [-10, pd.DataFrame({"a": [-1, -2, -3]})])
+@pytest.mark.parametrize(
+    "value", [-10, pd.DataFrame({"a": [-1, -2, -3]}), "abc"]
+)
 def test_dataframe_setitem_columns(df, arg, value):
     gdf = cudf.from_pandas(df)
     cudf_replace_value = value

@@ -67,7 +67,7 @@ struct scan_dispatcher {
     thrust::exclusive_scan(
       rmm::exec_policy(stream), begin, begin + input.size(), output.data<T>(), identity, Op{});
 
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
     return output_column;
   }
 
@@ -81,7 +81,7 @@ struct scan_dispatcher {
 }  // namespace
 
 std::unique_ptr<column> scan_exclusive(const column_view& input,
-                                       std::unique_ptr<aggregation> const& agg,
+                                       std::unique_ptr<scan_aggregation> const& agg,
                                        null_policy null_handling,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)

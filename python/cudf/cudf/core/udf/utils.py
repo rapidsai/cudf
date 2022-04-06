@@ -1,3 +1,5 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 from typing import Callable
 
 import cachetools
@@ -6,7 +8,6 @@ from numba import cuda, typeof
 from numba.core.errors import TypingError
 from numba.np import numpy_support
 from numba.types import Poison, Tuple, boolean, int64, void, CPointer
-from nvtx import annotate
 
 from cudf.core.buffer import Buffer
 
@@ -21,20 +22,17 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
 )
 from cudf.api.types import is_string_dtype
-
 from cudf_jit_udf import to_string_view_array
 
 JIT_SUPPORTED_TYPES = (
-    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
 )
-
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
-@annotate("NUMBA JIT", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def _get_udf_return_type(argty, func: Callable, args=()):
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
@@ -182,7 +180,7 @@ def _generate_cache_key(frame, func: Callable):
     )
 
 
-@annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
+@_cudf_nvtx_annotate
 def _compile_or_get(frame, func, args, kernel_getter=None):
     """
     Return a compiled kernel in terms of MaskedTypes that launches a

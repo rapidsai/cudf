@@ -17,6 +17,8 @@ include(../../../../fetch_rapids.cmake)
 include(rapids-cmake)
 include(rapids-cuda)
 include(rapids-find)
+include(rapids-cpm)
+rapids_cpm_init()
 
 # Use GPU_ARCHS if it is defined
 if(DEFINED GPU_ARCHS)
@@ -26,7 +28,7 @@ rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
   CUDF_JNI
-  VERSION 22.04.00
+  VERSION 22.06.00
   LANGUAGES C CXX CUDA
 )
 
@@ -89,20 +91,7 @@ rapids_cmake_build_type("Release")
 # ##################################################################################################
 # * Thrust/CUB
 # ------------------------------------------------------------------------------------
-find_path(
-  THRUST_INCLUDE "thrust"
-  HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src" "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
-        "$ENV{CONDA_PREFIX}/include"
-)
-
-message(STATUS "THRUST: THRUST_INCLUDE set to ${THRUST_INCLUDE}")
-
-find_path(
-  CUB_INCLUDE "cub" HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
-                          "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src" "$ENV{CONDA_PREFIX}/include"
-)
-
-message(STATUS "CUB: CUB_INCLUDE set to ${CUB_INCLUDE}")
+include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_thrust.cmake)
 
 # ##################################################################################################
 # * CUDF ------------------------------------------------------------------------------------------
@@ -126,21 +115,7 @@ rapids_find_package(ZLIB REQUIRED)
 # ##################################################################################################
 # * RMM -------------------------------------------------------------------------------------------
 
-find_path(
-  RMM_INCLUDE "rmm"
-  HINTS "${CUDF_CPP_BUILD_DIR}/_deps/rmm-src/include" "$ENV{RMM_ROOT}/include"
-        "$ENV{RMM_HOME}/include" "$ENV{CONDA_PREFIX}/include/rmm" "$ENV{CONDA_PREFIX}/include"
-)
-
-message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
-
-find_path(
-  SPDLOG_INCLUDE "spdlog"
-  HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include" "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
-        "$ENV{RMM_ROOT}/include" "$ENV{CONDA_PREFIX}/include"
-)
-
-message(STATUS "SPDLOG: SPDLOG_INCLUDE set to ${SPDLOG_INCLUDE}")
+include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_rmm.cmake)
 
 # ##################################################################################################
 # * ARROW -----------------------------------------------------------------------------------------
@@ -238,6 +213,7 @@ add_library(
   src/TableJni.cpp
   src/aggregation128_utils.cu
   src/map_lookup.cu
+  src/maps_column_view.cu
   src/row_conversion.cu
   src/check_nvcomp_output_sizes.cu
 )
@@ -259,18 +235,15 @@ endif()
 
 target_include_directories(
   cudfjni
-  PUBLIC "${THRUST_INCLUDE}"
-         "${CUB_INCLUDE}"
+  PUBLIC cudf::Thrust
          "${LIBCUDACXX_INCLUDE}"
          "${CUDAToolkit_INCLUDE_DIRS}"
          "${NVCOMP_INCLUDE}"
          "${CMAKE_BINARY_DIR}/include"
          "${CMAKE_SOURCE_DIR}/include"
-         "${SPDLOG_INCLUDE}"
          "${CMAKE_SOURCE_DIR}/src"
          "${JNI_INCLUDE_DIRS}"
          "${CUDF_INCLUDE}"
-         "${RMM_INCLUDE}"
          "${ARROW_INCLUDE}"
 )
 
@@ -307,7 +280,7 @@ if(USE_GDS)
     PUBLIC "${LIBCUDACXX_INCLUDE}" "${CUDF_INCLUDE}"
     PRIVATE "${cuFile_INCLUDE_DIRS}"
   )
-  target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
+  target_link_libraries(cufilejni PRIVATE cudfjni rmm::rmm "${cuFile_LIBRARIES}")
 endif()
 
 # ##################################################################################################
@@ -334,7 +307,7 @@ if(CUDF_JNI_LIBCUDF_STATIC)
 endif()
 
 target_link_libraries(
-  cudfjni PRIVATE ${CUDF_LINK} ${NVCOMP_LIBRARY} ${ARROW_LIBRARY} CUDA::cuda_driver
+  cudfjni PRIVATE ${CUDF_LINK} ${NVCOMP_LIBRARY} ${ARROW_LIBRARY} rmm::rmm CUDA::cuda_driver
 )
 
 # ##################################################################################################

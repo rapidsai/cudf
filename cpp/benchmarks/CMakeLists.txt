@@ -14,7 +14,7 @@
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cpp common/generate_nullmask.cu)
+add_library(cudf_datagen STATIC common/generate_input.cu)
 target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(
@@ -24,7 +24,7 @@ target_compile_options(
 
 target_link_libraries(
   cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
-                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf
+                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf cudftestutil
 )
 
 target_include_directories(
@@ -136,7 +136,7 @@ ConfigureBench(COPY_IF_ELSE_BENCH copying/copy_if_else.cpp)
 
 # ##################################################################################################
 # * transpose benchmark ---------------------------------------------------------------------------
-ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cu)
+ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
 # * apply_boolean_mask benchmark ------------------------------------------------------------------
@@ -144,7 +144,9 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
-ConfigureNVBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates.cpp)
+ConfigureNVBench(
+  STREAM_COMPACTION_NVBENCH stream_compaction/distinct.cpp stream_compaction/unique.cpp
+)
 
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
@@ -162,6 +164,7 @@ ConfigureBench(SEARCH_BENCH search/search.cpp)
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
+ConfigureNVBench(SORT_NVBENCH sort/sort_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -175,9 +178,10 @@ ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
 ConfigureBench(
-  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/reduce.cpp
-  reduction/scan.cpp reduction/minmax.cpp
+  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
+  reduction/reduce.cpp reduction/scan.cpp
 )
+ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,9 @@
 #include <vector>
 
 #include <tests/copying/slice_tests.cuh>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 std::vector<cudf::size_type> splits_to_indices(std::vector<cudf::size_type> splits,
                                                cudf::size_type size)
@@ -1355,6 +1358,15 @@ TEST_F(ContiguousSplitUntypedTest, ValidityEdgeCase)
   for (unsigned long index = 0; index < result.size(); index++) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index].column(0), result[index].table.column(0));
   }
+}
+
+TEST_F(ContiguousSplitUntypedTest, CalculationOverflow)
+{
+  // tests an edge case where buf.elements * buf.element_size overflows an INT32.
+  auto col = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT64}, 400 * 1024 * 1024, cudf::mask_state::UNALLOCATED);
+  auto result = cudf::contiguous_split(cudf::table_view{{*col}}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, result[0].table.column(0));
 }
 
 // contiguous split with strings

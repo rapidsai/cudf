@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
@@ -29,6 +29,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <cstdlib>

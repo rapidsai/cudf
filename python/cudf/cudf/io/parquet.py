@@ -7,7 +7,6 @@ from typing import Dict, List, Tuple
 from uuid import uuid4
 
 import numpy as np
-from nvtx import annotate
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -15,9 +14,10 @@ from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils import ioutils
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 
-@annotate("_WRITE_PARQUET", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def _write_parquet(
     df,
     paths,
@@ -75,7 +75,7 @@ def _write_parquet(
 
 # Logic chosen to match: https://arrow.apache.org/
 # docs/_modules/pyarrow/parquet.html#write_to_dataset
-@annotate("WRITE_TO_DATASET", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def write_to_dataset(
     df,
     root_path,
@@ -164,7 +164,7 @@ def write_to_dataset(
 
 
 @ioutils.doc_read_parquet_metadata()
-@annotate("READ_PARQUET_METADATA", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def read_parquet_metadata(path):
     """{docstring}"""
 
@@ -177,9 +177,13 @@ def read_parquet_metadata(path):
     return num_rows, num_row_groups, col_names
 
 
-@annotate("_PROCESS_DATASET", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def _process_dataset(
-    paths, fs, filters=None, row_groups=None, categorical_partitions=True,
+    paths,
+    fs,
+    filters=None,
+    row_groups=None,
+    categorical_partitions=True,
 ):
     # Returns:
     #     file_list - Expanded/filtered list of paths
@@ -203,7 +207,10 @@ def _process_dataset(
 
     # Initialize ds.FilesystemDataset
     dataset = ds.dataset(
-        paths, filesystem=fs, format="parquet", partitioning="hive",
+        paths,
+        filesystem=fs,
+        format="parquet",
+        partitioning="hive",
     )
     file_list = dataset.files
     if len(file_list) == 0:
@@ -287,7 +294,8 @@ def _process_dataset(
                 filtered_row_groups = [
                     rg_info.id
                     for rg_fragment in file_fragment.split_by_row_group(
-                        filters, schema=dataset.schema,
+                        filters,
+                        schema=dataset.schema,
                     )
                     for rg_info in rg_fragment.row_groups
                 ]
@@ -313,7 +321,7 @@ def _process_dataset(
 
 
 @ioutils.doc_read_parquet()
-@annotate("READ_PARQUET", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def read_parquet(
     filepath_or_buffer,
     engine="cudf",
@@ -390,7 +398,10 @@ def read_parquet(
     filepaths_or_buffers = []
     if use_python_file_object:
         open_file_options = _default_open_file_options(
-            open_file_options, columns, row_groups, fs=fs,
+            open_file_options,
+            columns,
+            row_groups,
+            fs=fs,
         )
     for i, source in enumerate(filepath_or_buffer):
         tmp_source, compression = ioutils.get_filepath_or_buffer(
@@ -415,7 +426,7 @@ def read_parquet(
     # (There is a good chance this was not the intention)
     if engine != "cudf":
         warnings.warn(
-            "Using CPU via PyArrow to read Parquet dataset."
+            "Using CPU via PyArrow to read Parquet dataset. "
             "This option is both inefficient and unstable!"
         )
         if filters is not None:
@@ -441,7 +452,7 @@ def read_parquet(
     )
 
 
-@annotate("_PARQUET_TO_FRAME", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def _parquet_to_frame(
     paths_or_buffers,
     *args,
@@ -455,7 +466,10 @@ def _parquet_to_frame(
     # one call to `_read_parquet`
     if not partition_keys:
         return _read_parquet(
-            paths_or_buffers, *args, row_groups=row_groups, **kwargs,
+            paths_or_buffers,
+            *args,
+            row_groups=row_groups,
+            **kwargs,
         )
 
     # For partitioned data, we need a distinct read for each
@@ -477,7 +491,10 @@ def _parquet_to_frame(
         # Add new DataFrame to our list
         dfs.append(
             _read_parquet(
-                key_paths, *args, row_groups=key_row_groups, **kwargs,
+                key_paths,
+                *args,
+                row_groups=key_row_groups,
+                **kwargs,
             )
         )
         # Add partition columns to the last DataFrame
@@ -509,7 +526,7 @@ def _parquet_to_frame(
     )
 
 
-@annotate("_WRITE_PARQUET", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def _read_parquet(
     filepaths_or_buffers,
     engine,
@@ -543,7 +560,7 @@ def _read_parquet(
 
 
 @ioutils.doc_to_parquet()
-@annotate("TO_PARQUET", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def to_parquet(
     df,
     path,
@@ -655,7 +672,7 @@ def _generate_filename():
     return uuid4().hex + ".parquet"
 
 
-@annotate("_GET_PARTITIONED", color="green", domain="cudf_python")
+@_cudf_nvtx_annotate
 def _get_partitioned(
     df,
     root_path,
@@ -699,7 +716,7 @@ ParquetWriter = libparquet.ParquetWriter
 
 
 class ParquetDatasetWriter:
-    @annotate("ParquetDatasetWriter_INIT", color="green", domain="cudf_python")
+    @_cudf_nvtx_annotate
     def __init__(
         self,
         path,
@@ -776,9 +793,7 @@ class ParquetDatasetWriter:
         self.path_cw_map: Dict[str, int] = {}
         self.filename = None
 
-    @annotate(
-        "ParquetDatasetWriter_WRITE_TABLE", color="green", domain="cudf_python"
-    )
+    @_cudf_nvtx_annotate
     def write_table(self, df):
         """
         Write a dataframe to the file/dataset
@@ -835,9 +850,7 @@ class ParquetDatasetWriter:
         self.path_cw_map.update({k: new_cw_idx for k in new_paths})
         self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
-    @annotate(
-        "ParquetDatasetWriter_CLOSE", color="green", domain="cudf_python"
-    )
+    @_cudf_nvtx_annotate
     def close(self, return_metadata=False):
         """
         Close all open files and optionally return footer metadata as a binary

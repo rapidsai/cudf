@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import os
 import re
@@ -10,8 +10,8 @@ import versioneer
 
 install_requires = [
     "cudf",
-    "dask>=2021.11.1,<=2022.01.0",
-    "distributed>=2021.11.1,<=2022.01.0",
+    "dask==2022.03.0",
+    "distributed==2022.03.0",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.4.0dev0",
@@ -84,8 +84,8 @@ setup(
         "Topic :: Scientific/Engineering",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     packages=find_packages(exclude=["tests", "tests.*"]),
     cmdclass=versioneer.get_cmdclass(),

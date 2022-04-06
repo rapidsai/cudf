@@ -120,7 +120,7 @@ struct RowHandle {
   template <typename T, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<T>())>
   __device__ void operator()(cudf::mutable_column_device_view source, cudf::size_type index)
   {
-    cudf_assert(false && "Unsupported type.");
+    CUDF_UNREACHABLE("Unsupported type.");
   }
 };
 
@@ -196,13 +196,13 @@ void type_dispatcher_benchmark(::benchmark::State& state)
   rmm::device_uvector<TypeParam*> d_vec(n_cols, rmm::cuda_stream_default);
 
   if (dispatching_type == NO_DISPATCHING) {
-    CUDA_TRY(cudaMemcpy(
+    CUDF_CUDA_TRY(cudaMemcpy(
       d_vec.data(), h_vec_p.data(), sizeof(TypeParam*) * n_cols, cudaMemcpyHostToDevice));
   }
 
   // Warm up
   launch_kernel<functor_type, dispatching_type>(source_table, d_vec.data(), work_per_thread);
-  CUDA_TRY(cudaDeviceSynchronize());
+  CUDF_CUDA_TRY(cudaDeviceSynchronize());
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0

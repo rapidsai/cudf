@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 import os
 import shutil
 import sysconfig
@@ -90,8 +90,8 @@ setup(
         "Topic :: Apache Kafka",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     # Include the separately-compiled shared library
     setup_requires=["Cython>=0.29,<0.30"],
@@ -104,7 +104,8 @@ setup(
     ),
     packages=find_packages(include=["cudf_kafka", "cudf_kafka.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf_kafka._lib*"]), ["*.pxd"],
+        find_packages(include=["cudf_kafka._lib*"]),
+        ["*.pxd"],
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,

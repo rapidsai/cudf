@@ -19,7 +19,7 @@ from cudf._lib.lists import (
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
-from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
@@ -29,9 +29,16 @@ from cudf.core.dtypes import ListDtype
 
 class ListColumn(ColumnBase):
     dtype: ListDtype
+    _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
 
     def __init__(
-        self, size, dtype, mask=None, offset=0, null_count=None, children=(),
+        self,
+        size,
+        dtype,
+        mask=None,
+        offset=0,
+        null_count=None,
+        children=(),
     ):
         super().__init__(
             None,
@@ -92,50 +99,14 @@ class ListColumn(ColumnBase):
         # avoid it being negative
         return max(0, len(self.base_children[0]) - 1)
 
-    def binary_operator(
-        self, binop: str, other: BinaryOperand, reflect: bool = False
-    ) -> ColumnBase:
-        """
-        Calls a binary operator *binop* on operands *self*
-        and *other*.
-
-        Parameters
-        ----------
-        self, other : list columns
-
-        binop :  binary operator
-            Only "add" operator is currently being supported
-            for lists concatenation functions
-
-        reflect : boolean, default False
-            If ``True``, swap the order of the operands. See
-            https://docs.python.org/3/reference/datamodel.html#object.__ror__
-            for more information on when this is necessary.
-
-        Returns
-        -------
-        Series : the output dtype is determined by the
-            input operands.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> gdf = cudf.DataFrame({'val': [['a', 'a'], ['b'], ['c']]})
-        >>> gdf
-            val
-        0  [a, a]
-        1     [b]
-        2     [c]
-        >>> gdf['val'] + gdf['val']
-        0    [a, a, a, a]
-        1          [b, b]
-        2          [c, c]
-        Name: val, dtype: list
-
-        """
-
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        # Lists only support __add__, which concatenates lists.
+        reflect, op = self._check_reflected_op(op)
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
+            return NotImplemented
         if isinstance(other.dtype, ListDtype):
-            if binop == "add":
+            if op == "__add__":
                 return concatenate_rows(
                     cudf.core.frame.Frame({0: self, 1: other})
                 )
@@ -253,6 +224,11 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
+
+    def normalize_binop_value(self, other):
+        if not isinstance(other, ListColumn):
+            return NotImplemented
+        return other
 
     def _with_type_metadata(
         self: "cudf.core.column.ListColumn", dtype: Dtype

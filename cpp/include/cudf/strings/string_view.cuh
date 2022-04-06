@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.hpp>
 
 #ifndef __CUDA_ARCH__
@@ -26,6 +27,7 @@
 // or jitify2 source file. The jitify cannot include thrust headers at this time.
 #ifndef CUDF_JIT_UDF
 #include <thrust/count.h>
+#include <thrust/execution_policy.h>
 #endif
 
 // This file should only include device code logic.
@@ -97,7 +99,8 @@ CUDF_HOST_DEVICE inline string_view string_view::max()
 #if defined(__CUDA_ARCH__)
   psentinel = &cudf::strings::detail::max_string_sentinel[0];
 #else
-  CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, cudf::strings::detail::max_string_sentinel));
+  CUDF_CUDA_TRY(
+    cudaGetSymbolAddress((void**)&psentinel, cudf::strings::detail::max_string_sentinel));
 #endif
   return string_view(psentinel, 4);
 }

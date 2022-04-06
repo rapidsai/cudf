@@ -80,6 +80,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
   private static final File TEST_DECIMAL_PARQUET_FILE = TestUtils.getResourceAsFile("decimal.parquet");
+  private static final File TEST_ALL_TYPES_PLAIN_AVRO_FILE = TestUtils.getResourceAsFile("alltypes_plain.avro");
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
 
@@ -639,6 +640,65 @@ public class TableTest extends CudfTestBase {
           DType.FLOAT32
       };
       assertTableTypes(expectedTypes, table);
+    }
+  }
+
+  @Test
+  void testReadAvro() {
+    AvroOptions opts = AvroOptions.builder()
+        .includeColumn("bool_col")
+        .includeColumn("int_col")
+        .includeColumn("timestamp_col")
+        .build();
+
+    try (Table expected = new Table.TestBuilder()
+        .column(true, false, true, false, true, false, true, false)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+            1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+        .build();
+        Table table = Table.readAvro(opts, TEST_ALL_TYPES_PLAIN_AVRO_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadAvroBuffer() throws IOException{
+    AvroOptions opts = AvroOptions.builder()
+        .includeColumn("bool_col")
+        .includeColumn("timestamp_col")
+        .build();
+
+    byte[] buffer = Files.readAllBytes(TEST_ALL_TYPES_PLAIN_AVRO_FILE.toPath());
+    int bufferLen = buffer.length;
+    try (Table expected = new Table.TestBuilder()
+        .column(true, false, true, false, true, false, true, false)
+        .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+            1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+        .build();
+        Table table = Table.readAvro(opts, buffer, 0, bufferLen)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadAvroFull() {
+    try (Table expected = new Table.TestBuilder()
+        .column(4, 5, 6, 7, 2, 3, 0, 1)
+        .column(true, false, true, false, true, false, true, false)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(0, 1, 0, 1, 0, 1, 0, 1)
+        .column(0L, 10L, 0L, 10L, 0L, 10L, 0L, 10L)
+        .column(0.0f, 1.100000023841858f, 0.0f, 1.100000023841858f, 0.0f, 1.100000023841858f, 0.0f, 1.100000023841858f)
+        .column(0.0d, 10.1d, 0.0d, 10.1d, 0.0d, 10.1d, 0.0d, 10.1d)
+        .column("03/01/09", "03/01/09", "04/01/09", "04/01/09", "02/01/09", "02/01/09", "01/01/09", "01/01/09")
+        .column("0", "1", "0", "1", "0", "1", "0", "1")
+        .column(1235865600000000L, 1235865660000000L, 1238544000000000L, 1238544060000000L,
+            1233446400000000L, 1233446460000000L, 1230768000000000L, 1230768060000000L)
+        .build();
+        Table table = Table.readAvro(TEST_ALL_TYPES_PLAIN_AVRO_FILE)) {
+      assertTablesAreEqual(expected, table);
     }
   }
 
@@ -4085,6 +4145,97 @@ public class TableTest extends CudfTestBase {
                  Arrays.asList(100d, 150d, 160d)
          )) {
       assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testCreateTDigestReduction() {
+    try (Table t1 = new Table.TestBuilder()
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+         Scalar tdigest = t1.getColumn(0)
+            .reduce(ReductionAggregation.createTDigest(1000), DType.STRUCT)) {
+      assertEquals(DType.STRUCT, tdigest.getType());
+
+      try (CloseableArray columns = CloseableArray.wrap(tdigest.getChildrenFromStructScalar())) {
+        assertEquals(3, columns.size());
+        try (HostColumnVector centroids = ((ColumnView) columns.get(0)).copyToHost();
+           HostColumnVector min = ((ColumnView) columns.get(1)).copyToHost();
+           HostColumnVector max = ((ColumnView) columns.get(2)).copyToHost()) {
+          assertEquals(DType.LIST, centroids.getType());
+          assertEquals(DType.FLOAT64, min.getType());
+          assertEquals(DType.FLOAT64, max.getType());
+          assertEquals(1, min.getRowCount());
+          assertEquals(1, max.getRowCount());
+          assertEquals(70, min.getDouble(0));
+          assertEquals(160, max.getDouble(0));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMergeTDigestReduction() {
+    StructType centroidStruct = new StructType(false,
+            new BasicType(false, DType.FLOAT64), // mean
+            new BasicType(false, DType.FLOAT64)); // weight
+
+    ListType centroidList = new ListType(false, centroidStruct);
+
+    StructType tdigestType = new StructType(false,
+            centroidList,
+            new BasicType(false, DType.FLOAT64), // min
+            new BasicType(false, DType.FLOAT64)); // max
+
+    try (ColumnVector tdigests = ColumnVector.fromStructs(tdigestType,
+            new StructData(Arrays.asList(
+                    new StructData(1.0, 100.0),
+                    new StructData(2.0, 50.0)),
+                    1.0, // min
+                    2.0), // max
+            new StructData(Arrays.asList(
+                    new StructData(3.0, 200.0),
+                    new StructData(4.0, 99.0)),
+                    3.0, // min
+                    4.0)); // max
+      Scalar merged = tdigests.reduce(ReductionAggregation.mergeTDigest(1000), DType.STRUCT)) {
+
+      assertEquals(DType.STRUCT, merged.getType());
+      try (CloseableArray columns = CloseableArray.wrap(merged.getChildrenFromStructScalar())) {
+        assertEquals(3, columns.size());
+        try (HostColumnVector centroids = ((ColumnView) columns.get(0)).copyToHost();
+             HostColumnVector min = ((ColumnView) columns.get(1)).copyToHost();
+             HostColumnVector max = ((ColumnView) columns.get(2)).copyToHost()) {
+          assertEquals(3, columns.size());
+          assertEquals(DType.LIST, centroids.getType());
+          assertEquals(DType.FLOAT64, min.getType());
+          assertEquals(DType.FLOAT64, max.getType());
+          assertEquals(1, min.getRowCount());
+          assertEquals(1, max.getRowCount());
+          assertEquals(1.0, min.getDouble(0));
+          assertEquals(4.0, max.getDouble(0));
+          assertEquals(1, centroids.rows);
+
+          List list = centroids.getList(0);
+          assertEquals(4, list.size());
+
+          StructData data = (StructData) list.get(0);
+          assertEquals(1.0, data.dataRecord.get(0));
+          assertEquals(100.0, data.dataRecord.get(1));
+
+          data = (StructData) list.get(1);
+          assertEquals(2.0, data.dataRecord.get(0));
+          assertEquals(50.0, data.dataRecord.get(1));
+
+          data = (StructData) list.get(2);
+          assertEquals(3.0, data.dataRecord.get(0));
+          assertEquals(200.0, data.dataRecord.get(1));
+
+          data = (StructData) list.get(3);
+          assertEquals(4.0, data.dataRecord.get(0));
+          assertEquals(99.0, data.dataRecord.get(1));
+        }
+      }
     }
   }
 
@@ -8406,20 +8557,16 @@ public class TableTest extends CudfTestBase {
   @Test
   void testSample() {
     try (Table t = new Table.TestBuilder().column("s1", "s2", "s3", "s4", "s5").build()) {
-      try (Table ret = t.sample(3, false, 0);
-           Table expected = new Table.TestBuilder().column("s3", "s4", "s5").build()) {
-        assertTablesAreEqual(expected, ret);
+      try (Table ret = t.sample(3, false, 0)) {
+        assertEquals(ret.getRowCount(), 3);
       }
 
-      try (Table ret = t.sample(5, false, 0);
-           Table expected = new Table.TestBuilder().column("s3", "s4", "s5", "s2", "s1").build()) {
-        assertTablesAreEqual(expected, ret);
+      try (Table ret = t.sample(5, false, 0)) {
+        assertEquals(ret.getRowCount(), 5);
       }
 
-      try (Table ret = t.sample(8, true, 0);
-           Table expected = new Table.TestBuilder()
-               .column("s1", "s1", "s4", "s5", "s5", "s1", "s3", "s2").build()) {
-        assertTablesAreEqual(expected, ret);
+      try (Table ret = t.sample(8, true, 0)) {
+        assertEquals(ret.getRowCount(), 8);
       }
     }
   }

@@ -15,6 +15,9 @@
  */
 
 #include <strings/count_matches.hpp>
+#include <strings/regex/dispatcher.hpp>
+#include <strings/regex/regex.cuh>
+#include <strings/utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -26,13 +29,13 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/scan.h>
 
 namespace cudf {
 namespace strings {
@@ -75,6 +78,27 @@ struct findall_fn {
   }
 };
 
+struct findall_dispatch_fn {
+  reprog_device d_prog;
+
+  template <int stack_size>
+  std::unique_ptr<column> operator()(column_device_view const& d_strings,
+                                     size_type total_matches,
+                                     offset_type const* d_offsets,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    rmm::device_uvector<string_index_pair> indices(total_matches, stream);
+
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       d_strings.size(),
+                       findall_fn<stack_size>{d_strings, d_prog, d_offsets, indices.data()});
+
+    return make_strings_column(indices.begin(), indices.end(), stream, mr);
+  }
+};
+
 }  // namespace
 
 //
@@ -96,62 +120,23 @@ std::unique_ptr<column> findall_record(
   auto offsets   = count_matches(*d_strings, *d_prog, stream, mr);
   auto d_offsets = offsets->mutable_view().data<offset_type>();
 
-  // Compute null output rows
-  auto [null_mask, null_count] = cudf::detail::valid_if(
-    d_offsets,
-    d_offsets + strings_count,
-    [] __device__(auto const v) { return v > 0; },
-    stream,
-    mr);
-
-  auto const valid_count = strings_count - null_count;
-  // Return an empty lists column if there are no valid rows
-  if (valid_count == 0) {
-    return make_lists_column(0,
-                             make_empty_column(type_to_id<offset_type>()),
-                             make_empty_column(type_id::STRING),
-                             0,
-                             rmm::device_buffer{},
-                             stream,
-                             mr);
-  }
-
   // Convert counts into offsets
   thrust::exclusive_scan(
     rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // Create indices vector with the total number of groups that will be extracted
-  auto total_matches = cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
+  auto const total_matches =
+    cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
 
-  rmm::device_uvector<string_index_pair> indices(total_matches, stream);
-  auto d_indices = indices.data();
-  auto begin     = thrust::make_counting_iterator<size_type>(0);
-
-  // Build the string indices
-  auto const regex_insts = d_prog->insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    findall_fn<RX_STACK_SMALL> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    findall_fn<RX_STACK_MEDIUM> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    findall_fn<RX_STACK_LARGE> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else {
-    findall_fn<RX_STACK_ANY> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  }
-
-  // Build the child strings column from the resulting indices
-  auto strings_output = make_strings_column(indices.begin(), indices.end(), stream, mr);
+  auto strings_output = regex_dispatcher(
+    *d_prog, findall_dispatch_fn{*d_prog}, *d_strings, total_matches, d_offsets, stream, mr);
 
   // Build the lists column from the offsets and the strings
   return make_lists_column(strings_count,
                            std::move(offsets),
                            std::move(strings_output),
-                           null_count,
-                           std::move(null_mask),
+                           input.null_count(),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }

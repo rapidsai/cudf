@@ -15,6 +15,7 @@
  */
 
 #include <strings/count_matches.hpp>
+#include <strings/regex/dispatcher.hpp>
 #include <strings/regex/regex.cuh>
 #include <strings/utilities.hpp>
 
@@ -31,7 +32,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/distance.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {
@@ -110,6 +116,28 @@ struct token_reader_fn {
   }
 };
 
+struct generate_dispatch_fn {
+  reprog_device d_prog;
+
+  template <int stack_size>
+  rmm::device_uvector<string_index_pair> operator()(column_device_view const& d_strings,
+                                                    size_type total_tokens,
+                                                    split_direction direction,
+                                                    offset_type const* d_offsets,
+                                                    rmm::cuda_stream_view stream)
+  {
+    rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
+
+    thrust::for_each_n(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator<size_type>(0),
+      d_strings.size(),
+      token_reader_fn<stack_size>{d_strings, d_prog, direction, d_offsets, tokens.data()});
+
+    return tokens;
+  }
+};
+
 /**
  * @brief Call regex to split each input string into tokens.
  *
@@ -148,24 +176,8 @@ rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const&
   // the last offset entry is the total number of tokens to be generated
   auto const total_tokens = cudf::detail::get_value<offset_type>(offsets, strings_count, stream);
 
-  // generate tokens for each string
-  rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
-  auto const regex_insts = d_prog.insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    token_reader_fn<RX_STACK_SMALL> reader{d_strings, d_prog, direction, d_offsets, tokens.data()};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, reader);
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    token_reader_fn<RX_STACK_MEDIUM> reader{d_strings, d_prog, direction, d_offsets, tokens.data()};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, reader);
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    token_reader_fn<RX_STACK_LARGE> reader{d_strings, d_prog, direction, d_offsets, tokens.data()};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, reader);
-  } else {
-    token_reader_fn<RX_STACK_ANY> reader{d_strings, d_prog, direction, d_offsets, tokens.data()};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, reader);
-  }
-
-  return tokens;
+  return regex_dispatcher(
+    d_prog, generate_dispatch_fn{d_prog}, d_strings, total_tokens, direction, d_offsets, stream);
 }
 
 /**

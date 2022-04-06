@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@
  */
 
 #include "writer_impl.hpp"
-#include <io/statistics/column_statistics.cuh>
 
+#include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+
+#include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 #include <io/utilities/config_utils.hpp>
 
@@ -42,6 +44,10 @@
 #include <nvcomp/snappy.h>
 
 #include <thrust/binary_search.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <cstring>
@@ -71,9 +77,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
     case compression_type::AUTO:
     case compression_type::SNAPPY: return parquet::Compression::SNAPPY;
     case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
-    default:
-      CUDF_EXPECTS(false, "Unsupported compression type");
-      return parquet::Compression::UNCOMPRESSED;
+    default: CUDF_FAIL("Unsupported compression type");
   }
 }
 
@@ -392,11 +396,17 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
-    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type =
-      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
-    col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-    col_schema.ts_scale    = -1000;  // negative value indicates division by absolute value
+    col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.converted_type = ConvertedType::UNKNOWN;
+    col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
+    if (timestamp_is_int96) {
+      col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
+    }
+    // set logical type if it's not int96
+    else {
+      col_schema.logical_type.isset.TIMESTAMP            = true;
+      col_schema.logical_type.TIMESTAMP.unit.isset.NANOS = true;
+    }
   }
 
   //  unsupported outside cudf for parquet 1.0.
@@ -870,8 +880,11 @@ void writer::impl::gather_fragment_statistics(
     device_2dspan<statistics_group>(frag_stats_group.data(), num_columns, num_fragments);
 
   gpu::InitFragmentStatistics(frag_stats_group_2dview, frag, col_desc, stream);
-  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
-    frag_stats_chunk.data(), frag_stats_group.data(), num_fragments * num_columns, stream);
+  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(frag_stats_chunk.data(),
+                                                                      frag_stats_group.data(),
+                                                                      num_fragments * num_columns,
+                                                                      stream,
+                                                                      int96_timestamps);
   stream.synchronize();
 }
 
@@ -1110,7 +1123,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
       if (nvcomp_integration::is_stable_enabled()) {
         snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
       } else {
-        CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
+        CUDF_CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
       }
       break;
     default: break;
@@ -1123,11 +1136,11 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
-  CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
-                           d_chunks_in_batch.data(),
-                           d_chunks_in_batch.flat_view().size_bytes(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
+                                d_chunks_in_batch.data(),
+                                d_chunks_in_batch.flat_view().size_bytes(),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
   stream.synchronize();
 }
 
@@ -1566,28 +1579,28 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           // we still need to do a (much smaller) memcpy for the statistics.
           if (ck.ck_stat_size != 0) {
             column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
-            CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
-                                     dev_bfr,
-                                     ck.ck_stat_size,
-                                     cudaMemcpyDeviceToHost,
-                                     stream.value()));
+            CUDF_CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
+                                          dev_bfr,
+                                          ck.ck_stat_size,
+                                          cudaMemcpyDeviceToHost,
+                                          stream.value()));
             stream.synchronize();
           }
         } else {
           if (!host_bfr) {
             host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
                                                 uint8_t* ptr = nullptr;
-                                                CUDA_TRY(cudaMallocHost(&ptr, size));
+                                                CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
                                                 return ptr;
                                               }(max_chunk_bfr_size),
                                               cudaFreeHost};
           }
           // copy the full data
-          CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
-                                   dev_bfr,
-                                   ck.ck_stat_size + ck.compressed_size,
-                                   cudaMemcpyDeviceToHost,
-                                   stream.value()));
+          CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
+                                        dev_bfr,
+                                        ck.ck_stat_size + ck.compressed_size,
+                                        cudaMemcpyDeviceToHost,
+                                        stream.value()));
           stream.synchronize();
           out_sink_[p]->host_write(host_bfr.get() + ck.ck_stat_size, ck.compressed_size);
           if (ck.ck_stat_size != 0) {

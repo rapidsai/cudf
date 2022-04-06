@@ -29,6 +29,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/find.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 
 #include <type_traits>
@@ -117,7 +120,7 @@ struct scan_functor {
     thrust::inclusive_scan(
       rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), Op{});
 
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
     return output_column;
   }
 };
@@ -245,7 +248,7 @@ struct scan_dispatcher {
 
 std::unique_ptr<column> scan_inclusive(
   column_view const& input,
-  std::unique_ptr<aggregation> const& agg,
+  std::unique_ptr<scan_aggregation> const& agg,
   null_policy null_handling,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
