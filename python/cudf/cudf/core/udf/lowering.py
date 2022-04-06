@@ -28,6 +28,7 @@ from cudf.core.udf.typing import (
     _string_view_rfind,
     _string_view_startswith,
     string_view,
+    dstring
 )
 
 
@@ -412,10 +413,11 @@ def string_view_len_impl(context, builder, sig, args):
     return result
 
 
-# @cuda_lower(len, types.literal('abcde'))
-# def string_literal_len_impl(context, builder, sig, args):
-#    # todo- should be able to compile out the length of literals...
-#    pass
+@cuda_lowering_registry.lower_cast(string_view, dstring)
+def cast_stringview_to_dstring(context, builder, fromty, toty, val):
+    """defer to the c++ constructor for this"""
+    out_dstr = cgutils.create_struct_proxy(toty)(context, builder)
+    return
 
 
 @cuda_lowering_registry.lower_cast(types.StringLiteral, MaskedType)

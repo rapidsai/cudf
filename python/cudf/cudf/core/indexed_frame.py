@@ -43,7 +43,7 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.utils import _compile_or_get, _launch_arg_from_col, _supported_cols_from_frame
+from cudf.core.udf.utils import _compile_or_get, _launch_arg_from_col, _supported_cols_from_frame, _return_col_from_dtype
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 doc_reset_index_template = """
@@ -1049,7 +1049,7 @@ class IndexedFrame(Frame):
             ) from e
 
         # Mask and data column preallocated
-        ans_col = cp.empty(len(self), dtype=retty)
+        ans_col = _return_col_from_dtype(retty, len(self))
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
         launch_args = [(ans_col, ans_mask), len(self)]
         offsets = []

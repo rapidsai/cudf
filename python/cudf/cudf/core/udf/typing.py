@@ -37,6 +37,37 @@ SUPPORTED_NUMBA_TYPES = (
 
 
 # String object definitions
+   
+class DStringType(types.Type):
+    def __init__(self):
+        super().__init__(name='dstring')
+
+dstring = DStringType()
+
+
+@register_model(DStringType)
+class dstring_model(models.StructModel):
+    _members = (
+        ('m_data', types.CPointer(types.char)),
+        ('m_bytes', types.int32),
+        ('m_size', types.int32),
+    )
+
+    bytes = 0
+    for member_ty in (t[1] for t in _members):
+        if isinstance(member_ty, types.CPointer):
+            # TODO: is this always right?
+            bytes += 8
+        else:
+            bytes += member_ty.bitwidth / 8
+    
+    size_bytes = bytes
+
+    def __init__(self, dmm, fe_type):
+        super().__init__(dmm, fe_type, self._members)
+
+
+
 class StringView(types.Type):
     def __init__(self):
         super().__init__(name="string_view")
@@ -521,6 +552,13 @@ class MaskedStringAttrs(AttributeTemplate):
 
     def resolve_rfind(self, mod):
         return types.BoundFunction(MaskedStringRFind, MaskedType(string_view))
+
+    def resolve_value(self, mod):
+        return string_view
+
+    def resolve_valid(self, mod):
+        return types.boolean
+
 
 
 _len_string_view = cuda.declare_device(

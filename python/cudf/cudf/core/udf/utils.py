@@ -9,10 +9,9 @@ from numba.core.errors import TypingError
 from numba.np import numpy_support
 from numba.types import Poison, Tuple, boolean, int64, void, CPointer
 
-from cudf.core.buffer import Buffer
-
+import cupy as cp
 from cudf.core.dtypes import CategoricalDtype
-from cudf.core.udf.typing import MaskedType, string_view, str_view_arg_handler
+from cudf.core.udf.typing import MaskedType, string_view, str_view_arg_handler, dstring_model
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
@@ -25,6 +24,8 @@ from cudf.api.types import is_string_dtype
 from cudf_jit_udf import to_string_view_array
 
 from cudf.utils.utils import _cudf_nvtx_annotate
+
+import rmm
 
 JIT_SUPPORTED_TYPES = (
     NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
@@ -217,7 +218,7 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
 
     kernel, scalar_return_type = kernel_getter(frame, func, args)
 
-    np_return_type = numpy_support.as_dtype(scalar_return_type)
+    np_return_type = scalar_return_type if scalar_return_type is string_view else numpy_support.as_dtype(scalar_return_type)
     precompiled[cache_key] = (kernel, np_return_type)
 
     return kernel, np_return_type
@@ -240,3 +241,12 @@ def _launch_arg_from_col(col):
         return data
     else:
         return data, mask
+
+def _return_col_from_dtype(dt, size):
+    if dt is string_view:
+        #
+        return rmm.DeviceBuffer(
+            size=int(size * dstring_model.size_bytes)
+        )
+    else:
+        return cp.empty(size, dtype=dt)
