@@ -2423,7 +2423,7 @@ def test_parquet_reader_decimal_columns():
 
 
 def test_parquet_reader_unsupported_compression(datadir):
-    fname = datadir / "test.zstd"
+    fname = datadir / "spark_zstd.parquet"
 
     with pytest.raises(RuntimeError):
         cudf.read_parquet(fname)
