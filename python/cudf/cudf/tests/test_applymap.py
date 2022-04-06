@@ -88,3 +88,16 @@ def test_applymap_dataframe(data, func, na_action):
     got = gdf.applymap(func, na_action=na_action)
 
     utils.assert_eq(expect, got, check_dtype=False)
+
+
+def test_applymap_raise_cases():
+    df = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+    def f(x, some_kwarg=0):
+        return x + some_kwarg
+
+    with pytest.raises(NotImplementedError):
+        df.applymap(f, some_kwarg=1)
+
+    with pytest.raises(ValueError):
+        df.applymap(f, na_action="some_invalid_option")
