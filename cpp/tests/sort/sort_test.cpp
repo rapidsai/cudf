@@ -804,6 +804,39 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointSortedOrderGather)
   CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_table, sorted->view());
 }
 
+struct SortCornerTest : public BaseFixture {
+};
+
+TEST_F(SortCornerTest, WithEmptyStructColumn)
+{
+  using int_col = fixed_width_column_wrapper<int32_t>;
+
+  int_col col_for_mask{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 1, 1}};
+  auto null_mask  = cudf::copy_bitmask(col_for_mask.release()->view());
+  auto struct_col = cudf::make_structs_column(6, {}, UNKNOWN_NULL_COUNT, std::move(null_mask));
+
+  int_col col1{{1, 2, 3, 1, 2, 3}};
+  int_col col2{{1, 1, 1, 2, 2, 2}};
+  table_view input{{struct_col->view(), col1, col2}};
+
+  int_col expected{{1, 0, 3, 4, 2, 5}};
+  std::vector<order> column_order{order::ASCENDING, order::ASCENDING, order::ASCENDING};
+  auto got = sorted_order(input, column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+
+  int_col col3{{0, 1, 2, 3, 4, 5}};
+  std::vector<std::unique_ptr<cudf::column>> child_columns;
+  child_columns.push_back(std::move(struct_col));
+  child_columns.push_back(col3.release());
+  auto struct_col2 =
+    cudf::make_structs_column(6, std::move(child_columns), 0, rmm::device_buffer{});
+  table_view input2{{struct_col2->view()}};
+
+  int_col expected2{{5, 4, 3, 2, 0, 1}};
+  auto got2 = sorted_order(input2, {order::DESCENDING});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got2->view());
+}
+
 }  // namespace test
 }  // namespace cudf
 
