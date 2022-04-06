@@ -24,7 +24,10 @@ from cudf.utils.dtypes import (
 from cudf.api.types import is_string_dtype
 from cudf_jit_udf import to_string_view_array
 
+from cudf.utils.utils import _cudf_nvtx_annotate
+
 JIT_SUPPORTED_TYPES = (
+    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
 )
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
