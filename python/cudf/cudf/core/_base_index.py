@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+import warnings
 from functools import cached_property
 from typing import Any, Set
 
@@ -1147,6 +1148,9 @@ class BaseIndex(Serializable):
                     (1, 2)],
                    names=['a', 'b'])
         """
+        warnings.warn(
+            "Index.join is deprecated and will be removed", FutureWarning
+        )
 
         if isinstance(self, cudf.MultiIndex) and isinstance(
             other, cudf.MultiIndex
