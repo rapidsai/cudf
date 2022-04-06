@@ -19,12 +19,8 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
-#include "io/statistics/statistics.cuh"
-#include "thrust/iterator/counting_iterator.h"
 #include "writer_impl.hpp"
 
-#include <cuda_runtime_api.h>
-#include <driver_types.h>
 #include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 
@@ -47,8 +43,6 @@
 #include <numeric>
 #include <utility>
 
-#include <cooperative_groups.h>
-#include <cooperative_groups/memcpy_async.h>
 #include <cuda/std/limits>
 namespace cudf {
 namespace io {
@@ -1092,7 +1086,7 @@ hostdevice_vector<uint8_t> allocate_and_encode_blobs(
 }
 
 writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
-  statistics_freq stats_freq,
+  statistics_freq const stats_freq,
   orc_table_view const& orc_table,
   file_segmentation const& segmentation)
 {
@@ -1186,7 +1180,7 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
   auto const is_granularity_rowgroup = stats_freq == ORC_STATISTICS_ROW_GROUP;
   // we have to encode the row groups now IF they are being written out
   auto rowgroup_blobs = [&]() -> std::vector<ColStatsBlob> {
-    if (not is_granularity_rowgroup or single_write_mode) { return {}; }
+    if (not is_granularity_rowgroup) { return {}; }
 
     hostdevice_vector<uint8_t> blobs =
       allocate_and_encode_blobs(rowgroup_merge, rowgroup_chunks, num_rowgroup_blobs, stream);
@@ -1203,13 +1197,13 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
   }();
 
   return {std::move(rowgroup_blobs),
-          {std::move(stripe_chunks)},
-          {std::move(stripe_merge)},
+          std::move(stripe_chunks),
+          std::move(stripe_merge),
           std::move(stat_desc)};
 }
 
 writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
-  int num_columns, int num_stripes, writer::impl::persisted_statistics& incoming_stats)
+  int const num_columns, int const num_stripes, writer::impl::persisted_statistics& incoming_stats)
 {
   auto stripe_size_iter = thrust::make_transform_iterator(incoming_stats.stripe_stat_merge.begin(),
                                                           [](auto const& i) { return i.size(); });
@@ -1255,10 +1249,10 @@ writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
     }
 
     auto d_file_stats_merge = stats_merge.device_ptr(num_stripe_blobs);
-    cudaMemcpy(d_file_stats_merge,
+    cudaMemcpyAsync(d_file_stats_merge,
                file_stats_merge.data(),
                num_file_blobs * sizeof(statistics_merge_group),
-               cudaMemcpyHostToDevice);
+               cudaMemcpyHostToDevice, stream);
 
     auto file_stat_chunks = stat_chunks.data() + num_stripe_blobs;
     detail::merge_group_statistics<detail::io_file_format::ORC>(
@@ -2054,15 +2048,14 @@ void writer::impl::write(table_view const& table)
 
     auto intermediate_stats = gather_statistic_blobs(stats_freq_, orc_table, segmentation);
 
-    // persist min/max string pointers in stripe_stat_chunks
-
-    persisted_stripe_statistics.stripe_stat_chunks.emplace_back(
-      std::move(intermediate_stats.stripe_stat_chunks));
-    persisted_stripe_statistics.stripe_stat_merge.emplace_back(
-      std::move(intermediate_stats.stripe_stat_merge));
-    if (intermediate_stats.stats_desc.size() > 0)
+    if (intermediate_stats.stats_desc.size() > 0) {
+      persisted_stripe_statistics.stripe_stat_chunks.emplace_back(
+        std::move(intermediate_stats.stripe_stat_chunks));
+      persisted_stripe_statistics.stripe_stat_merge.emplace_back(
+        std::move(intermediate_stats.stripe_stat_merge));
       persisted_stripe_statistics.stats_desc = std::move(intermediate_stats.stats_desc);
-
+    }
+    
     // Write stripes
     std::vector<std::future<void>> write_tasks;
     for (size_t stripe_id = 0; stripe_id < stripes.size(); ++stripe_id) {
