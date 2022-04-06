@@ -365,35 +365,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 for i, col in enumerate(columns_df._column_names):
                     self._frame[col].loc[key[0]] = value_cols[i]
             else:
-                if isinstance(value, cudf.DataFrame):
-                    if value.shape != self._frame.loc[key[0]].shape:
-                        raise ValueError(
-                            template.substitute(
-                                value1=value.shape,
-                                value2=self._frame.loc[key[0]].shape,
-                            )
-                        )
-                    value_column_names = set(value._column_names)
-                    scatter_map = _indices_from_labels(self._frame, key[0])
-                    for col in columns_df._column_names:
-                        columns_df[col][scatter_map] = (
-                            value._data[col]
-                            if col in value_column_names
-                            else cudf.NA
-                        )
-                else:
-                    value = np.array(value)
-                    value = value.reshape((-1, value.shape[0]))
-                    if value.shape != self._frame.loc[key[0]].shape:
-                        raise ValueError(
-                            template.substitute(
-                                value1=value.shape,
-                                value2=self._frame.loc[key[0]].shape,
-                            )
-                        )
-                    scatter_map = _indices_from_labels(self._frame, key[0])
-                    for i, col in enumerate(columns_df._column_names):
-                        self._frame._data[col][scatter_map] = value[:, i]
+                scatter_map = _indices_from_labels(self._frame, key[0])
+                self._frame.iloc[scatter_map, key[1]] = value
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
