@@ -387,7 +387,7 @@ def test_contains(data, search_key):
         (data_test_2(), 2),
     ],
 )
-def test_get(data, index, expectation):
+def test_get(data, index):
     expect = Series(data).list.get(index)
     ds = dgd.from_cudf(Series(data), 5)
     assert_eq(expect, ds.list.get(index).compute())
