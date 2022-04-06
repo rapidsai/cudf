@@ -78,7 +78,7 @@ std::pair<StackSymbolOutItT, StackOpIndexOutItT> to_sparse_stack_symbols(
 
 /**
  * @brief Reads in a sequence of items that represent stack operations, applies these operations to
- * a stack, and, for every oepration being read in, outputs what was the symbol on top of the stack
+ * a stack, and, for every operation being read in, outputs what was the symbol on top of the stack
  * before the operations was applied. In case the stack is empty before any operation,
  * \p empty_stack will be output instead.
  *
@@ -91,7 +91,8 @@ std::pair<StackSymbolOutItT, StackOpIndexOutItT> to_sparse_stack_symbols(
  * @param[in] end Iterator to one past the last item representing the stack operation
  * @param[in] to_stack_op A function object that takes an instance of InputItT's value type and
  * returns the kind of stack operation such item represents (i.e., of type stack_op_type)
- * @param[in] empty_stack A symbol that will be written to top_of_stack whenever the stack was empty
+ * @param[in] empty_stack A symbol that will be written to top_of_stack_out_it whenever the stack
+ * was empty
  * @param[out] top_of_stack The output iterator to which the item will be written to
  * @return TopOfStackOutItT Iterators to one past the last element that was written
  */
@@ -103,13 +104,15 @@ TopOfStackOutItT to_top_of_stack(InputItT begin,
                                  InputItT end,
                                  ToStackOpTypeT to_stack_op,
                                  StackSymbolT empty_stack,
-                                 TopOfStackOutItT top_of_stack)
+                                 TopOfStackOutItT top_of_stack_out_it)
 {
-  std::stack<StackSymbolT> stack;
+  // This is the data structure that keeps track of the full stack state for each input symbol
+  std::stack<StackSymbolT> stack_state;
+
   for (auto it = begin; it < end; it++) {
     // Write what is currently on top of the stack when reading in the current symbol
-    *top_of_stack = stack.empty() ? empty_stack : stack.top();
-    top_of_stack++;
+    *top_of_stack_out_it = stack_state.empty() ? empty_stack : stack_state.top();
+    top_of_stack_out_it++;
 
     auto const& current        = *it;
     fst::stack_op_type op_type = to_stack_op(current);
@@ -117,12 +120,12 @@ TopOfStackOutItT to_top_of_stack(InputItT begin,
     // Check whether this symbol corresponds to a push or pop operation and modify the stack
     // accordingly
     if (op_type == fst::stack_op_type::PUSH) {
-      stack.push(current);
+      stack_state.push(current);
     } else if (op_type == fst::stack_op_type::POP) {
-      stack.pop();
+      stack_state.pop();
     }
   }
-  return top_of_stack;
+  return top_of_stack_out_it;
 }
 
 /**
@@ -155,8 +158,7 @@ TEST_F(LogicalStackTest, GroundTruth)
   // The stack symbol that we'll fill everywhere where there's nothing on the stack
   constexpr SymbolT empty_stack_symbol = '_';
 
-  // This just has to be a stack symbol that may not be confused with a symbol that would push or
-  // pop
+  // This just has to be a stack symbol that may not be confused with a symbol that would push
   constexpr SymbolT read_symbol = 'x';
 
   // Prepare cuda stream for data transfers & kernels
@@ -185,7 +187,7 @@ TEST_F(LogicalStackTest, GroundTruth)
     input += input;
 
   // Getting the symbols that actually modify the stack (i.e., symbols that push or pop)
-  std::string stack_symbols = "";
+  std::string stack_symbols{};
   std::vector<SymbolOffsetT> stack_op_indexes;
   stack_op_indexes.reserve(input.size());
 
@@ -196,13 +198,11 @@ TEST_F(LogicalStackTest, GroundTruth)
                           std::back_inserter(stack_symbols),
                           std::back_inserter(stack_op_indexes));
 
-  // Prepare sparse stack ops
-  std::size_t num_stack_ops = stack_symbols.size();
-
-  rmm::device_uvector<SymbolT> d_stack_ops(stack_symbols.size(), stream_view);
-  rmm::device_uvector<SymbolOffsetT> d_stack_op_indexes(stack_op_indexes.size(), stream_view);
-  auto top_of_stack_gpu = hostdevice_vector<SymbolT>(input.size(), stream_view);
-  cudf::device_span<SymbolOffsetT> d_stack_op_idx_span{d_stack_op_indexes.data(), d_stack_op_indexes.size()};
+  rmm::device_uvector<SymbolT> d_stack_ops{stack_symbols.size(), stream_view};
+  rmm::device_uvector<SymbolOffsetT> d_stack_op_indexes{stack_op_indexes.size(), stream_view};
+  hostdevice_vector<SymbolT> top_of_stack_gpu{input.size(), stream_view};
+  cudf::device_span<SymbolOffsetT> d_stack_op_idx_span{d_stack_op_indexes.data(),
+                                                       d_stack_op_indexes.size()};
 
   cudaMemcpyAsync(d_stack_ops.data(),
                   stack_symbols.data(),
@@ -225,16 +225,15 @@ TEST_F(LogicalStackTest, GroundTruth)
   rmm::device_buffer d_temp_storage{};
 
   // Run algorithm
-  fst::SparseStackOpToTopOfStack<StackLevelT>(
-    d_temp_storage,
-    d_stack_ops.data(),
-    d_stack_op_idx_span,
-    JSONToStackOp{},
-    top_of_stack_gpu.device_ptr(),
-    empty_stack_symbol,
-    read_symbol,
-    string_size,
-    stream);
+  fst::SparseStackOpToTopOfStack<StackLevelT>(d_temp_storage,
+                                              d_stack_ops.data(),
+                                              d_stack_op_idx_span,
+                                              JSONToStackOp{},
+                                              top_of_stack_gpu.device_ptr(),
+                                              empty_stack_symbol,
+                                              read_symbol,
+                                              string_size,
+                                              stream);
 
   // Async copy results from device to host
   top_of_stack_gpu.device_to_host(stream_view);
@@ -253,6 +252,7 @@ TEST_F(LogicalStackTest, GroundTruth)
 
   // Verify results
   ASSERT_EQ(input.size(), top_of_stack_cpu.size());
+  ASSERT_EQ(top_of_stack_gpu.size(), top_of_stack_cpu.size());
   for (size_t i = 0; i < input.size() && i < top_of_stack_cpu.size(); i++) {
     ASSERT_EQ(top_of_stack_gpu.host_ptr()[i], top_of_stack_cpu[i]) << "Mismatch at index #" << i;
   }
