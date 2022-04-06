@@ -2420,3 +2420,10 @@ def test_parquet_reader_decimal_columns():
     expected = pd.read_parquet(buffer, columns=["col3", "col2", "col1"])
 
     assert_eq(actual, expected)
+
+
+def test_parquet_reader_unsupported_compression(datadir):
+    fname = datadir / "test.zstd"
+
+    with pytest.raises(RuntimeError):
+        cudf.read_parquet(fname)
