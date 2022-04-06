@@ -1251,6 +1251,7 @@ def test_datetime_reductions(data, op, dtype):
     ],
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10609")
 def test_datetime_infer_format(data, dtype):
     sr = cudf.Series(data)
     psr = pd.Series(data)
@@ -1548,6 +1549,7 @@ def test_date_range_start_freq_periods(start, freq, periods):
     )
 
 
+# @pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10609")
 def test_date_range_end_freq_periods(end, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
@@ -1557,7 +1559,14 @@ def test_date_range_end_freq_periods(end, freq, periods):
 
     expect = pd.date_range(end=end, periods=periods, freq=_pfreq, name="a")
     got = cudf.date_range(end=end, periods=periods, freq=_gfreq, name="a")
-
+    print(end, periods, freq)
+    if (
+        periods == 100
+        and isinstance(freq, dict)
+        and freq.get("nanoseconds") == 3
+    ):
+        # import pdb;pdb.set_trace()
+        print("YES")
     np.testing.assert_allclose(
         expect.to_numpy().astype("int64"),
         got.to_pandas().to_numpy().astype("int64"),

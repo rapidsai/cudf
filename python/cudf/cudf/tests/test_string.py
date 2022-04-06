@@ -199,6 +199,7 @@ def test_string_astype(dtype):
     elif dtype.startswith("bool"):
         data = ["True", "False", "True", "False", "False"]
     elif dtype.startswith("datetime64"):
+        pytest.skip(reason="https://github.com/rapidsai/cudf/issues/10609")
         data = [
             "2019-06-04T00:00:00Z",
             "2019-06-04T12:12:12Z",

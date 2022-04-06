@@ -9,6 +9,7 @@ from libcpp cimport bool
 from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+import warnings
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
@@ -608,8 +609,22 @@ def shift(Column input, int offset, object fill_value=None):
     cdef DeviceScalar fill
 
     if isinstance(fill_value, DeviceScalar):
+        if not cudf.utils.dtypes._can_cast(input.dtype, fill_value.dtype):
+            warnings.warn(
+                f"Passing {fill_value.dtype} to shift is deprecated and will "
+                f"raise in a future version"
+                f", pass a {input.dtype} scalar instead.",
+                FutureWarning,
+            )
         fill = fill_value
     else:
+        if not cudf.utils.dtypes._can_cast(input.dtype, type(fill_value)):
+            warnings.warn(
+                f"Passing {type(fill_value)} to shift is deprecated and will "
+                f"raise in a future version"
+                f", pass a {input.dtype} scalar instead.",
+                FutureWarning,
+            )
         fill = as_device_scalar(fill_value, input.dtype)
 
     cdef column_view c_input = input.view()
