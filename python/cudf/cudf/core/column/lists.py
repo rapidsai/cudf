@@ -348,15 +348,18 @@ class ListMethods(ColumnMethods):
         default: Optional[Union[ScalarLike, ColumnLike]] = None,
     ) -> ParentType:
         """
-        Extract element at the given index from each list.
+        Extract element at the given index from each list in a Series of lists.
 
-        `index` can be an integer or a sequence of integers.
-        Passing a sequence enables extracting values at
-        different indexes for different lists.
+        ``index`` can be an integer or a sequence of integers.  If
+        ``index`` is an integer, the element at position ``index`` is
+        extracted from each list.  If ``index`` is a sequence, it must
+        be of the same length as the Series, and ``index[i]``
+        specifies the position of the element to extract from the
+        ``i``-th list in the Series.
 
-        If the index is out of bounds for any list,
-        return <NA> or, if provided, ``default``.
-        Thus, this method never raises an ``IndexError``.
+        If the index is out of bounds for any list, return <NA> or, if
+        provided, ``default``.  Thus, this method never raises an
+        ``IndexError``.
 
         Parameters
         ----------
