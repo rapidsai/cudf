@@ -707,7 +707,9 @@ class BaseIndex(Serializable):
         if is_mixed_with_object_dtype(self, other):
             difference = self.copy()
         else:
-            difference = self.join(other, how="leftanti")
+            other = other.copy(deep=False)
+            other.names = self.names
+            difference = self._merge(other, how="leftanti", on=self.name)
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
@@ -989,7 +991,11 @@ class BaseIndex(Serializable):
         return union_result
 
     def _intersection(self, other, sort=None):
-        intersection_result = self.unique().join(other.unique(), how="inner")
+        other_unique = other.unique()
+        other_unique.names = self.names
+        intersection_result = self.unique()._merge(
+            other_unique, how="inner", on=self.name
+        )
 
         if sort is None and len(other):
             return intersection_result.sort_values()
