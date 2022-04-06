@@ -384,7 +384,7 @@ def test_contains(data, search_key):
     "data, index, expectation",
     [
         (data_test_1(), 1, does_not_raise()),
-        (data_test_2(), 2, pytest.raises(IndexError)),
+        (data_test_2(), 2, does_not_raise()),
     ],
 )
 def test_get(data, index, expectation):
