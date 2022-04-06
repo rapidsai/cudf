@@ -1166,6 +1166,9 @@ writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
   auto const num_file_blobs     = orc_table.num_columns();
   auto const num_stat_blobs     = num_rowgroup_blobs + num_stripe_blobs + num_file_blobs;
 
+  auto const are_statistics_enabled = stats_freq != statistics_freq::STATISTICS_NONE;
+  if (not are_statistics_enabled or num_stat_blobs == 0) { return {}; }
+
   auto& stat_merge  = incoming_stats._stat_merge;
   auto& stat_chunks = incoming_stats._stat_chunks;
 
