@@ -710,7 +710,16 @@ class BaseIndex(Serializable):
         else:
             other = other.copy(deep=False)
             other.names = self.names
-            difference = self._merge(other, how="leftanti", on=self.name)
+            difference = cudf.core.index._index_from_data(
+                cudf.DataFrame._from_data(self._data)
+                ._merge(
+                    cudf.DataFrame._from_data(other._data),
+                    how="leftanti",
+                    on=self.name,
+                )
+                ._data
+            )
+
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
@@ -994,8 +1003,14 @@ class BaseIndex(Serializable):
     def _intersection(self, other, sort=None):
         other_unique = other.unique()
         other_unique.names = self.names
-        intersection_result = self.unique()._merge(
-            other_unique, how="inner", on=self.name
+        intersection_result = cudf.core.index._index_from_data(
+            cudf.DataFrame._from_data(self.unique()._data)
+            ._merge(
+                cudf.DataFrame._from_data(other_unique._data),
+                how="inner",
+                on=self.name,
+            )
+            ._data
         )
 
         if sort is None and len(other):
