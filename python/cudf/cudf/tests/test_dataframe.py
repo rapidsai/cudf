@@ -9210,7 +9210,12 @@ def test_dataframe_iloc_inplace_update(key, value):
 )
 @pytest.mark.parametrize(
     ("data, index"),
-    [({"x": [10, 20], "y": [30, 40]}, [cudf.Index([0, 2]), pd.Index([0, 2])])],
+    [
+        (
+            {"x": [10, 20], "y": [30, 40]},
+            [0, 2],
+        )
+    ],
 )
 def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe(
     loc_key, iloc_key, data, index
@@ -9218,12 +9223,14 @@ def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe(
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     pdf = gdf.to_pandas()
 
-    actual = gdf.loc[loc_key] = cudf.DataFrame(data, index=index[0])
-    expected = pdf.loc[loc_key] = pd.DataFrame(data, index=index[1])
+    actual = gdf.loc[loc_key] = cudf.DataFrame(data, index=cudf.Index([0, 2]))
+    expected = pdf.loc[loc_key] = pd.DataFrame(data, index=pd.Index([0, 2]))
     assert_eq(expected, actual)
 
-    actual = gdf.iloc[iloc_key] = cudf.DataFrame(data, index=index[0])
-    expected = pdf.iloc[iloc_key] = pd.DataFrame(data, index=index[1])
+    actual = gdf.iloc[iloc_key] = cudf.DataFrame(
+        data, index=cudf.Index([0, 2])
+    )
+    expected = pdf.iloc[iloc_key] = pd.DataFrame(data, index=pd.Index([0, 2]))
     assert_eq(expected, actual)
 
 

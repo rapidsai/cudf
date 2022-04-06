@@ -11,7 +11,6 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from string import Template
 from typing import (
     Any,
     Dict,
@@ -341,11 +340,6 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 )
             self._frame._data.insert(key[1], new_col)
         else:
-            template = Template(
-                "shape mismatch: value array of shape $value1 could "
-                "not be broadcast to indexing result of shape "
-                "$value2"
-            )
             if isinstance(value, (cupy.ndarray, np.ndarray)):
                 value_df = DataFrame(value)
                 if value_df.shape[1] != columns_df.shape[1]:
@@ -355,7 +349,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         )
                     else:
                         raise ValueError(
-                            template.substitute(
+                            "shape mismatch: value array of shape {value1} "
+                            "could not be broadcast to indexing result of "
+                            "shape {value2}".format(
                                 value1=value_df.shape,
                                 value2=columns_df.shape,
                             )
@@ -428,40 +424,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
-        columns_df = self._frame._from_data(
-            self._frame._data.select_by_index(key[1]), self._frame._index
-        )
-
-        template = Template(
-            "shape mismatch: value array of shape $value1 could "
-            "not be broadcast to indexing result of shape "
-            "$value2"
-        )
-        if isinstance(value, cudf.DataFrame):
-            if value.shape != self._frame.iloc[key[0]].shape:
-                raise ValueError(
-                    template.substitute(
-                        value1=value.shape,
-                        value2=self._frame.loc[key[0]].shape,
-                    )
-                )
-            value_column_names = set(value._column_names)
-            for col in columns_df._column_names:
-                columns_df[col][key[0]] = (
-                    value._data[col] if col in value_column_names else cudf.NA
-                )
-        else:
-            value = np.array(value)
-            value = value.reshape((-1, value.shape[0]))
-            if value.shape != self._frame.iloc[key[0]].shape:
-                raise ValueError(
-                    template.substitute(
-                        value1=value.shape,
-                        value2=self._frame.loc[key[0]].shape,
-                    )
-                )
-            for i, col in enumerate(columns_df._column_names):
-                self._frame._data[col][key[0]] = value[:, i]
+        scatter_map = _indices_from_labels(self._frame, key[0])
+        self._frame.iloc[scatter_map, key[1]] = value
 
     def _getitem_scalar(self, arg):
         col = self._frame.columns[arg[1]]
@@ -1130,7 +1094,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         6  6  6  6
         8  8  8  8
         """
-        # breakpoint()
         if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
             return self._get_columns_by_label(arg, downcast=True)
 
