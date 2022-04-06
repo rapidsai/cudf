@@ -453,7 +453,9 @@ class NumericalColumn(NumericalBaseColumn):
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
             replaced = replaced.fillna(
-                df._data["new"][df._data["old"].isnull()][0]
+                df._data["new"]
+                .apply_boolean_mask(df._data["old"].isnull())
+                .element_indexing(0)
             )
             df = df.dropna(subset=["old"])
 

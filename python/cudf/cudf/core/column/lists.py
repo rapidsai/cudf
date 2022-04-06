@@ -376,6 +376,7 @@ class ListMethods(ColumnMethods):
         2    6
         dtype: int64
 
+        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
         >>> s.list.get(2)
         0    <NA>
         1       5

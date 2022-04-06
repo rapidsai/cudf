@@ -25,6 +25,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/host_vector.h>
+
 #include <algorithm>
 
 template <typename T>
@@ -153,7 +155,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
 
     auto host_result = cudf::detail::make_host_vector_sync(dev_result);
 
-    CHECK_CUDA(rmm::cuda_stream_default.value());
+    CUDF_CHECK_CUDA(rmm::cuda_stream_default.value());
 
     if (!is_timestamp_sum<T, cudf::DeviceSum>()) {
       EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
@@ -300,7 +302,7 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
 
     auto host_result = cudf::detail::make_host_vector_sync(dev_result);
 
-    CHECK_CUDA(rmm::cuda_stream_default.value());
+    CUDF_CHECK_CUDA(rmm::cuda_stream_default.value());
 
     // print_exact(exact, "exact");
     // print_exact(host_result.data(), "result");

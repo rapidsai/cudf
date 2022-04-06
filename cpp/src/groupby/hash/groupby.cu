@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,11 @@
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/copy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
 #include <unordered_set>
@@ -640,10 +645,14 @@ bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request 
     // Currently, structs are not supported in any of hash-based aggregations.
     // Therefore, if any request contains structs then we must fallback to sort-based aggregations.
     // TODO: Support structs in hash-based aggregations.
+    auto const v_type = is_dictionary(r.values.type())
+                          ? cudf::dictionary_column_view(r.values).keys().type()
+                          : r.values.type();
+
     return not(r.values.type().id() == type_id::STRUCT) and
-           cudf::has_atomic_support(r.values.type()) and
-           std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
-             return is_hash_aggregation(a->kind);
+           std::all_of(r.aggregations.begin(), r.aggregations.end(), [v_type](auto const& a) {
+             return cudf::has_atomic_support(cudf::detail::target_type(v_type, a->kind)) and
+                    is_hash_aggregation(a->kind);
            });
   });
 }
