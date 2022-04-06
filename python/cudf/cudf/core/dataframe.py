@@ -3721,7 +3721,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._apply(func, _get_row_kernel, *args, **kwargs)
 
     def applymap(
-        self, func: Callable, na_action: str | None = None, **kwargs
+        self,
+        func: Callable[[Any], Any],
+        na_action: Union[str, None] = None,
+        **kwargs,
     ) -> DataFrame:
 
         """
