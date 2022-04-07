@@ -70,7 +70,7 @@ const std::array<char, 33> escapable_chars{
  * @param pattern Regular expression encoded with UTF-8.
  * @return Fixed-width 32-bit character vector.
  */
-std::vector<char32_t> string_to_char32_vector(std::string_view const& pattern)
+std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
 {
   size_type size  = static_cast<size_type>(pattern.size());
   size_type count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
@@ -870,7 +870,7 @@ class regex_compiler {
 };
 
 // Convert pattern into program
-reprog reprog::create_from(std::string_view const& pattern, regex_flags const flags)
+reprog reprog::create_from(std::string_view pattern, regex_flags const flags)
 {
   reprog rtn;
   auto pattern32 = string_to_char32_vector(pattern);

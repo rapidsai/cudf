@@ -38,7 +38,8 @@ struct alignas(8) relist {
    */
   constexpr inline static std::size_t data_size_for(int32_t insts)
   {
-    return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) + ((insts + 7) / 8);
+    return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) +
+           cudf::util::div_rounding_up_unsafe(insts, 8);
   }
 
   /**
@@ -57,7 +58,7 @@ struct alignas(8) relist {
 
   __device__ __forceinline__
   relist(int16_t insts, int32_t num_threads, u_char* gp_ptr, int32_t index)
-    : masksize((insts + 7) / 8), stride(num_threads)
+    : masksize(cudf::util::div_rounding_up_unsafe(insts, 8)), stride(num_threads)
   {
     auto const rdata_size = sizeof(ranges[0]);
     auto const idata_size = sizeof(inst_ids[0]);
@@ -92,11 +93,11 @@ struct alignas(8) relist {
 
  private:
   int16_t size{};
-  int16_t masksize;
-  int32_t stride;
-  int2* ranges;       // pair per instruction
-  int16_t* inst_ids;  // one per instruction
-  u_char* mask;       // bit per instruction
+  int16_t const masksize;
+  int32_t const stride;
+  int2* __restrict__ ranges;       // pair per instruction
+  int16_t* __restrict__ inst_ids;  // one per instruction
+  u_char* __restrict__ mask;       // bit per instruction
 
   __device__ __forceinline__ void writeMask(int32_t pos) const
   {

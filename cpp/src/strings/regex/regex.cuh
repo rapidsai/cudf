@@ -218,8 +218,8 @@ class reprog_device {
 
  private:
   struct reljunk {
-    relist* list1;
-    relist* list2;
+    relist* __restrict__ list1;
+    relist* __restrict__ list2;
     int32_t starttype{};
     char32_t startchar{};
 
