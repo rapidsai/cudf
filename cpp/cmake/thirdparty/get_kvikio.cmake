@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-# This function finds KvikIO and sets `KvikIO_INCLUDE_DIR`
+# This function finds KvikIO
 function(find_and_configure_kvikio VERSION)
 
   rapids_cpm_find(
@@ -25,11 +25,6 @@ function(find_and_configure_kvikio VERSION)
     # GIT_TAG branch-${VERSION} TODO: use this before merge of PR
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
     OPTIONS "KvikIO_BUILD_EXAMPLES OFF"
-  )
-
-  set(KvikIO_INCLUDE_DIR
-      ${KvikIO_SOURCE_DIR}/cpp/include
-      PARENT_SCOPE
   )
 
 endfunction()
