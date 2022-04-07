@@ -3729,6 +3729,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         """
         Apply a function to a Dataframe elementwise.
+
         This method applies a function that accepts and returns a scalar
         to every element of a DataFrame.
 
