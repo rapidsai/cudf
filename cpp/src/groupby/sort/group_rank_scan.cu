@@ -301,25 +301,36 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
     data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
   ranks->set_null_mask(copy_bitmask(rank, stream, mr));
   auto mutable_ranks = ranks->mutable_view();
-  thrust::tabulate(rmm::exec_policy(stream),
-                   mutable_ranks.begin<double>(),
-                   mutable_ranks.end<double>(),
-                   [is_dense_rank,
-                    is_double = rank.type().id() == type_id::FLOAT64,
-                    dcount    = count.begin<size_type>(),
-                    labels    = group_labels.data(),
-                    offsets   = group_offsets.begin(),
-                    d_rank    = rank.begin<double>(),
-                    s_rank    = rank.begin<size_type>()] __device__(size_type row_index) -> double {
-                     double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
-                     auto const count = dcount[labels[row_index]];
-                     if (is_dense_rank) {
+  if (is_dense_rank) {
+    thrust::tabulate(rmm::exec_policy(stream),
+                     mutable_ranks.begin<double>(),
+                     mutable_ranks.end<double>(),
+                     [is_double = rank.type().id() == type_id::FLOAT64,
+                      dcount    = count.begin<size_type>(),
+                      labels    = group_labels.data(),
+                      offsets   = group_offsets.begin(),
+                      d_rank    = rank.begin<double>(),
+                      s_rank = rank.begin<size_type>()] __device__(size_type row_index) -> double {
+                       double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
+                       auto const count = dcount[labels[row_index]];
                        size_type const last_rank_index = offsets[labels[row_index]] + count - 1;
                        auto const last_rank            = s_rank[last_rank_index];
                        return r / last_rank;
-                     }
-                     return r / count;
-                   });
+                     });
+  } else {
+    thrust::tabulate(rmm::exec_policy(stream),
+                     mutable_ranks.begin<double>(),
+                     mutable_ranks.end<double>(),
+                     [is_double = rank.type().id() == type_id::FLOAT64,
+                      dcount    = count.begin<size_type>(),
+                      labels    = group_labels.data(),
+                      d_rank    = rank.begin<double>(),
+                      s_rank = rank.begin<size_type>()] __device__(size_type row_index) -> double {
+                       double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
+                       auto const count = dcount[labels[row_index]];
+                       return r / count;
+                     });
+  }
   return ranks;
 }
 
