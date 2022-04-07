@@ -49,7 +49,7 @@ enum class stack_op_type : int32_t {
 namespace detail {
 
 /**
- * @brief A convenience struct that represents a stack opepration as a pair, where the stack_level
+ * @brief A convenience struct that represents a stack operation as a pair, where the stack_level
  * represents the stack's level and the value represents the stack symbol.
  *
  * @tparam StackLevelT The stack level type sufficient to cover all stack levels. Must be signed
@@ -73,6 +73,7 @@ struct StackOp {
  */
 template <std::size_t BYTE_SIZE>
 struct StackOpToUnsigned {
+  using UnsignedT = void;
 };
 
 template <>
@@ -166,8 +167,8 @@ struct PopulatePopWithPush {
 };
 
 /**
- * @brief Binary reduction operator that is used to replace each read_symbol occurance with the last
- * non-read_symbol that precedes such read_symbol.
+ * @brief Binary reduction operator that is used to replace each read_symbol occurrence with the
+ * last non-read_symbol that precedes such read_symbol.
  */
 template <typename StackSymbolT>
 struct PropagateLastWrite {
@@ -298,6 +299,7 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
 
   // The unsigned integer type that we use for radix sorting items of type StackOpT
   using StackOpUnsignedT = detail::UnsignedStackOpType<StackOpT>;
+  static_assert(!std::is_void<StackOpUnsignedT>(), "unsupported StackOpT size");
 
   // Transforming sequence of stack symbols to stack operations
   using StackSymbolToStackOpT = detail::StackSymbolToStackOp<StackOpT, StackSymbolToStackOpTypeT>;
@@ -495,7 +497,7 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
     std::min(num_symbols_in, static_cast<decltype(num_symbols_in)>(10000)), stream, d_top_of_stack);
 
   // We perform an exclusive scan in order to fill the items at the very left that may
-  // be reading the empty stack before there's the first push occurance in the sequence.
+  // be reading the empty stack before there's the first push occurrence in the sequence.
   // Also, we're interested in the top-of-the-stack symbol before the operation was applied.
   CUDA_TRY(cub::DeviceScan::ExclusiveScan(temp_storage.data(),
                                           total_temp_storage_bytes,
