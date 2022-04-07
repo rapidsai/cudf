@@ -39,6 +39,7 @@ namespace io {
 
 constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  // 128MB
 constexpr size_type default_row_group_size_rows = 1000000;
+constexpr size_type default_target_page_size = 512 * 1024;
 
 /**
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
@@ -382,6 +383,8 @@ class parquet_writer_options {
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
   size_type _row_group_size_rows = default_row_group_size_rows;
+  // target page size uncompressed
+  size_t _target_page_size = default_target_page_size;
 
   /**
    * @brief Constructor from sink and table.
@@ -483,6 +486,11 @@ class parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
+   * @brief Returns target page size, in bytes.
+   */
+  auto get_target_page_size() const { return _target_page_size; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -552,24 +560,17 @@ class parquet_writer_options {
   /**
    * @brief Sets the maximum row group size, in bytes.
    */
-  void set_row_group_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(
-      size_bytes >= 512 * 1024,
-      "The maximum row group size cannot be smaller than the page size, which is 512KB.");
-    _row_group_size_bytes = size_bytes;
-  }
+  void set_row_group_size_bytes(size_t size_bytes) { _row_group_size_bytes = size_bytes; }
 
   /**
    * @brief Sets the maximum row group size, in rows.
    */
-  void set_row_group_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the page size, which is 5000 rows.");
-    _row_group_size_rows = size_rows;
-  }
+  void set_row_group_size_rows(size_type size_rows) { _row_group_size_rows = size_rows; }
+
+  /**
+   * @brief Returns target page size.
+   */
+  void set_target_page_size(size_t target_pgsz) { _target_page_size = target_pgsz; }
 };
 
 class parquet_writer_options_builder {
@@ -700,6 +701,18 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets target page size, in bytes.
+   *
+   * @param ps The page size to use.
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& target_page_size(size_t target_pgsz)
+  {
+    options._target_page_size = target_pgsz;
+    return *this;
+  }
+
+  /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps.
@@ -783,6 +796,8 @@ class chunked_parquet_writer_options {
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
   size_type _row_group_size_rows = default_row_group_size_rows;
+  // target page size uncompressed
+  size_t _target_page_size = default_target_page_size;
 
   /**
    * @brief Constructor from sink.
@@ -845,6 +860,11 @@ class chunked_parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
+   * @brief Returns target page size, in bytes.
+   */
+  auto get_target_page_size() const { return _target_page_size; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
@@ -888,24 +908,17 @@ class chunked_parquet_writer_options {
   /**
    * @brief Sets the maximum row group size, in bytes.
    */
-  void set_row_group_size_bytes(size_t size_bytes)
-  {
-    CUDF_EXPECTS(
-      size_bytes >= 512 * 1024,
-      "The maximum row group size cannot be smaller than the page size, which is 512KB.");
-    _row_group_size_bytes = size_bytes;
-  }
+  void set_row_group_size_bytes(size_t size_bytes) { _row_group_size_bytes = size_bytes; }
 
   /**
    * @brief Sets the maximum row group size, in rows.
    */
-  void set_row_group_size_rows(size_type size_rows)
-  {
-    CUDF_EXPECTS(
-      size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the page size, which is 5000 rows.");
-    _row_group_size_rows = size_rows;
-  }
+  void set_row_group_size_rows(size_type size_rows) { _row_group_size_rows = size_rows; }
+
+  /**
+   * @brief Returns target page size.
+   */
+  void set_target_page_size(size_t target_pgsz) { _target_page_size = target_pgsz; }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -1022,6 +1035,18 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& row_group_size_rows(size_type val)
   {
     options.set_row_group_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets target page size in parquet_writer_options.
+   *
+   * @param ps The page size to use.
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& target_page_size(size_t target_pgsz)
+  {
+    options._target_page_size = target_pgsz;
     return *this;
   }
 

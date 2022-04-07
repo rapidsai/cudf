@@ -242,7 +242,8 @@ __global__ void __launch_bounds__(128)
                statistics_merge_group* page_grstats,
                statistics_merge_group* chunk_grstats,
                size_t max_page_comp_data_size,
-               int32_t num_columns)
+               int32_t num_columns,
+               size_t target_page_size)
 {
   // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -338,6 +339,11 @@ __global__ void __launch_bounds__(128)
       uint32_t max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
                                : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
                                                                          : 512 * 1024;
+
+      // override max_page_size if target is smaller
+      if (max_page_size > target_page_size)
+        max_page_size = target_page_size;
+
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > max_page_size))) {
         if (ck_g.use_dictionary) {
@@ -1941,6 +1947,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
+                      size_t target_page_size,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       size_t max_page_comp_data_size,
@@ -1949,7 +1956,8 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
   auto num_rowgroups = chunks.size().first;
   dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
   gpuInitPages<<<dim_grid, 128, 0, stream.value()>>>(
-    chunks, pages, col_desc, page_grstats, chunk_grstats, max_page_comp_data_size, num_columns);
+    chunks, pages, col_desc, page_grstats, chunk_grstats, max_page_comp_data_size, num_columns,
+    target_page_size);
 }
 
 void EncodePages(device_span<gpu::EncPage> pages,
