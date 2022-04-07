@@ -93,11 +93,11 @@ struct alignas(8) relist {
 
  private:
   int16_t size{};
-  int16_t masksize;
+  int16_t const masksize;
   int32_t reserved;
-  int2* ranges;       // pair per instruction
-  int16_t* inst_ids;  // one per instruction
-  u_char* mask;       // bit per instruction
+  int2* __restrict__ ranges;       // pair per instruction
+  int16_t* __restrict__ inst_ids;  // one per instruction
+  u_char* __restrict__ mask;       // bit per instruction
 
   __device__ __forceinline__ void writeMask(int32_t pos) const
   {
