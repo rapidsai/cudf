@@ -9186,6 +9186,16 @@ def test_dataframe_loc_inplace_update(key, value):
     assert_eq(expected, actual)
 
 
+def test_dataframe_loc_inplace_update_string_index():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]}, index=list("abc"))
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[["a"], ["x", "y"]] = [10, 20]
+    expected = pdf.loc[["a"], ["x", "y"]] = [10, 20]
+
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     ("key, value"),
     [([0], [10, 20]), ([0, 2], [[10, 30], [20, 40]])],
