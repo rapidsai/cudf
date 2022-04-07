@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -488,11 +488,11 @@ class concurrent_unordered_multimap {
 
       m_hashtbl_values = m_allocator.allocate(m_hashtbl_capacity, stream);
     }
-    CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values,
-                             other.m_hashtbl_values,
-                             m_hashtbl_size * sizeof(value_type),
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values,
+                                  other.m_hashtbl_values,
+                                  m_hashtbl_size * sizeof(value_type),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
   }
 
   void clear_async(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
@@ -519,7 +519,7 @@ class concurrent_unordered_multimap {
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
 
     if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
-      CUDA_TRY(cudaMemPrefetchAsync(
+      CUDF_CUDA_TRY(cudaMemPrefetchAsync(
         m_hashtbl_values, m_hashtbl_size * sizeof(value_type), dev_id, stream.value()));
     }
   }
@@ -575,8 +575,8 @@ class concurrent_unordered_multimap {
 
       if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
         int dev_id = 0;
-        CUDA_TRY(cudaGetDevice(&dev_id));
-        CUDA_TRY(cudaMemPrefetchAsync(
+        CUDF_CUDA_TRY(cudaGetDevice(&dev_id));
+        CUDF_CUDA_TRY(cudaMemPrefetchAsync(
           m_hashtbl_values, m_hashtbl_size * sizeof(value_type), dev_id, stream.value()));
       }
     }
@@ -584,7 +584,7 @@ class concurrent_unordered_multimap {
     if (init) {
       init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
         m_hashtbl_values, m_hashtbl_size, unused_key, unused_element);
-      CUDA_TRY(cudaGetLastError());
+      CUDF_CHECK_CUDA(stream.value());
     }
   }
 };
