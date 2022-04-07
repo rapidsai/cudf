@@ -297,7 +297,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
           cudf::detail::get_value<offset_type>(offsets_child, column_size + column_offset, stream) -
           bytes_offset;
 
-        CUDA_TRY(
+        CUDF_CUDA_TRY(
           cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream.value()));
 
         // get ready for the next column
