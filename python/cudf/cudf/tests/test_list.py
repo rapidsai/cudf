@@ -315,6 +315,9 @@ def test_get_default():
     sr_nested = cudf.Series([[[1, 2], [3, 4], [5, 6]], [[5, 6], [7, 8]]])
     assert_eq(cudf.Series([[3, 4], [7, 8]]), sr_nested.list.get(1))
     assert_eq(cudf.Series([[5, 6], cudf.NA]), sr_nested.list.get(2))
+    assert_eq(
+        cudf.Series([[5, 6], [0, 0]]), sr_nested.list.get(2, default=[0, 0])
+    )
 
 
 def test_get_ind_sequence():
@@ -322,13 +325,11 @@ def test_get_ind_sequence():
     sr = cudf.Series([[1, 2], [3, 4, 5], [6, 7, 8, 9]])
     assert_eq(cudf.Series([1, 4, 8]), sr.list.get([0, 1, 2]))
     assert_eq(cudf.Series([1, 4, 8]), sr.list.get(cudf.Series([0, 1, 2])))
+    assert_eq(cudf.Series([1, 4, 8]), sr.list.get(cudf.Series([0, 1, 2])))
     assert_eq(cudf.Series([cudf.NA, 5, cudf.NA]), sr.list.get([2, 2, -5]))
     assert_eq(cudf.Series([0, 5, 0]), sr.list.get([2, 2, -5], default=0))
-
     sr_nested = cudf.Series([[[1, 2], [3, 4], [5, 6]], [[5, 6], [7, 8]]])
-    assert_eq(
-        cudf.Series([[5, 6], [0, 0]]), sr_nested.list.get(2, default=[0, 0])
-    )
+    assert_eq(cudf.Series([[1, 2], [7, 8]]), sr_nested.list.get([0, 1]))
 
 
 @pytest.mark.parametrize(
