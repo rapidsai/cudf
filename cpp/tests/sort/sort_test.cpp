@@ -811,6 +811,7 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
 {
   using int_col = fixed_width_column_wrapper<int32_t>;
 
+  // struct{}, int, int
   int_col col_for_mask{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 1, 1}};
   auto null_mask  = cudf::copy_bitmask(col_for_mask.release()->view());
   auto struct_col = cudf::make_structs_column(6, {}, UNKNOWN_NULL_COUNT, std::move(null_mask));
@@ -824,6 +825,7 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
   auto got = sorted_order(input, column_order);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
+  // struct{struct{}, int}
   int_col col3{{0, 1, 2, 3, 4, 5}};
   std::vector<std::unique_ptr<cudf::column>> child_columns;
   child_columns.push_back(std::move(struct_col));
@@ -835,7 +837,26 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
   int_col expected2{{5, 4, 3, 2, 0, 1}};
   auto got2 = sorted_order(input2, {order::DESCENDING});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got2->view());
-}
+
+  // struct{struct{}, struct{int}}
+  int_col col_for_mask2{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 0, 1}};
+  auto null_mask2 = cudf::copy_bitmask(col_for_mask2.release()->view());
+  std::vector<std::unique_ptr<cudf::column>> child_columns2;
+  auto child_col_1 = cudf::make_structs_column(6, {}, UNKNOWN_NULL_COUNT, std::move(null_mask2));
+  child_columns2.push_back(std::move(child_col_1));
+  int_col col4{{0, 1, 2, 3, 4, 5}};
+  std::vector<std::unique_ptr<cudf::column>> grand_child;
+  grand_child.push_back(std::move(col4.release()));
+  auto child_col_2 = cudf::make_structs_column(6, std::move(grand_child), 0, rmm::device_buffer{});
+  child_columns2.push_back(std::move(child_col_2));
+  auto struct_col3 =
+    cudf::make_structs_column(6, std::move(child_columns2), 0, rmm::device_buffer{});
+  table_view input3{{struct_col3->view()}};
+
+  int_col expected3{{1, 4, 0, 2, 3, 5}};
+  auto got3 = sorted_order(input3, {order::ASCENDING});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, got3->view());
+};
 
 }  // namespace test
 }  // namespace cudf
