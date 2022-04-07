@@ -84,7 +84,7 @@ std::pair<StackSymbolOutItT, StackOpIndexOutItT> to_sparse_stack_symbols(
  *
  * @tparam InputItT Forward input iterator type to items representing stack operations
  * @tparam ToStackOpTypeT A transform function object class that maps an item representing a stack
- * oepration to the stack_op_type of such item
+ * operation to the stack_op_type of such item
  * @tparam StackSymbolT Type representing items being pushed onto the stack
  * @tparam TopOfStackOutItT A forward output iterator type being assigned items of StackSymbolT
  * @param[in] begin Forward iterator to the beginning of the items representing stack operations
@@ -129,7 +129,7 @@ TopOfStackOutItT to_top_of_stack(InputItT begin,
 }
 
 /**
- * @brief Funciton object used to filter for brackets and braces that represent push and pop
+ * @brief Function object used to filter for brackets and braces that represent push and pop
  * operations
  *
  */
