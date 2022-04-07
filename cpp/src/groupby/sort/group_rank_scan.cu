@@ -63,6 +63,8 @@ struct unique_comparator {
 /**
  * @brief generate grouped row ranks or dense ranks using a row comparison then scan the results
  *
+ * @tparam forward true if the rank scan computation should use forward iterator traversal (default)
+ * else reverse iterator traversal
  * @tparam value_resolver flag value resolver function with boolean first and row number arguments
  * @tparam scan_operator scan function ran on the flag values
  * @param grouped_values input column to generate ranks for
@@ -77,7 +79,7 @@ struct unique_comparator {
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> rank values
  */
-template <typename value_resolver, typename scan_operator>
+template <bool forward, typename value_resolver, typename scan_operator>
 std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                        column_view const& value_order,
                                        device_span<size_type const> group_labels,
@@ -102,77 +104,55 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                        mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  auto forward_first_unique_identifier = [labels  = group_labels.begin(),
-                                          offsets = group_offsets.begin(),
-                                          comparator,
-                                          resolver] __device__(size_type row_index) {
-    auto group_start = offsets[labels[row_index]];
-    return resolver(row_index == group_start || !comparator(row_index, row_index - 1),
-                    row_index - group_start);
-  };
+  // First value of equal values is 1.
+  [[maybe_unused]] auto forward_first_unique_identifier =
+    [labels  = group_labels.begin(),
+     offsets = group_offsets.begin(),
+     comparator,
+     resolver] __device__(size_type row_index) {
+      auto const group_start = offsets[labels[row_index]];
+      return resolver(row_index == group_start || !comparator(row_index, row_index - 1),
+                      row_index - group_start);
+    };
+  // Last value of equal values is 1.
+  [[maybe_unused]] auto backward_last_unique_identifier =
+    [labels  = group_labels.begin(),
+     offsets = group_offsets.begin(),
+     comparator,
+     resolver] __device__(size_type row_index) {
+      auto const group_start = offsets[labels[row_index]];
+      auto const group_end   = offsets[labels[row_index] + 1];
+      return resolver(row_index + 1 == group_end || !comparator(row_index, row_index + 1),
+                      row_index - group_start);
+    };
+  auto unique_identifier = [&]() {
+    if constexpr (forward) {
+      return forward_first_unique_identifier;
+    } else {
+      return backward_last_unique_identifier;
+    }
+  }();
 
   thrust::tabulate(rmm::exec_policy(stream),
                    mutable_ranks.begin<size_type>(),
                    mutable_ranks.end<size_type>(),
-                   forward_first_unique_identifier);
+                   unique_identifier);
 
+  auto [group_labels_begin, mutable_rank_begin] = [&]() {
+    if constexpr (forward) {
+      return thrust::pair{group_labels.begin(), mutable_ranks.begin<size_type>()};
+    } else {
+      return thrust::pair{thrust::reverse_iterator(group_labels.end()),
+                          thrust::reverse_iterator(mutable_ranks.end<size_type>())};
+    }
+  }();
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                group_labels.begin(),
-                                group_labels.end(),
-                                mutable_ranks.begin<size_type>(),
-                                mutable_ranks.begin<size_type>(),
+                                group_labels_begin,
+                                group_labels_begin + group_labels.size(),
+                                mutable_rank_begin,
+                                mutable_rank_begin,
                                 thrust::equal_to{},
                                 scan_op);
-
-  return ranks;
-}
-
-template <typename value_resolver, typename scan_operator>
-std::unique_ptr<column> rank_generator_reverse(column_view const& grouped_values,
-                                               column_view const& value_order,
-                                               device_span<size_type const> group_labels,
-                                               device_span<size_type const> group_offsets,
-                                               value_resolver resolver,
-                                               scan_operator scan_op,
-                                               bool has_nulls,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
-{
-  auto const flattened = cudf::structs::detail::flatten_nested_columns(
-    table_view{{grouped_values}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
-  auto const d_flat_order = table_device_view::create(flattened, stream);
-  auto sorted_index_order = value_order.begin<size_type>();
-  auto comparator         = unique_comparator<size_type, decltype(sorted_index_order)>(
-    *d_flat_order, sorted_index_order, has_nulls);
-
-  auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
-                                       flattened.flattened_columns().num_rows(),
-                                       mask_state::UNALLOCATED,
-                                       stream,
-                                       mr);
-  auto mutable_ranks = ranks->mutable_view();
-
-  auto backward_last_unique_identifier = [labels  = group_labels.begin(),
-                                          offsets = group_offsets.begin(),
-                                          comparator,
-                                          resolver] __device__(size_type row_index) {
-    auto group_start = offsets[labels[row_index]];
-    auto group_end   = offsets[labels[row_index] + 1];
-    return resolver(row_index + 1 == group_end || !comparator(row_index, row_index + 1),
-                    row_index - group_start);
-  };
-  thrust::tabulate(rmm::exec_policy(stream),
-                   mutable_ranks.begin<size_type>(),
-                   mutable_ranks.end<size_type>(),
-                   backward_last_unique_identifier);
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                thrust::reverse_iterator(group_labels.end()),
-                                thrust::reverse_iterator(group_labels.begin()),
-                                thrust::reverse_iterator(mutable_ranks.end<size_type>()),
-                                thrust::reverse_iterator(mutable_ranks.end<size_type>()),
-                                thrust::equal_to{},
-                                scan_op);
-
   return ranks;
 }
 }  // namespace
@@ -184,7 +164,7 @@ std::unique_ptr<column> min_rank_scan(column_view const& grouped_values,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return rank_generator(
+  return rank_generator<true>(
     grouped_values,
     value_order,
     group_labels,
@@ -205,7 +185,7 @@ std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return rank_generator_reverse(
+  return rank_generator<false>(
     grouped_values,
     value_order,
     group_labels,
@@ -282,7 +262,7 @@ std::unique_ptr<column> dense_rank_scan(column_view const& grouped_values,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  return rank_generator(
+  return rank_generator<true>(
     grouped_values,
     value_order,
     group_labels,
