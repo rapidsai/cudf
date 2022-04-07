@@ -102,16 +102,18 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                        mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    mutable_ranks.begin<size_type>(),
-    mutable_ranks.end<size_type>(),
-    [comparator, resolver, labels = group_labels.data(), offsets = group_offsets.data()] __device__(
-      size_type row_index) {
-      auto group_start = offsets[labels[row_index]];
-      return resolver(row_index == group_start || !comparator(row_index, row_index - 1),
-                      row_index - group_start);
-    });
+  thrust::tabulate(rmm::exec_policy(stream),
+                   mutable_ranks.begin<size_type>(),
+                   mutable_ranks.end<size_type>(),
+                   [comparator,
+                    resolver,
+                    labels  = group_labels.begin(),
+                    offsets = group_offsets.begin()] __device__(size_type row_index) {
+                     auto group_start = offsets[labels[row_index]];
+                     return resolver(
+                       row_index == group_start || !comparator(row_index, row_index - 1),
+                       row_index - group_start);
+                   });
 
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 group_labels.begin(),
@@ -149,17 +151,19 @@ std::unique_ptr<column> rank_generator_reverse(column_view const& grouped_values
                                        mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    mutable_ranks.begin<size_type>(),
-    mutable_ranks.end<size_type>(),
-    [comparator, resolver, labels = group_labels.data(), offsets = group_offsets.data()] __device__(
-      size_type row_index) {
-      auto group_start = offsets[labels[row_index]];
-      auto group_end   = offsets[labels[row_index] + 1];
-      return resolver(row_index + 1 == group_end || !comparator(row_index, row_index + 1),
-                      row_index - group_start);
-    });
+  thrust::tabulate(rmm::exec_policy(stream),
+                   mutable_ranks.begin<size_type>(),
+                   mutable_ranks.end<size_type>(),
+                   [comparator,
+                    resolver,
+                    labels  = group_labels.begin(),
+                    offsets = group_offsets.begin()] __device__(size_type row_index) {
+                     auto group_start = offsets[labels[row_index]];
+                     auto group_end   = offsets[labels[row_index] + 1];
+                     return resolver(
+                       row_index + 1 == group_end || !comparator(row_index, row_index + 1),
+                       row_index - group_start);
+                   });
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 thrust::reverse_iterator(group_labels.end()),
                                 thrust::reverse_iterator(group_labels.begin()),
@@ -226,14 +230,14 @@ std::unique_ptr<column> first_rank_scan(column_view const& grouped_values,
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    mutable_ranks.begin<size_type>(),
-    mutable_ranks.end<size_type>(),
-    [labels = group_labels.data(), offsets = group_offsets.data()] __device__(size_type row_index) {
-      auto group_start = offsets[labels[row_index]];
-      return row_index - group_start + 1;
-    });
+  thrust::tabulate(rmm::exec_policy(stream),
+                   mutable_ranks.begin<size_type>(),
+                   mutable_ranks.end<size_type>(),
+                   [labels  = group_labels.begin(),
+                    offsets = group_offsets.begin()] __device__(size_type row_index) {
+                     auto group_start = offsets[labels[row_index]];
+                     return row_index - group_start + 1;
+                   });
   return ranks;
 }
 
@@ -307,7 +311,7 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
                      mutable_ranks.end<double>(),
                      [is_double = rank.type().id() == type_id::FLOAT64,
                       dcount    = count.begin<size_type>(),
-                      labels    = group_labels.data(),
+                      labels    = group_labels.begin(),
                       offsets   = group_offsets.begin(),
                       d_rank    = rank.begin<double>(),
                       s_rank = rank.begin<size_type>()] __device__(size_type row_index) -> double {
@@ -323,7 +327,7 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
                      mutable_ranks.end<double>(),
                      [is_double = rank.type().id() == type_id::FLOAT64,
                       dcount    = count.begin<size_type>(),
-                      labels    = group_labels.data(),
+                      labels    = group_labels.begin(),
                       d_rank    = rank.begin<double>(),
                       s_rank = rank.begin<size_type>()] __device__(size_type row_index) -> double {
                        double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
@@ -334,11 +338,11 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
   return ranks;
 }
 
-std::unique_ptr<column> percent_rank_scan(column_view const& rank_min,
-                                          device_span<size_type const> group_labels,
-                                          device_span<size_type const> group_offsets,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> ansi_sql_percent_rank_scan(column_view const& rank_min,
+                                                   device_span<size_type const> group_labels,
+                                                   device_span<size_type const> group_offsets,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   auto const group_size_iter = cudf::detail::make_counting_transform_iterator(
     0,

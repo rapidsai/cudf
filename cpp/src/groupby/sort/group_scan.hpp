@@ -193,7 +193,7 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
                                                  rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Internal API to calculate groupwise percent rank value
+ * @brief Internal API to calculate groupwise ANSI SQL percent rank value
  *
  * @param rank_min min rank of the column or struct column by which the rows within a group are
  * sorted
@@ -201,13 +201,13 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
  * @param group_offsets group index offsets with group ID indices
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Column of type `double` of percent rank values
+ * @return Column of type `double` of ANSI SQL percent rank values
  */
-std::unique_ptr<column> percent_rank_scan(column_view const& rank_min,
-                                          device_span<size_type const> group_labels,
-                                          device_span<size_type const> group_offsets,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> ansi_sql_percent_rank_scan(column_view const& rank_min,
+                                                   device_span<size_type const> group_labels,
+                                                   device_span<size_type const> group_offsets,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr);
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf

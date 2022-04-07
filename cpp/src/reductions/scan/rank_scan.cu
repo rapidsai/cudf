@@ -113,9 +113,9 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
     mr);
 }
 
-std::unique_ptr<column> inclusive_percent_rank_scan(column_view const& order_by,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> inclusive_ansi_sql_percent_rank_scan(column_view const& order_by,
+                                                             rmm::cuda_stream_view stream,
+                                                             rmm::mr::device_memory_resource* mr)
 {
   auto const rank_column =
     inclusive_rank_scan(order_by, stream, rmm::mr::get_current_device_resource());

@@ -204,7 +204,7 @@ void scan_result_functor::operator()<aggregation::ANSI_SQL_PERCENT_RANK>(aggrega
   cache.add_result(
     values,
     agg,
-    detail::percent_rank_scan(
+    detail::ansi_sql_percent_rank_scan(
       rank_min, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
 }
 }  // namespace detail

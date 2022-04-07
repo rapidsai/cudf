@@ -337,7 +337,8 @@ std::unique_ptr<Base> make_row_number_aggregation();
 /**
  * @brief Factory to create a RANK aggregation
  *
- * `RANK` returns a column of size_type or double "ranks" for given rank method and column order.
+ * `RANK` returns a column of size_type or double "ranks" (see note 3 below for how the
+ * data type is determined) for a given rank method and column order.
  * If nulls are excluded, the rank will be null for those rows.
  *
  * This aggregation only works with "scan" algorithms. The input column into the group or
@@ -376,41 +377,21 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * A grouped rank aggregation scan with:
  *   groupby column      : venue
  *   input orderby column: time
- * Produces the following first rank column:
- * {   1,     2,     3,     4,     5,      1,     2,     3,     4,     5}
- * (This corresponds to the following grouping and `driver` rows:)
- * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
- *   <----------silverstone----------->|<-------------monza-------------->
- *
- * Produces the following average rank column:
- * {   1,     2,   3.5,   3.5,     5,      1,   2.5,   2.5,     4,     5}
- * (This corresponds to the following grouping and `driver` rows:)
- * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
- *   <----------silverstone----------->|<-------------monza-------------->
- *
- * Produces the following min rank column:
- * {   1,     2,     3,     3,     5,      1,     2,     2,     4,     5}
- * (This corresponds to the following grouping and `driver` rows:)
- * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
- *   <----------silverstone----------->|<-------------monza-------------->
- *
- * Produces the following max rank column:
- * {   1,     2,     4,     4,     5,      1,     3,     3,     4,     5}
- * (This corresponds to the following grouping and `driver` rows:)
- * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
- *   <----------silverstone----------->|<-------------monza-------------->
- *
- * Produces the following dense rank column:
- * {   1,     2,     3,     3,     4,      1,     2,     2,     3,     4}
- * (This corresponds to the following grouping and `driver` rows:)
- * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
- *   <----------silverstone----------->|<-------------monza-------------->
+ * Produces the following rank column for each methods:
+ * first:   {   1,     2,     3,     4,     5,      1,     2,     3,     4,     5}
+ * average: {   1,     2,   3.5,   3.5,     5,      1,   2.5,   2.5,     4,     5}
+ * min:     {   1,     2,     3,     3,     5,      1,     2,     2,     4,     5}
+ * max:     {   1,     2,     4,     4,     5,      1,     3,     3,     4,     5}
+ * dense:   {   1,     2,     3,     3,     4,      1,     2,     2,     3,     4}
+ * This corresponds to the following grouping and `driver` rows:
+ *          { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
+ *            <----------silverstone----------->|<-------------monza-------------->
  * @endcode
  *
  * @param method The ranking method used for tie breaking (same values).
  * @param column_order The desired sort order for ranking
  * @param null_handling  flag to include nulls during ranking. If nulls are not included,
- * corresponding rank will be null.
+ * the corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements for column
  * @param percentage flag to convert ranks to percentage in range (0,1]
  */
@@ -425,7 +406,7 @@ std::unique_ptr<Base> make_rank_aggregation(rank_method method,
  * @brief Factory to create a ANSI_SQL_PERCENT_RANK aggregation
  *
  * `ANSI_SQL_PERCENT_RANK` returns a non-nullable column of double precision "fractional" ranks.
- * For row index `i`, the percent rank of row `i` is defined as:
+ * For row index `i`, the ANSI SQL percent rank of row `i` is defined as:
  *   percent_rank = (rank - 1) / (group_row_count - 1)
  * where,
  *   1. rank is the `RANK` of the row within the group
@@ -463,19 +444,19 @@ std::unique_ptr<Base> make_rank_aggregation(rank_method method,
  *    {      "monza",     "PER" ("perez"),      12203}
  *  ]
  *
- * A grouped percent rank aggregation scan with:
+ * A grouped ANSI SQL percent rank aggregation scan with:
  *   groupby column      : venue
  *   input orderby column: time
- * Produces the following percent rank column:
+ * Produces the following ANSI SQL percent rank column:
  * { 0.00,  0.25,  0.50,  0.50,  1.00,   0.00,  0.25,  0.25,  0.75,  1.00 }
  *
- * (This corresponds to the following grouping and `driver` rows:)
+ * This corresponds to the following grouping and `driver` rows:
  * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
  *   <----------silverstone----------->|<-------------monza-------------->
  * @endcode
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_percent_rank_aggregation();
+std::unique_ptr<Base> make_ansi_sql_percent_rank_aggregation();
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation

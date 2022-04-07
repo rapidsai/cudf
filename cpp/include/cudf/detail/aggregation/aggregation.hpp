@@ -76,7 +76,7 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class rank_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
-    data_type col_type, class percent_rank_aggregation const& agg);
+    data_type col_type, class ansi_sql_percent_rank_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, class collect_list_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
@@ -125,7 +125,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class nth_element_aggregation const& agg);
   virtual void visit(class row_number_aggregation const& agg);
   virtual void visit(class rank_aggregation const& agg);
-  virtual void visit(class percent_rank_aggregation const& agg);
+  virtual void visit(class ansi_sql_percent_rank_aggregation const& agg);
   virtual void visit(class collect_list_aggregation const& agg);
   virtual void visit(class collect_set_aggregation const& agg);
   virtual void visit(class lead_lag_aggregation const& agg);
@@ -667,7 +667,10 @@ class rank_aggregation final : public rolling_aggregation,
            _percentage == other._percentage;
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
@@ -681,22 +684,24 @@ class rank_aggregation final : public rolling_aggregation,
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  private:
-  size_t hash_impl() const
+  [[nodiscard]] size_t hash_impl() const
   {
     return std::hash<int>{}(static_cast<int>(_method)) ^
-           std::hash<bool>{}(static_cast<bool>(_null_handling)) ^ std::hash<bool>{}(_percentage);
+           std::hash<int>{}(static_cast<int>(_column_order)) ^
+           std::hash<int>{}(static_cast<int>(_null_handling)) ^
+           std::hash<int>{}(static_cast<int>(_null_precedence)) ^ std::hash<bool>{}(_percentage);
   }
 };
 
-class percent_rank_aggregation final : public rolling_aggregation,
-                                       public groupby_scan_aggregation,
-                                       public scan_aggregation {
+class ansi_sql_percent_rank_aggregation final : public rolling_aggregation,
+                                                public groupby_scan_aggregation,
+                                                public scan_aggregation {
  public:
-  percent_rank_aggregation() : aggregation{ANSI_SQL_PERCENT_RANK} {}
+  ansi_sql_percent_rank_aggregation() : aggregation{ANSI_SQL_PERCENT_RANK} {}
 
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
-    return std::make_unique<percent_rank_aggregation>(*this);
+    return std::make_unique<ansi_sql_percent_rank_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override

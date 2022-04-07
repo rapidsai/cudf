@@ -44,7 +44,7 @@ using percent_result_col = fixed_width_column_wrapper<percent_result_t>;
 
 auto const rank         = cudf::make_rank_aggregation<scan_aggregation>(cudf::rank_method::MIN);
 auto const dense_rank   = cudf::make_rank_aggregation<scan_aggregation>(cudf::rank_method::DENSE);
-auto const percent_rank = cudf::make_percent_rank_aggregation<scan_aggregation>();
+auto const percent_rank = cudf::make_ansi_sql_percent_rank_aggregation<scan_aggregation>();
 
 auto constexpr INCLUSIVE_SCAN = cudf::scan_type::INCLUSIVE;
 auto constexpr INCLUDE_NULLS  = cudf::null_policy::INCLUDE;
@@ -321,8 +321,9 @@ TEST(RankScanTest, ExclusiveScan)
                             "Rank aggregation operator requires an inclusive scan");
   CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
                             "Rank aggregation operator requires an inclusive scan");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, percent_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
-                            "Percent rank aggregation operator requires an inclusive scan");
+  CUDF_EXPECT_THROW_MESSAGE(
+    cudf::scan(vals, percent_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
+    "ANSI SQL Percent rank aggregation operator requires an inclusive scan");
 }
 
 }  // namespace cudf::test
