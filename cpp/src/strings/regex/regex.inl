@@ -38,7 +38,8 @@ struct alignas(8) relist {
    */
   constexpr inline static std::size_t data_size_for(int32_t insts)
   {
-    return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) + ((insts + 7) / 8);
+    return ((sizeof(ranges[0]) + sizeof(inst_ids[0])) * insts) +
+           cudf::util::div_rounding_up_unsafe(insts, 8);
   }
 
   /**
@@ -57,7 +58,7 @@ struct alignas(8) relist {
   };
 
   __device__ __forceinline__ relist(int16_t insts, u_char* data = nullptr)
-    : masksize((insts + 7) / 8)
+    : masksize(cudf::util::div_rounding_up_unsafe(insts, 8))
   {
     auto ptr = data == nullptr ? reinterpret_cast<u_char*>(this) + sizeof(relist) : data;
     ranges   = reinterpret_cast<int2*>(ptr);
