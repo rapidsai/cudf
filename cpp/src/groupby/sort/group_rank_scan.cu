@@ -102,18 +102,19 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                        mr);
   auto mutable_ranks = ranks->mutable_view();
 
+  auto forward_first_unique_identifier = [labels  = group_labels.begin(),
+                                          offsets = group_offsets.begin(),
+                                          comparator,
+                                          resolver] __device__(size_type row_index) {
+    auto group_start = offsets[labels[row_index]];
+    return resolver(row_index == group_start || !comparator(row_index, row_index - 1),
+                    row_index - group_start);
+  };
+
   thrust::tabulate(rmm::exec_policy(stream),
                    mutable_ranks.begin<size_type>(),
                    mutable_ranks.end<size_type>(),
-                   [comparator,
-                    resolver,
-                    labels  = group_labels.begin(),
-                    offsets = group_offsets.begin()] __device__(size_type row_index) {
-                     auto group_start = offsets[labels[row_index]];
-                     return resolver(
-                       row_index == group_start || !comparator(row_index, row_index - 1),
-                       row_index - group_start);
-                   });
+                   forward_first_unique_identifier);
 
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 group_labels.begin(),
@@ -151,19 +152,19 @@ std::unique_ptr<column> rank_generator_reverse(column_view const& grouped_values
                                        mr);
   auto mutable_ranks = ranks->mutable_view();
 
+  auto backward_last_unique_identifier = [labels  = group_labels.begin(),
+                                          offsets = group_offsets.begin(),
+                                          comparator,
+                                          resolver] __device__(size_type row_index) {
+    auto group_start = offsets[labels[row_index]];
+    auto group_end   = offsets[labels[row_index] + 1];
+    return resolver(row_index + 1 == group_end || !comparator(row_index, row_index + 1),
+                    row_index - group_start);
+  };
   thrust::tabulate(rmm::exec_policy(stream),
                    mutable_ranks.begin<size_type>(),
                    mutable_ranks.end<size_type>(),
-                   [comparator,
-                    resolver,
-                    labels  = group_labels.begin(),
-                    offsets = group_offsets.begin()] __device__(size_type row_index) {
-                     auto group_start = offsets[labels[row_index]];
-                     auto group_end   = offsets[labels[row_index] + 1];
-                     return resolver(
-                       row_index + 1 == group_end || !comparator(row_index, row_index + 1),
-                       row_index - group_start);
-                   });
+                   backward_last_unique_identifier);
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 thrust::reverse_iterator(group_labels.end()),
                                 thrust::reverse_iterator(group_labels.begin()),
