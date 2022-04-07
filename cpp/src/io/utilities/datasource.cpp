@@ -76,10 +76,7 @@ class file_source : public datasource {
                      rmm::cuda_stream_view stream) override
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
-
-    if (!_kvikio_file.closed()) { return device_read_async(offset, size, dst, stream).get(); }
-    auto const read_size = std::min(size, _file.size() - offset);
-    return _cufile_in->read(offset, read_size, dst, stream);
+    return device_read_async(offset, size, dst, stream).get();
   }
 
   std::unique_ptr<datasource::buffer> device_read(size_t offset,
@@ -88,14 +85,10 @@ class file_source : public datasource {
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
-    if (!_kvikio_file.closed()) {
-      rmm::device_buffer out_data(size, stream);
-      size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
-      out_data.resize(read, stream);
-      return datasource::buffer::create(std::move(out_data));
-    }
-    auto const read_size = std::min(size, _file.size() - offset);
-    return _cufile_in->read(offset, read_size, stream);
+    rmm::device_buffer out_data(size, stream);
+    size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
+    out_data.resize(read, stream);
+    return datasource::buffer::create(std::move(out_data));
   }
 
   [[nodiscard]] size_t size() const override { return _file.size(); }

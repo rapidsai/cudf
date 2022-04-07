@@ -90,12 +90,7 @@ class file_sink : public data_sink {
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
     if (!supports_device_write()) CUDF_FAIL("Device writes are not supported for this file.");
-
-    if (!_kvikio_file.closed()) {
-      return device_write_async(gpu_data, _bytes_written, stream).get();
-    }
-    _cufile_out->write(gpu_data, _bytes_written, size);
-    _bytes_written += size;
+    return device_write_async(gpu_data, _bytes_written, stream).get();
   }
 
  private:
