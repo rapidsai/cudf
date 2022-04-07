@@ -49,7 +49,7 @@ namespace {
  * string_index_pairs for all matching substrings.
  *
  * The number of output columns is dependent on the string with the most matches.
- * For strings with fewer matches, null entries are appended into d_indices
+ * For strings with fewer matches, null entries are appended into `d_indices`
  * up to the maximum column count.
  */
 template <int stack_size>
