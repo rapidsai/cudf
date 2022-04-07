@@ -120,7 +120,7 @@ struct scan_functor {
     thrust::inclusive_scan(
       rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), Op{});
 
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
     return output_column;
   }
 };

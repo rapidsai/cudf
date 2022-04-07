@@ -192,9 +192,9 @@ rmm::device_buffer decompress_data(datasource& source,
 
     for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
       inflate_in.host_to_device(stream);
-      CUDA_TRY(
+      CUDF_CUDA_TRY(
         cudaMemsetAsync(inflate_out.device_ptr(), 0, inflate_out.memory_size(), stream.value()));
-      CUDA_TRY(gpuinflate(
+      CUDF_CUDA_TRY(gpuinflate(
         inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), 0, stream));
       inflate_out.device_to_host(stream, true);
 
@@ -424,11 +424,11 @@ std::vector<column_buffer> decode_data(metadata& meta,
   // Copy valid bits that are shared between columns
   for (size_t i = 0; i < out_buffers.size(); i++) {
     if (valid_alias[i] != nullptr) {
-      CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
-                               valid_alias[i],
-                               out_buffers[i].null_mask_size(),
-                               cudaMemcpyHostToDevice,
-                               stream.value()));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
+                                    valid_alias[i],
+                                    out_buffers[i].null_mask_size(),
+                                    cudaMemcpyHostToDevice,
+                                    stream.value()));
     }
   }
   schema_desc.device_to_host(stream, true);
