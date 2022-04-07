@@ -1751,6 +1751,11 @@ def test_groupby_2keys_rank(nelem, method, ascending, na_option, pct):
 
     assert_groupby_results_equal(got_df, expect_df, check_dtype=False)
 
+def test_groupby_rank_fails():
+    pdf = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 2, 3, 4], "z": [1, 2, 3, 4]})
+    gdf = cudf.from_pandas(pdf)
+    with pytest.raises(NotImplementedError):
+        gdf.groupby(["x", "y"]).rank(method="min", axis=1)
 
 def test_groupby_mix_agg_scan():
     err_msg = "Cannot perform both aggregation and scan in one operation"
