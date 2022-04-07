@@ -104,35 +104,22 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
                                        mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  // First value of equal values is 1.
-  [[maybe_unused]] auto forward_first_unique_identifier =
-    [labels  = group_labels.begin(),
-     offsets = group_offsets.begin(),
-     comparator,
-     resolver] __device__(size_type row_index) {
-      auto const group_start = offsets[labels[row_index]];
+  auto unique_identifier = [labels  = group_labels.begin(),
+                            offsets = group_offsets.begin(),
+                            comparator,
+                            resolver] __device__(size_type row_index) {
+    auto const group_start = offsets[labels[row_index]];
+    if constexpr (forward) {
+      // First value of equal values is 1.
       return resolver(row_index == group_start || !comparator(row_index, row_index - 1),
                       row_index - group_start);
-    };
-  // Last value of equal values is 1.
-  [[maybe_unused]] auto backward_last_unique_identifier =
-    [labels  = group_labels.begin(),
-     offsets = group_offsets.begin(),
-     comparator,
-     resolver] __device__(size_type row_index) {
-      auto const group_start = offsets[labels[row_index]];
-      auto const group_end   = offsets[labels[row_index] + 1];
+    } else {
+      auto const group_end = offsets[labels[row_index] + 1];
+      // Last value of equal values is 1.
       return resolver(row_index + 1 == group_end || !comparator(row_index, row_index + 1),
                       row_index - group_start);
-    };
-  auto unique_identifier = [&]() {
-    if constexpr (forward) {
-      return forward_first_unique_identifier;
-    } else {
-      return backward_last_unique_identifier;
     }
-  }();
-
+  };
   thrust::tabulate(rmm::exec_policy(stream),
                    mutable_ranks.begin<size_type>(),
                    mutable_ranks.end<size_type>(),
