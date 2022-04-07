@@ -844,7 +844,7 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
   std::vector<std::unique_ptr<cudf::column>> child_columns2;
   auto child_col_1 = cudf::make_structs_column(6, {}, UNKNOWN_NULL_COUNT, std::move(null_mask2));
   child_columns2.push_back(std::move(child_col_1));
-  int_col col4{{0, 1, 2, 3, 4, 5}};
+  int_col col4{{5, 4, 3, 2, 1, 0}};
   std::vector<std::unique_ptr<cudf::column>> grand_child;
   grand_child.push_back(std::move(col4.release()));
   auto child_col_2 = cudf::make_structs_column(6, std::move(grand_child), 0, rmm::device_buffer{});
@@ -853,9 +853,9 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
     cudf::make_structs_column(6, std::move(child_columns2), 0, rmm::device_buffer{});
   table_view input3{{struct_col3->view()}};
 
-  int_col expected3{{1, 4, 0, 2, 3, 5}};
+  int_col expected3{{4, 1, 5, 3, 2, 0}};
   auto got3 = sorted_order(input3, {order::ASCENDING});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, got3->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, got3->view(), debug_output_level::ALL_ERRORS);
 };
 
 }  // namespace test
