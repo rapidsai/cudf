@@ -38,7 +38,6 @@ class file_sink : public data_sink {
 
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath, "w");
-      _use_kvikio  = true;
     } else {
       _cufile_out =
         std::unique_ptr<detail::cufile_output_impl>(detail::make_cufile_output(filepath));
@@ -60,12 +59,13 @@ class file_sink : public data_sink {
 
   [[nodiscard]] bool supports_device_write() const override
   {
-    return _use_kvikio || _cufile_out != nullptr;
+    return !_kvikio_file.closed() || _cufile_out != nullptr;
   }
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
-    return _use_kvikio || (_cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(size));
+    return !_kvikio_file.closed() ||
+           (_cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(size));
   }
 
   std::future<void> device_write_async(void const* gpu_data,
@@ -77,7 +77,7 @@ class file_sink : public data_sink {
     size_t offset = _bytes_written;
     _bytes_written += size;
 
-    if (_use_kvikio) {
+    if (!_kvikio_file.closed()) {
       // KvikIO's `pwrite()` returns a `std::future<size_t>` so we convert it
       // to `std::future<void>`
       return std::async(std::launch::deferred, [this, gpu_data, size, offset] {
@@ -91,7 +91,9 @@ class file_sink : public data_sink {
   {
     if (!supports_device_write()) CUDF_FAIL("Device writes are not supported for this file.");
 
-    if (_use_kvikio) { return device_write_async(gpu_data, _bytes_written, stream).get(); }
+    if (!_kvikio_file.closed()) {
+      return device_write_async(gpu_data, _bytes_written, stream).get();
+    }
     _cufile_out->write(gpu_data, _bytes_written, size);
     _bytes_written += size;
   }
@@ -101,7 +103,6 @@ class file_sink : public data_sink {
   size_t _bytes_written = 0;
   std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   kvikio::FileHandle _kvikio_file;
-  bool _use_kvikio{false};
 };
 
 /**

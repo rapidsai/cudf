@@ -40,7 +40,6 @@ class file_source : public datasource {
   {
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath);
-      _use_kvikio  = true;
     } else {
       _cufile_in = std::unique_ptr<detail::cufile_input_impl>(detail::make_cufile_input(filepath));
     }
@@ -50,12 +49,13 @@ class file_source : public datasource {
 
   [[nodiscard]] bool supports_device_read() const override
   {
-    return _use_kvikio || _cufile_in != nullptr;
+    return !_kvikio_file.closed() || _cufile_in != nullptr;
   }
 
   [[nodiscard]] bool is_device_read_preferred(size_t size) const override
   {
-    return _use_kvikio || (_cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size));
+    return !_kvikio_file.closed() ||
+           (_cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size));
   }
 
   std::future<size_t> device_read_async(size_t offset,
@@ -66,7 +66,7 @@ class file_source : public datasource {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
     auto const read_size = std::min(size, _file.size() - offset);
-    if (_use_kvikio) { return _kvikio_file.pread(dst, read_size, offset); }
+    if (!_kvikio_file.closed()) { return _kvikio_file.pread(dst, read_size, offset); }
     return _cufile_in->read_async(offset, read_size, dst, stream);
   }
 
@@ -77,7 +77,7 @@ class file_source : public datasource {
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
-    if (_use_kvikio) { return device_read_async(offset, size, dst, stream).get(); }
+    if (!_kvikio_file.closed()) { return device_read_async(offset, size, dst, stream).get(); }
     auto const read_size = std::min(size, _file.size() - offset);
     return _cufile_in->read(offset, read_size, dst, stream);
   }
@@ -88,7 +88,7 @@ class file_source : public datasource {
   {
     CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
 
-    if (_use_kvikio) {
+    if (!_kvikio_file.closed()) {
       rmm::device_buffer out_data(size, stream);
       size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
       out_data.resize(read, stream);
@@ -106,7 +106,6 @@ class file_source : public datasource {
  private:
   std::unique_ptr<detail::cufile_input_impl> _cufile_in;
   kvikio::FileHandle _kvikio_file;
-  bool _use_kvikio{false};
 };
 
 /**
