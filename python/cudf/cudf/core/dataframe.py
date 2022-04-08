@@ -3764,10 +3764,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # exists to provide numba with the correct
             # bytecode to generate the equivalent PTX
             # as a null-ignoring version of the function
-            def _func(x):
-                if x is cudf.NA:  # pragma: no cover
+            def _func(x):  # pragma: no cover
+                if x is cudf.NA:
                     return cudf.NA
-                else:  # pragma: no cover
+                else:
                     return devfunc(x)
 
         else:

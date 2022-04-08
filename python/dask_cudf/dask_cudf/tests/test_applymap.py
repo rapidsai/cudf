@@ -12,8 +12,7 @@ from .utils import _make_random_frame
     "func",
     [
         lambda x: x + 1,
-        lambda x: x - 1,
-        lambda x: x + 0.5,
+        lambda x: x - 0.5,
         lambda x: 2 if x is NA else 2 + (x + 1) / 4.1,
         lambda x: 42,
     ],
