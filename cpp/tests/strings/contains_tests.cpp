@@ -17,6 +17,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -210,7 +211,7 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
                                               "5.79.97.178",
                                               "127.0.0.1"});
   auto strings_view = cudf::strings_column_view(strings);
-  {  // is_ip
+  {  // is_ip: 58 instructions
     std::string pattern =
       "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)"
       "$";
@@ -219,7 +220,7 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
       {true, true, false, false, false, false, true, true, true, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
-  {  // is_loopback
+  {  // is_loopback: 72 instructions
     std::string pattern =
       "^127\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
       "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
@@ -229,7 +230,7 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
       {false, false, false, false, false, false, false, false, false, true});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
-  {  // is_multicast
+  {  // is_multicast: 79 instructions
     std::string pattern =
       "^(2(2[4-9]|3[0-9]))\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
       "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
@@ -428,29 +429,22 @@ TEST_F(StringsContainsTests, MediumRegex)
     "5678901234567890",
     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnop"
     "qrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
 
   auto strings_view = cudf::strings_column_view(strings);
   {
     auto results      = cudf::strings::contains_re(strings_view, medium_regex);
     bool h_expected[] = {true, false, false};
-    cudf::test::fixed_width_column_wrapper<bool> expected(
-      h_expected,
-      h_expected + h_strings.size(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    cudf::test::fixed_width_column_wrapper<bool> expected(h_expected,
+                                                          h_expected + h_strings.size());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
     auto results      = cudf::strings::matches_re(strings_view, medium_regex);
     bool h_expected[] = {true, false, false};
-    cudf::test::fixed_width_column_wrapper<bool> expected(
-      h_expected,
-      h_expected + h_strings.size(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    cudf::test::fixed_width_column_wrapper<bool> expected(h_expected,
+                                                          h_expected + h_strings.size());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
     auto results         = cudf::strings::count_re(strings_view, medium_regex);
@@ -475,29 +469,22 @@ TEST_F(StringsContainsTests, LargeRegex)
     "5678901234567890",
     "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnop"
     "qrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
 
   auto strings_view = cudf::strings_column_view(strings);
   {
     auto results      = cudf::strings::contains_re(strings_view, large_regex);
     bool h_expected[] = {true, false, false};
-    cudf::test::fixed_width_column_wrapper<bool> expected(
-      h_expected,
-      h_expected + h_strings.size(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    cudf::test::fixed_width_column_wrapper<bool> expected(h_expected,
+                                                          h_expected + h_strings.size());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
     auto results      = cudf::strings::matches_re(strings_view, large_regex);
     bool h_expected[] = {true, false, false};
-    cudf::test::fixed_width_column_wrapper<bool> expected(
-      h_expected,
-      h_expected + h_strings.size(),
-      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    cudf::test::fixed_width_column_wrapper<bool> expected(h_expected,
+                                                          h_expected + h_strings.size());
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
     auto results         = cudf::strings::count_re(strings_view, large_regex);
