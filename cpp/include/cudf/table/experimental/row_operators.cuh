@@ -552,6 +552,7 @@ class device_row_comparator {
           }
         }
         if (lcol.type().id() == type_id::STRUCT) {
+          if (lcol.num_child_columns() == 0) { return true; }
           lcol = detail::structs_column_device_view(lcol).sliced_child(0);
           rcol = detail::structs_column_device_view(rcol).sliced_child(0);
         } else if (lcol.type().id() == type_id::LIST) {

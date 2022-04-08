@@ -155,3 +155,45 @@ TEST_F(ListRankScanTest, ListOfStruct)
                                    cudf::null_policy::INCLUDE);
   }
 }
+
+TEST_F(ListRankScanTest, ListOfEmptyStruct)
+{
+  // []
+  // []
+  // Null
+  // Null
+  // [Null, Null]
+  // [Null, Null]
+  // [Null, Null]
+  // [Null]
+  // [Null]
+  // [{}]
+  // [{}]
+  // [{}, {}]
+  // [{}, {}]
+
+  auto struct_validity = std::vector<bool>{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  auto struct_validity_buffer =
+    cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
+  auto struct_col =
+    cudf::make_structs_column(14, {}, cudf::UNKNOWN_NULL_COUNT, std::move(struct_validity_buffer));
+
+  auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
+    0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
+  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto list_validity_buffer =
+    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
+  auto list_column = cudf::make_lists_column(13,
+                                             offsets.release(),
+                                             std::move(struct_col),
+                                             cudf::UNKNOWN_NULL_COUNT,
+                                             std::move(list_validity_buffer));
+
+  auto expect =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6};
+
+  this->test_ungrouped_rank_scan(*list_column,
+                                 expect,
+                                 cudf::make_dense_rank_aggregation<cudf::scan_aggregation>(),
+                                 cudf::null_policy::INCLUDE);
+}
