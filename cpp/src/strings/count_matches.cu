@@ -67,7 +67,7 @@ struct count_dispatch_fn {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    CUDF_EXPECTS(output_size >= d_strings.size(), "Unexpected output size");
+    cudf_assert(output_size >= d_strings.size() and "Unexpected output size");
 
     auto results = make_numeric_column(
       data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
