@@ -29,6 +29,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/pair.h>
 #include <thrust/reduce.h>
@@ -45,7 +46,7 @@ namespace {
  * string_index_pairs for all matching substrings.
  *
  * The number of output columns is dependent on the string with the most matches.
- * For strings with fewer matches, null entries are appended into d_indices
+ * For strings with fewer matches, null entries are appended into `d_indices`
  * up to the maximum column count.
  */
 struct findall_fn {
