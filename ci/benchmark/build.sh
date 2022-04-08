@@ -81,6 +81,9 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
 if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
     gpuci_logger "gpuci_mamba_retry update dask"
     gpuci_mamba_retry update dask
+    gpuci_logger "gpuci_mamba_retry install dask>=2022.03.0 --force-reinstall"
+    gpuc_conda_retry config --remove channels dask/label/dev
+    gpuci_mamba_retry install dask>=2022.03.0 --force-reinstall
 else
     gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.03.0 conda-forge::distributed>=2022.03.0 conda-forge::dask-core>=2022.03.0 --force-reinstall"
     gpuci_mamba_retry install conda-forge::dask>=2022.03.0 conda-forge::distributed>=2022.03.0 conda-forge::dask-core>=2022.03.0 --force-reinstall
