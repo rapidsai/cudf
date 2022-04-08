@@ -1203,14 +1203,14 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
 }
 
 writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
-  int num_stripes, writer::impl::persisted_statistics& incoming_stats)
+  int num_stripes, writer::impl::persisted_statistics& per_chunk_stats)
 {
-  auto stripe_size_iter = thrust::make_transform_iterator(incoming_stats.stripe_stat_merge.begin(),
+  auto stripe_size_iter = thrust::make_transform_iterator(per_chunk_stats.stripe_stat_merge.begin(),
                                                           [](auto const& i) { return i.size(); });
 
   auto const num_stripe_blobs =
-    thrust::reduce(stripe_size_iter, stripe_size_iter + incoming_stats.stripe_stat_merge.size());
-  auto const num_file_blobs = incoming_stats.stats_desc.size();
+    thrust::reduce(stripe_size_iter, stripe_size_iter + per_chunk_stats.stripe_stat_merge.size());
+  auto const num_file_blobs = per_chunk_stats.stats_desc.size();
   auto const num_blobs = single_write_mode ? static_cast<int>(num_stripe_blobs + num_file_blobs)
                                            : static_cast<int>(num_stripe_blobs);
 
@@ -1222,28 +1222,28 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
 
   size_t chunk_offset = 0;
   size_t merge_offset = 0;
-  for (size_t i = 0; i < incoming_stats.stripe_stat_chunks.size(); ++i) {
-    auto chunk_bytes = incoming_stats.stripe_stat_chunks[i].size() * sizeof(statistics_chunk);
-    auto merge_bytes = incoming_stats.stripe_stat_merge[i].size() * sizeof(statistics_merge_group);
+  for (size_t i = 0; i < per_chunk_stats.stripe_stat_chunks.size(); ++i) {
+    auto chunk_bytes = per_chunk_stats.stripe_stat_chunks[i].size() * sizeof(statistics_chunk);
+    auto merge_bytes = per_chunk_stats.stripe_stat_merge[i].size() * sizeof(statistics_merge_group);
     cudaMemcpyAsync(stat_chunks.data() + chunk_offset,
-                    incoming_stats.stripe_stat_chunks[i].data(),
+                    per_chunk_stats.stripe_stat_chunks[i].data(),
                     chunk_bytes,
                     cudaMemcpyDeviceToDevice,
                     stream);
     cudaMemcpyAsync(stats_merge.device_ptr() + merge_offset,
-                    incoming_stats.stripe_stat_merge[i].device_ptr(),
+                    per_chunk_stats.stripe_stat_merge[i].device_ptr(),
                     merge_bytes,
                     cudaMemcpyDeviceToDevice,
                     stream);
-    chunk_offset += incoming_stats.stripe_stat_chunks[i].size();
-    merge_offset += incoming_stats.stripe_stat_merge[i].size();
+    chunk_offset += per_chunk_stats.stripe_stat_chunks[i].size();
+    merge_offset += per_chunk_stats.stripe_stat_merge[i].size();
   }
 
   if (single_write_mode) {
     std::vector<statistics_merge_group> file_stats_merge(num_file_blobs);
     for (auto i = 0u; i < num_file_blobs; ++i) {
       auto col_stats         = &file_stats_merge[i];
-      col_stats->col         = incoming_stats.stats_desc.device_ptr(i);
+      col_stats->col         = per_chunk_stats.stats_desc.device_ptr(i);
       col_stats->start_chunk = static_cast<uint32_t>(i * num_stripes);
       col_stats->num_chunks  = static_cast<uint32_t>(num_stripes);
     }
