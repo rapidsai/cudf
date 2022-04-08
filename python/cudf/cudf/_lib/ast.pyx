@@ -211,10 +211,17 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 nodes.append(stack.pop())
                 stack.append(Operation(op, nodes[-1]))
             elif isinstance(value, (ast.BinOp, ast.BoolOp)):
-                ast_traverse(value, col_names, stack, nodes)
                 op = python_cudf_ast_map[type(value.op)]
-                # TODO: This assumes that left is parsed before right, should
-                # maybe handle this more explicitly.
+
+                # Note that since the fields of `value` are ordered, a single
+                # call to `ast_traverse(value, ...)` would have the same effect
+                # as explicitly invoking it on `left` and `right` (the call
+                # will have no effect on the operator), but we have no
+                # guarantee that the fields or their ordering will not change
+                # in future Python versions so it's best to be explicit.
+                ast_traverse(value.left, col_names, stack, nodes)
+                ast_traverse(value.right, col_names, stack, nodes)
+
                 nodes.append(stack.pop())
                 nodes.append(stack.pop())
                 stack.append(Operation(op, nodes[-1], nodes[-2]))
@@ -229,8 +236,11 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                         # the comparison is `a < b < c` that will be encoded as
                         # `a < b and b < c`.
                         comp = ast.Compare(operands[i], op, operands[i+1])
-                        ast_traverse(comp, col_names, stack, nodes)
                         op = python_cudf_ast_map[type(op)]
+
+                        ast_traverse(comp.left, col_names, stack, nodes)
+                        ast_traverse(comp.comparators, col_names, stack, nodes)
+
                         nodes.append(stack.pop())
                         nodes.append(stack.pop())
                         inner_ops.append(Operation(op, nodes[-1], nodes[-2]))
@@ -249,11 +259,11 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                     functools.reduce(_combine_compare_ops, inner_ops)
                     stack.append(nodes[-1])
                 else:
-                    ast_traverse(value, col_names, stack, nodes)
                     op = python_cudf_ast_map[type(value.ops[0])]
-                    # TODO: This makes assumptions about the field ordering
-                    # (left, ops, comparators) in the above parsing, should
-                    # maybe handle this more explicitly.
+
+                    ast_traverse(value.left, col_names, stack, nodes)
+                    ast_traverse(value.comparators[0], col_names, stack, nodes)
+
                     nodes.append(stack.pop())
                     nodes.append(stack.pop())
                     stack.append(Operation(op, nodes[-1], nodes[-2]))
