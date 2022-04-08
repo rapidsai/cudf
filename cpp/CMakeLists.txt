@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.04.00
+  VERSION 22.06.00
   LANGUAGES C CXX CUDA
 )
 
@@ -155,6 +155,21 @@ include(cmake/thirdparty/get_gtest.cmake)
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
 include(cmake/Modules/FindcuFile.cmake)
+
+# Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
+if(NOT BUILD_SHARED_LIBS)
+  include("${rapids-cmake-dir}/export/find_package_file.cmake")
+  list(APPEND METADATA_KINDS BUILD INSTALL)
+  foreach(METADATA_KIND IN LISTS METADATA_KINDS)
+    rapids_export_find_package_file(
+      ${METADATA_KIND} "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
+    )
+    rapids_export_package(${METADATA_KIND} cuco cudf-exports)
+    rapids_export_package(${METADATA_KIND} ZLIB cudf-exports)
+    rapids_export_package(${METADATA_KIND} cuFile cudf-exports)
+    rapids_export_package(${METADATA_KIND} nvcomp cudf-exports)
+  endforeach()
+endif()
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------

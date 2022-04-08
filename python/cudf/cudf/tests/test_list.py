@@ -292,21 +292,63 @@ def test_get_nested_lists():
     assert_eq(expect, got)
 
 
-def test_get_nulls():
-    with pytest.raises(IndexError, match="list index out of range"):
-        sr = cudf.Series([[], [], []])
-        sr.list.get(100)
+def test_get_default():
+    sr = cudf.Series([[1, 2], [3, 4, 5], [6, 7, 8, 9]])
+
+    assert_eq(cudf.Series([cudf.NA, 5, 8]), sr.list.get(2))
+    assert_eq(cudf.Series([cudf.NA, 5, 8]), sr.list.get(2, default=cudf.NA))
+    assert_eq(cudf.Series([0, 5, 8]), sr.list.get(2, default=0))
+    assert_eq(cudf.Series([0, 3, 7]), sr.list.get(-3, default=0))
+    assert_eq(cudf.Series([2, 5, 9]), sr.list.get(-1))
+
+    string_sr = cudf.Series(
+        [["apple", "banana"], ["carrot", "daffodil", "elephant"]]
+    )
+    assert_eq(
+        cudf.Series(["default", "elephant"]),
+        string_sr.list.get(2, default="default"),
+    )
+
+    sr_with_null = cudf.Series([[0, cudf.NA], [1]])
+    assert_eq(cudf.Series([cudf.NA, 0]), sr_with_null.list.get(1, default=0))
+
+    sr_nested = cudf.Series([[[1, 2], [3, 4], [5, 6]], [[5, 6], [7, 8]]])
+    assert_eq(cudf.Series([[3, 4], [7, 8]]), sr_nested.list.get(1))
+    assert_eq(cudf.Series([[5, 6], cudf.NA]), sr_nested.list.get(2))
+    assert_eq(
+        cudf.Series([[5, 6], [0, 0]]), sr_nested.list.get(2, default=[0, 0])
+    )
 
 
 @pytest.mark.parametrize(
     "data, scalar, expect",
     [
-        ([[1, 2, 3], []], 1, [True, False],),
-        ([[1, 2, 3], [], [3, 4, 5]], 6, [False, False, False],),
-        ([[1.0, 2.0, 3.0], None, []], 2.0, [True, None, False],),
-        ([[None, "b", "c"], [], ["b", "e", "f"]], "b", [True, False, True],),
+        (
+            [[1, 2, 3], []],
+            1,
+            [True, False],
+        ),
+        (
+            [[1, 2, 3], [], [3, 4, 5]],
+            6,
+            [False, False, False],
+        ),
+        (
+            [[1.0, 2.0, 3.0], None, []],
+            2.0,
+            [True, None, False],
+        ),
+        (
+            [[None, "b", "c"], [], ["b", "e", "f"]],
+            "b",
+            [True, False, True],
+        ),
         ([[None, 2, 3], None, []], 1, [False, None, False]),
-        ([[None, "b", "c"], [], ["b", "e", "f"]], "d", [False, False, False],),
+        (
+            [[None, "b", "c"], [], ["b", "e", "f"]],
+            "d",
+            [False, False, False],
+        ),
     ],
 )
 def test_contains_scalar(data, scalar, expect):
@@ -319,11 +361,26 @@ def test_contains_scalar(data, scalar, expect):
 @pytest.mark.parametrize(
     "data, expect",
     [
-        ([[1, 2, 3], []], [None, None],),
-        ([[1.0, 2.0, 3.0], None, []], [None, None, None],),
-        ([[None, 2, 3], [], None], [None, None, None],),
-        ([[1, 2, 3], [3, 4, 5]], [None, None],),
-        ([[], [], []], [None, None, None],),
+        (
+            [[1, 2, 3], []],
+            [None, None],
+        ),
+        (
+            [[1.0, 2.0, 3.0], None, []],
+            [None, None, None],
+        ),
+        (
+            [[None, 2, 3], [], None],
+            [None, None, None],
+        ),
+        (
+            [[1, 2, 3], [3, 4, 5]],
+            [None, None],
+        ),
+        (
+            [[], [], []],
+            [None, None, None],
+        ),
     ],
 )
 def test_contains_null_search_key(data, expect):
@@ -381,7 +438,7 @@ def test_concatenate_rows_of_lists():
 
 
 def test_concatenate_list_with_nonlist():
-    with pytest.raises(TypeError, match="can only concatenate list to list"):
+    with pytest.raises(TypeError):
         gdf1 = cudf.DataFrame({"A": [["a", "c"], ["b", "d"], ["c", "d"]]})
         gdf2 = cudf.DataFrame({"A": ["a", "b", "c"]})
         gdf1["A"] + gdf2["A"]

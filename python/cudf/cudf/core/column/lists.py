@@ -2,7 +2,7 @@
 
 import pickle
 from functools import cached_property
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 import numpy as np
 import pyarrow as pa
@@ -19,7 +19,7 @@ from cudf._lib.lists import (
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
-from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
@@ -29,9 +29,16 @@ from cudf.core.dtypes import ListDtype
 
 class ListColumn(ColumnBase):
     dtype: ListDtype
+    _VALID_BINARY_OPERATIONS = {"__add__", "__radd__"}
 
     def __init__(
-        self, size, dtype, mask=None, offset=0, null_count=None, children=(),
+        self,
+        size,
+        dtype,
+        mask=None,
+        offset=0,
+        null_count=None,
+        children=(),
     ):
         super().__init__(
             None,
@@ -92,50 +99,14 @@ class ListColumn(ColumnBase):
         # avoid it being negative
         return max(0, len(self.base_children[0]) - 1)
 
-    def binary_operator(
-        self, binop: str, other: BinaryOperand, reflect: bool = False
-    ) -> ColumnBase:
-        """
-        Calls a binary operator *binop* on operands *self*
-        and *other*.
-
-        Parameters
-        ----------
-        self, other : list columns
-
-        binop :  binary operator
-            Only "add" operator is currently being supported
-            for lists concatenation functions
-
-        reflect : boolean, default False
-            If ``True``, swap the order of the operands. See
-            https://docs.python.org/3/reference/datamodel.html#object.__ror__
-            for more information on when this is necessary.
-
-        Returns
-        -------
-        Series : the output dtype is determined by the
-            input operands.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> gdf = cudf.DataFrame({'val': [['a', 'a'], ['b'], ['c']]})
-        >>> gdf
-            val
-        0  [a, a]
-        1     [b]
-        2     [c]
-        >>> gdf['val'] + gdf['val']
-        0    [a, a, a, a]
-        1          [b, b]
-        2          [c, c]
-        Name: val, dtype: list
-
-        """
+    def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
+        # Lists only support __add__, which concatenates lists.
+        reflect, op = self._check_reflected_op(op)
         other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
+            return NotImplemented
         if isinstance(other.dtype, ListDtype):
-            if binop == "add":
+            if op == "__add__":
                 return concatenate_rows(
                     cudf.core.frame.Frame({0: self, 1: other})
                 )
@@ -255,6 +226,8 @@ class ListColumn(ColumnBase):
         )
 
     def normalize_binop_value(self, other):
+        if not isinstance(other, ListColumn):
+            return NotImplemented
         return other
 
     def _with_type_metadata(
@@ -364,16 +337,20 @@ class ListMethods(ColumnMethods):
             )
         super().__init__(parent=parent)
 
-    def get(self, index: int) -> ParentType:
+    def get(
+        self, index: int, default: Optional[ScalarLike] = None
+    ) -> ParentType:
         """
-        Extract element at the given index from each component
+        Extract element at the given index from each list.
 
-        Extract element from lists, tuples, or strings in
-        each element in the Series/Index.
+        If the index is out of bounds for any list,
+        return <NA> or, if provided, ``default``.
+        Thus, this method never raises an ``IndexError``.
 
         Parameters
         ----------
         index : int
+        default : scalar, optional
 
         Returns
         -------
@@ -387,14 +364,37 @@ class ListMethods(ColumnMethods):
         1    5
         2    6
         dtype: int64
+
+        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.get(2)
+        0    <NA>
+        1       5
+        2       6
+        dtype: int64
+
+        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.get(2, default=0)
+        0   0
+        1   5
+        2   6
+        dtype: int64
         """
-        min_col_list_len = self.len().min()
-        if -min_col_list_len <= index < min_col_list_len:
-            return self._return_or_inplace(
-                extract_element(self._column, index)
+        out = extract_element(self._column, index)
+
+        if not (default is None or default is cudf.NA):
+            # determine rows for which `index` is out-of-bounds
+            lengths = count_elements(self._column)
+            out_of_bounds_mask = (np.negative(index) > lengths) | (
+                index >= lengths
             )
-        else:
-            raise IndexError("list index out of range")
+
+            # replace the value in those rows (should be NA) with `default`
+            if out_of_bounds_mask.any():
+                out = out._scatter_by_column(
+                    out_of_bounds_mask, cudf.Scalar(default)
+                )
+
+        return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> ParentType:
         """

@@ -15,7 +15,7 @@ from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
-from cudf.core.column.datetime import _numpy_to_pandas_conversion
+from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
@@ -300,7 +300,7 @@ def gen_rand(dtype, size, **kwargs):
         time_unit, _ = np.datetime_data(dtype)
         high = kwargs.get(
             "high",
-            1000000000000000000 / _numpy_to_pandas_conversion[time_unit],
+            int(1e18) / _unit_to_nanoseconds_conversion[time_unit],
         )
         return pd.to_datetime(
             np.random.randint(low=low, high=high, size=size), unit=time_unit
@@ -320,7 +320,8 @@ def gen_rand_series(dtype, size, **kwargs):
 
 def _decimal_series(input, dtype):
     return cudf.Series(
-        [x if x is None else Decimal(x) for x in input], dtype=dtype,
+        [x if x is None else Decimal(x) for x in input],
+        dtype=dtype,
     )
 
 

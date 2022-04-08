@@ -826,7 +826,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 masked = index is not None
                 data = {
                     key: cudf.core.column.column_empty(
-                        row_count=row_count, dtype=None, masked=masked,
+                        row_count=row_count,
+                        dtype=None,
+                        masked=masked,
                     )
                     for key in extra_cols
                 }
@@ -855,7 +857,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col_name, tuple
                 )
                 self._insert(
-                    i, col_name, data[col_name], nan_as_null=nan_as_null,
+                    i,
+                    col_name,
+                    data[col_name],
+                    nan_as_null=nan_as_null,
                 )
 
         if columns is not None:
@@ -1334,8 +1339,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, index=True, deep=False):
-        return Series(
-            {str(k): v for k, v in super().memory_usage(index, deep).items()}
+        mem_usage = [col.memory_usage for col in self._data.columns]
+        names = [str(name) for name in self._data.names]
+        if index:
+            mem_usage.append(self._index.memory_usage())
+            names.append("Index")
+        return Series._from_data(
+            data={None: as_column(mem_usage)},
+            index=as_index(names),
         )
 
     @_cudf_nvtx_annotate
@@ -2024,16 +2035,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return iter(self._column_names)
 
     @_cudf_nvtx_annotate
-    def iteritems(self):
-        """Iterate over column names and series pairs"""
-        warnings.warn(
-            "iteritems is deprecated and will be removed in a future version. "
-            "Use .items instead.",
-            FutureWarning,
-        )
-        return self.items()
-
-    @_cudf_nvtx_annotate
     def items(self):
         """Iterate over column names and series pairs"""
         for k in self:
@@ -2105,7 +2106,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError("Duplicate column names are not allowed")
 
         self._data = ColumnAccessor(
-            data, multiindex=multiindex, level_names=level_names,
+            data,
+            multiindex=multiindex,
+            level_names=level_names,
         )
 
     def _set_column_names_like(self, other):
@@ -3356,22 +3359,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         - For outer joins, the result will be the union of categories
         from both sides.
         """
-        if indicator:
-            raise NotImplementedError(
-                "Only indicator=False is currently supported"
-            )
-
-        if lsuffix or rsuffix:
-            raise ValueError(
-                "The lsuffix and rsuffix keywords have been replaced with the "
-                "``suffixes=`` keyword.  "
-                "Please provide the following instead: \n\n"
-                "    suffixes=('%s', '%s')"
-                % (lsuffix or "_x", rsuffix or "_y")
-            )
-        else:
-            lsuffix, rsuffix = suffixes
-
         # Compute merge
         gdf_result = super()._merge(
             right,
@@ -3384,12 +3371,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             sort=sort,
             indicator=indicator,
             suffixes=suffixes,
+            lsuffix=lsuffix,
+            rsuffix=rsuffix,
         )
         return gdf_result
 
     @_cudf_nvtx_annotate
     def join(
-        self, other, on=None, how="left", lsuffix="", rsuffix="", sort=False,
+        self,
+        other,
+        on=None,
+        how="left",
+        lsuffix="",
+        rsuffix="",
+        sort=False,
     ):
         """Join columns with other DataFrame on index or on a key column.
 
@@ -4526,7 +4521,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     gen_names, self.index._data.names
                 ):
                     data._insert(
-                        data.shape[1], gen_name, self.index._data[col_name],
+                        data.shape[1],
+                        gen_name,
+                        self.index._data[col_name],
                     )
                 descr = gen_names[0]
             index_descr.append(descr)
@@ -5114,7 +5111,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def _reduce(
-        self, op, axis=None, level=None, numeric_only=None, **kwargs,
+        self,
+        op,
+        axis=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
@@ -5142,7 +5144,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def _scan(
-        self, op, axis=None, *args, **kwargs,
+        self,
+        op,
+        axis=None,
+        *args,
+        **kwargs,
     ):
         axis = self._get_axis_from_axis_arg(axis)
 
@@ -5374,7 +5380,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 result = result.set_mask(
                     cudf._lib.transform.bools_to_mask(mask._column)
                 )
-            return Series(result, index=self.index, dtype=result_dtype,)
+            return Series(
+                result,
+                index=self.index,
+                dtype=result_dtype,
+            )
         else:
             result_df = DataFrame(result).set_index(self.index)
             result_df._set_column_names_like(prepared)
@@ -6111,7 +6121,7 @@ def make_binop_func(op, postprocess=None):
     # def postprocess(left, right, output)
     # where left and right are the inputs to the binop and output is the result
     # of calling the wrapped Frame binop.
-    wrapped_func = getattr(Frame, op)
+    wrapped_func = getattr(IndexedFrame, op)
 
     @functools.wraps(wrapped_func)
     def wrapper(self, other, axis="columns", level=None, fill_value=None):
@@ -6336,7 +6346,7 @@ def from_pandas(obj, nan_as_null=None):
 
 @_cudf_nvtx_annotate
 def merge(left, right, *args, **kwargs):
-    return left.merge(right, *args, **kwargs)
+    return super(type(left), left)._merge(right, *args, **kwargs)
 
 
 # a bit of fanciness to inject docstring with left parameter
@@ -6551,7 +6561,10 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
                 if idx in categories:
                     cols[idx] = (
                         cols[idx]
-                        ._set_categories(categories[idx], is_unique=True,)
+                        ._set_categories(
+                            categories[idx],
+                            is_unique=True,
+                        )
                         .codes
                     )
                 cols[idx] = cols[idx].astype(dtype)

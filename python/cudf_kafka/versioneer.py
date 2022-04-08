@@ -1,3 +1,4 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 # Version: 0.18
 
 """The Versioneer - like a rocketeer, but for versions.
@@ -1123,7 +1124,8 @@ def git_pieces_from_vcs(tag_prefix, root, verbose, run_command=run_command):
                 fmt = "tag '%s' doesn't start with prefix '%s'"
                 print(fmt % (full_tag, tag_prefix))
             pieces["error"] = "tag '{}' doesn't start with prefix '{}'".format(
-                full_tag, tag_prefix,
+                full_tag,
+                tag_prefix,
             )
             return pieces
         pieces["closest-tag"] = full_tag[len(tag_prefix) :]
