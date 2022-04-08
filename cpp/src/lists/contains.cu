@@ -56,8 +56,11 @@ auto constexpr is_struct_type()
   return std::is_same_v<Type, cudf::struct_view>;
 }
 
+/**
+ * @brief Functor for searching index of a given scalar in a list.
+ */
 template <typename Type, duplicate_find_option find_option, typename Enable = void>
-struct search_list {
+struct search_functor {
   template <typename... Args>
   void operator()(Args&&...)
   {
@@ -92,12 +95,12 @@ size_type __device__ distance(Iterator begin, Iterator end, Iterator found_iter)
 }
 
 template <typename Type, duplicate_find_option find_option>
-struct search_list<Type, std::enable_if_t<is_supported_type_no_struct<Type>()>> {
+struct search_functor<Type, std::enable_if_t<is_supported_type_no_struct<Type>()>> {
   bool const has_nulls;
 
   /**
-   * @brief Search a scalar in a list defined by iterators pointing to rows of the child column of
-   * the original list column.
+   * @brief Search index of a given scalar in a list defined by offsets pointing to rows of the
+   * child column of the original lists column.
    */
   __device__ size_type operator()(column_device_view const& input_child,
                                   size_type const* list_offsets,
@@ -117,10 +120,10 @@ struct search_list<Type, std::enable_if_t<is_supported_type_no_struct<Type>()>> 
 };
 
 template <typename Type, duplicate_find_option find_option>
-struct search_list<Type, std::enable_if_t<is_struct_type<Type>()>> {
+struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
   /**
-   * @brief Search a list scalar in a list defined by iterators pointing to rows of the flattened
-   * table of the child column of the original list column.
+   * @brief Search index of a given struct scalar in a list defined by offsets pointing to rows of
+   * the flattened table of the child column of the original lists column.
    */
   template <typename Comparator, typename Iteraror>
   __device__ size_type operator()(Comparator const& row_comparator,
@@ -138,28 +141,9 @@ struct search_list<Type, std::enable_if_t<is_struct_type<Type>()>> {
 };
 
 /**
- * @brief __device__ functor to search for a key in a list.
+ * @brief Search for the index of the given scalar in all list rows.
  */
-template <duplicate_find_option find_option>
-struct finder {
-  __device__ size_type operator()(list_device_view const& list,
-                                  cudf::scalar const& search_key) const
-  {
-    auto const list_begin = find_begin<ElementType, find_option>(list);
-    auto const list_end   = find_end<ElementType, find_option>(list);
-    auto const find_iter  = thrust::find_if(
-      thrust::seq, list_begin, list_end, [search_key] __device__(auto element_and_validity) {
-        auto const [element, element_is_valid] = element_and_validity;
-        return element_is_valid && cudf::equality_compare(element, search_key);
-      });
-    return distance<find_option>(list_begin, list_end, find_iter);
-  }
-};
-
-/**
- * @brief Search for the index of the given scalar key in each list row.
- */
-template <typename ElementType, typename SearchKeyPairIter, typename OutputPairIter>
+template <typename Type, typename OutputPairIter>
 void search_all_lists(column_device_view const& d_lists,
                       cudf::scalar const& key,
                       bool search_keys_have_nulls,
@@ -226,21 +210,6 @@ void search_all_lists(column_device_view const& d_lists,
  * @brief Functor to search each list row for the specified search keys.
  */
 struct lookup_functor {
-  template <typename ElementType>
-  auto static constexpr is_supported()
-  {
-    return cudf::is_numeric<ElementType>() || cudf::is_chrono<ElementType>() ||
-           cudf::is_fixed_point<ElementType>() || std::is_same_v<ElementType, cudf::string_view> ||
-           std::is_same_v<ElementType, cudf::struct_view>;
-  }
-
-  template <typename ElementType, typename... Args>
-  std::enable_if_t<!is_supported<ElementType>(), std::unique_ptr<column>> operator()(
-    Args&&...) const
-  {
-    CUDF_FAIL("Unsupported type in list search operation.");
-  }
-
   template <typename ElementType, typename SearchKeyType>
   std::enable_if_t<is_supported<ElementType>(), std::unique_ptr<column>> operator()(
     lists_column_view const& lists,
