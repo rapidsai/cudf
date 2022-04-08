@@ -143,7 +143,7 @@ struct search_functor<Type, std::enable_if_t<is_supported_type_no_struct<Type>()
        search_key,
        search_key_is_valid,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
-        if (!search_key_is_valid || (has_null_lists && input.is_null(list_idx))) {
+        if (!search_key_is_valid || (has_null_lists && input.is_null_nocheck(list_idx))) {
           return {NOT_FOUND_IDX, false};
         }
 
@@ -175,7 +175,7 @@ struct search_functor<Type, std::enable_if_t<is_supported_type_no_struct<Type>()
        search_keys,
        search_keys_have_nulls,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
-        if (search_keys_have_nulls && search_keys.is_null(list_idx)) {
+        if (search_keys_have_nulls && search_keys.is_null_nocheck(list_idx)) {
           return {NOT_FOUND_IDX, false};
         }
         if (has_null_lists && input.is_null(list_idx)) { return {NOT_FOUND_IDX, false}; }
@@ -186,66 +186,12 @@ struct search_functor<Type, std::enable_if_t<is_supported_type_no_struct<Type>()
   }
 };
 
-template <typename Type, duplicate_find_option find_option>
-struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
-  /**
-   * @brief Search index of a given struct scalar in a list defined by offsets pointing to rows of
-   * the flattened table of the child column of the original lists column.
-   */
-  template <typename Comparator, typename Iteraror>
-  __device__ size_type search_list(Comparator const& row_comparator,
-                                   size_type const* list_offsets,
-                                   size_type list_idx)
-  {
-    auto const begin = list_begin<find_option>(list_offsets, list_idx);
-    auto const end   = list_end<find_option>(list_offsets, list_idx);
-    auto const found_iter =
-      thrust::find_if(thrust::seq, begin, end, [&] __device__(auto const idx) {
-        return row_comparator(idx, list_idx);
-      });
-    return distance<find_option>(begin, end, found_iter);
-  }
-};
-
 /**
- * @brief Search for the index of the corresponding key in each list row.
+ * @brief TBA
  */
-template <typename ElementType, typename SearchKeyPairIter, typename OutputPairIter>
-void search_all_lists(column_device_view const& d_lists,
-                      column_device_view const& d_keys,
-                      bool search_keys_have_nulls,
-                      duplicate_find_option find_option,
-                      OutputPairIter const& output_iters,
-                      rmm::cuda_stream_view stream)
-{
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    output_iters,
-    output_iters + d_lists.size(),
-    [dv_lists = lists_column_device_view{d_lists},
-     search_key_pair_iter,
-     find_option,
-     search_keys_have_nulls = search_keys_have_nulls,
-     NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto row_index) -> thrust::pair<size_type, bool> {
-      auto const [search_key, search_key_is_valid] = search_key_pair_iter[row_index];
-      if (search_keys_have_nulls && !search_key_is_valid) { return {NOT_FOUND_IDX, false}; }
-
-      auto const list = list_device_view(dv_lists, row_index);
-      if (list.is_null()) { return {NOT_FOUND_IDX, false}; }
-
-      auto const position = find_option == duplicate_find_option::FIND_FIRST
-                              ? finder<duplicate_find_option::FIND_FIRST>{}(list, search_key)
-                              : finder<duplicate_find_option::FIND_LAST>{}(list, search_key);
-      return {position, true};
-    });
-}
-
-/**
- * @brief Functor to search each list row for the specified search keys.
- */
-struct lookup_functor {
-  template <typename ElementType, typename SearchKeyType>
-  std::enable_if_t<is_supported<ElementType>(), std::unique_ptr<column>> operator()(
+struct index_of_dispatch {
+  template <typename Type, typename SearchKeyType>
+  std::enable_if_t<is_supported<Type>(), std::unique_ptr<column>> operator()(
     lists_column_view const& lists,
     SearchKeyType const& search_key,
     bool search_keys_have_nulls,
@@ -283,18 +229,20 @@ struct lookup_functor {
     auto const output_iters = thrust::make_zip_iterator(
       out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
-    if constexpr (std::is_same_v<ElementType, cudf::struct_view>) {
+    if constexpr (std::is_same_v<Type, cudf::struct_view>) {
       //
     } else {  // not struct type
+              //      search_functor<Type, duplicate_find
+
       auto const do_search = [&](auto const& search_key_iter) {
-        search_each_list_row<ElementType>(
+        search_each_list_row<Type>(
           *d_lists_ptr, search_key_iter, search_keys_have_nulls, find_option, output_iters, stream);
       };
 
       if (search_keys_have_nulls) {
-        do_search(cudf::detail::make_pair_rep_iterator<ElementType, true>(*d_skeys));
+        do_search(cudf::detail::make_pair_rep_iterator<Type, true>(*d_skeys));
       } else {
-        do_search(cudf::detail::make_pair_rep_iterator<ElementType, false>(*d_skeys));
+        do_search(cudf::detail::make_pair_rep_iterator<Type, false>(*d_skeys));
       }
     }
 
@@ -341,7 +289,7 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   return cudf::type_dispatcher(search_key.type(),
-                               lookup_functor{},
+                               index_of_dispatch{},
                                lists,
                                search_key,
                                !search_key.is_valid(stream),
@@ -359,7 +307,7 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
   return cudf::type_dispatcher(search_keys.type(),
-                               lookup_functor{},
+                               index_of_dispatch{},
                                lists,
                                search_keys,
                                search_keys.has_nulls(),
