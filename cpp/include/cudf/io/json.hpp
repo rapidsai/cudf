@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ class json_reader_options_builder;
  * @brief Input arguments to the `read_json` interface.
  *
  * Available parameters and are closely patterned after PANDAS' `read_json` API.
- * Not all parameters are unsupported. If the matching PANDAS' parameter
+ * Not all parameters are supported. If the matching PANDAS' parameter
  * has a default value of `None`, then a default value of `-1` or `0` may be
  * used as the equivalent.
  *
