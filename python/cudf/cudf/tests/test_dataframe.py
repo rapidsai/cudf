@@ -9268,3 +9268,30 @@ def test_empty_numeric_only(data):
     expected = pdf.prod(numeric_only=True)
     actual = gdf.prod(numeric_only=True)
     assert_eq(expected, actual)
+
+
+@pytest.fixture
+def df_eval():
+    N = int(10)
+    rng = cupy.random.default_rng(0)
+    return cudf.DataFrame(
+        {
+            "a": rng.random(N),
+            "b": rng.random(N),
+            "c": rng.random(N),
+            "d": rng.random(N),
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "df.a + df.b",
+        "df.a * df.b",
+        "df.a > df.b",
+    ],
+)
+def test_dataframe_eval(df_eval, expr):
+    expr_stripped = expr.replace("df.", "")
+    assert eval(expr, {"df": df_eval}) == df_eval.eval(expr_stripped)
