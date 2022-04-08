@@ -3,16 +3,14 @@
 import ast
 from enum import Enum
 
-from cudf.core.dataframe import DataFrame
-
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
-cimport cudf._lib.cpp.ast as libcudf_ast
 from cudf._lib.ast cimport underlying_type_ast_operator
 from cudf._lib.column cimport Column
+from cudf._lib.cpp cimport ast as libcudf_ast
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
@@ -240,12 +238,10 @@ def evaluate_expression(object df, Expression expr):
         table_view_from_table(df),
         <libcudf_ast.expression &> dereference(expr.c_obj.get())
     )
-    return DataFrame._from_data(
-        {'result': Column.from_unique_ptr(move(col))}
-    )
+    return {'result': Column.from_unique_ptr(move(col))}
 
 
-def make_and_evaluate_expression(expr, df):
+def make_and_evaluate_expression(df, expr):
     """Create a cudf evaluable expression from a string and evaluate it."""
     # Important: both make and evaluate must be coupled to guarantee that the
     # nodes created (the owning ColumnReferences and Literals) remain in scope.
