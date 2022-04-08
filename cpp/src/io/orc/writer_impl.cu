@@ -1202,15 +1202,15 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
           std::move(stat_desc)};
 }
 
-writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
-  int const num_columns, int const num_stripes, writer::impl::persisted_statistics& incoming_stats)
+writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
+  int num_stripes, writer::impl::persisted_statistics& incoming_stats)
 {
   auto stripe_size_iter = thrust::make_transform_iterator(incoming_stats.stripe_stat_merge.begin(),
                                                           [](auto const& i) { return i.size(); });
 
   auto const num_stripe_blobs =
     thrust::reduce(stripe_size_iter, stripe_size_iter + incoming_stats.stripe_stat_merge.size());
-  auto const num_file_blobs = num_columns;
+  auto const num_file_blobs = incoming_stats.stats_desc.size();
   auto const num_blobs = single_write_mode ? static_cast<int>(num_stripe_blobs + num_file_blobs)
                                            : static_cast<int>(num_stripe_blobs);
 
@@ -1241,7 +1241,7 @@ writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
 
   if (single_write_mode) {
     std::vector<statistics_merge_group> file_stats_merge(num_file_blobs);
-    for (auto i = 0; i < num_columns; ++i) {
+    for (auto i = 0u; i < num_file_blobs; ++i) {
       auto col_stats         = &file_stats_merge[i];
       col_stats->col         = incoming_stats.stats_desc.device_ptr(i);
       col_stats->start_chunk = static_cast<uint32_t>(i * num_stripes);
@@ -1275,7 +1275,7 @@ writer::impl::encoded_statistics writer::impl::finish_statistic_blobs(
   std::vector<ColStatsBlob> file_blobs(single_write_mode ? num_file_blobs : 0);
   if (single_write_mode) {
     auto file_stat_merge = stats_merge.host_ptr(num_stripe_blobs);
-    for (auto i = 0; i < num_file_blobs; i++) {
+    for (auto i = 0u; i < num_file_blobs; i++) {
       auto const stat_begin = blobs.host_ptr(file_stat_merge[i].start_chunk);
       auto const stat_end   = stat_begin + file_stat_merge[i].num_chunks;
       file_blobs[i].assign(stat_begin, stat_end);
@@ -2173,8 +2173,7 @@ void writer::impl::close()
   ProtobufWriter pbw_(&buffer_);
   PostScript ps;
 
-  auto const statistics =
-    finish_statistic_blobs(ff.types.size() - 1, ff.stripes.size(), persisted_stripe_statistics);
+  auto const statistics = finish_statistic_blobs(ff.stripes.size(), persisted_stripe_statistics);
 
   // File-level statistics
   if (single_write_mode and not statistics.file_level.empty()) {

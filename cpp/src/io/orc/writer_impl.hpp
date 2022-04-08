@@ -284,6 +284,10 @@ class writer::impl {
     hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
     hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
+  /**
+   * @brief Statistics data stored between calls to write for chunked writes
+   *
+   */
   struct intermediate_statistics {
     intermediate_statistics(rmm::cuda_stream_view stream) : stripe_stat_chunks(0, stream){};
     intermediate_statistics(std::vector<ColStatsBlob> rb,
@@ -303,14 +307,21 @@ class writer::impl {
     hostdevice_vector<stats_column_desc> stats_desc;
   };
 
-  // used for chunked writes to persist data between calls to write.
+  /**
+   * @brief used for chunked writes to persist data between calls to write.
+   *
+   */
   struct persisted_statistics {
     std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
     std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
     hostdevice_vector<stats_column_desc> stats_desc;
   };
 
-  struct encoded_statistics {
+  /**
+   * @brief Protobuf encoded statistics created at file close
+   *
+   */
+  struct encoded_footer_statistics {
     std::vector<ColStatsBlob> stripe_level;
     std::vector<ColStatsBlob> file_level;
   };
@@ -330,15 +341,12 @@ class writer::impl {
   /**
    * @brief Returns column statistics encoded in ORC protobuf format.
    *
-   * @param stats_freq Frequence of statistics to be included in the output file
-   * @param orc_table Table information to be written
-   * @param segmentation stripe and rowgroup ranges
+   * @param num_stripes number of stripes in the data
    * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
    * @return The encoded statistic blobs
    */
-  encoded_statistics finish_statistic_blobs(int const num_columns,
-                                            int const num_stripes,
-                                            writer::impl::persisted_statistics& incoming_stats);
+  encoded_footer_statistics finish_statistic_blobs(
+    int num_stripes, writer::impl::persisted_statistics& incoming_stats);
 
   /**
    * @brief Writes the specified column's row index stream.
