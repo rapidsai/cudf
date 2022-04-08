@@ -40,6 +40,8 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/optional.h>
+#include <thrust/pair.h>
 
 #include <utility>
 
@@ -117,6 +119,9 @@ struct null_replaced_value_accessor {
 /**
  * @brief validity accessor of column with null bitmask
  * A unary functor that returns validity at index `i`.
+ *
+ * @tparam safe If false, the accessor with throw logic_error if the column is not nullable. If
+ * true, the accessor checks for nullability and if col is not nullable, returns true.
  */
 template <bool safe = false>
 struct validity_accessor {
@@ -306,6 +311,8 @@ auto make_pair_rep_iterator(column_device_view const& column)
  *
  * @throws cudf::logic_error if the column is not nullable when safe = false
  *
+ * @tparam safe If false, the accessor with throw logic_error if the column is not nullable. If
+ * true, the accessor checks for nullability and if col is not nullable, returns true.
  * @param column The column to iterate
  * @return auto Iterator that returns validities of column elements.
  */

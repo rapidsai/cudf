@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/for_each.h>
 #include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
@@ -78,10 +81,10 @@ auto generate_empty_output(strings_column_view const& input,
 
   auto offsets_column = make_numeric_column(
     data_type{type_to_id<offset_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
-  CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<offset_type>(),
-                           0,
-                           offsets_column->size() * sizeof(offset_type),
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<offset_type>(),
+                                0,
+                                offsets_column->size() * sizeof(offset_type),
+                                stream.value()));
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
@@ -261,7 +264,7 @@ auto make_strings_children(Func fn,
   } else {
     // Compute the offsets values from the provided output string sizes.
     auto const string_sizes = output_strings_sizes.value();
-    CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(offset_type), stream.value()));
+    CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(offset_type), stream.value()));
     thrust::inclusive_scan(rmm::exec_policy(stream),
                            string_sizes.template begin<size_type>(),
                            string_sizes.template end<size_type>(),

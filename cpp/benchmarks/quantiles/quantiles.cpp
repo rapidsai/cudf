@@ -20,6 +20,7 @@
 
 #include <cudf/quantiles.hpp>
 
+#include <thrust/execution_policy.h>
 #include <thrust/tabulate.h>
 
 class Quantiles : public cudf::benchmark {

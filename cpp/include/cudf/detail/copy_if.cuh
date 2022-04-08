@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,9 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <cub/cub.cuh>
 
@@ -251,10 +254,10 @@ struct scatter_gather_functor {
     if (output.nullable()) {
       // Have to initialize the output mask to all zeros because we may update
       // it with atomicOr().
-      CUDA_TRY(cudaMemsetAsync(static_cast<void*>(output.null_mask()),
-                               0,
-                               cudf::bitmask_allocation_size_bytes(output.size()),
-                               stream.value()));
+      CUDF_CUDA_TRY(cudaMemsetAsync(static_cast<void*>(output.null_mask()),
+                                    0,
+                                    cudf::bitmask_allocation_size_bytes(output.size()),
+                                    stream.value()));
     }
 
     auto output_device_view = cudf::mutable_column_device_view::create(output, stream);
@@ -341,7 +344,7 @@ std::unique_ptr<table> copy_if(
 
   // initialize just the first element of block_offsets to 0 since the InclusiveSum below
   // starts at the second element.
-  CUDA_TRY(cudaMemsetAsync(block_offsets.begin(), 0, sizeof(cudf::size_type), stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(block_offsets.begin(), 0, sizeof(cudf::size_type), stream.value()));
 
   // 2. Find the offset for each block's output using a scan of block counts
   if (grid.num_blocks > 1) {
@@ -367,7 +370,7 @@ std::unique_ptr<table> copy_if(
   // As it is InclusiveSum, last value in block_offsets will be output_size
   // unless num_blocks == 1, in which case output_size is just block_counts[0]
   cudf::size_type output_size{0};
-  CUDA_TRY(cudaMemcpyAsync(
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
     &output_size,
     grid.num_blocks > 1 ? block_offsets.begin() + grid.num_blocks : block_counts.begin(),
     sizeof(cudf::size_type),

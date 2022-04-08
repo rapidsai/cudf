@@ -36,6 +36,7 @@ project(
 # * build options ---------------------------------------------------------------------------------
 
 option(USE_NVTX "Build with NVTX support" ON)
+option(BUILD_SHARED_LIBS "Build cuDF JNI shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
@@ -44,6 +45,7 @@ option(CUDF_JNI_ARROW_STATIC "Statically link Arrow" ON)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
+message(VERBOSE "CUDF_JNI: Build cuDF JNI shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF_JNI: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
 message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
@@ -115,21 +117,7 @@ rapids_find_package(ZLIB REQUIRED)
 # ##################################################################################################
 # * RMM -------------------------------------------------------------------------------------------
 
-find_path(
-  RMM_INCLUDE "rmm"
-  HINTS "${CUDF_CPP_BUILD_DIR}/_deps/rmm-src/include" "$ENV{RMM_ROOT}/include"
-        "$ENV{RMM_HOME}/include" "$ENV{CONDA_PREFIX}/include/rmm" "$ENV{CONDA_PREFIX}/include"
-)
-
-message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
-
-find_path(
-  SPDLOG_INCLUDE "spdlog"
-  HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include" "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
-        "$ENV{RMM_ROOT}/include" "$ENV{CONDA_PREFIX}/include"
-)
-
-message(STATUS "SPDLOG: SPDLOG_INCLUDE set to ${SPDLOG_INCLUDE}")
+include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_rmm.cmake)
 
 # ##################################################################################################
 # * ARROW -----------------------------------------------------------------------------------------
@@ -207,7 +195,7 @@ endif()
 # * library targets -------------------------------------------------------------------------------
 
 add_library(
-  cudfjni SHARED
+  cudfjni
   src/Aggregation128UtilsJni.cpp
   src/AggregationJni.cpp
   src/CudfJni.cpp
@@ -232,7 +220,7 @@ add_library(
   src/check_nvcomp_output_sizes.cu
 )
 
-if(CUDF_JNI_LIBCUDF_STATIC)
+if(CUDF_JNI_LIBCUDF_STATIC AND BUILD_SHARED_LIBS)
   # When linking against libcudf.a, the JNI library will include the old libcudf.so. For
   # backwards-compatibility for software that expects to find libcudf.so in the JVM environment
   # after cudf has loaded, the JNI code and libcudf.a will be combined into libcudf.so. A stub
@@ -255,11 +243,9 @@ target_include_directories(
          "${NVCOMP_INCLUDE}"
          "${CMAKE_BINARY_DIR}/include"
          "${CMAKE_SOURCE_DIR}/include"
-         "${SPDLOG_INCLUDE}"
          "${CMAKE_SOURCE_DIR}/src"
          "${JNI_INCLUDE_DIRS}"
          "${CUDF_INCLUDE}"
-         "${RMM_INCLUDE}"
          "${ARROW_INCLUDE}"
 )
 
@@ -270,8 +256,15 @@ target_include_directories(
 # Override RPATH for cudfjni
 set_target_properties(
   cudfjni
-  PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN" # set target compile options
-             CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON
+  PROPERTIES BUILD_RPATH "\$ORIGIN"
+             INSTALL_RPATH "\$ORIGIN"
+             # set target compile options
+             CXX_STANDARD 17
+             CXX_STANDARD_REQUIRED ON
+             CUDA_STANDARD 17
+             CUDA_STANDARD_REQUIRED ON
+             POSITION_INDEPENDENT_CODE ON
+             INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
 
 target_compile_options(
@@ -285,18 +278,23 @@ target_compile_definitions(
 )
 
 if(USE_GDS)
-  add_library(cufilejni SHARED src/CuFileJni.cpp)
+  add_library(cufilejni src/CuFileJni.cpp)
   set_target_properties(
     cufilejni
-    PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN" # set target compile options
-               CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               INSTALL_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
   target_include_directories(
     cufilejni
     PUBLIC "${LIBCUDACXX_INCLUDE}" "${CUDF_INCLUDE}"
     PRIVATE "${cuFile_INCLUDE_DIRS}"
   )
-  target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
+  target_link_libraries(cufilejni PRIVATE cudfjni rmm::rmm "${cuFile_LIBRARIES}")
 endif()
 
 # ##################################################################################################
@@ -323,7 +321,7 @@ if(CUDF_JNI_LIBCUDF_STATIC)
 endif()
 
 target_link_libraries(
-  cudfjni PRIVATE ${CUDF_LINK} ${NVCOMP_LIBRARY} ${ARROW_LIBRARY} CUDA::cuda_driver
+  cudfjni PRIVATE ${CUDF_LINK} ${NVCOMP_LIBRARY} ${ARROW_LIBRARY} rmm::rmm CUDA::cuda_driver
 )
 
 # ##################################################################################################

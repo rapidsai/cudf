@@ -69,8 +69,7 @@ class lists_column_device_view : private column_device_view {
    */
   [[nodiscard]] __device__ inline size_type offset_at(size_type idx) const
   {
-    return column_device_view::child(lists_column_view::offsets_column_index)
-      .element<size_type>(offset() + idx);
+    return offsets().size() > 0 ? offsets().element<size_type>(offset() + idx) : 0;
   }
 
   /**

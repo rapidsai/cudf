@@ -170,81 +170,71 @@ auto decompose_structs(table_view table,
     detail::linked_column_view const* col = linked_columns[col_idx].get();
     if (is_nested(col->type())) {
       // convert and insert
-      std::vector<column_view> r_verticalized_columns;
-      std::vector<int> r_verticalized_col_depths;
-      std::vector<detail::linked_column_view const*> flattened;
-      std::vector<int> depths;
-      // TODO: Here I added a bogus leaf column at the beginning to help in the while loop below.
-      //       Refactor the while loop so that it can handle the last case.
-      auto first_col =
-        std::make_shared<detail::linked_column_view>(make_empty_column(type_id::INT32)->view());
-      flattened.push_back(first_col.get());
-      std::function<void(detail::linked_column_view const*, int)> recursive_child =
-        [&](detail::linked_column_view const* c, int depth) {
-          flattened.push_back(c);
-          depths.push_back(depth);
+      std::vector<std::vector<detail::linked_column_view const*>> flattened;
+      std::function<void(
+        detail::linked_column_view const*, std::vector<detail::linked_column_view const*>*, int)>
+        recursive_child = [&](detail::linked_column_view const* c,
+                              std::vector<detail::linked_column_view const*>* branch,
+                              int depth) {
+          branch->push_back(c);
           if (c->type().id() == type_id::LIST) {
-            recursive_child(c->children[lists_column_view::child_column_index].get(), depth + 1);
+            recursive_child(
+              c->children[lists_column_view::child_column_index].get(), branch, depth + 1);
           } else if (c->type().id() == type_id::STRUCT) {
-            for (auto& child : c->children) {
-              recursive_child(child.get(), depth + 1);
+            for (size_t child_idx = 0; child_idx < c->children.size(); ++child_idx) {
+              if (child_idx > 0) {
+                verticalized_col_depths.push_back(depth + 1);
+                branch = &flattened.emplace_back();
+              }
+              recursive_child(c->children[child_idx].get(), branch, depth + 1);
             }
           }
         };
-      recursive_child(col, 0);
-      int curr_col_idx     = flattened.size() - 1;
-      column_view temp_col = *flattened[curr_col_idx];
-      while (curr_col_idx > 0) {
-        auto const prev_col = flattened[curr_col_idx - 1];
-        if (not is_nested(prev_col->type())) {
-          // We hit a column that's a leaf so seal this hierarchy
-          // But first, traverse upward and include any list columns in the ancestors
-          for (detail::linked_column_view* parent = flattened[curr_col_idx]->parent; parent;
-               parent                             = parent->parent) {
-            if (parent->type().id() == type_id::LIST) {
-              // Include this parent
-              temp_col = column_view(
-                parent->type(),
-                parent->size(),
-                nullptr,  // list has no data of its own
-                nullptr,  // If we're going through this then nullmask is already in another branch
-                UNKNOWN_NULL_COUNT,
-                parent->offset(),
-                {*parent->children[lists_column_view::offsets_column_index], temp_col});
-            }
-          }
-          r_verticalized_columns.push_back(temp_col);
-          r_verticalized_col_depths.push_back(depths[curr_col_idx - 1]);
-          temp_col = *prev_col;
-        } else {
+      auto& branch = flattened.emplace_back();
+      verticalized_col_depths.push_back(0);
+      recursive_child(col, &branch, 0);
+
+      for (auto const& branch : flattened) {
+        column_view temp_col = *branch.back();
+        for (auto it = branch.crbegin() + 1; it < branch.crend(); ++it) {
+          auto const& prev_col = *(*it);
           auto children =
-            (prev_col->type().id() == type_id::LIST)
+            (prev_col.type().id() == type_id::LIST)
               ? std::vector<column_view>{*prev_col
-                                            ->children[lists_column_view::offsets_column_index],
+                                            .children[lists_column_view::offsets_column_index],
                                          temp_col}
               : std::vector<column_view>{temp_col};
-          temp_col = column_view(prev_col->type(),
-                                 prev_col->size(),
+          temp_col = column_view(prev_col.type(),
+                                 prev_col.size(),
                                  nullptr,
-                                 prev_col->null_mask(),
+                                 prev_col.null_mask(),
                                  UNKNOWN_NULL_COUNT,
-                                 prev_col->offset(),
+                                 prev_col.offset(),
                                  std::move(children));
         }
-        --curr_col_idx;
+        // Traverse upward and include any list columns in the ancestors
+        for (detail::linked_column_view* parent = branch.front()->parent; parent;
+             parent                             = parent->parent) {
+          if (parent->type().id() == type_id::LIST) {
+            // Include this parent
+            temp_col = column_view(
+              parent->type(),
+              parent->size(),
+              nullptr,  // list has no data of its own
+              nullptr,  // If we're going through this then nullmask is already in another branch
+              UNKNOWN_NULL_COUNT,
+              parent->offset(),
+              {*parent->children[lists_column_view::offsets_column_index], temp_col});
+          }
+        }
+        verticalized_columns.push_back(temp_col);
       }
-      verticalized_columns.insert(
-        verticalized_columns.end(), r_verticalized_columns.rbegin(), r_verticalized_columns.rend());
-      verticalized_col_depths.insert(verticalized_col_depths.end(),
-                                     r_verticalized_col_depths.rbegin(),
-                                     r_verticalized_col_depths.rend());
       if (not column_order.empty()) {
-        new_column_order.insert(
-          new_column_order.end(), r_verticalized_columns.size(), column_order[col_idx]);
+        new_column_order.insert(new_column_order.end(), flattened.size(), column_order[col_idx]);
       }
       if (not null_precedence.empty()) {
         new_null_precedence.insert(
-          new_null_precedence.end(), r_verticalized_columns.size(), null_precedence[col_idx]);
+          new_null_precedence.end(), flattened.size(), null_precedence[col_idx]);
       }
     } else {
       verticalized_columns.push_back(*col);

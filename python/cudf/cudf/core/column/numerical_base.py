@@ -113,10 +113,11 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         else:
             result = self._numeric_quantile(q, interpolation, exact)
         if return_scalar:
+            scalar_result = result.element_indexing(0)
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-                if result[0] is cudf.NA
-                else result[0]
+                if scalar_result is cudf.NA
+                else scalar_result
             )
         return result
 
@@ -160,7 +161,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         sorted_indices = self.as_frame()._get_sorted_inds(
             ascending=True, na_position="first"
         )
-        sorted_indices = sorted_indices[self.null_count :]
+        sorted_indices = sorted_indices.slice(
+            self.null_count, len(sorted_indices)
+        )
 
         return libcudf.quantiles.quantile(
             self, q, interpolation, sorted_indices, exact
