@@ -339,7 +339,7 @@ class writer::impl {
                                                  file_segmentation const& segmentation);
 
   /**
-   * @brief Returns column statistics encoded in ORC protobuf format.
+   * @brief Returns column statistics encoded in ORC protobuf format stored in the footer.
    *
    * @param num_stripes number of stripes in the data
    * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
