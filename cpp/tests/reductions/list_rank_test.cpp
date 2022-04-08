@@ -197,3 +197,32 @@ TEST_F(ListRankScanTest, ListOfEmptyStruct)
                                  cudf::make_dense_rank_aggregation<cudf::scan_aggregation>(),
                                  cudf::null_policy::INCLUDE);
 }
+
+TEST_F(ListRankScanTest, EmptyDeepList)
+{
+  // List<List<int>>, where all lists are empty
+  // []
+  // []
+  // Null
+  // Null
+
+  // Internal empty list
+  auto list1 = cudf::test::lists_column_wrapper<int>{};
+
+  auto offsets       = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 0, 0};
+  auto list_nullmask = std::vector<bool>{1, 1, 0, 0};
+  auto list_validity_buffer =
+    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
+  auto list_column = cudf::make_lists_column(4,
+                                             offsets.release(),
+                                             list1.release(),
+                                             cudf::UNKNOWN_NULL_COUNT,
+                                             std::move(list_validity_buffer));
+
+  auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 2, 2};
+
+  this->test_ungrouped_rank_scan(*list_column,
+                                 expect,
+                                 cudf::make_dense_rank_aggregation<cudf::scan_aggregation>(),
+                                 cudf::null_policy::INCLUDE);
+}
