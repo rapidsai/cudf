@@ -92,8 +92,7 @@ struct map_find_fn {
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                                  cudf::detail::device_2dspan<gpu::PageFragment const> frags)
+  populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<gpu::PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -215,8 +214,7 @@ __global__ void __launch_bounds__(block_size, 1)
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  get_dictionary_indices_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                                cudf::detail::device_2dspan<gpu::PageFragment const> frags)
+  get_dictionary_indices_kernel(cudf::detail::device_2dspan<gpu::PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -276,15 +274,13 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
     <<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
-void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                              cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void populate_chunk_hash_maps(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
   dim3 const dim_grid(frags.size().second, frags.size().first);
 
-  populate_chunk_hash_maps_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags);
+  populate_chunk_hash_maps_kernel<block_size><<<dim_grid, block_size, 0, stream.value()>>>(frags);
 }
 
 void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
@@ -293,15 +289,13 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
   collect_map_entries_kernel<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
-void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                            cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                             rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
   dim3 const dim_grid(frags.size().second, frags.size().first);
 
-  get_dictionary_indices_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags);
+  get_dictionary_indices_kernel<block_size><<<dim_grid, block_size, 0, stream.value()>>>(frags);
 }
 }  // namespace gpu
 }  // namespace parquet

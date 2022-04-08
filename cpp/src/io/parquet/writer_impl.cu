@@ -929,7 +929,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   chunks.host_to_device(stream);
 
   gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
-  gpu::populate_chunk_hash_maps(chunks, frags, stream);
+  gpu::populate_chunk_hash_maps(frags, stream);
 
   chunks.device_to_host(stream, true);
 
@@ -978,7 +978,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   }
   chunks.host_to_device(stream);
   gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
-  gpu::get_dictionary_indices(chunks.device_view(), frags, stream);
+  gpu::get_dictionary_indices(frags, stream);
 
   return std::make_pair(std::move(dict_data), std::move(dict_index));
 }
