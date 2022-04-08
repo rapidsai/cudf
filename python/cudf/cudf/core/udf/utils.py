@@ -254,7 +254,6 @@ def _return_col_from_dtype(dt, size):
 
 def _post_process_output_col(col, retty):
     if retty == string_view:
-        breakpoint()
         return from_stringview_array(col)
     else:
         return as_column(col)
