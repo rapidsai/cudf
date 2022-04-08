@@ -9290,8 +9290,11 @@ def df_eval():
         "df.a + df.b",
         "df.a * df.b",
         "df.a > df.b",
+        "df.a > df.b > df.c",
     ],
 )
 def test_dataframe_eval(df_eval, expr):
     expr_stripped = expr.replace("df.", "")
-    assert eval(expr, {"df": df_eval}) == df_eval.eval(expr_stripped)
+    assert pd.eval(expr, local_dict={"df": df_eval}) == df_eval.eval(
+        expr_stripped
+    )

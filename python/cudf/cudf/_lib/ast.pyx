@@ -1,6 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
 import ast
+import functools
 from enum import Enum
 
 from cython.operator cimport dereference
@@ -218,18 +219,44 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 nodes.append(stack.pop())
                 stack.append(Operation(op, nodes[-1], nodes[-2]))
             elif isinstance(value, ast.Compare):
-                if len(value.ops) != 1:
-                    # TODO: Can relax this requirement by unpacking the
-                    # comparison into multiple.
-                    raise ValueError("Only binary comparisons are supported.")
-                ast_traverse(value, col_names, stack, nodes)
-                op = python_cudf_ast_map[type(value.ops[0])]
-                # TODO: This makes assumptions about the field ordering (left,
-                # ops, comparators) in the above parsing, should maybe handle
-                # this more explicitly.
-                nodes.append(stack.pop())
-                nodes.append(stack.pop())
-                stack.append(Operation(op, nodes[-1], nodes[-2]))
+                if len(value.ops) > 1:
+                    # Chained comparators should be split into multiple sets of
+                    # comparators. Parsing occurs left to right.
+                    operands = (value.left, *value.comparators)
+                    inner_ops = []
+                    for i, op in enumerate(value.ops):
+                        # Note that this will lead to duplicate nodes, e.g. if
+                        # the comparison is `a < b < c` that will be encoded as
+                        # `a < b and b < c`.
+                        comp = ast.Compare(operands[i], op, operands[i+1])
+                        ast_traverse(comp, col_names, stack, nodes)
+                        op = python_cudf_ast_map[type(op)]
+                        nodes.append(stack.pop())
+                        nodes.append(stack.pop())
+                        inner_ops.append(Operation(op, nodes[-1], nodes[-2]))
+                        nodes.append(inner_ops[-1])
+
+                    # Need to make sure the first element is also included.
+                    op = ASTOperator.LOGICAL_AND
+
+                    def _combine_compare_ops(left, right):
+                        nodes.append(Operation(op, left, right))
+                        return nodes[-1]
+
+                    # Note that the return value has already been added to the
+                    # list of nodes, so we don't need to save it here and can
+                    # just push `nodes[-1]` onto the stack.
+                    functools.reduce(_combine_compare_ops, inner_ops)
+                    stack.append(nodes[-1])
+                else:
+                    ast_traverse(value, col_names, stack, nodes)
+                    op = python_cudf_ast_map[type(value.ops[0])]
+                    # TODO: This makes assumptions about the field ordering
+                    # (left, ops, comparators) in the above parsing, should
+                    # maybe handle this more explicitly.
+                    nodes.append(stack.pop())
+                    nodes.append(stack.pop())
+                    stack.append(Operation(op, nodes[-1], nodes[-2]))
             elif isinstance(value, list):
                 for item in value:
                     if isinstance(item, ast.AST):
