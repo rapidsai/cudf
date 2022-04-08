@@ -112,7 +112,7 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
         gpuci_logger "gpuci_mamba_retry install dask>=2022.03.0 --force-reinstall"
-        gpuc_conda_retry config --remove channels dask/label/dev
+        gpuci_conda_retry config --remove channels dask/label/dev
         gpuci_mamba_retry install dask>=2022.03.0 --force-reinstall
         conda list
     else
