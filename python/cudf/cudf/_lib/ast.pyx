@@ -209,16 +209,22 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 op = python_cudf_ast_map[type(value.op)]
                 nodes.append(stack.pop())
                 stack.append(Operation(op, nodes[-1]))
-            elif isinstance(value, (ast.BinOp, ast.BoolOp, ast.Compare)):
-                if (
-                    isinstance(value, ast.Compare)
-                    and len(value.comparators) != 1
-                ):
+            elif isinstance(value, (ast.BinOp, ast.BoolOp)):
+                ast_traverse(value, col_names, stack, nodes)
+                op = python_cudf_ast_map[type(value.op)]
+                # TODO: This assumes that left is parsed before right, should
+                # maybe handle this more explicitly.
+                nodes.append(stack.pop())
+                nodes.append(stack.pop())
+                stack.append(Operation(op, nodes[-1], nodes[-2]))
+            elif isinstance(value, ast.Compare):
+                if len(value.ops) != 1:
                     # TODO: Can relax this requirement by unpacking the
                     # comparison into multiple.
                     raise ValueError("Only binary comparisons are supported.")
-                ast_traverse(value, col_names, stack, nodes)
-                op = python_cudf_ast_map[type(value.op)]
+                ast_traverse(value.left, col_names, stack, nodes)
+                ast_traverse(value.comparators[0], col_names, stack, nodes)
+                op = python_cudf_ast_map[type(value.ops[0])]
                 # TODO: This assumes that left is parsed before right, should
                 # maybe handle this more explicitly.
                 nodes.append(stack.pop())
