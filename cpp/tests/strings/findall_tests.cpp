@@ -22,6 +22,8 @@
 #include <cudf_test/table_utilities.hpp>
 #include <tests/strings/utilities.h>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <vector>
 
 struct StringsFindallTests : public cudf::test::BaseFixture {

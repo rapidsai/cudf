@@ -28,6 +28,8 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <vector>
 
 struct StringsSplitTest : public cudf::test::BaseFixture {

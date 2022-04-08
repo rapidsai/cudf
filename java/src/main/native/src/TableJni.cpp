@@ -137,8 +137,8 @@ public:
           left_to_copy < buffer_amount_available ? left_to_copy : buffer_amount_available;
       char *copy_to = current_buffer_data + current_buffer_written;
 
-      CUDA_TRY(cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDeviceToHost,
-                               stream.value()));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDeviceToHost,
+                                    stream.value()));
 
       copy_from = copy_from + amount_to_copy;
       current_buffer_written += amount_to_copy;

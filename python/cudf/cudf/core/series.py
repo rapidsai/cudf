@@ -53,7 +53,6 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
@@ -96,7 +95,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
             arg = list(arg)
-        data = self._frame._column[arg]
+        data = self._frame._get_elements_from_column(arg)
 
         if (
             isinstance(data, (dict, list))
@@ -856,7 +855,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, index=True, deep=False):
-        return sum(super().memory_usage(index, deep).values())
+        return self._column.memory_usage + (
+            self._index.memory_usage() if index else 0
+        )
 
     @_cudf_nvtx_annotate
     def __array_function__(self, func, types, args, kwargs):
@@ -3282,7 +3283,7 @@ def make_binop_func(op):
     # appropriate API for Series as required for pandas compatibility. The
     # main effect is reordering and error-checking parameters in
     # Series-specific ways.
-    wrapped_func = getattr(Frame, op)
+    wrapped_func = getattr(IndexedFrame, op)
 
     @functools.wraps(wrapped_func)
     def wrapper(self, other, level=None, fill_value=None, axis=0):

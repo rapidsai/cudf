@@ -1339,8 +1339,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, index=True, deep=False):
-        return Series(
-            {str(k): v for k, v in super().memory_usage(index, deep).items()}
+        mem_usage = [col.memory_usage for col in self._data.columns]
+        names = [str(name) for name in self._data.names]
+        if index:
+            mem_usage.append(self._index.memory_usage())
+            names.append("Index")
+        return Series._from_data(
+            data={None: as_column(mem_usage)},
+            index=as_index(names),
         )
 
     @_cudf_nvtx_annotate
@@ -6120,7 +6126,7 @@ def make_binop_func(op, postprocess=None):
     # def postprocess(left, right, output)
     # where left and right are the inputs to the binop and output is the result
     # of calling the wrapped Frame binop.
-    wrapped_func = getattr(Frame, op)
+    wrapped_func = getattr(IndexedFrame, op)
 
     @functools.wraps(wrapped_func)
     def wrapper(self, other, axis="columns", level=None, fill_value=None):

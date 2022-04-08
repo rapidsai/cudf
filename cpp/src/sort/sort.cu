@@ -24,6 +24,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/functional.h>
+
 namespace cudf {
 namespace detail {
 std::unique_ptr<column> sorted_order(table_view const& input,

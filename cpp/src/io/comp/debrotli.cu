@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2048,7 +2048,7 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
   int sm_count = 0;
   int dev      = 0;
   uint32_t max_fb_size, min_fb_size, fb_size;
-  CUDA_TRY(cudaGetDevice(&dev));
+  CUDF_CUDA_TRY(cudaGetDevice(&dev));
   if (cudaSuccess == cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev)) {
     // printf("%d SMs on device %d\n", sm_count, dev);
     max_num_inputs =
@@ -2092,14 +2092,14 @@ cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s* inputs,
   scratch_size = min(scratch_size, (size_t)0xffffffffu);
   fb_heap_size = (uint32_t)((scratch_size - sizeof(brotli_dictionary_s)) & ~0xf);
 
-  CUDA_TRY(cudaMemsetAsync(scratch_u8, 0, 2 * sizeof(uint32_t), stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(scratch_u8, 0, 2 * sizeof(uint32_t), stream.value()));
   // NOTE: The 128KB dictionary copy can have a relatively large overhead since source isn't
   // page-locked
-  CUDA_TRY(cudaMemcpyAsync(scratch_u8 + fb_heap_size,
-                           get_brotli_dictionary(),
-                           sizeof(brotli_dictionary_s),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(scratch_u8 + fb_heap_size,
+                                get_brotli_dictionary(),
+                                sizeof(brotli_dictionary_s),
+                                cudaMemcpyHostToDevice,
+                                stream.value()));
   gpu_debrotli_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     inputs, outputs, scratch_u8, fb_heap_size, count32);
 #if DUMP_FB_HEAP
@@ -2107,7 +2107,7 @@ cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s* inputs,
   uint32_t cur = 0;
   printf("heap dump (%d bytes)\n", fb_heap_size);
   while (cur < fb_heap_size && !(cur & 3)) {
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       &dump[0], scratch_u8 + cur, 2 * sizeof(uint32_t), cudaMemcpyDeviceToHost, stream.value()));
     stream.synchronize();
     printf("@%d: next = %d, size = %d\n", cur, dump[0], dump[1]);
