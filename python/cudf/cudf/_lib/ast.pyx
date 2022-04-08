@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2022, NVIDIA CORPORATION.
 
 import ast
 from enum import Enum
@@ -14,8 +14,9 @@ cimport cudf._lib.cpp.ast as libcudf_ast
 from cudf._lib.ast cimport underlying_type_ast_operator
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.table cimport Table
+from cudf._lib.utils cimport table_view_from_table
 
 
 class ASTOperator(Enum):
@@ -91,9 +92,9 @@ cdef class ColumnReference(Expression):
 
 cdef class Operation(Expression):
     def __cinit__(self, op, Expression left, Expression right=None):
-        # This awkward double casting appears to be the only way to get Cython
-        # to generate valid C++ that doesn't try to apply the shift operator
-        # directly to values of the enum (which is invalid).
+        # This awkward double casting is the only way to get Cython to generate
+        # valid C++ that doesn't try to apply the shift operator directly to
+        # values of the enum (which is invalid).
         cdef libcudf_ast.ast_operator op_value = <libcudf_ast.ast_operator> (
             <underlying_type_ast_operator> op.value)
 
@@ -233,10 +234,10 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 ast_traverse(value, col_names, stack, nodes)
 
 
-def evaluate_expression(Table df, Expression expr):
-    """Evaluate an Expression on a Table."""
+def evaluate_expression(object df, Expression expr):
+    """Evaluate an Expression on a DataFrame."""
     cdef unique_ptr[column] col = libcudf_ast.compute_column(
-        df.view(),
+        table_view_from_table(df),
         <libcudf_ast.expression &> dereference(expr.c_obj.get())
     )
     return DataFrame._from_data(
