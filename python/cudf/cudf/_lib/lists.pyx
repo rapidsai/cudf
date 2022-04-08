@@ -126,7 +126,7 @@ def sort_lists(Column col, bool ascending, str na_position):
     return Column.from_unique_ptr(move(c_result))
 
 
-def extract_element_scalar(Column col, int index):
+def extract_element_scalar(Column col, size_type index):
     # shared_ptr required because lists_column_view has no default
     # ctor
     cdef shared_ptr[lists_column_view] list_view = (
