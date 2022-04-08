@@ -14,6 +14,7 @@ import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
+from pandas.core.dtypes.common import is_float
 
 import cudf
 from cudf import _lib as libcudf
@@ -3023,6 +3024,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5    <NA>
         dtype: int64
         """
+        if not is_integer(periods):
+            if not (is_float(periods) and periods.is_integer()):
+                raise ValueError("periods must be an integer")
+            periods = int(periods)
+
         return self - self.shift(periods=periods)
 
     @copy_docstring(SeriesGroupBy)
