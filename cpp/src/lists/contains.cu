@@ -31,6 +31,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/logical.h>
 
 #include <type_traits>
@@ -39,61 +41,109 @@ namespace cudf {
 namespace lists {
 
 namespace {
-
 auto constexpr NOT_FOUND_IDX = size_type{-1};
 
-auto get_search_keys_device_iterable_view(column_view const& search_keys,
-                                          rmm::cuda_stream_view stream)
+template <typename Type>
+auto constexpr is_supported_type_no_struct()
 {
-  return column_device_view::create(search_keys, stream);
+  return cudf::is_numeric<Type>() || cudf::is_chrono<Type>() || cudf::is_fixed_point<Type>() ||
+         std::is_same_v<Type, cudf::string_view>;
 }
 
-auto get_search_keys_device_iterable_view(cudf::scalar const& search_key, rmm::cuda_stream_view)
+template <typename Type>
+auto constexpr is_struct_type()
 {
-  return &search_key;
+  return std::is_same_v<Type, cudf::struct_view>;
 }
 
-template <typename ElementType, duplicate_find_option find_option>
-auto __device__ find_begin(list_device_view const& list)
-{
-  if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
-    return list.pair_rep_begin<ElementType>();
-  } else {
-    return thrust::make_reverse_iterator(list.pair_rep_end<ElementType>());
+template <typename Type, duplicate_find_option find_option, typename Enable = void>
+struct search_list {
+  template <typename... Args>
+  void operator()(Args&&...)
+  {
+    CUDF_FAIL("Unsupported type in search index functor.");
   }
+};
+
+template <duplicate_find_option find_option>
+auto __device__ list_begin(size_type const* list_offsets, size_type list_idx)
+{
+  return find_option == duplicate_find_option::FIND_FIRST
+           ? thrust::make_counting_iterator<size_type>(list_offsets[list_idx])
+           : thrust::make_reverse_iterator(
+               thrust::make_counting_iterator<size_type>(list_offsets[list_idx + 1]));
 }
 
-template <typename ElementType, duplicate_find_option find_option>
-auto __device__ find_end(list_device_view const& list)
+template <duplicate_find_option find_option>
+auto __device__ list_end(size_type const* list_offsets, size_type list_idx)
 {
-  if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
-    return list.pair_rep_end<ElementType>();
-  } else {
-    return thrust::make_reverse_iterator(list.pair_rep_begin<ElementType>());
-  }
+  return find_option == duplicate_find_option::FIND_FIRST
+           ? thrust::make_counting_iterator<size_type>(list_offsets[list_idx + 1])
+           : thrust::make_reverse_iterator(
+               thrust::make_counting_iterator<size_type>(list_offsets[list_idx]));
 }
 
 template <duplicate_find_option find_option, typename Iterator>
-size_type __device__ distance([[maybe_unused]] Iterator begin, Iterator end, Iterator find_iter)
+size_type __device__ distance(Iterator begin, Iterator end, Iterator found_iter)
 {
-  if (find_iter == end) {
-    return NOT_FOUND_IDX;  // Not found.
-  }
-
-  if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
-    return find_iter - begin;  // Distance of find_position from begin.
-  } else {
-    return end - find_iter - 1;  // Distance of find_position from end.
-  }
+  if (found_iter == end) { return NOT_FOUND_IDX; }
+  return find_option == duplicate_find_option::FIND_FIRST ? found_iter - begin
+                                                          : end - found_iter - 1;
 }
 
+template <typename Type, duplicate_find_option find_option>
+struct search_list<Type, std::enable_if_t<is_supported_type_no_struct<Type>()>> {
+  bool const has_nulls;
+
+  /**
+   * @brief Search a scalar in a list defined by iterators pointing to rows of the child column of
+   * the original list column.
+   */
+  __device__ size_type operator()(column_device_view const& input_child,
+                                  size_type const* list_offsets,
+                                  size_type list_idx,
+                                  Type const& search_key)
+  {
+    auto const begin = list_begin<find_option>(list_offsets, list_idx);
+    auto const end   = list_end<find_option>(list_offsets, list_idx);
+    auto const found_iter =
+      thrust::find_if(thrust::seq, begin, end, [&] __device__(auto const idx) {
+        auto const element  = input_child.template element<Type>(idx);
+        auto const is_valid = !has_nulls || input_child.is_valid_nocheck(idx);
+        return is_valid && cudf::equality_compare(element, search_key);
+      });
+    return distance<find_option>(begin, end, found_iter);
+  }
+};
+
+template <typename Type, duplicate_find_option find_option>
+struct search_list<Type, std::enable_if_t<is_struct_type<Type>()>> {
+  /**
+   * @brief Search a list scalar in a list defined by iterators pointing to rows of the flattened
+   * table of the child column of the original list column.
+   */
+  template <typename Comparator, typename Iteraror>
+  __device__ size_type operator()(Comparator const& row_comparator,
+                                  size_type const* list_offsets,
+                                  size_type list_idx)
+  {
+    auto const begin = list_begin<find_option>(list_offsets, list_idx);
+    auto const end   = list_end<find_option>(list_offsets, list_idx);
+    auto const found_iter =
+      thrust::find_if(thrust::seq, begin, end, [&] __device__(auto const idx) {
+        return row_comparator(idx, list_idx);
+      });
+    return distance<find_option>(begin, end, found_iter);
+  }
+};
+
 /**
- * @brief __device__ functor to search for a key in a `list_device_view`.
+ * @brief __device__ functor to search for a key in a list.
  */
 template <duplicate_find_option find_option>
 struct finder {
-  template <typename ElementType>
-  __device__ size_type operator()(list_device_view const& list, ElementType const& search_key) const
+  __device__ size_type operator()(list_device_view const& list,
+                                  cudf::scalar const& search_key) const
   {
     auto const list_begin = find_begin<ElementType, find_option>(list);
     auto const list_end   = find_end<ElementType, find_option>(list);
@@ -107,15 +157,48 @@ struct finder {
 };
 
 /**
+ * @brief Search for the index of the given scalar key in each list row.
+ */
+template <typename ElementType, typename SearchKeyPairIter, typename OutputPairIter>
+void search_all_lists(column_device_view const& d_lists,
+                      cudf::scalar const& key,
+                      bool search_keys_have_nulls,
+                      duplicate_find_option find_option,
+                      OutputPairIter const& output_iters,
+                      rmm::cuda_stream_view stream)
+{
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    output_iters,
+    output_iters + d_lists.size(),
+    [dv_lists = lists_column_device_view{d_lists},
+     search_key_pair_iter,
+     find_option,
+     search_keys_have_nulls = search_keys_have_nulls,
+     NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto row_index) -> thrust::pair<size_type, bool> {
+      auto const [search_key, search_key_is_valid] = search_key_pair_iter[row_index];
+      if (search_keys_have_nulls && !search_key_is_valid) { return {NOT_FOUND_IDX, false}; }
+
+      auto const list = list_device_view(dv_lists, row_index);
+      if (list.is_null()) { return {NOT_FOUND_IDX, false}; }
+
+      auto const position = find_option == duplicate_find_option::FIND_FIRST
+                              ? finder<duplicate_find_option::FIND_FIRST>{}(list, search_key)
+                              : finder<duplicate_find_option::FIND_LAST>{}(list, search_key);
+      return {position, true};
+    });
+}
+
+/**
  * @brief Search for the index of the corresponding key in each list row.
  */
 template <typename ElementType, typename SearchKeyPairIter, typename OutputPairIter>
-void search_each_list_row(column_device_view const& d_lists,
-                          SearchKeyPairIter search_key_pair_iter,
-                          bool search_keys_have_nulls,
-                          duplicate_find_option find_option,
-                          OutputPairIter const& output_iters,
-                          rmm::cuda_stream_view stream)
+void search_all_lists(column_device_view const& d_lists,
+                      column_device_view const& d_keys,
+                      bool search_keys_have_nulls,
+                      duplicate_find_option find_option,
+                      OutputPairIter const& output_iters,
+                      rmm::cuda_stream_view stream)
 {
   thrust::tabulate(
     rmm::exec_policy(stream),
