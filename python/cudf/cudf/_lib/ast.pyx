@@ -201,6 +201,9 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
     elif isinstance(root, ast.Num):
         stack.append(Literal(root.n))
     else:
+        # Iterating over `_fields` is _much_ faster than calling
+        # `iter_child_nodes`. That may not matter for practical data sizes
+        # though, so we'll need to benchmark.
         # for value in ast.iter_child_nodes(root):
         for field in root._fields:
             value = getattr(root, field)
@@ -226,47 +229,37 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 nodes.append(stack.pop())
                 stack.append(Operation(op, nodes[-1], nodes[-2]))
             elif isinstance(value, ast.Compare):
+                # Chained comparators should be split into multiple sets of
+                # comparators. Parsing occurs left to right.
+                operands = (value.left, *value.comparators)
+                inner_ops = []
+                for i, op in enumerate(value.ops):
+                    # Note that this will lead to duplicate nodes, e.g. if
+                    # the comparison is `a < b < c` that will be encoded as
+                    # `a < b and b < c`.
+                    comp = ast.Compare(operands[i], op, operands[i+1])
+                    op = python_cudf_ast_map[type(op)]
+
+                    ast_traverse(comp.left, col_names, stack, nodes)
+                    ast_traverse(comp.comparators, col_names, stack, nodes)
+
+                    nodes.append(stack.pop())
+                    nodes.append(stack.pop())
+                    inner_ops.append(Operation(op, nodes[-1], nodes[-2]))
+                    nodes.append(inner_ops[-1])
+
+                # If we have more than one comparator, we need to link them
+                # together with a bunch of LOGICAL_AND operators.
                 if len(value.ops) > 1:
-                    # Chained comparators should be split into multiple sets of
-                    # comparators. Parsing occurs left to right.
-                    operands = (value.left, *value.comparators)
-                    inner_ops = []
-                    for i, op in enumerate(value.ops):
-                        # Note that this will lead to duplicate nodes, e.g. if
-                        # the comparison is `a < b < c` that will be encoded as
-                        # `a < b and b < c`.
-                        comp = ast.Compare(operands[i], op, operands[i+1])
-                        op = python_cudf_ast_map[type(op)]
-
-                        ast_traverse(comp.left, col_names, stack, nodes)
-                        ast_traverse(comp.comparators, col_names, stack, nodes)
-
-                        nodes.append(stack.pop())
-                        nodes.append(stack.pop())
-                        inner_ops.append(Operation(op, nodes[-1], nodes[-2]))
-                        nodes.append(inner_ops[-1])
-
-                    # Need to make sure the first element is also included.
                     op = ASTOperator.LOGICAL_AND
 
                     def _combine_compare_ops(left, right):
-                        nodes.append(Operation(op, left, right))
+                        nodes.append(Operation(, left, right))
                         return nodes[-1]
 
-                    # Note that the return value has already been added to the
-                    # list of nodes, so we don't need to save it here and can
-                    # just push `nodes[-1]` onto the stack.
                     functools.reduce(_combine_compare_ops, inner_ops)
-                    stack.append(nodes[-1])
-                else:
-                    op = python_cudf_ast_map[type(value.ops[0])]
 
-                    ast_traverse(value.left, col_names, stack, nodes)
-                    ast_traverse(value.comparators[0], col_names, stack, nodes)
-
-                    nodes.append(stack.pop())
-                    nodes.append(stack.pop())
-                    stack.append(Operation(op, nodes[-1], nodes[-2]))
+                stack.append(nodes[-1])
             elif isinstance(value, list):
                 for item in value:
                     if isinstance(item, ast.AST):
