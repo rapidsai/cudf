@@ -5,11 +5,12 @@ import operator
 import numpy as np
 import pandas as pd
 import pytest
-from .utils import _make_random_frame
 
 from dask import dataframe as dd
 
 import cudf
+
+from .utils import _make_random_frame
 
 
 def _make_empty_frame(npartitions=2):
