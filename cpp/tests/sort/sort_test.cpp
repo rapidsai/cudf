@@ -855,7 +855,7 @@ TEST_F(SortCornerTest, WithEmptyStructColumn)
 
   int_col expected3{{4, 1, 5, 3, 2, 0}};
   auto got3 = sorted_order(input3, {order::ASCENDING});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, got3->view(), debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, got3->view());
 };
 
 }  // namespace test
