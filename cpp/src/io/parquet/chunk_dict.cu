@@ -125,8 +125,6 @@ __global__ void __launch_bounds__(block_size, 1)
   // Make a view of the hash map
   auto hash_map_mutable = map_type::device_mutable_view(
     chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
-  auto hash_map = map_type::device_view(
-    chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
   __shared__ int total_num_dict_entries;
   for (size_type i = 0; i < s_num_values; i += block_size) {
@@ -139,29 +137,26 @@ __global__ void __launch_bounds__(block_size, 1)
     size_type is_unique      = 0;
     size_type uniq_elem_size = 0;
     if (is_valid) {
-      auto found_slot = type_dispatcher(data_col.type(), map_find_fn{hash_map}, data_col, val_idx);
-      if (found_slot == hash_map.end()) {
-        is_unique =
-          type_dispatcher(data_col.type(), map_insert_fn{hash_map_mutable}, data_col, val_idx);
-        uniq_elem_size = [&]() -> size_type {
-          if (not is_unique) { return 0; }
-          switch (col->physical_type) {
-            case Type::INT32: return 4;
-            case Type::INT64: return 8;
-            case Type::INT96: return 12;
-            case Type::FLOAT: return 4;
-            case Type::DOUBLE: return 8;
-            case Type::BYTE_ARRAY:
-              if (data_col.type().id() == type_id::STRING) {
-                // Strings are stored as 4 byte length + string bytes
-                return 4 + data_col.element<string_view>(val_idx).size_bytes();
-              }
-            case Type::FIXED_LEN_BYTE_ARRAY:
-              if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
-            default: CUDF_UNREACHABLE("Unsupported type for dictionary encoding");
-          }
-        }();
-      }
+      is_unique =
+        type_dispatcher(data_col.type(), map_insert_fn{hash_map_mutable}, data_col, val_idx);
+      uniq_elem_size = [&]() -> size_type {
+        if (not is_unique) { return 0; }
+        switch (col->physical_type) {
+          case Type::INT32: return 4;
+          case Type::INT64: return 8;
+          case Type::INT96: return 12;
+          case Type::FLOAT: return 4;
+          case Type::DOUBLE: return 8;
+          case Type::BYTE_ARRAY:
+            if (data_col.type().id() == type_id::STRING) {
+              // Strings are stored as 4 byte length + string bytes
+              return 4 + data_col.element<string_view>(val_idx).size_bytes();
+            }
+          case Type::FIXED_LEN_BYTE_ARRAY:
+            if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
+          default: CUDF_UNREACHABLE("Unsupported type for dictionary encoding");
+        }
+      }();
     }
 
     __syncthreads();
