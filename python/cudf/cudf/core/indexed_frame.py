@@ -43,7 +43,7 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
-from cudf.core.udf.utils import _compile_or_get, _launch_arg_from_col, _supported_cols_from_frame, _return_col_from_dtype
+from cudf.core.udf.utils import _compile_or_get, _launch_arg_from_col, _supported_cols_from_frame, _return_col_from_dtype, _post_process_output_col
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 doc_reset_index_template = """
@@ -1067,7 +1067,8 @@ class IndexedFrame(Frame):
         except Exception as e:
             raise RuntimeError("UDF kernel execution failed.") from e
 
-        col = cudf.core.column.as_column(ans_col)
+        col = _post_process_output_col(ans_col, retty)
+
         col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
         result = cudf.Series._from_data({None: col}, self._index)
 

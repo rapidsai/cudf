@@ -28,7 +28,6 @@ from cudf.core.udf.typing import (
     _string_view_rfind,
     _string_view_startswith,
     string_view,
-    dstring
 )
 
 
@@ -298,7 +297,6 @@ def pack_return_scalar_impl(context, builder, sig, args):
 
     return outdata._getvalue()
 
-
 @cuda_lower(operator.truth, MaskedType)
 def masked_scalar_truth_impl(context, builder, sig, args):
     indata = cgutils.create_struct_proxy(MaskedType(types.boolean))(
@@ -411,13 +409,6 @@ def string_view_len_impl(context, builder, sig, args):
     )
 
     return result
-
-
-@cuda_lowering_registry.lower_cast(string_view, dstring)
-def cast_stringview_to_dstring(context, builder, fromty, toty, val):
-    """defer to the c++ constructor for this"""
-    out_dstr = cgutils.create_struct_proxy(toty)(context, builder)
-    return
 
 
 @cuda_lowering_registry.lower_cast(types.StringLiteral, MaskedType)
