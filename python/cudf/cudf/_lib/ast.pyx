@@ -3,6 +3,7 @@
 import ast
 import functools
 from enum import Enum
+from itertools import repeat
 
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t
@@ -242,44 +243,19 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
             # TODO: Whether And/Or and BitAnd/BitOr actually correspond to
             # logical or bitwise operators depends on the data types that they
             # are applied to. We'll need to add logic to map to that.
-            elif isinstance(value, ast.BoolOp):
-                # Chained comparators should be split into multiple sets of
-                # comparators. Parsing occurs left to right.
+            elif isinstance(value, (ast.BoolOp, ast.Compare)):
+                if isinstance(value, ast.BoolOp):
+                    operators = repeat(value.op)
+                    operands = zip(value.values[:-1], value.values[1:])
+                    multiple_ops = len(value.values) > 2
+                else:
+                    operators = value.ops
+                    operands = (value.left, *value.comparators)
+                    multiple_ops = len(operands) > 2
+                    operands = zip(operands[:-1], operands[1:])
+
                 inner_ops = []
-                for left, right in zip(value.values[:-1], value.values[1:]):
-                    # Note that this will lead to duplicate nodes, e.g. if
-                    # the comparison is `a < b < c` that will be encoded as
-                    # `a < b and b < c`.
-                    op = python_cudf_ast_map[type(value.op)]
-
-                    ast_traverse(left, col_names, stack, nodes)
-                    ast_traverse(right, col_names, stack, nodes)
-
-                    nodes.append(stack.pop())
-                    nodes.append(stack.pop())
-                    inner_ops.append(Operation(op, nodes[-1], nodes[-2]))
-                    nodes.append(inner_ops[-1])
-
-                # If we have more than one comparator, we need to link them
-                # together with a bunch of LOGICAL_AND operators.
-                if len(value.values) > 2:
-                    op = ASTOperator.LOGICAL_AND
-
-                    def _combine_compare_ops(left, right):
-                        nodes.append(Operation(op, left, right))
-                        return nodes[-1]
-
-                    functools.reduce(_combine_compare_ops, inner_ops)
-
-                stack.append(nodes[-1])
-            elif isinstance(value, ast.Compare):
-                # Chained comparators should be split into multiple sets of
-                # comparators. Parsing occurs left to right.
-                operands = (value.left, *value.comparators)
-                inner_ops = []
-                for op, (left, right) in zip(
-                    value.ops, zip(operands[:-1], operands[1:])
-                ):
+                for op, (left, right) in zip(operators, operands):
                     # Note that this will lead to duplicate nodes, e.g. if
                     # the comparison is `a < b < c` that will be encoded as
                     # `a < b and b < c`.
@@ -295,7 +271,7 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
 
                 # If we have more than one comparator, we need to link them
                 # together with a bunch of LOGICAL_AND operators.
-                if len(operands) > 2:
+                if multiple_ops:
                     op = ASTOperator.LOGICAL_AND
 
                     def _combine_compare_ops(left, right):
