@@ -725,10 +725,17 @@ namespace hash {
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
  public:
+  __device__ element_hasher(Nullate nulls,
+                            uint32_t seed             = DEFAULT_HASH_SEED,
+                            hash_value_type null_hash = std::numeric_limits<hash_value_type>::max())
+    : _has_nulls(nulls), _seed(seed), _null_hash(null_hash)
+  {
+  }
+
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    if (has_nulls && col.is_null(row_index)) { return std::numeric_limits<hash_value_type>::max(); }
+    if (_has_nulls && col.is_null(row_index)) { return _null_hash; }
     return hash_function<T>{}(col.element<T>(row_index));
   }
 
@@ -751,10 +758,9 @@ class element_hasher {
     int start_off               = row_index;
     int end_off                 = row_index + 1;
     while (is_nested(curr_col.type())) {
-      if (has_nulls) {
+      if (_has_nulls) {
         for (int i = start_off; i < end_off; ++i) {
-          hash = detail::hash_combine(
-            hash, curr_col.is_null(i) ? std::numeric_limits<hash_value_type>::max() : 0);
+          hash = detail::hash_combine(hash, curr_col.is_null(i) ? _null_hash : 0);
         }
       }
       if (curr_col.type().id() == type_id::STRUCT) {
@@ -774,12 +780,14 @@ class element_hasher {
       hash = cudf::detail::hash_combine(
         hash,
         type_dispatcher<dispatch_void_if_nested>(
-          curr_col.type(), element_hasher<hash_function, Nullate>{has_nulls}, curr_col, i));
+          curr_col.type(), element_hasher<hash_function, Nullate>{_has_nulls}, curr_col, i));
     }
     return hash;
   }
 
-  Nullate has_nulls;
+  uint32_t _seed;
+  hash_value_type _null_hash;
+  Nullate _has_nulls;
 };
 
 /**
@@ -804,13 +812,13 @@ class device_row_hasher {
   __device__ auto operator()(size_type row_index) const
   {
     // Hash the first column w/ the seed
-    auto const initial_hash = cudf::detail::hash_combine(
-      hash_value_type{0},
-      type_dispatcher<dispatch_storage_type>(_table.column(0).type(),
-                                             // TODO: revert back to using seed
-                                             element_hasher<hash_function, Nullate>{_has_nulls},
-                                             _table.column(0),
-                                             row_index));
+    auto const initial_hash =
+      cudf::detail::hash_combine(hash_value_type{0},
+                                 type_dispatcher<dispatch_storage_type>(
+                                   _table.column(0).type(),
+                                   element_hasher<hash_function, Nullate>{_has_nulls, _seed},
+                                   _table.column(0),
+                                   row_index));
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
