@@ -6337,7 +6337,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  4   4   8  0
         4  5   2   7  3
         """
-        return self._from_data(
+        return Series._from_data(
             libcudf.ast.make_and_evaluate_expression(self, expr)
         )
 

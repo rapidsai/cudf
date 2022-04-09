@@ -130,8 +130,14 @@ python_cudf_ast_map = {
     ast.BitAnd: ASTOperator.BITWISE_AND,
     ast.BitOr: ASTOperator.BITWISE_OR,
     ast.BitXor: ASTOperator.BITWISE_XOR,
-    ast.And: ASTOperator.LOGICAL_AND,
-    ast.Or: ASTOperator.LOGICAL_OR,
+    # TODO: These maps are wrong, but for pandas compatibility they actually
+    # need to be dtype-specific so this is just for testing the AST parsing
+    # logic. Eventually the lookup for these will need to be updated.
+    ast.And: ASTOperator.BITWISE_AND,
+    ast.Or: ASTOperator.BITWISE_OR,
+    # ast.And: ASTOperator.LOGICAL_AND,
+    # ast.Or: ASTOperator.LOGICAL_OR,
+
     # Unary operators
     # ast.Identity: ASTOperator.IDENTITY,
     # ast.Sin: ASTOperator.SIN,
@@ -193,6 +199,8 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
         evaluation.  This list must remain in scope until the expression has
         been evaluated.
     """
+    # TODO: We'll eventually need to find a way to support operations on mixed
+    # but compatible dtypes (e.g. adding int to float).
     # Base cases: Name
     if isinstance(root, ast.Name):
         stack.append(ColumnReference(col_names.index(root.id) + 1))
@@ -206,6 +214,14 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
         # though, so we'll need to benchmark.
         # for value in ast.iter_child_nodes(root):
         for field in root._fields:
+            # Note that since the fields of `value` are ordered, in some cases
+            # (e.g. `ast.BinOp`) a single call to `ast_traverse(value, ...)`
+            # would have the same effect as explicitly invoking it on the
+            # fields (e.g. `left` and `right` for `ast.BinOp`). However, this
+            # relies on the fields and their ordering not changing in future
+            # Python versions, and that we won't change the parsing logic for
+            # e.g. the operators, so it's best to be explicit in all the
+            # branches below.
             value = getattr(root, field)
             if isinstance(value, ast.UnaryOp):
                 # Faster to directly parse the operand and skip the op.
@@ -213,35 +229,31 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 op = python_cudf_ast_map[type(value.op)]
                 nodes.append(stack.pop())
                 stack.append(Operation(op, nodes[-1]))
-            elif isinstance(value, (ast.BinOp, ast.BoolOp)):
+            elif isinstance(value, ast.BinOp):
                 op = python_cudf_ast_map[type(value.op)]
 
-                # Note that since the fields of `value` are ordered, a single
-                # call to `ast_traverse(value, ...)` would have the same effect
-                # as explicitly invoking it on `left` and `right` (the call
-                # will have no effect on the operator), but we have no
-                # guarantee that the fields or their ordering will not change
-                # in future Python versions so it's best to be explicit.
                 ast_traverse(value.left, col_names, stack, nodes)
                 ast_traverse(value.right, col_names, stack, nodes)
 
                 nodes.append(stack.pop())
                 nodes.append(stack.pop())
                 stack.append(Operation(op, nodes[-1], nodes[-2]))
-            elif isinstance(value, ast.Compare):
+
+            # TODO: Whether And/Or and BitAnd/BitOr actually correspond to
+            # logical or bitwise operators depends on the data types that they
+            # are applied to. We'll need to add logic to map to that.
+            elif isinstance(value, ast.BoolOp):
                 # Chained comparators should be split into multiple sets of
                 # comparators. Parsing occurs left to right.
-                operands = (value.left, *value.comparators)
                 inner_ops = []
-                for i, op in enumerate(value.ops):
+                for left, right in zip(value.values[:-1], value.values[1:]):
                     # Note that this will lead to duplicate nodes, e.g. if
                     # the comparison is `a < b < c` that will be encoded as
                     # `a < b and b < c`.
-                    comp = ast.Compare(operands[i], op, operands[i+1])
-                    op = python_cudf_ast_map[type(op)]
+                    op = python_cudf_ast_map[type(value.op)]
 
-                    ast_traverse(comp.left, col_names, stack, nodes)
-                    ast_traverse(comp.comparators, col_names, stack, nodes)
+                    ast_traverse(left, col_names, stack, nodes)
+                    ast_traverse(right, col_names, stack, nodes)
 
                     nodes.append(stack.pop())
                     nodes.append(stack.pop())
@@ -250,11 +262,44 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
 
                 # If we have more than one comparator, we need to link them
                 # together with a bunch of LOGICAL_AND operators.
-                if len(value.ops) > 1:
+                if len(value.values) > 2:
                     op = ASTOperator.LOGICAL_AND
 
                     def _combine_compare_ops(left, right):
-                        nodes.append(Operation(, left, right))
+                        nodes.append(Operation(op, left, right))
+                        return nodes[-1]
+
+                    functools.reduce(_combine_compare_ops, inner_ops)
+
+                stack.append(nodes[-1])
+            elif isinstance(value, ast.Compare):
+                # Chained comparators should be split into multiple sets of
+                # comparators. Parsing occurs left to right.
+                operands = (value.left, *value.comparators)
+                inner_ops = []
+                for op, (left, right) in zip(
+                    value.ops, zip(operands[:-1], operands[1:])
+                ):
+                    # Note that this will lead to duplicate nodes, e.g. if
+                    # the comparison is `a < b < c` that will be encoded as
+                    # `a < b and b < c`.
+                    op = python_cudf_ast_map[type(op)]
+
+                    ast_traverse(left, col_names, stack, nodes)
+                    ast_traverse(right, col_names, stack, nodes)
+
+                    nodes.append(stack.pop())
+                    nodes.append(stack.pop())
+                    inner_ops.append(Operation(op, nodes[-1], nodes[-2]))
+                    nodes.append(inner_ops[-1])
+
+                # If we have more than one comparator, we need to link them
+                # together with a bunch of LOGICAL_AND operators.
+                if len(operands) > 2:
+                    op = ASTOperator.LOGICAL_AND
+
+                    def _combine_compare_ops(left, right):
+                        nodes.append(Operation(op, left, right))
                         return nodes[-1]
 
                     functools.reduce(_combine_compare_ops, inner_ops)
@@ -274,7 +319,7 @@ def evaluate_expression(object df, Expression expr):
         table_view_from_table(df),
         <libcudf_ast.expression &> dereference(expr.c_obj.get())
     )
-    return {'result': Column.from_unique_ptr(move(col))}
+    return {'None': Column.from_unique_ptr(move(col))}
 
 
 def make_and_evaluate_expression(df, expr):

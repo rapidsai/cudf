@@ -9272,14 +9272,15 @@ def test_empty_numeric_only(data):
 
 @pytest.fixture
 def df_eval():
-    N = int(10)
+    N = 10
+    int_max = 10
     rng = cupy.random.default_rng(0)
     return cudf.DataFrame(
         {
-            "a": rng.random(N),
-            "b": rng.random(N),
-            "c": rng.random(N),
-            "d": rng.random(N),
+            "a": rng.integers(N, size=int_max),
+            "b": rng.integers(N, size=int_max),
+            "c": rng.integers(N, size=int_max),
+            "d": rng.integers(N, size=int_max),
         }
     )
 
@@ -9291,10 +9292,13 @@ def df_eval():
         "df.a * df.b",
         "df.a > df.b",
         "df.a > df.b > df.c",
+        "df.a > df.b < df.c",
+        "df.a and df.b",
+        # "df.a and df.b or df.c",
     ],
 )
 def test_dataframe_eval(df_eval, expr):
     expr_stripped = expr.replace("df.", "")
-    assert pd.eval(expr, local_dict={"df": df_eval}) == df_eval.eval(
-        expr_stripped
-    )
+    expect = pd.eval(expr, local_dict={"df": df_eval.to_pandas()})
+    got = df_eval.eval(expr_stripped)
+    assert got.to_pandas().equals(expect)
