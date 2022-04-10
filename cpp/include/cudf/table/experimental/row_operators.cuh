@@ -736,7 +736,7 @@ class element_hasher {
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     if (_has_nulls && col.is_null(row_index)) { return _null_hash; }
-    return hash_function<T>{}(col.element<T>(row_index));
+    return hash_function<T>{_seed}(col.element<T>(row_index));
   }
 
   template <typename T,
