@@ -9161,3 +9161,39 @@ def test_dataframe_pct_change(data, periods, fill_method):
     expected = pdf.pct_change(periods=periods, fill_method=fill_method)
 
     assert_eq(expected, actual)
+
+
+def test_mean_timeseries():
+    gdf = cudf.datasets.timeseries()
+    pdf = gdf.to_pandas()
+
+    expected = pdf.mean(numeric_only=True)
+    actual = gdf.mean(numeric_only=True)
+
+    assert_eq(expected, actual)
+
+    with pytest.raises(AttributeError):
+        gdf.mean()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+def test_std_different_dtypes(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = pdf.std(numeric_only=True)
+    actual = gdf.std(numeric_only=True)
+
+    assert_eq(expected, actual)
+
+    with pytest.raises(AttributeError):
+        gdf.std()
