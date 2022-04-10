@@ -800,11 +800,9 @@ template <template <typename> class hash_function, typename Nullate>
 class device_row_hasher {
  public:
   device_row_hasher() = delete;
-  CUDF_HOST_DEVICE device_row_hasher(Nullate has_nulls, table_device_view t)
-    : _table{t}, _has_nulls{has_nulls}
-  {
-  }
-  CUDF_HOST_DEVICE device_row_hasher(Nullate has_nulls, table_device_view t, uint32_t seed)
+  CUDF_HOST_DEVICE device_row_hasher(Nullate has_nulls,
+                                     table_device_view t,
+                                     uint32_t seed = DEFAULT_HASH_SEED)
     : _table{t}, _seed(seed), _has_nulls{has_nulls}
   {
   }
@@ -845,7 +843,7 @@ class device_row_hasher {
  private:
   table_device_view _table;
   Nullate _has_nulls;
-  uint32_t _seed{DEFAULT_HASH_SEED};
+  uint32_t _seed;
 };
 
 using preprocessed_table = row::equality::preprocessed_table;
