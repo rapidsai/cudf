@@ -129,6 +129,97 @@ TEST_F(HashTest, MultiValueNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(spark_output1->view(), spark_output2->view());
 }
 
+TEST_F(HashTest, BasicList)
+{
+  using lcw = cudf::test::lists_column_wrapper<uint64_t>;
+  using icw = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  auto const col = lcw{{}, {}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
+  auto const input  = cudf::table_view({col});
+  auto const expect = icw{1607593296,
+                          1607593296,
+                          -636010097,
+                          -132459357,
+                          -636010097,
+                          -2008850957,
+                          -1023787369,
+                          761197503,
+                          761197503,
+                          1340177511,
+                          -1023787369,
+                          -1023787369};
+
+  auto const output = cudf::hash(input);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), debug_output_level::ALL_ERRORS);
+}
+
+TEST_F(HashTest, NullableList)
+{
+  using lcw  = cudf::test::lists_column_wrapper<uint64_t>;
+  using icw  = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  using mask = std::vector<bool>;
+
+  auto const valids = mask{1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0};
+  auto const col =
+    lcw{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {}, {2, 2}, {2, 2}, {}}, valids.begin()};
+  auto expect = icw{-2023148619,
+                    -2023148619,
+                    -31671896,
+                    -31671896,
+                    -1205248335,
+                    1865773848,
+                    1865773848,
+                    -2023148682,
+                    -1205248335,
+                    -1205248335,
+                    -2023148682};
+
+  auto const output = cudf::hash(cudf::table_view({col}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view());
+}
+
+TEST_F(HashTest, ListOfStruct)
+{
+  auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{
+    {-1, -1, 0, 2, 2, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, 1, 2},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0}};
+  auto col2 = cudf::test::strings_column_wrapper{
+    {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}};
+  auto struc = cudf::test::structs_column_wrapper{
+    {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+
+  auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
+    0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
+
+  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto nullmask_buf =
+    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
+  auto list_column = cudf::make_lists_column(
+    17, offsets.release(), struc.release(), cudf::UNKNOWN_NULL_COUNT, std::move(nullmask_buf));
+
+  auto expect = cudf::test::fixed_width_column_wrapper<int32_t>{83451479,
+                                                                83451479,
+                                                                83455332,
+                                                                83455332,
+                                                                -759684425,
+                                                                -959632766,
+                                                                -959632766,
+                                                                -959632766,
+                                                                -959636527,
+                                                                -656998704,
+                                                                613652814,
+                                                                1902080426,
+                                                                1902080426,
+                                                                2061025592,
+                                                                2061025592,
+                                                                -319840811,
+                                                                -319840811};
+
+  auto const output = cudf::hash(cudf::table_view({*list_column}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view());
+}
+
 template <typename T>
 class HashTestTyped : public cudf::test::BaseFixture {
 };

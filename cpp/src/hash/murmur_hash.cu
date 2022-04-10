@@ -17,7 +17,7 @@
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -39,16 +39,15 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
   // Return early if there's nothing to hash
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
 
-  bool const nullable     = has_nulls(input);
-  auto const device_input = table_device_view::create(input, stream);
-  auto output_view        = output->mutable_view();
+  bool const nullable   = has_nulls(input);
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(input, stream);
+  auto output_view      = output->mutable_view();
 
   // Compute the hash value for each row
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    output_view.begin<int32_t>(),
-    output_view.end<int32_t>(),
-    row_hasher<MurmurHash3_32, nullate::DYNAMIC>(nullate::DYNAMIC{nullable}, *device_input));
+  thrust::tabulate(rmm::exec_policy(stream),
+                   output_view.begin<int32_t>(),
+                   output_view.end<int32_t>(),
+                   row_hasher.device_hasher<MurmurHash3_32>(nullable));
 
   return output;
 }
