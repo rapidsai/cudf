@@ -28,7 +28,9 @@ from cudf.core.udf.typing import (
     _string_view_rfind,
     _string_view_startswith,
     _string_view_upper,
+    _create_dstring_from_stringview,
     string_view,
+    dstring
 )
 
 
@@ -291,6 +293,7 @@ def pack_return_masked_impl(context, builder, sig, args):
 @cuda_lower(api.pack_return, types.Number)
 @cuda_lower(api.pack_return, types.NPDatetime)
 @cuda_lower(api.pack_return, types.NPTimedelta)
+@cuda_lower(api.pack_return, dstring)
 def pack_return_scalar_impl(context, builder, sig, args):
     outdata = cgutils.create_struct_proxy(sig.return_type)(context, builder)
     outdata.value = args[0]
@@ -361,7 +364,7 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 @lower_builtin(api.Masked, types.Number, types.boolean)
 @lower_builtin(api.Masked, types.NPDatetime, types.boolean)
 @lower_builtin(api.Masked, types.NPTimedelta, types.boolean)
-@lower_builtin(api.Masked, string_view, types.boolean)
+@lower_builtin(api.Masked, dstring, types.boolean)
 def masked_constructor(context, builder, sig, args):
     ty = sig.return_type
     value, valid = args
@@ -369,6 +372,33 @@ def masked_constructor(context, builder, sig, args):
     masked.value = value
     masked.valid = valid
     return masked._getvalue()
+
+# make it so that string input data is immediately converted
+# to a MaskedType(dstring). This guarantees string functions
+# only need to ever expect cudf::dstring inputs and guarantees
+# that UDFs returning string data will always return dstring types
+def call_create_dstring_from_stringview(strview, dstr):
+    return _create_dstring_from_stringview(strview, dstr)
+
+@lower_builtin(api.Masked, string_view, types.boolean)
+def masked_constructor_stringview(context, builder, sig, args):
+    #breakpoint()
+    value, valid = args
+    ret = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder)
+
+    dstr = builder.alloca(ret.value.type)
+    strview = builder.alloca(value.type)
+
+    builder.store(value, strview)
+
+    _ = context.compile_internal(
+        builder,
+        call_create_dstring_from_stringview,
+        nb_signature(types.int32, types.CPointer(string_view), types.CPointer(dstring)),
+        (strview, dstr)
+    )
+    ret.valid = valid
+    return ret._getvalue()
 
 
 # Allows us to make an instance of MaskedType a global variable
@@ -589,9 +619,19 @@ def call_string_view_upper(st, tgt):
     return _string_view_upper(st, tgt)
 
 @cuda_lower(
-    "MaskedType.upper", MaskedType(string_view), MaskedType(string_view)
+    "MaskedType.upper", MaskedType(string_view)
 )
 def masked_stringview_upper(context, builder, sig, args):
+    # create an empty MaskedType(dstring)
+    retty = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+
+    # input struct
+    input_masked_strview = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+
+
+
     maskedty = sig.args[0]
     st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
     ret = cgutils.create_struct_proxy(maskedty)(context, builder)

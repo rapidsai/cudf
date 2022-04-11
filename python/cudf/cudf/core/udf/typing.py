@@ -37,18 +37,28 @@ SUPPORTED_NUMBA_TYPES = (
 
 
 # String object definitions
+class DString(types.Type):
+    def __init__(self):
+        super().__init__(name="dstring")
+
+
+
 class StringView(types.Type):
     def __init__(self):
         super().__init__(name="string_view")
 
 
 string_view = StringView()
+dstring = DString()
 
 
 @typeof_impl.register(StringView)
 def typeof_stringview(val, c):
     return string_view
 
+@typeof_impl.register(DString)
+def typeof_dstring(val, c):
+    return dstring
 
 @register_model(StringView)
 class stringview_model(models.StructModel):
@@ -74,11 +84,34 @@ class stringview_model(models.StructModel):
     
     size_bytes = bytes
 
-
     def __init__(self, dmm, fe_type):
         super().__init__(dmm, fe_type, self._members)
 
+@register_model(DString)
+class dstring_model(models.StructModel):
+    # from dstring.hpp:
+    # private:
+    #   char* m_data{};
+    #   cudf::size_type m_bytes{};
+    #   cudf::size_type m_size{};
 
+    _members = (
+        ("m_data", types.CPointer(types.char)),
+        ("m_bytes", types.int32),
+        ("m_size", types.int32)
+    )
+    bytes = 0
+    for member_ty in (t[1] for t in _members):
+        if isinstance(member_ty, types.CPointer):
+            # TODO: is this always right?
+            bytes += 8
+        else:
+            bytes += member_ty.bitwidth / 8
+    
+    size_bytes = bytes
+
+    def __init__(self, dmm, fe_type):
+        super().__init__(dmm, fe_type, self._members)
 
 
 class StrViewArgHandler:
@@ -96,7 +129,7 @@ class StrViewArgHandler:
     See numba.cuda.compiler._prepare_args for details.
     """
     def prepare_args(self, ty, val, **kwargs):
-        if isinstance(ty, types.CPointer) and isinstance(ty.dtype, StringView):
+        if isinstance(ty, types.CPointer) and isinstance(ty.dtype, DString):
             return types.uint64, val.ptr
         else:
             return ty, val
@@ -116,8 +149,8 @@ class MaskedType(types.Type):
         # with a value type
 
         # TODO - replace object with stringview immediately
-        if isinstance(value, (types.PyObject, StringView)):
-            self.value_type = string_view
+        if isinstance(value, (types.PyObject, StringView, DString)):
+            self.value_type = dstring
         elif isinstance(value, SUPPORTED_NUMBA_TYPES):
             self.value_type = value
         else:
@@ -218,7 +251,7 @@ class MaskedConstructor(ConcreteTemplate):
             | datetime_cases
             | timedelta_cases
             | {types.boolean}
-            | {types.pyobject, string_view}
+            | {types.pyobject, string_view, dstring}
         )
     ]
 
@@ -506,7 +539,7 @@ class MaskedStringUpper(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(
-            MaskedType(string_view), MaskedType(string_view),  recvr=self.this
+            MaskedType(dstring), recvr=self.this
         )
 
 @cuda_decl_registry.register_attr
@@ -539,7 +572,7 @@ class MaskedStringAttrs(AttributeTemplate):
         )
 
     def resolve_value(self, mod):
-        return string_view
+        return dstring
 
     def resolve_valid(self, mod):
         return types.boolean
@@ -568,5 +601,10 @@ _string_view_rfind = cuda.declare_device(
 
 _string_view_upper = cuda.declare_device(
     "upper",
-    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+    types.int32(types.CPointer(dstring), types.CPointer(string_view)),
+)
+
+_create_dstring_from_stringview = cuda.declare_device(
+    "create_dstring_from_stringview",
+    types.int32(types.CPointer(string_view), types.CPointer(dstring))
 )

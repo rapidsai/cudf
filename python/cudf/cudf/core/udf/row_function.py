@@ -24,7 +24,7 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
-from cudf.core.udf.typing import stringview_model
+from cudf.core.udf.typing import stringview_model, dstring_model
 
 
 def _get_frame_row_type(dtype):
@@ -50,7 +50,7 @@ def _get_frame_row_type(dtype):
     sizes = []
     for field in dtype.fields.values():
         if field[0] == np.dtype('object'):
-            sizes.append(stringview_model.size_bytes)
+            sizes.append(dstring_model.size_bytes)
         else:
             sizes.append(field[0].itemsize)
 
@@ -72,7 +72,7 @@ def _get_frame_row_type(dtype):
 
         # increment offset by itemsize plus one byte for validity
         if elemdtype == np.dtype('object'):
-            itemsize = stringview_model.size_bytes
+            itemsize = dstring_model.size_bytes
         else:
             itemsize = elemdtype.itemsize
         offset += itemsize + 1
@@ -142,7 +142,6 @@ def _get_row_kernel(frame, func, args):
     scalar_return_type = _get_udf_return_type(row_type, func, args)
     # this is the signature for the final full kernel compilation
     sig = _construct_signature(frame, scalar_return_type, args)
-
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
     np_field_types = np.dtype(

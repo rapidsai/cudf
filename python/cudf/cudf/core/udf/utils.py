@@ -11,7 +11,7 @@ from numba.types import Poison, Tuple, boolean, int64, void, CPointer
 
 import cupy as cp
 from cudf.core.dtypes import CategoricalDtype
-from cudf.core.udf.typing import MaskedType, string_view, str_view_arg_handler, stringview_model
+from cudf.core.udf.typing import MaskedType, dstring_model, string_view, str_view_arg_handler, dstring
 from cudf.core.column.column import as_column
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
@@ -22,7 +22,7 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
 )
 from cudf.api.types import is_string_dtype
-from cudf_jit_udf import to_string_view_array, from_stringview_array
+from cudf_jit_udf import to_string_view_array, from_dstring_array
 
 from cudf.utils.utils import _cudf_nvtx_annotate
 
@@ -125,7 +125,7 @@ def _masked_array_type_from_col(col):
     """
     if is_string_dtype(col.dtype):
         # strings_udf library provides a pointer directly to the data
-        col_type = CPointer(string_view)
+        col_type = CPointer(dstring)
     else:
         nb_scalar_ty = numpy_support.from_dtype(col.dtype)
         col_type = nb_scalar_ty[::1]
@@ -219,7 +219,7 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
 
     kernel, scalar_return_type = kernel_getter(frame, func, args)
 
-    np_return_type = scalar_return_type if scalar_return_type is string_view else numpy_support.as_dtype(scalar_return_type)
+    np_return_type = scalar_return_type if scalar_return_type is dstring else numpy_support.as_dtype(scalar_return_type)
     precompiled[cache_key] = (kernel, np_return_type)
 
     return kernel, np_return_type
@@ -244,16 +244,17 @@ def _launch_arg_from_col(col):
         return data, mask
 
 def _return_col_from_dtype(dt, size):
-    if dt is string_view:
+    if dt is dstring:
         #
         return rmm.DeviceBuffer(
-            size=int(size * stringview_model.size_bytes)
+            size=int(size * dstring_model.size_bytes)
         )
     else:
         return cp.empty(size, dtype=dt)
 
 def _post_process_output_col(col, retty):
-    if retty == string_view:
-        return from_stringview_array(col)
+    if retty == dstring:
+        breakpoint()
+        return from_dstring_array(col)
     else:
         return as_column(col)
