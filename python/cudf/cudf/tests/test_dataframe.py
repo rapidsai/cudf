@@ -9301,6 +9301,10 @@ def df_eval():
         ("sin(a)", float),
         ("exp(sin(abs(a)))", float),
         ("(a + b) - (c * d)", int),
+        ("~a", int),
+        ("(a > b) and (c > d)", int),
+        ("(a > b) or (c > d)", int),
+        ("not (a > b)", int),
     ],
 )
 def test_dataframe_eval(df_eval, expr, dtype):

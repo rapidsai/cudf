@@ -6311,9 +6311,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  4   4
         4  5   2
         """
-        return Series._from_data(
-            libcudf.ast.make_and_evaluate_expression(self, expr)
-        )
+        return Series._from_data(libcudf.ast.evaluate_expression(self, expr))
 
 
 def from_dataframe(df, allow_copy=False):

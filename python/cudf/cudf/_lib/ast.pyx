@@ -3,7 +3,6 @@
 import ast
 import functools
 from enum import Enum
-from itertools import repeat
 
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t
@@ -147,9 +146,8 @@ python_cudf_operator_map = {
     ast.Or: ASTOperator.LOGICAL_OR,
 
     # Unary operators
-    # ast.Identity: ASTOperator.IDENTITY,
-    # ast.Bit: ASTOperator.BIT_INVERT,
-    # ast.Not: ASTOperator.NOT,
+    ast.Invert: ASTOperator.BIT_INVERT,
+    ast.Not: ASTOperator.NOT,
 }
 
 
@@ -187,7 +185,7 @@ python_cudf_function_map = {
 
 # TODO: Consider wrapping this in another function that caches the result along
 # with the nodes so that we can avoid multiple parsings.
-cdef ast_traverse(root, tuple col_names, list stack, list nodes):
+cdef parse_expression(root, tuple col_names, list stack, list nodes):
     """Construct an evaluable libcudf expression by traversing Python AST.
 
     This function performs a recursive traversal of the provided root
@@ -210,15 +208,15 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
         created. When parsing the current root requires creating an Operation
         node, a suitable number of elements (corresponding to the arity of the
         operator) are popped from the stack as the operands for the operation.
-        When the recursive traversal is complete, the stack will have length
-        exactly one and contain the expression to evaluate.
+        When the recursive traversal is complete, the stack will contain
+        exactly one element, the expression to evaluate.
     nodes : list
         The set of all nodes created while parsing the expression. This
         argument is necessary because all C++ node types are non-owning
         objects, so if the Python Expressions corresponding to nodes in the
         expression go out of scope and are garbage-collected the final
         expression will contain references to invalid data and seg fault upon
-        evaluation.  This list must remain in scope until the expression has
+        evaluation. This list must remain in scope until the expression has
         been evaluated.
     """
     # TODO: We'll eventually need to find a way to support operations on mixed
@@ -236,15 +234,15 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
         stack.append(Literal(root.n))
     elif isinstance(root, ast.UnaryOp):
         # Faster to directly parse the operand and skip the op.
-        ast_traverse(root.operand, col_names, stack, nodes)
+        parse_expression(root.operand, col_names, stack, nodes)
         op = python_cudf_operator_map[type(root.op)]
         nodes.append(stack.pop())
         stack.append(Operation(op, nodes[-1]))
     elif isinstance(root, ast.BinOp):
         op = python_cudf_operator_map[type(root.op)]
 
-        ast_traverse(root.left, col_names, stack, nodes)
-        ast_traverse(root.right, col_names, stack, nodes)
+        parse_expression(root.left, col_names, stack, nodes)
+        parse_expression(root.right, col_names, stack, nodes)
 
         nodes.append(stack.pop())
         nodes.append(stack.pop())
@@ -255,7 +253,7 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
     # are applied to. We'll need to add logic to map to that.
     elif isinstance(root, (ast.BoolOp, ast.Compare)):
         if isinstance(root, ast.BoolOp):
-            operators = repeat(root.op)
+            operators = [root.op] * (len(root.values) - 1)
             operands = zip(root.values[:-1], root.values[1:])
             multiple_ops = len(root.values) > 2
         else:
@@ -269,8 +267,8 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
             # Note that this will lead to duplicate nodes, e.g. if
             # the comparison is `a < b < c` that will be encoded as
             # `a < b and b < c`.
-            ast_traverse(left, col_names, stack, nodes)
-            ast_traverse(right, col_names, stack, nodes)
+            parse_expression(left, col_names, stack, nodes)
+            parse_expression(right, col_names, stack, nodes)
 
             nodes.append(stack.pop())
             nodes.append(stack.pop())
@@ -302,35 +300,34 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 f"Function {root.func} only accepts one positional "
                 "argument."
             )
-        ast_traverse(root.args[0], col_names, stack, nodes)
+        parse_expression(root.args[0], col_names, stack, nodes)
 
         nodes.append(stack.pop())
         stack.append(Operation(op, nodes[-1]))
     elif isinstance(root, list):
         for item in root:
-            ast_traverse(item, col_names, stack, nodes)
+            parse_expression(item, col_names, stack, nodes)
 
 
-def evaluate_expression(object df, Expression expr):
-    """Evaluate an Expression on a DataFrame."""
-    cdef unique_ptr[column] col
-    cdef table_view tbl = table_view_from_table(df)
-    with nogil:
-        col = move(
-            libcudf_transform.compute_column(
-                tbl,
-                <libcudf_ast.expression &> dereference(expr.c_obj.get())
-            )
-        )
-    return {None: Column.from_unique_ptr(move(col))}
-
-
-def make_and_evaluate_expression(df, expr):
+def evaluate_expression(df, expr):
     """Create a cudf evaluable expression from a string and evaluate it."""
     # Important: both make and evaluate must be coupled to guarantee that the
     # nodes created (the owning ColumnReferences and Literals) remain in scope.
     stack = []
     nodes = []
-    ast_traverse(ast.parse(expr).body[0].value, df._column_names, stack, nodes)
+    parse_expression(
+        ast.parse(expr).body[0].value, df._column_names, stack, nodes
+    )
+
     # At the end, all the stack contains is the expression to evaluate.
-    return evaluate_expression(df, stack[-1])
+    cdef Expression cudf_expr = stack[-1]
+    cdef table_view tbl = table_view_from_table(df)
+    cdef unique_ptr[column] col
+    with nogil:
+        col = move(
+            libcudf_transform.compute_column(
+                tbl,
+                <libcudf_ast.expression &> dereference(cudf_expr.c_obj.get())
+            )
+        )
+    return {None: Column.from_unique_ptr(move(col))}
