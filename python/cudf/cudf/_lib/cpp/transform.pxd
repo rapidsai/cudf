@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -7,6 +7,7 @@ from libcpp.string cimport string
 
 from rmm._lib.device_buffer cimport device_buffer
 
+from cudf._lib.cpp.ast cimport expression
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
@@ -42,3 +43,8 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         column_view input_column,
         column_view categories
     )
+
+    cdef unique_ptr[column] compute_column(
+        const table_view table,
+        const expression &expr
+    ) except +

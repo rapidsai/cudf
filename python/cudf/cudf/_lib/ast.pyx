@@ -12,11 +12,14 @@ from libcpp.utility cimport move
 
 from cudf._lib.ast cimport underlying_type_ast_operator
 from cudf._lib.column cimport Column
-from cudf._lib.cpp cimport ast as libcudf_ast
+from cudf._lib.cpp cimport ast as libcudf_ast, transform as libcudf_transform
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.utils cimport table_view_from_table
+
+# Aliases for simplicity
+ctypedef unique_ptr[libcudf_ast.expression] expression_ptr
 
 
 class ASTOperator(Enum):
@@ -81,15 +84,16 @@ cdef class Literal(Expression):
     def __cinit__(self, value):
         cdef int val = value
         self.c_scalar = make_unique[numeric_scalar[int64_t]](val, True)
-        self.c_obj = <unique_ptr[libcudf_ast.expression]> make_unique[
-            libcudf_ast.literal](
-                <numeric_scalar[int64_t] &>dereference(self.c_scalar))
+        self.c_obj = <expression_ptr> make_unique[libcudf_ast.literal](
+            <numeric_scalar[int64_t] &>dereference(self.c_scalar)
+        )
 
 
 cdef class ColumnReference(Expression):
     def __cinit__(self, size_type index):
-        self.c_obj = <unique_ptr[libcudf_ast.expression]> make_unique[
-            libcudf_ast.column_reference](index)
+        self.c_obj = <expression_ptr>make_unique[libcudf_ast.column_reference](
+            index
+        )
 
 
 cdef class Operation(Expression):
@@ -97,16 +101,17 @@ cdef class Operation(Expression):
         # This awkward double casting is the only way to get Cython to generate
         # valid C++ that doesn't try to apply the shift operator directly to
         # values of the enum (which is invalid).
-        cdef libcudf_ast.ast_operator op_value = <libcudf_ast.ast_operator> (
-            <underlying_type_ast_operator> op.value)
+        cdef libcudf_ast.ast_operator op_value = <libcudf_ast.ast_operator>(
+            <underlying_type_ast_operator> op.value
+        )
 
         if right is None:
-            self.c_obj = <unique_ptr[libcudf_ast.expression]> make_unique[
-                libcudf_ast.operation](op_value, dereference(left.c_obj))
+            self.c_obj = <expression_ptr> make_unique[libcudf_ast.operation](
+                op_value, dereference(left.c_obj)
+            )
         else:
-            self.c_obj = <unique_ptr[libcudf_ast.expression]> make_unique[
-                libcudf_ast.operation](
-                    op_value, dereference(left.c_obj), dereference(right.c_obj)
+            self.c_obj = <expression_ptr> make_unique[libcudf_ast.operation](
+                op_value, dereference(left.c_obj), dereference(right.c_obj)
             )
 
 
@@ -303,8 +308,7 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
         stack.append(Operation(op, nodes[-1]))
     elif isinstance(root, list):
         for item in root:
-            if isinstance(item, ast.AST):
-                ast_traverse(item, col_names, stack, nodes)
+            ast_traverse(item, col_names, stack, nodes)
 
 
 def evaluate_expression(object df, Expression expr):
@@ -313,7 +317,7 @@ def evaluate_expression(object df, Expression expr):
     cdef table_view tbl = table_view_from_table(df)
     with nogil:
         col = move(
-            libcudf_ast.compute_column(
+            libcudf_transform.compute_column(
                 tbl,
                 <libcudf_ast.expression &> dereference(expr.c_obj.get())
             )

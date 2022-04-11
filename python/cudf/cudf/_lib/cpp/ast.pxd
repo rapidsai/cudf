@@ -86,9 +86,3 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
     cdef cppclass operation(expression):
         operation(ast_operator, const expression &)
         operation(ast_operator, const expression&, const expression&)
-
-cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
-    cdef unique_ptr[column] compute_column(
-        const table_view table,
-        const expression &expr
-    ) except +
