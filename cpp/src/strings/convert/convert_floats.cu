@@ -130,11 +130,11 @@ __device__ inline double stod(string_view const& d_str)
   else if (exp_ten < std::numeric_limits<double>::min_exponent10)
     return double{0};
 
+  exp_ten += 1 - num_digits;
   // exp10() is faster than pow(10.0,exp_ten)
-  double const base =
-    sign * static_cast<double>(digits) * exp10(static_cast<double>(1 - num_digits));
-  double const exponent = exp10(static_cast<double>(exp_ten));
-  return base * exponent;
+  double const exponent = exp10(static_cast<double>(std::abs(exp_ten)));
+  double const base     = sign * static_cast<double>(digits);
+  return exp_ten < 0 ? base / exponent : base * exponent;
 }
 
 /**
