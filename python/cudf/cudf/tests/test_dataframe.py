@@ -9286,19 +9286,21 @@ def df_eval():
 
 
 @pytest.mark.parametrize(
-    "expr",
+    "expr, dtype",
     [
-        "df.a + df.b",
-        "df.a * df.b",
-        "df.a > df.b",
-        "df.a > df.b > df.c",
-        "df.a > df.b < df.c",
-        "df.a and df.b",
-        # "df.a and df.b or df.c",
+        ("df.a + df.b", int),
+        ("df.a * df.b", int),
+        ("df.a > df.b", int),
+        ("df.a > df.b > df.c", int),
+        ("df.a > df.b < df.c", int),
+        ("df.a and df.b", int),
+        # ("df.a and df.b or df.c", int),
+        ("sin(df.a)", float),
     ],
 )
-def test_dataframe_eval(df_eval, expr):
+def test_dataframe_eval(df_eval, expr, dtype):
+    df_eval = df_eval.astype(dtype)
     expr_stripped = expr.replace("df.", "")
     expect = pd.eval(expr, local_dict={"df": df_eval.to_pandas()})
     got = df_eval.eval(expr_stripped)
-    assert got.to_pandas().equals(expect)
+    assert_eq(expect, got, check_names=False)

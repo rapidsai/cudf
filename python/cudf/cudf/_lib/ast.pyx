@@ -110,7 +110,7 @@ cdef class Operation(Expression):
 
 # This dictionary encodes the mapping from Python AST operators to their cudf
 # counterparts.
-python_cudf_ast_map = {
+python_cudf_operator_map = {
     # TODO: Mapping TBD for commented out operators.
     # Binary operators
     ast.Add: ASTOperator.ADD,
@@ -141,31 +141,45 @@ python_cudf_ast_map = {
 
     # Unary operators
     # ast.Identity: ASTOperator.IDENTITY,
-    # ast.Sin: ASTOperator.SIN,
-    # ast.Cos: ASTOperator.COS,
-    # ast.Tan: ASTOperator.TAN,
-    # ast.Arcsin: ASTOperator.ARCSIN,
-    # ast.Arccos: ASTOperator.ARCCOS,
-    # ast.Arctan: ASTOperator.ARCTAN,
-    # ast.Sinh: ASTOperator.SINH,
-    # ast.Cosh: ASTOperator.COSH,
-    # ast.Tanh: ASTOperator.TANH,
-    # ast.Arcsinh: ASTOperator.ARCSINH,
-    # ast.Arccosh: ASTOperator.ARCCOSH,
-    # ast.Arctanh: ASTOperator.ARCTANH,
-    # ast.Exp: ASTOperator.EXP,
-    # ast.Log: ASTOperator.LOG,
-    # ast.Sqrt: ASTOperator.SQRT,
-    # ast.Cbrt: ASTOperator.CBRT,
-    # ast.Ceil: ASTOperator.CEIL,
-    # ast.Floor: ASTOperator.FLOOR,
-    # ast.Abs: ASTOperator.ABS,
-    # ast.Rint: ASTOperator.RINT,
     # ast.Bit: ASTOperator.BIT_INVERT,
     # ast.Not: ASTOperator.NOT,
 }
 
 
+# Mapping between Python function names encode in an ast.Call node and the
+# corresponding libcudf C++ AST operators.
+python_cudf_function_map = {
+    # TODO: Operators listed on
+    # https://pandas.pydata.org/pandas-docs/stable/user_guide/enhancingperf.html#expression-evaluation-via-eval
+    # that we don't support yet:
+    # expm1, log1p, arctan2 and log10.
+    'sin': ASTOperator.SIN,
+    'cos': ASTOperator.COS,
+    'tan': ASTOperator.TAN,
+    'arcsin': ASTOperator.ARCSIN,
+    'arccos': ASTOperator.ARCCOS,
+    'arctan': ASTOperator.ARCTAN,
+    'sinh': ASTOperator.SINH,
+    'cosh': ASTOperator.COSH,
+    'tanh': ASTOperator.TANH,
+    'arcsinh': ASTOperator.ARCSINH,
+    'arccosh': ASTOperator.ARCCOSH,
+    'arctanh': ASTOperator.ARCTANH,
+    'exp': ASTOperator.EXP,
+    'log': ASTOperator.LOG,
+    'sqrt': ASTOperator.SQRT,
+    'abs': ASTOperator.ABS,
+
+    # TODO: Operators supported by libcudf with no Python analog.
+    # ast.rint: ASTOperator.RINT,
+    # ast.cbrt: ASTOperator.CBRT,
+    # ast.ceil: ASTOperator.CEIL,
+    # ast.floor: ASTOperator.FLOOR,
+}
+
+
+# TODO: Consider wrapping this in another function that caches the result along
+# with the nodes so that we can avoid multiple parsings.
 cdef ast_traverse(root, tuple col_names, list stack, list nodes):
     """Construct an evaluable libcudf expression by traversing Python AST.
 
@@ -227,11 +241,11 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
             if isinstance(value, ast.UnaryOp):
                 # Faster to directly parse the operand and skip the op.
                 ast_traverse(value.operand, col_names, stack, nodes)
-                op = python_cudf_ast_map[type(value.op)]
+                op = python_cudf_operator_map[type(value.op)]
                 nodes.append(stack.pop())
                 stack.append(Operation(op, nodes[-1]))
             elif isinstance(value, ast.BinOp):
-                op = python_cudf_ast_map[type(value.op)]
+                op = python_cudf_operator_map[type(value.op)]
 
                 ast_traverse(value.left, col_names, stack, nodes)
                 ast_traverse(value.right, col_names, stack, nodes)
@@ -259,13 +273,13 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                     # Note that this will lead to duplicate nodes, e.g. if
                     # the comparison is `a < b < c` that will be encoded as
                     # `a < b and b < c`.
-                    op = python_cudf_ast_map[type(op)]
-
                     ast_traverse(left, col_names, stack, nodes)
                     ast_traverse(right, col_names, stack, nodes)
 
                     nodes.append(stack.pop())
                     nodes.append(stack.pop())
+
+                    op = python_cudf_operator_map[type(op)]
                     inner_ops.append(Operation(op, nodes[-1], nodes[-2]))
                     nodes.append(inner_ops[-1])
 
@@ -281,6 +295,21 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                     functools.reduce(_combine_compare_ops, inner_ops)
 
                 stack.append(nodes[-1])
+            elif isinstance(value, ast.Call):
+                if len(value.args) != 1 or value.keywords:
+                    raise ValueError(
+                        f"Function {value.func} only accepts one "
+                        "positional argument."
+                    )
+                try:
+                    op = python_cudf_function_map[value.func.id]
+                except KeyError:
+                    raise ValueError(f"Unsupported function {value.func}.")
+                # Assuming only unary functions are supported (checked above).
+                ast_traverse(value.args[0], col_names, stack, nodes)
+
+                nodes.append(stack.pop())
+                stack.append(Operation(op, nodes[-1]))
             elif isinstance(value, list):
                 for item in value:
                     if isinstance(item, ast.AST):
