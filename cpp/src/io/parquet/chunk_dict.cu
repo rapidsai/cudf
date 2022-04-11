@@ -22,6 +22,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/atomic>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -159,7 +161,6 @@ __global__ void __launch_bounds__(block_size, 1)
       }();
     }
 
-    __syncthreads();
     auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
     __syncthreads();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
@@ -186,22 +187,22 @@ __global__ void __launch_bounds__(block_size, 1)
   auto map =
     map_type::device_view(chunk.dict_map_slots, chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
-  __shared__ size_type counter;
-  if (t == 0) counter = 0;
+  __shared__ cuda::atomic<size_type, cuda::thread_scope_device> counter;
+  using cuda::std::memory_order_relaxed;
+  if (t == 0) { counter.store(0, memory_order_relaxed); }
   __syncthreads();
-  for (size_t i = 0; i < chunk.dict_map_size; i += block_size) {
+  for (size_type i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
-      auto slot = map.begin_slot() + t + i;
-      auto key  = static_cast<map_type::key_type>(slot->first);
+      auto* slot = reinterpret_cast<map_type::value_type*>(map.begin_slot() + t + i);
+      auto key   = slot->first;
       if (key != KEY_SENTINEL) {
-        auto loc = atomicAdd(&counter, 1);
+        auto loc = counter.fetch_add(1, memory_order_relaxed);
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
         chunk.dict_data[loc] = key;
         // If sorting dict page ever becomes a hard requirement, enable the following statement and
         // add a dict sorting step before storing into the slot's second field.
         // chunk.dict_data_idx[loc] = t + i;
-        slot->second.store(loc);
-        // TODO: ^ This doesn't need to be atomic. Try casting to value_type ptr and just writing.
+        slot->second = loc;
       }
     }
   }
