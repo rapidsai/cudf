@@ -105,7 +105,7 @@ std::unique_ptr<column> findall_record(
   auto const d_prog = reprog_device::create(pattern, flags, stream);
 
   // Create lists offsets column
-  auto offsets   = count_matches(*d_strings, *d_prog, input.size() + 1, stream, mr);
+  auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
   auto d_offsets = offsets->mutable_view().data<offset_type>();
 
   // Convert counts into offsets

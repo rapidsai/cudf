@@ -60,7 +60,7 @@ std::unique_ptr<column> count_matches(column_device_view const& d_strings,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(output_size >= d_strings.size(), "Unexpected output size");
+  assert(output_size >= d_strings.size() and "Unexpected output size");
 
   auto results = make_numeric_column(
     data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
