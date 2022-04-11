@@ -1446,7 +1446,12 @@ def test_loc_zero_dim_array():
         slice((1, 2), None),
         slice(None, (1, 2)),
         (1, 1),
-        (1, slice(None)),
+        pytest.param(
+            (1, slice(None)),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/46704"
+            ),
+        ),
     ],
 )
 def test_loc_series_multiindex(arg):
