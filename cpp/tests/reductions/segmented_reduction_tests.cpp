@@ -387,61 +387,6 @@ TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
-// int32_t pow10(int32_t exponent) { return exponent == 0 ? 1 : 10 * pow10(exponent - 1); }
-
-// template <typename T>
-// struct SegmentedReductionFixedPointTest : public cudf::test::BaseFixture {
-//  public:
-//   std::vector<typename T::rep> scale_list_by_pow10(std::vector<typename T::rep> input,
-//                                                    int32_t exponent)
-//   {
-//     std::vector<typename T::rep> result(input.size());
-//     std::transform(input.begin(), input.end(), result.begin(), [&exponent](auto x) {
-//       return exponent >= 0 ? x * pow10(exponent) : x / pow10(-exponent);
-//     });
-//     return result;
-//   }
-// };
-
-// TYPED_TEST_SUITE(SegmentedReductionFixedPointTest, cudf::test::FixedPointTypes);
-
-// TYPED_TEST(SegmentedReductionFixedPointTest, MaxIncludeNullsScaleZero)
-// {
-//   // [1, 2, 3], [1], [], [2, NULL, 3], [NULL], [NULL, NULL] | scale: 0
-//   // values:  {1, 2, 3, 1, 2, XXX, 3, XXX, XXX, XXX}
-//   // nullmask:{1, 1, 1, 1, 1, 0, 1, 0, 0, 0}
-//   // offsets: {0, 3, 4, 4, 7, 8, 10}
-//   // output_dtype: decimalXX, scale: -1, 0, 1
-//   // outputs: {3, 1, XXX, XXX, XXX, XXX}
-//   // output nullmask: {1, 1, 0, 0, 0, 0}
-
-//   using DecimalXX = TypeParam;
-
-//   for (int output_scale : {-1, 0, 1}) {
-//     fixed_point_column_wrapper<typename DecimalXX::rep> input{
-//       {1, 2, 3, 1, 2, XXX, 3, XXX, XXX, XXX},
-//       {true, true, true, true, true, false, true, false, false, false},
-//       numeric::scale_type(0)};
-//     fixed_width_column_wrapper<size_type> offsets{0, 3, 4, 4, 7, 8, 10};
-
-//     data_type output_dtype{type_to_id<DecimalXX>(), numeric::scale_type{output_scale}};
-
-//     auto result_rep = this->scale_list_by_pow10({3, 1, XXX, XXX, XXX, XXX}, -output_scale);
-//     fixed_point_column_wrapper<typename DecimalXX::rep> expect{
-//       result_rep.begin(),
-//       result_rep.end(),
-//       {true, true, false, false, false, false},
-//       numeric::scale_type(output_scale)};
-
-//     auto res = segmented_reduce(input,
-//                                 column_view(offsets),
-//                                 *make_max_aggregation<segmented_reduce_aggregation>(),
-//                                 output_dtype,
-//                                 null_policy::INCLUDE);
-//     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
-//   }
-// }
-
 // String min/max test grid
 // Segment: Length 0, length 1, length 2
 // Element nulls: No nulls, all nulls, some nulls
