@@ -103,13 +103,13 @@ __global__ void __launch_bounds__(block_size, 1)
   auto chunk   = frag.chunk;
   auto col     = chunk->col_desc;
 
+  if (not chunk->use_dictionary) { return; }
+
   size_type start_row = frag.start_row;
   size_type end_row   = frag.start_row + frag.num_rows;
 
   __shared__ size_type s_start_value_idx;
   __shared__ size_type s_num_values;
-
-  if (not chunk->use_dictionary) { return; }
 
   if (t == 0) {
     // Find the bounds of values in leaf column to be inserted into the map for current chunk
@@ -219,6 +219,8 @@ __global__ void __launch_bounds__(block_size, 1)
   auto chunk   = frag.chunk;
   auto col     = chunk->col_desc;
 
+  if (not chunk->use_dictionary) { return; }
+
   size_type start_row = frag.start_row;
   size_type end_row   = frag.start_row + frag.num_rows;
 
@@ -236,14 +238,12 @@ __global__ void __launch_bounds__(block_size, 1)
   }
   __syncthreads();
 
-  if (not chunk->use_dictionary) { return; }
-
   column_device_view const& data_col = *col->leaf_column;
 
   auto map = map_type::device_view(
     chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
-  for (size_t i = 0; i < s_num_values; i += block_size) {
+  for (size_type i = 0; i < s_num_values; i += block_size) {
     if (t + i < s_num_values) {
       auto val_idx = s_start_value_idx + t + i;
       bool is_valid =
