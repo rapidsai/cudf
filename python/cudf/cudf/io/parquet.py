@@ -680,6 +680,7 @@ def _get_partitioned(
     filename=None,
     fs=None,
     preserve_index=False,
+    max_rows=None,
     **kwargs,
 ):
     fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
@@ -698,7 +699,21 @@ def _get_partitioned(
 
     full_paths = []
     metadata_file_paths = []
-    for keys in part_names.itertuples(index=False):
+    full_offsets = []
+    for idx, keys in enumerate(part_names.itertuples(index=False)):
+        current_offset = part_offsets[idx]
+        if max_rows is not None:
+            start, end = current_offset
+            if end - start > max_rows:
+                new_offsets = list(range(start, end, max_rows))
+                i = 0
+                while i < len(new_offsets) - 1:
+                    full_offsets.append((new_offsets[i], new_offsets[i + 1]))
+                    i += 1
+                full_offsets.append((new_offsets[i], new_offsets[i + 1]))
+        else:
+            full_offsets.append(current_offset)
+
         subdir = fs.sep.join(
             [f"{name}={val}" for name, val in zip(partition_cols, keys)]
         )
@@ -724,6 +739,7 @@ class ParquetDatasetWriter:
         index=None,
         compression=None,
         statistics="ROWGROUP",
+        max_rows=None,
     ) -> None:
         """
         Write a parquet file or dataset incrementally
@@ -792,6 +808,7 @@ class ParquetDatasetWriter:
         # in self._chunked_writers for reverse lookup
         self.path_cw_map: Dict[str, int] = {}
         self.filename = None
+        self.max_rows = max_rows
 
     @_cudf_nvtx_annotate
     def write_table(self, df):
@@ -810,6 +827,7 @@ class ParquetDatasetWriter:
             self.partition_cols,
             preserve_index=self.common_args["index"],
             filename=self.filename,
+            max_rows=self.max_rows,
         )
 
         existing_cw_batch = defaultdict(dict)
@@ -836,7 +854,9 @@ class ParquetDatasetWriter:
                 for path in self._chunked_writers[cw_idx][1]
             ]
             cw.write_table(grouped_df, this_cw_part_info)
+        import pdb
 
+        pdb.set_trace()
         # Create new cw for unhandled paths encountered in this write_table
         new_paths, part_info, meta_paths = zip(*new_cw_paths)
         self._chunked_writers.append(
