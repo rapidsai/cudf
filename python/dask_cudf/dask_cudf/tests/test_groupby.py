@@ -11,7 +11,7 @@ import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
-from dask_cudf.groupby import SUPPORTED_AGGS, _is_supported
+from dask_cudf.groupby import SUPPORTED_AGGS, _aggs_supported
 
 
 @pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
@@ -609,7 +609,7 @@ def test_groupby_agg_redirect(aggregations):
     [["not_supported"], {"a": "not_supported"}, {"a": ["not_supported"]}],
 )
 def test_is_supported(arg):
-    assert _is_supported(arg, {"supported"}) is False
+    assert _aggs_supported(arg, {"supported"}) is False
 
 
 def test_groupby_unique_lists():
