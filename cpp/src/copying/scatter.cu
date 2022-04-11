@@ -351,6 +351,7 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
                                          [n_rows] __device__(size_type index) {
                                            return ((index >= -n_rows) && (index < n_rows));
                                          }),
+      std::out_of_range,
       "Scatter map index out of bounds");
   }
 

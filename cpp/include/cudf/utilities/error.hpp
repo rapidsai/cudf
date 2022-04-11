@@ -64,21 +64,38 @@ struct cuda_error : public std::runtime_error {
  * @brief Macro for checking (pre-)conditions that throws an exception when
  * a condition is violated.
  *
+ * Defaults to throwing `cudf::logic_error`, but a custom exception may also be
+ * specified.
+ *
  * Example usage:
  *
  * @code
- * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
+ * // throws cudf::logic_error
+ * CUDF_EXPECTS(lhs.type() != rhs.type(), "Column type mismatch");
+ *
+ * // throws std::invalid_argument
+ * CUDF_EXPECTS(not cudf::is_nested(child_col.type()), std::invalid_argument,
+ *      "Nested types are not supported.");
  * @endcode
  *
- * @param[in] cond Expression that evaluates to true or false
- * @param[in] reason String literal description of the reason that cond is
- * expected to be true
- * @throw cudf::logic_error if the condition evaluates to false.
+ * @param[in] _condition Expression that evaluates to true or false
+ * @param[in] _expection_type The exception type to throw; must inherit
+ *     `std::exception`. If not specified (i.e. if only two macro
+ *     arguments are provided), defaults to `cudf::logic_error`
+ * @param[in] _what  String literal description of why the exception was
+ *     thrown, i.e. why `_condition` was expected to be true.
+ * @throw `_exception_type` if the condition evaluates to 0 (false).
  */
-#define CUDF_EXPECTS(cond, reason)                                  \
-  (!!(cond)) ? static_cast<void>(0)                                 \
-             : throw cudf::logic_error("cuDF failure at: " __FILE__ \
-                                       ":" CUDF_STRINGIFY(__LINE__) ": " reason)
+#define CUDF_EXPECTS(...)                                             \
+  GET_CUDF_EXPECTS_MACRO(__VA_ARGS__, CUDF_EXPECTS_3, CUDF_EXPECTS_2) \
+  (__VA_ARGS__)
+#define GET_CUDF_EXPECTS_MACRO(_1, _2, _3, NAME, ...) NAME
+#define CUDF_EXPECTS_3(_condition, _exception_type, _reason)               \
+  (!!(_condition)) ? static_cast<void>(0) : throw _exception_type          \
+  {                                                                        \
+    "cuDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _reason \
+  }
+#define CUDF_EXPECTS_2(_condition, _reason) CUDF_EXPECTS_3(_condition, cudf::logic_error, _reason)
 
 /**
  * @brief Indicates that an erroneous code path has been taken.
