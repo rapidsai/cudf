@@ -200,7 +200,11 @@ class device_row_comparator {
           return cuda::std::make_pair(state, depth);
         }
 
-        // Structs have been modified to only have 1 child when using this.
+        if (lcol.num_child_columns() == 0) {
+          return cuda::std::make_pair(weak_ordering::EQUIVALENT, depth);
+        }
+
+        // Non-empty structs have been modified to only have 1 child when using this.
         lcol = lcol.children()[0];
         rcol = rcol.children()[0];
         ++depth;
