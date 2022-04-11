@@ -394,6 +394,9 @@ TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
 // Position of the min/max: start of segment, end of segment
 // Include null, exclude null
 
+#undef XXX
+#define XXX ""  // null placeholder
+
 struct SegmentedReductionStringTest : public cudf::test::BaseFixture {
 };
 
