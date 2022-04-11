@@ -30,7 +30,7 @@ class ASTOperator(Enum):
     PYMOD = libcudf_ast.ast_operator.PYMOD
     POW = libcudf_ast.ast_operator.POW
     EQUAL = libcudf_ast.ast_operator.EQUAL
-    # NULL_EQUAL = libcudf_ast.ast_operator.NULL_EQUAL
+    NULL_EQUAL = libcudf_ast.ast_operator.NULL_EQUAL
     NOT_EQUAL = libcudf_ast.ast_operator.NOT_EQUAL
     LESS = libcudf_ast.ast_operator.LESS
     GREATER = libcudf_ast.ast_operator.GREATER
@@ -40,9 +40,9 @@ class ASTOperator(Enum):
     BITWISE_OR = libcudf_ast.ast_operator.BITWISE_OR
     BITWISE_XOR = libcudf_ast.ast_operator.BITWISE_XOR
     LOGICAL_AND = libcudf_ast.ast_operator.LOGICAL_AND
-    # NULL_LOGICAL_AND = libcudf_ast.ast_operator.NULL_LOGICAL_AND
+    NULL_LOGICAL_AND = libcudf_ast.ast_operator.NULL_LOGICAL_AND
     LOGICAL_OR = libcudf_ast.ast_operator.LOGICAL_OR
-    # NULL_LOGICAL_OR = libcudf_ast.ast_operator.NULL_LOGICAL_OR
+    NULL_LOGICAL_OR = libcudf_ast.ast_operator.NULL_LOGICAL_OR
     # Unary operators
     IDENTITY = libcudf_ast.ast_operator.IDENTITY
     SIN = libcudf_ast.ast_operator.SIN
@@ -113,16 +113,13 @@ cdef class Operation(Expression):
 # This dictionary encodes the mapping from Python AST operators to their cudf
 # counterparts.
 python_cudf_operator_map = {
-    # TODO: Mapping TBD for commented out operators.
     # Binary operators
     ast.Add: ASTOperator.ADD,
     ast.Sub: ASTOperator.SUB,
     ast.Mult: ASTOperator.MUL,
     ast.Div: ASTOperator.DIV,
-    # ast.True: ASTOperator.TRUE_DIV,
     ast.FloorDiv: ASTOperator.FLOOR_DIV,
     ast.Mod: ASTOperator.PYMOD,
-    # ast.Pymod: ASTOperator.PYMOD,
     ast.Pow: ASTOperator.POW,
     ast.Eq: ASTOperator.EQUAL,
     ast.NotEq: ASTOperator.NOT_EQUAL,
@@ -175,7 +172,7 @@ python_cudf_function_map = {
     'sqrt': ASTOperator.SQRT,
     'abs': ASTOperator.ABS,
 
-    # TODO: Operators supported by libcudf with no Python analog.
+    # TODO: Operators supported by libcudf with no Python function analog.
     # ast.rint: ASTOperator.RINT,
     # ast.cbrt: ASTOperator.CBRT,
     # ast.ceil: ASTOperator.CEIL,
@@ -278,7 +275,7 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
             nodes.append(inner_ops[-1])
 
         # If we have more than one comparator, we need to link them
-        # together with a bunch of LOGICAL_AND operators.
+        # together with LOGICAL_AND operators.
         if multiple_ops:
             op = ASTOperator.LOGICAL_AND
 
