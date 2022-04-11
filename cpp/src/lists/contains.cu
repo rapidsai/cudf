@@ -132,6 +132,8 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
                         OutputPairIter const& out_iters,
                         rmm::cuda_stream_view stream) const
   {
+    auto const key_accessor = cudf::detail::scalar_value_accessor<Type>{search_key};
+
     thrust::tabulate(
       rmm::exec_policy(stream),
       out_iters,
@@ -141,14 +143,15 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
        d_offsets,
        has_null_lists,
        has_null_elements,
-       search_key,
+       key_accessor,
        search_key_is_null,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
         if (search_key_is_null || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
           return {NOT_FOUND_IDX, false};
         }
 
-        return {search_list(d_child, d_offsets, list_idx, has_null_elements, search_key), true};
+        return {search_list(d_child, d_offsets, list_idx, has_null_elements, key_accessor(0)),
+                true};
       });
   }
 
@@ -161,7 +164,7 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
                         size_type const* d_offsets,
                         bool has_null_lists,
                         bool has_null_elements,
-                        column_device_view const& search_keys,
+                        column_device_view const& d_search_keys,
                         bool search_keys_have_nulls,
                         OutputPairIter const& out_iters,
                         rmm::cuda_stream_view stream) const
@@ -175,15 +178,15 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
        d_offsets,
        has_null_lists,
        has_null_elements,
-       search_keys,
+       d_search_keys,
        search_keys_have_nulls,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
-        if (search_keys_have_nulls && search_keys.is_null_nocheck(list_idx)) {
+        if (search_keys_have_nulls && d_search_keys.is_null_nocheck(list_idx)) {
           return {NOT_FOUND_IDX, false};
         }
         if (has_null_lists && d_lists.is_null_nocheck(list_idx)) { return {NOT_FOUND_IDX, false}; }
 
-        auto const key = search_keys.template element<Type>(list_idx);
+        auto const key = d_search_keys.template element<Type>(list_idx);
         return {search_list(d_child, d_offsets, list_idx, has_null_elements, key), true};
       });
   }
