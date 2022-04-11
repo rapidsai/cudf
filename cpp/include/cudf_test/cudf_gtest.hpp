@@ -117,8 +117,14 @@ struct TypeList<Types<TYPES...>> {
 #define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
   EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
 
-#define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
-  EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
+#define CUDART_EXPECT_THROW_MESSAGE(x, msg) \
+  EXPECT_THROW_MESSAGE(x, cudf::cudart_error, "CUDA error encountered at:", msg)
+
+#define STICKY_CUDA_EXPECT_THROW_MESSAGE(x, msg) \
+  EXPECT_THROW_MESSAGE(x, cudf::sticky_cuda_error, "Sticky CUDA error encountered at:", msg)
+
+#define STICKY_CUDA_EXPECT_THROW_MESSAGE_1(x, msg) \
+  EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "Sticky CUDA error encountered at:", msg)
 
 /**
  * @brief test macro to be expected as no exception.
