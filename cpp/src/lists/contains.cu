@@ -33,6 +33,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 
 namespace cudf {
@@ -57,19 +58,23 @@ auto constexpr is_supported_type()
 template <duplicate_find_option find_option>
 auto __device__ list_begin(size_type const* d_offsets, size_type list_idx)
 {
-  return find_option == duplicate_find_option::FIND_FIRST
-           ? thrust::make_counting_iterator<size_type>(d_offsets[list_idx])
-           : thrust::make_reverse_iterator(
-               thrust::make_counting_iterator<size_type>(d_offsets[list_idx + 1]));
+  if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
+    return thrust::make_counting_iterator<size_type>(d_offsets[list_idx]);
+  } else {
+    return thrust::make_reverse_iterator(
+      thrust::make_counting_iterator<size_type>(d_offsets[list_idx + 1]));
+  }
 }
 
 template <duplicate_find_option find_option>
 auto __device__ list_end(size_type const* d_offsets, size_type list_idx)
 {
-  return find_option == duplicate_find_option::FIND_FIRST
-           ? thrust::make_counting_iterator<size_type>(d_offsets[list_idx + 1])
-           : thrust::make_reverse_iterator(
-               thrust::make_counting_iterator<size_type>(d_offsets[list_idx]));
+  if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
+    return thrust::make_counting_iterator<size_type>(d_offsets[list_idx + 1]);
+  } else {
+    return thrust::make_reverse_iterator(
+      thrust::make_counting_iterator<size_type>(d_offsets[list_idx]));
+  }
 }
 
 template <duplicate_find_option find_option, typename Iterator>
