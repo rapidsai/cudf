@@ -1179,6 +1179,19 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                     codec_stats{parquet::SNAPPY, 0, 0},
                                     codec_stats{parquet::BROTLI, 0, 0}};
 
+  auto is_codec_supported = [&codecs](int8_t codec) {
+    if (codec == parquet::UNCOMPRESSED) return true;
+    return std::find_if(codecs.begin(), codecs.end(), [codec](auto& cstats) {
+             return codec == cstats.compression_type;
+           }) != codecs.end();
+  };
+  CUDF_EXPECTS(std::all_of(chunks.begin(),
+                           chunks.end(),
+                           [&is_codec_supported](auto const& chunk) {
+                             return is_codec_supported(chunk.codec);
+                           }),
+               "Unsupported compression type");
+
   for (auto& codec : codecs) {
     for_each_codec_page(codec.compression_type, [&](size_t page) {
       auto page_uncomp_size = pages[page].uncompressed_page_size;
