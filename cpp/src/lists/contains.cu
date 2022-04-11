@@ -48,6 +48,12 @@ auto constexpr is_supported_type_no_struct()
          std::is_same_v<Type, cudf::string_view>;
 }
 
+template <typename Type>
+auto constexpr is_supported_type()
+{
+  return is_supported_type_no_struct<Type>() && cudf::is_struct_type<Type>();
+}
+
 template <duplicate_find_option find_option>
 auto __device__ list_begin(size_type const* d_offsets, size_type list_idx)
 {
@@ -82,7 +88,7 @@ struct search_functor {
   template <typename... Args>
   void operator()(Args&&...)
   {
-    CUDF_FAIL("Unsupported type in search index functor.");
+    CUDF_FAIL("Unsupported type in `search_functor`.");
   }
 };
 
@@ -95,11 +101,11 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_type_no_s
    * @brief Search index of a given scalar in a list defined by offsets pointing to rows of the
    * child column of the original lists column.
    */
-  __device__ size_type search_list(column_device_view const& d_child,
-                                   size_type const* d_offsets,
-                                   size_type list_idx,
-                                   bool has_null_elements,
-                                   Type const& search_key)
+  static __device__ size_type search_list(column_device_view const& d_child,
+                                          size_type const* d_offsets,
+                                          size_type list_idx,
+                                          bool has_null_elements,
+                                          Type const& search_key)
   {
     auto const begin = list_begin<find_option>(d_offsets, list_idx);
     auto const end   = list_end<find_option>(d_offsets, list_idx);
@@ -124,7 +130,7 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_type_no_s
                         cudf::scalar const& search_key,
                         bool search_key_is_null,
                         OutputPairIter const& out_iters,
-                        rmm::cuda_stream_view stream)
+                        rmm::cuda_stream_view stream) const
   {
     thrust::tabulate(
       rmm::exec_policy(stream),
@@ -158,7 +164,7 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_type_no_s
                         column_device_view const& search_keys,
                         bool search_keys_have_nulls,
                         OutputPairIter const& out_iters,
-                        rmm::cuda_stream_view stream)
+                        rmm::cuda_stream_view stream) const
   {
     thrust::tabulate(
       rmm::exec_policy(stream),
@@ -187,8 +193,14 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_type_no_s
  * @brief TBA
  */
 struct dispatch_index_of {
+  template <typename Type, typename... Args>
+  std::enable_if_t<!is_supported_type<Type>(), std::unique_ptr<column>> operator()(Args&&...) const
+  {
+    CUDF_FAIL("Unsupported type in `dispatch_index_of` functor.");
+  }
+
   template <typename Type, typename SearchKeyType>
-  std::enable_if_t<is_supported_type_no_struct<Type>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<is_supported_type<Type>(), std::unique_ptr<column>> operator()(
     lists_column_view const& lists,
     SearchKeyType const& search_keys,
     bool search_keys_have_nulls,
@@ -226,26 +238,23 @@ struct dispatch_index_of {
     auto const out_iters = thrust::make_zip_iterator(
       out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
-    auto const do_search = [&](auto const& searcher) {
-      searcher.search_all_lists(*d_lists_ptr,
-                                *d_child_ptr,
-                                lists.offsets_begin(),
-                                lists.has_nulls(),
-                                child.has_nulls(),
-                                search_keys,
-                                search_keys_have_nulls,
-                                out_iters,
-                                stream);
-    };
-
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
       //
     } else {  // not struct type
-              //      search_functor<Type, duplicate_find
+      auto const do_search = [&](auto const& searcher) {
+        auto const d_child_ptr = column_device_view::create(child, stream);
+        searcher.search_all_lists(*d_lists_ptr,
+                                  *d_child_ptr,
+                                  lists.offsets_begin(),
+                                  lists.has_nulls(),
+                                  child.has_nulls(),
+                                  search_keys,
+                                  search_keys_have_nulls,
+                                  out_iters,
+                                  stream);
+      };
 
-      auto const d_child_ptr = column_device_view::create(child, stream);
-
-      if (search_keys_have_nulls) {
+      if (find_option == duplicate_find_option::FIND_FIRST) {
         auto const searcher = search_functor<Type, duplicate_find_option::FIND_FIRST>{};
         do_search(searcher);
       } else {
@@ -350,7 +359,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
                                        rmm::mr::device_memory_resource* mr)
 {
   auto const num_rows = lists.size();
-  auto const d_lists  = column_device_view::create(input.parent());
+  auto const d_lists  = column_device_view::create(lists.parent());
   auto has_nulls_output =
     make_numeric_column(data_type{type_id::BOOL8}, num_rows, mask_state::UNALLOCATED, stream, mr);
   auto const output_begin = has_nulls_output->mutable_view().template begin<bool>();
