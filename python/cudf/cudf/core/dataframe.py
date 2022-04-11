@@ -6274,6 +6274,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
               booleans.
             * String columns are not yet supported.
             * Only numerical literals are supported.
+            * Operators generally will not cast automatically. Users are
+              responsible for casting columns to suitable types before
+              evaluating a function.
 
         Examples
         --------

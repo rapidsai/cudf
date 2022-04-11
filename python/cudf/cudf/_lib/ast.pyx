@@ -230,22 +230,26 @@ cdef parse_expression(root, tuple col_names, list stack, list nodes):
         stack.append(ColumnReference(col_id))
     # Note: in Python > 3.7 ast.Num is a subclass of ast.Constant. We may need
     # to generalize this code eventually if that inheritance is removed.
-    elif isinstance(root, ast.Num):
-        stack.append(Literal(root.n))
+    if isinstance(root, ast.Constant):
+        if isinstance(root, ast.Num):
+            stack.append(Literal(root.n))
+        else:
+            raise ValueError(
+                f"Unsupported literal {repr(root.value)} of type "
+                "{type(root.value)}"
+            )
     elif isinstance(root, ast.UnaryOp):
-        # Faster to directly parse the operand and skip the op.
         parse_expression(root.operand, col_names, stack, nodes)
-        op = python_cudf_operator_map[type(root.op)]
         nodes.append(stack.pop())
+        op = python_cudf_operator_map[type(root.op)]
         stack.append(Operation(op, nodes[-1]))
     elif isinstance(root, ast.BinOp):
-        op = python_cudf_operator_map[type(root.op)]
-
         parse_expression(root.left, col_names, stack, nodes)
         parse_expression(root.right, col_names, stack, nodes)
+        nodes.append(stack.pop())
+        nodes.append(stack.pop())
 
-        nodes.append(stack.pop())
-        nodes.append(stack.pop())
+        op = python_cudf_operator_map[type(root.op)]
         stack.append(Operation(op, nodes[-1], nodes[-2]))
 
     # TODO: Whether And/Or and BitAnd/BitOr actually correspond to
@@ -275,7 +279,8 @@ cdef parse_expression(root, tuple col_names, list stack, list nodes):
 
             op = python_cudf_operator_map[type(op)]
             inner_ops.append(Operation(op, nodes[-1], nodes[-2]))
-            nodes.append(inner_ops[-1])
+
+        nodes.extend(inner_ops)
 
         # If we have more than one comparator, we need to link them
         # together with LOGICAL_AND operators.
