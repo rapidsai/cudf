@@ -74,9 +74,11 @@ class TableReference(Enum):
     RIGHT = libcudf_ast.table_reference.RIGHT
 
 
+# Note that this function only currently supports numeric literals. libcudf
+# expressions don't really support other types yet though, so this isn't
+# restrictive at the moment.
 cdef class Literal(Expression):
     def __cinit__(self, value):
-        # TODO: Generalize this to other types of literals.
         cdef int val = value
         self.c_scalar = make_unique[numeric_scalar[int64_t]](val, True)
         self.c_obj = <unique_ptr[libcudf_ast.expression]> make_unique[
@@ -128,16 +130,19 @@ python_cudf_operator_map = {
     ast.Gt: ASTOperator.GREATER,
     ast.LtE: ASTOperator.LESS_EQUAL,
     ast.GtE: ASTOperator.GREATER_EQUAL,
+    ast.BitXor: ASTOperator.BITWISE_XOR,
+    # TODO: The mapping of logical/bitwise operators here is inconsistent with
+    # pandas. In pandas, Both `BitAnd` and `And` map to
+    # `ASTOperator.LOGICAL_AND` for booleans, while they map to
+    # `ASTOperator.BITWISE_AND` for integers. However, there is no good way to
+    # encode this at present because expressions can be arbitrarily nested so
+    # we won't know the dtype of the input without inserting a much more
+    # complex traversal of the expression tree to determine the output types at
+    # each node. For now, we'll rely on users to use the appropriate operator.
     ast.BitAnd: ASTOperator.BITWISE_AND,
     ast.BitOr: ASTOperator.BITWISE_OR,
-    ast.BitXor: ASTOperator.BITWISE_XOR,
-    # TODO: These maps are wrong, but for pandas compatibility they actually
-    # need to be dtype-specific so this is just for testing the AST parsing
-    # logic. Eventually the lookup for these will need to be updated.
-    ast.And: ASTOperator.BITWISE_AND,
-    ast.Or: ASTOperator.BITWISE_OR,
-    # ast.And: ASTOperator.LOGICAL_AND,
-    # ast.Or: ASTOperator.LOGICAL_OR,
+    ast.And: ASTOperator.LOGICAL_AND,
+    ast.Or: ASTOperator.LOGICAL_OR,
 
     # Unary operators
     # ast.Identity: ASTOperator.IDENTITY,
@@ -335,7 +340,7 @@ def evaluate_expression(object df, Expression expr):
                 <libcudf_ast.expression &> dereference(expr.c_obj.get())
             )
         )
-    return {'None': Column.from_unique_ptr(move(col))}
+    return {None: Column.from_unique_ptr(move(col))}
 
 
 def make_and_evaluate_expression(df, expr):

@@ -6264,16 +6264,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ndarray, scalar, pandas object, or None
             The result of the evaluation or None if ``inplace=True``.
 
-        See Also
-        --------
-        DataFrame.query : Evaluates a boolean expression to query the columns
-            of a frame.
-
         Notes
         -----
-        For more details see the API documentation for :func:`~eval`.
-        For detailed examples see :ref:`enhancing performance with eval
-        <enhancingperf.eval>`.
+        Difference from pandas:
+            * The inplace argument or additional kwargs are not supported.
+            * Bitwise and logical operators are not dtype-dependent.
+              Specifically, `&` must be used for bitwise operators on integers,
+              not `and`, which is specifically for the logical and between
+              booleans.
+            * String columns are not yet supported.
+            * Only numerical literals are supported.
 
         Examples
         --------
@@ -6310,32 +6310,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  3   6
         3  4   4
         4  5   2
-
-        Use ``inplace=True`` to modify the original DataFrame.
-
-        >>> df.eval('C = A + B', inplace=True)
-        >>> df
-        A   B   C
-        0  1  10  11
-        1  2   8  10
-        2  3   6   9
-        3  4   4   8
-        4  5   2   7
-
-        Multiple columns can be assigned to using multi-line expressions:
-
-        >>> df.eval(
-        ...     '''
-        ... C = A + B
-        ... D = A - B
-        ... '''
-        ... )
-        A   B   C  D
-        0  1  10  11 -9
-        1  2   8  10 -6
-        2  3   6   9 -3
-        3  4   4   8  0
-        4  5   2   7  3
         """
         return Series._from_data(
             libcudf.ast.make_and_evaluate_expression(self, expr)

@@ -9293,8 +9293,8 @@ def df_eval():
         ("a > b", int),
         ("a > b > c", int),
         ("a > b < c", int),
-        ("a and b", int),
-        # ("a and b or c", int),
+        ("a & b", int),
+        # ("a & b | c", int),
         ("sin(a)", float),
     ],
 )
