@@ -9285,17 +9285,22 @@ def df_eval():
     )
 
 
+# Note that for now expressions do not automatically handle casting, so inputs
+# need to be casted appropriately
 @pytest.mark.parametrize(
     "expr, dtype",
     [
         ("a + b", int),
+        ("a / b", float),
         ("a * b", int),
         ("a > b", int),
         ("a > b > c", int),
         ("a > b < c", int),
         ("a & b", int),
-        # ("a & b | c", int),
+        ("a & b | c", int),
         ("sin(a)", float),
+        ("exp(sin(abs(a)))", float),
+        ("(a + b) - (c * d)", int),
     ],
 )
 def test_dataframe_eval(df_eval, expr, dtype):

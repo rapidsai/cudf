@@ -223,110 +223,91 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
     # but compatible dtypes (e.g. adding int to float).
     # Base cases: Name
     if isinstance(root, ast.Name):
-        stack.append(ColumnReference(col_names.index(root.id) + 1))
+        try:
+            col_id = col_names.index(root.id) + 1
+        except ValueError:
+            raise ValueError(f"Unknown column name {root.id}")
+        stack.append(ColumnReference(col_id))
     # Note: in Python > 3.7 ast.Num is a subclass of ast.Constant. We may need
     # to generalize this code eventually if that inheritance is removed.
-    elif isinstance(root, ast.Constant):
+    elif isinstance(root, ast.Num):
+        stack.append(Literal(root.n))
+    elif isinstance(root, ast.UnaryOp):
+        # Faster to directly parse the operand and skip the op.
+        ast_traverse(root.operand, col_names, stack, nodes)
+        op = python_cudf_operator_map[type(root.op)]
+        nodes.append(stack.pop())
+        stack.append(Operation(op, nodes[-1]))
+    elif isinstance(root, ast.BinOp):
+        op = python_cudf_operator_map[type(root.op)]
+
+        ast_traverse(root.left, col_names, stack, nodes)
+        ast_traverse(root.right, col_names, stack, nodes)
+
+        nodes.append(stack.pop())
+        nodes.append(stack.pop())
+        stack.append(Operation(op, nodes[-1], nodes[-2]))
+
+    # TODO: Whether And/Or and BitAnd/BitOr actually correspond to
+    # logical or bitwise operators depends on the data types that they
+    # are applied to. We'll need to add logic to map to that.
+    elif isinstance(root, (ast.BoolOp, ast.Compare)):
+        if isinstance(root, ast.BoolOp):
+            operators = repeat(root.op)
+            operands = zip(root.values[:-1], root.values[1:])
+            multiple_ops = len(root.values) > 2
+        else:
+            operators = root.ops
+            operands = (root.left, *root.comparators)
+            multiple_ops = len(operands) > 2
+            operands = zip(operands[:-1], operands[1:])
+
+        inner_ops = []
+        for op, (left, right) in zip(operators, operands):
+            # Note that this will lead to duplicate nodes, e.g. if
+            # the comparison is `a < b < c` that will be encoded as
+            # `a < b and b < c`.
+            ast_traverse(left, col_names, stack, nodes)
+            ast_traverse(right, col_names, stack, nodes)
+
+            nodes.append(stack.pop())
+            nodes.append(stack.pop())
+
+            op = python_cudf_operator_map[type(op)]
+            inner_ops.append(Operation(op, nodes[-1], nodes[-2]))
+            nodes.append(inner_ops[-1])
+
+        # If we have more than one comparator, we need to link them
+        # together with a bunch of LOGICAL_AND operators.
+        if multiple_ops:
+            op = ASTOperator.LOGICAL_AND
+
+            def _combine_compare_ops(left, right):
+                nodes.append(Operation(op, left, right))
+                return nodes[-1]
+
+            functools.reduce(_combine_compare_ops, inner_ops)
+
+        stack.append(nodes[-1])
+    elif isinstance(root, ast.Call):
         try:
-            stack.append(Literal(root.n))
-        except TypeError:
+            op = python_cudf_function_map[root.func.id]
+        except KeyError:
+            raise ValueError(f"Unsupported function {root.func}.")
+        # Assuming only unary functions are supported, which is checked above.
+        if len(root.args) != 1 or root.keywords:
             raise ValueError(
-                f"Only numeric constants are supported, received constant "
-                f"{repr(root.value)} of type {type(root.value)}."
+                f"Function {root.func} only accepts one positional "
+                "argument."
             )
-    else:
-        # Iterating over `_fields` is _much_ faster than calling
-        # `iter_child_nodes`. That may not matter for practical data sizes
-        # though, so we'll need to benchmark.
-        # for value in ast.iter_child_nodes(root):
-        for field in root._fields:
-            # Note that since the fields of `value` are ordered, in some cases
-            # (e.g. `ast.BinOp`) a single call to `ast_traverse(value, ...)`
-            # would have the same effect as explicitly invoking it on the
-            # fields (e.g. `left` and `right` for `ast.BinOp`). However, this
-            # relies on the fields and their ordering not changing in future
-            # Python versions, and that we won't change the parsing logic for
-            # e.g. the operators, so it's best to be explicit in all the
-            # branches below.
-            value = getattr(root, field)
-            if isinstance(value, ast.UnaryOp):
-                # Faster to directly parse the operand and skip the op.
-                ast_traverse(value.operand, col_names, stack, nodes)
-                op = python_cudf_operator_map[type(value.op)]
-                nodes.append(stack.pop())
-                stack.append(Operation(op, nodes[-1]))
-            elif isinstance(value, ast.BinOp):
-                op = python_cudf_operator_map[type(value.op)]
+        ast_traverse(root.args[0], col_names, stack, nodes)
 
-                ast_traverse(value.left, col_names, stack, nodes)
-                ast_traverse(value.right, col_names, stack, nodes)
-
-                nodes.append(stack.pop())
-                nodes.append(stack.pop())
-                stack.append(Operation(op, nodes[-1], nodes[-2]))
-
-            # TODO: Whether And/Or and BitAnd/BitOr actually correspond to
-            # logical or bitwise operators depends on the data types that they
-            # are applied to. We'll need to add logic to map to that.
-            elif isinstance(value, (ast.BoolOp, ast.Compare)):
-                if isinstance(value, ast.BoolOp):
-                    operators = repeat(value.op)
-                    operands = zip(value.values[:-1], value.values[1:])
-                    multiple_ops = len(value.values) > 2
-                else:
-                    operators = value.ops
-                    operands = (value.left, *value.comparators)
-                    multiple_ops = len(operands) > 2
-                    operands = zip(operands[:-1], operands[1:])
-
-                inner_ops = []
-                for op, (left, right) in zip(operators, operands):
-                    # Note that this will lead to duplicate nodes, e.g. if
-                    # the comparison is `a < b < c` that will be encoded as
-                    # `a < b and b < c`.
-                    ast_traverse(left, col_names, stack, nodes)
-                    ast_traverse(right, col_names, stack, nodes)
-
-                    nodes.append(stack.pop())
-                    nodes.append(stack.pop())
-
-                    op = python_cudf_operator_map[type(op)]
-                    inner_ops.append(Operation(op, nodes[-1], nodes[-2]))
-                    nodes.append(inner_ops[-1])
-
-                # If we have more than one comparator, we need to link them
-                # together with a bunch of LOGICAL_AND operators.
-                if multiple_ops:
-                    op = ASTOperator.LOGICAL_AND
-
-                    def _combine_compare_ops(left, right):
-                        nodes.append(Operation(op, left, right))
-                        return nodes[-1]
-
-                    functools.reduce(_combine_compare_ops, inner_ops)
-
-                stack.append(nodes[-1])
-            elif isinstance(value, ast.Call):
-                if len(value.args) != 1 or value.keywords:
-                    raise ValueError(
-                        f"Function {value.func} only accepts one "
-                        "positional argument."
-                    )
-                try:
-                    op = python_cudf_function_map[value.func.id]
-                except KeyError:
-                    raise ValueError(f"Unsupported function {value.func}.")
-                # Assuming only unary functions are supported (checked above).
-                ast_traverse(value.args[0], col_names, stack, nodes)
-
-                nodes.append(stack.pop())
-                stack.append(Operation(op, nodes[-1]))
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, ast.AST):
-                        ast_traverse(item, col_names, stack, nodes)
-            elif isinstance(value, ast.AST):
-                ast_traverse(value, col_names, stack, nodes)
+        nodes.append(stack.pop())
+        stack.append(Operation(op, nodes[-1]))
+    elif isinstance(root, list):
+        for item in root:
+            if isinstance(item, ast.AST):
+                ast_traverse(item, col_names, stack, nodes)
 
 
 def evaluate_expression(object df, Expression expr):
@@ -349,6 +330,6 @@ def make_and_evaluate_expression(df, expr):
     # nodes created (the owning ColumnReferences and Literals) remain in scope.
     stack = []
     nodes = []
-    ast_traverse(ast.parse(expr), df._column_names, stack, nodes)
+    ast_traverse(ast.parse(expr).body[0].value, df._column_names, stack, nodes)
     # At the end, all the stack contains is the expression to evaluate.
     return evaluate_expression(df, stack[-1])
