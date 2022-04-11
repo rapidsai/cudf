@@ -27,6 +27,7 @@ from cudf.core.udf.typing import (
     _string_view_find,
     _string_view_rfind,
     _string_view_startswith,
+    _string_view_upper,
     string_view,
 )
 
@@ -583,3 +584,35 @@ def masked_stringview_rfind(context, builder, sig, args):
         (st_ptr, tgt_ptr),
     )
     return result
+
+def call_string_view_upper(st, tgt):
+    return _string_view_upper(st, tgt)
+
+@cuda_lower(
+    "MaskedType.upper", MaskedType(string_view), MaskedType(string_view)
+)
+def masked_stringview_upper(context, builder, sig, args):
+    maskedty = sig.args[0]
+    st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
+    ret = cgutils.create_struct_proxy(maskedty)(context, builder)
+
+    st_ptr = builder.alloca(st.value.type)
+    tgt_ptr = builder.alloca(st.value.type)
+
+    builder.store(st.value, st_ptr)
+
+    result = context.compile_internal(
+        builder,
+        call_string_view_upper,
+        nb_signature(
+            types.int32, types.CPointer(string_view), types.CPointer(string_view)
+        ),
+        (st_ptr, tgt_ptr),
+    )
+
+    #builder.store(ret.value, tgt_ptr)
+
+    builder.store(ret.value, tgt_ptr)
+    ret.valid = st.valid
+
+    return ret._getvalue()

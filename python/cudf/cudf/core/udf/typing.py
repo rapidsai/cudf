@@ -501,6 +501,13 @@ class MaskedStringRFind(AbstractTemplate):
             types.int32, MaskedType(string_view), recvr=self.this
         )
 
+class MaskedStringUpper(AbstractTemplate):
+    key = "MaskedType.upper"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(string_view), MaskedType(string_view),  recvr=self.this
+        )
 
 @cuda_decl_registry.register_attr
 class MaskedStringAttrs(AttributeTemplate):
@@ -517,10 +524,19 @@ class MaskedStringAttrs(AttributeTemplate):
         )
 
     def resolve_find(self, mod):
-        return types.BoundFunction(MaskedStringFind, MaskedType(string_view))
+        return types.BoundFunction(
+            MaskedStringFind, MaskedType(string_view)
+        )
 
     def resolve_rfind(self, mod):
-        return types.BoundFunction(MaskedStringRFind, MaskedType(string_view))
+        return types.BoundFunction(
+            MaskedStringRFind, MaskedType(string_view)
+        )
+
+    def resolve_upper(self, mod):
+        return types.BoundFunction(
+            MaskedStringUpper, MaskedType(string_view)
+        )
 
     def resolve_value(self, mod):
         return string_view
@@ -547,5 +563,10 @@ _string_view_find = cuda.declare_device(
 )
 _string_view_rfind = cuda.declare_device(
     "rfind",
+    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+)
+
+_string_view_upper = cuda.declare_device(
+    "upper",
     types.int32(types.CPointer(string_view), types.CPointer(string_view)),
 )
