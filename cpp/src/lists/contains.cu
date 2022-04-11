@@ -132,6 +132,9 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_type_no_s
       out_iters + input.size(),
       [input,
        input_child,
+       list_offsets,
+       has_null_lists,
+       has_null_elements,
        search_key,
        search_key_is_valid,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
@@ -164,13 +167,16 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_type_no_s
       out_iters + input.size(),
       [input,
        input_child,
+       list_offsets,
+       has_null_lists,
+       has_null_elements,
        search_keys,
        search_keys_have_nulls,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
         if (search_keys_have_nulls && search_keys.is_null_nocheck(list_idx)) {
           return {NOT_FOUND_IDX, false};
         }
-        if (has_null_lists && input.is_null(list_idx)) { return {NOT_FOUND_IDX, false}; }
+        if (has_null_lists && input.is_null_nocheck(list_idx)) { return {NOT_FOUND_IDX, false}; }
 
         auto const key = search_keys.template element<Type>(list_idx);
         return {search_list(input_child, list_offsets, list_idx, has_null_elements, key), true};
