@@ -17,7 +17,6 @@ from cudf._lib.lists import (
     drop_list_duplicates,
     extract_element_column,
     extract_element_scalar,
-    extract_element,
     index_of,
     sort_lists,
 )
