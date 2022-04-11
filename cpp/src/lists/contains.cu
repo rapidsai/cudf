@@ -35,8 +35,6 @@
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/logical.h>
 
-#include <type_traits>
-
 namespace cudf {
 namespace lists {
 
@@ -48,12 +46,6 @@ auto constexpr is_supported_type_no_struct()
 {
   return cudf::is_numeric<Type>() || cudf::is_chrono<Type>() || cudf::is_fixed_point<Type>() ||
          std::is_same_v<Type, cudf::string_view>;
-}
-
-template <typename Type>
-auto constexpr is_struct_type()
-{
-  return std::is_same_v<Type, cudf::struct_view>;
 }
 
 template <duplicate_find_option find_option>
