@@ -42,7 +42,7 @@ namespace {
 auto constexpr NOT_FOUND_IDX = size_type{-1};
 
 template <typename Type>
-auto constexpr is_supported_type_no_struct()
+auto constexpr is_supported_non_nested_type()
 {
   return cudf::is_numeric<Type>() || cudf::is_chrono<Type>() || cudf::is_fixed_point<Type>() ||
          std::is_same_v<Type, cudf::string_view>;
@@ -51,7 +51,7 @@ auto constexpr is_supported_type_no_struct()
 template <typename Type>
 auto constexpr is_supported_type()
 {
-  return is_supported_type_no_struct<Type>() && cudf::is_struct_type<Type>();
+  return is_supported_non_nested_type<Type>() || cudf::is_struct_type<Type>();
 }
 
 template <duplicate_find_option find_option>
@@ -96,7 +96,7 @@ struct search_functor {
  * @brief The search_functor specialized for non-struct types.
  */
 template <typename Type, duplicate_find_option find_option>
-struct search_functor<Type, find_option, std::enable_if_t<is_supported_type_no_struct<Type>()>> {
+struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_nested_type<Type>()>> {
   /**
    * @brief Search index of a given scalar in a list defined by offsets pointing to rows of the
    * child column of the original lists column.
