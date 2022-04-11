@@ -34,7 +34,7 @@ __global__ void __launch_bounds__(block_size, 1)
   auto chunk = chunks[blockIdx.x];
   auto t     = threadIdx.x;
   // fut: Now that per-chunk dict is same size as ck.num_values, try to not use one block per chunk
-  for (size_t i = 0; i < chunk.dict_map_size; i += block_size) {
+  for (size_type i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
       new (&chunk.dict_map_slots[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
       new (&chunk.dict_map_slots[t + i].second) map_type::atomic_mapped_type{VALUE_SENTINEL};
