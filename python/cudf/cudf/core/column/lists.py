@@ -2,7 +2,7 @@
 
 import pickle
 from functools import cached_property
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 import numpy as np
 import pyarrow as pa
@@ -16,6 +16,7 @@ from cudf._lib.lists import (
     count_elements,
     drop_list_duplicates,
     extract_element,
+    index_of,
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
@@ -337,16 +338,20 @@ class ListMethods(ColumnMethods):
             )
         super().__init__(parent=parent)
 
-    def get(self, index: int) -> ParentType:
+    def get(
+        self, index: int, default: Optional[ScalarLike] = None
+    ) -> ParentType:
         """
-        Extract element at the given index from each component
+        Extract element at the given index from each list.
 
-        Extract element from lists, tuples, or strings in
-        each element in the Series/Index.
+        If the index is out of bounds for any list,
+        return <NA> or, if provided, ``default``.
+        Thus, this method never raises an ``IndexError``.
 
         Parameters
         ----------
         index : int
+        default : scalar, optional
 
         Returns
         -------
@@ -360,14 +365,37 @@ class ListMethods(ColumnMethods):
         1    5
         2    6
         dtype: int64
+
+        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.get(2)
+        0    <NA>
+        1       5
+        2       6
+        dtype: int64
+
+        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.get(2, default=0)
+        0   0
+        1   5
+        2   6
+        dtype: int64
         """
-        min_col_list_len = self.len().min()
-        if -min_col_list_len <= index < min_col_list_len:
-            return self._return_or_inplace(
-                extract_element(self._column, index)
+        out = extract_element(self._column, index)
+
+        if not (default is None or default is cudf.NA):
+            # determine rows for which `index` is out-of-bounds
+            lengths = count_elements(self._column)
+            out_of_bounds_mask = (np.negative(index) > lengths) | (
+                index >= lengths
             )
-        else:
-            raise IndexError("list index out of range")
+
+            # replace the value in those rows (should be NA) with `default`
+            if out_of_bounds_mask.any():
+                out = out._scatter_by_column(
+                    out_of_bounds_mask, cudf.Scalar(default)
+                )
+
+        return self._return_or_inplace(out)
 
     def contains(self, search_key: ScalarLike) -> ParentType:
         """
@@ -397,16 +425,25 @@ class ListMethods(ColumnMethods):
             )
         except RuntimeError as e:
             if (
-                "Type/Scale of search key does not"
-                "match list column element type" in str(e)
+                "Type/Scale of search key does not "
+                "match list column element type." in str(e)
             ):
-                raise TypeError(
-                    "Type/Scale of search key does not"
-                    "match list column element type"
-                ) from e
+                raise TypeError(str(e)) from e
             raise
-        else:
-            return res
+        return res
+
+    def index(self, search_key: ScalarLike) -> ParentType:
+        search_key = cudf.Scalar(search_key)
+        try:
+            res = self._return_or_inplace(index_of(self._column, search_key))
+        except RuntimeError as e:
+            if (
+                "Type/Scale of search key does not "
+                "match list column element type." in str(e)
+            ):
+                raise TypeError(str(e)) from e
+            raise
+        return res
 
     @property
     def leaves(self) -> ParentType:

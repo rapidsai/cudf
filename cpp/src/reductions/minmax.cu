@@ -216,7 +216,7 @@ struct minmax_functor {
     // copy the minmax_pair to the host; does not copy the strings
     using OutputType = minmax_pair<cudf::string_view>;
     OutputType host_result;
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream.value()));
     // strings are copied to create the scalars here
     return {std::make_unique<string_scalar>(host_result.min_val, true, stream, mr),
@@ -235,7 +235,7 @@ struct minmax_functor {
     // copy the minmax_pair to the host to call get_element
     using OutputType = minmax_pair<T>;
     OutputType host_result;
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream.value()));
     // get the keys for those indexes
     auto const keys = dictionary_column_view(col).keys();

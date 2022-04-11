@@ -67,7 +67,7 @@ std::unique_ptr<column> make_offsets_child_column(
   // we use inclusive-scan on a shifted output (d_offsets+1) and then set the first
   // offset values to zero manually.
   thrust::inclusive_scan(rmm::exec_policy(stream), begin, end, d_offsets + 1);
-  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream.value()));
   return offsets_column;
 }
 

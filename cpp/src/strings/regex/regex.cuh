@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,10 +42,10 @@ class reprog;
 using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
 using match_result = thrust::optional<match_pair>;
 
-constexpr int32_t RX_STACK_SMALL  = 112;    ///< fastest stack size
-constexpr int32_t RX_STACK_MEDIUM = 1104;   ///< faster stack size
-constexpr int32_t RX_STACK_LARGE  = 10128;  ///< fast stack size
-constexpr int32_t RX_STACK_ANY    = 8;      ///< slowest: uses global memory
+constexpr int32_t RX_STACK_SMALL  = 112;   ///< fastest stack size
+constexpr int32_t RX_STACK_MEDIUM = 1104;  ///< faster stack size
+constexpr int32_t RX_STACK_LARGE  = 2560;  ///< fast stack size
+constexpr int32_t RX_STACK_ANY    = 8;     ///< slowest: uses global memory
 
 /**
  * @brief Mapping the number of instructions to device code stack memory size.

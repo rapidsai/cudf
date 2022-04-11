@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -385,6 +385,42 @@ public class Cuda {
    * @throws CudaException on any error
    */
   static native int getNativeComputeMode() throws CudaException;
+
+  /**
+   * Gets the major CUDA compute capability of the current device.
+   * 
+   * For reference: https://developer.nvidia.com/cuda-gpus
+   * Hardware Generation	Compute Capability
+   *     Ampere	                8.x
+   *     Turing	                7.5
+   *     Volta	                7.0, 7.2
+   *     Pascal	                6.x
+   *     Maxwell                5.x
+   *     Kepler	                3.x
+   *     Fermi	                2.x
+   * 
+   * @return The Major compute capability version number of the current CUDA device
+   * @throws CudaException on any error
+   */
+  public static native int getComputeCapabilityMajor() throws CudaException;  
+
+  /**
+   * Gets the minor CUDA compute capability of the current device.
+   * 
+   * For reference: https://developer.nvidia.com/cuda-gpus
+   * Hardware Generation	Compute Capability
+   *     Ampere	                8.x
+   *     Turing	                7.5
+   *     Volta	                7.0, 7.2
+   *     Pascal	                6.x
+   *     Maxwell                5.x
+   *     Kepler	                3.x
+   *     Fermi	                2.x
+   * 
+   * @return The Minor compute capability version number of the current CUDA device
+   * @throws CudaException on any error
+   */
+  public static native int getComputeCapabilityMinor() throws CudaException;
 
   /**
    * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()
