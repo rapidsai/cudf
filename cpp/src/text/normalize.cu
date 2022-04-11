@@ -36,7 +36,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
 
 #include <limits>

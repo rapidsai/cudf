@@ -1,3 +1,5 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 unmasked_input_initializer_template = """\
         d_{idx} = input_col_{idx}
         masked_{idx} = Masked(d_{idx}[i], True)

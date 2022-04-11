@@ -24,6 +24,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/random.h>
 #include <thrust/shuffle.h>
 
 class StringCopy : public cudf::benchmark {
