@@ -9288,19 +9288,21 @@ def df_eval():
 @pytest.mark.parametrize(
     "expr, dtype",
     [
-        ("df.a + df.b", int),
-        ("df.a * df.b", int),
-        ("df.a > df.b", int),
-        ("df.a > df.b > df.c", int),
-        ("df.a > df.b < df.c", int),
-        ("df.a and df.b", int),
-        # ("df.a and df.b or df.c", int),
-        ("sin(df.a)", float),
+        ("a + b", int),
+        ("a * b", int),
+        ("a > b", int),
+        ("a > b > c", int),
+        ("a > b < c", int),
+        ("a and b", int),
+        # ("a and b or c", int),
+        ("sin(a)", float),
     ],
 )
 def test_dataframe_eval(df_eval, expr, dtype):
     df_eval = df_eval.astype(dtype)
-    expr_stripped = expr.replace("df.", "")
-    expect = pd.eval(expr, local_dict={"df": df_eval.to_pandas()})
-    got = df_eval.eval(expr_stripped)
+    expect = df_eval.to_pandas().eval(expr)
+    got = df_eval.eval(expr)
+    # In the specific case where the evaluated expression is a unary function
+    # of a single column with no nesting, pandas will retain the name. This
+    # level of compatibility is out of scope for now.
     assert_eq(expect, got, check_names=False)
