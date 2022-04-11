@@ -221,8 +221,14 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
         stack.append(ColumnReference(col_names.index(root.id) + 1))
     # Note: in Python > 3.7 ast.Num is a subclass of ast.Constant. We may need
     # to generalize this code eventually if that inheritance is removed.
-    elif isinstance(root, ast.Num):
-        stack.append(Literal(root.n))
+    elif isinstance(root, ast.Constant):
+        try:
+            stack.append(Literal(root.n))
+        except TypeError:
+            raise ValueError(
+                f"Only numeric constants are supported, received constant "
+                f"{repr(root.value)} of type {type(root.value)}."
+            )
     else:
         # Iterating over `_fields` is _much_ faster than calling
         # `iter_child_nodes`. That may not matter for practical data sizes
