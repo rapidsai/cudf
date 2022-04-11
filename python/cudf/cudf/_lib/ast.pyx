@@ -291,10 +291,15 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
 
 def evaluate_expression(object df, Expression expr):
     """Evaluate an Expression on a DataFrame."""
-    cdef unique_ptr[column] col = libcudf_ast.compute_column(
-        table_view_from_table(df),
-        <libcudf_ast.expression &> dereference(expr.c_obj.get())
-    )
+    cdef unique_ptr[column] col
+    cdef table_view tbl = table_view_from_table(df)
+    with nogil:
+        col = move(
+            libcudf_ast.compute_column(
+                tbl,
+                <libcudf_ast.expression &> dereference(expr.c_obj.get())
+            )
+        )
     return {'None': Column.from_unique_ptr(move(col))}
 
 
