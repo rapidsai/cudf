@@ -80,5 +80,5 @@ void nvbench_sort_struct(nvbench::state& state)
 NVBENCH_BENCH(nvbench_sort_struct)
   .set_name("sort_struct")
   .add_int64_power_of_two_axis("NumRows", {10, 18, 26})
-  .add_int64_axis("Depth", {1, 8})
+  .add_int64_axis("Depth", {0, 1, 8})
   .add_int64_axis("Nulls", {0, 1});

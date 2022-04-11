@@ -173,6 +173,8 @@
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
         <arrow.version>0.15.1</arrow.version>
+        <parallel.level>4</parallel.level>
+        <CUDF_CPP_BUILD_DIR/>
     </properties>
 
     <profiles>
@@ -396,8 +398,11 @@
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
-                                      executable="make">
-                                    <arg value="-j"/>
+                                      executable="cmake">
+                                    <arg value="--build"/>
+                                    <arg value="."/>
+                                    <arg value="--parallel"/>
+                                    <arg value="${parallel.level}"/>
                                 </exec>
                                 <mkdir dir="${project.build.directory}/extra-resources"/>
                                 <exec executable="bash" output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">
