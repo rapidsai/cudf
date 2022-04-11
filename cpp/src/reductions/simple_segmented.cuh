@@ -24,7 +24,7 @@
 #include <cudf/detail/reduction.cuh>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/utilities/element_argminmax.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
@@ -150,7 +150,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
 
   bool const is_argmin = std::is_same_v<Op, cudf::reduction::op::min>;
   auto string_comparator =
-    element_arg_minmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
+    cudf::detail::element_argminmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
   auto const identity = is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
 
   auto gather_map =

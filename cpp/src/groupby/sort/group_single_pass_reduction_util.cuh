@@ -23,7 +23,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/utilities/element_argminmax.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
@@ -182,7 +182,7 @@ struct group_reduction_functor<K, T, std::enable_if_t<is_group_reduction_support
     if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
       auto const count_iter = thrust::make_counting_iterator<ResultType>(0);
       auto const binop =
-        element_arg_minmax_fn<T>{*d_values_ptr, values.has_nulls(), K == aggregation::ARGMIN};
+        cudf::detail::element_argminmax_fn<T>{*d_values_ptr, values.has_nulls(), K == aggregation::ARGMIN};
       do_reduction(count_iter, result_begin, binop);
     } else {
       using OpType    = cudf::detail::corresponding_operator_t<K>;
