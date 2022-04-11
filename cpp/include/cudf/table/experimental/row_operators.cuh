@@ -19,6 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/algorithm.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/lists/list_device_view.cuh>
@@ -754,29 +755,31 @@ class element_hasher {
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
     auto hash                   = hash_value_type{0};
-    column_device_view curr_col = col;
-    int start_off               = row_index;
-    int end_off                 = row_index + 1;
+    column_device_view curr_col = col.slice(row_index, 1);
     while (is_nested(curr_col.type())) {
       if (_has_nulls) {
-        for (int i = start_off; i < end_off; ++i) {
-          hash = detail::hash_combine(hash, curr_col.is_null(i) ? _null_hash : 0);
-        }
+        auto validity_it = detail::make_validity_iterator<true>(curr_col);
+        hash =
+          detail::accumulate(validity_it,
+                             validity_it + curr_col.size(),
+                             hash,
+                             [null_hash = _null_hash](auto hash, auto is_valid) {
+                               return cudf::detail::hash_combine(hash, is_valid ? 0 : null_hash);
+                             });
       }
       if (curr_col.type().id() == type_id::STRUCT) {
-        curr_col = curr_col.child(0);
+        curr_col = detail::structs_column_device_view(curr_col).sliced_child(0);
       } else if (curr_col.type().id() == type_id::LIST) {
-        auto offsets = curr_col.child(lists_column_view::offsets_column_index);
-        for (int i = start_off; i < end_off; ++i) {
-          auto const child_size = offsets.element<size_type>(i + 1) - offsets.element<size_type>(i);
-          hash = cudf::detail::hash_combine(hash, hash_function<size_type>{}(child_size));
-        }
-        curr_col  = curr_col.child(lists_column_view::child_column_index);
-        start_off = offsets.element<size_type>(start_off);
-        end_off   = offsets.element<size_type>(end_off);
+        auto list_col   = detail::lists_column_device_view(curr_col);
+        auto list_sizes = make_list_size_iterator(list_col);
+        hash            = detail::accumulate(
+          list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
+            return cudf::detail::hash_combine(hash, hash_function<decltype(size)>{}(size));
+          });
+        curr_col = list_col.sliced_child();
       }
     }
-    for (int i = start_off; i < end_off; ++i) {
+    for (int i = 0; i < curr_col.size(); ++i) {
       hash = cudf::detail::hash_combine(
         hash,
         type_dispatcher<dispatch_void_if_nested>(
@@ -818,25 +821,19 @@ class device_row_hasher {
                                    _table.column(0),
                                    row_index));
 
-    // Hashes an element in a column
-    auto hasher = [=](size_type column_index) {
+    auto it = detail::make_counting_transform_iterator(0, [=](size_type column_index) {
       return cudf::type_dispatcher<dispatch_storage_type>(
         _table.column(column_index).type(),
         element_hasher<hash_function, Nullate>{_has_nulls},
         _table.column(column_index),
         row_index);
-    };
+    });
 
     // Hash each element and combine all the hash values together
-    return thrust::transform_reduce(
-      thrust::seq,
-      // note that this starts at 1 and not 0 now since we already hashed the first column
-      thrust::make_counting_iterator(1),
-      thrust::make_counting_iterator(_table.num_columns()),
-      hasher,
-      initial_hash,
-      [](hash_value_type lhs, hash_value_type rhs) {
-        return cudf::detail::hash_combine(lhs, rhs);
+    // note that this starts at 1 and not 0 since we already hashed the first column
+    return detail::accumulate(
+      it + 1, it + _table.num_columns(), initial_hash, [](auto hash, auto h) {
+        return cudf::detail::hash_combine(hash, h);
       });
   }
 

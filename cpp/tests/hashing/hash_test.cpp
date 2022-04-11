@@ -150,7 +150,7 @@ TEST_F(HashTest, BasicList)
                           -1023787369};
 
   auto const output = cudf::hash(input);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), debug_output_level::ALL_ERRORS);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 }
 
 TEST_F(HashTest, NullableList)
@@ -175,7 +175,7 @@ TEST_F(HashTest, NullableList)
                     -2023148682};
 
   auto const output = cudf::hash(cudf::table_view({col}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 }
 
 TEST_F(HashTest, ListOfStruct)
@@ -217,7 +217,7 @@ TEST_F(HashTest, ListOfStruct)
                                                                 -319840811};
 
   auto const output = cudf::hash(cudf::table_view({*list_column}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 }
 
 template <typename T>
