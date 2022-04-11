@@ -14,13 +14,11 @@
  * limitations under the License.
  */
 
-#include "cudf_test/column_utilities.hpp"
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
@@ -40,7 +38,7 @@ struct SegmentedReductionTest : public cudf::test::BaseFixture {
 struct SegmentedReductionTestUntyped : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_SUITE(SegmentedReductionTest, NumericTypes);
+TYPED_TEST_CASE(SegmentedReductionTest, NumericTypes);
 
 TYPED_TEST(SegmentedReductionTest, SumExcludeNulls)
 {
@@ -389,88 +387,180 @@ TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
-int32_t pow10(int32_t exponent) { return exponent == 0 ? 1 : 10 * pow10(exponent - 1); }
+// int32_t pow10(int32_t exponent) { return exponent == 0 ? 1 : 10 * pow10(exponent - 1); }
 
-template <typename T>
-struct SegmentedReductionFixedPointTest : public cudf::test::BaseFixture {
- public:
-  std::vector<typename T::rep> scale_list_by_pow10(std::vector<typename T::rep> input,
-                                                   int32_t exponent)
-  {
-    std::vector<typename T::rep> result(input.size());
-    std::transform(input.begin(), input.end(), result.begin(), [&exponent](auto x) {
-      return exponent >= 0 ? x * pow10(exponent) : x / pow10(-exponent);
-    });
-    return result;
-  }
-};
+// template <typename T>
+// struct SegmentedReductionFixedPointTest : public cudf::test::BaseFixture {
+//  public:
+//   std::vector<typename T::rep> scale_list_by_pow10(std::vector<typename T::rep> input,
+//                                                    int32_t exponent)
+//   {
+//     std::vector<typename T::rep> result(input.size());
+//     std::transform(input.begin(), input.end(), result.begin(), [&exponent](auto x) {
+//       return exponent >= 0 ? x * pow10(exponent) : x / pow10(-exponent);
+//     });
+//     return result;
+//   }
+// };
 
-TYPED_TEST_SUITE(SegmentedReductionFixedPointTest, cudf::test::FixedPointTypes);
+// TYPED_TEST_SUITE(SegmentedReductionFixedPointTest, cudf::test::FixedPointTypes);
 
-TYPED_TEST(SegmentedReductionFixedPointTest, MaxIncludeNullsScaleZero)
-{
-  // [1, 2, 3], [1], [], [2, NULL, 3], [NULL], [NULL, NULL] | scale: 0
-  // values:  {1, 2, 3, 1, 2, XXX, 3, XXX, XXX, XXX}
-  // nullmask:{1, 1, 1, 1, 1, 0, 1, 0, 0, 0}
-  // offsets: {0, 3, 4, 4, 7, 8, 10}
-  // output_dtype: decimalXX, scale: -1, 0, 1
-  // outputs: {3, 1, XXX, XXX, XXX, XXX}
-  // output nullmask: {1, 1, 0, 0, 0, 0}
+// TYPED_TEST(SegmentedReductionFixedPointTest, MaxIncludeNullsScaleZero)
+// {
+//   // [1, 2, 3], [1], [], [2, NULL, 3], [NULL], [NULL, NULL] | scale: 0
+//   // values:  {1, 2, 3, 1, 2, XXX, 3, XXX, XXX, XXX}
+//   // nullmask:{1, 1, 1, 1, 1, 0, 1, 0, 0, 0}
+//   // offsets: {0, 3, 4, 4, 7, 8, 10}
+//   // output_dtype: decimalXX, scale: -1, 0, 1
+//   // outputs: {3, 1, XXX, XXX, XXX, XXX}
+//   // output nullmask: {1, 1, 0, 0, 0, 0}
 
-  using DecimalXX = TypeParam;
+//   using DecimalXX = TypeParam;
 
-  for (int output_scale : {-1, 0, 1}) {
-    fixed_point_column_wrapper<typename DecimalXX::rep> input{
-      {1, 2, 3, 1, 2, XXX, 3, XXX, XXX, XXX},
-      {true, true, true, true, true, false, true, false, false, false},
-      numeric::scale_type(0)};
-    fixed_width_column_wrapper<size_type> offsets{0, 3, 4, 4, 7, 8, 10};
+//   for (int output_scale : {-1, 0, 1}) {
+//     fixed_point_column_wrapper<typename DecimalXX::rep> input{
+//       {1, 2, 3, 1, 2, XXX, 3, XXX, XXX, XXX},
+//       {true, true, true, true, true, false, true, false, false, false},
+//       numeric::scale_type(0)};
+//     fixed_width_column_wrapper<size_type> offsets{0, 3, 4, 4, 7, 8, 10};
 
-    data_type output_dtype{type_to_id<DecimalXX>(), numeric::scale_type{output_scale}};
+//     data_type output_dtype{type_to_id<DecimalXX>(), numeric::scale_type{output_scale}};
 
-    auto result_rep = this->scale_list_by_pow10({3, 1, XXX, XXX, XXX, XXX}, -output_scale);
-    fixed_point_column_wrapper<typename DecimalXX::rep> expect{
-      result_rep.begin(),
-      result_rep.end(),
-      {true, true, false, false, false, false},
-      numeric::scale_type(output_scale)};
+//     auto result_rep = this->scale_list_by_pow10({3, 1, XXX, XXX, XXX, XXX}, -output_scale);
+//     fixed_point_column_wrapper<typename DecimalXX::rep> expect{
+//       result_rep.begin(),
+//       result_rep.end(),
+//       {true, true, false, false, false, false},
+//       numeric::scale_type(output_scale)};
 
-    auto res = segmented_reduce(input,
-                                column_view(offsets),
-                                *make_max_aggregation<segmented_reduce_aggregation>(),
-                                output_dtype,
-                                null_policy::INCLUDE);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
-  }
-}
+//     auto res = segmented_reduce(input,
+//                                 column_view(offsets),
+//                                 *make_max_aggregation<segmented_reduce_aggregation>(),
+//                                 output_dtype,
+//                                 null_policy::INCLUDE);
+//     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+//   }
+// }
+
+// String min/max test grid
+// Segment: Length 0, length 1, length 2
+// Element nulls: No nulls, all nulls, some nulls
+// String: Empty string,
+// Position of the min/max: start of segment, end of segment
+// Include null, exclude null
 
 struct SegmentedReductionStringTest : public cudf::test::BaseFixture {
 };
 
 TEST_F(SegmentedReductionStringTest, MaxIncludeNulls)
 {
-  // ['world'], ['cudf', NULL, 'cuml'], ['hello', 'rapids', 'ai'], [], [NULL], [NULL, NULL]
-  // values:  {"world", "cudf", XXX, "cuml", "hello", "rapids", "ai", XXX, XXX, XXX}
-  // nullmask:{1, 1, 0, 1, 1, 1, 1, 0, 0, 0}
-  // offsets: {0, 1, 4, 7, 7, 8, 10}
+  // data: ['world'], ['cudf', NULL, ''], ['rapids', 'i am', 'ai'], ['apples', 'zebras'],
+  //       [], [NULL], [NULL, NULL]
+  // values:  {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX}
+  // nullmask:{1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0}
+  // offsets: {0, 1, 4, 7, 9, 9, 10, 12}
   // output_dtype: string dtype
-  // outputs: {"world", XXX, "rapids", XXX, XXX, XXX}
-  // output nullmask: {1, 0, 1, 0, 0, 0}
+  // outputs: {"world", XXX, "rapids", "zebras", XXX, XXX, XXX}
+  // output nullmask: {1, 0, 1, 1, 0, 0, 0}
 
   strings_column_wrapper input{
-    {"world", "cudf", XXX, "cuml", "hello", "rapids", "ai", XXX, XXX, XXX},
-    {true, true, false, true, true, true, true, false, false, false}};
-  fixed_width_column_wrapper<size_type> offsets{0, 1, 4, 7, 7, 8, 10};
+    {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX},
+    {true, true, false, true, true, true, true, true, true, false, false, false}};
+  fixed_width_column_wrapper<size_type> offsets{0, 1, 4, 7, 9, 9, 10, 12};
   data_type output_dtype{type_id::STRING};
 
-  strings_column_wrapper expect{{"world", XXX, "rapids", XXX, XXX, XXX},
-                                {true, false, true, false, false, false}};
+  strings_column_wrapper expect{{"world", XXX, "rapids", "zebras", XXX, XXX, XXX},
+                                {true, false, true, true, false, false, false}};
 
   auto res = segmented_reduce(input,
                               column_view(offsets),
                               *make_max_aggregation<segmented_reduce_aggregation>(),
                               output_dtype,
                               null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TEST_F(SegmentedReductionStringTest, MaxExcludeNulls)
+{
+  // data: ['world'], ['cudf', NULL, ''], ['rapids', 'i am', 'ai'], ['apples', 'zebras'],
+  //       [], [NULL], [NULL, NULL]
+  // values:  {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX}
+  // nullmask:{1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0}
+  // offsets: {0, 1, 4, 7, 9, 9, 10, 12}
+  // output_dtype: string dtype
+  // outputs: {"world", "cudf", "rapids", "zebras", XXX, XXX, XXX}
+  // output nullmask: {1, 1, 1, 1, 0, 0, 0}
+
+  strings_column_wrapper input{
+    {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX},
+    {true, true, false, true, true, true, true, true, true, false, false, false}};
+  fixed_width_column_wrapper<size_type> offsets{0, 1, 4, 7, 9, 9, 10, 12};
+  data_type output_dtype{type_id::STRING};
+
+  strings_column_wrapper expect{{"world", "cudf", "rapids", "zebras", XXX, XXX, XXX},
+                                {true, true, true, true, false, false, false}};
+
+  auto res = segmented_reduce(input,
+                              column_view(offsets),
+                              *make_max_aggregation<segmented_reduce_aggregation>(),
+                              output_dtype,
+                              null_policy::EXCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TEST_F(SegmentedReductionStringTest, MinIncludeNulls)
+{
+  // data: ['world'], ['cudf', NULL, ''], ['rapids', 'i am', 'ai'], ['apples', 'zebras'],
+  //       [], [NULL], [NULL, NULL]
+  // values:  {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX}
+  // nullmask:{1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0}
+  // offsets: {0, 1, 4, 7, 9, 9, 10, 12}
+  // output_dtype: string dtype
+  // outputs: {"world", XXX, "ai", "apples", XXX, XXX, XXX}
+  // output nullmask: {1, 0, 1, 1, 0, 0, 0}
+
+  strings_column_wrapper input{
+    {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX},
+    {true, true, false, true, true, true, true, true, true, false, false, false}};
+  fixed_width_column_wrapper<size_type> offsets{0, 1, 4, 7, 9, 9, 10, 12};
+  data_type output_dtype{type_id::STRING};
+
+  strings_column_wrapper expect{{"world", XXX, "ai", "apples", XXX, XXX, XXX},
+                                {true, false, true, true, false, false, false}};
+
+  auto res = segmented_reduce(input,
+                              column_view(offsets),
+                              *make_min_aggregation<segmented_reduce_aggregation>(),
+                              output_dtype,
+                              null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TEST_F(SegmentedReductionStringTest, MinExcludeNulls)
+{
+  // data: ['world'], ['cudf', NULL, ''], ['rapids', 'i am', 'ai'], ['apples', 'zebras'],
+  //       [], [NULL], [NULL, NULL]
+  // values:  {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX}
+  // nullmask:{1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0}
+  // offsets: {0, 1, 4, 7, 9, 9, 10, 12}
+  // output_dtype: string dtype
+  // outputs: {"world", "", "ai", "apples", XXX, XXX, XXX}
+  // output nullmask: {1, 1, 1, 1, 0, 0, 0}
+
+  strings_column_wrapper input{
+    {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX},
+    {true, true, false, true, true, true, true, true, true, false, false, false}};
+  fixed_width_column_wrapper<size_type> offsets{0, 1, 4, 7, 9, 9, 10, 12};
+  data_type output_dtype{type_id::STRING};
+
+  strings_column_wrapper expect{{"world", "", "ai", "apples", XXX, XXX, XXX},
+                                {true, true, true, true, false, false, false}};
+
+  auto res = segmented_reduce(input,
+                              column_view(offsets),
+                              *make_min_aggregation<segmented_reduce_aggregation>(),
+                              output_dtype,
+                              null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
