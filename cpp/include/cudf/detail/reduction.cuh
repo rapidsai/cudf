@@ -296,7 +296,7 @@ template <typename InputIterator,
           typename BinaryOp,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
           typename std::enable_if_t<!(is_fixed_width<OutputType>() &&
-                                    !cudf::is_fixed_point<OutputType>())>* = nullptr>
+                                      !cudf::is_fixed_point<OutputType>())>* = nullptr>
 std::unique_ptr<column> segmented_reduce(InputIterator,
                                          OffsetIterator,
                                          cudf::size_type,

@@ -181,8 +181,8 @@ struct group_reduction_functor<K, T, std::enable_if_t<is_group_reduction_support
 
     if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
       auto const count_iter = thrust::make_counting_iterator<ResultType>(0);
-      auto const binop =
-        cudf::detail::element_argminmax_fn<T>{*d_values_ptr, values.has_nulls(), K == aggregation::ARGMIN};
+      auto const binop      = cudf::detail::element_argminmax_fn<T>{
+        *d_values_ptr, values.has_nulls(), K == aggregation::ARGMIN};
       do_reduction(count_iter, result_begin, binop);
     } else {
       using OpType    = cudf::detail::corresponding_operator_t<K>;

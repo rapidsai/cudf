@@ -112,7 +112,6 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
   return result;
 }
 
-
 /**
  * @brief String segmented reduction for 'min', 'max'.
  *
@@ -290,8 +289,7 @@ struct same_column_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return string_segmented_reduction<ElementType, Op>(
-      col, offsets, null_handling, stream, mr);
+    return string_segmented_reduction<ElementType, Op>(col, offsets, null_handling, stream, mr);
   }
 
   template <typename ElementType, CUDF_ENABLE_IF(!is_supported<ElementType>())>
