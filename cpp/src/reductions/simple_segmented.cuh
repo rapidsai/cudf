@@ -112,16 +112,35 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
   return result;
 }
 
+
+/**
+ * @brief String segmented reduction for 'min', 'max'.
+ *
+ * This algorithm uses argmin/argmax as a custom comparator to build a gather
+ * map, then builds the output.
+ *
+ * @tparam InputType    the input column data-type
+ * @tparam Op           the operator of cudf::reduction::op::
+
+ * @param col Input column of data to reduce.
+ * @param offsets Indices to segment boundaries.
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
+ * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
+ * the reduced value is valid if any element in the segment is valid.
+ * @param stream Used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Output column in device memory
+ */
+
 template <typename InputType,
-          typename ResultType,
           typename Op,
           CUDF_ENABLE_IF(std::is_same_v<Op, cudf::reduction::op::min> ||
                          std::is_same_v<Op, cudf::reduction::op::max>)>
-std::unique_ptr<column> string_simple_segmented_reduction(column_view const& col,
-                                                          device_span<size_type const> offsets,
-                                                          null_policy null_handling,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> string_segmented_reduction(column_view const& col,
+                                                   device_span<size_type const> offsets,
+                                                   null_policy null_handling,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   // Pass to simple_segmented_reduction, get indices to gather, perform gather here.
   auto device_col = cudf::column_device_view::create(col, stream);
@@ -188,15 +207,14 @@ std::unique_ptr<column> string_simple_segmented_reduction(column_view const& col
 }
 
 template <typename InputType,
-          typename ResultType,
           typename Op,
           CUDF_ENABLE_IF(!std::is_same_v<Op, cudf::reduction::op::min>() &&
                          !std::is_same_v<Op, cudf::reduction::op::max>())>
-std::unique_ptr<column> string_simple_segmented_reduction(column_view const& col,
-                                                          device_span<size_type const> offsets,
-                                                          null_policy null_handling,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> string_segmented_reduction(column_view const& col,
+                                                   device_span<size_type const> offsets,
+                                                   null_policy null_handling,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FAIL("Segmented reduction on string column only supports min and max reduction.");
 }
@@ -272,7 +290,7 @@ struct same_column_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return string_simple_segmented_reduction<ElementType, ElementType, Op>(
+    return string_segmented_reduction<ElementType, Op>(
       col, offsets, null_handling, stream, mr);
   }
 

@@ -291,65 +291,12 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
   return dev_result;
 }
 
-/**
- * @brief string column specialization for segmented reduction.
- *
- * This specialization creates the gather map from which
- */
 template <typename InputIterator,
           typename OffsetIterator,
           typename BinaryOp,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr>
-std::unique_ptr<column> segmented_reduce(InputIterator d_in,
-                                         OffsetIterator d_offset,
-                                         cudf::size_type num_segments,
-                                         BinaryOp binary_op,
-                                         OutputType identity,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
-{
-  auto gather_map = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, num_segments, mask_state::UNALLOCATED, stream, mr);
-  auto dev_result_mview = gather_map->mutable_view();
-
-  // Allocate temporary storage
-  rmm::device_buffer d_temp_storage;
-  size_t temp_storage_bytes = 0;
-  cub::DeviceSegmentedReduce::Reduce(d_temp_storage.data(),
-                                     temp_storage_bytes,
-                                     d_in,
-                                     dev_result_mview.data<OutputType>(),
-                                     num_segments,
-                                     d_offset,
-                                     d_offset + 1,
-                                     binary_op,
-                                     identity,
-                                     stream.value());
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
-
-  // Run reduction
-  cub::DeviceSegmentedReduce::Reduce(d_temp_storage.data(),
-                                     temp_storage_bytes,
-                                     d_in,
-                                     dev_result_mview.data<OutputType>(),
-                                     num_segments,
-                                     d_offset,
-                                     d_offset + 1,
-                                     binary_op,
-                                     identity,
-                                     stream.value());
-
-  return gather_map;
-}
-
-template <typename InputIterator,
-          typename OffsetIterator,
-          typename BinaryOp,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<(!is_fixed_width<OutputType>() &&
-                                     !std::is_same_v<OutputType, string_view>()) ||
-                                    is_fixed_point<OutputType>()>* = nullptr>
+          typename std::enable_if_t<!(is_fixed_width<OutputType>() &&
+                                    !cudf::is_fixed_point<OutputType>())>* = nullptr>
 std::unique_ptr<column> segmented_reduce(InputIterator,
                                          OffsetIterator,
                                          cudf::size_type,
