@@ -95,7 +95,7 @@ std::unique_ptr<column> hash(table_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   switch (hash_function) {
-    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, stream, mr);
+    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, seed, stream, mr);
     case (hash_id::HASH_SERIAL_MURMUR3):
       return serial_murmur_hash3_32<MurmurHash3_32>(input, seed, stream, mr);
     case (hash_id::HASH_SPARK_MURMUR3):

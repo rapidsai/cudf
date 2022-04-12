@@ -754,7 +754,7 @@ class element_hasher {
                            std::is_same_v<T, cudf::list_view>)>
   __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
   {
-    auto hash                   = hash_value_type{0};
+    auto hash                   = hash_value_type{_seed};
     column_device_view curr_col = col.slice(row_index, 1);
     while (is_nested(curr_col.type())) {
       if (_has_nulls) {
@@ -783,7 +783,10 @@ class element_hasher {
       hash = cudf::detail::hash_combine(
         hash,
         type_dispatcher<dispatch_void_if_nested>(
-          curr_col.type(), element_hasher<hash_function, Nullate>{_has_nulls}, curr_col, i));
+          curr_col.type(),
+          element_hasher<hash_function, Nullate>{_has_nulls, DEFAULT_HASH_SEED, _null_hash},
+          curr_col,
+          i));
     }
     return hash;
   }
@@ -879,9 +882,10 @@ class row_hasher {
    * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
    */
   template <template <typename> class hash_function = default_hash, typename Nullate>
-  device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {}) const
+  device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
+                                                          uint32_t seed   = DEFAULT_HASH_SEED) const
   {
-    return device_row_hasher<hash_function, Nullate>(nullate, *d_t);
+    return device_row_hasher<hash_function, Nullate>(nullate, *d_t, seed);
   }
 
  private:

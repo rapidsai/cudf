@@ -29,6 +29,7 @@ namespace cudf {
 namespace detail {
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
+                                        uint32_t seed,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
@@ -47,7 +48,7 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
   thrust::tabulate(rmm::exec_policy(stream),
                    output_view.begin<int32_t>(),
                    output_view.end<int32_t>(),
-                   row_hasher.device_hasher<MurmurHash3_32>(nullable));
+                   row_hasher.device_hasher<MurmurHash3_32>(nullable, seed));
 
   return output;
 }

@@ -39,6 +39,7 @@ std::unique_ptr<column> hash(
 
 std::unique_ptr<column> murmur_hash3_32(
   table_view const& input,
+  uint32_t seed                       = 0,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
