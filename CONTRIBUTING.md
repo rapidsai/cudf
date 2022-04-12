@@ -30,13 +30,15 @@ conduct. More information can be found at:
    or [help wanted](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
    labels.
 3. Comment on the issue stating that you are going to work on it.
-4. Write code to address the issue or implement the feature.
-5. Add unit tests and unit benchmarks.
-6. [Create your pull request](https://github.com/rapidsai/cudf/compare).
-7. Verify that CI passes all [status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks).
+4. Create a fork of the cudf repository and check out a branch with a name that
+   describes your planned work. For example, `fix-documentation`.
+5. Write code to address the issue or implement the feature.
+6. Add unit tests and unit benchmarks.
+7. [Create your pull request](https://github.com/rapidsai/cudf/compare).
+8. Verify that CI passes all [status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks).
    Fix if needed.
-8. Wait for other developers to review your code and update code as needed.
-9. Once reviewed and approved, a RAPIDS developer will merge your pull request.
+9. Wait for other developers to review your code and update code as needed.
+10. Once reviewed and approved, a RAPIDS developer will merge your pull request.
 
 If you are unsure about anything, don't hesitate to comment on issues and ask for clarification!
 
