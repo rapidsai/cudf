@@ -124,6 +124,22 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
   }
 
   /**
+   * @brief TBA
+   * Need to handle fixed point separately
+   */
+  template <typename ScalarDView>
+  static __device__ Type get_scalar_value(ScalarDView const& input)
+  {
+    if constexpr (cudf::is_fixed_point<Type>()) {
+      auto const value = input.rep();
+      auto const scale = numeric::scale_type{input.type().scale()};
+      return Type{numeric::scaled_integer<typename Type::rep>{value, scale}};
+    } else {
+      return input.value();
+    }
+  }
+
+  /**
    * @brief Search for the index of the given scalar in all list rows.
    */
   template <typename OutputPairIter>
@@ -137,7 +153,7 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
                         OutputPairIter const& out_iters,
                         rmm::cuda_stream_view stream) const
   {
-    auto const key_accessor = cudf::detail::make_pair_rep_iterator<Type>(search_key);
+    using ScalarType = cudf::scalar_type_t<Type>;
 
     thrust::tabulate(
       rmm::exec_policy(stream),
@@ -148,15 +164,15 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
        d_offsets,
        has_null_lists,
        has_null_elements,
-       key_accessor,
        search_key_is_null,
+       key_view = get_scalar_device_view(static_cast<ScalarType&>(const_cast<scalar&>(search_key))),
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
         if (search_key_is_null || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
           return {NOT_FOUND_IDX, false};
         }
 
-        return {search_list(d_child, d_offsets, list_idx, has_null_elements, key_accessor[0].first),
-                true};
+        auto const key = get_scalar_value(key_view);
+        return {search_list(d_child, d_offsets, list_idx, has_null_elements, key), true};
       });
   }
 
