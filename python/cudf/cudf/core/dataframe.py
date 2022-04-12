@@ -10,7 +10,7 @@ import pickle
 import sys
 import warnings
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import (
     Any,
     Dict,
@@ -1854,86 +1854,75 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ],
         Optional[BaseIndex],
     ]:
-        lhs, rhs = self, other
+        # Check built-in types first for speed.
+        if isinstance(other, (list, dict, Sequence, Mapping)):
+            warnings.warn(
+                "Binary operations between host objects such as "
+                f"{type(other)} and cudf.DataFrame are deprecated and will be "
+                "removed in a future release. Please convert it to a cudf "
+                "object before performing the operation.",
+                FutureWarning,
+            )
+            if len(other) != self._num_columns:
+                raise ValueError(
+                    "Other is of the wrong length. Expected "
+                    f"{self._num_columns}, got {len(other)}"
+                )
 
-        if _is_scalar_or_zero_d_array(rhs):
-            rhs = [rhs] * lhs._num_columns
+        lhs, rhs = self._data, other
+        index = self._index
+        fill_requires_key = False
+        left_default: Any = False
 
-        # For columns that exist in rhs but not lhs, we swap the order so that
-        # we can always assume that left has a binary operator. This
-        # implementation assumes that binary operations between a column and
-        # NULL are always commutative, even for binops (like subtraction) that
-        # are normally anticommutative.
-        # TODO: The above should no longer be necessary once we switch to
-        # properly invoking the operator since we can then rely on reflection.
-        if isinstance(rhs, Sequence):
-            # TODO: Consider validating sequence length (pandas does).
-            operands = {
-                name: (left, right, reflect, fill_value)
-                for right, (name, left) in zip(rhs, lhs._data.items())
-            }
-        elif isinstance(rhs, DataFrame):
+        if _is_scalar_or_zero_d_array(other):
+            rhs = {name: other for name in self._data}
+        elif isinstance(other, (list, Sequence)):
+            rhs = {name: o for (name, o) in zip(self._data, other)}
+        elif isinstance(other, Series):
+            rhs = dict(zip(other.index.values_host, other.values_host))
+            # For keys in right but not left, perform binops between NaN (not
+            # NULL!) and the right value (result is NaN).
+            left_default = as_column(np.nan, length=len(self))
+        elif isinstance(other, DataFrame):
             if (
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
                 and (
-                    not lhs._data.to_pandas_index().equals(
-                        rhs._data.to_pandas_index()
+                    not self.index.equals(other.index)
+                    or not self._data.to_pandas_index().equals(
+                        other._data.to_pandas_index()
                     )
-                    or not lhs.index.equals(rhs.index)
                 )
             ):
                 raise ValueError(
                     "Can only compare identically-labeled DataFrame objects"
                 )
+            new_lhs, new_rhs = _align_indices(self, other)
+            index = new_lhs._index
+            lhs, rhs = new_lhs._data, new_rhs._data
+            fill_requires_key = True
+            # For DataFrame-DataFrame ops, always default to operating against
+            # the fill value.
+            left_default = fill_value
 
-            lhs, rhs = _align_indices(lhs, rhs)
-
-            operands = {
-                name: (
-                    lcol,
-                    rhs._data[name]
-                    if name in rhs._data
-                    else (fill_value or None),
-                    reflect,
-                    fill_value if name in rhs._data else None,
-                )
-                for name, lcol in lhs._data.items()
-            }
-            for name, col in rhs._data.items():
-                if name not in lhs._data:
-                    operands[name] = (
-                        col,
-                        (fill_value or None),
-                        not reflect,
-                        None,
-                    )
-        elif isinstance(rhs, Series):
-            # Note: This logic will need updating if any of the user-facing
-            # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
-            right_dict = dict(zip(rhs.index.values_host, rhs.values_host))
-            left_cols = lhs._column_names
-            # mypy thinks lhs._column_names is a List rather than a Tuple, so
-            # we have to ignore the type check.
-            result_cols = left_cols + tuple(  # type: ignore
-                col for col in right_dict if col not in left_cols
-            )
-            operands = {}
-            for col in result_cols:
-                if col in left_cols:
-                    left = lhs._data[col]
-                    right = right_dict[col] if col in right_dict else None
-                else:
-                    # We match pandas semantics here by performing binops
-                    # between a NaN (not NULL!) column and the actual values,
-                    # which results in nans, the pandas output.
-                    left = as_column(np.nan, length=lhs._num_rows)
-                    right = right_dict[col]
-                operands[col] = (left, right, reflect, fill_value)
-        else:
+        if not isinstance(rhs, (dict, Mapping)):
             return NotImplemented, None
 
-        return operands, lhs._index
+        operands = {
+            k: (
+                v,
+                rhs.get(k, fill_value),
+                reflect,
+                fill_value if (not fill_requires_key or k in rhs) else None,
+            )
+            for k, v in lhs.items()
+        }
+
+        if left_default is not False:
+            for k, v in rhs.items():
+                if k not in lhs:
+                    operands[k] = (left_default, v, reflect, None)
+        return operands, index
 
     @_cudf_nvtx_annotate
     def update(

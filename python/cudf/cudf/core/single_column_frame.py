@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
 
 import cupy
@@ -337,6 +338,17 @@ class SingleColumnFrame(Frame, NotIterable):
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):
+            if not hasattr(other, "__cuda_array_interface__"):
+                # TODO: When this deprecated behavior is removed, also change
+                # the above conditional to stop checking for pd.Series and
+                # pd.Index since we only need to support SingleColumnFrame.
+                warnings.warn(
+                    f"Binary operations between host objects such as "
+                    f"{type(other)} and {type(self)} are deprecated and will "
+                    "be removed in a future release. Please convert it to a "
+                    "cudf object before performing the operation.",
+                    FutureWarning,
+                )
             # Non-scalar right operands are valid iff they convert to columns.
             try:
                 other = as_column(other)
