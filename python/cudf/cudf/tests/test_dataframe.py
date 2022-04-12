@@ -9172,7 +9172,7 @@ def test_mean_timeseries():
 
     assert_eq(expected, actual)
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(TypeError):
         gdf.mean()
 
 
@@ -9195,5 +9195,5 @@ def test_std_different_dtypes(data):
 
     assert_eq(expected, actual)
 
-    with pytest.raises(AttributeError):
+    with pytest.raises(TypeError):
         gdf.std()

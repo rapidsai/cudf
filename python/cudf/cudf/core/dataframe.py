@@ -5146,9 +5146,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     for col in source._data.names
                 ]
             except AttributeError:
-                raise TypeError(
-                    f"cannot perform {op} with type {source.dtype}"
-                )
+                raise TypeError(f"Not all column dtypes support op {op}")
 
             return Series._from_data(
                 {None: result}, as_index(source._data.names)
