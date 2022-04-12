@@ -82,6 +82,7 @@ class TableReference(Enum):
 # restrictive at the moment.
 cdef class Literal(Expression):
     def __cinit__(self, value):
+        # TODO: Enable floating point scalars.
         cdef int val = value
         self.c_scalar = make_unique[numeric_scalar[int64_t]](val, True)
         self.c_obj = <expression_ptr> make_unique[libcudf_ast.literal](
@@ -149,6 +150,7 @@ python_cudf_operator_map = {
     # Unary operators
     ast.Invert: ASTOperator.BIT_INVERT,
     ast.Not: ASTOperator.NOT,
+    # TODO: Missing USub, possibility other unary ops?
 }
 
 
@@ -313,6 +315,100 @@ cdef parse_expression(root, tuple col_names, list stack, list nodes):
             parse_expression(item, col_names, stack, nodes)
 
 
+class libcudfASTVisitor(ast.NodeVisitor):
+    def __init__(self, col_names):
+        self.stack = []
+        self.nodes = []
+        self.col_names = col_names
+
+    def visit_Name(self, node):
+        try:
+            col_id = self.col_names.index(node.id) + 1
+        except ValueError:
+            raise ValueError(f"Unknown column name {node.id}")
+        self.stack.append(ColumnReference(col_id))
+
+    def visit_Constant(self, node):
+        if not isinstance(node, ast.Num):
+            raise ValueError(
+                f"Unsupported literal {repr(node.value)} of type "
+                "{type(node.value)}"
+            )
+        self.stack.append(Literal(node.value))
+
+    def visit_UnaryOp(self, node):
+        self.visit(node.operand)
+        self.nodes.append(self.stack.pop())
+        op = python_cudf_operator_map[type(node.op)]
+        self.stack.append(Operation(op, self.nodes[-1]))
+
+    def visit_BinOp(self, node):
+        self.visit(node.left)
+        self.visit(node.right)
+        self.nodes.append(self.stack.pop())
+        self.nodes.append(self.stack.pop())
+
+        op = python_cudf_operator_map[type(node.op)]
+        self.stack.append(Operation(op, self.nodes[-1], self.nodes[-2]))
+
+    def _visit_BoolOp_Compare(self, operators, operands, has_multiple_ops):
+        inner_ops = []
+        for op, (left, right) in zip(operators, operands):
+            # Note that this will lead to duplicate nodes, e.g. if
+            # the comparison is `a < b < c` that will be encoded as
+            # `a < b and b < c`.
+            self.visit(left)
+            self.visit(right)
+
+            self.nodes.append(self.stack.pop())
+            self.nodes.append(self.stack.pop())
+
+            op = python_cudf_operator_map[type(op)]
+            inner_ops.append(Operation(op, self.nodes[-1], self.nodes[-2]))
+
+        self.nodes.extend(inner_ops)
+
+        # If we have more than one comparator, we need to link them
+        # together with LOGICAL_AND operators.
+        if has_multiple_ops:
+            op = ASTOperator.LOGICAL_AND
+
+            def _combine_compare_ops(left, right):
+                self.nodes.append(Operation(op, left, right))
+                return self.nodes[-1]
+
+            functools.reduce(_combine_compare_ops, inner_ops)
+
+        self.stack.append(self.nodes[-1])
+
+    def visit_BoolOp(self, node):
+        operators = [node.op] * (len(node.values) - 1)
+        operands = zip(node.values[:-1], node.values[1:])
+        self._visit_BoolOp_Compare(operators, operands, len(node.values) > 2)
+
+    def visit_Compare(self, node):
+        operands = (node.left, *node.comparators)
+        has_multiple_ops = len(operands) > 2
+        operands = zip(operands[:-1], operands[1:])
+        self._visit_BoolOp_Compare(node.ops, operands, has_multiple_ops)
+
+    def visit_Call(self, node):
+        try:
+            op = python_cudf_function_map[node.func.id]
+        except KeyError:
+            raise ValueError(f"Unsupported function {node.func}.")
+        # Assuming only unary functions are supported, which is checked above.
+        if len(node.args) != 1 or node.keywords:
+            raise ValueError(
+                f"Function {node.func} only accepts one positional "
+                "argument."
+            )
+        self.visit(node.args[0])
+
+        self.nodes.append(self.stack.pop())
+        self.stack.append(Operation(op, self.nodes[-1]))
+
+
 # TODO: It would be nice to use a dataclass for this, but Cython won't support
 # it until we upgrade to 3.0.
 class _OwningExpression:
@@ -322,7 +418,6 @@ class _OwningExpression:
         self.nodes = nodes
 
 
-@functools.lru_cache(256)
 def parse_expression_cached(str expr, tuple col_names):
     """A caching wrapper for parse_expression.
 
@@ -336,9 +431,37 @@ def parse_expression_cached(str expr, tuple col_names):
     return _OwningExpression(stack[-1], nodes)
 
 
+def parse_expression_new(str expr, tuple col_names):
+    visitor = libcudfASTVisitor(col_names)
+    visitor.visit(ast.parse(expr))
+    # Note that we don't really need this wrapper if we go with the visitor
+    # approach since the visitor itself owns the stack/nodes, but we'll need
+    # some sort of wrapper to enable caching so I've just mimicked the other
+    # pattern for now to simplify testing/benchmarking.
+    return _OwningExpression(visitor.stack[-1], visitor.nodes)
+
+
 def evaluate_expression(df: "cudf.DataFrame", expr: str):
     """Create a cudf evaluable expression from a string and evaluate it."""
     expr_container = parse_expression_cached(expr, df._column_names)
+
+    # At the end, all the stack contains is the expression to evaluate.
+    cdef Expression cudf_expr = expr_container.expression
+    cdef table_view tbl = table_view_from_table(df)
+    cdef unique_ptr[column] col
+    with nogil:
+        col = move(
+            libcudf_transform.compute_column(
+                tbl,
+                <libcudf_ast.expression &> dereference(cudf_expr.c_obj.get())
+            )
+        )
+    return {None: Column.from_unique_ptr(move(col))}
+
+
+def evaluate_expression_new(df: "cudf.DataFrame", expr: str):
+    """Create a cudf evaluable expression from a string and evaluate it."""
+    expr_container = parse_expression_new(expr, df._column_names)
 
     # At the end, all the stack contains is the expression to evaluate.
     cdef Expression cudf_expr = expr_container.expression
