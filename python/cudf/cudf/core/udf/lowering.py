@@ -28,6 +28,7 @@ from cudf.core.udf.typing import (
     _dstring_rfind,
     _dstring_startswith,
     _dstring_upper,
+    _dstring_lower,
     _create_dstring_from_stringview,
     string_view,
     dstring
@@ -640,6 +641,39 @@ def masked_dstring_upper(context, builder, sig, args):
     _ = context.compile_internal(
         builder,
         call_dstring_upper,
+        nb_signature(
+            types.int32, types.CPointer(dstring), types.CPointer(dstring)
+        ),
+        (st_ptr, tgt_ptr),
+    )
+
+    ret.value = builder.load(tgt_ptr)
+    ret.valid = input_masked_dstring.valid
+    return ret._getvalue()
+
+def call_dstring_lower(st, tgt):
+    return _dstring_lower(st, tgt)
+
+@cuda_lower(
+    "MaskedType.lower", MaskedType(dstring)
+)
+def masked_dstring_lower(context, builder, sig, args):
+    # create an empty MaskedType(dstring)
+    ret = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+
+    # input struct
+    input_masked_dstring = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
+
+    st_ptr = builder.alloca(input_masked_dstring.value.type)
+    tgt_ptr = builder.alloca(input_masked_dstring.value.type)
+
+    builder.store(input_masked_dstring.value, st_ptr)
+
+    _ = context.compile_internal(
+        builder,
+        call_dstring_lower,
         nb_signature(
             types.int32, types.CPointer(dstring), types.CPointer(dstring)
         ),

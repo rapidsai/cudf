@@ -797,3 +797,18 @@ def test_string_udf_upper(data):
         return st.upper()
 
     run_masked_udf_test(func, data, check_dtype=False)
+
+@pytest.mark.parametrize('data', [
+    {
+        'str_col': ["abc", "ABC", "aBc", "123", ""]
+    }
+])
+def test_string_udf_lower(data):
+    # tests the `lower` method of strings
+
+    data = cudf.DataFrame(data)
+    def func(row):
+        st = row['str_col']
+        return st.lower()
+
+    run_masked_udf_test(func, data, check_dtype=False)

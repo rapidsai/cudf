@@ -542,6 +542,14 @@ class MaskedStringUpper(AbstractTemplate):
             MaskedType(dstring), recvr=self.this
         )
 
+class MaskedStringLower(AbstractTemplate):
+    key = "MaskedType.lower"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(dstring), recvr=self.this
+        )
+
 @cuda_decl_registry.register_attr
 class MaskedDStringAttrs(AttributeTemplate):
     key = MaskedType(dstring)
@@ -569,6 +577,11 @@ class MaskedDStringAttrs(AttributeTemplate):
     def resolve_upper(self, mod):
         return types.BoundFunction(
             MaskedStringUpper, MaskedType(dstring)
+        )
+
+    def resolve_lower(self, mod):
+        return types.BoundFunction(
+            MaskedStringLower, MaskedType(dstring)
         )
 
     def resolve_value(self, mod):
@@ -602,6 +615,11 @@ _dstring_rfind = cuda.declare_device(
 _dstring_upper = cuda.declare_device(
     "upper",
     types.int32(types.CPointer(dstring), types.CPointer(dstring)),
+)
+
+_dstring_lower = cuda.declare_device(
+    "lower",
+    types.int32(types.CPointer(dstring), types.CPointer(dstring))
 )
 
 _create_dstring_from_stringview = cuda.declare_device(
