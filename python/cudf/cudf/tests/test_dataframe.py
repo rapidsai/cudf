@@ -2106,6 +2106,11 @@ def test_binops_df(pdf, gdf, binop, other):
                 pass
 
 
+def test_binops_df_invalid(gdf):
+    with pytest.raises(TypeError):
+        gdf + np.array([1, 2])
+
+
 @pytest.mark.parametrize("binop", [operator.and_, operator.or_, operator.xor])
 def test_bitwise_binops_df(pdf, gdf, binop):
     d = binop(pdf, pdf + 1)

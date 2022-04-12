@@ -1865,7 +1865,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             if len(other) != self._num_columns:
                 raise ValueError(
-                    "Other is the wrong length. Expected "
+                    "Other is of the wrong length. Expected "
                     f"{self._num_columns}, got {len(other)}"
                 )
 
