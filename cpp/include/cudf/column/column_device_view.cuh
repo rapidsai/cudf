@@ -347,8 +347,13 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   [[nodiscard]] CUDF_HOST_DEVICE column_device_view slice(size_type offset,
                                                           size_type size) const noexcept
   {
-    return column_device_view{
-      _type, size, _data, _null_mask, _offset + offset, d_children, _num_children};
+    return column_device_view{this->type(),
+                              size,
+                              this->head(),
+                              this->null_mask(),
+                              this->offset() + offset,
+                              d_children,
+                              this->num_child_columns()};
   }
 
   /**

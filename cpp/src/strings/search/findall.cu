@@ -119,7 +119,7 @@ std::unique_ptr<table> findall(strings_column_view const& input,
     reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
-  auto find_counts     = count_matches(*d_strings, *d_prog, stream);
+  auto find_counts     = count_matches(*d_strings, *d_prog, strings_count + 1, stream);
   auto d_find_counts   = find_counts->view().data<size_type>();
 
   size_type const columns_count = thrust::reduce(
