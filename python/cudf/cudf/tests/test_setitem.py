@@ -157,7 +157,7 @@ def test_series_set_equal_length_object_by_mask(replace_data):
     psr[pd_bool_col] = (
         replace_data.to_pandas(nullable=True)
         if hasattr(replace_data, "to_pandas")
-        else replace_data
+        else pd.Series(replace_data)
     )
     gsr[gd_bool_col] = replace_data
 
@@ -167,7 +167,7 @@ def test_series_set_equal_length_object_by_mask(replace_data):
     psr[psr > 1] = (
         replace_data.to_pandas()
         if hasattr(replace_data, "to_pandas")
-        else replace_data
+        else pd.Series(replace_data)
     )
     gsr[gsr > 1] = replace_data
 
