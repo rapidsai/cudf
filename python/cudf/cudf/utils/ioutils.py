@@ -81,7 +81,7 @@ Examples
 See Also
 --------
 cudf.read_csv
-cudf.read_json
+cudf.io.json.read_json
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
