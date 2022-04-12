@@ -20,10 +20,10 @@
 namespace cudf::detail {
 
 template <typename Iterator, typename T, typename BinaryOp>
-CUDF_HOST_DEVICE T accumulate(Iterator first, Iterator last, T init, BinaryOp op)
+__device__ __forceinline__ T accumulate(Iterator first, Iterator last, T init, BinaryOp op)
 {
   for (; first != last; ++first) {
-    init = op(init, *first);
+    init = op(std::move(init), *first);
   }
   return init;
 }

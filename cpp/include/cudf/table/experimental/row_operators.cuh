@@ -19,7 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/algorithm.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/lists/list_device_view.cuh>
@@ -734,7 +734,7 @@ class element_hasher {
   }
 
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
+  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
   {
     if (_has_nulls && col.is_null(row_index)) { return _null_hash; }
     return hash_function<T>{_seed}(col.element<T>(row_index));
@@ -743,7 +743,7 @@ class element_hasher {
   template <typename T,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>() and
                            not std::is_same_v<T, cudf::list_view>)>
-  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
+  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
   {
     cudf_assert(false && "Unsupported type in hash.");
     return {};
@@ -752,7 +752,7 @@ class element_hasher {
   template <typename T,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>() and
                            std::is_same_v<T, cudf::list_view>)>
-  __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
+  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
   {
     auto hash                   = hash_value_type{0};
     column_device_view curr_col = col.slice(row_index, 1);
