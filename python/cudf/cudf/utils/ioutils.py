@@ -77,11 +77,6 @@ Examples
 0       10   hello
 1       20  rapids
 2       30      ai
-
-See Also
---------
-cudf.read_csv
-cudf.read_json
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
