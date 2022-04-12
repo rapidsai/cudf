@@ -3,16 +3,17 @@
 Contributions to cuDF fall into the following categories:
 
 1. To report a bug, request a new feature, or report a problem with
-   documentation, please file an [issue](https://github.com/rapidsai/cudf/issues/new/choose)
-   describing in detail the problem or new feature. The RAPIDS team evaluates
-   and triages issues, and schedules them for a release. If you believe the
-   issue needs priority attention, please comment on the issue to notify the
-   team.
+   documentation, please file an
+   [issue](https://github.com/rapidsai/cudf/issues/new/choose) describing the
+   problem or new feature in detail. The RAPIDS team evaluates and triages
+   issues, and schedules them for a release. If you believe the issue needs
+   priority attention, please comment on the issue to notify the team.
 2. To propose and implement a new feature, please file a new feature request
    [issue](https://github.com/rapidsai/cudf/issues/new/choose). Describe the
    intended feature and discuss the design and implementation with the team and
    community. Once the team agrees that the plan looks good, go ahead and
-   implement it, using the [code contributions](#code-contributions) guide below.
+   implement it, using the [code contributions](#code-contributions) guide
+   below.
 3. To implement a feature or bug fix for an existing issue, please follow the
    [code contributions](#code-contributions) guide below. If you need more
    context on a particular issue, please ask in a comment.
@@ -25,13 +26,19 @@ cuDF's code of conduct. More information can be found at:
 
 ### Your first issue
 
-1. Follow the guide at the bottom of this page for [Setting up your build environment](#setting-up-your-build-environment).
-2. Find an issue to work on. The best way is to look for the [good first issue](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
-    or [help wanted](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) labels.
+1. Follow the guide at the bottom of this page for
+   [Setting up your build environment](#setting-up-your-build-environment).
+2. Find an issue to work on. The best way is to look for the
+   [good first issue](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+   or [help wanted](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+   labels.
 3. Comment on the issue stating that you are going to work on it.
 4. Code! Make sure to update unit tests!
-5. When done, [create your pull request](https://github.com/rapidsai/cudf/compare).
-6. Verify that CI passes all [status checks](https://help.github.com/articles/about-status-checks/). Fix if needed.
+5. When done,
+   [create your pull request](https://github.com/rapidsai/cudf/compare).
+6. Verify that CI passes all
+   [status checks](https://help.github.com/articles/about-status-checks/).
+   Fix if needed.
 7. Wait for other developers to review your code and update code as needed.
 8. Once reviewed and approved, a RAPIDS developer will merge your pull request.
 
@@ -45,7 +52,7 @@ can look at the prioritized issues for our next release in our
 [project boards](https://github.com/rapidsai/cudf/projects).
 
 **Note:** Always look at the release board with the highest number for issues
-*to work on. This is where RAPIDS developers also focus their efforts.
+to work on. This is where RAPIDS developers also focus their efforts.
 
 Look at the unassigned issues, and find an issue to which you are comfortable
 contributing. Start with _Step 3_ above, commenting on the issue to let others
@@ -63,9 +70,9 @@ Other operating systems may be compatible, but are not currently tested.
 
 Compilers:
 
-* `gcc`     version 9.3+
-* `nvcc`    version 11.5+
-* `cmake`   version 3.20.1+
+* `gcc` version 9.3+
+* `nvcc` version 11.5+
+* `cmake` version 3.20.1+
 
 CUDA/GPU:
 
@@ -73,7 +80,8 @@ CUDA/GPU:
 * NVIDIA driver 450.80.02+
 * Pascal architecture or better
 
-You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
+You can obtain CUDA from
+[https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
 
 ### Create the build environment
 
@@ -90,13 +98,15 @@ git submodule update --init --remote --recursive
 
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
-# note: RAPIDS currently doesn't support `channel_priority: strict`; use `channel_priority: flexible` instead
+# note: RAPIDS currently doesn't support `channel_priority: strict`;
+# use `channel_priority: flexible` instead
 conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda11.5.yml
 # activate the environment
 conda activate cudf_dev
 ```
 
-- For other CUDA versions, check the corresponding `cudf_dev_cuda*.yml` file in `conda/environments/`.
+- For other CUDA versions, check the corresponding `cudf_dev_cuda*.yml` file in
+  `conda/environments/`.
 
 ### Build cuDF from source
 
@@ -120,8 +130,8 @@ cd $CUDF_HOME
 ```
 
 - Other libraries like `cudf-kafka` and `custreamz` can be installed with this
-  script. For the complete list of libraries as well as details about the script
-  usage, run the `help` command:
+  script. For the complete list of libraries as well as details about the
+  script usage, run the `help` command:
 
 ```bash
 ./build.sh --help
@@ -129,8 +139,8 @@ cd $CUDF_HOME
 
 ### Build, install and test cuDF libraries for contributors
 
-The general workflow is provided below. Please, also see the last section about
-[code formatting](###code-formatting).
+The general workflow is provided below. Please also see the last section about
+[code formatting](#code-formatting).
 
 #### `libcudf` (C++)
 
@@ -172,9 +182,10 @@ pytest -v cudf/cudf/tests
 
 #### `dask-cudf` (Python)
 
-- First, build the `libcudf` C++ and `cudf` Python libraries following the steps above
+- First, build the `libcudf` C++ and `cudf` Python libraries following the
+  steps above
 
-- To install in edit/develop mode the `dask-cudf` Python package:
+- To install the `dask-cudf` Python package in editable/develop mode:
 ```bash
 cd $CUDF_HOME/python/dask_cudf
 python setup.py build_ext --inplace
@@ -210,7 +221,8 @@ make test
 
 #### `cudf-kafka` (Python)
 
-- First, build the `libcudf` and `libcudf_kafka` following the steps above
+- First, build the `libcudf` and `libcudf_kafka` libraries following the steps
+  above
 
 - To install the `cudf-kafka` Python package in editable/develop mode:
 
@@ -222,9 +234,11 @@ python setup.py develop
 
 #### `custreamz` (Python)
 
-- First, build `libcudf`, `libcudf_kafka`, and `cudf_kafka` following the steps above
+- First, build `libcudf`, `libcudf_kafka`, and `cudf_kafka` following the steps
+  above
 
-- To install in edit/develop mode the `custreamz` Python package:
+- To install the `custreamz` Python package in editable/develop mode:
+
 ```bash
 cd $CUDF_HOME/python/custreamz
 python setup.py build_ext --inplace
@@ -232,6 +246,7 @@ python setup.py develop
 ```
 
 - To run `custreamz` tests :
+
 ```bash
 cd $CUDF_HOME/python
 pytest -v custreamz
@@ -241,17 +256,18 @@ pytest -v custreamz
 
 - First, build the `libcudf` C++ library following the steps above
 
-- Then, refer to [Java README](java/README.md)
+- Then, refer to the [Java README](java/README.md)
 
-Done! You are ready to develop for the cuDF project. But please go to [code
-formatting](###code-formatting) to ensure that you contributing code follows
-the expected format.
+Done! You are ready to develop for the cuDF project. Please review the
+project's [code formatting guidelines](#code-formatting) to ensure that
+contributed code follows the expected format.
 
 ## Debugging cuDF
 
 ### Building in debug mode from source
 
-Follow the [above instructions](####build-cudf-from-source) to build from source and add `-g` to the `./build.sh` command.
+Follow the instructions to [build from source](#build-cudf-from-source) and add
+`-g` to the `./build.sh` command.
 
 For example:
 
@@ -259,13 +275,15 @@ For example:
 ./build.sh libcudf -g
 ```
 
-This builds `libcudf` in debug mode which enables some `assert` safety checks and includes symbols in the library for debugging.
+This builds `libcudf` in debug mode which enables some `assert` safety checks
+and includes symbols in the library for debugging.
 
 All other steps for installing `libcudf` into your environment are the same.
 
 ### Debugging with `cuda-gdb` and `cuda-memcheck`
 
-When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb` and `cuda-memcheck` is easy.
+When you have a debug build of `libcudf` installed, debugging with the
+`cuda-gdb` and `cuda-memcheck` is easy.
 
 If you are debugging a Python script, run the following:
 
@@ -285,7 +303,7 @@ the libcudf.so library.
 
 Therefore, it is recommended to add device debug symbols only to specific files
 by setting the `-G` compile option locally in your `cpp/CMakeLists.txt` for
-that file.  Here is an example of adding the `-G` option to the compile command
+that file. Here is an example of adding the `-G` option to the compile command
 for `src/copying/copy.cu` source file:
 
 ```
@@ -295,70 +313,9 @@ set_source_files_properties(src/copying/copy.cu PROPERTIES COMPILE_OPTIONS "-G")
 This will add the device debug symbols for this object file in `libcudf.so`.
 You can then use `cuda-dbg` to debug into the kernels in that source file.
 
-### Building and testing on a gpuCI image locally
+## Code Formatting
 
-Before submitting a pull request, you can do a local build and test on your machine that mimics our gpuCI environment using the `ci/local/build.sh` script.
-For detailed information on usage of this script, see [here](ci/local/README.md).
-
-## Automated Build in Docker Container
-
-A Dockerfile is provided with a preconfigured conda environment for building
-and installing cuDF from source based off of the main branch.
-
-### Prerequisites
-
-* Install [nvidia-docker2](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker) for Docker + GPU support
-* Verify NVIDIA driver is `450.80.02` or higher
-* Ensure CUDA 11.5+ is installed
-
-### Usage
-
-From cudf project root run the following, to build with defaults:
-
-```bash
-docker build --tag cudf .
-```
-
-After the container is built run the container:
-
-```bash
-docker run --runtime=nvidia -it cudf bash
-```
-
-Activate the conda environment `cudf` to use the newly built cuDF and libcudf libraries:
-
-```
-root@3f689ba9c842:/# source activate cudf
-(cudf) root@3f689ba9c842:/# python -c "import cudf"
-(cudf) root@3f689ba9c842:/#
-```
-
-### Customizing the Build
-
-Several build arguments are available to customize the build process of the
-container. These are specified by using the Docker [build-arg](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg)
-flag. Below is a list of the available arguments and their purpose:
-
-| Build Argument | Default Value | Other Value(s) | Purpose |
-| --- | --- | --- | --- |
-| `CUDA_VERSION` | 11.0 | 11.2.2 | set CUDA version |
-| `LINUX_VERSION` | ubuntu18.04 | ubuntu20.04 | set Ubuntu version |
-| `CC` & `CXX` | 9 | 10 | set gcc/g++ version |
-| `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |
-| `CUDF_BRANCH` | main | Any branch name | set git branch to checkout of `CUDF_REPO` |
-| `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
-| `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
-| `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
-| `PYARROW_VERSION` | 1.0.1 | Not supported | set pyarrow version |
-| `CMAKE_VERSION` | newest | >=3.18 | set cmake version |
-| `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
-| `PYTHON_VERSION` | 3.7 | 3.8 | set Python version |
-
-
-### Code Formatting
-
-
-#### Python
+### Python
 
 cuDF uses [Black](https://black.readthedocs.io/en/stable/),
 [isort](https://pycqa.github.io/isort/), and
@@ -384,9 +341,9 @@ flake8 --config=python/.flake8.cython
 ```
 
 Additionally, many editors have plugins that will apply `isort` and `black` as
-you edit files, as well as use `flake8` to report any style / syntax issues.
+you edit files, as well as use `flake8` to report any style / syntax issues.111
 
-#### C++/CUDA
+### C++/CUDA
 
 cuDF uses [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html).
 
@@ -400,7 +357,7 @@ python3 ./cpp/scripts/run-clang-format.py -inplace
 Additionally, many editors have plugins or extensions that you can set up to
 automatically run `clang-format` either manually or on file save.
 
-#### Pre-commit hooks
+### Pre-commit hooks
 
 Optionally, you may wish to setup [pre-commit hooks](https://pre-commit.com/)
 to automatically run `isort`, `black`, `flake8`, and `clang-format` when you
@@ -424,8 +381,7 @@ pre-commit install
 from the root of the cuDF repository. Now code linters and formatters will be
 run each time you commit changes.
 
----
-
 ## Attribution
+
 Portions adopted from https://github.com/pytorch/pytorch/blob/master/CONTRIBUTING.md
 Portions adopted from https://github.com/dask/dask/blob/master/docs/source/develop.rst
