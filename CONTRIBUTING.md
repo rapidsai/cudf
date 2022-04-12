@@ -79,13 +79,12 @@ You can obtain CUDA from
 
 ### Create the build environment
 
-- Clone the repository and submodules:
+- Clone the repository:
 
 ```bash
 CUDF_HOME=$(pwd)/cudf
 git clone https://github.com/rapidsai/cudf.git $CUDF_HOME
 cd $CUDF_HOME
-git submodule update --init --remote --recursive
 ```
 
 - Create the conda development environment `cudf_dev`:
