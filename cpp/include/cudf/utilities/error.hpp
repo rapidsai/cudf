@@ -57,14 +57,11 @@ struct cuda_error : public std::runtime_error {
 };
 
 struct cudart_error : public cuda_error {
-  cudart_error(std::string const& message, cudaError_t const& error) : cuda_error(message, error) {}
+  using cuda_error::cuda_error;
 };
 
-struct sticky_cuda_error : public cuda_error {
-  sticky_cuda_error(std::string const& message, cudaError_t const& error)
-    : cuda_error(message, error)
-  {
-  }
+struct fatal_cuda_error : public cuda_error {
+  using cuda_error::cuda_error;
 };
 /** @} */
 
@@ -119,13 +116,17 @@ namespace detail {
 
 inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line)
 {
+  // Calls cudaGetLastError twice. It is nearly certain that a fatal error occurred if the second
+  // call doesn't return with cudaSuccess.
   cudaGetLastError();
   auto const last = cudaGetLastError();
   auto const msg  = std::string{"CUDA error encountered at: " + std::string{file} + ":" +
                                std::to_string(line) + ": " + std::to_string(error) + " " +
                                cudaGetErrorName(error) + " " + cudaGetErrorString(error)};
+  // Calls cudaDeviceSynchronize to make sure that there is no other asynchronize error occurs
+  // between two calls.
   if (error == last && last == cudaDeviceSynchronize()) {
-    throw sticky_cuda_error{"Sticky " + msg, error};
+    throw fatal_cuda_error{"Sticky " + msg, error};
   } else {
     throw cudart_error{msg, error};
   }
