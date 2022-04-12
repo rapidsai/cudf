@@ -43,15 +43,16 @@ struct count_matches_fn {
   __device__ size_type operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) { return 0; }
-    size_type count  = 0;
-    auto const d_str = d_strings.element<string_view>(idx);
+    size_type count   = 0;
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
 
     int32_t begin = 0;
-    int32_t end   = d_str.length();
+    int32_t end   = nchars;
     while ((begin < end) && (prog.find<stack_size>(idx, d_str, begin, end) > 0)) {
       ++count;
       begin = end + (begin == end);
-      end   = d_str.length();
+      end   = nchars;
     }
     return count;
   }
@@ -62,11 +63,14 @@ struct count_dispatch_fn {
 
   template <int stack_size>
   std::unique_ptr<column> operator()(column_device_view const& d_strings,
+                                     size_type output_size,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    assert(output_size >= d_strings.size() and "Unexpected output size");
+
     auto results = make_numeric_column(
-      data_type{type_id::INT32}, d_strings.size() + 1, mask_state::UNALLOCATED, stream, mr);
+      data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
 
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
@@ -80,21 +84,15 @@ struct count_dispatch_fn {
 }  // namespace
 
 /**
- * @brief Returns a column of regex match counts for each string in the given column.
- *
- * A null entry will result in a zero count for that output row.
- *
- * @param d_strings Device view of the input strings column.
- * @param d_prog Regex instance to evaluate on each string.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @copydoc cudf::strings::detail::count_matches
  */
 std::unique_ptr<column> count_matches(column_device_view const& d_strings,
                                       reprog_device const& d_prog,
+                                      size_type output_size,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return regex_dispatcher(d_prog, count_dispatch_fn{d_prog}, d_strings, stream, mr);
+  return regex_dispatcher(d_prog, count_dispatch_fn{d_prog}, d_strings, output_size, stream, mr);
 }
 
 }  // namespace detail

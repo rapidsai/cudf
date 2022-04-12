@@ -2484,7 +2484,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Series of booleans indicating if each element is in values.
 
         Raises
-        -------
+        ------
         TypeError
             If values is a string
 
