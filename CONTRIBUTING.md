@@ -292,7 +292,7 @@ Therefore, it is recommended to add device debug symbols only to specific files 
 compile option locally in your `cpp/CMakeLists.txt` for that file. Here is an example of adding the
 `-G` option to the compile command for `src/copying/copy.cu` source file:
 
-```
+```cmake
 set_source_files_properties(src/copying/copy.cu PROPERTIES COMPILE_OPTIONS "-G")
 ```
 
@@ -300,31 +300,6 @@ This will add the device debug symbols for this object file in `libcudf.so`.  Yo
 `cuda-dbg` to debug into the kernels in that source file.
 
 ## Code Formatting
-
-### Python
-
-cuDF uses [Black](https://black.readthedocs.io/en/stable/), [isort](https://pycqa.github.io/isort/),
-and [flake8](https://flake8.pycqa.org/en/latest/) to ensure a consistent code format throughout the
-project. They have been installed during the `cudf_dev` environment creation.
-
-These tools are used to auto-format the Python code, as well as check the Cython code in the
-repository. Additionally, there is a CI check in place to enforce that committed code follows our
-standards. You can use the tools to automatically format your Python code by running:
-
-```bash
-isort --atomic python/**/*.py
-black python
-```
-
-Check the syntax of your Python and Cython code by running:
-
-```bash
-flake8 python
-flake8 --config=python/.flake8.cython
-```
-
-Additionally, many editors have plugins that will apply `isort` and `black` as you edit files, as
-well as use `flake8` to report any style / syntax issues.
 
 ### C++/CUDA
 
@@ -339,11 +314,16 @@ python3 ./cpp/scripts/run-clang-format.py -inplace
 Additionally, many editors have plugins or extensions that you can set up to automatically run
 `clang-format` either manually or on file save.
 
-### Pre-commit hooks
+### Python / Pre-commit hooks
 
-Optionally, you may wish to setup [pre-commit hooks](https://pre-commit.com/) to automatically run
-`isort`, `black`, `flake8`, and `clang-format` when you make a git commit. This can be done by
-installing `pre-commit` via `conda` or `pip`:
+cuDF uses [pre-commit](https://pre-commit.com/) to execute code linters and formatters such as
+[Black](https://black.readthedocs.io/en/stable/), [isort](https://pycqa.github.io/isort/), and
+[flake8](https://flake8.pycqa.org/en/latest/). These tools ensure a consistent code format
+throughout the project. Using pre-commit ensures that linter versions and options are aligned for
+all developers. Additionally, there is a CI check in place to enforce that committed code follows
+our standards.
+
+To use `pre-commit`, install via `conda` or `pip`:
 
 ```bash
 conda install -c conda-forge pre-commit
@@ -353,13 +333,21 @@ conda install -c conda-forge pre-commit
 pip install pre-commit
 ```
 
-From within the repository, run:
+Then run pre-commit hooks before committing code:
+
+```bash
+pre-commit run
+```
+
+Optionally, you may set up the pre-commit hooks to run automatically when you make a git commit. This can be done by running:
 
 ```bash
 pre-commit install
 ```
 
 Now code linters and formatters will be run each time you commit changes.
+
+You can skip these checks with `git commit --no-verify` or with the short version `git commit -n`.
 
 ## Attribution
 
