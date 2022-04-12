@@ -373,7 +373,7 @@ namespace detail{
     void external_function(..., rmm::cuda_stream_view stream){
         // Implementation uses the stream with async APIs.
         rmm::device_buffer buff(...,stream);
-        CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
+        CUDF_CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
         kernel<<<..., stream>>>(...);
         thrust::algorithm(rmm::exec_policy(stream), ...);
     }
@@ -777,7 +777,7 @@ CUDF_FAIL("This code path should not be reached.");
 
 ### CUDA Error Checking
 
-Use the `CUDA_TRY` macro to check for the successful completion of CUDA runtime API functions. This
+Use the `CUDF_CUDA_TRY` macro to check for the successful completion of CUDA runtime API functions. This
 macro throws a `cudf::cuda_error` exception if the CUDA API return value is not `cudaSuccess`. The
 thrown exception includes a description of the CUDA error code in its `what()` message.
 

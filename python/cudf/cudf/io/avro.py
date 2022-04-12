@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 import cudf
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
@@ -16,7 +16,8 @@ def read_avro(
     """{docstring}"""
 
     is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
-        path_or_data=filepath_or_buffer, **kwargs,
+        path_or_data=filepath_or_buffer,
+        **kwargs,
     )
     if not is_single_filepath_or_buffer:
         raise NotImplementedError(

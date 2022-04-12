@@ -111,6 +111,7 @@ WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, decimal, type_group_id::
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, list, cudf::type_id::LIST);
+WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, struct, cudf::type_id::STRUCT);
 
 BENCHMARK_DEFINE_F(ParquetWrite, writer_options)
 (::benchmark::State& state) { BM_parq_write_varying_options(state); }

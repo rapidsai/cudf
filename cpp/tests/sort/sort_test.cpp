@@ -25,6 +25,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <thrust/host_vector.h>
+#include <thrust/sort.h>
+
 #include <type_traits>
 #include <vector>
 
@@ -83,7 +86,7 @@ TYPED_TEST(Sort, WithNullMax)
     // the rest of the values are equivalent and yields random sorted order.
     auto to_host = [](column_view const& col) {
       thrust::host_vector<int32_t> h_data(col.size());
-      CUDA_TRY(cudaMemcpy(
+      CUDF_CUDA_TRY(cudaMemcpy(
         h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
       return h_data;
     };
@@ -121,7 +124,7 @@ TYPED_TEST(Sort, WithNullMin)
     // the rest of the values are equivalent and yields random sorted order.
     auto to_host = [](column_view const& col) {
       thrust::host_vector<int32_t> h_data(col.size());
-      CUDA_TRY(cudaMemcpy(
+      CUDF_CUDA_TRY(cudaMemcpy(
         h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
       return h_data;
     };
@@ -157,7 +160,7 @@ TYPED_TEST(Sort, WithMixedNullOrder)
     // the rest of the values are equivalent and yields random sorted order.
     auto to_host = [](column_view const& col) {
       thrust::host_vector<int32_t> h_data(col.size());
-      CUDA_TRY(cudaMemcpy(
+      CUDF_CUDA_TRY(cudaMemcpy(
         h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
       return h_data;
     };
@@ -803,6 +806,60 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointSortedOrderGather)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(index_col, indices->view());
   CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_table, sorted->view());
 }
+
+struct SortCornerTest : public BaseFixture {
+};
+
+TEST_F(SortCornerTest, WithEmptyStructColumn)
+{
+  using int_col = fixed_width_column_wrapper<int32_t>;
+
+  // struct{}, int, int
+  int_col col_for_mask{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 1, 1}};
+  auto null_mask  = cudf::copy_bitmask(col_for_mask.release()->view());
+  auto struct_col = cudf::make_structs_column(6, {}, UNKNOWN_NULL_COUNT, std::move(null_mask));
+
+  int_col col1{{1, 2, 3, 1, 2, 3}};
+  int_col col2{{1, 1, 1, 2, 2, 2}};
+  table_view input{{struct_col->view(), col1, col2}};
+
+  int_col expected{{1, 0, 3, 4, 2, 5}};
+  std::vector<order> column_order{order::ASCENDING, order::ASCENDING, order::ASCENDING};
+  auto got = sorted_order(input, column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+
+  // struct{struct{}, int}
+  int_col col3{{0, 1, 2, 3, 4, 5}};
+  std::vector<std::unique_ptr<cudf::column>> child_columns;
+  child_columns.push_back(std::move(struct_col));
+  child_columns.push_back(col3.release());
+  auto struct_col2 =
+    cudf::make_structs_column(6, std::move(child_columns), 0, rmm::device_buffer{});
+  table_view input2{{struct_col2->view()}};
+
+  int_col expected2{{5, 4, 3, 2, 0, 1}};
+  auto got2 = sorted_order(input2, {order::DESCENDING});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, got2->view());
+
+  // struct{struct{}, struct{int}}
+  int_col col_for_mask2{{0, 0, 0, 0, 0, 0}, {1, 0, 1, 1, 0, 1}};
+  auto null_mask2 = cudf::copy_bitmask(col_for_mask2.release()->view());
+  std::vector<std::unique_ptr<cudf::column>> child_columns2;
+  auto child_col_1 = cudf::make_structs_column(6, {}, UNKNOWN_NULL_COUNT, std::move(null_mask2));
+  child_columns2.push_back(std::move(child_col_1));
+  int_col col4{{5, 4, 3, 2, 1, 0}};
+  std::vector<std::unique_ptr<cudf::column>> grand_child;
+  grand_child.push_back(std::move(col4.release()));
+  auto child_col_2 = cudf::make_structs_column(6, std::move(grand_child), 0, rmm::device_buffer{});
+  child_columns2.push_back(std::move(child_col_2));
+  auto struct_col3 =
+    cudf::make_structs_column(6, std::move(child_columns2), 0, rmm::device_buffer{});
+  table_view input3{{struct_col3->view()}};
+
+  int_col expected3{{4, 1, 5, 3, 2, 0}};
+  auto got3 = sorted_order(input3, {order::ASCENDING});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, got3->view());
+};
 
 }  // namespace test
 }  // namespace cudf
