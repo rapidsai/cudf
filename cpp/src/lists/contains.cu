@@ -55,10 +55,10 @@ auto constexpr is_supported_type()
   return is_supported_non_nested_type<Type>() || cudf::is_struct_type<Type>();
 }
 
-template <duplicate_find_option find_option>
+template <bool find_first>
 auto __device__ begin_offset(size_type const* d_offsets, size_type list_idx)
 {
-  if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
+  if constexpr (find_first) {
     return thrust::make_counting_iterator<size_type>(d_offsets[list_idx]);
   } else {
     return thrust::make_reverse_iterator(
@@ -66,10 +66,10 @@ auto __device__ begin_offset(size_type const* d_offsets, size_type list_idx)
   }
 }
 
-template <duplicate_find_option find_option>
+template <bool find_first>
 auto __device__ end_offset(size_type const* d_offsets, size_type list_idx)
 {
-  if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
+  if constexpr (find_first) {
     return thrust::make_counting_iterator<size_type>(d_offsets[list_idx + 1]);
   } else {
     return thrust::make_reverse_iterator(
@@ -77,18 +77,17 @@ auto __device__ end_offset(size_type const* d_offsets, size_type list_idx)
   }
 }
 
-template <duplicate_find_option find_option, typename Iterator>
+template <bool find_first, typename Iterator>
 size_type __device__ distance(Iterator begin, Iterator end, Iterator found_iter)
 {
   if (found_iter == end) { return NOT_FOUND_IDX; }
-  return find_option == duplicate_find_option::FIND_FIRST ? found_iter - begin
-                                                          : end - found_iter - 1;
+  return find_first ? found_iter - begin : end - found_iter - 1;
 }
 
 /**
  * @brief Functor for searching index of the given key in a list.
  */
-template <typename Type, duplicate_find_option find_option, typename Enable = void>
+template <typename Type, typename Enable = void>
 struct search_functor {
   template <typename... Args>
   void operator()(Args&&...)
@@ -100,26 +99,26 @@ struct search_functor {
 /**
  * @brief The search_functor specialized for non-struct types.
  */
-template <typename Type, duplicate_find_option find_option>
-struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_nested_type<Type>()>> {
+template <typename Type>
+struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>()>> {
   /**
    * @brief Search index of a given scalar in a list defined by offsets pointing to rows of the
    * child column of the original lists column.
    */
-  template <typename ElementPairIter>
+  template <bool find_first, typename ElementPairIter>
   static __device__ size_type search_list(ElementPairIter const& pair_iter,
                                           size_type const* d_offsets,
                                           size_type list_idx,
                                           Type const& search_key)
   {
-    auto const begin = begin_offset<find_option>(d_offsets, list_idx);
-    auto const end   = end_offset<find_option>(d_offsets, list_idx);
+    auto const begin = begin_offset<find_first>(d_offsets, list_idx);
+    auto const end   = end_offset<find_first>(d_offsets, list_idx);
     auto const found_iter =
       thrust::find_if(thrust::seq, begin, end, [pair_iter, search_key] __device__(auto const idx) {
         auto const [element, is_valid] = pair_iter[idx];
         return is_valid && cudf::equality_compare(element, search_key);
       });
-    return distance<find_option>(begin, end, found_iter);
+    return distance<find_first>(begin, end, found_iter);
   }
 
   /**
@@ -132,33 +131,40 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
                         bool has_null_lists,
                         bool has_null_elements,
                         SearchKeyPairIter const& key_pair_iter,
-                        OutputPairIter const& out_iters,
+                        duplicate_find_option find_option,
+                        OutputPairIter const& out_iter,
                         rmm::cuda_stream_view stream) const
   {
     thrust::tabulate(
       rmm::exec_policy(stream),
-      out_iters,
-      out_iters + d_lists.size(),
+      out_iter,
+      out_iter + d_lists.size(),
       [d_lists,
        pair_iter,
        d_offsets,
        has_null_lists,
        has_null_elements,
        key_pair_iter,
+       find_option,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
         auto const [key, key_is_valid] = key_pair_iter[list_idx];
         if (!key_is_valid || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
           return {NOT_FOUND_IDX, false};
         }
 
-        return {search_list<ElementPairIter>(pair_iter, d_offsets, list_idx, key), true};
+        return find_option == duplicate_find_option::FIND_FIRST
+                 ? thrust::pair<size_type, bool>{search_list<true>(
+                                                   pair_iter, d_offsets, list_idx, key),
+                                                 true}
+                 : thrust::pair<size_type, bool>{
+                     search_list<false>(pair_iter, d_offsets, list_idx, key), true};
       });
   }
 };
 
 template <typename SearchKeyType>
-auto get_search_keys_device_iterable_view(SearchKeyType const& search_keys,
-                                          rmm::cuda_stream_view stream)
+auto get_search_keys_device_view(SearchKeyType const& search_keys,
+                                 [[maybe_unused]] rmm::cuda_stream_view stream)
 {
   if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
     return &search_keys;
@@ -212,8 +218,8 @@ struct dispatch_index_of {
 
     auto out_positions = make_numeric_column(
       data_type{type_id::INT32}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-    auto out_validity    = rmm::device_uvector<bool>(lists.size(), stream);
-    auto const out_iters = thrust::make_zip_iterator(
+    auto out_validity   = rmm::device_uvector<bool>(lists.size(), stream);
+    auto const out_iter = thrust::make_zip_iterator(
       out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
@@ -222,30 +228,45 @@ struct dispatch_index_of {
 
     } else {  // not struct type
 
-      auto const d_keys         = get_search_keys_device_iterable_view(search_keys, stream);
-      auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type, false>(*d_keys);
+      auto const d_keys_ptr = get_search_keys_device_view(search_keys, stream);
+      //      auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type,
+      //      false>(*d_keys_ptr);
 
-      auto const d_child_ptr        = column_device_view::create(child, stream);
-      auto const elements_pair_iter = cudf::detail::make_pair_iterator<Type, false>(*d_keys);
+      auto const d_child_ptr = column_device_view::create(child, stream);
+      //      auto const elements_pair_iter = cudf::detail::make_pair_iterator<Type,
+      //      false>(*d_child_ptr);
 
       // If same scale, then...
-      auto const do_search = [&](auto const& searcher) {
-        searcher.search_all_lists(*d_lists_ptr,
-                                  elements_pair_iter,
-                                  lists.offsets_begin(),
-                                  lists.has_nulls(),
-                                  child.has_nulls(),
-                                  keys_pair_iter,
-                                  out_iters,
-                                  stream);
+      auto const do_search = [&](auto const& elements_pair_iter, auto const& keys_pair_iter) {
+        search_functor<Type>{}.search_all_lists(*d_lists_ptr,
+                                                elements_pair_iter,
+                                                lists.offsets_begin(),
+                                                lists.has_nulls(),
+                                                child.has_nulls(),
+                                                keys_pair_iter,
+                                                find_option,
+                                                out_iter,
+                                                stream);
       };
 
-      if (find_option == duplicate_find_option::FIND_FIRST) {
-        auto const searcher = search_functor<Type, duplicate_find_option::FIND_FIRST>{};
-        do_search(searcher);
+      if (child.has_nulls()) {
+        auto const elements_pair_iter = cudf::detail::make_pair_iterator<Type, true>(*d_child_ptr);
+        if (search_keys_have_nulls) {
+          auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type, true>(*d_keys_ptr);
+          do_search(elements_pair_iter, keys_pair_iter);
+        } else {
+          auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type, false>(*d_keys_ptr);
+          do_search(elements_pair_iter, keys_pair_iter);
+        }
       } else {
-        auto const searcher = search_functor<Type, duplicate_find_option::FIND_LAST>{};
-        do_search(searcher);
+        auto const elements_pair_iter = cudf::detail::make_pair_iterator<Type, false>(*d_child_ptr);
+        if (search_keys_have_nulls) {
+          auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type, true>(*d_keys_ptr);
+          do_search(elements_pair_iter, keys_pair_iter);
+        } else {
+          auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type, false>(*d_keys_ptr);
+          do_search(elements_pair_iter, keys_pair_iter);
+        }
       }
     }
 
