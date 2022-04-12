@@ -115,18 +115,17 @@ __global__ void __launch_bounds__(block_size, 1)
 
   if (not chunk->use_dictionary) { return; }
 
-  size_type start_row = frag.start_row;
-  size_type end_row   = frag.start_row + frag.num_rows;
-
   __shared__ cg::experimental::block_tile_memory<4, block_size> shared;
   auto thb   = cg::experimental::this_thread_block(shared);
   auto block = cg::experimental::tiled_partition<block_size>(thb);
+
+  size_type start_row = frag.start_row;
+  size_type end_row   = frag.start_row + frag.num_rows;
 
   // Find the bounds of values in leaf column to be inserted into the map for current chunk
   auto cudf_col          = *(col->parent_column);
   auto s_start_value_idx = row_to_value_idx(start_row, cudf_col);
   auto end_value_idx     = row_to_value_idx(end_row, cudf_col);
-  auto s_num_values      = end_value_idx - s_start_value_idx;
 
   column_device_view const& data_col = *col->leaf_column;
 
@@ -135,11 +134,9 @@ __global__ void __launch_bounds__(block_size, 1)
     chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
   int total_num_dict_entries;
-  for (size_type i = 0; i < s_num_values; i += block_size) {
-    // add the value to hash map
-    size_type val_idx = i + t + s_start_value_idx;
-    bool is_valid =
-      (i + t < s_num_values && val_idx < data_col.size()) and data_col.is_valid(val_idx);
+  auto val_idx = s_start_value_idx + t;
+  while (block.any(val_idx < end_value_idx)) {
+    auto const is_valid = val_idx < data_col.size() and data_col.is_valid(val_idx);
 
     // insert element at val_idx to hash map and count successful insertions
     size_type is_unique      = 0;
@@ -178,6 +175,8 @@ __global__ void __launch_bounds__(block_size, 1)
 
     // Check if the num unique values in chunk has already exceeded max dict size and early exit
     if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
+
+    val_idx += block_size;
   }
 }
 
@@ -234,30 +233,28 @@ __global__ void __launch_bounds__(block_size, 1)
   auto s_start_value_idx  = row_to_value_idx(start_row, cudf_col);
   auto s_ck_start_val_idx = row_to_value_idx(chunk->start_row, cudf_col);
   auto end_value_idx      = row_to_value_idx(end_row, cudf_col);
-  auto s_num_values       = end_value_idx - s_start_value_idx;
 
   column_device_view const& data_col = *col->leaf_column;
 
   auto map = map_type::device_view(
     chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
-  for (size_type i = 0; i < s_num_values; i += block_size) {
-    if (t + i < s_num_values) {
-      auto val_idx = s_start_value_idx + t + i;
-      bool is_valid =
-        (i + t < s_num_values && val_idx < data_col.size()) ? data_col.is_valid(val_idx) : false;
+  auto val_idx = s_start_value_idx + t;
+  while (val_idx < end_value_idx) {
+    auto const is_valid = val_idx < data_col.size() and data_col.is_valid(val_idx);
 
-      if (is_valid) {
-        auto found_slot = type_dispatcher(data_col.type(), map_find_fn{map}, data_col, val_idx);
-        cudf_assert(found_slot != map.end() &&
-                    "Unable to find value in map in dictionary index construction");
-        if (found_slot != map.end()) {
-          // No need for atomic as this is not going to be modified by any other thread
-          auto* val_ptr = reinterpret_cast<map_type::mapped_type*>(&found_slot->second);
-          chunk->dict_index[val_idx - s_ck_start_val_idx] = *val_ptr;
-        }
+    if (is_valid) {
+      auto found_slot = type_dispatcher(data_col.type(), map_find_fn{map}, data_col, val_idx);
+      cudf_assert(found_slot != map.end() &&
+                  "Unable to find value in map in dictionary index construction");
+      if (found_slot != map.end()) {
+        // No need for atomic as this is not going to be modified by any other thread
+        auto* val_ptr = reinterpret_cast<map_type::mapped_type*>(&found_slot->second);
+        chunk->dict_index[val_idx - s_ck_start_val_idx] = *val_ptr;
       }
     }
+
+    val_idx += block_size;
   }
 }
 
