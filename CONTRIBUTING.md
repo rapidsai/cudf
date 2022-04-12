@@ -32,7 +32,7 @@ conduct. More information can be found at:
 3. Comment on the issue stating that you are going to work on it.
 4. Code! Make sure to update unit tests!
 5. When done, [create your pull request](https://github.com/rapidsai/cudf/compare).
-6. Verify that CI passes all [status checks](https://help.github.com/articles/about-status-checks/).
+6. Verify that CI passes all [status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks).
    Fix if needed.
 7. Wait for other developers to review your code and update code as needed.
 8. Once reviewed and approved, a RAPIDS developer will merge your pull request.
@@ -45,7 +45,8 @@ Once you have gotten your feet wet and are more comfortable with the code, you c
 prioritized issues for our next release in our
 [project boards](https://github.com/rapidsai/cudf/projects).
 
-**Note:** Always look at the release board with the highest number for issues to work on. This is
+**Note:** Always look at the release board that is
+[currently under development](https://docs.rapids.ai/maintainers) for issues to work on. This is
 where RAPIDS developers also focus their efforts.
 
 Look at the unassigned issues, and find an issue to which you are comfortable contributing. Start
