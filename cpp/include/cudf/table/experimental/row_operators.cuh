@@ -742,57 +742,12 @@ class element_hasher {
     return hash_function<T>{_seed}(col.element<T>(row_index));
   }
 
-  template <typename T,
-            CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>() and
-                           not std::is_same_v<T, cudf::list_view>)>
+  template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view const& col,
                                         size_type row_index) const noexcept
   {
     cudf_assert(false && "Unsupported type in hash.");
     return {};
-  }
-
-  template <typename T,
-            CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>() and
-                           std::is_same_v<T, cudf::list_view>)>
-  __device__ hash_value_type operator()(column_device_view const& col,
-                                        size_type row_index) const noexcept
-  {
-    auto hash                   = hash_value_type{_seed};
-    column_device_view curr_col = col.slice(row_index, 1);
-    while (is_nested(curr_col.type())) {
-      if (_has_nulls) {
-        auto validity_it = detail::make_validity_iterator<true>(curr_col);
-        hash =
-          detail::accumulate(validity_it,
-                             validity_it + curr_col.size(),
-                             hash,
-                             [null_hash = _null_hash](auto hash, auto is_valid) {
-                               return cudf::detail::hash_combine(hash, is_valid ? 0 : null_hash);
-                             });
-      }
-      if (curr_col.type().id() == type_id::STRUCT) {
-        curr_col = detail::structs_column_device_view(curr_col).sliced_child(0);
-      } else if (curr_col.type().id() == type_id::LIST) {
-        auto list_col   = detail::lists_column_device_view(curr_col);
-        auto list_sizes = make_list_size_iterator(list_col);
-        hash            = detail::accumulate(
-          list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
-            return cudf::detail::hash_combine(hash, hash_function<decltype(size)>{}(size));
-          });
-        curr_col = list_col.sliced_child();
-      }
-    }
-    for (int i = 0; i < curr_col.size(); ++i) {
-      hash = cudf::detail::hash_combine(
-        hash,
-        type_dispatcher<dispatch_void_if_nested>(
-          curr_col.type(),
-          element_hasher<hash_function, Nullate>{_has_nulls, DEFAULT_HASH_SEED, _null_hash},
-          curr_col,
-          i));
-    }
-    return hash;
   }
 
   uint32_t _seed;
@@ -820,14 +775,14 @@ class device_row_hasher {
       cudf::detail::hash_combine(hash_value_type{0},
                                  type_dispatcher<dispatch_storage_type>(
                                    _table.column(0).type(),
-                                   element_hasher<hash_function, Nullate>{_has_nulls, _seed},
+                                   element_hasher_adapter<hash_function>{_has_nulls, _seed},
                                    _table.column(0),
                                    row_index));
 
     auto it = detail::make_counting_transform_iterator(0, [=](size_type column_index) {
       return cudf::type_dispatcher<dispatch_storage_type>(
         _table.column(column_index).type(),
-        element_hasher<hash_function, Nullate>{_has_nulls},
+        element_hasher_adapter<hash_function>{_has_nulls},
         _table.column(column_index),
         row_index);
     });
@@ -841,6 +796,78 @@ class device_row_hasher {
   }
 
  private:
+  /**
+   * @brief Computes the hash value of an element in the given column.
+   *
+   * When the column is non-nested, this is a simple wrapper around the element_hasher.
+   * When the column is nested, this uses the element_hasher to hash the shape and values of the
+   * column.
+   */
+  template <template <typename> class hash_fn>
+  class element_hasher_adapter {
+   public:
+    __device__ element_hasher_adapter(
+      Nullate nulls,
+      uint32_t seed             = DEFAULT_HASH_SEED,
+      hash_value_type null_hash = std::numeric_limits<hash_value_type>::max()) noexcept
+      : _has_nulls(nulls), _seed(seed), _null_hash(null_hash)
+    {
+    }
+
+    template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
+    __device__ hash_value_type operator()(column_device_view const& col,
+                                          size_type row_index) const noexcept
+    {
+      return element_hasher<hash_fn, Nullate>(_has_nulls, _seed, _null_hash)
+        .template operator()<T>(col, row_index);
+    }
+
+    template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
+    __device__ hash_value_type operator()(column_device_view const& col,
+                                          size_type row_index) const noexcept
+    {
+      auto hash                   = hash_value_type{_seed};
+      column_device_view curr_col = col.slice(row_index, 1);
+      while (is_nested(curr_col.type())) {
+        if (_has_nulls) {
+          auto validity_it = detail::make_validity_iterator<true>(curr_col);
+          hash =
+            detail::accumulate(validity_it,
+                               validity_it + curr_col.size(),
+                               hash,
+                               [null_hash = _null_hash](auto hash, auto is_valid) {
+                                 return cudf::detail::hash_combine(hash, is_valid ? 0 : null_hash);
+                               });
+        }
+        if (curr_col.type().id() == type_id::STRUCT) {
+          curr_col = detail::structs_column_device_view(curr_col).sliced_child(0);
+        } else if (curr_col.type().id() == type_id::LIST) {
+          auto list_col   = detail::lists_column_device_view(curr_col);
+          auto list_sizes = make_list_size_iterator(list_col);
+          hash            = detail::accumulate(
+            list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
+              return cudf::detail::hash_combine(hash, hash_fn<decltype(size)>{}(size));
+            });
+          curr_col = list_col.sliced_child();
+        }
+      }
+      for (int i = 0; i < curr_col.size(); ++i) {
+        hash = cudf::detail::hash_combine(
+          hash,
+          type_dispatcher<dispatch_void_if_nested>(
+            curr_col.type(),
+            element_hasher<hash_fn, Nullate>{_has_nulls, DEFAULT_HASH_SEED, _null_hash},
+            curr_col,
+            i));
+      }
+      return hash;
+    }
+
+    uint32_t _seed;
+    hash_value_type _null_hash;
+    Nullate _has_nulls;
+  };
+
   CUDF_HOST_DEVICE device_row_hasher(Nullate has_nulls,
                                      table_device_view t,
                                      uint32_t seed = DEFAULT_HASH_SEED) noexcept
