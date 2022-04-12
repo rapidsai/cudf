@@ -27,7 +27,6 @@
 #include <cuda/atomic>
 
 #include <cooperative_groups.h>
-#include <cooperative_groups/reduce.h>
 
 namespace cudf {
 namespace io {
@@ -118,14 +117,17 @@ __global__ void __launch_bounds__(block_size, 1)
   __shared__ cg::experimental::block_tile_memory<4, block_size> shared;
   auto thb   = cg::experimental::this_thread_block(shared);
   auto block = cg::experimental::tiled_partition<block_size>(thb);
+  // cub::BlockReduce instead of cg::reduce for performance purpose
+  using block_reduce = cub::BlockReduce<size_type, block_size>;
+  __shared__ typename block_reduce::TempStorage reduce_storage;
 
   size_type start_row = frag.start_row;
   size_type end_row   = frag.start_row + frag.num_rows;
 
   // Find the bounds of values in leaf column to be inserted into the map for current chunk
-  auto cudf_col          = *(col->parent_column);
-  auto s_start_value_idx = row_to_value_idx(start_row, cudf_col);
-  auto end_value_idx     = row_to_value_idx(end_row, cudf_col);
+  auto const cudf_col          = *(col->parent_column);
+  auto const s_start_value_idx = row_to_value_idx(start_row, cudf_col);
+  auto const end_value_idx     = row_to_value_idx(end_row, cudf_col);
 
   column_device_view const& data_col = *col->leaf_column;
 
@@ -133,7 +135,7 @@ __global__ void __launch_bounds__(block_size, 1)
   auto hash_map_mutable = map_type::device_mutable_view(
     chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
-  int total_num_dict_entries;
+  __shared__ int total_num_dict_entries;
   auto val_idx = s_start_value_idx + t;
   while (block.any(val_idx < end_value_idx)) {
     auto const is_valid = val_idx < data_col.size() and data_col.is_valid(val_idx);
@@ -164,14 +166,15 @@ __global__ void __launch_bounds__(block_size, 1)
       }();
     }
 
-    auto num_unique     = cg::reduce(block, is_unique, cg::plus<int>());
-    auto uniq_data_size = cg::reduce(block, uniq_elem_size, cg::plus<int>());
+    auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
+    block.sync();
+    auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
     if (t == 0) {
       total_num_dict_entries = atomicAdd(&chunk->num_dict_entries, num_unique);
       total_num_dict_entries += num_unique;
       atomicAdd(&chunk->uniq_data_size, uniq_data_size);
     }
-    total_num_dict_entries = block.shfl(total_num_dict_entries, 0);
+    block.sync();
 
     // Check if the num unique values in chunk has already exceeded max dict size and early exit
     if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
@@ -229,10 +232,10 @@ __global__ void __launch_bounds__(block_size, 1)
   size_type end_row   = frag.start_row + frag.num_rows;
 
   // Find the bounds of values in leaf column to be searched in the map for current chunk
-  auto cudf_col           = *(col->parent_column);
-  auto s_start_value_idx  = row_to_value_idx(start_row, cudf_col);
-  auto s_ck_start_val_idx = row_to_value_idx(chunk->start_row, cudf_col);
-  auto end_value_idx      = row_to_value_idx(end_row, cudf_col);
+  auto const cudf_col           = *(col->parent_column);
+  auto const s_start_value_idx  = row_to_value_idx(start_row, cudf_col);
+  auto const s_ck_start_val_idx = row_to_value_idx(chunk->start_row, cudf_col);
+  auto const end_value_idx      = row_to_value_idx(end_row, cudf_col);
 
   column_device_view const& data_col = *col->leaf_column;
 
