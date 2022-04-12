@@ -726,15 +726,17 @@ namespace hash {
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
  public:
-  __device__ element_hasher(Nullate nulls,
-                            uint32_t seed             = DEFAULT_HASH_SEED,
-                            hash_value_type null_hash = std::numeric_limits<hash_value_type>::max())
+  __device__ element_hasher(
+    Nullate nulls,
+    uint32_t seed             = DEFAULT_HASH_SEED,
+    hash_value_type null_hash = std::numeric_limits<hash_value_type>::max()) noexcept
     : _has_nulls(nulls), _seed(seed), _null_hash(null_hash)
   {
   }
 
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
+  __device__ hash_value_type operator()(column_device_view const& col,
+                                        size_type row_index) const noexcept
   {
     if (_has_nulls && col.is_null(row_index)) { return _null_hash; }
     return hash_function<T>{_seed}(col.element<T>(row_index));
@@ -743,7 +745,8 @@ class element_hasher {
   template <typename T,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>() and
                            not std::is_same_v<T, cudf::list_view>)>
-  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
+  __device__ hash_value_type operator()(column_device_view const& col,
+                                        size_type row_index) const noexcept
   {
     cudf_assert(false && "Unsupported type in hash.");
     return {};
@@ -752,7 +755,8 @@ class element_hasher {
   template <typename T,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>() and
                            std::is_same_v<T, cudf::list_view>)>
-  __device__ hash_value_type operator()(column_device_view const& col, size_type row_index) const
+  __device__ hash_value_type operator()(column_device_view const& col,
+                                        size_type row_index) const noexcept
   {
     auto hash                   = hash_value_type{_seed};
     column_device_view curr_col = col.slice(row_index, 1);
@@ -808,12 +812,12 @@ class device_row_hasher {
   device_row_hasher() = delete;
   CUDF_HOST_DEVICE device_row_hasher(Nullate has_nulls,
                                      table_device_view t,
-                                     uint32_t seed = DEFAULT_HASH_SEED)
+                                     uint32_t seed = DEFAULT_HASH_SEED) noexcept
     : _table{t}, _seed(seed), _has_nulls{has_nulls}
   {
   }
 
-  __device__ auto operator()(size_type row_index) const
+  __device__ auto operator()(size_type row_index) const noexcept
   {
     // Hash the first column w/ the seed
     auto const initial_hash =
