@@ -137,7 +137,7 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
                         OutputPairIter const& out_iters,
                         rmm::cuda_stream_view stream) const
   {
-    auto const key_accessor = cudf::detail::scalar_value_accessor<Type>{search_key};
+    auto const key_accessor = cudf::detail::make_pair_rep_iterator<Type>(search_key);
 
     thrust::tabulate(
       rmm::exec_policy(stream),
@@ -155,7 +155,7 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
           return {NOT_FOUND_IDX, false};
         }
 
-        return {search_list(d_child, d_offsets, list_idx, has_null_elements, key_accessor(0)),
+        return {search_list(d_child, d_offsets, list_idx, has_null_elements, key_accessor[0].first),
                 true};
       });
   }
