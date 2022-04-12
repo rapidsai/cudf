@@ -1982,7 +1982,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         None : method directly changes calling object
 
         Raises
-        -------
+        ------
         ValueError
             - When ``errors`` = 'raise' and there's overlapping non-NA data.
             - When ``errors`` is not either 'ignore' or 'raise'
@@ -6190,7 +6190,7 @@ def make_binop_func(op, postprocess=None):
     # def postprocess(left, right, output)
     # where left and right are the inputs to the binop and output is the result
     # of calling the wrapped Frame binop.
-    wrapped_func = getattr(Frame, op)
+    wrapped_func = getattr(IndexedFrame, op)
 
     @functools.wraps(wrapped_func)
     def wrapper(self, other, axis="columns", level=None, fill_value=None):

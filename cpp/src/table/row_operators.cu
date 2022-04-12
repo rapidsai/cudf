@@ -85,57 +85,44 @@ auto decompose_structs(table_view table,
     auto const& col = table.column(col_idx);
     if (is_nested(col.type())) {
       // convert and insert
-      std::vector<column_view> r_verticalized_columns;
-      std::vector<int> r_verticalized_col_depths;
-      std::vector<column_view> flattened;
-      std::vector<int> depths;
-      // TODO: Here I added a bogus leaf column at the beginning to help in the while loop below.
-      //       Refactor the while loop so that it can handle the last case.
-      flattened.push_back(make_empty_column(type_id::INT32)->view());
-      std::function<void(column_view const&, int)> recursive_child = [&](column_view const& c,
-                                                                         int depth) {
-        flattened.push_back(c);
-        depths.push_back(depth);
-        if (c.type().id() == type_id::STRUCT) {
-          for (int child_idx = 0; child_idx < c.num_children(); ++child_idx) {
-            auto scol = structs_column_view(c);
-            recursive_child(scol.get_sliced_child(child_idx), depth + 1);
+      std::vector<std::vector<column_view>> flattened;
+      std::function<void(column_view const&, std::vector<column_view>*, int)> recursive_child =
+        [&](column_view const& c, std::vector<column_view>* branch, int depth) {
+          branch->push_back(c);
+          if (c.type().id() == type_id::STRUCT) {
+            for (int child_idx = 0; child_idx < c.num_children(); ++child_idx) {
+              auto scol = structs_column_view(c);
+              if (child_idx > 0) {
+                verticalized_col_depths.push_back(depth + 1);
+                branch = &flattened.emplace_back();
+              }
+              recursive_child(scol.get_sliced_child(child_idx), branch, depth + 1);
+            }
           }
-        }
-      };
-      recursive_child(col, 0);
-      int curr_col_idx     = flattened.size() - 1;
-      column_view curr_col = flattened[curr_col_idx];
-      while (curr_col_idx > 0) {
-        auto const& prev_col = flattened[curr_col_idx - 1];
-        if (not is_nested(prev_col.type())) {
-          // We hit a column that's a leaf so seal this hierarchy
-          r_verticalized_columns.push_back(curr_col);
-          r_verticalized_col_depths.push_back(depths[curr_col_idx - 1]);
-          curr_col = prev_col;
-        } else {
-          curr_col = column_view(prev_col.type(),
-                                 prev_col.size(),
+        };
+      auto& branch = flattened.emplace_back();
+      verticalized_col_depths.push_back(0);
+      recursive_child(col, &branch, 0);
+
+      for (auto const& branch : flattened) {
+        column_view curr_col = branch.back();
+        for (auto it = branch.crbegin() + 1; it < branch.crend(); ++it) {
+          curr_col = column_view(it->type(),
+                                 it->size(),
                                  nullptr,
-                                 prev_col.null_mask(),
+                                 it->null_mask(),
                                  UNKNOWN_NULL_COUNT,
-                                 prev_col.offset(),
+                                 it->offset(),
                                  {curr_col});
         }
-        --curr_col_idx;
+        verticalized_columns.push_back(curr_col);
       }
-      verticalized_columns.insert(
-        verticalized_columns.end(), r_verticalized_columns.rbegin(), r_verticalized_columns.rend());
-      verticalized_col_depths.insert(verticalized_col_depths.end(),
-                                     r_verticalized_col_depths.rbegin(),
-                                     r_verticalized_col_depths.rend());
       if (not column_order.empty()) {
-        new_column_order.insert(
-          new_column_order.end(), r_verticalized_columns.size(), column_order[col_idx]);
+        new_column_order.insert(new_column_order.end(), flattened.size(), column_order[col_idx]);
       }
       if (not null_precedence.empty()) {
         new_null_precedence.insert(
-          new_null_precedence.end(), r_verticalized_columns.size(), null_precedence[col_idx]);
+          new_null_precedence.end(), flattened.size(), null_precedence[col_idx]);
       }
     } else {
       verticalized_columns.push_back(col);

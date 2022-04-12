@@ -273,7 +273,7 @@ class SingleColumnFrame(Frame, NotIterable):
             Value to indicate missing category.
 
         Returns
-        --------
+        -------
         (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
             - *labels* contains the encoded values
             - *cats* contains the categories in order that the N-th
