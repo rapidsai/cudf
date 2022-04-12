@@ -156,6 +156,17 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
   }
 };
 
+template <typename SearchKeyType>
+auto get_search_keys_device_iterable_view(SearchKeyType const& search_keys,
+                                          rmm::cuda_stream_view stream)
+{
+  if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
+    return &search_keys;
+  } else {
+    return column_device_view::create(search_keys, stream);
+  }
+}
+
 /**
  * @brief TBA
  */
@@ -211,16 +222,20 @@ struct dispatch_index_of {
 
     } else {  // not struct type
 
+      auto const d_keys         = get_search_keys_device_iterable_view(search_keys, stream);
+      auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type, false>(*d_keys);
+
+      auto const d_child_ptr        = column_device_view::create(child, stream);
+      auto const elements_pair_iter = cudf::detail::make_pair_iterator<Type, false>(*d_keys);
+
       // If same scale, then...
       auto const do_search = [&](auto const& searcher) {
-        auto const d_child_ptr = column_device_view::create(child, stream);
         searcher.search_all_lists(*d_lists_ptr,
-                                  *d_child_ptr,
+                                  elements_pair_iter,
                                   lists.offsets_begin(),
                                   lists.has_nulls(),
                                   child.has_nulls(),
-                                  search_keys,
-                                  search_keys_have_nulls,
+                                  keys_pair_iter,
                                   out_iters,
                                   stream);
       };
