@@ -465,16 +465,16 @@ class UnpackReturnToMasked(AbstractTemplate):
 
 # String functions
 @cuda_decl_registry.register_global(len)
-class MaskedStringViewLength(AbstractTemplate):
+class MaskedDStringLength(AbstractTemplate):
     """
     provide the length of a cudf::string_view like struct
     """
 
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(
-            args[0].value_type, StringView
+            args[0].value_type, DString
         ):
-            return nb_signature(types.int32, args[0])
+            return nb_signature(MaskedType(types.int32), args[0])
 
 
 @cuda_decl_registry.register_global(len)
@@ -504,7 +504,7 @@ class MaskedStringStartsWith(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(
-            types.boolean, MaskedType(string_view), recvr=self.this
+            types.boolean, MaskedType(dstring), recvr=self.this
         )
 
 
@@ -513,7 +513,7 @@ class MaskedStringEndsWith(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(
-            types.boolean, MaskedType(string_view), recvr=self.this
+            types.boolean, MaskedType(dstring), recvr=self.this
         )
 
 
@@ -522,7 +522,7 @@ class MaskedStringFind(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(
-            types.int32, MaskedType(string_view), recvr=self.this
+            types.int32, MaskedType(dstring), recvr=self.this
         )
 
 
@@ -531,7 +531,7 @@ class MaskedStringRFind(AbstractTemplate):
 
     def generic(self, args, kws):
         return nb_signature(
-            types.int32, MaskedType(string_view), recvr=self.this
+            types.int32, MaskedType(dstring), recvr=self.this
         )
 
 class MaskedStringUpper(AbstractTemplate):
@@ -543,32 +543,32 @@ class MaskedStringUpper(AbstractTemplate):
         )
 
 @cuda_decl_registry.register_attr
-class MaskedStringAttrs(AttributeTemplate):
-    key = MaskedType(string_view)
+class MaskedDStringAttrs(AttributeTemplate):
+    key = MaskedType(dstring)
 
     def resolve_startswith(self, mod):
         return types.BoundFunction(
-            MaskedStringStartsWith, MaskedType(string_view)
+            MaskedStringStartsWith, MaskedType(dstring)
         )
 
     def resolve_endswith(self, mod):
         return types.BoundFunction(
-            MaskedStringEndsWith, MaskedType(string_view)
+            MaskedStringEndsWith, MaskedType(dstring)
         )
 
     def resolve_find(self, mod):
         return types.BoundFunction(
-            MaskedStringFind, MaskedType(string_view)
+            MaskedStringFind, MaskedType(dstring)
         )
 
     def resolve_rfind(self, mod):
         return types.BoundFunction(
-            MaskedStringRFind, MaskedType(string_view)
+            MaskedStringRFind, MaskedType(dstring)
         )
 
     def resolve_upper(self, mod):
         return types.BoundFunction(
-            MaskedStringUpper, MaskedType(string_view)
+            MaskedStringUpper, MaskedType(dstring)
         )
 
     def resolve_value(self, mod):
@@ -579,29 +579,29 @@ class MaskedStringAttrs(AttributeTemplate):
 
 
 
-_len_string_view = cuda.declare_device(
-    "len_2", types.int32(types.CPointer(string_view))
+_dstring_len = cuda.declare_device(
+    "len", types.int32(types.CPointer(dstring))
 )
-_string_view_startswith = cuda.declare_device(
+_dstring_startswith = cuda.declare_device(
     "startswith",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(types.CPointer(dstring), types.CPointer(dstring)),
 )
-_string_view_endswith = cuda.declare_device(
+_dstring_endswith = cuda.declare_device(
     "endswith",
-    types.boolean(types.CPointer(string_view), types.CPointer(string_view)),
+    types.boolean(types.CPointer(dstring), types.CPointer(dstring)),
 )
-_string_view_find = cuda.declare_device(
+_dstring_find = cuda.declare_device(
     "find",
-    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+    types.int32(types.CPointer(dstring), types.CPointer(dstring)),
 )
-_string_view_rfind = cuda.declare_device(
+_dstring_rfind = cuda.declare_device(
     "rfind",
-    types.int32(types.CPointer(string_view), types.CPointer(string_view)),
+    types.int32(types.CPointer(dstring), types.CPointer(dstring)),
 )
 
-_string_view_upper = cuda.declare_device(
+_dstring_upper = cuda.declare_device(
     "upper",
-    types.int32(types.CPointer(dstring), types.CPointer(string_view)),
+    types.int32(types.CPointer(dstring), types.CPointer(dstring)),
 )
 
 _create_dstring_from_stringview = cuda.declare_device(

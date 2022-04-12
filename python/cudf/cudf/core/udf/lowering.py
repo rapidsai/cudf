@@ -22,12 +22,12 @@ from cudf.core.udf._ops import (
 from cudf.core.udf.typing import (
     MaskedType,
     NAType,
-    _len_string_view,
-    _string_view_endswith,
-    _string_view_find,
-    _string_view_rfind,
-    _string_view_startswith,
-    _string_view_upper,
+    _dstring_len,
+    _dstring_endswith,
+    _dstring_find,
+    _dstring_rfind,
+    _dstring_startswith,
+    _dstring_upper,
     _create_dstring_from_stringview,
     string_view,
     dstring
@@ -412,55 +412,57 @@ def lower_constant_masked(context, builder, ty, val):
 
 
 # String function implementations
-def call_len_string_view(st):
-    return _len_string_view(st)
+def call_len_dstring(st):
+    return _dstring_len(st)
 
 
-@cuda_lower(len, MaskedType(string_view))
+@cuda_lower(len, MaskedType(dstring))
 def string_view_len_impl(context, builder, sig, args):
-    retty = sig.return_type
-    maskedty = sig.args[0]
-    masked_str = cgutils.create_struct_proxy(maskedty)(
+    ret = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+    masked_dstr_ty = sig.args[0]
+    masked_dstr = cgutils.create_struct_proxy(masked_dstr_ty)(
         context, builder, value=args[0]
     )
 
     # the first element is the string_view struct
     # get a pointer that we will copy the data to
-    strty = masked_str.value.type
+    strty = masked_dstr.value.type
     arg = builder.alloca(strty)
 
     # store
-    builder.store(masked_str.value, arg)
+    builder.store(masked_dstr.value, arg)
 
     result = context.compile_internal(
         builder,
-        call_len_string_view,
-        nb_signature(retty, types.CPointer(string_view)),
+        call_len_dstring,
+        nb_signature(sig.return_type.value_type, types.CPointer(dstring)),
         (arg,),
     )
+    ret.value = result
+    ret.valid = masked_dstr.valid
 
-    return result
+    return ret._getvalue()
 
 
 @cuda_lowering_registry.lower_cast(types.StringLiteral, MaskedType)
-def cast_stringliteral_to_masked_stringview(
+def cast_stringliteral_to_masked_dstring(
     context, builder, fromty, toty, val
 ):
     """
-    cast a literal to a Masked(string_view)
+    cast a literal to a Masked(dstring)
     """
     # create an empty string_view
-    str_view = cgutils.create_struct_proxy(toty.value_type)(context, builder)
+    dstr = cgutils.create_struct_proxy(dstring)(context, builder)
 
     # set the empty strview data pointer to point to the literal value
     s = context.insert_const_string(builder.module, fromty.literal_value)
-    str_view.data = context.insert_addrspace_conv(
+    dstr.m_data = context.insert_addrspace_conv(
         builder, s, nvvm.ADDRSPACE_CONSTANT
     )
-    str_view.length = context.get_constant(
+    dstr.m_size = context.get_constant(
         types.int32, len(fromty.literal_value)
     )
-    str_view.bytes = context.get_constant(
+    dstr.m_bytes = context.get_constant(
         types.int32, len(fromty.literal_value.encode("UTF-8"))
     )
 
@@ -471,19 +473,19 @@ def cast_stringliteral_to_masked_stringview(
     to_return.valid = context.get_constant(types.boolean, 1)
 
     # set the value to be the string view
-    to_return.value = str_view._getvalue()
+    to_return.value = dstr._getvalue()
 
     return to_return._getvalue()
 
 
-def call_string_view_startswith(st, tgt):
-    return _string_view_startswith(st, tgt)
+def call_dstring_startswith(st, tgt):
+    return _dstring_startswith(st, tgt)
 
 
 @cuda_lower(
-    "MaskedType.startswith", MaskedType(string_view), MaskedType(string_view)
+    "MaskedType.startswith", MaskedType(dstring), MaskedType(dstring)
 )
-def masked_stringview_startswith(context, builder, sig, args):
+def masked_dstring_startswith(context, builder, sig, args):
     retty = sig.return_type
     maskedty = sig.args[0]
 
@@ -502,23 +504,23 @@ def masked_stringview_startswith(context, builder, sig, args):
 
     result = context.compile_internal(
         builder,
-        call_string_view_startswith,
+        call_dstring_startswith,
         nb_signature(
-            retty, types.CPointer(string_view), types.CPointer(string_view)
+            retty, types.CPointer(dstring), types.CPointer(dstring)
         ),
         (st_ptr, tgt_ptr),
     )
     return result
 
 
-def call_string_view_endswith(st, tgt):
-    return _string_view_endswith(st, tgt)
+def call_dstring_endswith(st, tgt):
+    return _dstring_endswith(st, tgt)
 
 
 @cuda_lower(
-    "MaskedType.endswith", MaskedType(string_view), MaskedType(string_view)
+    "MaskedType.endswith", MaskedType(dstring), MaskedType(dstring)
 )
-def masked_stringview_endswith(context, builder, sig, args):
+def masked_dstring_endswith(context, builder, sig, args):
     retty = sig.return_type
     maskedty = sig.args[0]
 
@@ -537,23 +539,23 @@ def masked_stringview_endswith(context, builder, sig, args):
 
     result = context.compile_internal(
         builder,
-        call_string_view_endswith,
+        call_dstring_endswith,
         nb_signature(
-            retty, types.CPointer(string_view), types.CPointer(string_view)
+            retty, types.CPointer(dstring), types.CPointer(dstring)
         ),
         (st_ptr, tgt_ptr),
     )
     return result
 
 
-def call_string_view_find(st, tgt):
-    return _string_view_find(st, tgt)
+def call_dstring_find(st, tgt):
+    return _dstring_find(st, tgt)
 
 
 @cuda_lower(
-    "MaskedType.find", MaskedType(string_view), MaskedType(string_view)
+    "MaskedType.find", MaskedType(dstring), MaskedType(dstring)
 )
-def masked_stringview_find(context, builder, sig, args):
+def masked_dstring_find(context, builder, sig, args):
     retty = sig.return_type
     maskedty = sig.args[0]
 
@@ -572,23 +574,23 @@ def masked_stringview_find(context, builder, sig, args):
 
     result = context.compile_internal(
         builder,
-        call_string_view_find,
+        call_dstring_find,
         nb_signature(
-            retty, types.CPointer(string_view), types.CPointer(string_view)
+            retty, types.CPointer(dstring), types.CPointer(dstring)
         ),
         (st_ptr, tgt_ptr),
     )
     return result
 
 
-def call_string_view_rfind(st, tgt):
-    return _string_view_rfind(st, tgt)
+def call_dstring_rfind(st, tgt):
+    return _dstring_rfind(st, tgt)
 
 
 @cuda_lower(
-    "MaskedType.rfind", MaskedType(string_view), MaskedType(string_view)
+    "MaskedType.rfind", MaskedType(dstring), MaskedType(dstring)
 )
-def masked_stringview_rfind(context, builder, sig, args):
+def masked_dstring_rfind(context, builder, sig, args):
     retty = sig.return_type
     maskedty = sig.args[0]
 
@@ -607,19 +609,19 @@ def masked_stringview_rfind(context, builder, sig, args):
 
     result = context.compile_internal(
         builder,
-        call_string_view_rfind,
+        call_dstring_rfind,
         nb_signature(
-            retty, types.CPointer(string_view), types.CPointer(string_view)
+            retty, types.CPointer(dstring), types.CPointer(dstring)
         ),
         (st_ptr, tgt_ptr),
     )
     return result
 
-def call_string_view_upper(st, tgt):
-    return _string_view_upper(st, tgt)
+def call_dstring_upper(st, tgt):
+    return _dstring_upper(st, tgt)
 
 @cuda_lower(
-    "MaskedType.upper", MaskedType(string_view)
+    "MaskedType.upper", MaskedType(dstring)
 )
 def masked_stringview_upper(context, builder, sig, args):
     # create an empty MaskedType(dstring)
@@ -643,9 +645,9 @@ def masked_stringview_upper(context, builder, sig, args):
 
     result = context.compile_internal(
         builder,
-        call_string_view_upper,
+        call_dstring_upper,
         nb_signature(
-            types.int32, types.CPointer(string_view), types.CPointer(string_view)
+            types.int32, types.CPointer(dstring), types.CPointer(dstring)
         ),
         (st_ptr, tgt_ptr),
     )
