@@ -2042,7 +2042,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         None : method directly changes calling object
 
         Raises
-        -------
+        ------
         ValueError
             - When ``errors`` = 'raise' and there's overlapping non-NA data.
             - When ``errors`` is not either 'ignore' or 'raise'
