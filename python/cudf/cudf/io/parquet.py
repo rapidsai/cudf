@@ -668,8 +668,11 @@ def merge_parquet_filemetadata(filemetadata_list):
     return libparquet.merge_filemetadata(filemetadata_list)
 
 
-def _generate_filename():
-    return uuid4().hex + ".parquet"
+def _generate_filename(num=None):
+    if num is None:
+        return uuid4().hex + ".parquet"
+    else:
+        return uuid4().hex + num + ".parquet"
 
 
 @_cudf_nvtx_annotate
@@ -700,31 +703,38 @@ def _get_partitioned(
     full_paths = []
     metadata_file_paths = []
     full_offsets = []
+
     for idx, keys in enumerate(part_names.itertuples(index=False)):
-        current_offset = part_offsets[idx]
+        current_offset = (part_offsets[idx], part_offsets[idx + 1])
+        num_chunks = 1
         if max_rows is not None:
             start, end = current_offset
             if end - start > max_rows:
                 new_offsets = list(range(start, end, max_rows))
-                i = 0
-                while i < len(new_offsets) - 1:
-                    full_offsets.append((new_offsets[i], new_offsets[i + 1]))
-                    i += 1
-                full_offsets.append((new_offsets[i], new_offsets[i + 1]))
+                new_offsets.append(end)
+                num_chunks = len(new_offsets) - 1
+                full_offsets.extend(new_offsets)
+            else:
+                full_offsets.append(end)
         else:
-            full_offsets.append(current_offset)
+            full_offsets.extend(current_offset)
 
         subdir = fs.sep.join(
             [f"{name}={val}" for name, val in zip(partition_cols, keys)]
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdirs(prefix, exist_ok=True)
-        filename = filename or _generate_filename()
-        full_path = fs.sep.join([prefix, filename])
-        full_paths.append(full_path)
-        metadata_file_paths.append(fs.sep.join([subdir, filename]))
 
-    return full_paths, metadata_file_paths, grouped_df, part_offsets, filename
+        while num_chunks > 0:
+            filename = filename or _generate_filename(str(num_chunks))
+            full_path = fs.sep.join([prefix, filename + str(num_chunks)])
+            num_chunks -= 1
+            full_paths.append(full_path)
+            metadata_file_paths.append(
+                fs.sep.join([subdir, filename + str(num_chunks)])
+            )
+
+    return full_paths, metadata_file_paths, grouped_df, full_offsets, filename
 
 
 ParquetWriter = libparquet.ParquetWriter
@@ -854,9 +864,7 @@ class ParquetDatasetWriter:
                 for path in self._chunked_writers[cw_idx][1]
             ]
             cw.write_table(grouped_df, this_cw_part_info)
-        import pdb
 
-        pdb.set_trace()
         # Create new cw for unhandled paths encountered in this write_table
         new_paths, part_info, meta_paths = zip(*new_cw_paths)
         self._chunked_writers.append(
