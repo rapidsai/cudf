@@ -561,7 +561,7 @@ result : Series or DataFrame, depending on the value of `typ`.
 
 See Also
 --------
-.cudf.io.json.to_json
+cudf.DataFrame.to_json
 """
 doc_read_json = docfmt_partial(docstring=_docstring_read_json)
 
@@ -628,7 +628,7 @@ index : bool, default True
 
 See Also
 --------
-.cudf.io.json.read_json
+cudf.read_json
 """
 doc_to_json = docfmt_partial(docstring=_docstring_to_json)
 
