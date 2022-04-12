@@ -1251,7 +1251,6 @@ def test_datetime_reductions(data, op, dtype):
     ],
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10609")
 def test_datetime_infer_format(data, dtype):
     sr = cudf.Series(data)
     psr = pd.Series(data)
@@ -1549,7 +1548,6 @@ def test_date_range_start_freq_periods(start, freq, periods):
     )
 
 
-# @pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10609")
 def test_date_range_end_freq_periods(end, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
