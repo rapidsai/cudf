@@ -2,24 +2,21 @@
 
 Contributions to cuDF fall into the following categories:
 
-1. To report a bug, request a new feature, or report a problem with
-   documentation, please file an
-   [issue](https://github.com/rapidsai/cudf/issues/new/choose) describing the
-   problem or new feature in detail. The RAPIDS team evaluates and triages
-   issues, and schedules them for a release. If you believe the issue needs
-   priority attention, please comment on the issue to notify the team.
+1. To report a bug, request a new feature, or report a problem with documentation, please file an
+   [issue](https://github.com/rapidsai/cudf/issues/new/choose) describing the problem or new feature
+   in detail. The RAPIDS team evaluates and triages issues, and schedules them for a release. If you
+   believe the issue needs priority attention, please comment on the issue to notify the team.
 2. To propose and implement a new feature, please file a new feature request
-   [issue](https://github.com/rapidsai/cudf/issues/new/choose). Describe the
-   intended feature and discuss the design and implementation with the team and
-   community. Once the team agrees that the plan looks good, go ahead and
-   implement it, using the [code contributions](#code-contributions) guide
-   below.
-3. To implement a feature or bug fix for an existing issue, please follow the
-   [code contributions](#code-contributions) guide below. If you need more
-   context on a particular issue, please ask in a comment.
+   [issue](https://github.com/rapidsai/cudf/issues/new/choose). Describe the intended feature and
+   discuss the design and implementation with the team and community. Once the team agrees that the
+   plan looks good, go ahead and implement it, using the [code contributions](#code-contributions)
+   guide below.
+3. To implement a feature or bug fix for an existing issue, please follow the [code
+   contributions](#code-contributions) guide below. If you need more context on a particular issue,
+   please ask in a comment.
 
-As contributors and maintainers to this project, you are expected to abide by
-cuDF's code of conduct. More information can be found at:
+As contributors and maintainers to this project, you are expected to abide by cuDF's code of
+conduct. More information can be found at:
 [Contributor Code of Conduct](https://docs.rapids.ai/resources/conduct/).
 
 ## Code contributions
@@ -34,37 +31,33 @@ cuDF's code of conduct. More information can be found at:
    labels.
 3. Comment on the issue stating that you are going to work on it.
 4. Code! Make sure to update unit tests!
-5. When done,
-   [create your pull request](https://github.com/rapidsai/cudf/compare).
-6. Verify that CI passes all
-   [status checks](https://help.github.com/articles/about-status-checks/).
+5. When done, [create your pull request](https://github.com/rapidsai/cudf/compare).
+6. Verify that CI passes all [status checks](https://help.github.com/articles/about-status-checks/).
    Fix if needed.
 7. Wait for other developers to review your code and update code as needed.
 8. Once reviewed and approved, a RAPIDS developer will merge your pull request.
 
-Remember, if you are unsure about anything, don't hesitate to comment on issues
-and ask for clarifications!
+If you are unsure about anything, don't hesitate to comment on issues and ask for clarification!
 
 ### Seasoned developers
 
-Once you have gotten your feet wet and are more comfortable with the code, you
-can look at the prioritized issues for our next release in our
+Once you have gotten your feet wet and are more comfortable with the code, you can look at the
+prioritized issues for our next release in our
 [project boards](https://github.com/rapidsai/cudf/projects).
 
-**Note:** Always look at the release board with the highest number for issues
-to work on. This is where RAPIDS developers also focus their efforts.
+**Note:** Always look at the release board with the highest number for issues to work on. This is
+where RAPIDS developers also focus their efforts.
 
-Look at the unassigned issues, and find an issue to which you are comfortable
-contributing. Start with _Step 3_ above, commenting on the issue to let others
-know you are working on it. If you have any questions related to the
-implementation of the issue, ask them in the issue instead of the PR.
+Look at the unassigned issues, and find an issue to which you are comfortable contributing. Start
+with _Step 3_ above, commenting on the issue to let others know you are working on it. If you have
+any questions related to the implementation of the issue, ask them in the issue instead of the PR.
 
 ## Setting up your build environment
 
-The following instructions are for developers and contributors to cuDF
-development. These instructions are tested on Ubuntu Linux LTS releases. Use
-these instructions to build cuDF from source and contribute to its development.
-Other operating systems may be compatible, but are not currently tested.
+The following instructions are for developers and contributors to cuDF development. These
+instructions are tested on Ubuntu Linux LTS releases. Use these instructions to build cuDF from
+source and contribute to its development. Other operating systems may be compatible, but are not
+currently tested.
 
 ### General requirements
 
@@ -110,12 +103,11 @@ conda activate cudf_dev
 
 ### Build cuDF from source
 
-- A `build.sh` script is provided in `$CUDF_HOME`. Running the script with no
-  additional arguments will install the `libcudf`, `cudf` and `dask_cudf`
-  libraries. By default, the libraries are installed to the `$CONDA_PREFIX`
-  directory. To install into a different location, set the location in
-  `$INSTALL_PREFIX`. Finally, note that the script depends on the `nvcc`
-  executable being on your path, or defined in `$CUDACXX`.
+- A `build.sh` script is provided in `$CUDF_HOME`. Running the script with no additional arguments
+  will install the `libcudf`, `cudf` and `dask_cudf` libraries. By default, the libraries are
+  installed to the `$CONDA_PREFIX` directory. To install into a different location, set the location
+  in `$INSTALL_PREFIX`. Finally, note that the script depends on the `nvcc` executable being on your
+  path, or defined in `$CUDACXX`.
 
 ```bash
 cd $CUDF_HOME
@@ -129,9 +121,8 @@ cd $CUDF_HOME
 ./build.sh libcudf cudf  # libcudf and cudf only
 ```
 
-- Other libraries like `cudf-kafka` and `custreamz` can be installed with this
-  script. For the complete list of libraries as well as details about the
-  script usage, run the `help` command:
+- Other libraries like `cudf-kafka` and `custreamz` can be installed with this script. For the
+  complete list of libraries as well as details about the script usage, run the `help` command:
 
 ```bash
 ./build.sh --help
@@ -182,8 +173,7 @@ pytest -v cudf/cudf/tests
 
 #### `dask-cudf` (Python)
 
-- First, build the `libcudf` C++ and `cudf` Python libraries following the
-  steps above
+- First, build the `libcudf` C++ and `cudf` Python libraries following the steps above
 
 - To install the `dask-cudf` Python package in editable/develop mode:
 ```bash
@@ -221,8 +211,7 @@ make test
 
 #### `cudf-kafka` (Python)
 
-- First, build the `libcudf` and `libcudf_kafka` libraries following the steps
-  above
+- First, build the `libcudf` and `libcudf_kafka` libraries following the steps above
 
 - To install the `cudf-kafka` Python package in editable/develop mode:
 
@@ -234,8 +223,7 @@ python setup.py develop
 
 #### `custreamz` (Python)
 
-- First, build `libcudf`, `libcudf_kafka`, and `cudf_kafka` following the steps
-  above
+- First, build `libcudf`, `libcudf_kafka`, and `cudf_kafka` following the steps above
 
 - To install the `custreamz` Python package in editable/develop mode:
 
@@ -258,16 +246,15 @@ pytest -v custreamz
 
 - Then, refer to the [Java README](java/README.md)
 
-Done! You are ready to develop for the cuDF project. Please review the
-project's [code formatting guidelines](#code-formatting) to ensure that
-contributed code follows the expected format.
+Done! You are ready to develop for the cuDF project. Please review the project's
+[code formatting guidelines](#code-formatting).
 
 ## Debugging cuDF
 
 ### Building in debug mode from source
 
-Follow the instructions to [build from source](#build-cudf-from-source) and add
-`-g` to the `./build.sh` command.
+Follow the instructions to [build from source](#build-cudf-from-source) and add `-g` to the
+`./build.sh` command.
 
 For example:
 
@@ -275,15 +262,15 @@ For example:
 ./build.sh libcudf -g
 ```
 
-This builds `libcudf` in debug mode which enables some `assert` safety checks
-and includes symbols in the library for debugging.
+This builds `libcudf` in debug mode which enables some `assert` safety checks and includes symbols
+in the library for debugging.
 
 All other steps for installing `libcudf` into your environment are the same.
 
 ### Debugging with `cuda-gdb` and `cuda-memcheck`
 
-When you have a debug build of `libcudf` installed, debugging with the
-`cuda-gdb` and `cuda-memcheck` is easy.
+When you have a debug build of `libcudf` installed, debugging with the `cuda-gdb` and
+`cuda-memcheck` is easy.
 
 If you are debugging a Python script, run the following:
 
@@ -297,72 +284,65 @@ cuda-memcheck python <program_name>.py <program_arguments>
 
 ### Device debug symbols
 
-The device debug symbols are not automatically added with the cmake `Debug`
-build type because it causes a runtime delay of several minutes when loading
-the libcudf.so library.
+The device debug symbols are not automatically added with the cmake `Debug` build type because it
+causes a runtime delay of several minutes when loading the libcudf.so library.
 
-Therefore, it is recommended to add device debug symbols only to specific files
-by setting the `-G` compile option locally in your `cpp/CMakeLists.txt` for
-that file. Here is an example of adding the `-G` option to the compile command
-for `src/copying/copy.cu` source file:
+Therefore, it is recommended to add device debug symbols only to specific files by setting the `-G`
+compile option locally in your `cpp/CMakeLists.txt` for that file. Here is an example of adding the
+`-G` option to the compile command for `src/copying/copy.cu` source file:
 
 ```
 set_source_files_properties(src/copying/copy.cu PROPERTIES COMPILE_OPTIONS "-G")
 ```
 
-This will add the device debug symbols for this object file in `libcudf.so`.
-You can then use `cuda-dbg` to debug into the kernels in that source file.
+This will add the device debug symbols for this object file in `libcudf.so`.  You can then use
+`cuda-dbg` to debug into the kernels in that source file.
 
 ## Code Formatting
 
 ### Python
 
-cuDF uses [Black](https://black.readthedocs.io/en/stable/),
-[isort](https://pycqa.github.io/isort/), and
-[flake8](https://flake8.pycqa.org/en/latest/) to ensure a consistent code
-format throughout the project. They have been installed during the `cudf_dev`
-environment creation.
+cuDF uses [Black](https://black.readthedocs.io/en/stable/), [isort](https://pycqa.github.io/isort/),
+and [flake8](https://flake8.pycqa.org/en/latest/) to ensure a consistent code format throughout the
+project. They have been installed during the `cudf_dev` environment creation.
 
-These tools are used to auto-format the Python code, as well as check the
-Cython code in the repository. Additionally, there is a CI check in place to
-enforce that committed code follows our standards. You can use the tools to
-automatically format your Python code by running:
+These tools are used to auto-format the Python code, as well as check the Cython code in the
+repository. Additionally, there is a CI check in place to enforce that committed code follows our
+standards. You can use the tools to automatically format your Python code by running:
 
 ```bash
 isort --atomic python/**/*.py
 black python
 ```
 
-and then check the syntax of your Python and Cython code by running:
+Check the syntax of your Python and Cython code by running:
 
 ```bash
 flake8 python
 flake8 --config=python/.flake8.cython
 ```
 
-Additionally, many editors have plugins that will apply `isort` and `black` as
-you edit files, as well as use `flake8` to report any style / syntax issues.111
+Additionally, many editors have plugins that will apply `isort` and `black` as you edit files, as
+well as use `flake8` to report any style / syntax issues.
 
 ### C++/CUDA
 
 cuDF uses [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html).
 
-In order to format the C++/CUDA files, navigate to the root (`cudf`) directory
-and run:
+In order to format the C++/CUDA files, navigate to the root (`cudf`) directory and run:
 
 ```bash
 python3 ./cpp/scripts/run-clang-format.py -inplace
 ```
 
-Additionally, many editors have plugins or extensions that you can set up to
-automatically run `clang-format` either manually or on file save.
+Additionally, many editors have plugins or extensions that you can set up to automatically run
+`clang-format` either manually or on file save.
 
 ### Pre-commit hooks
 
-Optionally, you may wish to setup [pre-commit hooks](https://pre-commit.com/)
-to automatically run `isort`, `black`, `flake8`, and `clang-format` when you
-make a git commit.  This can be done by installing `pre-commit` via `conda` or
-`pip`:
+Optionally, you may wish to setup [pre-commit hooks](https://pre-commit.com/) to automatically run
+`isort`, `black`, `flake8`, and `clang-format` when you make a git commit. This can be done by
+installing `pre-commit` via `conda` or `pip`:
 
 ```bash
 conda install -c conda-forge pre-commit
@@ -372,14 +352,13 @@ conda install -c conda-forge pre-commit
 pip install pre-commit
 ```
 
-and then running:
+From within the repository, run:
 
 ```bash
 pre-commit install
 ```
 
-from the root of the cuDF repository. Now code linters and formatters will be
-run each time you commit changes.
+Now code linters and formatters will be run each time you commit changes.
 
 ## Attribution
 
