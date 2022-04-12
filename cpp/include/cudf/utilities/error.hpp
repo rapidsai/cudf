@@ -50,6 +50,8 @@ struct cuda_error : public std::runtime_error {
     : std::runtime_error(message), _cudaError(error)
   {
   }
+
+ public:
   cudaError_t error_code() { return _cudaError; }
 
  protected:
