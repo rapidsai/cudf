@@ -101,6 +101,10 @@ conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda11.5.yml
 conda activate cudf_dev
 ```
 
+- **Note**: the conda environment files are updated frequently, so the
+  development environment may also need to be updated if dependency versions or
+  pinnings are changed.
+
 - For other CUDA versions, check the corresponding `cudf_dev_cuda*.yml` file in
   `conda/environments/`.
 
