@@ -623,27 +623,21 @@ def call_dstring_upper(st, tgt):
 @cuda_lower(
     "MaskedType.upper", MaskedType(dstring)
 )
-def masked_stringview_upper(context, builder, sig, args):
+def masked_dstring_upper(context, builder, sig, args):
     # create an empty MaskedType(dstring)
-    retty = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+    ret = cgutils.create_struct_proxy(sig.return_type)(context, builder)
 
     # input struct
-    input_masked_strview = cgutils.create_struct_proxy(sig.args[0])(
+    input_masked_dstring = cgutils.create_struct_proxy(sig.args[0])(
         context, builder, value=args[0]
     )
 
+    st_ptr = builder.alloca(input_masked_dstring.value.type)
+    tgt_ptr = builder.alloca(input_masked_dstring.value.type)
 
+    builder.store(input_masked_dstring.value, st_ptr)
 
-    maskedty = sig.args[0]
-    st = cgutils.create_struct_proxy(maskedty)(context, builder, value=args[0])
-    ret = cgutils.create_struct_proxy(maskedty)(context, builder)
-
-    st_ptr = builder.alloca(st.value.type)
-    tgt_ptr = builder.alloca(st.value.type)
-
-    builder.store(st.value, st_ptr)
-
-    result = context.compile_internal(
+    _ = context.compile_internal(
         builder,
         call_dstring_upper,
         nb_signature(
@@ -652,9 +646,6 @@ def masked_stringview_upper(context, builder, sig, args):
         (st_ptr, tgt_ptr),
     )
 
-    #builder.store(ret.value, tgt_ptr)
-
-    builder.store(ret.value, tgt_ptr)
-    ret.valid = st.valid
-
+    ret.value = builder.load(tgt_ptr)
+    ret.valid = input_masked_dstring.valid
     return ret._getvalue()

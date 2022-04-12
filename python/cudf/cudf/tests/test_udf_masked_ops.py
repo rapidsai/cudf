@@ -782,3 +782,18 @@ def test_string_udf_rfind(data, substr):
         return st.rfind(substr)
 
     run_masked_udf_test(func, data, check_dtype=False)
+
+@pytest.mark.parametrize('data', [
+    {
+        'str_col': ["abc", "ABC", "aBc", "123", ""]
+    }
+])
+def test_string_udf_upper(data):
+    # tests the `upper` method of strings
+
+    data = cudf.DataFrame(data)
+    def func(row):
+        st = row['str_col']
+        return st.upper()
+
+    run_masked_udf_test(func, data, check_dtype=False)
