@@ -14,17 +14,13 @@ CSV
    DataFrame.to_csv
 
 
-.. currentmodule:: cudf.io.json
-
 JSON
 ~~~~
 .. autosummary::
    :toctree: api/
 
    read_json
-   to_json
-
-.. currentmodule:: cudf
+   DataFrame.to_json
 
 Parquet
 ~~~~~~~
