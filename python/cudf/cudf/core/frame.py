@@ -917,6 +917,12 @@ class Frame(BinaryOperand, Scannable):
         -------
         A list of cudf.DataFrame objects.
         """
+        if not isinstance(self, cudf.DataFrame):
+            warnings.warn(
+                f"{self.__class__}.scatter_by_map is deprecated and will be "
+                "removed.",
+                FutureWarning,
+            )
 
         # map_index might be a column name or array,
         # make it a Column
@@ -1095,6 +1101,8 @@ class Frame(BinaryOperand, Scannable):
             elif method == "backfill":
                 method = "bfill"
 
+        # TODO: This logic should be handled in different subclasses since
+        # different Frames support different types of values.
         if isinstance(value, cudf.Series):
             value = value.reindex(self._data.names)
         elif isinstance(value, cudf.DataFrame):
@@ -1209,6 +1217,11 @@ class Frame(BinaryOperand, Scannable):
             some or all ``NaN`` values
 
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Index.interpolate is deprecated and will be removed.",
+                FutureWarning,
+            )
 
         if method in {"pad", "ffill"} and limit_direction != "forward":
             raise ValueError(
@@ -1320,6 +1333,12 @@ class Frame(BinaryOperand, Scannable):
         same type as caller
             Return a Series or DataFrame with data ranks as values.
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Index.rank is deprecated and will be removed.",
+                FutureWarning,
+            )
+
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 
@@ -1355,6 +1374,12 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions."""
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Index.shift is deprecated and will be removed.",
+                FutureWarning,
+            )
+
         axis = self._get_axis_from_axis_arg(axis)
         if axis != 0:
             raise ValueError("Only axis=0 is supported.")
@@ -1747,6 +1772,12 @@ class Frame(BinaryOperand, Scannable):
         3    3    8  d
         4    4    9  e
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Index.replace is deprecated and will be removed.",
+                FutureWarning,
+            )
+
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
 
@@ -2309,6 +2340,12 @@ class Frame(BinaryOperand, Scannable):
         4    0.043478
         dtype: float64
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Index.scale is deprecated and will be removed.",
+                FutureWarning,
+            )
+
         vmin = self.min()
         vmax = self.max()
         scaled = (self - vmin) / (vmax - vmin)
@@ -3357,6 +3394,12 @@ class Frame(BinaryOperand, Scannable):
         2   6  24
         3  10  34
         """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "This method is deprecated and will be removed.",
+                FutureWarning,
+            )
+
         cast_to_int = op in ("cumsum", "cumprod")
         skipna = True if skipna is None else skipna
 
