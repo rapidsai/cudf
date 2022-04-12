@@ -56,7 +56,7 @@ auto constexpr is_supported_type()
 }
 
 template <duplicate_find_option find_option>
-auto __device__ list_begin(size_type const* d_offsets, size_type list_idx)
+auto __device__ begin_offset(size_type const* d_offsets, size_type list_idx)
 {
   if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
     return thrust::make_counting_iterator<size_type>(d_offsets[list_idx]);
@@ -67,7 +67,7 @@ auto __device__ list_begin(size_type const* d_offsets, size_type list_idx)
 }
 
 template <duplicate_find_option find_option>
-auto __device__ list_end(size_type const* d_offsets, size_type list_idx)
+auto __device__ end_offset(size_type const* d_offsets, size_type list_idx)
 {
   if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
     return thrust::make_counting_iterator<size_type>(d_offsets[list_idx + 1]);
@@ -106,87 +106,32 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
    * @brief Search index of a given scalar in a list defined by offsets pointing to rows of the
    * child column of the original lists column.
    */
-  static __device__ size_type search_list(column_device_view const& d_child,
+  template <typename ElementPairIter>
+  static __device__ size_type search_list(ElementPairIter const& pair_iter,
                                           size_type const* d_offsets,
                                           size_type list_idx,
-                                          bool has_null_elements,
                                           Type const& search_key)
   {
-    auto const begin = list_begin<find_option>(d_offsets, list_idx);
-    auto const end   = list_end<find_option>(d_offsets, list_idx);
+    auto const begin = begin_offset<find_option>(d_offsets, list_idx);
+    auto const end   = end_offset<find_option>(d_offsets, list_idx);
     auto const found_iter =
-      thrust::find_if(thrust::seq, begin, end, [&] __device__(auto const idx) {
-        auto const element  = d_child.template element<Type>(idx);
-        auto const is_valid = !has_null_elements || d_child.is_valid_nocheck(idx);
+      thrust::find_if(thrust::seq, begin, end, [pair_iter, search_key] __device__(auto const idx) {
+        auto const [element, is_valid] = pair_iter[idx];
         return is_valid && cudf::equality_compare(element, search_key);
       });
     return distance<find_option>(begin, end, found_iter);
   }
 
   /**
-   * @brief TBA
-   * Need to handle fixed point separately
-   */
-  template <typename ScalarDView>
-  static __device__ Type get_scalar_value(ScalarDView const& input)
-  {
-    if constexpr (cudf::is_fixed_point<Type>()) {
-      auto const value = input.rep();
-      auto const scale = numeric::scale_type{input.type().scale()};
-      return Type{numeric::scaled_integer<typename Type::rep>{value, scale}};
-    } else {
-      return input.value();
-    }
-  }
-
-  /**
-   * @brief Search for the index of the given scalar in all list rows.
-   */
-  template <typename OutputPairIter>
-  void search_all_lists(column_device_view const& d_lists,
-                        column_device_view const& d_child,
-                        size_type const* d_offsets,
-                        bool has_null_lists,
-                        bool has_null_elements,
-                        cudf::scalar const& search_key,
-                        bool search_key_is_null,
-                        OutputPairIter const& out_iters,
-                        rmm::cuda_stream_view stream) const
-  {
-    using ScalarType = cudf::scalar_type_t<Type>;
-
-    thrust::tabulate(
-      rmm::exec_policy(stream),
-      out_iters,
-      out_iters + d_lists.size(),
-      [d_lists,
-       d_child,
-       d_offsets,
-       has_null_lists,
-       has_null_elements,
-       search_key_is_null,
-       key_view = get_scalar_device_view(static_cast<ScalarType&>(const_cast<scalar&>(search_key))),
-       NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
-        if (search_key_is_null || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
-          return {NOT_FOUND_IDX, false};
-        }
-
-        auto const key = get_scalar_value(key_view);
-        return {search_list(d_child, d_offsets, list_idx, has_null_elements, key), true};
-      });
-  }
-
-  /**
    * @brief Search for the index of the corresponding key (given in a column) in all list rows.
    */
-  template <typename OutputPairIter>
+  template <typename ElementPairIter, typename SearchKeyPairIter, typename OutputPairIter>
   void search_all_lists(column_device_view const& d_lists,
-                        column_device_view const& d_child,
+                        ElementPairIter const& pair_iter,
                         size_type const* d_offsets,
                         bool has_null_lists,
                         bool has_null_elements,
-                        column_device_view const& d_search_keys,
-                        bool search_keys_have_nulls,
+                        SearchKeyPairIter const& key_pair_iter,
                         OutputPairIter const& out_iters,
                         rmm::cuda_stream_view stream) const
   {
@@ -195,20 +140,18 @@ struct search_functor<Type, find_option, std::enable_if_t<is_supported_non_neste
       out_iters,
       out_iters + d_lists.size(),
       [d_lists,
-       d_child,
+       pair_iter,
        d_offsets,
        has_null_lists,
        has_null_elements,
-       d_search_keys,
-       search_keys_have_nulls,
+       key_pair_iter,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
-        if (search_keys_have_nulls && d_search_keys.is_null_nocheck(list_idx)) {
+        auto const [key, key_is_valid] = key_pair_iter[list_idx];
+        if (!key_is_valid || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
           return {NOT_FOUND_IDX, false};
         }
-        if (has_null_lists && d_lists.is_null_nocheck(list_idx)) { return {NOT_FOUND_IDX, false}; }
 
-        auto const key = d_search_keys.template element<Type>(list_idx);
-        return {search_list(d_child, d_offsets, list_idx, has_null_elements, key), true};
+        return {search_list<ElementPairIter>(pair_iter, d_offsets, list_idx, key), true};
       });
   }
 };
@@ -264,7 +207,11 @@ struct dispatch_index_of {
 
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
       //
+      (void)find_option;
+
     } else {  // not struct type
+
+      // If same scale, then...
       auto const do_search = [&](auto const& searcher) {
         auto const d_child_ptr = column_device_view::create(child, stream);
         searcher.search_all_lists(*d_lists_ptr,
@@ -387,18 +334,18 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto has_nulls_output =
     make_numeric_column(data_type{type_id::BOOL8}, num_rows, mask_state::UNALLOCATED, stream, mr);
   auto const output_begin = has_nulls_output->mutable_view().template begin<bool>();
-  thrust::tabulate(rmm::exec_policy(stream),
-                   output_begin,
-                   output_begin + num_rows,
-                   [lists = lists_column_device_view{*d_lists}] __device__(auto list_idx) {
-                     auto const list       = list_device_view{lists, list_idx};
-                     auto const list_begin = thrust::make_counting_iterator(size_type{0});
-                     return list.is_null() ||
-                            thrust::any_of(
-                              thrust::seq, list_begin, list_begin + list.size(), [&list](auto i) {
-                                return list.is_null(i);
-                              });
-                   });
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    output_begin,
+    output_begin + num_rows,
+    [lists = lists_column_device_view{*d_lists}] __device__(auto list_idx) {
+      auto const list         = list_device_view{lists, list_idx};
+      auto const begin_offset = thrust::make_counting_iterator(size_type{0});
+      return list.is_null() ||
+             thrust::any_of(thrust::seq, begin_offset, begin_offset + list.size(), [&list](auto i) {
+               return list.is_null(i);
+             });
+    });
   auto const validity_begin = cudf::detail::make_counting_transform_iterator(
     0, [lists = lists_column_device_view{*d_lists}] __device__(auto list_idx) {
       return not list_device_view{lists, list_idx}.is_null();
