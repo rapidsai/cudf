@@ -827,7 +827,7 @@ inline jthrowable cuda_exception(JNIEnv *const env, const char *file, unsigned i
         throw cudf::jni::jni_exception("CUDA ERROR");                                              \
       }                                                                                            \
     }                                                                                              \
-  } while(0)
+  } while (0)
 
 #define JNI_NULL_CHECK(env, obj, error_msg, ret_val)                                               \
   {                                                                                                \
