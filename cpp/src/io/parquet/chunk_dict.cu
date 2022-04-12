@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define _CG_ABI_EXPERIMENTAL  // enable experimental API
+
 #include <io/parquet/parquet_gpu.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -24,10 +26,18 @@
 
 #include <cuda/atomic>
 
+#include <cooperative_groups.h>
+#include <cooperative_groups/reduce.h>
+
 namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
+namespace {
+constexpr int DEFAULT_BLOCK_SIZE = 256;
+}
+
+namespace cg = cooperative_groups;
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
@@ -108,27 +118,23 @@ __global__ void __launch_bounds__(block_size, 1)
   size_type start_row = frag.start_row;
   size_type end_row   = frag.start_row + frag.num_rows;
 
-  __shared__ size_type s_start_value_idx;
-  __shared__ size_type s_num_values;
+  __shared__ cg::experimental::block_tile_memory<4, block_size> shared;
+  auto thb   = cg::experimental::this_thread_block(shared);
+  auto block = cg::experimental::tiled_partition<block_size>(thb);
 
-  if (t == 0) {
-    // Find the bounds of values in leaf column to be inserted into the map for current chunk
-    auto cudf_col      = *(col->parent_column);
-    s_start_value_idx  = row_to_value_idx(start_row, cudf_col);
-    auto end_value_idx = row_to_value_idx(end_row, cudf_col);
-    s_num_values       = end_value_idx - s_start_value_idx;
-  }
-  __syncthreads();
+  // Find the bounds of values in leaf column to be inserted into the map for current chunk
+  auto cudf_col          = *(col->parent_column);
+  auto s_start_value_idx = row_to_value_idx(start_row, cudf_col);
+  auto end_value_idx     = row_to_value_idx(end_row, cudf_col);
+  auto s_num_values      = end_value_idx - s_start_value_idx;
 
   column_device_view const& data_col = *col->leaf_column;
-  using block_reduce                 = cub::BlockReduce<size_type, block_size>;
-  __shared__ typename block_reduce::TempStorage reduce_storage;
 
   // Make a view of the hash map
   auto hash_map_mutable = map_type::device_mutable_view(
     chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
-  __shared__ int total_num_dict_entries;
+  int total_num_dict_entries;
   for (size_type i = 0; i < s_num_values; i += block_size) {
     // add the value to hash map
     size_type val_idx = i + t + s_start_value_idx;
@@ -161,15 +167,14 @@ __global__ void __launch_bounds__(block_size, 1)
       }();
     }
 
-    auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
-    __syncthreads();
-    auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
+    auto num_unique     = cg::reduce(block, is_unique, cg::plus<int>());
+    auto uniq_data_size = cg::reduce(block, uniq_elem_size, cg::plus<int>());
     if (t == 0) {
       total_num_dict_entries = atomicAdd(&chunk->num_dict_entries, num_unique);
       total_num_dict_entries += num_unique;
       atomicAdd(&chunk->uniq_data_size, uniq_data_size);
     }
-    __syncthreads();
+    total_num_dict_entries = block.shfl(total_num_dict_entries, 0);
 
     // Check if the num unique values in chunk has already exceeded max dict size and early exit
     if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
@@ -224,19 +229,12 @@ __global__ void __launch_bounds__(block_size, 1)
   size_type start_row = frag.start_row;
   size_type end_row   = frag.start_row + frag.num_rows;
 
-  __shared__ size_type s_start_value_idx;
-  __shared__ size_type s_ck_start_val_idx;
-  __shared__ size_type s_num_values;
-
-  if (t == 0) {
-    // Find the bounds of values in leaf column to be searched in the map for current chunk
-    auto cudf_col      = *(col->parent_column);
-    s_start_value_idx  = row_to_value_idx(start_row, cudf_col);
-    s_ck_start_val_idx = row_to_value_idx(chunk->start_row, cudf_col);
-    auto end_value_idx = row_to_value_idx(end_row, cudf_col);
-    s_num_values       = end_value_idx - s_start_value_idx;
-  }
-  __syncthreads();
+  // Find the bounds of values in leaf column to be searched in the map for current chunk
+  auto cudf_col           = *(col->parent_column);
+  auto s_start_value_idx  = row_to_value_idx(start_row, cudf_col);
+  auto s_ck_start_val_idx = row_to_value_idx(chunk->start_row, cudf_col);
+  auto end_value_idx      = row_to_value_idx(end_row, cudf_col);
+  auto s_num_values       = end_value_idx - s_start_value_idx;
 
   column_device_view const& data_col = *col->leaf_column;
 
@@ -273,10 +271,9 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
 void populate_chunk_hash_maps(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
-  constexpr int block_size = 256;
   dim3 const dim_grid(frags.size().second, frags.size().first);
-
-  populate_chunk_hash_maps_kernel<block_size><<<dim_grid, block_size, 0, stream.value()>>>(frags);
+  populate_chunk_hash_maps_kernel<DEFAULT_BLOCK_SIZE>
+    <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(frags);
 }
 
 void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
@@ -288,10 +285,9 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
 void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                             rmm::cuda_stream_view stream)
 {
-  constexpr int block_size = 256;
   dim3 const dim_grid(frags.size().second, frags.size().first);
-
-  get_dictionary_indices_kernel<block_size><<<dim_grid, block_size, 0, stream.value()>>>(frags);
+  get_dictionary_indices_kernel<DEFAULT_BLOCK_SIZE>
+    <<<dim_grid, DEFAULT_BLOCK_SIZE, 0, stream.value()>>>(frags);
 }
 }  // namespace gpu
 }  // namespace parquet
