@@ -6277,10 +6277,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             * Operators generally will not cast automatically. Users are
               responsible for casting columns to suitable types before
               evaluating a function.
+            * We do not support multiple statements in the same expression.
+            * We do not support assignment
 
         Examples
         --------
-        >>> df = pd.DataFrame({'A': range(1, 6), 'B': range(10, 0, -2)})
+        >>> df = cudf.DataFrame({'A': range(1, 6), 'B': range(10, 0, -2)})
         >>> df
         A   B
         0  1  10
@@ -6295,24 +6297,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3     8
         4     7
         dtype: int64
-
-        Assignment is allowed though by default the original DataFrame is not
-        modified.
-
-        >>> df.eval('C = A + B')
-        A   B   C
-        0  1  10  11
-        1  2   8  10
-        2  3   6   9
-        3  4   4   8
-        4  5   2   7
-        >>> df
-        A   B
-        0  1  10
-        1  2   8
-        2  3   6
-        3  4   4
-        4  5   2
         """
         return Series._from_data(libcudf.ast.evaluate_expression(self, expr))
 
