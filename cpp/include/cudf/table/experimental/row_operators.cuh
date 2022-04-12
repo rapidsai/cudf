@@ -808,14 +808,10 @@ class element_hasher {
  */
 template <template <typename> class hash_function, typename Nullate>
 class device_row_hasher {
+  friend class row_hasher;
+
  public:
   device_row_hasher() = delete;
-  CUDF_HOST_DEVICE device_row_hasher(Nullate has_nulls,
-                                     table_device_view t,
-                                     uint32_t seed = DEFAULT_HASH_SEED) noexcept
-    : _table{t}, _seed(seed), _has_nulls{has_nulls}
-  {
-  }
 
   __device__ auto operator()(size_type row_index) const noexcept
   {
@@ -845,6 +841,13 @@ class device_row_hasher {
   }
 
  private:
+  CUDF_HOST_DEVICE device_row_hasher(Nullate has_nulls,
+                                     table_device_view t,
+                                     uint32_t seed = DEFAULT_HASH_SEED) noexcept
+    : _table{t}, _seed(seed), _has_nulls{has_nulls}
+  {
+  }
+
   table_device_view _table;
   Nullate _has_nulls;
   uint32_t _seed;
