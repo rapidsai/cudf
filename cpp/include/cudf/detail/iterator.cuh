@@ -449,14 +449,40 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
   /**
    * @brief returns a pair with value and validity of the scalar.
    *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
+   *
    * @throw `cudf::logic_error` if this function is called in host.
    *
    * @return a pair with value and validity of the scalar.
    */
-  CUDF_HOST_DEVICE inline const value_type operator()(size_type) const
+  template <typename T = Element,
+            CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || std::is_same_v<T, string_view>)>
+  CUDF_HOST_DEVICE inline value_type operator()(size_type) const
   {
 #if defined(__CUDA_ARCH__)
     return {Element(super_t::dscalar.value()), super_t::dscalar.is_valid()};
+#else
+    CUDF_FAIL("unsupported device scalar iterator operation");
+#endif
+  }
+
+  /**
+   * @brief returns a pair with value and validity of the scalar of `fixed_point` type.
+   *
+   * @throw `cudf::logic_error` if this function is called in host.
+   *
+   * @return a pair with value and validity of the scalar.
+   */
+  template <typename T = Element, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
+  CUDF_HOST_DEVICE inline value_type operator()(size_type) const
+  {
+#if defined(__CUDA_ARCH__)
+    using namespace numeric;
+    using rep        = typename T::rep;
+    auto const value = super_t::dscalar.rep();
+    auto const scale = scale_type{super_t::dscalar.type().scale()};
+    return {T{scaled_integer<rep> { value, scale }}, super_t::dscalar.is_valid()};
 #else
     CUDF_FAIL("unsupported device scalar iterator operation");
 #endif
