@@ -787,6 +787,21 @@ inline jthrowable cuda_exception(JNIEnv *const env, const char *file, unsigned i
     JNI_THROW_NEW(env, class_name, message, ret_val)                                               \
   }
 
+// Throw a new exception only if one is not pending then always return with the specified value
+#define JNI_CHECK_THROW_NEW_CUDA_ERROR(env, e, fatal, ret_val)                                     \
+  {                                                                                                \
+    if (env->ExceptionOccurred()) {                                                                \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    jclass ex_class = env->FindClass(cudf::jni::CUDA_ERROR_CLASS);                                 \
+    const char* n_err_name = cudaGetErrorName(e.error_code());                                     \
+    auto what =                                                                                    \
+        (fatal ? "Fatal CUDA ERROR [" : "CUDA ERROR [")  +                                         \
+        n_err_name + "]: " + (e.what() == nullptr ? "" : e.what());                                \
+    env->ThrowNew(ex_class, message, what.c_str());                                                \
+    return ret_val;                                                                                \
+  }
+
 #define JNI_CUDA_TRY(env, ret_val, call)                                                           \
   {                                                                                                \
     cudaError_t internal_cuda_status = (call);                                                     \
@@ -841,9 +856,11 @@ inline jthrowable cuda_exception(JNIEnv *const env, const char *file, unsigned i
         std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
-  catch (const cudf::cuda_error &e) {                                                              \
-    /* For CUDA errors, the specific error code will be extracted from error message. */           \
-    JNI_CHECK_THROW_NEW(env, cudf::jni::CUDA_ERROR_CLASS, e.what(), ret_val);                      \
+  catch (const cudf::fatal_cuda_error &e) {                                                        \
+    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, e, true, ret_val);                                         \
+  }                                                                                                \
+  catch (const cudf::cudart_error &e) {                                                            \
+    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, e, false, ret_val);                                        \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \

@@ -15,9 +15,6 @@
  */
 package ai.rapids.cudf;
 
-import java.util.EnumSet;
-import java.util.Set;
-
 /**
  * Exception from the cuda language/library.  Be aware that because of how cuda does asynchronous
  * processing exceptions from cuda can be thrown by method calls that did not cause the exception
@@ -33,15 +30,35 @@ import java.util.Set;
 public class CudaException extends RuntimeException {
   CudaException(String message) {
     super(message);
-    this.cudaError = extractCudaError(message);
+    isFatal = message.startsWith("Fatal");
+    cudaError = extractCudaError(message);
   }
 
   CudaException(String message, Throwable cause) {
     super(message, cause);
-    this.cudaError = extractCudaError(message);
+    isFatal = message.startsWith("Fatal");
+    cudaError = extractCudaError(message);
+  }
+
+  /**
+   * Returns whether this CudaError is fatal or not.
+   *
+   * Fatal errors leave the process in an inconsistent state and any further CUDA work will return
+   * the same error. To continue using CUDA, the process must be terminated and relaunched.
+   */
+  public boolean isFatal() {
+    return isFatal;
   }
 
   public final CudaError cudaError;
+
+  private final boolean isFatal;
+
+  private static CudaError extractCudaError(String msg) {
+    int startIdx = msg.indexOf('[');
+    int endIdx = msg.indexOf(']');
+    return CudaError.valueOf(msg.substring(startIdx + 1, endIdx));
+  }
 
   /**
    * The Java mirror of cudaError, which facilities the tracking of CUDA errors in JVM.
@@ -172,40 +189,9 @@ public class CudaException extends RuntimeException {
 
     final int code;
 
-    private static final Set<CudaError> stickyErrors = EnumSet.of(
-        CudaError.cudaErrorIllegalAddress,
-        CudaError.cudaErrorLaunchTimeout,
-        CudaError.cudaErrorHardwareStackError,
-        CudaError.cudaErrorIllegalInstruction,
-        CudaError.cudaErrorMisalignedAddress,
-        CudaError.cudaErrorInvalidAddressSpace,
-        CudaError.cudaErrorInvalidPc,
-        CudaError.cudaErrorLaunchFailure,
-        CudaError.cudaErrorExternalDevice,
-        CudaError.cudaErrorUnknown
-    );
-
     CudaError(int errorCode) {
       this.code = errorCode;
     }
 
-    /**
-     * Returns whether this CudaError is sticky or not.
-     *
-     * Sticky errors leave the process in an inconsistent state and any further CUDA work will return
-     * the same error. To continue using CUDA, the process must be terminated and relaunched.
-     */
-    public boolean isSticky() {
-      return stickyErrors.contains(this);
-    }
-  }
-
-  private static CudaError extractCudaError(String message) {
-    for (String segment : message.split(" ")) {
-      if (segment.startsWith("cudaError")) {
-        return CudaError.valueOf(segment);
-      }
-    }
-    throw new CudfException("invalid CUDA error message: " + message);
   }
 }
