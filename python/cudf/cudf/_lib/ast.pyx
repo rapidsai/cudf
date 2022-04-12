@@ -3,6 +3,7 @@
 import ast
 import functools
 from enum import Enum
+from typing import List
 
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t
@@ -183,8 +184,6 @@ python_cudf_function_map = {
 }
 
 
-# TODO: Consider wrapping this in another function that caches the result along
-# with the nodes so that we can avoid multiple parsings.
 cdef parse_expression(root, tuple col_names, list stack, list nodes):
     """Construct an evaluable libcudf expression by traversing Python AST.
 
@@ -314,18 +313,35 @@ cdef parse_expression(root, tuple col_names, list stack, list nodes):
             parse_expression(item, col_names, stack, nodes)
 
 
-def evaluate_expression(df, expr):
-    """Create a cudf evaluable expression from a string and evaluate it."""
-    # Important: both make and evaluate must be coupled to guarantee that the
-    # nodes created (the owning ColumnReferences and Literals) remain in scope.
+# TODO: It would be nice to use a dataclass for this, but Cython won't support
+# it until we upgrade to 3.0.
+class _OwningExpression:
+    """A container for an Expression that owns the Expression's subnodes."""
+    def __init__(self, expression: Expression, nodes: List[Expression]):
+        self.expression = expression
+        self.nodes = nodes
+
+
+@functools.lru_cache(256)
+def parse_expression_cached(str expr, tuple col_names):
+    """A caching wrapper for parse_expression.
+
+    The signature is chosen so as to appropriately determine the cache key.
+    """
     stack = []
     nodes = []
     parse_expression(
-        ast.parse(expr).body[0].value, df._column_names, stack, nodes
+        ast.parse(expr).body[0].value, col_names, stack, nodes
     )
+    return _OwningExpression(stack[-1], nodes)
+
+
+def evaluate_expression(df: "cudf.DataFrame", expr: str):
+    """Create a cudf evaluable expression from a string and evaluate it."""
+    expr_container = parse_expression_cached(expr, df._column_names)
 
     # At the end, all the stack contains is the expression to evaluate.
-    cdef Expression cudf_expr = stack[-1]
+    cdef Expression cudf_expr = expr_container.expression
     cdef table_view tbl = table_view_from_table(df)
     cdef unique_ptr[column] col
     with nogil:
