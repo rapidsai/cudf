@@ -33,7 +33,7 @@ constexpr int DEFAULT_BLOCK_SIZE = 256;
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 1)
+__global__ void __launch_bounds__(block_size)
   initialize_chunk_hash_maps_kernel(device_span<EncColumnChunk> chunks)
 {
   auto chunk = chunks[blockIdx.x];
@@ -96,7 +96,7 @@ struct map_find_fn {
 };
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 1)
+__global__ void __launch_bounds__(block_size)
   populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<gpu::PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
@@ -174,7 +174,7 @@ __global__ void __launch_bounds__(block_size, 1)
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 1)
+__global__ void __launch_bounds__(block_size)
   collect_map_entries_kernel(device_span<EncColumnChunk> chunks)
 {
   auto& chunk = chunks[blockIdx.x];
@@ -206,7 +206,7 @@ __global__ void __launch_bounds__(block_size, 1)
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 1)
+__global__ void __launch_bounds__(block_size)
   get_dictionary_indices_kernel(cudf::detail::device_2dspan<gpu::PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
