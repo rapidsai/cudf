@@ -829,3 +829,26 @@ def test_string_udf_indexing(data, idx):
         return row[idx]
 
     run_masked_udf_test(func, data)
+
+@pytest.mark.parametrize('data', [
+    {
+        'str_col': ['abc', 'a', '', '123AbC']
+    }
+])
+@pytest.mark.parametrize("slc", [
+    slice(0, 1),
+    slice(0, -1)
+    slice(None, 2),
+    slice(2, None)
+    slice(0, 0)
+])
+def test_string_udf_substring(data, slc):
+    # tests indexing into strings with an int
+
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return row[slc]
+
+    run_masked_udf_test(func, data)

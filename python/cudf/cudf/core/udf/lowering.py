@@ -30,6 +30,7 @@ from cudf.core.udf.typing import (
     _dstring_upper,
     _dstring_lower,
     _dstring_at,
+    _dstring_substr,
     _create_dstring_from_stringview,
     string_view,
     dstring
@@ -451,7 +452,7 @@ def call_dstring_at(st, tgt, idx):
     return _dstring_at(st, tgt, idx)
 
 @cuda_lower(operator.getitem, MaskedType(dstring), types.Integer)
-def masked_dstring_substring(context, builder, sig, args):
+def masked_dstring_at(context, builder, sig, args):
     input = cgutils.create_struct_proxy(sig.args[0])(context, builder, value=args[0])
 
     # create two pointers to empty dstrings
@@ -475,6 +476,37 @@ def masked_dstring_substring(context, builder, sig, args):
     to_return.value = builder.load(retstr)
 
     return to_return._getvalue()
+
+def call_dstring_substr(st, tgt, start, stop):
+    return _dstring_substr(st, tgt, start, stop)
+
+@cuda_lower(operator.getitem, MaskedType(dstring), types.SliceType)
+def masked_dstring_substring(context, builder, sig, args):
+    input = cgutils.create_struct_proxy(sig.args[0])(context, builder, value=args[0])
+    slc = cgutils.create_struct_proxy(sig.args[1])(context, builder, value=args[1])
+
+    # create two pointers to empty dstrings
+    strty = input.value.type
+    dstr = builder.alloca(strty)
+    retstr = builder.alloca(strty)
+
+    # store the real input value as the first dstring
+    builder.store(input.value, dstr)
+
+    # call dstring::substring
+    _ = context.compile_internal(
+        builder,
+        call_dstring_substr,
+        nb_signature(types.CPointer(dstring), types.CPointer(dstring), types.int32, types.int32),
+        (dstr, retstr, slc.start, slc.stop)
+    )
+
+    to_return = cgutils.create_struct_proxy(sig.return_type)
+    to_return.valid = input.valid
+    to_return.value = builder.load(retstr)
+
+    return to_return._getvalue()
+
 
 @cuda_lowering_registry.lower_cast(types.StringLiteral, MaskedType)
 def cast_stringliteral_to_masked_dstring(

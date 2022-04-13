@@ -496,10 +496,13 @@ class MaskedDstringSubstring(AbstractTemplate):
     Typing for st[idx], st[:idx], etc
     """
     def generic(self, args, kws):
-        if isinstance(args[0], MaskedType) and args[0].value_type == dstring and isinstance(args[1], types.Integer):
+        if (
+            isinstance(args[0], MaskedType) 
+            and args[0].value_type == dstring 
+            and isinstance(args[1], (types.Integer, types.SliceType))
+        ):
             # __getitem__ is actually a two argument function: (val, idx) -> ret
             return nb_signature(MaskedType(dstring), MaskedType(dstring), args[1])
-
 
 for binary_op in arith_ops + bitwise_ops + comparison_ops:
     # Every op shares the same typing class
@@ -637,6 +640,11 @@ _dstring_lower = cuda.declare_device(
 _dstring_at = cuda.declare_device(
     "at",
     types.int32(types.CPointer(dstring), types.CPointer(dstring), types.int32)
+)
+
+_dstring_substr = cuda.declare_device(
+    "substr",
+    types.int32(types.CPointer(dstring), types.CPointer(dstring), types.int32, types.int32)
 )
 
 _create_dstring_from_stringview = cuda.declare_device(
