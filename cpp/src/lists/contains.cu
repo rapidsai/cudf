@@ -105,18 +105,18 @@ struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>(
    * @brief Search index of a given scalar in a list defined by offsets pointing to rows of the
    * child column of the original lists column.
    */
-  template <bool find_first, typename ElementPairIter>
-  static __device__ size_type search_list(ElementPairIter const& pair_iter,
+  template <bool find_first, typename ElementIter>
+  static __device__ size_type search_list(ElementIter const& element_iter,
                                           size_type const* d_offsets,
                                           size_type list_idx,
                                           Type const& search_key)
   {
-    auto const begin = begin_offset<find_first>(d_offsets, list_idx);
-    auto const end   = end_offset<find_first>(d_offsets, list_idx);
-    auto const found_iter =
-      thrust::find_if(thrust::seq, begin, end, [pair_iter, search_key] __device__(auto const idx) {
-        auto const [element, is_valid] = pair_iter[idx];
-        return is_valid && cudf::equality_compare(element, search_key);
+    auto const begin      = begin_offset<find_first>(d_offsets, list_idx);
+    auto const end        = end_offset<find_first>(d_offsets, list_idx);
+    auto const found_iter = thrust::find_if(
+      thrust::seq, begin, end, [element_iter, search_key] __device__(auto const idx) {
+        auto const element_opt = element_iter[idx];
+        return element_opt && cudf::equality_compare(element_opt.value(), search_key);
       });
     return distance<find_first>(begin, end, found_iter);
   }
@@ -124,13 +124,13 @@ struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>(
   /**
    * @brief Search for the index of the corresponding key (given in a column) in all list rows.
    */
-  template <typename ElementPairIter, typename SearchKeyPairIter, typename OutputPairIter>
+  template <typename ElementIter, typename SearchKeyIter, typename OutputPairIter>
   void search_all_lists(column_device_view const& d_lists,
-                        ElementPairIter const& pair_iter,
+                        ElementIter const& element_iter,
                         size_type const* d_offsets,
                         bool has_null_lists,
                         bool has_null_elements,
-                        SearchKeyPairIter const& key_pair_iter,
+                        SearchKeyIter const& key_iter,
                         duplicate_find_option find_option,
                         OutputPairIter const& out_iter,
                         rmm::cuda_stream_view stream) const
@@ -140,24 +140,25 @@ struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>(
       out_iter,
       out_iter + d_lists.size(),
       [d_lists,
-       pair_iter,
+       element_iter,
        d_offsets,
        has_null_lists,
        has_null_elements,
-       key_pair_iter,
+       key_iter,
        find_option,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
-        auto const [key, key_is_valid] = key_pair_iter[list_idx];
-        if (!key_is_valid || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
+        auto const key_opt = key_iter[list_idx];
+        if (!key_opt || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
           return {NOT_FOUND_IDX, false};
         }
 
+        auto const key = key_opt.value();
         return find_option == duplicate_find_option::FIND_FIRST
                  ? thrust::pair<size_type, bool>{search_list<true>(
-                                                   pair_iter, d_offsets, list_idx, key),
+                                                   element_iter, d_offsets, list_idx, key),
                                                  true}
                  : thrust::pair<size_type, bool>{
-                     search_list<false>(pair_iter, d_offsets, list_idx, key), true};
+                     search_list<false>(element_iter, d_offsets, list_idx, key), true};
       });
   }
 };
@@ -229,45 +230,29 @@ struct dispatch_index_of {
     } else {  // not struct type
 
       auto const d_keys_ptr = get_search_keys_device_view(search_keys, stream);
-      //      auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type,
+      //      auto const key_iter = cudf::detail::make_pair_iterator<Type,
       //      false>(*d_keys_ptr);
 
       auto const d_child_ptr = column_device_view::create(child, stream);
-      //      auto const elements_pair_iter = cudf::detail::make_pair_iterator<Type,
+      //      auto const elements_iter = cudf::detail::make_pair_iterator<Type,
       //      false>(*d_child_ptr);
 
       // If same scale, then...
-      auto const do_search = [&](auto const& elements_pair_iter, auto const& keys_pair_iter) {
-        search_functor<Type>{}.search_all_lists(*d_lists_ptr,
-                                                elements_pair_iter,
-                                                lists.offsets_begin(),
-                                                lists.has_nulls(),
-                                                child.has_nulls(),
-                                                keys_pair_iter,
-                                                find_option,
-                                                out_iter,
-                                                stream);
-      };
 
-      if (child.has_nulls()) {
-        auto const elements_pair_iter = cudf::detail::make_pair_iterator<Type, true>(*d_child_ptr);
-        if (search_keys_have_nulls) {
-          auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type, true>(*d_keys_ptr);
-          do_search(elements_pair_iter, keys_pair_iter);
-        } else {
-          auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type, false>(*d_keys_ptr);
-          do_search(elements_pair_iter, keys_pair_iter);
-        }
-      } else {
-        auto const elements_pair_iter = cudf::detail::make_pair_iterator<Type, false>(*d_child_ptr);
-        if (search_keys_have_nulls) {
-          auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type, true>(*d_keys_ptr);
-          do_search(elements_pair_iter, keys_pair_iter);
-        } else {
-          auto const keys_pair_iter = cudf::detail::make_pair_iterator<Type, false>(*d_keys_ptr);
-          do_search(elements_pair_iter, keys_pair_iter);
-        }
-      }
+      auto const elements_iter = cudf::detail::make_optional_iterator<Type>(
+        *d_child_ptr, nullate::DYNAMIC{child.has_nulls()});
+      auto const key_iter = cudf::detail::make_optional_iterator<Type>(
+        *d_keys_ptr, nullate::DYNAMIC{search_keys_have_nulls});
+
+      search_functor<Type>{}.search_all_lists(*d_lists_ptr,
+                                              elements_iter,
+                                              lists.offsets_begin(),
+                                              lists.has_nulls(),
+                                              child.has_nulls(),
+                                              key_iter,
+                                              find_option,
+                                              out_iter,
+                                              stream);
     }
 
     if (search_keys_have_nulls || lists.has_nulls() || child.has_nulls()) {
