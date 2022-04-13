@@ -194,9 +194,9 @@ __global__ void __launch_bounds__(block_size, 1)
   auto map =
     map_type::device_view(chunk.dict_map_slots, chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
-  __shared__ cuda::atomic<size_type, cuda::thread_scope_device> counter;
+  __shared__ cuda::atomic<size_type, cuda::thread_scope_block> counter;
   using cuda::std::memory_order_relaxed;
-  if (t == 0) { counter.store(0, memory_order_relaxed); }
+  if (t == 0) { new (&counter) cuda::atomic<size_type, cuda::thread_scope_block>{0}; }
   __syncthreads();
   for (size_type i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
