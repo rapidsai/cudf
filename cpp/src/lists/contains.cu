@@ -216,12 +216,14 @@ struct dispatch_index_of {
     }
 
     auto const d_lists_ptr = column_device_view::create(lists.parent(), stream);
+    auto const d_keys_ptr  = get_search_keys_device_view(search_keys, stream);
 
     auto out_positions = make_numeric_column(
       data_type{type_id::INT32}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
     auto out_validity   = rmm::device_uvector<bool>(lists.size(), stream);
     auto const out_iter = thrust::make_zip_iterator(
       out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
+    auto const searcher = search_functor<Type>{};
 
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
       //
@@ -229,13 +231,7 @@ struct dispatch_index_of {
 
     } else {  // not struct type
 
-      auto const d_keys_ptr = get_search_keys_device_view(search_keys, stream);
-      //      auto const key_iter = cudf::detail::make_pair_iterator<Type,
-      //      false>(*d_keys_ptr);
-
       auto const d_child_ptr = column_device_view::create(child, stream);
-      //      auto const elements_iter = cudf::detail::make_pair_iterator<Type,
-      //      false>(*d_child_ptr);
 
       // If same scale, then...
 
@@ -244,15 +240,15 @@ struct dispatch_index_of {
       auto const key_iter = cudf::detail::make_optional_iterator<Type>(
         *d_keys_ptr, nullate::DYNAMIC{search_keys_have_nulls});
 
-      search_functor<Type>{}.search_all_lists(*d_lists_ptr,
-                                              elements_iter,
-                                              lists.offsets_begin(),
-                                              lists.has_nulls(),
-                                              child.has_nulls(),
-                                              key_iter,
-                                              find_option,
-                                              out_iter,
-                                              stream);
+      searcher.search_all_lists(*d_lists_ptr,
+                                elements_iter,
+                                lists.offsets_begin(),
+                                lists.has_nulls(),
+                                child.has_nulls(),
+                                key_iter,
+                                find_option,
+                                out_iter,
+                                stream);
     }
 
     if (search_keys_have_nulls || lists.has_nulls() || child.has_nulls()) {
