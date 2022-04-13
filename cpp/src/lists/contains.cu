@@ -119,7 +119,9 @@ struct search_functor {
 template <typename Type>
 struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>()>> {
   /**
-   * @brief Search index of a given scalar in a list defined by offsets pointing to rows of the
+   * @brief tba
+   *
+   * Search index of a given element in a list defined by offsets pointing to rows of the
    * child column of the original lists column.
    */
   template <bool find_first, typename ElementIter>
@@ -180,15 +182,14 @@ struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>(
   }
 };
 
-#if 0
+#if 1
 /**
  * @brief The search_functor specialized for struct type.
  */
 template <typename Type>
 struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
   /**
-   * @brief Search index of a given scalar in a list defined by offsets pointing to rows of the
-   * child column of the original lists column.
+   * @brief tba
    */
   template <bool find_first, typename EqComparator>
   static __device__ size_type search_list(size_type const* d_offsets,
@@ -199,8 +200,9 @@ struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
     auto const begin      = begin_offset<find_first>(d_offsets, list_idx);
     auto const end        = end_offset<find_first>(d_offsets, list_idx);
     auto const found_iter = thrust::find_if(
-      thrust::seq, begin, end, [comp, search_key_is_scalar] __device__(auto const idx) {
-        return comp(idx, search_key_is_scalar ? 0 : idx);
+      thrust::seq, begin, end, [d_offsets, comp, search_key_is_scalar] __device__(auto const idx) {
+        auto const row_idx = idx - *d_offsets;
+        return comp(row_idx, search_key_is_scalar ? 0 : row_idx);
       });
     return distance<find_first>(begin, end, found_iter);
   }
@@ -208,13 +210,14 @@ struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
   /**
    * @brief Search for the index of the corresponding key (given in a column) in all list rows.
    */
-  template <typename ElementIter, typename SearchKeyIter, typename OutputPairIter>
+  template <typename EqComparator, typename ValidityIter, typename OutputPairIter>
   void search_all_lists(column_device_view const& d_lists,
-                        ElementIter const& element_iter,
                         size_type const* d_offsets,
                         bool has_null_lists,
                         bool has_null_elements,
-                        SearchKeyIter const& keys_iter,
+                        EqComparator const& comp,
+                        bool search_key_is_scalar,
+                        ValidityIter const& key_validity_iter,
                         duplicate_find_option find_option,
                         OutputPairIter const& out_iter,
                         rmm::cuda_stream_view stream) const
@@ -224,25 +227,24 @@ struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
       out_iter,
       out_iter + d_lists.size(),
       [d_lists,
-       element_iter,
        d_offsets,
        has_null_lists,
        has_null_elements,
-       keys_iter,
+       key_validity_iter,
        find_option,
+       comp,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
         auto const key_opt = keys_iter[list_idx];
-        if (!key_opt || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
+        if (!key_validity_iter[list_idx] || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
           return {NOT_FOUND_IDX, false};
         }
 
-        auto const key = key_opt.value();
         return find_option == duplicate_find_option::FIND_FIRST
                  ? thrust::pair<size_type, bool>{search_list<true>(
-                                                   element_iter, d_offsets, list_idx, key),
+                                                   d_offsets, list_idx, comp, search_key_is_scalar),
                                                  true}
                  : thrust::pair<size_type, bool>{
-                     search_list<false>(element_iter, d_offsets, list_idx, key), true};
+                     search_list<false>(d_offsets, list_idx, comp, search_key_is_scalar), true};
       });
   }
 };
@@ -312,7 +314,7 @@ struct dispatch_index_of {
     auto const searcher = search_functor<Type>{};
 
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
-#if 0
+#if 1
       // Prepare to flatten the structs column and scalar.
       auto const has_null_elements = has_nested_nulls(table_view{std::vector<column_view>{
                                        col.child_begin(), col.child_end()}}) ||
