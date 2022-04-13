@@ -292,9 +292,8 @@ class list_device_view {
  *
  */
 struct list_size_functor {
-  detail::lists_column_device_view const d_column;
-  CUDF_HOST_DEVICE inline list_size_functor(detail::lists_column_device_view const& d_col)
-    : d_column(d_col)
+  lists_column_device_view const d_column;
+  CUDF_HOST_DEVICE inline list_size_functor(lists_column_device_view const& d_col) : d_column(d_col)
   {
   }
   __device__ inline size_type operator()(size_type idx)
@@ -317,7 +316,7 @@ struct list_size_functor {
  * @endcode
  *
  */
-CUDF_HOST_DEVICE auto inline make_list_size_iterator(detail::lists_column_device_view const& c)
+CUDF_HOST_DEVICE auto inline make_list_size_iterator(lists_column_device_view const& c)
 {
   return detail::make_counting_transform_iterator(0, list_size_functor{c});
 }

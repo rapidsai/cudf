@@ -560,8 +560,8 @@ class device_row_comparator {
           lcol = detail::structs_column_device_view(lcol).sliced_child(0);
           rcol = detail::structs_column_device_view(rcol).sliced_child(0);
         } else if (lcol.type().id() == type_id::LIST) {
-          auto l_list_col = detail::lists_column_device_view(lcol);
-          auto r_list_col = detail::lists_column_device_view(rcol);
+          auto l_list_col = lists_column_device_view(lcol);
+          auto r_list_col = lists_column_device_view(rcol);
 
           auto lsizes = make_list_size_iterator(l_list_col);
           auto rsizes = make_list_size_iterator(r_list_col);
