@@ -131,8 +131,8 @@ struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>(
     auto const begin      = begin_offset<find_first>(d_offsets, list_idx);
     auto const end        = end_offset<find_first>(d_offsets, list_idx);
     auto const found_iter = thrust::find_if(
-      thrust::seq, begin, end, [element_iter, search_key] __device__(auto const idx) {
-        auto const element_opt = element_iter[idx];
+      thrust::seq, begin, end, [element_iter, search_key, d_offsets] __device__(auto const idx) {
+        auto const element_opt = element_iter[idx - *d_offsets];
         return element_opt && cudf::equality_compare(element_opt.value(), search_key);
       });
     return distance<find_first>(begin, end, found_iter);
@@ -180,6 +180,75 @@ struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>(
   }
 };
 
+#if 0
+/**
+ * @brief The search_functor specialized for struct type.
+ */
+template <typename Type>
+struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
+  /**
+   * @brief Search index of a given scalar in a list defined by offsets pointing to rows of the
+   * child column of the original lists column.
+   */
+  template <bool find_first, typename EqComparator>
+  static __device__ size_type search_list(size_type const* d_offsets,
+                                          size_type list_idx,
+                                          EqComparator const& comp,
+                                          bool search_key_is_scalar)
+  {
+    auto const begin      = begin_offset<find_first>(d_offsets, list_idx);
+    auto const end        = end_offset<find_first>(d_offsets, list_idx);
+    auto const found_iter = thrust::find_if(
+      thrust::seq, begin, end, [comp, search_key_is_scalar] __device__(auto const idx) {
+        return comp(idx, search_key_is_scalar ? 0 : idx);
+      });
+    return distance<find_first>(begin, end, found_iter);
+  }
+
+  /**
+   * @brief Search for the index of the corresponding key (given in a column) in all list rows.
+   */
+  template <typename ElementIter, typename SearchKeyIter, typename OutputPairIter>
+  void search_all_lists(column_device_view const& d_lists,
+                        ElementIter const& element_iter,
+                        size_type const* d_offsets,
+                        bool has_null_lists,
+                        bool has_null_elements,
+                        SearchKeyIter const& keys_iter,
+                        duplicate_find_option find_option,
+                        OutputPairIter const& out_iter,
+                        rmm::cuda_stream_view stream) const
+  {
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      out_iter,
+      out_iter + d_lists.size(),
+      [d_lists,
+       element_iter,
+       d_offsets,
+       has_null_lists,
+       has_null_elements,
+       keys_iter,
+       find_option,
+       NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
+        auto const key_opt = keys_iter[list_idx];
+        if (!key_opt || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
+          return {NOT_FOUND_IDX, false};
+        }
+
+        auto const key = key_opt.value();
+        return find_option == duplicate_find_option::FIND_FIRST
+                 ? thrust::pair<size_type, bool>{search_list<true>(
+                                                   element_iter, d_offsets, list_idx, key),
+                                                 true}
+                 : thrust::pair<size_type, bool>{
+                     search_list<false>(element_iter, d_offsets, list_idx, key), true};
+      });
+  }
+};
+
+#endif
+
 template <typename SearchKeyType>
 auto get_search_keys_device_view(SearchKeyType const& search_keys,
                                  [[maybe_unused]] rmm::cuda_stream_view stream)
@@ -210,23 +279,20 @@ struct dispatch_index_of {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const
   {
-    auto constexpr scalar_search_key = std::is_same_v<SearchKeyType, cudf::scalar>;
-    if constexpr (!scalar_search_key) {
+    auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
+    if constexpr (!search_key_is_scalar) {
       CUDF_EXPECTS(search_keys.size() == lists.size(),
                    "Number of search keys must match list column size.");
     }
 
-    // Call `child()`, not `get_sliced_child`, because we will access its data starting by
-    // `offsets_begin()` that points to the correct child rows.
-    auto const child = lists.child();
-
+    auto const child = lists.get_sliced_child(stream);
     CUDF_EXPECTS(!cudf::is_nested(child.type()) || child.type().id() == type_id::STRUCT,
                  "Nested types except STRUCT are not supported in list search operations.");
     CUDF_EXPECTS(child.type() == search_keys.type(),
                  "Type/Scale of search key does not match list column element type.");
     CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
-    if (scalar_search_key && search_keys_have_nulls) {
+    if (search_key_is_scalar && search_keys_have_nulls) {
       return make_numeric_column(data_type(type_id::INT32),
                                  lists.size(),
                                  cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
@@ -246,6 +312,39 @@ struct dispatch_index_of {
     auto const searcher = search_functor<Type>{};
 
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
+#if 0
+      // Prepare to flatten the structs column and scalar.
+      auto const has_null_elements = has_nested_nulls(table_view{std::vector<column_view>{
+                                       col.child_begin(), col.child_end()}}) ||
+                                     has_nested_nulls(scalar_table);
+      auto const flatten_nullability = has_null_elements
+                                         ? structs::detail::column_nullability::FORCE
+                                         : structs::detail::column_nullability::MATCH_INCOMING;
+
+      // Flatten the input structs column, only materialize the bitmask if there is null in the
+      // input.
+      auto const col_flattened =
+        structs::detail::flatten_nested_columns(table_view{{col}}, {}, {}, flatten_nullability);
+      auto const val_flattened =
+        structs::detail::flatten_nested_columns(scalar_table, {}, {}, flatten_nullability);
+
+      // The struct scalar only contains the struct member columns.
+      // Thus, if there is any null in the input, we must exclude the first column in the flattened
+      // table of the input column from searching because that column is the materialized bitmask of
+      // the input structs column.
+      auto const col_flattened_content  = col_flattened.flattened_columns();
+      auto const col_flattened_children = table_view{std::vector<column_view>{
+        col_flattened_content.begin() + static_cast<size_type>(has_null_elements),
+        col_flattened_content.end()}};
+
+      auto const d_col_children_ptr = table_device_view::create(col_flattened_children, stream);
+      auto const d_val_ptr          = table_device_view::create(val_flattened, stream);
+
+      auto const start_iter = thrust::make_counting_iterator<size_type>(0);
+      auto const end_iter   = start_iter + col.size();
+      auto const comp       = row_equality_comparator(
+        nullate::DYNAMIC{has_null_elements}, *d_col_children_ptr, *d_val_ptr, null_equality::EQUAL);
+#endif
     } else {  // other types that are not struct
 
       auto const d_child_ptr   = column_device_view::create(child, stream);
