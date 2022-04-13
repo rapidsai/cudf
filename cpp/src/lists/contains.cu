@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf_test/column_utilities.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -214,7 +216,10 @@ struct dispatch_index_of {
                    "Number of search keys must match list column size.");
     }
 
-    auto const child = lists.get_sliced_child(stream);
+    // Call `child()`, not `get_sliced_child`, because we will access its data starting by
+    // `offsets_begin()` that points to the correct child rows.
+    auto const child = lists.child();
+
     CUDF_EXPECTS(!cudf::is_nested(child.type()) || child.type().id() == type_id::STRUCT,
                  "Nested types except STRUCT are not supported in list search operations.");
     CUDF_EXPECTS(child.type() == search_keys.type(),
@@ -253,6 +258,7 @@ struct dispatch_index_of {
       auto const elements_iter = cudf::detail::make_optional_iterator<Type>(
         *d_child_ptr, nullate::DYNAMIC{child.has_nulls()});
       auto const key_iter = cudf::detail::make_optional_iterator<Type>(
+
         *d_keys_ptr, nullate::DYNAMIC{search_keys_have_nulls});
 
       searcher.search_all_lists(*d_lists_ptr,
@@ -341,6 +347,10 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
+  auto x = index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream);
+  printf("line: %d\n", __LINE__);
+  cudf::test::print(x->view());
+
   return to_contains(
     index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
