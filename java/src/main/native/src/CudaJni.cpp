@@ -44,7 +44,7 @@ void auto_set_device(JNIEnv *env) {
   if (Cudf_device != cudaInvalidDeviceId) {
     if (Thread_device != Cudf_device) {
       cudaError_t cuda_status = cudaSetDevice(Cudf_device);
-      jni_cuda_check(env, cuda_status);
+      JNI_CUDA_CHECK(env, cuda_status);
       Thread_device = Cudf_device;
     }
   }
@@ -53,7 +53,7 @@ void auto_set_device(JNIEnv *env) {
 /** Fills all the bytes in the buffer 'buf' with 'value'. */
 void device_memset_async(JNIEnv *env, rmm::device_buffer &buf, char value) {
   cudaError_t cuda_status = cudaMemsetAsync((void *)buf.data(), value, buf.size());
-  jni_cuda_check(env, cuda_status);
+  JNI_CUDA_CHECK(env, cuda_status);
 }
 
 } // namespace jni

@@ -58,10 +58,6 @@ struct cuda_error : public std::runtime_error {
   cudaError_t _cudaError;
 };
 
-struct cudart_error : public cuda_error {
-  using cuda_error::cuda_error;
-};
-
 struct fatal_cuda_error : public cuda_error {
   using cuda_error::cuda_error;
 };
