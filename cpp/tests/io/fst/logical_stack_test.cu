@@ -167,20 +167,20 @@ TEST_F(LogicalStackTest, GroundTruth)
   rmm::cuda_stream_view stream_view(stream);
 
   // Test input,
-  std::string input = R"(  {
-"category": "reference",
-"index:" [4,12,42],
-"author": "Nigel Rees",
-"title": "Sayings of the Century",
-"price": 8.95
-}  
-{
-"category": "reference",
-"index:" [4,{},null,{"a":[]}],
-"author": "Nigel Rees",
-"title": "Sayings of the Century",
-"price": 8.95
-}  {} [] [ ])";
+  std::string input = R"(  {)"
+                      R"(category": "reference",)"
+                      R"("index:" [4,12,42],)"
+                      R"("author": "Nigel Rees",)"
+                      R"("title": "Sayings of the Century",)"
+                      R"("price": 8.95)"
+                      R"(}  )"
+                      R"({)"
+                      R"("category": "reference",)"
+                      R"("index:" [4,{},null,{"a":[]}],)"
+                      R"("author": "Nigel Rees",)"
+                      R"("title": "Sayings of the Century",)"
+                      R"("price": 8.95)"
+                      R"(}  {} [] [ ])";
 
   // Repeat input sample 1024x
   for (std::size_t i = 0; i < 10; i++)
@@ -221,19 +221,15 @@ TEST_F(LogicalStackTest, GroundTruth)
   SymbolT* d_top_of_stack = nullptr;
   cudaMalloc(&d_top_of_stack, string_size);
 
-  // Allocate temporary storage required by the get-top-of-the-stack algorithm
-  rmm::device_buffer d_temp_storage{};
-
   // Run algorithm
-  fst::SparseStackOpToTopOfStack<StackLevelT>(d_temp_storage,
-                                              d_stack_ops.data(),
-                                              d_stack_op_idx_span,
-                                              JSONToStackOp{},
-                                              top_of_stack_gpu.device_ptr(),
-                                              empty_stack_symbol,
-                                              read_symbol,
-                                              string_size,
-                                              stream);
+  fst::sparse_stack_op_to_top_of_stack<StackLevelT>(d_stack_ops.data(),
+                                                    d_stack_op_idx_span,
+                                                    JSONToStackOp{},
+                                                    top_of_stack_gpu.device_ptr(),
+                                                    empty_stack_symbol,
+                                                    read_symbol,
+                                                    string_size,
+                                                    stream);
 
   // Async copy results from device to host
   top_of_stack_gpu.device_to_host(stream_view);
