@@ -28,6 +28,7 @@ Attributes
    Series.nullmask
    Series.null_count
    Series.size
+   Series.T
    Series.memory_usage
    Series.has_nulls
    Series.empty
@@ -58,9 +59,6 @@ Indexing, iteration
    Series.items
    Series.iteritems
    Series.keys
-
-For more information on ``.at``, ``.iat``, ``.loc``, and
-``.iloc``,  see the :ref:`indexing documentation <indexing>`.
 
 Binary operator functions
 -------------------------
@@ -94,6 +92,7 @@ Binary operator functions
    Series.ne
    Series.eq
    Series.product
+   Series.dot
 
 Function application, GroupBy & window
 --------------------------------------
@@ -118,7 +117,6 @@ Computations / descriptive stats
    Series.all
    Series.any
    Series.autocorr
-   Series.ceil
    Series.clip
    Series.corr
    Series.count
@@ -131,7 +129,6 @@ Computations / descriptive stats
    Series.diff
    Series.digitize
    Series.factorize
-   Series.floor
    Series.kurt
    Series.max
    Series.mean
@@ -140,6 +137,7 @@ Computations / descriptive stats
    Series.mode
    Series.nlargest
    Series.nsmallest
+   Series.pct_change
    Series.prod
    Series.quantile
    Series.rank
@@ -166,8 +164,10 @@ Reindexing / selection / label manipulation
    Series.drop
    Series.drop_duplicates
    Series.equals
+   Series.first
    Series.head
    Series.isin
+   Series.last
    Series.reindex
    Series.rename
    Series.reset_index
@@ -215,27 +215,13 @@ Combining / comparing / joining / merging
    Series.append
    Series.update
 
-Numerical operations
-~~~~~~~~~~~~~~~~~~~~
-.. autosummary::
-   :toctree: api/
-
-   Series.acos
-   Series.asin
-   Series.atan
-   Series.cos
-   Series.exp
-   Series.log
-   Series.sin
-   Series.sqrt
-   Series.tan
-
 Time Series-related
 -------------------
 .. autosummary::
    :toctree: api/
 
    Series.shift
+   Series.resample
 
 Accessors
 ---------

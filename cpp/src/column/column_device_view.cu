@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,9 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <numeric>
 
@@ -74,11 +77,11 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
     new ColumnDeviceView(source, staging_buffer.data(), descendant_storage->data()), deleter};
 
   // copy the CPU memory with all the children into device memory
-  CUDA_TRY(cudaMemcpyAsync(descendant_storage->data(),
-                           staging_buffer.data(),
-                           descendant_storage->size(),
-                           cudaMemcpyDefault,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(descendant_storage->data(),
+                                staging_buffer.data(),
+                                descendant_storage->size(),
+                                cudaMemcpyDefault,
+                                stream.value()));
 
   stream.synchronize();
 

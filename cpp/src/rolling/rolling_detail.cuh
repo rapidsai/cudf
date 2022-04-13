@@ -55,6 +55,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/count.h>
+#include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
@@ -1280,7 +1281,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   output->set_null_count(output->size() - device_valid_count.value(stream));
 
   // check the stream for debugging
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   return output;
 }

@@ -162,6 +162,8 @@ std::unique_ptr<table> rsplit_re(
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
  * @param input A column of string elements to be split.
  * @param pattern The regex pattern for delimiting characters within each string.
  * @param maxsplit Maximum number of splits to perform.
@@ -211,6 +213,8 @@ std::unique_ptr<column> split_record_re(
  *       ["_ab", "cd"],
  *       ["ab_cd", ""] ]
  * @endcode
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *

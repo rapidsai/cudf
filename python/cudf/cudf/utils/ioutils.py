@@ -77,11 +77,6 @@ Examples
 0       10   hello
 1       20  rapids
 2       30      ai
-
-See Also
---------
-cudf.read_csv
-cudf.read_json
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -264,7 +259,6 @@ row_group_size_rows: integer or None, default None
 See Also
 --------
 cudf.read_parquet
-cudf.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
@@ -392,9 +386,6 @@ num_rows : int, default None
     If not None, the total number of rows to read.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
-decimal_cols_as_float: list, default None
-    If specified, names of the columns that should be converted from
-    Decimal to Float64 in the resulting dataframe.
 use_python_file_object : boolean, default True
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
     AbstractBufferedFile objects at IO time. This option is likely to improve
@@ -421,8 +412,7 @@ Examples
 
 See Also
 --------
-cudf.read_parquet
-cudf.DataFrame.to_parquet
+cudf.DataFrame.to_orc
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -569,7 +559,7 @@ result : Series or DataFrame, depending on the value of `typ`.
 
 See Also
 --------
-.cudf.io.json.to_json
+cudf.DataFrame.to_json
 """
 doc_read_json = docfmt_partial(docstring=_docstring_read_json)
 
@@ -636,7 +626,7 @@ index : bool, default True
 
 See Also
 --------
-.cudf.io.json.read_json
+cudf.read_json
 """
 doc_to_json = docfmt_partial(docstring=_docstring_to_json)
 

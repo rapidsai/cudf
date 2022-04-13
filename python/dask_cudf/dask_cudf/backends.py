@@ -142,10 +142,12 @@ def meta_nonempty_cudf(x):
     res = cudf.DataFrame(index=idx)
     for col in x._data.names:
         dtype = str(x._data[col].dtype)
-        if dtype in ("list", "struct"):
-            # Not possible to hash and store list & struct types
-            # as they can contain different levels of nesting or
-            # fields.
+        if dtype in ("list", "struct", "category"):
+            # 1. Not possible to hash and store list & struct types
+            #    as they can contain different levels of nesting or
+            #    fields.
+            # 2. Not possible to has `category` types as
+            #    they often contain an underlying types to them.
             res._data[col] = _get_non_empty_data(x._data[col])
         else:
             if dtype not in columns_with_dtype:
@@ -398,7 +400,10 @@ def group_split_cudf(df, c, k, ignore_index=False):
 @sizeof_dispatch.register(cudf.DataFrame)
 @_dask_cudf_nvtx_annotate
 def sizeof_cudf_dataframe(df):
-    return int(df.memory_usage().sum())
+    return int(
+        sum(col.memory_usage for col in df._data.columns)
+        + df._index.memory_usage()
+    )
 
 
 @sizeof_dispatch.register((cudf.Series, cudf.BaseIndex))

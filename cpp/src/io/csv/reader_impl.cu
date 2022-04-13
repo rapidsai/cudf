@@ -42,6 +42,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/host_vector.h>
+
 #include <algorithm>
 #include <iostream>
 #include <memory>
@@ -258,11 +260,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
 
     auto const previous_data_size = d_data.size();
     d_data.resize(target_pos - buffer_pos, stream);
-    CUDA_TRY(cudaMemcpyAsync(d_data.begin() + previous_data_size,
-                             data.begin() + buffer_pos + previous_data_size,
-                             target_pos - buffer_pos - previous_data_size,
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(d_data.begin() + previous_data_size,
+                                  data.begin() + buffer_pos + previous_data_size,
+                                  target_pos - buffer_pos - previous_data_size,
+                                  cudaMemcpyDefault,
+                                  stream.value()));
 
     // Pass 1: Count the potential number of rows in each character block for each
     // possible parser state at the beginning of the block.
@@ -278,11 +280,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                                                  range_end,
                                                                  skip_rows,
                                                                  stream);
-    CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
-                             row_ctx.device_ptr(),
-                             num_blocks * sizeof(uint64_t),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
+                                  row_ctx.device_ptr(),
+                                  num_blocks * sizeof(uint64_t),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
     stream.synchronize();
 
     // Sum up the rows in each character block, selecting the row count that
@@ -298,11 +300,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
       // At least one row in range in this batch
       all_row_offsets.resize(total_rows - skip_rows, stream);
 
-      CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
-                               row_ctx.host_ptr(),
-                               num_blocks * sizeof(uint64_t),
-                               cudaMemcpyHostToDevice,
-                               stream.value()));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
+                                    row_ctx.host_ptr(),
+                                    num_blocks * sizeof(uint64_t),
+                                    cudaMemcpyHostToDevice,
+                                    stream.value()));
 
       // Pass 2: Output row offsets
       cudf::io::csv::gpu::gather_row_offsets(parse_opts.view(),
@@ -319,11 +321,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
                                              stream);
       // With byte range, we want to keep only one row out of the specified range
       if (range_end < data.size()) {
-        CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
-                                 row_ctx.device_ptr(),
-                                 num_blocks * sizeof(uint64_t),
-                                 cudaMemcpyDeviceToHost,
-                                 stream.value()));
+        CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
+                                      row_ctx.device_ptr(),
+                                      num_blocks * sizeof(uint64_t),
+                                      cudaMemcpyDeviceToHost,
+                                      stream.value()));
         stream.synchronize();
 
         size_t rows_out_of_range = 0;
@@ -368,11 +370,11 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> load_data_and_gather
   // Remove header rows and extract header
   const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
   if (header_row_index + 1 < row_offsets.size()) {
-    CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
-                             row_offsets.data() + header_row_index,
-                             2 * sizeof(uint64_t),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
+                                  row_offsets.data() + header_row_index,
+                                  2 * sizeof(uint64_t),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
     stream.synchronize();
 
     const auto header_start = buffer_pos + row_ctx[0];
