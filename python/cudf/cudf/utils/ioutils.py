@@ -259,7 +259,6 @@ row_group_size_rows: integer or None, default None
 See Also
 --------
 cudf.read_parquet
-cudf.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
@@ -413,8 +412,7 @@ Examples
 
 See Also
 --------
-cudf.read_parquet
-cudf.DataFrame.to_parquet
+cudf.DataFrame.to_orc
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
