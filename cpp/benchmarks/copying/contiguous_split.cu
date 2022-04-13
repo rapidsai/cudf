@@ -22,6 +22,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 template <typename T>
 void BM_contiguous_split_common(benchmark::State& state,
                                 std::vector<T>& src_cols,

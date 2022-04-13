@@ -31,6 +31,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/transform.h>
 
 #include <cstdio>
