@@ -164,11 +164,8 @@ endif()
 # * include paths ---------------------------------------------------------------------------------
 
 target_include_directories(
-  cudfjni
-  PUBLIC "${CMAKE_BINARY_DIR}/include"
-         "${CMAKE_SOURCE_DIR}/include"
-         "${CMAKE_SOURCE_DIR}/src"
-         "${JNI_INCLUDE_DIRS}"
+  cudfjni PUBLIC "${CMAKE_BINARY_DIR}/include" "${CMAKE_SOURCE_DIR}/include"
+                 "${CMAKE_SOURCE_DIR}/src" "${JNI_INCLUDE_DIRS}"
 )
 
 # ##################################################################################################
@@ -211,10 +208,7 @@ if(USE_GDS)
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
-  target_include_directories(
-    cufilejni
-    PRIVATE "${cuFile_INCLUDE_DIRS}"
-  )
+  target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
   target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
 endif()
 
@@ -227,9 +221,7 @@ if(CUDF_JNI_LIBCUDF_STATIC)
   set(CUDF_LINK PRIVATE -Wl,--whole-archive cudf::cudf -Wl,--no-whole-archive PUBLIC cudf::cudf)
 endif()
 
-target_link_libraries(
-  cudfjni ${CUDF_LINK} PRIVATE nvcomp
-)
+target_link_libraries(cudfjni ${CUDF_LINK} PRIVATE nvcomp)
 
 # ##################################################################################################
 # * cudart options --------------------------------------------------------------------------------
