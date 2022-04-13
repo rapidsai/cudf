@@ -919,8 +919,8 @@ class Frame(BinaryOperand, Scannable):
         """
         if not isinstance(self, cudf.DataFrame):
             warnings.warn(
-                f"{self.__class__}.scatter_by_map is deprecated and will be "
-                "removed.",
+                f"{self.__class__.__name__}.scatter_by_map is deprecated and "
+                "will be removed.",
                 FutureWarning,
             )
 
@@ -3404,7 +3404,7 @@ class Frame(BinaryOperand, Scannable):
         """
         if isinstance(self, cudf.BaseIndex):
             warnings.warn(
-                "This method is deprecated and will be removed.",
+                f"Index.{op} is deprecated and will be removed.",
                 FutureWarning,
             )
 
@@ -3445,7 +3445,7 @@ class Frame(BinaryOperand, Scannable):
         # TODO: This will work for Index because it's passing self._index
         # (which is None), but eventually we may want to remove that parameter
         # for Index._from_data and simplify.
-        return self._from_data(results, index=self._index)
+        return self._from_data(results, self._index)
 
     @_cudf_nvtx_annotate
     @ioutils.doc_to_json()
