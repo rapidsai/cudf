@@ -2021,9 +2021,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def apply(self, func, convert_dtype=True, args=(), **kwargs):
         """
         Apply a scalar function to the values of a Series.
+        Similar to ``pandas.Series.apply``.
 
-        Similar to `pandas.Series.apply. Applies a user
-        defined function elementwise over a series.
+        ``apply`` relies on Numba to JIT compile ``func``.
+        Thus the allowed operations within func are limited
+        to the ones specified
+        [here](https://numba.pydata.org/numba-doc/latest/cuda/cudapysupported.html).
+        For more information, see the cuDF guide to
+        user defined functions found
+        [here](https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html).
 
         Parameters
         ----------

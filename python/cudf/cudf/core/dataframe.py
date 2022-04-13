@@ -3575,12 +3575,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ):
         """
         Apply a function along an axis of the DataFrame.
-
-        Designed to mimic `pandas.DataFrame.apply`. Applies a user
-        defined function row wise over a dataframe, with true null
-        handling. Works with UDFs using `core.udf.pipeline.nulludf`
-        and returns a single series. Uses numba to jit compile the
-        function to PTX via LLVM.
+        ``apply`` relies on Numba to JIT compile ``func``.
+        Thus the allowed operations within func are limited
+        to the ones specified
+        [here](https://numba.pydata.org/numba-doc/latest/cuda/cudapysupported.html).
+        For more information, see the cuDF guide
+        to user defined functions found
+        [here](https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html).
 
         Parameters
         ----------
@@ -3601,7 +3602,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Examples
         --------
 
-        Simple function of a single variable which could be NA
+        Simple function of a single variable which could be NA:
 
         >>> def f(row):
         ...     if row['a'] is cudf.NA:
@@ -3617,7 +3618,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: int64
 
         Function of multiple variables will operate in
-        a null aware manner
+        a null aware manner:
 
         >>> def f(row):
         ...     return row['a'] - row['b']
@@ -3633,7 +3634,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3    <NA>
         dtype: int64
 
-        Functions may conditionally return NA as in pandas
+        Functions may conditionally return NA as in pandas:
 
         >>> def f(row):
         ...     if row['a'] + row['b'] > 3:
@@ -3652,7 +3653,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: int64
 
         Mixed types are allowed, but will return the common
-        type, rather than object as in pandas
+        type, rather than object as in pandas:
 
         >>> def f(row):
         ...     return row['a'] + row['b']
@@ -3669,7 +3670,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Functions may also return scalar values, however the
         result will be promoted to a safe type regardless of
-        the data
+        the data:
 
         >>> def f(row):
         ...     if row['a'] > 3:
@@ -3686,7 +3687,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2    5.0
         dtype: float64
 
-        Ops against N columns are supported generally
+        Ops against N columns are supported generally:
 
         >>> def f(row):
         ...     v, w, x, y, z = (
