@@ -47,7 +47,7 @@ namespace detail {
 template <typename IndexIterator>
 rmm::device_uvector<unbound_list_view> list_vector_from_column(
   unbound_list_view::label_type label,
-  lists_column_device_view const& lists_column,
+  cudf::detail::lists_column_device_view const& lists_column,
   IndexIterator index_begin,
   IndexIterator index_end,
   rmm::cuda_stream_view stream,
@@ -178,19 +178,20 @@ std::unique_ptr<column> scatter(
   auto const scatter_map_size   = thrust::distance(scatter_map_begin, scatter_map_end);
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
-                            lists_column_device_view(*source_device_view),
+                            cudf::detail::lists_column_device_view(*source_device_view),
                             thrust::make_counting_iterator<size_type>(0),
                             thrust::make_counting_iterator<size_type>(scatter_map_size),
                             stream,
                             mr);
 
   auto const target_device_view = column_device_view::create(target, stream);
-  auto target_vector            = list_vector_from_column(unbound_list_view::label_type::TARGET,
-                                               lists_column_device_view(*target_device_view),
-                                               thrust::make_counting_iterator<size_type>(0),
-                                               thrust::make_counting_iterator<size_type>(num_rows),
-                                               stream,
-                                               mr);
+  auto target_vector =
+    list_vector_from_column(unbound_list_view::label_type::TARGET,
+                            cudf::detail::lists_column_device_view(*target_device_view),
+                            thrust::make_counting_iterator<size_type>(0),
+                            thrust::make_counting_iterator<size_type>(num_rows),
+                            stream,
+                            mr);
 
   return scatter_impl(
     source_vector, target_vector, scatter_map_begin, scatter_map_end, source, target, stream, mr);
@@ -254,19 +255,20 @@ std::unique_ptr<column> scatter(
   auto const scatter_map_size   = thrust::distance(scatter_map_begin, scatter_map_end);
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
-                            lists_column_device_view(*source_device_view),
+                            cudf::detail::lists_column_device_view(*source_device_view),
                             thrust::make_constant_iterator<size_type>(0),
                             thrust::make_constant_iterator<size_type>(0) + scatter_map_size,
                             stream,
                             mr);
 
   auto const target_device_view = column_device_view::create(target, stream);
-  auto target_vector            = list_vector_from_column(unbound_list_view::label_type::TARGET,
-                                               lists_column_device_view(*target_device_view),
-                                               thrust::make_counting_iterator<size_type>(0),
-                                               thrust::make_counting_iterator<size_type>(num_rows),
-                                               stream,
-                                               mr);
+  auto target_vector =
+    list_vector_from_column(unbound_list_view::label_type::TARGET,
+                            cudf::detail::lists_column_device_view(*target_device_view),
+                            thrust::make_counting_iterator<size_type>(0),
+                            thrust::make_counting_iterator<size_type>(num_rows),
+                            stream,
+                            mr);
 
   return scatter_impl(
     source_vector, target_vector, scatter_map_begin, scatter_map_end, wrapped, target, stream, mr);

@@ -230,11 +230,11 @@ struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
        d_offsets,
        has_null_lists,
        has_null_elements,
+       search_key_is_scalar,
        key_validity_iter,
        find_option,
        comp,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
-        auto const key_opt = keys_iter[list_idx];
         if (!key_validity_iter[list_idx] || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
           return {NOT_FOUND_IDX, false};
         }
@@ -314,7 +314,7 @@ struct dispatch_index_of {
     auto const searcher = search_functor<Type>{};
 
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
-#if 1
+#if 0
       // Prepare to flatten the structs column and scalar.
       auto const has_null_elements = has_nested_nulls(table_view{std::vector<column_view>{
                                        col.child_begin(), col.child_end()}}) ||
@@ -474,7 +474,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
     rmm::exec_policy(stream),
     output_begin,
     output_begin + num_rows,
-    [lists = lists_column_device_view{*d_lists}] __device__(auto list_idx) {
+    [lists = cudf::detail::lists_column_device_view{*d_lists}] __device__(auto list_idx) {
       auto const list         = list_device_view{lists, list_idx};
       auto const begin_offset = thrust::make_counting_iterator(size_type{0});
       return list.is_null() ||
@@ -483,7 +483,7 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
              });
     });
   auto const validity_begin = cudf::detail::make_counting_transform_iterator(
-    0, [lists = lists_column_device_view{*d_lists}] __device__(auto list_idx) {
+    0, [lists = cudf::detail::lists_column_device_view{*d_lists}] __device__(auto list_idx) {
       return not list_device_view{lists, list_idx}.is_null();
     });
   auto [null_mask, num_nulls] = cudf::detail::valid_if(
