@@ -3576,7 +3576,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Apply a function along an axis of the DataFrame.
         ``apply`` relies on Numba to JIT compile ``func``.
-        Thus the allowed operations within func are limited
+        Thus the allowed operations within ``func`` are limited
         to the ones specified
         [here](https://numba.pydata.org/numba-doc/latest/cuda/cudapysupported.html).
         For more information, see the cuDF guide

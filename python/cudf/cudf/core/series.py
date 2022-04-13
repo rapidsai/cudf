@@ -2024,7 +2024,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Similar to ``pandas.Series.apply``.
 
         ``apply`` relies on Numba to JIT compile ``func``.
-        Thus the allowed operations within func are limited
+        Thus the allowed operations within ``func`` are limited
         to the ones specified
         [here](https://numba.pydata.org/numba-doc/latest/cuda/cudapysupported.html).
         For more information, see the cuDF guide to
