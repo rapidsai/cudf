@@ -144,8 +144,13 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
 
 void drop_cache()
 {
-  const char* cmd = std::getenv("DROP_CACHE_CMD");
-  if (cmd != nullptr) {
-    CUDF_EXPECTS(std::system(cmd) == 0, "Failed to execute the drop cache script");
+  if (std::getenv("CUDF_BENCHMARK_DROP_CACHE") != nullptr) {
+    std::array drop_cache_cmds{"/sbin/sysctl vm.drop_caches=3",
+                               "sudo /sbin/sysctl vm.drop_caches=3"};
+
+    CUDF_EXPECTS(std::any_of(drop_cache_cmds.cbegin(),
+                             drop_cache_cmds.cend(),
+                             [](auto& cmd) { return std::system(cmd) == 0; }),
+                 "Failed to execute the drop cache script");
   }
 }
