@@ -33,6 +33,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/scan.h>
 
 namespace cudf {
 namespace strings {
@@ -114,28 +117,8 @@ std::unique_ptr<column> findall_record(
     reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
 
   // Create lists offsets column
-  auto offsets   = count_matches(*d_strings, *d_prog, stream, mr);
+  auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
   auto d_offsets = offsets->mutable_view().data<offset_type>();
-
-  // Compute null output rows
-  auto [null_mask, null_count] = cudf::detail::valid_if(
-    d_offsets,
-    d_offsets + strings_count,
-    [] __device__(auto const v) { return v > 0; },
-    stream,
-    mr);
-
-  auto const valid_count = strings_count - null_count;
-  // Return an empty lists column if there are no valid rows
-  if (valid_count == 0) {
-    return make_lists_column(0,
-                             make_empty_column(type_to_id<offset_type>()),
-                             make_empty_column(type_id::STRING),
-                             0,
-                             rmm::device_buffer{},
-                             stream,
-                             mr);
-  }
 
   // Convert counts into offsets
   thrust::exclusive_scan(
@@ -152,8 +135,8 @@ std::unique_ptr<column> findall_record(
   return make_lists_column(strings_count,
                            std::move(offsets),
                            std::move(strings_output),
-                           null_count,
-                           std::move(null_mask),
+                           input.null_count(),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }

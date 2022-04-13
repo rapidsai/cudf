@@ -54,7 +54,7 @@ Indexing, iteration
    DataFrame.iloc
    DataFrame.insert
    DataFrame.__iter__
-   DataFrame.iteritems
+   DataFrame.items
    DataFrame.keys
    DataFrame.iterrows
    DataFrame.itertuples
@@ -64,9 +64,6 @@ Indexing, iteration
    DataFrame.where
    DataFrame.mask
    DataFrame.query
-
-For more information on ``.at``, ``.iat``, ``.loc``, and
-``.iloc``,  see the :ref:`indexing documentation <indexing>`.
 
 Binary operator functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -84,6 +81,7 @@ Binary operator functions
    DataFrame.floordiv
    DataFrame.mod
    DataFrame.pow
+   DataFrame.dot
    DataFrame.radd
    DataFrame.rsub
    DataFrame.rmul
@@ -121,6 +119,7 @@ Computations / descriptive stats
 .. autosummary::
    :toctree: api/
 
+   DataFrame.abs
    DataFrame.all
    DataFrame.any
    DataFrame.clip
@@ -132,12 +131,15 @@ Computations / descriptive stats
    DataFrame.cumprod
    DataFrame.cumsum
    DataFrame.describe
+   DataFrame.diff
    DataFrame.kurt
    DataFrame.kurtosis
    DataFrame.max
    DataFrame.mean
+   DataFrame.median
    DataFrame.min
    DataFrame.mode
+   DataFrame.pct_change
    DataFrame.prod
    DataFrame.product
    DataFrame.quantile
@@ -148,6 +150,7 @@ Computations / descriptive stats
    DataFrame.sum
    DataFrame.std
    DataFrame.var
+   DataFrame.nunique
 
 Reindexing / selection / label manipulation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -159,7 +162,9 @@ Reindexing / selection / label manipulation
    DataFrame.drop
    DataFrame.drop_duplicates
    DataFrame.equals
+   DataFrame.first
    DataFrame.head
+   DataFrame.last
    DataFrame.reindex
    DataFrame.rename
    DataFrame.reset_index
@@ -180,6 +185,7 @@ Missing data handling
 
    DataFrame.dropna
    DataFrame.fillna
+   DataFrame.interpolate
    DataFrame.isna
    DataFrame.isnull
    DataFrame.nans_to_nulls
@@ -220,27 +226,13 @@ Combining / comparing / joining / merging
    DataFrame.merge
    DataFrame.update
 
-Numerical operations
-~~~~~~~~~~~~~~~~~~~~
-.. autosummary::
-   :toctree: api/
-
-   DataFrame.acos
-   DataFrame.asin
-   DataFrame.atan
-   DataFrame.cos
-   DataFrame.exp
-   DataFrame.log
-   DataFrame.sin
-   DataFrame.sqrt
-   DataFrame.tan
-
 Time Series-related
 ~~~~~~~~~~~~~~~~~~~
 .. autosummary::
    :toctree: api/
 
    DataFrame.shift
+   DataFrame.resample
 
 Serialization / IO / conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

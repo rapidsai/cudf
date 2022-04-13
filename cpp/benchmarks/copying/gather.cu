@@ -21,6 +21,8 @@
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/random.h>
 #include <thrust/reverse.h>
 #include <thrust/shuffle.h>
 

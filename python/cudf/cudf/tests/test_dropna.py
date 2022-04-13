@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -199,7 +199,8 @@ def test_dropna_thresh_cols(thresh, subset, inplace):
         actual = gdf
 
     assert_eq(
-        expected, actual,
+        expected,
+        actual,
     )
 
 

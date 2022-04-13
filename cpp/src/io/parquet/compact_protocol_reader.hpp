@@ -19,6 +19,7 @@
 #include "parquet.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <string>
 #include <vector>
 

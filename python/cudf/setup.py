@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import os
 import re
@@ -245,15 +245,16 @@ setup(
         "Topic :: Scientific/Engineering",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     # Include the separately-compiled shared library
     setup_requires=["cython", "protobuf"],
     ext_modules=extensions,
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf._lib*"]), ["*.pxd"],
+        find_packages(include=["cudf._lib*"]),
+        ["*.pxd"],
     ),
     cmdclass=cmdclass,
     install_requires=install_requires,

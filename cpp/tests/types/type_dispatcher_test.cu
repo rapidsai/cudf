@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ TYPED_TEST(TypedDispatcherTest, DeviceDispatch)
 {
   auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(1);
   dispatch_test_kernel<<<1, 1>>>(cudf::type_to_id<TypeParam>(), result.data());
-  CUDA_TRY(cudaDeviceSynchronize());
+  CUDF_CUDA_TRY(cudaDeviceSynchronize());
   EXPECT_EQ(true, result.front_element(rmm::cuda_stream_default));
 }
 
@@ -132,7 +132,7 @@ TYPED_TEST(TypedDoubleDispatcherTest, DeviceDoubleDispatch)
   auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(1);
   double_dispatch_test_kernel<<<1, 1>>>(
     cudf::type_to_id<TypeParam>(), cudf::type_to_id<TypeParam>(), result.data());
-  CUDA_TRY(cudaDeviceSynchronize());
+  CUDF_CUDA_TRY(cudaDeviceSynchronize());
   EXPECT_EQ(true, result.front_element(rmm::cuda_stream_default));
 }
 

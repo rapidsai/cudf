@@ -27,6 +27,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/functional.h>
+
 #include <fstream>
 #include <iostream>
 #include <vector>

@@ -29,6 +29,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/execution_policy.h>
+#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 #include <limits>

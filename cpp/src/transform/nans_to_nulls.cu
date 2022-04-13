@@ -26,6 +26,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 namespace cudf {
 namespace detail {
 struct dispatch_nan_to_null {

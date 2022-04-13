@@ -341,14 +341,7 @@ def test_series_column_iter_error():
     ):
         gs.iteritems()
 
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            f"{gs._column.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
-            f"if you wish to iterate over the values."
-        ),
-    ):
+    with pytest.raises(TypeError):
         iter(gs._column)
 
 
@@ -560,7 +553,7 @@ def test_categorical_value_counts(dropna, normalize, num_elements):
 @pytest.mark.parametrize("dropna", [True, False])
 @pytest.mark.parametrize("normalize", [True, False])
 def test_series_value_counts(dropna, normalize):
-    for size in [10 ** x for x in range(5)]:
+    for size in [10**x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
         sr = cudf.Series.from_masked_array(
@@ -867,8 +860,14 @@ def test_series_memory_usage():
             ),
         ),
         (
-            cudf.Series([1, 2, None, 10.2, None], dtype="float32",),
-            pd.Series([1, 2, None, 10.2, None], dtype=pd.Float32Dtype(),),
+            cudf.Series(
+                [1, 2, None, 10.2, None],
+                dtype="float32",
+            ),
+            pd.Series(
+                [1, 2, None, 10.2, None],
+                dtype=pd.Float32Dtype(),
+            ),
         ),
     ],
 )
@@ -1077,9 +1076,18 @@ def test_series_drop_index(ps, index, inplace):
         ("speed", 1),
         ("weight", 1),
         ("length", 1),
-        ("cow", None,),
-        ("lama", None,),
-        ("falcon", None,),
+        (
+            "cow",
+            None,
+        ),
+        (
+            "lama",
+            None,
+        ),
+        (
+            "falcon",
+            None,
+        ),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
@@ -1158,7 +1166,8 @@ def test_series_drop_raises():
 
 
 @pytest.mark.parametrize(
-    "data", [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
+    "data",
+    [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize(
@@ -1431,8 +1440,14 @@ def test_reset_index_dup_level_name_exceptions():
     assert_exceptions_equal(
         lfunc=ps.reset_index,
         rfunc=gs.reset_index,
-        lfunc_args_and_kwargs=([], {"level": [None]},),
-        rfunc_args_and_kwargs=([], {"level": [None]},),
+        lfunc_args_and_kwargs=(
+            [],
+            {"level": [None]},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"level": [None]},
+        ),
         expected_error_message="occurs multiple times, use a level number",
     )
 
@@ -1440,8 +1455,14 @@ def test_reset_index_dup_level_name_exceptions():
     assert_exceptions_equal(
         lfunc=ps.reset_index,
         rfunc=gs.reset_index,
-        lfunc_args_and_kwargs=([], {"drop": False, "inplace": True},),
-        rfunc_args_and_kwargs=([], {"drop": False, "inplace": True},),
+        lfunc_args_and_kwargs=(
+            [],
+            {"drop": False, "inplace": True},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"drop": False, "inplace": True},
+        ),
     )
 
     # Pandas raises the above exception should these two inputs crosses.
@@ -1518,7 +1539,8 @@ def test_series_transpose(data):
 
 
 @pytest.mark.parametrize(
-    "data", [1, 3, 5, 7, 7],
+    "data",
+    [1, 3, 5, 7, 7],
 )
 def test_series_nunique(data):
     cd_s = cudf.Series(data)
@@ -1531,7 +1553,8 @@ def test_series_nunique(data):
 
 
 @pytest.mark.parametrize(
-    "data", [1, 3, 5, 7, 7],
+    "data",
+    [1, 3, 5, 7, 7],
 )
 def test_series_nunique_index(data):
     cd_s = cudf.Series(data)
