@@ -812,3 +812,20 @@ def test_string_udf_lower(data):
         return st.lower()
 
     run_masked_udf_test(func, data, check_dtype=False)
+
+@pytest.mark.parametrize('data', [
+    {
+        'str_col': ['abc', 'a', '', '123AbC']
+    }
+])
+@pytest.mark.parametrize("idx", [0, 1, 2, -1])
+def test_string_udf_indexing(data, idx):
+    # tests indexing into strings with an int
+
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return row[idx]
+
+    run_masked_udf_test(func, data)

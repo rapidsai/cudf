@@ -35,6 +35,7 @@ SUPPORTED_NUMBA_TYPES = (
     types.PyObject,
 )
 
+import operator
 
 # String object definitions
 class DString(types.Type):
@@ -489,6 +490,17 @@ class StringLiteralLength(AbstractTemplate):
             return nb_signature(types.int32, args[0])
 
 
+@cuda_decl_registry.register_global(operator.getitem)
+class MaskedDstringSubstring(AbstractTemplate):
+    """
+    Typing for st[idx], st[:idx], etc
+    """
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType) and args[0].value_type == dstring and isinstance(args[1], types.Integer):
+            # __getitem__ is actually a two argument function: (val, idx) -> ret
+            return nb_signature(MaskedType(dstring), MaskedType(dstring), args[1])
+
+
 for binary_op in arith_ops + bitwise_ops + comparison_ops:
     # Every op shares the same typing class
     cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
@@ -620,6 +632,11 @@ _dstring_upper = cuda.declare_device(
 _dstring_lower = cuda.declare_device(
     "lower",
     types.int32(types.CPointer(dstring), types.CPointer(dstring))
+)
+
+_dstring_at = cuda.declare_device(
+    "at",
+    types.int32(types.CPointer(dstring), types.CPointer(dstring), types.int32)
 )
 
 _create_dstring_from_stringview = cuda.declare_device(
