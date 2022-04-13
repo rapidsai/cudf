@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define _CG_ABI_EXPERIMENTAL  // enable experimental API
+
 #include <io/parquet/parquet_gpu.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -24,6 +26,8 @@
 
 #include <cuda/atomic>
 
+#include <cooperative_groups.h>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -31,6 +35,8 @@ namespace gpu {
 namespace {
 constexpr int DEFAULT_BLOCK_SIZE = 256;
 }
+
+namespace cg = cooperative_groups;
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
@@ -101,13 +107,16 @@ __global__ void __launch_bounds__(block_size)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
-  auto t       = threadIdx.x;
   auto frag    = frags[col_idx][block_x];
   auto chunk   = frag.chunk;
   auto col     = chunk->col_desc;
 
   if (not chunk->use_dictionary) { return; }
 
+  __shared__ cg::experimental::block_tile_memory<4, block_size> shared;
+  auto thb   = cg::experimental::this_thread_block(shared);
+  auto block = cg::experimental::tiled_partition<block_size>(thb);
+  // cub::BlockReduce instead of cg::reduce for performance purpose
   using block_reduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
@@ -115,9 +124,9 @@ __global__ void __launch_bounds__(block_size)
   size_type end_row   = frag.start_row + frag.num_rows;
 
   // Find the bounds of values in leaf column to be inserted into the map for current chunk
-  auto const cudf_col          = *(col->parent_column);
-  auto const s_start_value_idx = row_to_value_idx(start_row, cudf_col);
-  auto const end_value_idx     = row_to_value_idx(end_row, cudf_col);
+  auto const cudf_col               = *(col->parent_column);
+  size_type const s_start_value_idx = row_to_value_idx(start_row, cudf_col);
+  size_type const end_value_idx     = row_to_value_idx(end_row, cudf_col);
 
   column_device_view const& data_col = *col->leaf_column;
 
@@ -125,10 +134,15 @@ __global__ void __launch_bounds__(block_size)
   auto hash_map_mutable = map_type::device_mutable_view(
     chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
-  __shared__ int total_num_dict_entries;
-  auto val_idx = s_start_value_idx + t;
-  while (val_idx - block_size < end_value_idx) {
-    auto const is_valid = val_idx < data_col.size() and data_col.is_valid(val_idx);
+  __shared__ size_type total_num_dict_entries;
+  if (block.thread_rank() == 0) { total_num_dict_entries = chunk->num_dict_entries; }
+  size_type val_idx = s_start_value_idx + t;
+  while (block.any(val_idx < end_value_idx)) {
+    // Check if the num unique values in chunk has already exceeded max dict size and early exit
+    if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
+
+    auto const is_valid =
+      val_idx < end_value_idx and val_idx < data_col.size() and data_col.is_valid(val_idx);
 
     // insert element at val_idx to hash map and count successful insertions
     size_type is_unique      = 0;
@@ -157,20 +171,16 @@ __global__ void __launch_bounds__(block_size)
     }
 
     auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
-    __syncthreads();
+    block.sync();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
-    if (t == 0) {
+    if (block.thread_rank() == 0) {
       total_num_dict_entries = atomicAdd(&chunk->num_dict_entries, num_unique);
       total_num_dict_entries += num_unique;
       atomicAdd(&chunk->uniq_data_size, uniq_data_size);
     }
-    __syncthreads();
-
-    // Check if the num unique values in chunk has already exceeded max dict size and early exit
-    if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
 
     val_idx += block_size;
-  }
+  }  // while
 }
 
 template <int block_size>
