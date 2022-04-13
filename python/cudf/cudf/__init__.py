@@ -6,6 +6,7 @@ validate_setup()
 
 import cupy
 from numba import config as numba_config, cuda
+import numba
 
 import rmm
 
@@ -82,7 +83,11 @@ from cudf.io import (
 )
 from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
-from cudf.utils.utils import set_allocator
+from cudf.utils.utils import (
+    set_allocator,
+    custom_from_cuda_array_interface,
+    custom_convert_object_with_cuda_array_interface,
+)
 
 try:
     from ptxcompiler.patch import patch_numba_codegen_if_needed
@@ -105,6 +110,11 @@ except AttributeError:
     # Numba < 0.54: No occupancy warnings
     pass
 del numba_config
+
+numba.cuda.api.from_cuda_array_interface = custom_from_cuda_array_interface
+cupy._core.core._convert_object_with_cuda_array_interface = (
+    custom_convert_object_with_cuda_array_interface
+)
 
 __version__ = get_versions()["version"]
 del get_versions

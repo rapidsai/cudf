@@ -3416,7 +3416,6 @@ class Frame(BinaryOperand, Scannable):
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
-
         return cudf.io.dlpack.to_dlpack(self)
 
     @_cudf_nvtx_annotate

@@ -18,6 +18,7 @@ from typing import (
     Union,
     cast,
 )
+from weakref import WeakSet
 
 import cupy
 import numpy as np
@@ -93,7 +94,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         "min",
     }
 
-    _is_viewed_by_pyobject = False
+    _cuda_array_interface_viewers: WeakSet = WeakSet()
 
     def as_frame(self) -> "cudf.core.frame.Frame":
         """
@@ -1158,7 +1159,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     @property
     def spillable(self):
-        return not (self._is_viewed_by_libcudf or self._is_viewed_by_pyobject)
+        return not (
+            self._is_viewed_by_libcudf
+            or len(self._cuda_array_interface_viewers)
+        )
+
+    def cuda_array_interface_callback(self, array):
+        self._cuda_array_interface_viewers.add(array)
 
 
 def column_empty_like(

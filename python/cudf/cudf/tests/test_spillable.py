@@ -39,10 +39,11 @@ def test_cupy():
     assert s.spillable is False
 
 
-def test_buffer_nullmask():
-    s = cudf.Series([1, 2, None])
-    _ = s.data
+def test_numba():
+    from numba.cuda.api import from_cuda_array_interface
+
+    s = cudf.Series([1, 2, 3])
+    arr = from_cuda_array_interface(s.__cuda_array_interface__)
     assert s.spillable is False
-    s = cudf.Series([1, 2, None])
-    _ = s.nullmask
-    assert s.spillable is False
+    del arr
+    assert s.spillable is True

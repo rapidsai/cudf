@@ -11,6 +11,8 @@ from typing import FrozenSet, Set, Union
 import cupy as cp
 import numpy as np
 import pandas as pd
+from cupy._core.core import _convert_object_with_cuda_array_interface
+from numba.cuda.api import from_cuda_array_interface
 from nvtx import annotate
 
 import rmm
@@ -512,3 +514,18 @@ def _cudf_nvtx_annotate(func, domain="cudf_python"):
 _dask_cudf_nvtx_annotate = partial(
     _cudf_nvtx_annotate, domain="dask_cudf_python"
 )
+
+
+def custom_from_cuda_array_interface(desc, owner=None, sync=True):
+    da = from_cuda_array_interface(desc, owner=owner, sync=sync)
+    if desc.get("callback", None):
+        desc["callback"](da)
+    return da
+
+
+def custom_convert_object_with_cuda_array_interface(a):
+    arr = _convert_object_with_cuda_array_interface(a)
+    desc = a.__cuda_array_interface__
+    if desc.get("callback", None):
+        desc["callback"](arr)
+    return arr

@@ -126,13 +126,14 @@ class NumericalColumn(NumericalBaseColumn):
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
-        self._is_viewed_by_pyobject = True
+        breakpoint()
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
             "data": (self.data_ptr, False),
             "version": 1,
+            "callback": self.cuda_array_interface_callback,
         }
 
         if self.nullable and self.has_nulls():
