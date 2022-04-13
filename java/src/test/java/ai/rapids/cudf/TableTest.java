@@ -36,6 +36,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.junit.jupiter.api.Test;
@@ -7893,6 +7894,54 @@ public class TableTest extends CudfTestBase {
       }
       try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testParquetWriteWithFieldId() throws IOException {
+    ColumnWriterOptions.StructBuilder sBuilder =
+        structBuilder("c3", true, 3)
+            .withColumns(true, "c31", 31)
+            .withColumns(true, "c32", 32);
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withColumns(true, "c1", 1)
+        .withDecimalColumn("c2", 9, true, 2)
+        .withStructColumn(sBuilder.build())
+        .withTimestampColumn("c4", true, true, 4)
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id", ".parquet");
+    try {
+      HostColumnVector.StructType structType = new HostColumnVector.StructType(
+          true,
+          new HostColumnVector.BasicType(true, DType.STRING),
+          new HostColumnVector.BasicType(true, DType.STRING));
+
+      try (Table table0 = new Table.TestBuilder()
+          .column(true, false) // c1
+          .decimal32Column(0, 298, 2473) // c2
+          .column(structType, // c3
+              new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
+          .timestampMicrosecondsColumn(1000L, 2000L) // c4
+          .build()) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(table0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()),
+          new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        assert (schema.getFields().get(0).getId().intValue() == 1);
+        assert (schema.getFields().get(1).getId().intValue() == 2);
+        assert (schema.getFields().get(2).getId().intValue() == 3);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(0).getId().intValue() == 31);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(1).getId().intValue() == 32);
+        assert (schema.getFields().get(3).getId().intValue() == 4);
       }
     } finally {
       tempFile.delete();
