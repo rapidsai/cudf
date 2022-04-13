@@ -231,7 +231,7 @@ struct StackOpToStackLevel {
  * @brief Retrieves an iterator that returns only the `stack_level` part from a StackOp iterator.
  */
 template <typename StackOpItT>
-auto get_stack_level_it(StackOpItT it)
+auto get_stack_level_iterator(StackOpItT it)
 {
   return thrust::make_transform_iterator(it, StackOpToStackLevel{});
 }
@@ -240,7 +240,7 @@ auto get_stack_level_it(StackOpItT it)
  * @brief Retrieves an iterator that returns only the `value` part from a StackOp iterator.
  */
 template <typename StackOpItT>
-auto get_value_it(StackOpItT it)
+auto get_value_iterator(StackOpItT it)
 {
   return thrust::make_transform_iterator(it, StackOpToStackSymbol{});
 }
@@ -433,10 +433,10 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // Dump info on stack operations: (stack level change + symbol) -> (absolute stack level + symbol)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_stack_level_it(stack_symbols_in),
-                           get_value_it(stack_symbols_in),
-                           get_stack_level_it(d_kv_operations.Current()),
-                           get_value_it(d_kv_operations.Current()));
+                           get_stack_level_iterator(stack_symbols_in),
+                           get_value_iterator(stack_symbols_in),
+                           get_stack_level_iterator(d_kv_operations.Current()),
+                           get_value_iterator(d_kv_operations.Current()));
 
   // Stable radix sort, sorting by stack level of the operations
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
@@ -470,10 +470,10 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // operation)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_stack_level_it(kv_ops_scan_in),
-                           get_value_it(kv_ops_scan_in),
-                           get_stack_level_it(kv_ops_scan_out),
-                           get_value_it(kv_ops_scan_out));
+                           get_stack_level_iterator(kv_ops_scan_in),
+                           get_value_iterator(kv_ops_scan_in),
+                           get_stack_level_iterator(kv_ops_scan_out),
+                           get_value_iterator(kv_ops_scan_out));
 
   // Fill the output tape with read-symbol
   thrust::fill(rmm::exec_policy(stream),
