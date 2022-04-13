@@ -227,7 +227,7 @@ struct StackOpToStackLevel {
  * @brief Retrieves an iterator that returns only the `stack_level` part from a StackOp iterator.
  */
 template <typename StackOpItT>
-auto get_stack_level_it(StackOpItT it)
+auto get_stack_level_iterator(StackOpItT it)
 {
   return thrust::make_transform_iterator(it, StackOpToStackLevel{});
 }
@@ -236,7 +236,7 @@ auto get_stack_level_it(StackOpItT it)
  * @brief Retrieves an iterator that returns only the `value` part from a StackOp iterator.
  */
 template <typename StackOpItT>
-auto get_value_it(StackOpItT it)
+auto get_value_iterator(StackOpItT it)
 {
   return thrust::make_transform_iterator(it, StackOpToStackSymbol{});
 }
@@ -284,16 +284,17 @@ template <typename StackLevelT,
           typename StackSymbolToStackOpTypeT,
           typename TopOfStackOutItT,
           typename StackSymbolT>
-void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
-                               StackSymbolItT d_symbols,
-                               device_span<SymbolPositionT> d_symbol_positions,
-                               StackSymbolToStackOpTypeT symbol_to_stack_op,
-                               TopOfStackOutItT d_top_of_stack,
-                               StackSymbolT empty_stack_symbol,
-                               StackSymbolT read_symbol,
-                               std::size_t num_symbols_out,
-                               rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
+                                     device_span<SymbolPositionT> d_symbol_positions,
+                                     StackSymbolToStackOpTypeT symbol_to_stack_op,
+                                     TopOfStackOutItT d_top_of_stack,
+                                     StackSymbolT const empty_stack_symbol,
+                                     StackSymbolT const read_symbol,
+                                     std::size_t const num_symbols_out,
+                                     rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
+  rmm::device_buffer temp_storage{};
+
   // Type used to hold pairs of (stack_level, value) pairs
   using StackOpT = detail::StackOp<StackLevelT, StackSymbolT>;
 
@@ -346,28 +347,28 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
 
   // Getting temporary storage requirements for the prefix sum of the stack level after each
   // operation
-  CUDA_TRY(cub::DeviceScan::InclusiveScan(nullptr,
-                                          stack_level_scan_bytes,
-                                          stack_symbols_in,
-                                          d_kv_operations.Current(),
-                                          detail::AddStackLevelFromStackOp{},
-                                          num_symbols_in,
-                                          stream));
+  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(nullptr,
+                                               stack_level_scan_bytes,
+                                               stack_symbols_in,
+                                               d_kv_operations.Current(),
+                                               detail::AddStackLevelFromStackOp{},
+                                               num_symbols_in,
+                                               stream));
 
   // Getting temporary storage requirements for the stable radix sort (sorting by stack level of the
   // operations)
-  CUDA_TRY(cub::DeviceRadixSort::SortPairs(nullptr,
-                                           stack_level_sort_bytes,
-                                           d_kv_operations_unsigned,
-                                           d_symbol_positions_db,
-                                           num_symbols_in,
-                                           begin_bit,
-                                           end_bit,
-                                           stream));
+  CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(nullptr,
+                                                stack_level_sort_bytes,
+                                                d_kv_operations_unsigned,
+                                                d_symbol_positions_db,
+                                                num_symbols_in,
+                                                begin_bit,
+                                                end_bit,
+                                                stream));
 
   // Getting temporary storage requirements for the scan to match pop operations with the latest
   // push of the same level
-  CUDA_TRY(cub::DeviceScan::InclusiveScan(
+  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
     nullptr,
     match_level_scan_bytes,
     kv_ops_scan_in,
@@ -378,14 +379,15 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
 
   // Getting temporary storage requirements for the scan to propagate top-of-stack for spots that
   // didn't push or pop
-  CUDA_TRY(cub::DeviceScan::ExclusiveScan(nullptr,
-                                          propagate_writes_scan_bytes,
-                                          d_top_of_stack,
-                                          d_top_of_stack,
-                                          detail::PropagateLastWrite<StackSymbolT>{read_symbol},
-                                          empty_stack_symbol,
-                                          num_symbols_out,
-                                          stream));
+  CUDF_CUDA_TRY(
+    cub::DeviceScan::ExclusiveScan(nullptr,
+                                   propagate_writes_scan_bytes,
+                                   d_top_of_stack,
+                                   d_top_of_stack,
+                                   detail::PropagateLastWrite<StackSymbolT>{read_symbol},
+                                   empty_stack_symbol,
+                                   num_symbols_out,
+                                   stream));
 
   // Scratch memory required by the algorithms
   auto total_temp_storage_bytes = std::max({stack_level_scan_bytes,
@@ -415,34 +417,34 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
   d_kv_operations = cub::DoubleBuffer<StackOpT>{d_kv_ops_current.data(), d_kv_ops_alt.data()};
 
   // Compute prefix sum of the stack level after each operation
-  CUDA_TRY(cub::DeviceScan::InclusiveScan(temp_storage.data(),
-                                          total_temp_storage_bytes,
-                                          stack_symbols_in,
-                                          d_kv_operations.Current(),
-                                          detail::AddStackLevelFromStackOp{},
-                                          num_symbols_in,
-                                          stream));
+  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(temp_storage.data(),
+                                               total_temp_storage_bytes,
+                                               stack_symbols_in,
+                                               d_kv_operations.Current(),
+                                               detail::AddStackLevelFromStackOp{},
+                                               num_symbols_in,
+                                               stream));
 
   // Dump info on stack operations: (stack level change + symbol) -> (absolute stack level + symbol)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_stack_level_it(stack_symbols_in),
-                           get_value_it(stack_symbols_in),
-                           get_stack_level_it(d_kv_operations.Current()),
-                           get_value_it(d_kv_operations.Current()));
+                           get_stack_level_iterator(stack_symbols_in),
+                           get_value_iterator(stack_symbols_in),
+                           get_stack_level_iterator(d_kv_operations.Current()),
+                           get_value_iterator(d_kv_operations.Current()));
 
   // Stable radix sort, sorting by stack level of the operations
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()),
     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Alternate())};
-  CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
-                                           total_temp_storage_bytes,
-                                           d_kv_operations_unsigned,
-                                           d_symbol_positions_db,
-                                           num_symbols_in,
-                                           begin_bit,
-                                           end_bit,
-                                           stream));
+  CUDF_CUDA_TRY(cub::DeviceRadixSort::SortPairs(temp_storage.data(),
+                                                total_temp_storage_bytes,
+                                                d_kv_operations_unsigned,
+                                                d_symbol_positions_db,
+                                                num_symbols_in,
+                                                begin_bit,
+                                                end_bit,
+                                                stream));
 
   // TransformInputIterator that remaps all operations on stack level 0 to the empty stack symbol
   kv_ops_scan_in  = {reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Current()),
@@ -451,11 +453,13 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
 
   // Dump info on stack operations sorted by their stack level (i.e. stack level after applying
   // operation)
-  test::print::print_array(
-    num_symbols_in, stream, get_stack_level_it(kv_ops_scan_in), get_value_it(kv_ops_scan_in));
+  test::print::print_array(num_symbols_in,
+                           stream,
+                           get_stack_level_iterator(kv_ops_scan_in),
+                           get_value_iterator(kv_ops_scan_in));
 
   // Inclusive scan to match pop operations with the latest push operation of that level
-  CUDA_TRY(cub::DeviceScan::InclusiveScan(
+  CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
     temp_storage.data(),
     total_temp_storage_bytes,
     kv_ops_scan_in,
@@ -468,10 +472,10 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
   // operation)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_stack_level_it(kv_ops_scan_in),
-                           get_value_it(kv_ops_scan_in),
-                           get_stack_level_it(kv_ops_scan_out),
-                           get_value_it(kv_ops_scan_out));
+                           get_stack_level_iterator(kv_ops_scan_in),
+                           get_value_iterator(kv_ops_scan_in),
+                           get_stack_level_iterator(kv_ops_scan_out),
+                           get_value_iterator(kv_ops_scan_out));
 
   // Fill the output tape with read-symbol
   thrust::fill(thrust::cuda::par.on(stream),
@@ -499,14 +503,15 @@ void SparseStackOpToTopOfStack(rmm::device_buffer& temp_storage,
   // We perform an exclusive scan in order to fill the items at the very left that may
   // be reading the empty stack before there's the first push occurrence in the sequence.
   // Also, we're interested in the top-of-the-stack symbol before the operation was applied.
-  CUDA_TRY(cub::DeviceScan::ExclusiveScan(temp_storage.data(),
-                                          total_temp_storage_bytes,
-                                          d_top_of_stack,
-                                          d_top_of_stack,
-                                          detail::PropagateLastWrite<StackSymbolT>{read_symbol},
-                                          empty_stack_symbol,
-                                          num_symbols_out,
-                                          stream));
+  CUDF_CUDA_TRY(
+    cub::DeviceScan::ExclusiveScan(temp_storage.data(),
+                                   total_temp_storage_bytes,
+                                   d_top_of_stack,
+                                   d_top_of_stack,
+                                   detail::PropagateLastWrite<StackSymbolT>{read_symbol},
+                                   empty_stack_symbol,
+                                   num_symbols_out,
+                                   stream));
 
   // Dump the final output
   test::print::print_array(
