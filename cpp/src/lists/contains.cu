@@ -147,7 +147,7 @@ struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>(
                         size_type const* d_offsets,
                         bool has_null_lists,
                         bool has_null_elements,
-                        SearchKeyIter const& key_iter,
+                        SearchKeyIter const& keys_iter,
                         duplicate_find_option find_option,
                         OutputPairIter const& out_iter,
                         rmm::cuda_stream_view stream) const
@@ -161,10 +161,10 @@ struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>(
        d_offsets,
        has_null_lists,
        has_null_elements,
-       key_iter,
+       keys_iter,
        find_option,
        NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(auto list_idx) -> thrust::pair<size_type, bool> {
-        auto const key_opt = key_iter[list_idx];
+        auto const key_opt = keys_iter[list_idx];
         if (!key_opt || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
           return {NOT_FOUND_IDX, false};
         }
@@ -246,19 +246,12 @@ struct dispatch_index_of {
     auto const searcher = search_functor<Type>{};
 
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
-      //
-      (void)find_option;
+    } else {  // other types that are not struct
 
-    } else {  // not struct type
-
-      auto const d_child_ptr = column_device_view::create(child, stream);
-
-      // If same scale, then...
-
+      auto const d_child_ptr   = column_device_view::create(child, stream);
       auto const elements_iter = cudf::detail::make_optional_iterator<Type>(
         *d_child_ptr, nullate::DYNAMIC{child.has_nulls()});
-      auto const key_iter = cudf::detail::make_optional_iterator<Type>(
-
+      auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
         *d_keys_ptr, nullate::DYNAMIC{search_keys_have_nulls});
 
       searcher.search_all_lists(*d_lists_ptr,
@@ -266,7 +259,7 @@ struct dispatch_index_of {
                                 lists.offsets_begin(),
                                 lists.has_nulls(),
                                 child.has_nulls(),
-                                key_iter,
+                                keys_iter,
                                 find_option,
                                 out_iter,
                                 stream);
