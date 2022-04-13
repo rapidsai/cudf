@@ -13,6 +13,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
     MutableMapping,
@@ -25,6 +26,7 @@ from typing import (
 )
 
 import cupy
+import numba
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -3707,6 +3709,68 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError("The `result_type` kwarg is not yet supported.")
 
         return self._apply(func, _get_row_kernel, *args, **kwargs)
+
+    def applymap(
+        self,
+        func: Callable[[Any], Any],
+        na_action: Union[str, None] = None,
+        **kwargs,
+    ) -> DataFrame:
+
+        """
+        Apply a function to a Dataframe elementwise.
+
+        This method applies a function that accepts and returns a scalar
+        to every element of a DataFrame.
+
+        Parameters
+        ----------
+        func : callable
+            Python function, returns a single value from a single value.
+        na_action : {None, 'ignore'}, default None
+            If 'ignore', propagate NaN values, without passing them to func.
+
+        Returns
+        -------
+        DataFrame
+            Transformed DataFrame.
+        """
+
+        if kwargs:
+            raise NotImplementedError(
+                "DataFrame.applymap does not yet support **kwargs."
+            )
+
+        if na_action not in {"ignore", None}:
+            raise ValueError(
+                f"na_action must be 'ignore' or None. Got {repr(na_action)}"
+            )
+
+        if na_action == "ignore":
+            devfunc = numba.cuda.jit(device=True)(func)
+
+            # promote to a null-ignoring function
+            # this code is never run in python, it only
+            # exists to provide numba with the correct
+            # bytecode to generate the equivalent PTX
+            # as a null-ignoring version of the function
+            def _func(x):  # pragma: no cover
+                if x is cudf.NA:
+                    return cudf.NA
+                else:
+                    return devfunc(x)
+
+        else:
+            _func = func
+
+        # TODO: naive implementation
+        # this could be written as a single kernel
+        result = {}
+        for name, col in self._data.items():
+            apply_sr = Series._from_data({None: col})
+            result[name] = apply_sr.apply(_func)
+
+        return DataFrame._from_data(result, index=self.index)
 
     @_cudf_nvtx_annotate
     @applyutils.doc_apply()

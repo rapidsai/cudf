@@ -105,6 +105,7 @@ Function application, GroupBy & window
    :toctree: api/
 
    DataFrame.apply
+   DataFrame.applymap
    DataFrame.apply_chunks
    DataFrame.apply_rows
    DataFrame.pipe
