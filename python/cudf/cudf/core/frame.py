@@ -2512,7 +2512,10 @@ class Frame(BinaryOperand, Scannable):
         ) in operands.items():
             output_mask = None
             if fill_value is not None:
-                if isinstance(right_column, ColumnBase):
+                left_is_column = isinstance(left_column, ColumnBase)
+                right_is_column = isinstance(right_column, ColumnBase)
+
+                if left_is_column and right_is_column:
                     # If both columns are nullable, pandas semantics dictate
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
@@ -2526,9 +2529,14 @@ class Frame(BinaryOperand, Scannable):
                         left_column = left_column.fillna(fill_value)
                     elif right_column.nullable:
                         right_column = right_column.fillna(fill_value)
-                else:
+                elif left_is_column:
                     if left_column.nullable:
                         left_column = left_column.fillna(fill_value)
+                elif right_is_column:
+                    if right_column.nullable:
+                        right_column = right_column.fillna(fill_value)
+                else:
+                    assert False, "At least one operand must be a column."
 
             # TODO: Disable logical and binary operators between columns that
             # are not numerical using the new binops mixin.

@@ -17,15 +17,20 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/lists/list_device_view.cuh>
+#include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/sorting.hpp>
+#include <cudf/structs/structs_column_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/logical.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
@@ -172,13 +177,11 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-                             not std::is_same_v<Element, cudf::struct_view>)>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const lhs_element_index,
-                                                              size_type const rhs_element_index)
+                             not std::is_same_v<Element, cudf::struct_view>),
+              typename... Args>
+    __device__ cuda::std::pair<weak_ordering, int> operator()(Args...)
     {
-      // TODO: make this CUDF_UNREACHABLE
-      cudf_assert(false && "Attempted to compare elements of uncomparable types.");
-      return cuda::std::make_pair(weak_ordering::LESS, std::numeric_limits<int>::max());
+      CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
     template <typename Element, CUDF_ENABLE_IF(std::is_same_v<Element, cudf::struct_view>)>
@@ -197,7 +200,11 @@ class device_row_comparator {
           return cuda::std::make_pair(state, depth);
         }
 
-        // Structs have been modified to only have 1 child when using this.
+        if (lcol.num_child_columns() == 0) {
+          return cuda::std::make_pair(weak_ordering::EQUIVALENT, depth);
+        }
+
+        // Non-empty structs have been modified to only have 1 child when using this.
         lcol = lcol.children()[0];
         rcol = rcol.children()[0];
         ++depth;
@@ -420,6 +427,290 @@ class self_comparator {
 };
 
 }  // namespace lexicographic
+
+namespace equality {
+
+template <typename Nullate>
+class device_row_comparator {
+  friend class self_comparator;
+
+ public:
+  /**
+   * @brief Checks whether the row at `lhs_index` in the `lhs` table is equal to the row at
+   * `rhs_index` in the `rhs` table.
+   *
+   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param rhs_index The index of the row in the `rhs` table to examine
+   * @return `true` if row from the `lhs` table is equal to the row in the `rhs` table
+   */
+  __device__ bool operator()(size_type const lhs_index, size_type const rhs_index) const noexcept
+  {
+    auto equal_elements = [=](column_device_view l, column_device_view r) {
+      return cudf::type_dispatcher(
+        l.type(), element_comparator{nulls, l, r, nulls_are_equal}, lhs_index, rhs_index);
+    };
+
+    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
+  }
+
+ private:
+  /**
+   * @brief Construct a function object for performing equality comparison between the rows of two
+   * tables.
+   *
+   * @param has_nulls Indicates if either input table contains columns with nulls.
+   * @param lhs The first table
+   * @param rhs The second table (may be the same table as `lhs`)
+   * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+   */
+  device_row_comparator(Nullate has_nulls,
+                        table_device_view lhs,
+                        table_device_view rhs,
+                        null_equality nulls_are_equal = null_equality::EQUAL) noexcept
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
+  {
+  }
+
+  /**
+   * @brief Performs an equality comparison between two elements in two columns.
+   *
+   * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+   */
+  class element_comparator {
+   public:
+    /**
+     * @brief Construct type-dispatched function object for comparing equality
+     * between two elements.
+     *
+     * @note `lhs` and `rhs` may be the same.
+     *
+     * @param has_nulls Indicates if either input column contains nulls.
+     * @param lhs The column containing the first element
+     * @param rhs The column containing the second element (may be the same as lhs)
+     * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+     */
+    __device__ element_comparator(Nullate has_nulls,
+                                  column_device_view lhs,
+                                  column_device_view rhs,
+                                  null_equality nulls_are_equal = null_equality::EQUAL) noexcept
+      : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
+    {
+    }
+
+    /**
+     * @brief Compares the specified elements for equality.
+     *
+     * @param lhs_element_index The index of the first element
+     * @param rhs_element_index The index of the second element
+     * @return True if lhs and rhs are equal or if both lhs and rhs are null and nulls are
+     * configured to be considered equal (`nulls_are_equal` == `null_equality::EQUAL`)
+     */
+    template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
+    __device__ bool operator()(size_type const lhs_element_index,
+                               size_type const rhs_element_index) const noexcept
+    {
+      if (nulls) {
+        bool const lhs_is_null{lhs.is_null(lhs_element_index)};
+        bool const rhs_is_null{rhs.is_null(rhs_element_index)};
+        if (lhs_is_null and rhs_is_null) {
+          return nulls_are_equal == null_equality::EQUAL;
+        } else if (lhs_is_null != rhs_is_null) {
+          return false;
+        }
+      }
+
+      return equality_compare(lhs.element<Element>(lhs_element_index),
+                              rhs.element<Element>(rhs_element_index));
+    }
+
+    template <typename Element,
+              CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>() and
+                             not cudf::is_nested<Element>()),
+              typename... Args>
+    __device__ bool operator()(Args...)
+    {
+      CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
+    }
+
+    template <typename Element, CUDF_ENABLE_IF(cudf::is_nested<Element>())>
+    __device__ bool operator()(size_type const lhs_element_index,
+                               size_type const rhs_element_index) const noexcept
+    {
+      column_device_view lcol = lhs.slice(lhs_element_index, 1);
+      column_device_view rcol = rhs.slice(rhs_element_index, 1);
+      while (is_nested(lcol.type())) {
+        if (nulls) {
+          auto lvalid = detail::make_validity_iterator<true>(lcol);
+          auto rvalid = detail::make_validity_iterator<true>(rcol);
+          if (nulls_are_equal == null_equality::UNEQUAL) {
+            if (thrust::any_of(
+                  thrust::seq, lvalid, lvalid + lcol.size(), thrust::logical_not<bool>()) or
+                thrust::any_of(
+                  thrust::seq, rvalid, rvalid + rcol.size(), thrust::logical_not<bool>())) {
+              return false;
+            }
+          } else {
+            if (not thrust::equal(thrust::seq, lvalid, lvalid + lcol.size(), rvalid)) {
+              return false;
+            }
+          }
+        }
+        if (lcol.type().id() == type_id::STRUCT) {
+          if (lcol.num_child_columns() == 0) { return true; }
+          lcol = detail::structs_column_device_view(lcol).sliced_child(0);
+          rcol = detail::structs_column_device_view(rcol).sliced_child(0);
+        } else if (lcol.type().id() == type_id::LIST) {
+          auto l_list_col = detail::lists_column_device_view(lcol);
+          auto r_list_col = detail::lists_column_device_view(rcol);
+
+          auto lsizes = make_list_size_iterator(l_list_col);
+          auto rsizes = make_list_size_iterator(r_list_col);
+          if (not thrust::equal(thrust::seq, lsizes, lsizes + lcol.size(), rsizes)) {
+            return false;
+          }
+
+          lcol = l_list_col.sliced_child();
+          rcol = r_list_col.sliced_child();
+          if (lcol.size() != rcol.size()) { return false; }
+        }
+      }
+
+      auto comp =
+        column_comparator{element_comparator{nulls, lcol, rcol, nulls_are_equal}, lcol.size()};
+      return type_dispatcher<dispatch_void_if_nested>(lcol.type(), comp);
+    }
+
+   private:
+    /**
+     * @brief Serially compare two columns for equality.
+     *
+     * When we want to get the equivalence of two columns by serially comparing all elements in a
+     * one column with the corresponding elements in the other column, this saves us from type
+     * dispatching for each individual element in the range
+     */
+    struct column_comparator {
+      element_comparator const comp;
+      size_type const size;
+
+      /**
+       * @brief Serially compare two columns for equality.
+       *
+       * @return True if ALL elements compare equal, false otherwise
+       */
+      template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
+      __device__ bool operator()() const noexcept
+      {
+        return thrust::all_of(thrust::seq,
+                              thrust::make_counting_iterator(0),
+                              thrust::make_counting_iterator(0) + size,
+                              [=](auto i) { return comp.template operator()<Element>(i, i); });
+      }
+
+      template <typename Element,
+                CUDF_ENABLE_IF(not cudf::is_equality_comparable<Element, Element>()),
+                typename... Args>
+      __device__ bool operator()(Args...) const noexcept
+      {
+        CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
+      }
+    };
+
+    column_device_view const lhs;
+    column_device_view const rhs;
+    Nullate const nulls;
+    null_equality const nulls_are_equal;
+  };
+
+  table_device_view const lhs;
+  table_device_view const rhs;
+  Nullate const nulls;
+  null_equality const nulls_are_equal;
+};
+
+struct preprocessed_table {
+  /**
+   * @brief Preprocess table for use with row equality comparison or row hashing
+   *
+   * Sets up the table for use with row equality comparison or row hashing. The resulting
+   * preprocessed table can be passed to the constructor of `equality::self_comparator` to
+   * avoid preprocessing again.
+   *
+   * @param table The table to preprocess
+   * @param stream The cuda stream to use while preprocessing.
+   */
+  static std::shared_ptr<preprocessed_table> create(table_view const& table,
+                                                    rmm::cuda_stream_view stream);
+
+ private:
+  friend class self_comparator;
+
+  using table_device_view_owner =
+    std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
+
+  preprocessed_table(table_device_view_owner&& table,
+                     std::vector<rmm::device_buffer>&& null_buffers)
+    : _t(std::move(table)), _null_buffers(std::move(null_buffers))
+  {
+  }
+
+  /**
+   * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
+   *
+   * @return table_device_view
+   */
+  operator table_device_view() { return *_t; }
+
+  table_device_view_owner _t;
+  std::vector<rmm::device_buffer> _null_buffers;
+};
+
+class self_comparator {
+ public:
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows of the
+   * same table.
+   *
+   * @param t The table to compare
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
+  self_comparator(table_view const& t, rmm::cuda_stream_view stream)
+    : d_t(preprocessed_table::create(t, stream))
+  {
+  }
+
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows of the
+   * same table.
+   *
+   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
+   * multiple comparators.
+   *
+   * @param t A table preprocessed for equality comparison
+   */
+  self_comparator(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
+
+  /**
+   * @brief Get the comparison operator to use on the device
+   *
+   * Returns a binary callable, `F`, with signature `bool F(size_t, size_t)`.
+   *
+   * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
+   *
+   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   */
+  template <typename Nullate>
+  device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  {
+    return device_row_comparator(nullate, *d_t, *d_t);
+  }
+
+ private:
+  std::shared_ptr<preprocessed_table> d_t;
+};
+
+}  // namespace equality
+
 }  // namespace row
 }  // namespace experimental
 }  // namespace cudf

@@ -30,6 +30,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -190,55 +191,6 @@ struct aggregate_writer_metadata {
   uint32_t column_order_listsize = 0;
 };
 
-struct linked_column_view;
-
-using LinkedColPtr    = std::shared_ptr<linked_column_view>;
-using LinkedColVector = std::vector<LinkedColPtr>;
-
-/**
- * @brief column_view with the added member pointer to the parent of this column.
- *
- */
-struct linked_column_view : public column_view {
-  // TODO(cp): we are currently keeping all column_view children info multiple times - once for each
-  //       copy of this object. Options:
-  // 1. Inherit from column_view_base. Only lose out on children vector. That is not needed.
-  // 2. Don't inherit at all. make linked_column_view keep a reference wrapper to its column_view
-  linked_column_view(column_view const& col) : column_view(col), parent(nullptr)
-  {
-    for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
-      children.push_back(std::make_shared<linked_column_view>(this, *child_it));
-    }
-  }
-
-  linked_column_view(linked_column_view* parent, column_view const& col)
-    : column_view(col), parent(parent)
-  {
-    for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
-      children.push_back(std::make_shared<linked_column_view>(this, *child_it));
-    }
-  }
-
-  linked_column_view* parent;  //!< Pointer to parent of this column. Nullptr if root
-  LinkedColVector children;
-};
-
-/**
- * @brief Converts all column_views of a table into linked_column_views
- *
- * @param table table of columns to convert
- * @return Vector of converted linked_column_views
- */
-LinkedColVector input_table_to_linked_columns(table_view const& table)
-{
-  LinkedColVector result;
-  for (column_view const& col : table) {
-    result.emplace_back(std::make_shared<linked_column_view>(col));
-  }
-
-  return result;
-}
-
 /**
  * @brief Extends SchemaElement to add members required in constructing parquet_column_view
  *
@@ -250,7 +202,7 @@ LinkedColVector input_table_to_linked_columns(table_view const& table)
  *    supported types
  */
 struct schema_tree_node : public SchemaElement {
-  LinkedColPtr leaf_column;
+  cudf::detail::LinkedColPtr leaf_column;
   statistics_dtype stats_dtype;
   int32_t ts_scale;
 
@@ -262,7 +214,7 @@ struct schema_tree_node : public SchemaElement {
 
 struct leaf_schema_fn {
   schema_tree_node& col_schema;
-  LinkedColPtr const& col;
+  cudf::detail::LinkedColPtr const& col;
   column_in_metadata const& col_meta;
   bool timestamp_is_int96;
 
@@ -494,7 +446,7 @@ struct leaf_schema_fn {
   }
 };
 
-inline bool is_col_nullable(LinkedColPtr const& col,
+inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
                             column_in_metadata const& col_meta,
                             bool single_write_mode)
 {
@@ -520,10 +472,11 @@ inline bool is_col_nullable(LinkedColPtr const& col,
  * Recursively traverses through linked_columns and corresponding metadata to construct schema tree.
  * The resulting schema tree is stored in a vector in pre-order traversal order.
  */
-std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linked_columns,
-                                                    table_input_metadata& metadata,
-                                                    bool single_write_mode,
-                                                    bool int96_timestamps)
+std::vector<schema_tree_node> construct_schema_tree(
+  cudf::detail::LinkedColVector const& linked_columns,
+  table_input_metadata& metadata,
+  bool single_write_mode,
+  bool int96_timestamps)
 {
   std::vector<schema_tree_node> schema;
   schema_tree_node root{};
@@ -534,8 +487,8 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
   root.parent_idx      = -1;  // root schema has no parent
   schema.push_back(std::move(root));
 
-  std::function<void(LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
-    [&](LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
+  std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
+    [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
       bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
 
       if (col->type().id() == type_id::STRUCT) {
@@ -545,7 +498,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 
         struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
-        struct_schema.num_children = col->num_children();
+        struct_schema.num_children = col->children.size();
         struct_schema.parent_idx   = parent_idx;
         schema.push_back(std::move(struct_schema));
 
@@ -553,7 +506,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         // for (auto child_it = col->children.begin(); child_it < col->children.end(); child_it++) {
         //   add_schema(*child_it, struct_node_index);
         // }
-        CUDF_EXPECTS(col->num_children() == static_cast<int>(col_meta.num_children()),
+        CUDF_EXPECTS(col->children.size() == static_cast<size_t>(col_meta.num_children()),
                      "Mismatch in number of child columns between input table and metadata");
         for (size_t i = 0; i < col->children.size(); ++i) {
           add_schema(col->children[i], col_meta.child(i), struct_node_index);
@@ -592,7 +545,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         // "col_name" : { "key_value" : { "key", "value" } }
 
         // verify the List child structure is a struct<left_child, right_child>
-        auto const& struct_col = col->child(lists_column_view::child_column_index);
+        column_view struct_col = *col->children[lists_column_view::child_column_index];
         CUDF_EXPECTS(struct_col.type().id() == type_id::STRUCT, "Map should be a List of struct");
         CUDF_EXPECTS(struct_col.num_children() == 2,
                      "Map should be a List of struct with two children only but found " +
@@ -740,7 +693,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
     // For list columns, we still need to retain the offset child column.
     auto children =
       (parent.type().id() == type_id::LIST)
-        ? std::vector<column_view>{parent.child(lists_column_view::offsets_column_index),
+        ? std::vector<column_view>{*parent.children[lists_column_view::offsets_column_index],
                                    single_inheritance_cudf_col}
         : std::vector<column_view>{single_inheritance_cudf_col};
 
@@ -1221,7 +1174,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
   }
 
-  auto vec         = input_table_to_linked_columns(table);
+  auto vec         = table_to_linked_columns(table);
   auto schema_tree = construct_schema_tree(vec, *table_meta, single_write_mode, int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
