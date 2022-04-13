@@ -2067,7 +2067,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    4
         dtype: int64
 
-        Apply a basic function to a series with nulls
+        Apply a basic function to a series with nulls:
 
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
@@ -2079,7 +2079,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         Use a function that does something conditionally,
-        based on if the value is or is not null
+        based on if the value is or is not null:
 
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
@@ -2097,7 +2097,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         as derived from the UDFs logic. Note that this means
         the common type will be returned even if such data
         is passed that would not result in any values of that
-        dtype.
+        dtype:
 
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
