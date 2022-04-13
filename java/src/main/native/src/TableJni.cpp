@@ -694,9 +694,9 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
     column_metadata.add_child(child);
     int childs_children = children[read_index++];
     if (childs_children > 0) {
-      read_index =
-          set_column_metadata(column_metadata.child(write_index), col_names, nullability, is_int96,
-                              precisions, is_map, parquetFieldIds, children, childs_children, read_index);
+      read_index = set_column_metadata(column_metadata.child(write_index), col_names, nullability,
+                                       is_int96, precisions, is_map, parquetFieldIds, children,
+                                       childs_children, read_index);
     }
   }
   return read_index;
@@ -740,9 +740,9 @@ void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_nam
     }
     int childs_children = children[read_index++];
     if (childs_children > 0) {
-      read_index =
-          set_column_metadata(metadata.column_metadata[write_index], cpp_names, col_nullability,
-                              is_int96, precisions, is_map, parquetFieldIds, children, childs_children, read_index);
+      read_index = set_column_metadata(metadata.column_metadata[write_index], cpp_names,
+                                       col_nullability, is_int96, precisions, is_map,
+                                       parquetFieldIds, children, childs_children, read_index);
     }
   }
 }
