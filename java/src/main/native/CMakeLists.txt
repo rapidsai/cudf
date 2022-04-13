@@ -36,6 +36,7 @@ project(
 # * build options ---------------------------------------------------------------------------------
 
 option(USE_NVTX "Build with NVTX support" ON)
+option(BUILD_SHARED_LIBS "Build cuDF JNI shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
@@ -44,6 +45,7 @@ option(CUDF_JNI_ARROW_STATIC "Statically link Arrow" ON)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
+message(VERBOSE "CUDF_JNI: Build cuDF JNI shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF_JNI: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
 message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
@@ -52,10 +54,12 @@ message(VERBOSE "CUDF_JNI: Build with static Arrow library: ${CUDF_JNI_ARROW_STA
 message(VERBOSE "CUDF_JNI: Link with libcudf statically: ${CUDF_JNI_LIBCUDF_STATIC}")
 
 set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
-if(DEFINED ENV{CUDF_CPP_BUILD_DIR})
-  set(CUDF_CPP_BUILD_DIR "$ENV{CUDF_CPP_BUILD_DIR}")
-else()
-  set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+if(NOT DEFINED CUDF_CPP_BUILD_DIR OR CUDF_CPP_BUILD_DIR STREQUAL "")
+  if(DEFINED ENV{CUDF_CPP_BUILD_DIR})
+    set(CUDF_CPP_BUILD_DIR "$ENV{CUDF_CPP_BUILD_DIR}")
+  else()
+    set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+  endif()
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
@@ -193,7 +197,7 @@ endif()
 # * library targets -------------------------------------------------------------------------------
 
 add_library(
-  cudfjni SHARED
+  cudfjni
   src/Aggregation128UtilsJni.cpp
   src/AggregationJni.cpp
   src/CudfJni.cpp
@@ -218,7 +222,7 @@ add_library(
   src/check_nvcomp_output_sizes.cu
 )
 
-if(CUDF_JNI_LIBCUDF_STATIC)
+if(CUDF_JNI_LIBCUDF_STATIC AND BUILD_SHARED_LIBS)
   # When linking against libcudf.a, the JNI library will include the old libcudf.so. For
   # backwards-compatibility for software that expects to find libcudf.so in the JVM environment
   # after cudf has loaded, the JNI code and libcudf.a will be combined into libcudf.so. A stub
@@ -254,8 +258,15 @@ target_include_directories(
 # Override RPATH for cudfjni
 set_target_properties(
   cudfjni
-  PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN" # set target compile options
-             CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON
+  PROPERTIES BUILD_RPATH "\$ORIGIN"
+             INSTALL_RPATH "\$ORIGIN"
+             # set target compile options
+             CXX_STANDARD 17
+             CXX_STANDARD_REQUIRED ON
+             CUDA_STANDARD 17
+             CUDA_STANDARD_REQUIRED ON
+             POSITION_INDEPENDENT_CODE ON
+             INTERFACE_POSITION_INDEPENDENT_CODE ON
 )
 
 target_compile_options(
@@ -269,11 +280,16 @@ target_compile_definitions(
 )
 
 if(USE_GDS)
-  add_library(cufilejni SHARED src/CuFileJni.cpp)
+  add_library(cufilejni src/CuFileJni.cpp)
   set_target_properties(
     cufilejni
-    PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN" # set target compile options
-               CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               INSTALL_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               POSITION_INDEPENDENT_CODE ON
+               INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
   target_include_directories(
     cufilejni

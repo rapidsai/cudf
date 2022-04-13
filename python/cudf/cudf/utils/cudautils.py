@@ -251,7 +251,7 @@ def compile_udf(udf, type_signature):
       numpy types with `numba.numpy_support.from_dtype(...)`.
 
     Returns
-    --------
+    -------
     ptx_code:
       The compiled CUDA PTX
 
