@@ -262,6 +262,9 @@ def test_kurtosis(data, null_flag):
     expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
+    with pytest.raises(NotImplementedError):
+        data.kurt(numeric_only=False)
+
 
 @pytest.mark.parametrize(
     "data",
@@ -294,6 +297,9 @@ def test_skew(data, null_flag):
     expected = pdata.skew()
     got = got if np.isscalar(got) else got.to_numpy()
     np.testing.assert_array_almost_equal(got, expected)
+
+    with pytest.raises(NotImplementedError):
+        data.skew(numeric_only=False)
 
 
 @pytest.mark.parametrize("dtype", params_dtypes)
