@@ -52,7 +52,7 @@ struct cuda_error : public std::runtime_error {
   }
 
  public:
-  cudaError_t error_code() { return _cudaError; }
+  cudaError_t error_code() const { return _cudaError; }
 
  protected:
   cudaError_t _cudaError;
@@ -128,9 +128,9 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
   // Calls cudaDeviceSynchronize to make sure that there is no other asynchronize error occurs
   // between two calls.
   if (error == last && last == cudaDeviceSynchronize()) {
-    throw fatal_cuda_error{"Sticky " + msg, error};
+    throw fatal_cuda_error{"Fatal " + msg, error};
   } else {
-    throw cudart_error{msg, error};
+    throw cuda_error{msg, error};
   }
 }
 }  // namespace detail
