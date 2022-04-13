@@ -41,19 +41,23 @@ void set_cudf_device(int device) {
  * is using the same device.
  */
 void auto_set_device(JNIEnv *env) {
-  if (Cudf_device != cudaInvalidDeviceId) {
-    if (Thread_device != Cudf_device) {
-      cudaError_t cuda_status = cudaSetDevice(Cudf_device);
-      JNI_CUDA_CHECK(env, cuda_status);
-      Thread_device = Cudf_device;
+  try {
+    if (Cudf_device != cudaInvalidDeviceId) {
+      if (Thread_device != Cudf_device) {
+        JNI_CUDA_CHECK(env, cudaSetDevice(Cudf_device));
+        Thread_device = Cudf_device;
+      }
     }
   }
+  CATCH_STD(env, );
 }
 
 /** Fills all the bytes in the buffer 'buf' with 'value'. */
 void device_memset_async(JNIEnv *env, rmm::device_buffer &buf, char value) {
-  cudaError_t cuda_status = cudaMemsetAsync((void *)buf.data(), value, buf.size());
-  JNI_CUDA_CHECK(env, cuda_status);
+  try {
+    JNI_CUDA_CHECK(env, cudaMemsetAsync((void *)buf.data(), value, buf.size()));
+  }
+  CATCH_STD(env, );
 }
 
 } // namespace jni
@@ -191,6 +195,34 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getNativeComputeMode(JNIEnv *env
     cudaDeviceProp device_prop;
     JNI_CUDA_TRY(env, -2, cudaGetDeviceProperties(&device_prop, device));
     return device_prop.computeMode;
+  }
+  CATCH_STD(env, -2);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getComputeCapabilityMajor(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    int device;
+    JNI_CUDA_TRY(env, -2, ::cudaGetDevice(&device));
+    int attribute_value;
+    JNI_CUDA_TRY(
+        env, -2,
+        ::cudaDeviceGetAttribute(&attribute_value, ::cudaDevAttrComputeCapabilityMajor, device));
+    return attribute_value;
+  }
+  CATCH_STD(env, -2);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getComputeCapabilityMinor(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    int device;
+    JNI_CUDA_TRY(env, -2, ::cudaGetDevice(&device));
+    int attribute_value;
+    JNI_CUDA_TRY(
+        env, -2,
+        ::cudaDeviceGetAttribute(&attribute_value, ::cudaDevAttrComputeCapabilityMinor, device));
+    return attribute_value;
   }
   CATCH_STD(env, -2);
 }

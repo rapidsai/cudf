@@ -327,11 +327,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
                                                                   jstring jpath, jlong pool_size) {
   try {
     // make sure the CUDA device is setup in the context
-    cudaError_t cuda_status = cudaFree(0);
-    JNI_CUDA_CHECK(env, cuda_status);
+    JNI_CUDA_CHECK(env, cudaFree(0));
     int device_id;
-    cuda_status = cudaGetDevice(&device_id);
-    JNI_CUDA_CHECK(env, cuda_status);
+    JNI_CUDA_CHECK(env, cudaGetDevice(&device_id));
 
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
