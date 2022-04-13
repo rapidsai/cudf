@@ -55,6 +55,10 @@ def validate_setup():
             raise e
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
+    except RuntimeError as e:
+        # could indicate that `libcuda.so` is missing
+        warnings.warn(str(e))
+        return
 
     if gpus_count > 0:
         # Cupy throws RunTimeException to get GPU count,
