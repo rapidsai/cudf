@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#define _CG_ABI_EXPERIMENTAL  // enable experimental API
-
 #include <io/parquet/parquet_gpu.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -26,8 +24,6 @@
 
 #include <cuda/atomic>
 
-#include <cooperative_groups.h>
-
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -35,8 +31,6 @@ namespace gpu {
 namespace {
 constexpr int DEFAULT_BLOCK_SIZE = 256;
 }
-
-namespace cg = cooperative_groups;
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
@@ -114,10 +108,6 @@ __global__ void __launch_bounds__(block_size)
 
   if (not chunk->use_dictionary) { return; }
 
-  __shared__ cg::experimental::block_tile_memory<4, block_size> shared;
-  auto thb   = cg::experimental::this_thread_block(shared);
-  auto block = cg::experimental::tiled_partition<block_size>(thb);
-  // cub::BlockReduce instead of cg::reduce for performance purpose
   using block_reduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
@@ -136,12 +126,8 @@ __global__ void __launch_bounds__(block_size)
     chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
   __shared__ size_type total_num_dict_entries;
-  if (t == 0) { total_num_dict_entries = chunk->num_dict_entries; }
   size_type val_idx = s_start_value_idx + t;
-  while (block.any(val_idx < end_value_idx)) {
-    // Check if the num unique values in chunk has already exceeded max dict size and early exit
-    if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
-
+  while (val_idx - block_size < end_value_idx) {
     auto const is_valid =
       val_idx < end_value_idx and val_idx < data_col.size() and data_col.is_valid(val_idx);
 
@@ -172,13 +158,17 @@ __global__ void __launch_bounds__(block_size)
     }
 
     auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
-    block.sync();
+    __syncthreads();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
-    if (block.thread_rank() == 0) {
+    if (t == 0) {
       total_num_dict_entries = atomicAdd(&chunk->num_dict_entries, num_unique);
       total_num_dict_entries += num_unique;
       atomicAdd(&chunk->uniq_data_size, uniq_data_size);
     }
+    __syncthreads();
+
+    // Check if the num unique values in chunk has already exceeded max dict size and early exit
+    if (total_num_dict_entries > MAX_DICT_SIZE) { return; }
 
     val_idx += block_size;
   }  // while
