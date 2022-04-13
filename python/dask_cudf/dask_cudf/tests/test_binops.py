@@ -10,7 +10,7 @@ from dask import dataframe as dd
 
 import cudf
 
-from .utils import _make_random_frame
+from dask_cudf.tests.utils import _make_random_frame
 
 
 def _make_empty_frame(npartitions=2):

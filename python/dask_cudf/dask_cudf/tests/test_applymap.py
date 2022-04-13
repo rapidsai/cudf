@@ -5,7 +5,7 @@ from pandas import NA
 
 from dask import dataframe as dd
 
-from .utils import _make_random_frame
+from dask_cudf.tests.utils import _make_random_frame
 
 
 @pytest.mark.parametrize(
