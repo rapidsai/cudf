@@ -5135,7 +5135,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
-                return source.astype("float64")
+                return Series(index=cudf.StringIndex([]))
 
         axis = source._get_axis_from_axis_arg(axis)
 
