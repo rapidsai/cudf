@@ -107,6 +107,7 @@ __global__ void __launch_bounds__(block_size)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
+  auto t       = threadIdx.x;
   auto frag    = frags[col_idx][block_x];
   auto chunk   = frag.chunk;
   auto col     = chunk->col_desc;
@@ -135,7 +136,7 @@ __global__ void __launch_bounds__(block_size)
     chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
   __shared__ size_type total_num_dict_entries;
-  if (block.thread_rank() == 0) { total_num_dict_entries = chunk->num_dict_entries; }
+  if (t == 0) { total_num_dict_entries = chunk->num_dict_entries; }
   size_type val_idx = s_start_value_idx + t;
   while (block.any(val_idx < end_value_idx)) {
     // Check if the num unique values in chunk has already exceeded max dict size and early exit
