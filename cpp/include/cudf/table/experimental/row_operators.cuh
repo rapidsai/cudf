@@ -561,6 +561,7 @@ class device_row_comparator {
         }
         if (lcol.type().id() == type_id::STRUCT) {
           if (lcol.num_child_columns() == 0) { return true; }
+          // Non-empty structs are assumed to be decomposed and contain only one child
           lcol = detail::structs_column_device_view(lcol).sliced_child(0);
           rcol = detail::structs_column_device_view(rcol).sliced_child(0);
         } else if (lcol.type().id() == type_id::LIST) {
@@ -780,12 +781,9 @@ class device_row_hasher {
                                    _table.column(0),
                                    row_index));
 
-    auto it = detail::make_counting_transform_iterator(0, [=](size_type column_index) {
+    auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
       return cudf::type_dispatcher<dispatch_storage_type>(
-        _table.column(column_index).type(),
-        element_hasher_adapter<hash_function>{_has_nulls},
-        _table.column(column_index),
-        row_index);
+        column.type(), element_hasher_adapter<hash_function>{_has_nulls}, column, row_index);
     });
 
     // Hash each element and combine all the hash values together
@@ -842,6 +840,7 @@ class device_row_hasher {
         }
         if (curr_col.type().id() == type_id::STRUCT) {
           if (curr_col.num_child_columns() == 0) { return hash; }
+          // Non-empty structs are assumed to be decomposed and contain only one child
           curr_col = detail::structs_column_device_view(curr_col).sliced_child(0);
         } else if (curr_col.type().id() == type_id::LIST) {
           auto list_col   = detail::lists_column_device_view(curr_col);
