@@ -6339,6 +6339,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         4  5   2   7  3
         """
         includes_assignment = "=" in expr
+
         # Check if there were multiple statements. Filter out empty lines.
         exprs = tuple(filter(None, expr.strip().split("\n")))
         if len(exprs) > 1 and not all("=" in e for e in exprs):
@@ -6347,23 +6348,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "contain an assignment."
             )
 
-        if includes_assignment:
-            targets, exprs = zip(
-                *((s.strip() for s in e.split("=")) for e in exprs)
-            )
-
-            cols = (
-                libcudf.transform.compute_column(
-                    [*self._columns], self._column_names, e
-                )
-                for e in exprs
-            )
-            ret = self if inplace else self.copy(deep=False)
-            for name, col in zip(targets, cols):
-                ret._data[name] = col
-            if not inplace:
-                return ret
-        else:
+        if not includes_assignment:
             if inplace:
                 raise ValueError(
                     "Cannot operate inplace if there is no assignment"
@@ -6375,6 +6360,22 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                 }
             )
+
+        targets, exprs = zip(
+            *((s.strip() for s in e.split("=")) for e in exprs)
+        )
+
+        cols = (
+            libcudf.transform.compute_column(
+                [*self._columns], self._column_names, e
+            )
+            for e in exprs
+        )
+        ret = self if inplace else self.copy(deep=False)
+        for name, col in zip(targets, cols):
+            ret._data[name] = col
+        if not inplace:
+            return ret
 
 
 def from_dataframe(df, allow_copy=False):
