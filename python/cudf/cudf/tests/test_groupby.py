@@ -1706,7 +1706,7 @@ def test_groupby_unique(by, data, dtype):
     assert_groupby_results_equal(expect, got)
 
 
-@pytest.mark.parametrize("nelem", [100, 1000])
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
 @pytest.mark.parametrize("func", ["cummin", "cummax", "cumcount", "cumsum"])
 def test_groupby_2keys_scan(nelem, func):
     pdf = make_frame(pd.DataFrame, nelem=nelem)
@@ -1724,7 +1724,7 @@ def test_groupby_2keys_scan(nelem, func):
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
 
 
-@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("nelem", [100, 1000])
 @pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("na_option", ["keep", "top", "bottom"])

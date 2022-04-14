@@ -50,22 +50,22 @@ struct permuted_comparator {
    * @brief comparator object which compares two rows of the table in given permutation order
    *
    * @param device_table Device table to compare
-   * @param permute permutation order, integer type column.
+   * @param permutation The permutation order, integer type column.
    * @param has_nulls whether the table has nulls
    */
-  permuted_comparator(table_device_view device_table, Iterator const permute_begin, bool has_nulls)
+  permuted_comparator(table_device_view device_table, Iterator const permutation, bool has_nulls)
     : comparator(nullate::DYNAMIC{has_nulls}, device_table, device_table, null_equality::EQUAL),
-      permute(permute_begin)
+      permutation(permutation)
   {
   }
   __device__ bool operator()(size_type index1, size_type index2) const
   {
-    return comparator(permute[index1], permute[index2]);
+    return comparator(permutation[index1], permutation[index2]);
   };
 
  private:
   row_equality_comparator<nullate::DYNAMIC> comparator;
-  Iterator const permute;
+  Iterator const permutation;
 };
 
 /**

@@ -639,11 +639,11 @@ class rank_aggregation final : public rolling_aggregation,
                                public groupby_scan_aggregation,
                                public scan_aggregation {
  public:
-  rank_aggregation(rank_method const method,
-                   order const column_order,
-                   null_policy const null_handling,
-                   null_order const null_precedence,
-                   bool const percentage)
+  rank_aggregation(rank_method method,
+                   order column_order,
+                   null_policy null_handling,
+                   null_order null_precedence,
+                   bool percentage)
     : aggregation{RANK},
       _method{method},
       _column_order{column_order},
@@ -652,11 +652,11 @@ class rank_aggregation final : public rolling_aggregation,
       _percentage(percentage)
   {
   }
-  rank_method _method;          ///< rank method
-  order _column_order;          ///< order of the column to rank
-  null_policy _null_handling;   ///< include or exclude nulls in ranks
-  null_order _null_precedence;  ///< order of nulls in ranks
-  bool _percentage;             ///< whether to return percentage ranks
+  rank_method const _method;          ///< rank method
+  order const _column_order;          ///< order of the column to rank
+  null_policy const _null_handling;   ///< include or exclude nulls in ranks
+  null_order const _null_precedence;  ///< order of nulls in ranks
+  bool const _percentage;             ///< whether to return percentage ranks
 
   [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
