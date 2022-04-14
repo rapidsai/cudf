@@ -757,13 +757,14 @@ public:
   }
 
 // Throw a new exception only if one is not pending then always return with the specified value
-#define JNI_CHECK_THROW_NEW_CUDA_ERROR(env, class_name, message, ret_val)                          \
+#define JNI_CHECK_THROW_NEW_CUDA_ERROR(env, class_name, e, ret_val)                                \
   do {                                                                                             \
     if (env->ExceptionOccurred()) {                                                                \
       return ret_val;                                                                              \
     }                                                                                              \
     const char *e_name = cudaGetErrorName(e.error_code());                                         \
-    std::string full_msg = "CUDA ERROR [") + e_name + "]: " + (message == nullptr ? "" : message); \
+    std::string full_msg =                                                                         \
+        "CUDA ERROR [" + e_name + "]: " + (e.what() == nullptr ? "" : e.what());                   \
     JNI_THROW_NEW(env, class_name, full_msg, ret_val)                                              \
   } while (0)
 
@@ -811,10 +812,10 @@ public:
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
   catch (const cudf::fatal_cuda_error &e) {                                                        \
-    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, cudf::jni::FATAL_CUDA_ERROR_CLASS, e.what(), ret_val);     \
+    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, cudf::jni::FATAL_CUDA_ERROR_CLASS, e, ret_val);            \
   }                                                                                                \
   catch (const cudf::cuda_error &e) {                                                              \
-    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e.what(), ret_val);           \
+    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                  \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
