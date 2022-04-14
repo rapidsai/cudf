@@ -486,11 +486,11 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             value = np.array(value)
             value = value.reshape((-1, value.shape[0]))
-            if value.shape != self._frame.iloc[key[0]].shape:
+            if value.shape != self._frame.iloc[key].shape:
                 raise ValueError(
                     template.format(
                         value1=value.shape,
-                        value2=self._frame.loc[key[0]].shape,
+                        value2=self._frame.iloc[key].shape,
                     )
                 )
             for i, col in enumerate(columns_df._column_names):
