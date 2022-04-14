@@ -572,13 +572,13 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ... })
                 >>> gdf = cudf.from_pandas(df)
                 >>> df.groupby('a').apply(lambda x: x.iloc[[0]])
-                     a  b  c                                                                                                                                                                        │·········
-                a                                                                                                                                                                                   │·········
-                1 0  1  1  1                                                                                                                                                                        │·········
+                     a  b  c
+                a
+                1 0  1  1  1
                 2 2  2  1  3
                 >>> gdf.groupby('a').apply(lambda x: x.iloc[[0]])
-                   a  b  c                                                                                                                                                                          │·········
-                0  1  1  1                                                                                                                                                                          │·········
+                   a  b  c
+                0  1  1  1
                 2  2  1  3
         """
         if not callable(function):
