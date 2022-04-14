@@ -764,8 +764,8 @@ public:
     }                                                                                              \
     const char *e_name = cudaGetErrorName(e.error_code());                                         \
     std::string full_msg =                                                                         \
-        "CUDA ERROR [" + e_name + "]: " + (e.what() == nullptr ? "" : e.what());                   \
-    JNI_THROW_NEW(env, class_name, full_msg, ret_val)                                              \
+        std::string("CUDA ERROR [") + e_name + "]: " + (e.what() == nullptr ? "" : e.what());      \
+    JNI_THROW_NEW(env, class_name, full_msg.c_str(), ret_val)                                      \
   } while (0)
 
 #define JNI_CUDA_TRY(env, ret_val, call)                                                           \
