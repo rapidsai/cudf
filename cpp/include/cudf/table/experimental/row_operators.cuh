@@ -84,7 +84,7 @@ namespace lexicographic {
  * second letter in both words is the first non-equal letter, and `a < b`, thus
  * `aac < abb`.
  *
- * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
  */
 template <typename Nullate>
 class device_row_comparator {
@@ -411,11 +411,11 @@ class self_comparator {
   /**
    * @brief Return the binary operator for comparing rows in the table.
    *
-   * Returns a binary callable, `F`, with signature `bool F(size_t, size_t)`.
+   * Returns a binary callable, `F`, with signature `bool F(size_type, size_type)`.
    *
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
-   * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+   * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
    */
   template <typename Nullate>
   device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
@@ -698,11 +698,11 @@ class self_comparator {
   /**
    * @brief Get the comparison operator to use on the device
    *
-   * Returns a binary callable, `F`, with signature `bool F(size_t, size_t)`.
+   * Returns a binary callable, `F`, with signature `bool F(size_type, size_type)`.
    *
    * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
    *
-   * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+   * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
    */
   template <typename Nullate>
   device_row_comparator<Nullate> device_comparator(
@@ -723,7 +723,7 @@ namespace hash {
  * @brief Computes the hash value of an element in the given column.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
- * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
  */
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
@@ -761,7 +761,7 @@ class element_hasher {
  * @brief Computes the hash value of a row in the given table.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
- * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
  */
 template <template <typename> class hash_function, typename Nullate>
 class device_row_hasher {
@@ -882,6 +882,9 @@ class device_row_hasher {
   uint32_t _seed;
 };
 
+// Inject row::equality::preprocessed_table into the row::hash namespace
+// As a result, row::equality::preprocessed_table and row::hash::preprocessed table are the same
+// type and are interchangeable.
 using preprocessed_table = row::equality::preprocessed_table;
 
 class row_hasher {
@@ -889,7 +892,7 @@ class row_hasher {
   /**
    * @brief Construct an owning object for hashing the rows of a table
    *
-   * @param t The table whose rows to hash
+   * @param t The table containing rows to hash
    * @param stream The stream to construct this object on. Not the stream that will be used for
    * comparisons using this object.
    */
@@ -899,23 +902,24 @@ class row_hasher {
   }
 
   /**
-   * @brief Construct an owning object for hashing the rows of a table
+   * @brief Construct an owning object for hashing the rows of a table from an existing
+   * preprocessed_table
    *
    * This constructor allows independently constructing a `preprocessed_table` and sharing it among
-   * multiple hashers.
+   * multiple `row_hasher` and `equality::self_comparator` objects.
    *
-   * @param t A table preprocessed for hashing
+   * @param t A table preprocessed for hashing or equality.
    */
   row_hasher(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
 
   /**
    * @brief Get the hash operator to use on the device
    *
-   * Returns a unary callable, `F`, with signature `hash_function::hash_value_type F(size_t)`.
+   * Returns a unary callable, `F`, with signature `hash_function::hash_value_type F(size_type)`.
    *
    * `F(i)` returns the hash of row i.
    *
-   * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+   * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
    */
   template <template <typename> class hash_function = default_hash, typename Nullate>
   device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
