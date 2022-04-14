@@ -9311,6 +9311,14 @@ def df_eval():
         ("a + 1.0", float),
         ("-a + 1", int),
         ("+a + 1", int),
+        ("e = a + 1", int),
+        (
+            """
+            e = log(cos(a)) + 1.0
+            f = abs(c) - exp(d)
+            """,
+            float,
+        ),
     ],
 )
 def test_dataframe_eval(df_eval, expr, dtype):
@@ -9321,3 +9329,10 @@ def test_dataframe_eval(df_eval, expr, dtype):
     # of a single column with no nesting, pandas will retain the name. This
     # level of compatibility is out of scope for now.
     assert_eq(expect, got, check_names=False)
+
+    # Test inplace
+    if "=" in expr:
+        pdf_eval = df_eval.to_pandas()
+        pdf_eval.eval(expr, inplace=True)
+        df_eval.eval(expr, inplace=True)
+        assert_eq(pdf_eval, df_eval)

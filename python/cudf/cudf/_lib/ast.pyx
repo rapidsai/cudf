@@ -344,7 +344,16 @@ def parse_expression(str expr, tuple col_names):
 
 
 def evaluate_expression(df: "cudf.DataFrame", expr: str):
-    """Create a cudf evaluable expression from a string and evaluate it."""
+    """Create a cudf evaluable expression from a string and evaluate it.
+
+    Parameters
+    ----------
+    df : cudf.DataFrame
+        The DataFrame that we are applying functions to.
+    expr : str
+        The expression to evaluate. Must be a single expression (not a
+        statement, i.e. no assignment).
+    """
     visitor = parse_expression(expr, df._column_names)
 
     # At the end, all the stack contains is the expression to evaluate.
@@ -358,4 +367,4 @@ def evaluate_expression(df: "cudf.DataFrame", expr: str):
                 <libcudf_ast.expression &> dereference(cudf_expr.c_obj.get())
             )
         )
-    return {None: Column.from_unique_ptr(move(col))}
+    return Column.from_unique_ptr(move(col))
