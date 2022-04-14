@@ -141,4 +141,4 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
  *
  * @throw cudf::logic_error if the environment variable is set and the command fails
  */
-void drop_cache();
+void try_drop_l3_cache();

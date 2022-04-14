@@ -60,7 +60,7 @@ void BM_orc_read_varying_input(benchmark::State& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
-    drop_cache();
+    try_drop_l3_cache();
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::read_orc(read_opts);
   }
@@ -118,7 +118,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   auto mem_stats_logger               = cudf::memory_stats_logger();
   for (auto _ : state) {
-    drop_cache();
+    try_drop_l3_cache();
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
 
     cudf::size_type rows_read = 0;

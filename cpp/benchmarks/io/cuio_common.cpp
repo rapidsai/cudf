@@ -158,7 +158,7 @@ std::string exec_cmd(std::string_view cmd)
   return error_out;
 }
 
-void drop_cache()
+void try_drop_l3_cache()
 {
   static bool is_drop_cache_enabled = std::getenv("CUDF_BENCHMARK_DROP_CACHE") != nullptr;
   if (not is_drop_cache_enabled) { return; }
