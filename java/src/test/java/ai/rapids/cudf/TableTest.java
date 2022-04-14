@@ -7902,15 +7902,18 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testParquetWriteWithFieldId() throws IOException {
+    // field IDs are:
+    // c1: -1, c2: 2, c3: 3, c31: 31, c32: 32, c4: -4, c5: not specified
     ColumnWriterOptions.StructBuilder sBuilder =
         structBuilder("c3", true, 3)
-            .withColumns(true, "c31", 31)
-            .withColumns(true, "c32", 32);
+            .withColumn(true, "c31", 31)
+            .withColumn(true, "c32", 32);
     ParquetWriterOptions options = ParquetWriterOptions.builder()
-        .withColumns(true, "c1", 1)
+        .withColumn(true, "c1", -1)
         .withDecimalColumn("c2", 9, true, 2)
         .withStructColumn(sBuilder.build())
-        .withTimestampColumn("c4", true, true, 4)
+        .withTimestampColumn("c4", true, true, -4)
+        .withColumns( true, "c5")
         .build();
 
     File tempFile = File.createTempFile("test-field-id", ".parquet");
@@ -7926,6 +7929,7 @@ public class TableTest extends CudfTestBase {
           .column(structType, // c3
               new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
           .timestampMicrosecondsColumn(1000L, 2000L) // c4
+          .column("a", "b") // c5
           .build()) {
         try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
           writer.write(table0);
@@ -7936,12 +7940,13 @@ public class TableTest extends CudfTestBase {
           new Path(tempFile.getAbsolutePath()),
           new Configuration()))) {
         MessageType schema = reader.getFooter().getFileMetaData().getSchema();
-        assert (schema.getFields().get(0).getId().intValue() == 1);
+        assert (schema.getFields().get(0).getId().intValue() == -1);
         assert (schema.getFields().get(1).getId().intValue() == 2);
         assert (schema.getFields().get(2).getId().intValue() == 3);
         assert (((GroupType) schema.getFields().get(2)).getFields().get(0).getId().intValue() == 31);
         assert (((GroupType) schema.getFields().get(2)).getFields().get(1).getId().intValue() == 32);
-        assert (schema.getFields().get(3).getId().intValue() == 4);
+        assert (schema.getFields().get(3).getId().intValue() == -4);
+        assert (schema.getFields().get(4).getId() == null);
       }
     } finally {
       tempFile.delete();
