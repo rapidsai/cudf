@@ -404,6 +404,7 @@ TYPED_TEST(TypedScalarStructContainTest, TrivialInputTests)
   EXPECT_EQ(false, cudf::contains(col, val2));
 }
 
+#if 0
 TYPED_TEST(TypedScalarStructContainTest, SlicedColumnInputTests)
 {
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
@@ -434,6 +435,7 @@ TYPED_TEST(TypedScalarStructContainTest, SlicedColumnInputTests)
   EXPECT_EQ(true, cudf::contains(col, val1));
   EXPECT_EQ(false, cudf::contains(col, val2));
 }
+#endif
 
 TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
 {
@@ -534,6 +536,7 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
   }
 }
 
+#if 0
 TYPED_TEST(TypedScalarStructContainTest, SlicedInputWithNullsTests)
 {
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
@@ -598,3 +601,4 @@ TYPED_TEST(TypedScalarStructContainTest, SlicedInputWithNullsTests)
     EXPECT_EQ(false, cudf::contains(col, val2));
   }
 }
+#endif
