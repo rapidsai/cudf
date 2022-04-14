@@ -141,17 +141,17 @@ TEST_F(Distinct, WithNull)
 
 TEST_F(Distinct, BasicList)
 {
-  using lcw = cudf::test::lists_column_wrapper<uint64_t>;
-  using icw = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  using LCW = cudf::test::lists_column_wrapper<uint64_t>;
+  using ICW = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   // clang-format off
-  auto const idx = icw{ 0,  0,   1,      2,   1,      3,      4,   5,   5,      6,      4,     4 };
-  auto const col = lcw{{}, {}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
+  auto const idx = ICW{ 0,  0,   1,      2,   1,      3,      4,   5,   5,      6,      4,     4 };
+  auto const col = LCW{{}, {}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
   // clang-format on
   auto const input = cudf::table_view({idx, col});
 
-  auto const exp_idx = icw{0, 1, 2, 3, 4, 5, 6};
-  auto const exp_val = lcw{{}, {1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
+  auto const exp_idx = ICW{0, 1, 2, 3, 4, 5, 6};
+  auto const exp_val = LCW{{}, {1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
   auto const expect  = cudf::table_view({exp_idx, exp_val});
 
   auto result        = cudf::distinct(input, {1});
@@ -162,18 +162,18 @@ TEST_F(Distinct, BasicList)
 
 TEST_F(Distinct, NullableList)
 {
-  using lcw  = cudf::test::lists_column_wrapper<uint64_t>;
-  using icw  = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  using LCW  = cudf::test::lists_column_wrapper<uint64_t>;
+  using ICW  = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
   using mask = std::vector<bool>;
 
   // clang-format off
-  auto const idx    = icw {  0,  0,   1,   1,      4,   5,   5,  6,       4,     4,  6};
+  auto const idx    = ICW {  0,  0,   1,   1,      4,   5,   5,  6,       4,     4,  6};
   auto const valids = mask{  1,  1,   1,   1,      1,   1,   1,  0,       1,     1,  0};
-  auto const col    = lcw {{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {}, {2, 2}, {2, 2}, {}}, valids.begin()};
+  auto const col    = LCW {{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {}, {2, 2}, {2, 2}, {}}, valids.begin()};
 
-  auto const exp_idx    = icw {  0,   1,      4,   5,  6};
+  auto const exp_idx    = ICW {  0,   1,      4,   5,  6};
   auto const exp_valids = mask{  1,   1,      1,   1,  0};
-  auto const exp_val    = lcw {{{}, {1}, {2, 2}, {2}, {}}, exp_valids.begin()};
+  auto const exp_val    = LCW {{{}, {1}, {2, 2}, {2}, {}}, exp_valids.begin()};
 
   // clang-format on
   auto const input  = cudf::table_view({idx, col});
@@ -212,7 +212,7 @@ TEST_F(Distinct, ListOfStruct)
   auto col2 = cudf::test::strings_column_wrapper{
     {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
     {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}};
-  auto struc = cudf::test::structs_column_wrapper{
+  auto struct_col = cudf::test::structs_column_wrapper{
     {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
@@ -227,7 +227,7 @@ TEST_F(Distinct, ListOfStruct)
                                        static_cast<cudf::bitmask_type*>(nullmask_buf.data()),
                                        cudf::UNKNOWN_NULL_COUNT,
                                        0,
-                                       {offsets, struc});
+                                       {offsets, struct_col});
 
   auto idx = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10};
@@ -261,7 +261,9 @@ TEST_F(Distinct, ListOfEmptyStruct)
   // 11. [{}, {}]       ==
   // 12. [{}, {}]
 
-  auto struct_validity = std::vector<bool>{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  using mask = std::vector<bool>;
+
+  auto struct_validity = mask{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto struct_validity_buffer =
     cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
   auto struct_col =
@@ -269,7 +271,7 @@ TEST_F(Distinct, ListOfEmptyStruct)
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
     0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
-  auto list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto list_nullmask = mask{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   auto list_validity_buffer =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::make_lists_column(13,
