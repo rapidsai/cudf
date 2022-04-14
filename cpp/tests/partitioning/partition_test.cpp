@@ -24,7 +24,6 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-
 template <typename T>
 class PartitionTest : public cudf::test::BaseFixture {
   using value_type = cudf::test::GetType<T, 0>;

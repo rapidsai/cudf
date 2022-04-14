@@ -31,7 +31,6 @@
 #include <algorithm>
 #include <random>
 
-
 class DurationsToString : public cudf::benchmark {
 };
 template <class TypeParam>
