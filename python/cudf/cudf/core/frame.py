@@ -2408,10 +2408,8 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def _encode(self):
-        data, index, indices = libcudf.transform.table_encode(self)
-        for name, col in data.items():
-            data[name] = col._with_type_metadata(self._data[name].dtype)
-        keys = self.__class__._from_data(data, index)
+        columns, indices = libcudf.transform.table_encode([*self._columns])
+        keys = self._from_columns_like_self(columns)
         return keys, indices
 
     @_cudf_nvtx_annotate
