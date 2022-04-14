@@ -133,4 +133,12 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
  */
 std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk);
 
+/**
+ * @brief Drops L3 cache if `CUDF_BENCHMARK_DROP_CACHE` environment variable is set.
+ *
+ * Has no effect if the environment variable is not set.
+ * May require sudo access ro run successfully.
+ *
+ * @throw cudf::logic_error if the environment variable is set and the command fails
+ */
 void drop_cache();
