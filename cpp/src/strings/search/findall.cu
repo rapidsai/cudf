@@ -85,7 +85,6 @@ struct findall_fn {
 
 }  // namespace
 
-//
 std::unique_ptr<table> findall(strings_column_view const& input,
                                std::string const& pattern,
                                regex_flags const flags,
