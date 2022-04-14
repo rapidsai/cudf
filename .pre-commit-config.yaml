@@ -60,7 +60,9 @@ repos:
         rev: v11.1.0
         hooks:
               - id: clang-format
-                types_or: [c, c++, cuda, header, inl]
+                files: \.(cu|cuh|h|hpp|cpp|inl)$
+                types_or: [file]
+                args: ['-fallback-style=none', '-style=file', '-i']
       - repo: local
         hooks:
               - id: cmake-format
