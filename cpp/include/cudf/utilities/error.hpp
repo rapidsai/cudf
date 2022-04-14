@@ -121,7 +121,7 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
   auto const msg  = std::string{"CUDA error encountered at: " + std::string{file} + ":" +
                                std::to_string(line) + ": " + std::to_string(error) + " " +
                                cudaGetErrorName(error) + " " + cudaGetErrorString(error)};
-  // Call cudaDeviceSynchronize to ensure `last` did not result from an asynchronous error. 
+  // Call cudaDeviceSynchronize to ensure `last` did not result from an asynchronous error.
   // between two calls.
   if (error == last && last == cudaDeviceSynchronize()) {
     throw fatal_cuda_error{"Fatal " + msg, error};
