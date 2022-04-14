@@ -98,10 +98,10 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             {c: "mean" for c in self.obj.columns if c not in self.by},
             split_every=split_every,
             split_out=split_out,
-            **self.dropna,
             sep=self.sep,
             sort=self.sort,
             as_index=self.as_index,
+            **self.dropna,
         )
 
     @_dask_cudf_nvtx_annotate
