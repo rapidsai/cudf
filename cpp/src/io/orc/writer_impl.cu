@@ -2223,15 +2223,13 @@ void writer::impl::close()
       pbw_.put_uint(ff.stripes[stripe_id].numberOfRows);
       md.stripeStats[stripe_id].colStats[0] = std::move(buffer_);
       for (size_t col_idx = 0; col_idx < ff.types.size() - 1; col_idx++) {
-        size_t idx = ff.stripes.size() * col_idx + stripe_id;
-        md.stripeStats[stripe_id].colStats[1 + col_idx] =
-          std::move(statistics.stripe_level[idx]);
+        size_t idx                                      = ff.stripes.size() * col_idx + stripe_id;
+        md.stripeStats[stripe_id].colStats[1 + col_idx] = std::move(statistics.stripe_level[idx]);
       }
     }
   }
 
   persisted_stripe_statistics.clear();
-
 
   ff.contentLength = out_sink_->bytes_written();
   std::transform(
