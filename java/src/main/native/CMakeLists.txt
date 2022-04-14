@@ -215,7 +215,7 @@ endif()
 # ##################################################################################################
 # * link libraries --------------------------------------------------------------------------------
 
-set(CUDF_LINK cudf::cudf)
+set(CUDF_LINK PUBLIC cudf::cudf)
 if(CUDF_JNI_LIBCUDF_STATIC)
   # Whole-link libcudf.a into the shared library but not its dependencies
   set(CUDF_LINK PRIVATE -Wl,--whole-archive cudf::cudf -Wl,--no-whole-archive PUBLIC cudf::cudf)
