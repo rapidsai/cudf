@@ -33,6 +33,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/scan.h>
 
 namespace cudf {
 namespace strings {
@@ -114,7 +117,7 @@ std::unique_ptr<column> findall_record(
     reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
 
   // Create lists offsets column
-  auto offsets   = count_matches(*d_strings, *d_prog, stream, mr);
+  auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
   auto d_offsets = offsets->mutable_view().data<offset_type>();
 
   // Convert counts into offsets

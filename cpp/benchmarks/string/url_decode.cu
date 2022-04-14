@@ -32,7 +32,9 @@
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/random.h>
+#include <thrust/tuple.h>
 
 struct url_string_generator {
   char* chars;

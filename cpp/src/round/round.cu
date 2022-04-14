@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy_range.cuh>
+#include <cudf/detail/fill.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -33,7 +34,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cudf/detail/fill.hpp>
+#include <thrust/transform.h>
+#include <thrust/uninitialized_fill.h>
 #include <type_traits>
 
 namespace cudf {

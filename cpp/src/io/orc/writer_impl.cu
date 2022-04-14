@@ -36,6 +36,17 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/extrema.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/reverse_iterator.h>
+#include <thrust/optional.h>
+#include <thrust/tabulate.h>
+#include <thrust/transform.h>
+
 #include <nvcomp/snappy.h>
 
 #include <algorithm>
@@ -695,11 +706,11 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
 
   auto aligned_rgs = hostdevice_2dvector<rowgroup_rows>(
     segmentation.num_rowgroups(), orc_table.num_columns(), stream);
-  CUDA_TRY(cudaMemcpyAsync(aligned_rgs.base_device_ptr(),
-                           segmentation.rowgroups.base_device_ptr(),
-                           aligned_rgs.count() * sizeof(rowgroup_rows),
-                           cudaMemcpyDefault,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(aligned_rgs.base_device_ptr(),
+                                segmentation.rowgroups.base_device_ptr(),
+                                aligned_rgs.count() * sizeof(rowgroup_rows),
+                                cudaMemcpyDefault,
+                                stream.value()));
   auto const d_stripes = cudf::detail::make_device_uvector_async(segmentation.stripes, stream);
 
   // One thread per column, per stripe
@@ -1414,7 +1425,7 @@ std::future<void> writer::impl::write_data_stream(gpu::StripeStream const& strm_
     if (out_sink_->is_device_write_preferred(length)) {
       return out_sink_->device_write_async(stream_in, length, stream);
     } else {
-      CUDA_TRY(
+      CUDF_CUDA_TRY(
         cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream.value()));
       stream.synchronize();
 
@@ -1503,10 +1514,10 @@ void pushdown_lists_null_mask(orc_column_view const& col,
                               rmm::cuda_stream_view stream)
 {
   // Set all bits - correct unless there's a mismatch between offsets and null mask
-  CUDA_TRY(cudaMemsetAsync(static_cast<void*>(out_mask.data()),
-                           255,
-                           out_mask.size() * sizeof(bitmask_type),
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(static_cast<void*>(out_mask.data()),
+                                255,
+                                out_mask.size() * sizeof(bitmask_type),
+                                stream.value()));
 
   // Reset bits where a null list element has rows in the child column
   thrust::for_each_n(
@@ -2030,7 +2041,7 @@ void writer::impl::write(table_view const& table)
       } else {
         return pinned_buffer<uint8_t>{[](size_t size) {
                                         uint8_t* ptr = nullptr;
-                                        CUDA_TRY(cudaMallocHost(&ptr, size));
+                                        CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
                                         return ptr;
                                       }(max_stream_size),
                                       cudaFreeHost};

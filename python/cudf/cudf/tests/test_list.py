@@ -292,10 +292,43 @@ def test_get_nested_lists():
     assert_eq(expect, got)
 
 
-def test_get_nulls():
-    with pytest.raises(IndexError, match="list index out of range"):
-        sr = cudf.Series([[], [], []])
-        sr.list.get(100)
+def test_get_default():
+    sr = cudf.Series([[1, 2], [3, 4, 5], [6, 7, 8, 9]])
+
+    assert_eq(cudf.Series([cudf.NA, 5, 8]), sr.list.get(2))
+    assert_eq(cudf.Series([cudf.NA, 5, 8]), sr.list.get(2, default=cudf.NA))
+    assert_eq(cudf.Series([0, 5, 8]), sr.list.get(2, default=0))
+    assert_eq(cudf.Series([0, 3, 7]), sr.list.get(-3, default=0))
+    assert_eq(cudf.Series([2, 5, 9]), sr.list.get(-1))
+
+    string_sr = cudf.Series(
+        [["apple", "banana"], ["carrot", "daffodil", "elephant"]]
+    )
+    assert_eq(
+        cudf.Series(["default", "elephant"]),
+        string_sr.list.get(2, default="default"),
+    )
+
+    sr_with_null = cudf.Series([[0, cudf.NA], [1]])
+    assert_eq(cudf.Series([cudf.NA, 0]), sr_with_null.list.get(1, default=0))
+
+    sr_nested = cudf.Series([[[1, 2], [3, 4], [5, 6]], [[5, 6], [7, 8]]])
+    assert_eq(cudf.Series([[3, 4], [7, 8]]), sr_nested.list.get(1))
+    assert_eq(cudf.Series([[5, 6], cudf.NA]), sr_nested.list.get(2))
+    assert_eq(
+        cudf.Series([[5, 6], [0, 0]]), sr_nested.list.get(2, default=[0, 0])
+    )
+
+
+def test_get_ind_sequence():
+    # test .list.get() when `index` is a sequence
+    sr = cudf.Series([[1, 2], [3, 4, 5], [6, 7, 8, 9]])
+    assert_eq(cudf.Series([1, 4, 8]), sr.list.get([0, 1, 2]))
+    assert_eq(cudf.Series([1, 4, 8]), sr.list.get(cudf.Series([0, 1, 2])))
+    assert_eq(cudf.Series([cudf.NA, 5, cudf.NA]), sr.list.get([2, 2, -5]))
+    assert_eq(cudf.Series([0, 5, 0]), sr.list.get([2, 2, -5], default=0))
+    sr_nested = cudf.Series([[[1, 2], [3, 4], [5, 6]], [[5, 6], [7, 8]]])
+    assert_eq(cudf.Series([[1, 2], [7, 8]]), sr_nested.list.get([0, 1]))
 
 
 @pytest.mark.parametrize(
@@ -366,6 +399,95 @@ def test_contains_null_search_key(data, expect):
     expect = cudf.Series(expect, dtype="bool")
     got = sr.list.contains(cudf.Scalar(cudf.NA, sr.dtype.element_type))
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, scalar",
+    [
+        (
+            [[9, 0, 2], [], [1, None, 0]],
+            "x",
+        ),
+        (
+            [["z", "y", None], None, [None, "x"]],
+            5,
+        ),
+    ],
+)
+def test_contains_invalid(data, scalar):
+    sr = cudf.Series(data)
+    with pytest.raises(
+        TypeError,
+        match="Type/Scale of search key does not "
+        "match list column element type.",
+    ):
+        sr.list.contains(scalar)
+
+
+@pytest.mark.parametrize(
+    "data, scalar, expect",
+    [
+        (
+            [[1, 2, 3], [], [3, 4, 5]],
+            3,
+            [2, -1, 0],
+        ),
+        (
+            [[1.0, 2.0, 3.0], None, [2.0, 5.0]],
+            2.0,
+            [1, None, 0],
+        ),
+        (
+            [[None, "b", "c"], [], ["b", "e", "f"]],
+            "f",
+            [-1, -1, 2],
+        ),
+        ([[-5, None, 8], None, []], -5, [0, None, -1]),
+        (
+            [[None, "x", None, "y"], ["z", "i", "j"]],
+            "y",
+            [3, -1],
+        ),
+        (
+            [["d", None, "e"], [None, "f"], []],
+            cudf.Scalar(cudf.NA, "O"),
+            [None, None, None],
+        ),
+        (
+            [None, [10, 9, 8], [5, 8, None]],
+            cudf.Scalar(cudf.NA, "int64"),
+            [None, None, None],
+        ),
+    ],
+)
+def test_index(data, scalar, expect):
+    sr = cudf.Series(data)
+    expect = cudf.Series(expect, dtype="int32")
+    got = sr.list.index(cudf.Scalar(scalar, sr.dtype.element_type))
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, scalar",
+    [
+        (
+            [[9, None, 8], [], [7, 6, 5]],
+            "c",
+        ),
+        (
+            [["a", "b", "c"], None, [None, "d"]],
+            2,
+        ),
+    ],
+)
+def test_index_invalid(data, scalar):
+    sr = cudf.Series(data)
+    with pytest.raises(
+        TypeError,
+        match="Type/Scale of search key does not "
+        "match list column element type.",
+    ):
+        sr.list.index(scalar)
 
 
 @pytest.mark.parametrize(

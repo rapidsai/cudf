@@ -30,6 +30,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/fill.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
+
 #include <optional>
 #include <utility>
 

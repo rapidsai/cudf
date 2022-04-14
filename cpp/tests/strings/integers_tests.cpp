@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/host_vector.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <string>
 #include <vector>
@@ -299,10 +302,10 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                             (cudf::size_type)d_integers.size());
   auto integers_view = integers->mutable_view();
-  CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
-                      d_integers.data(),
-                      d_integers.size() * sizeof(TypeParam),
-                      cudaMemcpyDeviceToDevice));
+  CUDF_CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
+                           d_integers.data(),
+                           d_integers.size() * sizeof(TypeParam),
+                           cudaMemcpyDeviceToDevice));
   integers_view.set_null_count(0);
 
   // convert to strings

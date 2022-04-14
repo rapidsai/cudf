@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
 from pickle import dumps
 
 import cachetools
@@ -248,7 +249,7 @@ def compile_udf(udf, type_signature):
       numpy types with `numba.numpy_support.from_dtype(...)`.
 
     Returns
-    --------
+    -------
     ptx_code:
       The compiled CUDA PTX
 

@@ -35,7 +35,11 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/count.h>
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
 namespace cudf {

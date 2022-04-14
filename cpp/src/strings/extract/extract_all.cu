@@ -31,6 +31,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {
@@ -135,7 +137,7 @@ std::unique_ptr<column> extract_all_record(
 
   // Get the match counts for each string.
   // This column will become the output lists child offsets column.
-  auto offsets   = count_matches(*d_strings, *d_prog, stream, mr);
+  auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
   auto d_offsets = offsets->mutable_view().data<offset_type>();
 
   // Compute null output rows
