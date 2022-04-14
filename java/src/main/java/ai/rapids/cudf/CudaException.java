@@ -30,29 +30,15 @@ package ai.rapids.cudf;
 public class CudaException extends RuntimeException {
   CudaException(String message) {
     super(message);
-    isFatal = message.startsWith("Fatal");
     cudaError = extractCudaError(message);
   }
 
   CudaException(String message, Throwable cause) {
     super(message, cause);
-    isFatal = message.startsWith("Fatal");
     cudaError = extractCudaError(message);
   }
 
-  /**
-   * Returns whether this CudaError is fatal or not.
-   *
-   * Fatal errors leave the process in an inconsistent state and any further CUDA work will return
-   * the same error. To continue using CUDA, the process must be terminated and relaunched.
-   */
-  public boolean isFatal() {
-    return isFatal;
-  }
-
   public final CudaError cudaError;
-
-  private final boolean isFatal;
 
   private static CudaError extractCudaError(String msg) {
     int startIdx = msg.indexOf('[');

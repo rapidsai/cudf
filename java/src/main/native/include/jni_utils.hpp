@@ -30,6 +30,7 @@ namespace jni {
 constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
 
 constexpr char const *CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
+constexpr char const *FATAL_CUDA_ERROR_CLASS = "ai/rapids/cudf/FatalCudaException";
 constexpr char const *CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
 constexpr char const *INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
 constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
@@ -756,17 +757,14 @@ public:
   }
 
 // Throw a new exception only if one is not pending then always return with the specified value
-#define JNI_CHECK_THROW_NEW_CUDA_ERROR(env, e, fatal, ret_val)                                     \
+#define JNI_CHECK_THROW_NEW_CUDA_ERROR(env, class_name, message, ret_val)                          \
   do {                                                                                             \
     if (env->ExceptionOccurred()) {                                                                \
       return ret_val;                                                                              \
     }                                                                                              \
-    jclass ex_class = env->FindClass(cudf::jni::CUDA_ERROR_CLASS);                                 \
     const char *e_name = cudaGetErrorName(e.error_code());                                         \
-    std::string what = std::string(fatal ? "Fatal CUDA ERROR [" : "CUDA ERROR [") + e_name +       \
-                       "]: " + (e.what() == nullptr ? "" : e.what());                              \
-    env->ThrowNew(ex_class, what.c_str());                                                         \
-    return ret_val;                                                                                \
+    std::string full_msg = "CUDA ERROR [") + e_name + "]: " + (message == nullptr ? "" : message); \
+    JNI_THROW_NEW(env, class_name, full_msg, ret_val)                                              \
   } while (0)
 
 #define JNI_CUDA_TRY(env, ret_val, call)                                                           \
@@ -812,11 +810,11 @@ public:
         std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
-  catch (const cudf::cuda_error &e) {                                                              \
-    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, e, false, ret_val);                                        \
-  }                                                                                                \
   catch (const cudf::fatal_cuda_error &e) {                                                        \
-    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, e, true, ret_val);                                         \
+    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, cudf::jni::FATAL_CUDA_ERROR_CLASS, e.what(), ret_val);     \
+  }                                                                                                \
+  catch (const cudf::cuda_error &e) {                                                              \
+    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e.what(), ret_val);           \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
