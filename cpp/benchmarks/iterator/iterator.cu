@@ -32,8 +32,6 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 
-#include <benchmark/benchmark.h>
-
 #include <random>
 
 template <typename T>
