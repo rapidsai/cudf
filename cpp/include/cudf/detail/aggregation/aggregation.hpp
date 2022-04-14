@@ -639,11 +639,11 @@ class rank_aggregation final : public rolling_aggregation,
                                public groupby_scan_aggregation,
                                public scan_aggregation {
  public:
-  rank_aggregation(rank_method method,
-                   order column_order,
-                   null_policy null_handling,
-                   null_order null_precedence,
-                   bool percentage)
+  rank_aggregation(rank_method const method,
+                   order const column_order,
+                   null_policy const null_handling,
+                   null_order const null_precedence,
+                   bool const percentage)
     : aggregation{RANK},
       _method{method},
       _column_order{column_order},

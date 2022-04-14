@@ -1706,7 +1706,7 @@ def test_groupby_unique(by, data, dtype):
     assert_groupby_results_equal(expect, got)
 
 
-@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("nelem", [100, 1000])
 @pytest.mark.parametrize("func", ["cummin", "cummax", "cumcount", "cumsum"])
 def test_groupby_2keys_scan(nelem, func):
     pdf = make_frame(pd.DataFrame, nelem=nelem)
@@ -1753,12 +1753,19 @@ def test_groupby_2keys_rank(nelem, method, ascending, na_option, pct):
 
 
 def test_groupby_rank_fails():
-    pdf = pd.DataFrame(
+    gdf = cudf.DataFrame(
         {"x": [1, 2, 3, 4], "y": [1, 2, 3, 4], "z": [1, 2, 3, 4]}
     )
-    gdf = cudf.from_pandas(pdf)
     with pytest.raises(NotImplementedError):
         gdf.groupby(["x", "y"]).rank(method="min", axis=1)
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2, 2],
+            "b": [[1, 2], [3, None, 5], None, [], [7, 8], [9]],
+        }
+    )
+    with pytest.raises(NotImplementedError):
+        gdf.groupby(["a"]).rank(method="min", axis=1)
 
 
 def test_groupby_mix_agg_scan():

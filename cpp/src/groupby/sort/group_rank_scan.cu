@@ -39,17 +39,26 @@ namespace detail {
 namespace {
 
 /**
- * @brief Functor to identify unique elements in a sorted order table/column
+ * @brief Functor to compare two rows of a table in given permutation order
+ * This is useful to identify unique elements in a sorted order table, when the permutation order is
+ * the sorted order of the table.
  *
  */
-template <typename ReturnType, typename Iterator>
-struct unique_comparator {
-  unique_comparator(table_device_view device_table, Iterator const sorted_order, bool has_nulls)
+template <typename Iterator>
+struct permuted_comparator {
+  /**
+   * @brief comparator object which compares two rows of the table in given permutation order
+   *
+   * @param device_table Device table to compare
+   * @param permute permutation order, integer type column.
+   * @param has_nulls whether the table has nulls
+   */
+  permuted_comparator(table_device_view device_table, Iterator const permute_begin, bool has_nulls)
     : comparator(nullate::DYNAMIC{has_nulls}, device_table, device_table, null_equality::EQUAL),
-      permute(sorted_order)
+      permute(permute_begin)
   {
   }
-  __device__ ReturnType operator()(size_type index1, size_type index2) const noexcept
+  __device__ bool operator()(size_type index1, size_type index2) const
   {
     return comparator(permute[index1], permute[index2]);
   };
@@ -93,8 +102,7 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
     table_view{{grouped_values}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
   auto sorted_index_order = value_order.begin<size_type>();
-  auto comparator         = unique_comparator<size_type, decltype(sorted_index_order)>(
-    *d_flat_order, sorted_index_order, has_nulls);
+  auto comparator         = permuted_comparator(*d_flat_order, sorted_index_order, has_nulls);
 
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                        flattened.flattened_columns().num_rows(),
@@ -177,11 +185,9 @@ std::unique_ptr<column> max_rank_scan(column_view const& grouped_values,
     group_labels,
     group_offsets,
     [] __device__(bool unequal, auto row_index_in_group) {
-      return unequal ? row_index_in_group + 1 : 0;
+      return unequal ? row_index_in_group + 1 : std::numeric_limits<size_type>::max();
     },
-    [] __device__(auto val1, auto val2) {
-      return val1 == 0 or val2 == 0 ? std::max(val1, val2) : std::min(val1, val2);
-    },
+    DeviceMin{},
     has_nested_nulls(table_view{{grouped_values}}),
     stream,
     mr);

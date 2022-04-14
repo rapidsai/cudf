@@ -121,26 +121,26 @@ template <>
 void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
-  // TODO review: this denotes key sorted, but the values are not sorted.
-  // CUDF_EXPECTS(helper.is_presorted(),
-  //              "Rank aggregate in groupby scan requires the keys to be presorted");
 
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(values),
                "Unsupported list type in grouped rank scan.");
   auto const& rank_agg         = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
   auto const& group_labels     = helper.group_labels(stream);
   auto const group_labels_view = column_view(cudf::device_span<const size_type>(group_labels));
-  auto const gather_map =
-    is_presorted()
-      ? cudf::detail::sequence(
-          group_labels.size(), *cudf::make_fixed_width_scalar(size_type{0}, stream), stream)
-      : ((rank_agg._method == rank_method::FIRST
-            ? cudf::detail::stable_sorted_order
-            : cudf::detail::sorted_order)(table_view({group_labels_view, get_grouped_values()}),
-                                          {order::ASCENDING, rank_agg._column_order},
-                                          {null_order::AFTER, rank_agg._null_precedence},
-                                          stream,
-                                          rmm::mr::get_current_device_resource()));
+  auto const gather_map        = [&]() {
+    if (is_presorted()) {  // assumes both keys and values are sorted, Spark does this.
+      return cudf::detail::sequence(
+        group_labels.size(), *cudf::make_fixed_width_scalar(size_type{0}, stream), stream);
+    } else {
+      auto sort_order = (rank_agg._method == rank_method::FIRST ? cudf::detail::stable_sorted_order
+                                                                       : cudf::detail::sorted_order);
+      return sort_order(table_view({group_labels_view, get_grouped_values()}),
+                        {order::ASCENDING, rank_agg._column_order},
+                        {null_order::AFTER, rank_agg._null_precedence},
+                        stream,
+                        rmm::mr::get_current_device_resource());
+    }
+  }();
 
   auto rank_scan = [&]() {
     switch (rank_agg._method) {
@@ -190,9 +190,7 @@ template <>
 void scan_result_functor::operator()<aggregation::ANSI_SQL_PERCENT_RANK>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
-  // TODO review: this denotes key sorted, but the values are not sorted.
-  // CUDF_EXPECTS(helper.is_presorted(),
-  //              "Percent rank aggregate in groupby scan requires the keys to be presorted");
+
   auto rank_min_agg = make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN);
   operator()<aggregation::RANK>(*rank_min_agg);
   column_view rank_min = cache.get_result(values, *rank_min_agg);
