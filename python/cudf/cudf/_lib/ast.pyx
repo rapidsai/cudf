@@ -230,7 +230,7 @@ class libcudfASTVisitor(ast.NodeVisitor):
 
     def visit_Name(self, node):
         try:
-            col_id = self.col_names.index(node.id) + 1
+            col_id = self.col_names.index(node.id)
         except ValueError:
             raise ValueError(f"Unknown column name {node.id}")
         self.stack.append(ColumnReference(col_id))

@@ -31,7 +31,9 @@ from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,
     data_from_table_view,
+    data_from_unique_ptr,
     table_view_from_columns,
+    table_view_from_table,
 )
 
 
@@ -162,7 +164,7 @@ def one_hot_encode(Column input_column, Column categories):
     return encodings
 
 
-def compute_column(df: "cudf.DataFrame", expr: str):
+def compute_column(list columns, tuple column_names, expr: str):
     """Compute a new column by evaluating an expression on a set of columns.
 
     Parameters
@@ -173,11 +175,11 @@ def compute_column(df: "cudf.DataFrame", expr: str):
         The expression to evaluate. Must be a single expression (not a
         statement, i.e. no assignment).
     """
-    visitor = parse_expression(expr, df._column_names)
+    visitor = parse_expression(expr, column_names)
 
     # At the end, all the stack contains is the expression to evaluate.
     cdef Expression cudf_expr = visitor.expression
-    cdef table_view tbl = table_view_from_table(df)
+    cdef table_view tbl = table_view_from_columns(columns)
     cdef unique_ptr[column] col
     with nogil:
         col = move(
