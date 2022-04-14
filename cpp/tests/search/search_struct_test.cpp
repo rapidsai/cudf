@@ -449,12 +449,6 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
       auto child3 = strings_col{"x", "" /*NULL*/, "z"};
       return structs_col{{child1, child2, child3}, null_at(1)};
     }();
-    auto const col2 = [] {
-      auto child1 = col_wrapper{{1, null, 3}, null_at(1)};
-      auto child2 = col_wrapper{{4, null, 6}, null_at(1)};
-      auto child3 = strings_col{{"x", "" /*NULL*/, "z"}, null_at(1)};
-      return structs_col{child1, child2, child3};
-    }();
 
     auto const val1 = [] {
       auto child1 = col_wrapper{1};
@@ -469,16 +463,15 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
       return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
     }();
     auto const val3 = [] {
-      auto child1 = col_wrapper{std::initializer_list<int32_t>{null}, null_at(0)};
-      auto child2 = col_wrapper{std::initializer_list<int32_t>{null}, null_at(0)};
-      auto child3 = strings_col{std::initializer_list<std::string>{""}, null_at(0)};
+      auto child1 = col_wrapper{{null}, null_at(0)};
+      auto child2 = col_wrapper{{null}, null_at(0)};
+      auto child3 = strings_col{{""}, null_at(0)};
       return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
     }();
 
     EXPECT_EQ(true, cudf::contains(col1, val1));
     EXPECT_EQ(false, cudf::contains(col1, val2));
     EXPECT_EQ(false, cudf::contains(col1, val3));
-    EXPECT_EQ(true, cudf::contains(col2, val3));
   }
 
   // Test with nulls at the children level.
@@ -486,7 +479,7 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
     auto const col = [] {
       auto child1 = col_wrapper{{1, null, 3}, null_at(1)};
       auto child2 = col_wrapper{{4, null, 6}, null_at(1)};
-      auto child3 = strings_col{{"" /*NULL*/, "y", "z"}, null_at(0)};
+      auto child3 = strings_col{{"" /*NULL*/, "" /*NULL*/, "z"}, nulls_at({0, 1})};
       return structs_col{{child1, child2, child3}};
     }();
 
@@ -502,9 +495,16 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
       auto child3 = strings_col{""};
       return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
     }();
+    auto const val3 = [] {
+      auto child1 = col_wrapper{{null}, null_at(0)};
+      auto child2 = col_wrapper{{null}, null_at(0)};
+      auto child3 = strings_col{{""}, null_at(0)};
+      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    }();
 
     EXPECT_EQ(true, cudf::contains(col, val1));
     EXPECT_EQ(false, cudf::contains(col, val2));
+    EXPECT_EQ(true, cudf::contains(col, val3));
   }
 
   // Test with nulls in the input scalar.
