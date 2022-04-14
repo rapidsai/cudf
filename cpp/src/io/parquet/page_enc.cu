@@ -265,7 +265,8 @@ __global__ void __launch_bounds__(128)
     uint32_t max_stats_len       = 0;
 
     if (!t) {
-      pagestats_g.col         = &col_desc[blockIdx.x];
+      pagestats_g.col_type    = col_g.leaf_column->type();
+      pagestats_g.stats_dtype = col_g.stats_dtype;
       pagestats_g.start_chunk = ck_g.first_fragment;
       pagestats_g.num_chunks  = 0;
     }
