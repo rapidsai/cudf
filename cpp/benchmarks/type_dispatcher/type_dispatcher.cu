@@ -17,8 +17,6 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/cuda.cuh>

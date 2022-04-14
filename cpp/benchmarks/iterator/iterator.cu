@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
