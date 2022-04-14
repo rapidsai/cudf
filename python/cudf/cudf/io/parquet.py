@@ -672,6 +672,12 @@ def _generate_filename():
     return uuid4().hex + ".parquet"
 
 
+def get_estimated_file_size(df):
+    df_mem_usage = df.memory_usage().sum()
+    file_size = df_mem_usage // 2500
+    return file_size
+
+
 @_cudf_nvtx_annotate
 def _get_partitioned(
     df,
@@ -680,6 +686,7 @@ def _get_partitioned(
     filename=None,
     fs=None,
     preserve_index=False,
+    max_file_size=None,
     **kwargs,
 ):
     fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
@@ -698,7 +705,26 @@ def _get_partitioned(
 
     full_paths = []
     metadata_file_paths = []
-    for keys in part_names.itertuples(index=False):
+    full_offsets = []
+
+    for idx, keys in enumerate(part_names.itertuples(index=False)):
+        current_offset = (part_offsets[idx], part_offsets[idx + 1])
+        # num_chunks = 1
+        if max_file_size is not None:
+            start, end = current_offset
+            sliced_df = grouped_df[start:end]
+            current_file_size = get_estimated_file_size(sliced_df)
+            if current_file_size > max_file_size:
+                parts = current_file_size // max_file_size
+                new_offsets = list(range(start, end, parts))
+                new_offsets.append(end)
+                # num_chunks = len(new_offsets) - 1
+                full_offsets.extend(new_offsets)
+            else:
+                full_offsets.append(end)
+        else:
+            full_offsets.extend(current_offset)
+
         subdir = fs.sep.join(
             [f"{name}={val}" for name, val in zip(partition_cols, keys)]
         )
@@ -724,6 +750,8 @@ class ParquetDatasetWriter:
         index=None,
         compression=None,
         statistics="ROWGROUP",
+        max_file_size=None,
+        file_name_prefix=None,
     ) -> None:
         """
         Write a parquet file or dataset incrementally
@@ -791,7 +819,12 @@ class ParquetDatasetWriter:
         # Map of partition_col values to their ParquetWriter's index
         # in self._chunked_writers for reverse lookup
         self.path_cw_map: Dict[str, int] = {}
-        self.filename = None
+        self.filename = file_name_prefix
+        self.max_file_size = max_file_size
+        if max_file_size is not None and file_name_prefix is None:
+            raise ValueError(
+                "file_name_prefix cannot be None if max_file_size is passed"
+            )
 
     @_cudf_nvtx_annotate
     def write_table(self, df):
