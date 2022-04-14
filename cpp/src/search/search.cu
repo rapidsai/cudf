@@ -195,8 +195,7 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
 
   // Prepare to flatten the structs column and scalar.
   auto const has_null_elements =
-    has_nested_nulls(table_view{std::vector<column_view>{col.child_begin(), col.child_end()}}) ||
-    has_nested_nulls(scalar_table);
+    has_nested_nulls(table_view{{col}}) || has_nested_nulls(scalar_table);
   auto const flatten_nullability = has_null_elements
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;
@@ -216,6 +215,7 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
     col_flattened_content.begin() + static_cast<size_type>(has_null_elements),
     col_flattened_content.end()}};
 
+  auto const d_col_ptr          = column_device_view::create(col, stream);
   auto const d_col_children_ptr = table_device_view::create(col_flattened_children, stream);
   auto const d_val_ptr          = table_device_view::create(val_flattened, stream);
 
@@ -224,7 +224,11 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
   auto const comp       = row_equality_comparator(
     nullate::DYNAMIC{has_null_elements}, *d_col_children_ptr, *d_val_ptr, null_equality::EQUAL);
   auto const found_iter = thrust::find_if(
-    rmm::exec_policy(stream), start_iter, end_iter, [comp] __device__(auto const idx) {
+    rmm::exec_policy(stream),
+    start_iter,
+    end_iter,
+    [comp, d_col = *d_col_ptr, has_null_structs = col.has_nulls()] __device__(auto const idx) {
+      if (has_null_structs && d_col.is_null_nocheck(idx)) { return false; }
       return comp(idx, 0);  // compare col[idx] == val[0].
     });
 
