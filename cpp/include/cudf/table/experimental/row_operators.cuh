@@ -748,8 +748,7 @@ class element_hasher {
   __device__ hash_value_type operator()(column_device_view const& col,
                                         size_type row_index) const noexcept
   {
-    cudf_assert(false && "Unsupported type in hash.");
-    return {};
+    CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
   uint32_t _seed;
@@ -842,6 +841,7 @@ class device_row_hasher {
                                });
         }
         if (curr_col.type().id() == type_id::STRUCT) {
+          if (curr_col.num_child_columns() == 0) { return hash; }
           curr_col = detail::structs_column_device_view(curr_col).sliced_child(0);
         } else if (curr_col.type().id() == type_id::LIST) {
           auto list_col   = detail::lists_column_device_view(curr_col);
