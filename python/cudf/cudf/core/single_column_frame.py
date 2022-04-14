@@ -51,9 +51,9 @@ class SingleColumnFrame(Frame, NotIterable):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
 
-        if numeric_only not in (None, True):
+        if numeric_only:
             raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
+                f"Series.{op} does not implement numeric_only"
             )
         try:
             return getattr(self._column, op)(**kwargs)
