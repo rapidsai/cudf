@@ -2689,21 +2689,19 @@ class IndexedFrame(Frame):
         if not ignore_index and self._index is not None:
             explode_column_num += self._index.nlevels
 
-        data, index = libcudf.lists.explode_outer(
-            self, explode_column_num, ignore_index
-        )
-        res = self.__class__._from_data(
-            ColumnAccessor(
-                data,
-                multiindex=self._data.multiindex,
-                level_names=self._data._level_names,
-            ),
-            index=index,
+        exploded = libcudf.lists.explode_outer(
+            [
+                *(self._index._data.columns if not ignore_index else ()),
+                *self._columns,
+            ],
+            explode_column_num,
         )
 
-        if not ignore_index and self._index is not None:
-            res.index.names = self._index.names
-        return res
+        return self._from_columns_like_self(
+            exploded,
+            self._column_names,
+            self._index_names if not ignore_index else None,
+        )
 
     @_cudf_nvtx_annotate
     def tile(self, count):
