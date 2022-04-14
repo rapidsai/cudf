@@ -433,6 +433,7 @@ namespace equality {
 template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
+  friend class table_comparator;
 
  public:
   /**
@@ -643,6 +644,7 @@ struct preprocessed_table {
 
  private:
   friend class self_comparator;
+  friend class table_comparator;
 
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
@@ -707,6 +709,59 @@ class self_comparator {
 
  private:
   std::shared_ptr<preprocessed_table> d_t;
+};
+
+class table_comparator {
+ public:
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows of two
+   * input tables.
+   *
+   * @param lhs The lhs table to compare
+   * @param rhs The rhs table to compare
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
+  table_comparator(table_view const& tlhs, table_view const& trhs, rmm::cuda_stream_view stream)
+    : d_tlhs(preprocessed_table::create(tlhs, stream)),
+      d_trhs(preprocessed_table::create(trhs, stream))
+  {
+  }
+
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows of two
+   * input tables.
+   *
+   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
+   * multiple comparators.
+   *
+   * @param lhs The lhs table to compare
+   * @param rhs The rhs table to compare
+   */
+  table_comparator(std::shared_ptr<preprocessed_table> tlhs,
+                   std::shared_ptr<preprocessed_table> trhs)
+    : d_tlhs{std::move(tlhs)}, d_trhs{std::move(trhs)}
+  {
+  }
+
+  /**
+   * @brief Get the comparison operator to use on the device
+   *
+   * Returns a binary callable, `F`, with signature `bool F(size_t, size_t)`.
+   *
+   * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
+   *
+   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   */
+  template <typename Nullate>
+  device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  {
+    return device_row_comparator(nullate, *d_tlhs, *d_trhs);
+  }
+
+ private:
+  std::shared_ptr<preprocessed_table> d_tlhs;
+  std::shared_ptr<preprocessed_table> d_trhs;
 };
 
 }  // namespace equality

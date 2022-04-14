@@ -28,6 +28,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
+#include <cudf/table/experimental/row_operators.cuh>
+
 #include <hash/unordered_multiset.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -190,9 +192,19 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
                  "scalar and column children types must match");
   }
 
+  // Convert the input scalar value into a structs column of one row.
+  auto const val_col = cudf::make_structs_column(
+    1, table{scalar_tview}.release(), 0, rmm::device_buffer{0, stream}, stream);
+
+  auto const col_tview     = table_view{{col}};
+  auto const has_any_nulls = has_nested_nulls(col_tview) || has_nested_nulls(scalar_tview);
+
+  auto const comp = cudf::experimental::row::equality::table_comparator(
+    col_tview, table_view{{val_col->view()}}, stream);
+  auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
+
+#if 0
   // Prepare to flatten the structs column and scalar.
-  auto const col_tview           = table_view{{col}};
-  auto const has_any_nulls       = has_nested_nulls(col_tview) || has_nested_nulls(scalar_tview);
   auto const flatten_nullability = has_any_nulls
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;
@@ -212,21 +224,22 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
     std::vector<column_view>{col_flattened_content.begin() + static_cast<size_type>(has_any_nulls),
                              col_flattened_content.end()}};
 
-  auto const d_col_ptr          = column_device_view::create(col, stream);
   auto const d_col_children_ptr = table_device_view::create(col_flattened_children, stream);
   auto const d_val_ptr          = table_device_view::create(val_flattened, stream);
 
-  auto const start_iter = thrust::make_counting_iterator<size_type>(0);
-  auto const end_iter   = start_iter + col.size();
   auto const comp       = row_equality_comparator(
     nullate::DYNAMIC{has_any_nulls}, *d_col_children_ptr, *d_val_ptr, null_equality::EQUAL);
+#endif
+  auto const d_col_ptr  = column_device_view::create(col, stream);
+  auto const start_iter = thrust::make_counting_iterator<size_type>(0);
+  auto const end_iter   = start_iter + col.size();
   auto const found_iter = thrust::find_if(
     rmm::exec_policy(stream),
     start_iter,
     end_iter,
-    [comp, d_col = *d_col_ptr, has_null_structs = col.has_nulls()] __device__(auto const idx) {
+    [dcomp, d_col = *d_col_ptr, has_null_structs = col.has_nulls()] __device__(auto const idx) {
       if (has_null_structs && d_col.is_null_nocheck(idx)) { return false; }
-      return comp(idx, 0);  // compare col[idx] == val[0].
+      return dcomp(idx, 0);  // compare col[idx] == val[0].
     });
 
   return found_iter != end_iter;
