@@ -53,7 +53,7 @@ struct alignas(16) reclass_device {
   int32_t count{};
   char32_t const* literals{};
 
-  __device__ inline bool is_match(char32_t ch, uint8_t const* flags) const;
+  __device__ inline bool is_match(char32_t const ch, uint8_t const* flags) const;
 };
 
 /**

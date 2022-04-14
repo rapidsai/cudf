@@ -907,7 +907,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             to have a valid result.
 
         Returns
-        ----------
+        -------
         DataFrame
             Correlation matrix.
 

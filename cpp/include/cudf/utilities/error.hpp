@@ -46,7 +46,20 @@ struct logic_error : public std::logic_error {
  * @brief Exception thrown when a CUDA error is encountered.
  */
 struct cuda_error : public std::runtime_error {
-  cuda_error(std::string const& message) : std::runtime_error(message) {}
+  cuda_error(std::string const& message, cudaError_t const& error)
+    : std::runtime_error(message), _cudaError(error)
+  {
+  }
+
+ public:
+  cudaError_t error_code() const { return _cudaError; }
+
+ protected:
+  cudaError_t _cudaError;
+};
+
+struct fatal_cuda_error : public cuda_error {
+  using cuda_error::cuda_error;
 };
 /** @} */
 
@@ -101,9 +114,20 @@ namespace detail {
 
 inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line)
 {
-  throw cudf::cuda_error(std::string{"CUDA error encountered at: " + std::string{file} + ":" +
-                                     std::to_string(line) + ": " + std::to_string(error) + " " +
-                                     cudaGetErrorName(error) + " " + cudaGetErrorString(error)});
+  // Calls cudaGetLastError twice. It is nearly certain that a fatal error occurred if the second
+  // call doesn't return with cudaSuccess.
+  cudaGetLastError();
+  auto const last = cudaGetLastError();
+  auto const msg  = std::string{"CUDA error encountered at: " + std::string{file} + ":" +
+                               std::to_string(line) + ": " + std::to_string(error) + " " +
+                               cudaGetErrorName(error) + " " + cudaGetErrorString(error)};
+  // Call cudaDeviceSynchronize to ensure `last` did not result from an asynchronous error.
+  // between two calls.
+  if (error == last && last == cudaDeviceSynchronize()) {
+    throw fatal_cuda_error{"Fatal " + msg, error};
+  } else {
+    throw cuda_error{msg, error};
+  }
 }
 }  // namespace detail
 }  // namespace cudf
@@ -115,13 +139,10 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  * cudaSuccess, invokes cudaGetLastError() to clear the error and throws an
  * exception detailing the CUDA error that occurred
  */
-#define CUDF_CUDA_TRY(call)                                       \
-  do {                                                            \
-    cudaError_t const status = (call);                            \
-    if (cudaSuccess != status) {                                  \
-      cudaGetLastError();                                         \
-      cudf::detail::throw_cuda_error(status, __FILE__, __LINE__); \
-    }                                                             \
+#define CUDF_CUDA_TRY(call)                                                                    \
+  do {                                                                                         \
+    cudaError_t const status = (call);                                                         \
+    if (cudaSuccess != status) { cudf::detail::throw_cuda_error(status, __FILE__, __LINE__); } \
   } while (0);
 
 /**

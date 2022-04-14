@@ -381,19 +381,16 @@ def test_contains(data, search_key):
 
 
 @pytest.mark.parametrize(
-    "data, index, expectation",
+    "data, index",
     [
-        (data_test_1(), 1, does_not_raise()),
-        (data_test_2(), 2, does_not_raise()),
+        (data_test_1(), 1),
+        (data_test_2(), 2),
     ],
 )
-def test_get(data, index, expectation):
-    with expectation:
-        expect = Series(data).list.get(index)
-
-    if expectation == does_not_raise():
-        ds = dgd.from_cudf(Series(data), 5)
-        assert_eq(expect, ds.list.get(index).compute())
+def test_get(data, index):
+    expect = Series(data).list.get(index)
+    ds = dgd.from_cudf(Series(data), 5)
+    assert_eq(expect, ds.list.get(index).compute())
 
 
 @pytest.mark.parametrize(
