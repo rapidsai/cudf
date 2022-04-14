@@ -34,8 +34,11 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
                                         rmm::mr::device_memory_resource* mr)
 {
   // TODO this should be UINT32
-  auto output = make_numeric_column(
-    data_type(type_id::INT32), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
+  auto output = make_numeric_column(data_type(type_to_id<hash_value_type>()),
+                                    input.num_rows(),
+                                    mask_state::UNALLOCATED,
+                                    stream,
+                                    mr);
 
   // Return early if there's nothing to hash
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }

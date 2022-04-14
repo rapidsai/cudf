@@ -247,19 +247,19 @@ TEST_F(Distinct, ListOfStruct)
 
 TEST_F(Distinct, ListOfEmptyStruct)
 {
-  // []
-  // []
-  // Null
-  // Null
-  // [Null, Null]
-  // [Null, Null]
-  // [Null, Null]
-  // [Null]
-  // [Null]
-  // [{}]
-  // [{}]
-  // [{}, {}]
-  // [{}, {}]
+  // 0.  []             ==
+  // 1.  []             !=
+  // 2.  Null           ==
+  // 3.  Null           !=
+  // 4.  [Null, Null]   ==
+  // 5.  [Null, Null]   ==
+  // 6.  [Null, Null]   !=
+  // 7.  [Null]         ==
+  // 8.  [Null]         !=
+  // 9.  [{}]           ==
+  // 10. [{}]           !=
+  // 11. [{}, {}]       ==
+  // 12. [{}, {}]
 
   auto struct_validity = std::vector<bool>{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto struct_validity_buffer =

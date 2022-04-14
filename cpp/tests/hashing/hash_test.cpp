@@ -131,12 +131,12 @@ TEST_F(HashTest, MultiValueNulls)
 
 TEST_F(HashTest, BasicList)
 {
-  using lcw = cudf::test::lists_column_wrapper<uint64_t>;
-  using icw = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using LCW = cudf::test::lists_column_wrapper<uint64_t>;
+  using ICW = cudf::test::fixed_width_column_wrapper<uint32_t>;
 
-  auto const col = lcw{{}, {}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
+  auto const col = LCW{{}, {}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
   auto const input  = cudf::table_view({col});
-  auto const expect = icw{1607593296,
+  auto const expect = ICW{1607593296,
                           1607593296,
                           -636010097,
                           -132459357,
@@ -152,7 +152,7 @@ TEST_F(HashTest, BasicList)
   auto const output = cudf::hash(input);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
-  auto const expect_seeded = icw{1607594254,
+  auto const expect_seeded = ICW{1607594254,
                                  1607594254,
                                  -636991801,
                                  -134832713,
@@ -171,14 +171,13 @@ TEST_F(HashTest, BasicList)
 
 TEST_F(HashTest, NullableList)
 {
-  using lcw  = cudf::test::lists_column_wrapper<uint64_t>;
-  using icw  = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
-  using mask = std::vector<bool>;
+  using LCW = cudf::test::lists_column_wrapper<uint64_t>;
+  using ICW = cudf::test::fixed_width_column_wrapper<uint32_t>;
 
-  auto const valids = mask{1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0};
+  auto const valids = std::vector<bool>{1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0};
   auto const col =
-    lcw{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {}, {2, 2}, {2, 2}, {}}, valids.begin()};
-  auto expect = icw{-2023148619,
+    LCW{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {}, {2, 2}, {2, 2}, {}}, valids.begin()};
+  auto expect = ICW{-2023148619,
                     -2023148619,
                     -31671896,
                     -31671896,
@@ -193,7 +192,7 @@ TEST_F(HashTest, NullableList)
   auto const output = cudf::hash(cudf::table_view({col}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
-  auto const expect_seeded = icw{-2022263846,
+  auto const expect_seeded = ICW{-2022263846,
                                  -2022263846,
                                  -90253200,
                                  -90253200,
@@ -229,44 +228,44 @@ TEST_F(HashTest, ListOfStruct)
   auto list_column = cudf::make_lists_column(
     17, offsets.release(), struc.release(), cudf::UNKNOWN_NULL_COUNT, std::move(nullmask_buf));
 
-  auto expect = cudf::test::fixed_width_column_wrapper<int32_t>{83451479,
-                                                                83451479,
-                                                                83455332,
-                                                                83455332,
-                                                                -759684425,
-                                                                -959632766,
-                                                                -959632766,
-                                                                -959632766,
-                                                                -959636527,
-                                                                -656998704,
-                                                                613652814,
-                                                                1902080426,
-                                                                1902080426,
-                                                                2061025592,
-                                                                2061025592,
-                                                                -319840811,
-                                                                -319840811};
+  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{83451479,
+                                                                 83451479,
+                                                                 83455332,
+                                                                 83455332,
+                                                                 -759684425,
+                                                                 -959632766,
+                                                                 -959632766,
+                                                                 -959632766,
+                                                                 -959636527,
+                                                                 -656998704,
+                                                                 613652814,
+                                                                 1902080426,
+                                                                 1902080426,
+                                                                 2061025592,
+                                                                 2061025592,
+                                                                 -319840811,
+                                                                 -319840811};
 
   auto const output = cudf::hash(cudf::table_view({*list_column}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
-  auto expect_seeded = cudf::test::fixed_width_column_wrapper<int32_t>{-68769184,
-                                                                       -68769184,
-                                                                       -68749037,
-                                                                       -68749037,
-                                                                       942988162,
-                                                                       1666174064,
-                                                                       1666174064,
-                                                                       1666174064,
-                                                                       1666186563,
-                                                                       606249849,
-                                                                       1602107255,
-                                                                       -2002620773,
-                                                                       -2002620773,
-                                                                       669559144,
-                                                                       669559144,
-                                                                       1970172743,
-                                                                       1970172743};
+  auto expect_seeded = cudf::test::fixed_width_column_wrapper<uint32_t>{-68769184,
+                                                                        -68769184,
+                                                                        -68749037,
+                                                                        -68749037,
+                                                                        942988162,
+                                                                        1666174064,
+                                                                        1666174064,
+                                                                        1666174064,
+                                                                        1666186563,
+                                                                        606249849,
+                                                                        1602107255,
+                                                                        -2002620773,
+                                                                        -2002620773,
+                                                                        669559144,
+                                                                        669559144,
+                                                                        1970172743,
+                                                                        1970172743};
 
   auto const seeded_output =
     cudf::hash(cudf::table_view({*list_column}), cudf::hash_id::HASH_MURMUR3, 619);
@@ -306,10 +305,10 @@ TEST_F(HashTest, ListOfEmptyStruct)
                                              cudf::UNKNOWN_NULL_COUNT,
                                              std::move(list_validity_buffer));
 
-  auto expect = cudf::test::fixed_width_column_wrapper<int32_t>{-2023148619,
-                                                                -2023148619,
-                                                                -2023148682,
-                                                                -2023148682,
+  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{-2023148619,
+                                                                 -2023148619,
+                                                                 -2023148682,
+                                                                 -2023148682,
                                                                 195678527,
                                                                 195678527,
                                                                 195678527,
@@ -345,7 +344,7 @@ TEST_F(HashTest, EmptyDeepList)
                                              cudf::UNKNOWN_NULL_COUNT,
                                              std::move(list_validity_buffer));
 
-  auto expect = cudf::test::fixed_width_column_wrapper<int32_t>{
+  auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{
     -2023148619, -2023148619, -2023148682, -2023148682};
 
   auto output = cudf::hash(cudf::table_view({*list_column}));
