@@ -40,7 +40,6 @@ def _check_groupby_supported(func):
         gb = args[0]
         if _groupby_supported(gb):
             return func(*args, **kwargs)
-        breakpoint()
         return getattr(super(type(gb), gb), func.__name__)(**kwargs)
 
     return wrapper
