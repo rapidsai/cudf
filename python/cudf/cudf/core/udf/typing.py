@@ -644,7 +644,7 @@ _dstring_at = cuda.declare_device(
 
 _dstring_substr = cuda.declare_device(
     "substr",
-    types.int32(types.CPointer(dstring), types.CPointer(dstring), types.int32, types.int32)
+    types.int32(types.CPointer(dstring), types.CPointer(dstring), types.int64, types.int64)
 )
 
 _create_dstring_from_stringview = cuda.declare_device(

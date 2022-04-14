@@ -467,11 +467,11 @@ def masked_dstring_at(context, builder, sig, args):
     _ = context.compile_internal(
         builder,
         call_dstring_at,
-        nb_signature(types.CPointer(dstring), types.CPointer(dstring), sig.args[1]),
+        nb_signature(types.int32, types.CPointer(dstring), types.CPointer(dstring), sig.args[1]),
         (dstr, retstr, args[1])
     )
 
-    to_return = cgutils.create_struct_proxy(sig.return_type)
+    to_return = cgutils.create_struct_proxy(sig.return_type)(context, builder)
     to_return.valid = input.valid
     to_return.value = builder.load(retstr)
 
@@ -497,11 +497,11 @@ def masked_dstring_substring(context, builder, sig, args):
     _ = context.compile_internal(
         builder,
         call_dstring_substr,
-        nb_signature(types.CPointer(dstring), types.CPointer(dstring), types.int32, types.int32),
+        nb_signature(types.int32, types.CPointer(dstring), types.CPointer(dstring), types.int64, types.int64),
         (dstr, retstr, slc.start, slc.stop)
     )
 
-    to_return = cgutils.create_struct_proxy(sig.return_type)
+    to_return = cgutils.create_struct_proxy(sig.return_type)(context, builder)
     to_return.valid = input.valid
     to_return.value = builder.load(retstr)
 
