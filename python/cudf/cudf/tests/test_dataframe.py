@@ -9305,6 +9305,8 @@ def df_eval():
         ("(a > b) and (c > d)", int),
         ("(a > b) or (c > d)", int),
         ("not (a > b)", int),
+        ("a + 1", int),
+        ("a + 1.0", float),
     ],
 )
 def test_dataframe_eval(df_eval, expr, dtype):

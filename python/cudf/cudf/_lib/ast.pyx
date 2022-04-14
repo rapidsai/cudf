@@ -82,12 +82,28 @@ class TableReference(Enum):
 # restrictive at the moment.
 cdef class Literal(Expression):
     def __cinit__(self, value):
-        # TODO: Enable floating point scalars.
-        cdef int val = value
-        self.c_scalar = make_unique[numeric_scalar[int64_t]](val, True)
-        self.c_obj = <expression_ptr> make_unique[libcudf_ast.literal](
-            <numeric_scalar[int64_t] &>dereference(self.c_scalar)
-        )
+        # TODO: Would love to find a better solution than unions for literals.
+        cdef int intval
+        cdef float floatval
+
+        if isinstance(value, int):
+            self.c_scalar_type = scalar_type_t.INT
+            intval = value
+            self.c_scalar.int_ptr = make_unique[numeric_scalar[int64_t]](
+                intval, True
+            )
+            self.c_obj = <expression_ptr> make_unique[libcudf_ast.literal](
+                <numeric_scalar[int64_t] &>dereference(self.c_scalar.int_ptr)
+            )
+        elif isinstance(value, float):
+            self.c_scalar_type = scalar_type_t.DOUBLE
+            floatval = value
+            self.c_scalar.double_ptr = make_unique[numeric_scalar[double]](
+                floatval, True
+            )
+            self.c_obj = <expression_ptr> make_unique[libcudf_ast.literal](
+                <numeric_scalar[double] &>dereference(self.c_scalar.double_ptr)
+            )
 
 
 cdef class ColumnReference(Expression):

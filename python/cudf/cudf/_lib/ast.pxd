@@ -11,12 +11,23 @@ from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
 ctypedef int32_t underlying_type_ast_operator
 
 
+ctypedef enum scalar_type_t:
+    INT
+    DOUBLE
+
+
+ctypedef union int_or_double_scalar_ptr:
+    unique_ptr[numeric_scalar[int64_t]] int_ptr
+    unique_ptr[numeric_scalar[double]] double_ptr
+
+
 cdef class Expression:
     cdef unique_ptr[expression] c_obj
 
 
 cdef class Literal(Expression):
-    cdef unique_ptr[numeric_scalar[int64_t]] c_scalar
+    cdef scalar_type_t c_scalar_type
+    cdef int_or_double_scalar_ptr c_scalar
 
 
 cdef class ColumnReference(Expression):
