@@ -246,8 +246,19 @@ class libcudfASTVisitor(ast.NodeVisitor):
     def visit_UnaryOp(self, node):
         self.visit(node.operand)
         self.nodes.append(self.stack.pop())
-        op = python_cudf_operator_map[type(node.op)]
-        self.stack.append(Operation(op, self.nodes[-1]))
+        if isinstance(node.op, ast.USub):
+            # TODO: Except for leaf nodes, we won't know the type of the
+            # operand, so there's no way to know whether this should be a float
+            # or an int. We should maybe see what Spark does, and this will
+            # probably require casting.
+            self.nodes.append(Literal(-1))
+            op = ASTOperator.MUL
+            self.stack.append(Operation(op, self.nodes[-1], self.nodes[-2]))
+        elif isinstance(node.op, ast.UAdd):
+            self.stack.append(self.nodes[-1])
+        else:
+            op = python_cudf_operator_map[type(node.op)]
+            self.stack.append(Operation(op, self.nodes[-1]))
 
     def visit_BinOp(self, node):
         self.visit(node.left)

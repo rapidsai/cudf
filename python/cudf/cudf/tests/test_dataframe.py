@@ -9290,6 +9290,8 @@ def df_eval():
 @pytest.mark.parametrize(
     "expr, dtype",
     [
+        ("a", int),
+        ("+a", int),
         ("a + b", int),
         ("a / b", float),
         ("a * b", int),
@@ -9307,6 +9309,8 @@ def df_eval():
         ("not (a > b)", int),
         ("a + 1", int),
         ("a + 1.0", float),
+        ("-a + 1", int),
+        ("+a + 1", int),
     ],
 )
 def test_dataframe_eval(df_eval, expr, dtype):
