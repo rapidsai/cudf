@@ -264,19 +264,73 @@ def test_groupby_dropna_cudf(dropna, by):
     dd.assert_eq(dask_result, cudf_result)
 
 
-@pytest.mark.parametrize("dropna", [False, True, None])
 @pytest.mark.parametrize(
-    "by", ["a", "b", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]]
+    "dropna,by",
+    [
+        (False, "a"),
+        (False, "b"),
+        (False, "c"),
+        pytest.param(
+            False,
+            "d",
+            marks=pytest.mark.xfail(
+                reason="dropna=False is broken in Dask CPU for groupbys on "
+                "categorical columns"
+            ),
+        ),
+        pytest.param(
+            False,
+            ["a", "b"],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/dask/dask/issues/8817"
+            ),
+        ),
+        pytest.param(
+            False,
+            ["a", "c"],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/dask/dask/issues/8817"
+            ),
+        ),
+        pytest.param(
+            False,
+            ["a", "d"],
+            marks=pytest.mark.xfail(
+                reason="multi-col groupbys on categorical columns are broken "
+                "in Dask CPU"
+            ),
+        ),
+        (True, "a"),
+        (True, "b"),
+        (True, "c"),
+        (True, "d"),
+        (True, ["a", "b"]),
+        (True, ["a", "c"]),
+        pytest.param(
+            True,
+            ["a", "d"],
+            marks=pytest.mark.xfail(
+                reason="multi-col groupbys on categorical columns are broken "
+                "in Dask CPU"
+            ),
+        ),
+        (None, "a"),
+        (None, "b"),
+        (None, "c"),
+        (None, "d"),
+        (None, ["a", "b"]),
+        (None, ["a", "c"]),
+        pytest.param(
+            None,
+            ["a", "d"],
+            marks=pytest.mark.xfail(
+                reason="multi-col groupbys on categorical columns are broken "
+                "in Dask CPU"
+            ),
+        ),
+    ],
 )
 def test_groupby_dropna_dask(dropna, by):
-    # see https://github.com/dask/dask/issues/8817
-    if len(by) > 1 and dropna is False:
-        pytest.skip("Multi-column dropna support is broken for Dask CPU")
-    if by == "d" or "d" in by:
-        pytest.skip(
-            "Dask CPU doesn't have support for dropna with categorical columns"
-        )
-
     # NOTE: This test is borrowed from upstream dask
     #       (dask/dask/dataframe/tests/test_groupby.py)
     df = pd.DataFrame(
