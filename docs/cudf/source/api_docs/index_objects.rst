@@ -92,7 +92,9 @@ Conversion
 
    Index.astype
    Index.to_arrow
+   Index.to_cupy
    Index.to_list
+   Index.to_numpy
    Index.to_series
    Index.to_frame
    Index.to_pandas
