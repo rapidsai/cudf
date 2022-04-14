@@ -9168,7 +9168,7 @@ def test_diff_many_dtypes():
         {
             "dates": pd.date_range("2020-01-01", "2020-01-06", freq="D"),
             "bools": [True, True, True, False, True, True],
-            "floats": [1.0, 2.0, 3.5, 4.0, 5.0, -1.7],
+            "floats": [1.0, 2.0, 3.5, np.nan, 5.0, -1.7],
             "ints": [1, 2, 3, 3, 4, 5],
             "nans_nulls": [np.nan, None, None, np.nan, np.nan, None],
         }
