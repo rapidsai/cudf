@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/merge.h>
 #include <thrust/pair.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include "cudf/utilities/traits.hpp"
 #include <queue>
@@ -137,7 +139,7 @@ void materialize_bitmask(column_view const& left_col,
     }
   }
 
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 struct side_index_generator {
@@ -210,7 +212,7 @@ index_vector generate_merged_indices(table_view const& left_table,
                   ineq_op);
   }
 
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   return merged_indices;
 }

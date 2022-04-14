@@ -387,7 +387,7 @@ def search_range(start, stop, x, step=1, side="left"):
         See description for usage.
 
     Returns
-    --------
+    -------
     int
         Insertion position of n.
 
