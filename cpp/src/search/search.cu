@@ -107,8 +107,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
   // Prepare to flatten the structs column
-  auto const has_null_elements   = has_nested_nulls(t) or has_nested_nulls(values);
-  auto const flatten_nullability = has_null_elements
+  auto const has_any_nulls       = has_nested_nulls(t) or has_nested_nulls(values);
+  auto const flatten_nullability = has_any_nulls
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;
 
@@ -130,11 +130,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
     detail::make_device_uvector_async(null_precedence_flattened, stream);
 
   auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  auto const comp     = row_lexicographic_comparator(nullate::DYNAMIC{has_null_elements},
-                                                 lhs,
-                                                 rhs,
-                                                 column_order_dv.data(),
-                                                 null_precedence_dv.data());
+  auto const comp     = row_lexicographic_comparator(
+    nullate::DYNAMIC{has_any_nulls}, lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
   launch_search(
     count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
 
@@ -194,9 +191,8 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
   }
 
   // Prepare to flatten the structs column and scalar.
-  auto const has_null_elements =
-    has_nested_nulls(table_view{{col}}) || has_nested_nulls(scalar_table);
-  auto const flatten_nullability = has_null_elements
+  auto const has_any_nulls = has_nested_nulls(table_view{{col}}) || has_nested_nulls(scalar_table);
+  auto const flatten_nullability = has_any_nulls
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;
 
@@ -211,9 +207,9 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
   // table of the input column from searching because that column is the materialized bitmask of
   // the input structs column.
   auto const col_flattened_content  = col_flattened.flattened_columns();
-  auto const col_flattened_children = table_view{std::vector<column_view>{
-    col_flattened_content.begin() + static_cast<size_type>(has_null_elements),
-    col_flattened_content.end()}};
+  auto const col_flattened_children = table_view{
+    std::vector<column_view>{col_flattened_content.begin() + static_cast<size_type>(has_any_nulls),
+                             col_flattened_content.end()}};
 
   auto const d_col_ptr          = column_device_view::create(col, stream);
   auto const d_col_children_ptr = table_device_view::create(col_flattened_children, stream);
@@ -222,7 +218,7 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
   auto const start_iter = thrust::make_counting_iterator<size_type>(0);
   auto const end_iter   = start_iter + col.size();
   auto const comp       = row_equality_comparator(
-    nullate::DYNAMIC{has_null_elements}, *d_col_children_ptr, *d_val_ptr, null_equality::EQUAL);
+    nullate::DYNAMIC{has_any_nulls}, *d_col_children_ptr, *d_val_ptr, null_equality::EQUAL);
   auto const found_iter = thrust::find_if(
     rmm::exec_policy(stream),
     start_iter,
