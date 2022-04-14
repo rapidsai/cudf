@@ -206,7 +206,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ``MultiIndex`` instance
 
         Returns
-        --------
+        -------
         None or MultiIndex
 
         Examples
@@ -591,7 +591,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             CuPy array of boolean values.
 
         Notes
-        -------
+        -----
         When `level` is None, `values` can only be MultiIndex, or a
         set/list-like tuples.
         When `level` is provided, `values` can be Index or MultiIndex,

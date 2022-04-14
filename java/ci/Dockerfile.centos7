@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,16 +33,8 @@ RUN yum install -y git zlib-devel maven tar wget patch ninja-build
 ## pre-create the CMAKE_INSTALL_PREFIX folder, set writable by any user for Jenkins
 RUN mkdir /usr/local/rapids && mkdir /rapids && chmod 777 /usr/local/rapids && chmod 777 /rapids
 
-ARG CMAKE_VERSION=3.20.5
+ARG CMAKE_VERSION=3.22.3
 RUN cd /usr/local/ && wget --quiet https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz && \
    tar zxf cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz && \
    rm cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
 ENV PATH /usr/local/cmake-${CMAKE_VERSION}-linux-x86_64/bin:$PATH
-
-# get GDS user-space lib
-ARG GDS_VERSION=1.0.0
-RUN cd /tmp/ && wget https://developer.download.nvidia.com/gds/redist/rel-${GDS_VERSION}/gds-redistrib-${GDS_VERSION}.tgz && \
-    tar zxf gds-redistrib-${GDS_VERSION}.tgz && \
-    cp -R ./gds-redistrib-${GDS_VERSION}/targets/x86_64-linux/lib/* /usr/local/cuda/targets/x86_64-linux/lib && \
-    cp -R ./gds-redistrib-${GDS_VERSION}/targets/x86_64-linux/include/* /usr/local/cuda/targets/x86_64-linux/include && \
-    rm -rf gds-redistrib-*
