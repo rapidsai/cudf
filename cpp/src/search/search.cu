@@ -182,25 +182,26 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
 {
   CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
-  auto const scalar_table = static_cast<struct_scalar const*>(&value)->view();
-  CUDF_EXPECTS(col.num_children() == scalar_table.num_columns(),
+  auto const scalar_tview = static_cast<struct_scalar const*>(&value)->view();
+  CUDF_EXPECTS(col.num_children() == scalar_tview.num_columns(),
                "struct scalar and structs column must have the same number of children");
   for (size_type i = 0; i < col.num_children(); ++i) {
-    CUDF_EXPECTS(col.child(i).type() == scalar_table.column(i).type(),
+    CUDF_EXPECTS(col.child(i).type() == scalar_tview.column(i).type(),
                  "scalar and column children types must match");
   }
 
   // Prepare to flatten the structs column and scalar.
-  auto const has_any_nulls = has_nested_nulls(table_view{{col}}) || has_nested_nulls(scalar_table);
+  auto const col_tview           = table_view{{col}};
+  auto const has_any_nulls       = has_nested_nulls(col_tview) || has_nested_nulls(scalar_tview);
   auto const flatten_nullability = has_any_nulls
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;
 
   // Flatten the input structs column, only materialize the bitmask if there is null in the input.
   auto const col_flattened =
-    structs::detail::flatten_nested_columns(table_view{{col}}, {}, {}, flatten_nullability);
+    structs::detail::flatten_nested_columns(col_tview, {}, {}, flatten_nullability);
   auto const val_flattened =
-    structs::detail::flatten_nested_columns(scalar_table, {}, {}, flatten_nullability);
+    structs::detail::flatten_nested_columns(scalar_tview, {}, {}, flatten_nullability);
 
   // The struct scalar only contains the struct member columns.
   // Thus, if there is any null in the input, we must exclude the first column in the flattened
