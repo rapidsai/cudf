@@ -10,13 +10,16 @@ from libc.stdint cimport int64_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
-from cudf._lib.ast cimport underlying_type_ast_operator
 from cudf._lib.column cimport Column
 from cudf._lib.cpp cimport ast as libcudf_ast, transform as libcudf_transform
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.utils cimport table_view_from_table
+
+# Necessary for proper casting, see below.
+ctypedef int32_t underlying_type_ast_operator
+
 
 # Aliases for simplicity
 ctypedef unique_ptr[libcudf_ast.expression] expression_ptr
@@ -116,8 +119,10 @@ cdef class ColumnReference(Expression):
 cdef class Operation(Expression):
     def __cinit__(self, op, Expression left, Expression right=None):
         # This awkward double casting is the only way to get Cython to generate
-        # valid C++ that doesn't try to apply the shift operator directly to
-        # values of the enum (which is invalid).
+        # valid C++. Cython doesn't support scoped enumerations, so it assumes
+        # that enums correspond to their underlying value types and will thus
+        # attempt operations that are invalid without first explicitly casting
+        # to the underlying before casting to the desired type.
         cdef libcudf_ast.ast_operator op_value = <libcudf_ast.ast_operator>(
             <underlying_type_ast_operator> op.value
         )
