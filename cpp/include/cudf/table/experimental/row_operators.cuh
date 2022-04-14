@@ -804,12 +804,11 @@ class device_row_hasher {
    */
   template <template <typename> class hash_fn>
   class element_hasher_adapter {
+    static constexpr hash_value_type NULL_HASH = std::numeric_limits<hash_value_type>::max();
+
    public:
-    __device__ element_hasher_adapter(
-      Nullate nulls,
-      uint32_t seed             = DEFAULT_HASH_SEED,
-      hash_value_type null_hash = std::numeric_limits<hash_value_type>::max()) noexcept
-      : _has_nulls(nulls), _seed(seed), _null_hash(null_hash)
+    __device__ element_hasher_adapter(Nullate nulls, uint32_t seed = DEFAULT_HASH_SEED) noexcept
+      : _has_nulls(nulls), _seed(seed)
     {
     }
 
@@ -817,7 +816,7 @@ class device_row_hasher {
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
     {
-      return element_hasher<hash_fn, Nullate>(_has_nulls, _seed, _null_hash)
+      return element_hasher<hash_fn, Nullate>(_has_nulls, _seed, NULL_HASH)
         .template operator()<T>(col, row_index);
     }
 
@@ -830,13 +829,10 @@ class device_row_hasher {
       while (is_nested(curr_col.type())) {
         if (_has_nulls) {
           auto validity_it = detail::make_validity_iterator<true>(curr_col);
-          hash =
-            detail::accumulate(validity_it,
-                               validity_it + curr_col.size(),
-                               hash,
-                               [null_hash = _null_hash](auto hash, auto is_valid) {
-                                 return cudf::detail::hash_combine(hash, is_valid ? 0 : null_hash);
-                               });
+          hash             = detail::accumulate(
+            validity_it, validity_it + curr_col.size(), hash, [](auto hash, auto is_valid) {
+              return cudf::detail::hash_combine(hash, is_valid ? 0 : NULL_HASH);
+            });
         }
         if (curr_col.type().id() == type_id::STRUCT) {
           if (curr_col.num_child_columns() == 0) { return hash; }
@@ -857,7 +853,7 @@ class device_row_hasher {
           hash,
           type_dispatcher<dispatch_void_if_nested>(
             curr_col.type(),
-            element_hasher<hash_fn, Nullate>{_has_nulls, DEFAULT_HASH_SEED, _null_hash},
+            element_hasher<hash_fn, Nullate>{_has_nulls, DEFAULT_HASH_SEED, NULL_HASH},
             curr_col,
             i));
       }
@@ -865,7 +861,6 @@ class device_row_hasher {
     }
 
     uint32_t _seed;
-    hash_value_type _null_hash;
     Nullate _has_nulls;
   };
 
