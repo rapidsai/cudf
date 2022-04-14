@@ -52,9 +52,9 @@ class SingleColumnFrame(Frame, NotIterable):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
 
-        if numeric_only not in (None, True):
+        if numeric_only:
             raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
+                f"Series.{op} does not implement numeric_only"
             )
         try:
             return getattr(self._column, op)(**kwargs)
@@ -81,8 +81,8 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def ndim(self):
-        """Get the dimensionality (always 1 for single-columned frames)."""
+    def ndim(self):  # noqa: D401
+        """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
     @property  # type: ignore
