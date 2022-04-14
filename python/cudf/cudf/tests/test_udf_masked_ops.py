@@ -852,3 +852,54 @@ def test_string_udf_substring(data, slc):
         return row[slc]
 
     run_masked_udf_test(func, data)
+
+@pytest.mark.parametrize('data', [
+    {
+        'str_col': ['abcd', 'AbCd', 'ABCD', '123AbC']
+    }
+])
+@pytest.mark.parametrize('chars', ['a', 'b', 'C', 'cd'])
+def test_string_udf_strip(data, chars):
+    # tests str.strip()
+
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return st.strip(chars)
+
+    run_masked_udf_test(func, data)
+
+@pytest.mark.parametrize('data', [
+    {
+        'str_col': ['abcdd', 'AbCd', 'ABCD', '123AbC']
+    }
+])
+@pytest.mark.parametrize('chars', ['a', 'b', 'C', 'cd'])
+def test_string_udf_lstrip(data, chars):
+    # tests str.lstrip()
+
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return st.lstrip(chars)
+
+    run_masked_udf_test(func, data)
+
+@pytest.mark.parametrize('data', [
+    {
+        'str_col': ['abcd', 'AbCd', 'ABCD', '123AbC']
+    }
+])
+@pytest.mark.parametrize('chars', ['a', 'b', 'C', 'cd'])
+def test_string_udf_rstrip(data, chars):
+    # tests str.rstrip()
+
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return st.rstrip(chars)
+
+    run_masked_udf_test(func, data)

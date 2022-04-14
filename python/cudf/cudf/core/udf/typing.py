@@ -565,6 +565,32 @@ class MaskedStringLower(AbstractTemplate):
             MaskedType(dstring), recvr=self.this
         )
 
+class MaskedStringStrip(AbstractTemplate):
+    key = "MaskedType.strip"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(dstring), MaskedType(dstring), recvr=self.this
+        )
+
+class MaskedStringRStrip(AbstractTemplate):
+    key = "MaskedType.rstrip"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(dstring), recvr=self.this
+        )
+
+class MaskedStringLStrip(AbstractTemplate):
+    key = "MaskedType.lstrip"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(dstring), recvr=self.this
+        )
+
+
+
 @cuda_decl_registry.register_attr
 class MaskedDStringAttrs(AttributeTemplate):
     key = MaskedType(dstring)
@@ -597,6 +623,21 @@ class MaskedDStringAttrs(AttributeTemplate):
     def resolve_lower(self, mod):
         return types.BoundFunction(
             MaskedStringLower, MaskedType(dstring)
+        )
+
+    def resolve_strip(self, mod):
+        return types.BoundFunction(
+            MaskedStringStrip, MaskedType(dstring)
+        )
+
+    def resolve_rstrip(self, mod):
+        return types.BoundFunction(
+            MaskedStringStrip, MaskedType(dstring)
+        )
+
+    def resolve_lstrip(self, mod):
+        return types.BoundFunction(
+            MaskedStringStrip, MaskedType(dstring)
         )
 
     def resolve_value(self, mod):
@@ -645,6 +686,21 @@ _dstring_at = cuda.declare_device(
 _dstring_substr = cuda.declare_device(
     "substr",
     types.int32(types.CPointer(dstring), types.CPointer(dstring), types.int64, types.int64)
+)
+
+_dstring_strip = cuda.declare_device(
+    "strip",
+    types.int32(types.CPointer(dstring), types.CPointer(dstring), types.CPointer(dstring))
+)
+
+_dstring_lstrip = cuda.declare_device(
+    "lstrip",
+    types.int32(types.CPointer(dstring), types.CPointer(dstring), types.CPointer(dstring))
+)
+
+_dstring_rstrip = cuda.declare_device(
+    "rstrip",
+    types.int32(types.CPointer(dstring), types.CPointer(dstring), types.CPointer(dstring))
 )
 
 _create_dstring_from_stringview = cuda.declare_device(

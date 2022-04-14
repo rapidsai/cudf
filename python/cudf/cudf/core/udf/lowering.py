@@ -31,6 +31,9 @@ from cudf.core.udf.typing import (
     _dstring_lower,
     _dstring_at,
     _dstring_substr,
+    _dstring_strip,
+    _dstring_lstrip,
+    _dstring_rstrip,
     _create_dstring_from_stringview,
     string_view,
     dstring
@@ -746,3 +749,99 @@ def masked_dstring_lower(context, builder, sig, args):
     ret.value = builder.load(tgt_ptr)
     ret.valid = input_masked_dstring.valid
     return ret._getvalue()
+
+def call_dstring_strip(st, tgt, chars):
+    return _dstring_strip(st, tgt, chars)
+
+@cuda_lower(
+    "MaskedType.strip", MaskedType(dstring), MaskedType(dstring)
+)
+def masked_dstring_strip(context, builder, sig, args):
+    source = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder, value=args[0])
+    chars = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder, value=args[1])
+
+    
+    source_ptr = builder.alloca(source.value.type)
+    target_ptr = builder.alloca(source.value.type)
+    chars_ptr = builder.alloca(source.value.type)
+    
+    builder.store(source.value, source_ptr)
+    builder.store(chars.value, chars_ptr)
+
+    _ = context.compile_internal(
+        builder,
+        call_dstring_strip,
+        nb_signature(
+            types.int32, types.CPointer(dstring), types.CPointer(dstring), types.CPointer(dstring)
+        ),
+        (source_ptr, target_ptr, chars_ptr),
+    )
+
+    result = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder)
+    result.valid = source.valid
+    result.value = builder.load(target_ptr)
+    return result._getvalue()
+
+def call_dstring_rstrip(st, tgt, chars):
+    return _dstring_rstrip(st, tgt, chars)
+
+@cuda_lower(
+    "MaskedType.rstrip", MaskedType(dstring), MaskedType(dstring)
+)
+def masked_dstring_rstrip(context, builder, sig, args):
+    source = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder, value=args[0])
+    chars = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder, value=args[1])
+
+    
+    source_ptr = builder.alloca(source.value.type)
+    target_ptr = builder.alloca(source.value.type)
+    chars_ptr = builder.alloca(source.value.type)
+    
+    builder.store(source.value, source_ptr)
+    builder.store(chars.value, chars_ptr)
+
+    _ = context.compile_internal(
+        builder,
+        call_dstring_rstrip,
+        nb_signature(
+            types.int32, types.CPointer(dstring), types.CPointer(dstring), types.CPointer(dstring)
+        ),
+        (source_ptr, target_ptr, chars_ptr),
+    )
+
+    result = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder)
+    result.valid = source.valid
+    result.value = builder.load(target_ptr)
+    return result._getvalue()
+
+def call_dstring_lstrip(st, tgt, chars):
+    return _dstring_lstrip(st, tgt, chars)
+
+@cuda_lower(
+    "MaskedType.lstrip", MaskedType(dstring), MaskedType(dstring)
+)
+def masked_dstring_lstrip(context, builder, sig, args):
+    source = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder, value=args[0])
+    chars = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder, value=args[1])
+
+    
+    source_ptr = builder.alloca(source.value.type)
+    target_ptr = builder.alloca(source.value.type)
+    chars_ptr = builder.alloca(source.value.type)
+    
+    builder.store(source.value, source_ptr)
+    builder.store(chars.value, chars_ptr)
+
+    _ = context.compile_internal(
+        builder,
+        call_dstring_lstrip,
+        nb_signature(
+            types.int32, types.CPointer(dstring), types.CPointer(dstring), types.CPointer(dstring)
+        ),
+        (source_ptr, target_ptr, chars_ptr),
+    )
+
+    result = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder)
+    result.valid = source.valid
+    result.value = builder.load(target_ptr)
+    return result._getvalue()
