@@ -443,11 +443,17 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
 
   // Test with nulls at the top level.
   {
-    auto const col = [] {
+    auto const col1 = [] {
       auto child1 = col_wrapper{1, null, 3};
       auto child2 = col_wrapper{4, null, 6};
       auto child3 = strings_col{"x", "" /*NULL*/, "z"};
       return structs_col{{child1, child2, child3}, null_at(1)};
+    }();
+    auto const col2 = [] {
+      auto child1 = col_wrapper{{1, null, 3}, null_at(1)};
+      auto child2 = col_wrapper{{4, null, 6}, null_at(1)};
+      auto child3 = strings_col{{"x", "" /*NULL*/, "z"}, null_at(1)};
+      return structs_col{child1, child2, child3};
     }();
 
     auto const val1 = [] {
@@ -469,9 +475,10 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
       return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
     }();
 
-    EXPECT_EQ(true, cudf::contains(col, val1));
-    EXPECT_EQ(false, cudf::contains(col, val2));
-    EXPECT_EQ(false, cudf::contains(col, val3));
+    EXPECT_EQ(true, cudf::contains(col1, val1));
+    EXPECT_EQ(false, cudf::contains(col1, val2));
+    EXPECT_EQ(false, cudf::contains(col1, val3));
+    EXPECT_EQ(true, cudf::contains(col2, val3));
   }
 
   // Test with nulls at the children level.
