@@ -341,30 +341,3 @@ def parse_expression(str expr, tuple col_names):
     visitor = libcudfASTVisitor(col_names)
     visitor.visit(ast.parse(expr))
     return visitor
-
-
-def evaluate_expression(df: "cudf.DataFrame", expr: str):
-    """Create a cudf evaluable expression from a string and evaluate it.
-
-    Parameters
-    ----------
-    df : cudf.DataFrame
-        The DataFrame that we are applying functions to.
-    expr : str
-        The expression to evaluate. Must be a single expression (not a
-        statement, i.e. no assignment).
-    """
-    visitor = parse_expression(expr, df._column_names)
-
-    # At the end, all the stack contains is the expression to evaluate.
-    cdef Expression cudf_expr = visitor.expression
-    cdef table_view tbl = table_view_from_table(df)
-    cdef unique_ptr[column] col
-    with nogil:
-        col = move(
-            libcudf_transform.compute_column(
-                tbl,
-                <libcudf_ast.expression &> dereference(cudf_expr.c_obj.get())
-            )
-        )
-    return Column.from_unique_ptr(move(col))

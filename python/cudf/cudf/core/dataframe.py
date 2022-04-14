@@ -6352,9 +6352,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 *((s.strip() for s in e.split("=")) for e in exprs)
             )
 
-            outputs = (libcudf.ast.evaluate_expression(self, e) for e in exprs)
+            cols = (libcudf.transform.compute_column(self, e) for e in exprs)
             ret = self if inplace else self.copy(deep=False)
-            for name, col in zip(targets, outputs):
+            for name, col in zip(targets, cols):
                 ret._data[name] = col
             if not inplace:
                 return ret
@@ -6364,7 +6364,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     "Cannot operate inplace if there is no assignment"
                 )
             return Series._from_data(
-                {None: libcudf.ast.evaluate_expression(self, exprs[0])}
+                {None: libcudf.transform.compute_column(self, exprs[0])}
             )
 
 

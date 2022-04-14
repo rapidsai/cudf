@@ -4,10 +4,12 @@ import numpy as np
 from numba.np import numpy_support
 
 import cudf
+from cudf._lib.ast import parse_expression
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core.buffer import Buffer
 from cudf.utils import cudautils
 
+from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
@@ -17,7 +19,9 @@ from libcpp.utility cimport move
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 cimport cudf._lib.cpp.transform as libcudf_transform
+from cudf._lib.ast cimport Expression
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.ast cimport expression
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
@@ -156,3 +160,30 @@ def one_hot_encode(Column input_column, Column categories):
     )
 
     return encodings
+
+
+def compute_column(df: "cudf.DataFrame", expr: str):
+    """Compute a new column by evaluating an expression on a set of columns.
+
+    Parameters
+    ----------
+    df : cudf.DataFrame
+        The DataFrame that we are applying functions to.
+    expr : str
+        The expression to evaluate. Must be a single expression (not a
+        statement, i.e. no assignment).
+    """
+    visitor = parse_expression(expr, df._column_names)
+
+    # At the end, all the stack contains is the expression to evaluate.
+    cdef Expression cudf_expr = visitor.expression
+    cdef table_view tbl = table_view_from_table(df)
+    cdef unique_ptr[column] col
+    with nogil:
+        col = move(
+            libcudf_transform.compute_column(
+                tbl,
+                <expression &> dereference(cudf_expr.c_obj.get())
+            )
+        )
+    return Column.from_unique_ptr(move(col))
