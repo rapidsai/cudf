@@ -183,7 +183,6 @@ struct search_functor<Type, std::enable_if_t<is_supported_non_nested_type<Type>(
   }
 };
 
-#if 1
 /**
  * @brief The search_functor specialized for struct type.
  */
@@ -265,8 +264,6 @@ struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
   }
 };
 
-#endif
-
 template <typename SearchKeyType>
 auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
                                      [[maybe_unused]] rmm::cuda_stream_view stream)
@@ -340,7 +337,6 @@ struct dispatch_index_of {
     auto const searcher = search_functor<Type>{};
 
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
-#if 1
       // Prepare to flatten the structs column and scalar.
       auto const child_tview   = table_view{{child}};
       auto const keys_tview    = get_search_keys_table_view(search_keys);
@@ -366,11 +362,11 @@ struct dispatch_index_of {
                              : tmp;
       }();
 
-      auto const child_cdv_ptr = column_device_view::create(child, stream);
-      auto const child_tdv_ptr = table_device_view::create(child_flattened_children, stream);
-      auto const keys_tdv_ptr  = table_device_view::create(keys_flattened, stream);
-
-      auto const comp = row_equality_comparator(
+      auto const child_cdv_ptr     = column_device_view::create(child, stream);
+      auto const child_tdv_ptr     = table_device_view::create(child_flattened_children, stream);
+      auto const keys_tdv_ptr      = table_device_view::create(keys_flattened, stream);
+      auto const key_validity_iter = cudf::detail::make_validity_iterator(*keys_dv_ptr);
+      auto const comp              = row_equality_comparator(
         nullate::DYNAMIC{has_any_nulls}, *child_tdv_ptr, *keys_tdv_ptr, null_equality::EQUAL);
 
       searcher.search_all_lists(*lists_cdv_ptr,
@@ -380,16 +376,15 @@ struct dispatch_index_of {
                                 child.has_nulls(),
                                 comp,
                                 search_key_is_scalar,
-                                cudf::detail::make_validity_iterator(*keys_dv_ptr),
+                                key_validity_iter,
                                 find_option,
                                 out_iter,
                                 stream);
-#endif
     } else {  // other types that are not struct
 
-      auto const d_child_ptr   = column_device_view::create(child, stream);
+      auto const child_cdv_ptr = column_device_view::create(child, stream);
       auto const elements_iter = cudf::detail::make_optional_iterator<Type>(
-        *d_child_ptr, nullate::DYNAMIC{child.has_nulls()});
+        *child_cdv_ptr, nullate::DYNAMIC{child.has_nulls()});
       auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
         *keys_dv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
 
