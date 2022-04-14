@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#include <cudf/types.hpp>
-
 namespace cudf::detail {
 
 template <typename Iterator, typename T, typename BinaryOp>

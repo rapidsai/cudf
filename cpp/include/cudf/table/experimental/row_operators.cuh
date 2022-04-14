@@ -415,7 +415,7 @@ class self_comparator {
    *
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
-   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   * @tparam Nullate A cudf::nullate type describing how to check for nulls.
    */
   template <typename Nullate>
   device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
@@ -445,7 +445,7 @@ class device_row_comparator {
    * @brief Checks whether the row at `lhs_index` in the `lhs` table is equal to the row at
    * `rhs_index` in the `rhs` table.
    *
-   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param lhs_index The index of the row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table is equal to the row in the `rhs` table
    */
@@ -479,8 +479,6 @@ class device_row_comparator {
 
   /**
    * @brief Performs an equality comparison between two elements in two columns.
-   *
-   * @tparam Nullate A cudf::nullate type describing how to check for nulls.
    */
   class element_comparator {
    public:
@@ -509,7 +507,7 @@ class device_row_comparator {
      * @param lhs_element_index The index of the first element
      * @param rhs_element_index The index of the second element
      * @return True if lhs and rhs are equal or if both lhs and rhs are null and nulls are
-     * configured to be considered equal (`nulls_are_equal` == `null_equality::EQUAL`)
+     * considered equal (`nulls_are_equal` == `null_equality::EQUAL`)
      */
     template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
     __device__ bool operator()(size_type const lhs_element_index,
@@ -590,7 +588,7 @@ class device_row_comparator {
     /**
      * @brief Serially compare two columns for equality.
      *
-     * When we want to get the equivalence of two columns by serially comparing all elements in a
+     * When we want to get the equivalence of two columns by serially comparing all elements in
      * one column with the corresponding elements in the other column, this saves us from type
      * dispatching for each individual element in the range
      */
@@ -704,7 +702,7 @@ class self_comparator {
    *
    * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
    *
-   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   * @tparam Nullate A cudf::nullate type describing how to check for nulls.
    */
   template <typename Nullate>
   device_row_comparator<Nullate> device_comparator(
@@ -917,7 +915,7 @@ class row_hasher {
    *
    * `F(i)` returns the hash of row i.
    *
-   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   * @tparam Nullate A cudf::nullate type describing how to check for nulls.
    */
   template <template <typename> class hash_function = default_hash, typename Nullate>
   device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
