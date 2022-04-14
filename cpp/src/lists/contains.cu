@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/detail/contains.hpp>
@@ -212,9 +213,10 @@ struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
    */
   template <typename EqComparator, typename ValidityIter, typename OutputPairIter>
   void search_all_lists(column_device_view const& d_lists,
+                        column_device_view const& d_child,
                         size_type const* d_offsets,
                         bool has_null_lists,
-                        bool has_null_elements,
+                        bool has_null_structs,
                         EqComparator const& comp,
                         bool search_key_is_scalar,
                         ValidityIter const& key_validity_iter,
@@ -229,7 +231,7 @@ struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
       [d_lists,
        d_offsets,
        has_null_lists,
-       has_null_elements,
+       has_null_structs,
        search_key_is_scalar,
        key_validity_iter,
        find_option,
@@ -238,6 +240,8 @@ struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
         if (!key_validity_iter[list_idx] || (has_null_lists && d_lists.is_null_nocheck(list_idx))) {
           return {NOT_FOUND_IDX, false};
         }
+
+        // todo: check null for child
 
         return find_option == duplicate_find_option::FIND_FIRST
                  ? thrust::pair<size_type, bool>{search_list<true>(
@@ -252,13 +256,23 @@ struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
 #endif
 
 template <typename SearchKeyType>
-auto get_search_keys_device_view(SearchKeyType const& search_keys,
-                                 [[maybe_unused]] rmm::cuda_stream_view stream)
+auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
+                                     [[maybe_unused]] rmm::cuda_stream_view stream)
 {
   if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
     return &search_keys;
   } else {
     return column_device_view::create(search_keys, stream);
+  }
+}
+
+template <typename SearchKeyType>
+auto get_search_keys_table_view(SearchKeyType const& search_keys)
+{
+  if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
+    return static_cast<struct_scalar const*>(&search_keys)->view();
+  } else {
+    return table_view{{search_keys}};
   }
 }
 
@@ -304,7 +318,7 @@ struct dispatch_index_of {
     }
 
     auto const d_lists_ptr = column_device_view::create(lists.parent(), stream);
-    auto const d_keys_ptr  = get_search_keys_device_view(search_keys, stream);
+    auto const keys_d_ptr  = get_search_keys_device_view_ptr(search_keys, stream);
 
     auto out_positions = make_numeric_column(
       data_type{type_id::INT32}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
@@ -314,38 +328,49 @@ struct dispatch_index_of {
     auto const searcher = search_functor<Type>{};
 
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
-#if 0
+#if 1
       // Prepare to flatten the structs column and scalar.
-      auto const has_null_elements = has_nested_nulls(table_view{std::vector<column_view>{
-                                       col.child_begin(), col.child_end()}}) ||
-                                     has_nested_nulls(scalar_table);
-      auto const flatten_nullability = has_null_elements
+      auto const child_tview   = table_view{{child}};
+      auto const keys_tview    = get_search_keys_table_view(search_keys);
+      auto const has_any_nulls = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
+      auto const flatten_nullability = has_any_nulls
                                          ? structs::detail::column_nullability::FORCE
                                          : structs::detail::column_nullability::MATCH_INCOMING;
 
-      // Flatten the input structs column, only materialize the bitmask if there is null in the
-      // input.
-      auto const col_flattened =
-        structs::detail::flatten_nested_columns(table_view{{col}}, {}, {}, flatten_nullability);
-      auto const val_flattened =
-        structs::detail::flatten_nested_columns(scalar_table, {}, {}, flatten_nullability);
+      // Flatten the input search space column and the keys scalar/column, only materialize the
+      // bitmask if there is null in the input.
+      auto const child_flattened =
+        structs::detail::flatten_nested_columns(child_tview, {}, {}, flatten_nullability);
+      auto const keys_flattened =
+        structs::detail::flatten_nested_columns(keys_tview, {}, {}, flatten_nullability);
 
       // The struct scalar only contains the struct member columns.
       // Thus, if there is any null in the input, we must exclude the first column in the flattened
       // table of the input column from searching because that column is the materialized bitmask of
       // the input structs column.
-      auto const col_flattened_content  = col_flattened.flattened_columns();
-      auto const col_flattened_children = table_view{std::vector<column_view>{
-        col_flattened_content.begin() + static_cast<size_type>(has_null_elements),
-        col_flattened_content.end()}};
+      auto const child_flattened_content  = child_flattened.flattened_columns();
+      auto const child_flattened_children = table_view{std::vector<column_view>{
+        child_flattened_content.begin() + static_cast<size_type>(has_any_nulls),
+        child_flattened_content.end()}};
 
-      auto const d_col_children_ptr = table_device_view::create(col_flattened_children, stream);
-      auto const d_val_ptr          = table_device_view::create(val_flattened, stream);
+      auto const child_cd_ptr = column_device_view::create(child, stream);
+      auto const child_td_ptr = table_device_view::create(child_flattened_children, stream);
+      auto const keys_td_ptr  = table_device_view::create(keys_flattened, stream);
 
-      auto const start_iter = thrust::make_counting_iterator<size_type>(0);
-      auto const end_iter   = start_iter + col.size();
-      auto const comp       = row_equality_comparator(
-        nullate::DYNAMIC{has_null_elements}, *d_col_children_ptr, *d_val_ptr, null_equality::EQUAL);
+      auto const comp = row_equality_comparator(
+        nullate::DYNAMIC{has_any_nulls}, *child_td_ptr, *keys_td_ptr, null_equality::EQUAL);
+
+      searcher.search_all_lists(*d_lists_ptr,
+                                *child_cd_ptr,
+                                lists.offsets_begin(),
+                                lists.has_nulls(),
+                                child.has_nulls(),
+                                comp,
+                                search_key_is_scalar,
+                                cudf::detail::make_validity_iterator(*keys_d_ptr),
+                                find_option,
+                                out_iter,
+                                stream);
 #endif
     } else {  // other types that are not struct
 
@@ -353,7 +378,7 @@ struct dispatch_index_of {
       auto const elements_iter = cudf::detail::make_optional_iterator<Type>(
         *d_child_ptr, nullate::DYNAMIC{child.has_nulls()});
       auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
-        *d_keys_ptr, nullate::DYNAMIC{search_keys_have_nulls});
+        *keys_d_ptr, nullate::DYNAMIC{search_keys_have_nulls});
 
       searcher.search_all_lists(*d_lists_ptr,
                                 elements_iter,
