@@ -35,6 +35,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <fstream>
 #include <type_traits>
 
@@ -223,9 +225,8 @@ using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
 using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;
 TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
-// TODO: debug truncation errors for `timestamp_ns` and overflow errors for `timestamp_s` , see
-// issue #9393.
-using SupportedTimestampTypes = cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us>;
+using SupportedTimestampTypes =
+  cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
 TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
 // Base test fixture for chunked writer tests
@@ -386,7 +387,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
     sequence, sequence + num_rows, validity);
   table_view expected({col});
 
-  auto filepath = temp_env->get_temp_filepath("OrcTimestampOverflow.orc");
+  auto filepath = temp_env->get_temp_filepath("ParquetTimestampOverflow.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected);
   cudf_io::write_parquet(out_opts);
@@ -1100,11 +1101,11 @@ class custom_test_data_sink : public cudf::io::data_sink {
   {
     return std::async(std::launch::deferred, [=] {
       char* ptr = nullptr;
-      CUDA_TRY(cudaMallocHost(&ptr, size));
-      CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
       stream.synchronize();
       outfile_.write(ptr, size);
-      CUDA_TRY(cudaFreeHost(ptr));
+      CUDF_CUDA_TRY(cudaFreeHost(ptr));
     });
   }
 
@@ -2165,11 +2166,11 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
   {
     return std::async(std::launch::deferred, [=] {
       char* ptr = nullptr;
-      CUDA_TRY(cudaMallocHost(&ptr, size));
-      CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
       stream.synchronize();
       mm_writer->host_write(ptr, size);
-      CUDA_TRY(cudaFreeHost(ptr));
+      CUDF_CUDA_TRY(cudaFreeHost(ptr));
     });
   }
 

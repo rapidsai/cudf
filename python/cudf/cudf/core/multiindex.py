@@ -8,7 +8,7 @@ import pickle
 from collections.abc import Sequence
 from functools import cached_property
 from numbers import Integral
-from typing import Any, List, MutableMapping, Optional, Tuple, Union
+from typing import Any, List, MutableMapping, Tuple, Union
 
 import cupy
 import numpy as np
@@ -206,7 +206,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ``MultiIndex`` instance
 
         Returns
-        --------
+        -------
         None or MultiIndex
 
         Examples
@@ -281,11 +281,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def _from_data(
         cls,
         data: MutableMapping,
-        index: Optional[cudf.core.index.BaseIndex] = None,
         name: Any = None,
     ) -> MultiIndex:
-        assert index is None
-        obj = cls.from_frame(cudf.DataFrame._from_data(data))
+        obj = cls.from_frame(cudf.DataFrame._from_data(data=data))
         if name is not None:
             obj.name = name
         return obj
@@ -593,7 +591,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             CuPy array of boolean values.
 
         Notes
-        -------
+        -----
         When `level` is None, `values` can only be MultiIndex, or a
         set/list-like tuples.
         When `level` is provided, `values` can be Index or MultiIndex,
@@ -872,7 +870,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def __eq__(self, other):
         if isinstance(other, MultiIndex):
             for self_col, other_col in zip(
-                self._data.values(), other._data.values(),
+                self._data.values(),
+                other._data.values(),
             ):
                 if not self_col.equals(other_col):
                     return False
@@ -1475,7 +1474,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
-        usage = sum(super().memory_usage(deep=deep).values())
+        usage = sum(col.memory_usage for col in self._data.columns)
         if self.levels:
             for level in self.levels:
                 usage += level.memory_usage(deep=deep)
@@ -1681,9 +1680,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         partial_index = self.__class__._from_data(
             data=self._data.select_by_index(slice(key_as_table._num_columns))
         )
-        (lower_bound, upper_bound, sort_inds,) = _lexsorted_equal_range(
-            partial_index, key_as_table, is_sorted
-        )
+        (
+            lower_bound,
+            upper_bound,
+            sort_inds,
+        ) = _lexsorted_equal_range(partial_index, key_as_table, is_sorted)
 
         if lower_bound == upper_bound:
             raise KeyError(key)
@@ -1830,3 +1831,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 index_columns.append(col)
                 index_names.append(name)
         return data_columns, index_columns, data_names, index_names
+
+    def repeat(self, repeats, axis=None):
+        return self._from_columns_like_self(
+            Frame._repeat([*self._columns], repeats, axis), self._column_names
+        )

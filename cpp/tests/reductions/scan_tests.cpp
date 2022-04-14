@@ -25,7 +25,9 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <numeric>
@@ -126,10 +128,7 @@ struct ScanTest : public BaseScanTest<T> {
       switch (agg->kind) {
         case aggregation::MIN: return std::string{"\xF7\xBF\xBF\xBF"};
         case aggregation::MAX: return std::string{};
-        default: {
-          CUDF_FAIL("Unsupported aggregation");
-          return HostType{};
-        }
+        default: CUDF_FAIL("Unsupported aggregation");
       }
     } else {
       switch (agg->kind) {
@@ -137,10 +136,7 @@ struct ScanTest : public BaseScanTest<T> {
         case aggregation::PRODUCT: return HostType{1};
         case aggregation::MIN: return std::numeric_limits<HostType>::max();
         case aggregation::MAX: return std::numeric_limits<HostType>::lowest();
-        default: {
-          CUDF_FAIL("Unsupported aggregation");
-          return HostType{};
-        }
+        default: CUDF_FAIL("Unsupported aggregation");
       }
     }
   }

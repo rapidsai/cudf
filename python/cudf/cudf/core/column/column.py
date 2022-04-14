@@ -41,10 +41,9 @@ from cudf._lib.stream_compaction import (
     drop_nulls,
 )
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    _is_scalar_or_zero_d_array,
     infer_dtype,
     is_bool_dtype,
     is_categorical_dtype,
@@ -68,7 +67,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.core.mixins import Reducible
+from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.utils import utils
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
@@ -78,7 +77,7 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import NotIterable, mask_dtype
+from cudf.utils.utils import _array_ufunc, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 # TODO: This workaround allows type hints for `slice`, since `slice` is a
@@ -86,7 +85,7 @@ T = TypeVar("T", bound="ColumnBase")
 Slice = TypeVar("Slice", bound=slice)
 
 
-class ColumnBase(Column, Serializable, Reducible, NotIterable):
+class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     _VALID_REDUCTIONS = {
         "any",
         "all",
@@ -185,7 +184,10 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             return False
         if check_dtypes and (self.dtype != other.dtype):
             return False
-        return self.binary_operator("NULL_EQUALS", other).all()
+        ret = self._binaryop(other, "NULL_EQUALS")
+        if ret is NotImplemented:
+            raise TypeError(f"Cannot compare equality with {type(other)}")
+        return ret.all()
 
     def all(self, skipna: bool = True) -> bool:
         # The skipna argument is only used for numerical columns.
@@ -339,14 +341,6 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         return self
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
-        # libcudf currently doesn't handle case when offset > len(df)
-        # ticket to fix the bug in link below:
-        # https://github.com/rapidsai/cudf/issues/10314
-        if abs(offset) > len(self):
-            if fill_value is None:
-                return column_empty_like(self, masked=True)
-            else:
-                return full(len(self), fill_value, dtype=self.dtype)
         return libcudf.copying.shift(self, offset, fill_value)
 
     @property
@@ -475,22 +469,6 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             )
             return self.take(gather_map)
 
-    def __getitem__(self, arg) -> Union[ScalarLike, ColumnBase]:
-        if _is_scalar_or_zero_d_array(arg):
-            return self.element_indexing(int(arg))
-        elif isinstance(arg, slice):
-            start, stop, stride = arg.indices(len(self))
-            return self.slice(start, stop, stride)
-        else:
-            arg = as_column(arg)
-            if len(arg) == 0:
-                arg = as_column([], dtype="int32")
-            if is_integer_dtype(arg.dtype):
-                return self.take(arg)
-            if is_bool_dtype(arg.dtype):
-                return self.apply_boolean_mask(arg)
-            raise NotImplementedError(type(arg))
-
     def __setitem__(self, key: Any, value: Any):
         """
         Set the value of ``self[key]`` to ``value``.
@@ -518,6 +496,13 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         if out:
             self._mimic_inplace(out, inplace=True)
 
+    def _wrap_binop_normalization(self, other):
+        if other is cudf.NA or other is None:
+            return cudf.Scalar(other, dtype=self.dtype)
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
+        return self.normalize_binop_value(other)
+
     def _scatter_by_slice(
         self, key: Slice, value: Union[cudf.core.scalar.Scalar, ColumnBase]
     ) -> Optional[ColumnBase]:
@@ -541,7 +526,10 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
 
         # step != 1, create a scatter map with arange
         scatter_map = arange(
-            start=start, stop=stop, step=step, dtype=cudf.dtype(np.int32),
+            start=start,
+            stop=stop,
+            step=step,
+            dtype=cudf.dtype(np.int32),
         )
 
         return self._scatter_by_column(scatter_map, value)
@@ -608,7 +596,10 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
                 raise ValueError(msg)
 
     def fillna(
-        self: T, value: Any = None, method: str = None, dtype: Dtype = None,
+        self: T,
+        value: Any = None,
+        method: str = None,
+        dtype: Dtype = None,
     ) -> T:
         """Fill null values with ``value``.
 
@@ -668,7 +659,11 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
         return concat_columns([self, as_column(other)])
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self,
+        q: np.ndarray,
+        interpolation: str,
+        exact: bool,
+        return_scalar: bool,
     ) -> ColumnBase:
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
@@ -828,7 +823,9 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             raise ValueError(f"Invalid value for side: {side}")
 
     def sort_by_values(
-        self: ColumnBase, ascending: bool = True, na_position: str = "last",
+        self: ColumnBase,
+        ascending: bool = True,
+        na_position: str = "last",
     ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
         col_inds = self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
@@ -1004,13 +1001,6 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             "consider using .to_arrow()"
         )
 
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed. To explicitly construct a host array, consider using "
-            ".to_numpy()"
-        )
-
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
@@ -1018,50 +1008,8 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
             "`__cuda_array_interface__`"
         )
 
-    def __add__(self, other):
-        return self.binary_operator("add", other)
-
-    def __sub__(self, other):
-        return self.binary_operator("sub", other)
-
-    def __mul__(self, other):
-        return self.binary_operator("mul", other)
-
-    def __eq__(self, other):
-        return self.binary_operator("eq", other)
-
-    def __ne__(self, other):
-        return self.binary_operator("ne", other)
-
-    def __or__(self, other):
-        return self.binary_operator("or", other)
-
-    def __and__(self, other):
-        return self.binary_operator("and", other)
-
-    def __floordiv__(self, other):
-        return self.binary_operator("floordiv", other)
-
-    def __truediv__(self, other):
-        return self.binary_operator("truediv", other)
-
-    def __mod__(self, other):
-        return self.binary_operator("mod", other)
-
-    def __pow__(self, other):
-        return self.binary_operator("pow", other)
-
-    def __lt__(self, other):
-        return self.binary_operator("lt", other)
-
-    def __gt__(self, other):
-        return self.binary_operator("gt", other)
-
-    def __le__(self, other):
-        return self.binary_operator("le", other)
-
-    def __ge__(self, other):
-        return self.binary_operator("ge", other)
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        return _array_ufunc(self, ufunc, method, inputs, kwargs)
 
     def searchsorted(
         self,
@@ -1120,14 +1068,6 @@ class ColumnBase(Column, Serializable, Reducible, NotIterable):
     def unary_operator(self, unaryop: str):
         raise TypeError(
             f"Operation {unaryop} not supported for dtype {self.dtype}."
-        )
-
-    def binary_operator(
-        self, op: str, other: BinaryOperand, reflect: bool = False
-    ) -> ColumnBase:
-        raise TypeError(
-            f"Operation {op} not supported between dtypes {self.dtype} and "
-            f"{other.dtype}."
         )
 
     def normalize_binop_value(
@@ -1918,7 +1858,8 @@ def as_column(
             # changing from pd array to series,possible arrow bug
             interval_series = pd.Series(arbitrary)
             data = as_column(
-                pa.Array.from_pandas(interval_series), dtype=arbitrary.dtype,
+                pa.Array.from_pandas(interval_series),
+                dtype=arbitrary.dtype,
             )
             if dtype is not None:
                 data = data.astype(dtype)
@@ -2143,7 +2084,11 @@ def _construct_array(
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary) in ("mixed", "mixed-integer",)
+            and infer_dtype(arbitrary)
+            in (
+                "mixed",
+                "mixed-integer",
+            )
         ):
             native_dtype = "object"
         arbitrary = np.asarray(
