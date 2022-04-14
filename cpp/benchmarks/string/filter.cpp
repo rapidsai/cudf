@@ -18,13 +18,13 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/translate.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
 
 #include <limits>
 #include <vector>

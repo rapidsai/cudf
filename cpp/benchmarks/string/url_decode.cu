@@ -17,13 +17,13 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>

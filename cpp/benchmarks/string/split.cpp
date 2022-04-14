@@ -18,11 +18,11 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <cudf_test/column_wrapper.hpp>
 
 #include <limits>
 

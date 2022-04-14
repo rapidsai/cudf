@@ -16,9 +16,9 @@
 
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 
-#include <cudf/detail/sorting.hpp>
-
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/detail/sorting.hpp>
 
 #include <nvbench/nvbench.cuh>
 

@@ -19,11 +19,12 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <limits>
 
