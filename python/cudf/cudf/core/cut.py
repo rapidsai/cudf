@@ -1,3 +1,5 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 from collections.abc import Sequence
 
 import cupy
@@ -27,6 +29,7 @@ def cut(
     Use cut when you need to segment and sort data values into bins. This
     function is also useful for going from a continuous variable to a
     categorical variable.
+
     Parameters
     ----------
     x : array-like
@@ -56,6 +59,7 @@ def cut(
         Categorical and Series (with Categorical dtype). If True,
         the resulting categorical will be ordered. If False, the resulting
         categorical will be unordered (labels must be provided).
+
     Returns
     -------
     out : CategoricalIndex
@@ -66,6 +70,7 @@ def cut(
         For scalar or sequence bins, this is an ndarray with the computed
         bins. If set duplicates=drop, bins will drop non-unique bin. For
         an IntervalIndex bins, this is equal to bins.
+
     Examples
     --------
     Discretize into three equal-sized bins.
