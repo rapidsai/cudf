@@ -82,7 +82,7 @@ class SingleColumnFrame(Frame, NotIterable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def ndim(self):
-        """Get the dimensionality (always 1 for single-columned frames)."""
+        """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
     @property  # type: ignore
