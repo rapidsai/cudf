@@ -30,7 +30,7 @@ namespace jni {
 constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
 
 constexpr char const *CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
-constexpr char const *FATAL_CUDA_ERROR_CLASS = "ai/rapids/cudf/FatalCudaException";
+constexpr char const *FATAL_CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaFatalException";
 constexpr char const *CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
 constexpr char const *INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
 constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";

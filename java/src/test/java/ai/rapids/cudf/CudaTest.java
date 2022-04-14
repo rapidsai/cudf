@@ -37,7 +37,7 @@ public class CudaTest {
     assertThrows(CudaException.class, () -> {
           try {
             Cuda.memset(Long.MAX_VALUE, (byte) 0, 1024);
-          } catch (FatalCudaException ignored) {
+          } catch (CudaFatalException ignored) {
           } catch (CudaException ex) {
             assertEquals(CudaException.CudaError.cudaErrorInvalidValue, ex.cudaError);
             throw ex;

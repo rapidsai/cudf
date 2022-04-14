@@ -16,16 +16,16 @@
 package ai.rapids.cudf;
 
 /**
- * FatalCudaException is a kind of CudaException which leaves the process in an inconsistent state
+ * CudaFatalException is a kind of CudaException which leaves the process in an inconsistent state
  * and any further CUDA work will return the same error.
  * To continue using CUDA, the process must be terminated and relaunched.
  */
-public class FatalCudaException extends CudaException {
-  FatalCudaException(String message) {
+public class CudaFatalException extends CudaException {
+  CudaFatalException(String message) {
     super(message);
   }
 
-  FatalCudaException(String message, Throwable cause) {
+  CudaFatalException(String message, Throwable cause) {
     super(message, cause);
   }
 }
