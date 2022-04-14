@@ -7,7 +7,7 @@ from cudf._lib.cpp.ast cimport column_reference, expression, literal, operation
 from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
 
 # Since Cython <3 doesn't support scoped enumerations but attempts to work with
-# the underlying value of an enum, typedefing this to cast seems unavoidable.
+# the underlying value of an enum, we will need this ctypedef for casting.
 ctypedef int32_t underlying_type_ast_operator
 
 
