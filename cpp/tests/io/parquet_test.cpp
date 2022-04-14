@@ -3206,25 +3206,4 @@ TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
                cudf::logic_error);
 }
 
-TYPED_TEST(ParquetWriterSchemaTest, FieldID)
-{
-  column_wrapper<TypeParam> col;
-  std::vector<std::unique_ptr<column>> cols;
-  cols.push_back(col.release());
-  auto expected = std::make_unique<table>(std::move(cols));
-
-  cudf_io::table_input_metadata expected_metadata(*expected);
-  auto constexpr gold = 825;
-  expected_metadata.column_metadata[0].set_parquet_field_id(gold);
-
-  auto filepath = temp_env->get_temp_filepath("FieldID.parquet");
-  cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
-      .metadata(&expected_metadata);
-
-  auto got_metadata = out_opts.get_metadata();
-  EXPECT_TRUE(got_metadata->column_metadata[0].is_parquet_field_id_set());
-  EXPECT_EQ(gold, got_metadata->column_metadata[0].get_parquet_field_id());
-}
-
 CUDF_TEST_PROGRAM_MAIN()
