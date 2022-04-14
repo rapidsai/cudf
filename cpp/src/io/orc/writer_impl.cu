@@ -1215,7 +1215,18 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
     return rowgroup_blobs;
   }();
 
+  hostdevice_vector<uint8_t> stripe_data =
+    allocate_and_encode_blobs(stripe_merge, stripe_chunks, num_stripe_blobs, stream);
+
+  std::vector<ColStatsBlob> stripe_blobs(num_stripe_blobs);
+  for (size_t i = 0; i < num_stripe_blobs; i++) {
+    auto const stat_begin = stripe_data.host_ptr(stripe_stat_merge[i].start_chunk);
+    auto const stat_end   = stat_begin + stripe_stat_merge[i].num_chunks;
+    stripe_blobs[i].assign(stat_begin, stat_end);
+  }
+
   return {std::move(rowgroup_blobs),
+          std::move(stripe_blobs),
           std::move(stripe_chunks),
           std::move(stripe_merge),
           std::move(col_stats_dtypes),
@@ -1285,15 +1296,6 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
   hostdevice_vector<uint8_t> blobs =
     allocate_and_encode_blobs(stats_merge, stat_chunks, num_blobs, stream);
 
-  auto stripe_stat_merge = stats_merge.host_ptr();
-
-  std::vector<ColStatsBlob> stripe_blobs(num_stripe_blobs);
-  for (size_t i = 0; i < num_stripe_blobs; i++) {
-    auto const stat_begin = blobs.host_ptr(stripe_stat_merge[i].start_chunk);
-    auto const stat_end   = stat_begin + stripe_stat_merge[i].num_chunks;
-    stripe_blobs[i].assign(stat_begin, stat_end);
-  }
-
   std::vector<ColStatsBlob> file_blobs(single_write_mode ? num_file_blobs : 0);
   if (single_write_mode) {
     auto file_stat_merge = stats_merge.host_ptr(num_stripe_blobs);
@@ -1304,7 +1306,7 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
     }
   }
 
-  return {std::move(stripe_blobs), std::move(file_blobs)};
+  return {std::move(file_blobs)};
 }
 
 void writer::impl::write_index_stream(int32_t stripe_id,
