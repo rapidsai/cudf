@@ -2660,11 +2660,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis != 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        if not all(is_numeric_dtype(i) for i in self.dtypes):
-            raise NotImplementedError(
-                "DataFrame.diff only supports numeric dtypes"
-            )
-
         if abs(periods) > len(self):
             df = cudf.DataFrame._from_data(
                 {
