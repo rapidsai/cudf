@@ -30,7 +30,7 @@ namespace jni {
 constexpr jint MINIMUM_JNI_VERSION = JNI_VERSION_1_6;
 
 constexpr char const *CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaException";
-constexpr char const *FATAL_CUDA_ERROR_CLASS = "ai/rapids/cudf/CudaFatalException";
+constexpr char const *CUDA_FATAL_ERROR_CLASS = "ai/rapids/cudf/CudaFatalException";
 constexpr char const *CUDF_ERROR_CLASS = "ai/rapids/cudf/CudfException";
 constexpr char const *INDEX_OOB_CLASS = "java/lang/ArrayIndexOutOfBoundsException";
 constexpr char const *ILLEGAL_ARG_CLASS = "java/lang/IllegalArgumentException";
@@ -762,10 +762,19 @@ public:
     if (env->ExceptionOccurred()) {                                                                \
       return ret_val;                                                                              \
     }                                                                                              \
-    const char *e_name = cudaGetErrorName(e.error_code());                                         \
-    std::string full_msg =                                                                         \
-        std::string("CUDA ERROR [") + e_name + "]: " + (e.what() == nullptr ? "" : e.what());      \
-    JNI_THROW_NEW(env, class_name, full_msg.c_str(), ret_val)                                      \
+    std::string n_msg = std::string("CUDA ERROR: ") + (e.what() == nullptr ? "" : e.what());       \
+    jstring j_msg = env->NewStringUTF(n_msg.c_str());                                              \
+    const char *n_name = cudaGetErrorName(e.error_code());                                         \
+    jstring j_name = env->NewStringUTF(n_name);                                                    \
+    jclass ex_class = env->FindClass(class_name);                                                  \
+    jmethodID ctor_id =                                                                            \
+        env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V");           \
+    if (ctor_id == NULL) {                                                                         \
+      return ret_val;                                                                              \
+    }                                                                                              \
+    jobject cuda_error = env->NewObject(ex_class, ctor_id, j_msg, j_name);                         \
+    env->Throw((jthrowable)cuda_error);                                                            \
+    return ret_val;                                                                                \
   } while (0)
 
 #define JNI_CUDA_TRY(env, ret_val, call)                                                           \
@@ -812,7 +821,7 @@ public:
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
   catch (const cudf::fatal_cuda_error &e) {                                                        \
-    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, cudf::jni::FATAL_CUDA_ERROR_CLASS, e, ret_val);            \
+    JNI_CHECK_THROW_NEW_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e, ret_val);            \
   }                                                                                                \
   catch (const cudf::cuda_error &e) {                                                              \
     JNI_CHECK_THROW_NEW_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                  \

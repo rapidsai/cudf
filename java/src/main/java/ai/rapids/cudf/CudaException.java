@@ -28,23 +28,17 @@ package ai.rapids.cudf;
  * don't switch between threads for different parts of processing that can be retried as a chunk.
  */
 public class CudaException extends RuntimeException {
-  CudaException(String message) {
+  CudaException(String message, String cudaErrorName) {
     super(message);
-    cudaError = extractCudaError(message);
+    cudaError = CudaError.valueOf(cudaErrorName);
   }
 
-  CudaException(String message, Throwable cause) {
+  CudaException(String message, String cudaErrorName, Throwable cause) {
     super(message, cause);
-    cudaError = extractCudaError(message);
+    cudaError = CudaError.valueOf(cudaErrorName);
   }
 
   public final CudaError cudaError;
-
-  private static CudaError extractCudaError(String msg) {
-    int startIdx = msg.indexOf('[');
-    int endIdx = msg.indexOf(']');
-    return CudaError.valueOf(msg.substring(startIdx + 1, endIdx));
-  }
 
   /**
    * The Java mirror of cudaError, which facilities the tracking of CUDA errors in JVM.
