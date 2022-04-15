@@ -129,10 +129,11 @@ std::unique_ptr<column> string_simple_segmented_reduction(column_view const& col
   auto it                 = thrust::make_counting_iterator(0);
   auto const num_segments = static_cast<size_type>(offsets.size()) - 1;
 
-  bool const is_argmin = std::is_same_v<Op, cudf::reduction::op::min>;
+  bool constexpr is_argmin = std::is_same_v<Op, cudf::reduction::op::min>;
   auto string_comparator =
     element_arg_minmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
-  auto const identity = is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
+  auto constexpr identity =
+    is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
 
   auto gather_map =
     cudf::reduction::detail::segmented_reduce(it,
