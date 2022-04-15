@@ -149,6 +149,7 @@ Computations / descriptive stats
    DataFrame.round
    DataFrame.skew
    DataFrame.sum
+   DataFrame.sum_of_squares
    DataFrame.std
    DataFrame.var
    DataFrame.nunique
@@ -248,9 +249,11 @@ Serialization / IO / conversion
    DataFrame.to_dlpack
    DataFrame.to_parquet
    DataFrame.to_csv
+   DataFrame.to_cupy
    DataFrame.to_hdf
    DataFrame.to_dict
    DataFrame.to_json
+   DataFrame.to_numpy
    DataFrame.to_pandas
    DataFrame.to_feather
    DataFrame.to_records

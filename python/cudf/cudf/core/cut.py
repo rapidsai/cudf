@@ -64,6 +64,7 @@ def cut(
         Categorical and Series (with Categorical dtype). If True,
         the resulting categorical will be ordered. If False, the resulting
         categorical will be unordered (labels must be provided).
+
     Returns
     -------
     out : CategoricalIndex
