@@ -1365,11 +1365,14 @@ class Frame(BinaryOperand, Scannable):
             if source.empty:
                 return source.astype("float64")
 
-        data, index = libcudf.sort.rank_columns(
-            source, method_enum, na_option, ascending, pct
+        result_columns = libcudf.sort.rank_columns(
+            [*source._columns], method_enum, na_option, ascending, pct
         )
 
-        return self._from_data(data, index).astype(np.float64)
+        return self.__class__._from_data(
+            dict(zip(source._column_names, result_columns)),
+            index=source._index,
+        ).astype(np.float64)
 
     @_cudf_nvtx_annotate
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):

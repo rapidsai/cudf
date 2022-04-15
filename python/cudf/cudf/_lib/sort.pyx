@@ -21,12 +21,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport null_order, null_policy, order
 from cudf._lib.sort cimport underlying_type_t_rank_method
-from cudf._lib.utils cimport (
-    columns_from_unique_ptr,
-    data_from_unique_ptr,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def is_sorted(
@@ -203,15 +198,13 @@ class RankMethod(IntEnum):
     DENSE = < underlying_type_t_rank_method > rank_method.DENSE
 
 
-def rank_columns(source_table, object method, str na_option,
+def rank_columns(list source_columns, object method, str na_option,
                  bool ascending, bool pct
                  ):
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
-    cdef table_view source_table_view = table_view_from_table(
-        source_table, ignore_index=True
-    )
+    cdef table_view source_table_view = table_view_from_columns(source_columns)
 
     cdef rank_method c_rank_method = < rank_method > (
         < underlying_type_t_rank_method > method
@@ -251,7 +244,7 @@ def rank_columns(source_table, object method, str na_option,
     cdef vector[unique_ptr[column]] c_results
     cdef column_view c_view
     cdef Column col
-    for col in source_table._columns:
+    for col in source_columns:
         c_view = col.view()
         with nogil:
             c_results.push_back(move(
@@ -265,11 +258,6 @@ def rank_columns(source_table, object method, str na_option,
                 )
             ))
 
-    cdef unique_ptr[table] c_result
-    c_result.reset(new table(move(c_results)))
-    data, _ = data_from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=None
-    )
-    return data, source_table._index
+    return [Column.from_unique_ptr(
+        move(c_results[i])
+    ) for i in range(c_results.size())]
