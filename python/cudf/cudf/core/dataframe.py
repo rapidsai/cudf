@@ -3193,17 +3193,42 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Difference from pandas:
         Not supporting *copy* because default and only behavior is copy=True
         """
-        # Never transpose a MultiIndex - remove the existing columns and
-        # replace with a RangeIndex. Afterward, reassign.
-        columns = self.index.copy(deep=False)
+
         index = self._data.to_pandas_index()
+        columns = self.index.copy(deep=False)
         if self._num_columns == 0 or self._num_rows == 0:
             return DataFrame(index=index, columns=columns)
+
+        # No column from index is transposed with libcudf.
+        source_columns = [*self._columns]
+        source_dtype = source_columns[0].dtype
+        if is_categorical_dtype(source_dtype):
+            if any(not is_categorical_dtype(c.dtype) for c in source_columns):
+                raise ValueError("Columns must all have the same dtype")
+            cats = list(c.categories for c in source_columns)
+            cats = cudf.core.column.concat_columns(cats).unique()
+            source_columns = [
+                col._set_categories(cats, is_unique=True).codes
+                for col in source_columns
+            ]
+
+        if any(c.dtype != source_columns[0].dtype for c in source_columns):
+            raise ValueError("Columns must all have the same dtype")
+
+        result_columns = libcudf.transpose.transpose(source_columns)
+
+        if is_categorical_dtype(source_dtype):
+            result_columns = [
+                codes._with_type_metadata(
+                    cudf.core.dtypes.CategoricalDtype(categories=cats)
+                )
+                for codes in result_columns
+            ]
+
         # Set the old column names as the new index
         result = self.__class__._from_data(
-            # Cython renames the columns to the range [0...ncols]
-            libcudf.transpose.transpose(self),
-            as_index(index),
+            {i: col for i, col in enumerate(result_columns)},
+            index=as_index(index),
         )
         # Set the old index as the new column names
         result.columns = columns
