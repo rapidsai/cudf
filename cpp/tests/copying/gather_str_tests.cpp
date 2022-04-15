@@ -13,9 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "cudf/detail/null_mask.hpp"
+#include "cudf/strings/strings_column_view.hpp"
+#include "cudf/types.hpp"
+#include "cudf/utilities/type_dispatcher.hpp"
+#include "cudf_test/iterator_utilities.hpp"
+#include <cstdlib>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf_test/base_fixture.hpp>
@@ -24,6 +33,55 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <tests/strings/utilities.h>
+
+#include <thrust/sequence.h>
+
+namespace cudf::test {
+class GatherSanitizeStringTest : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+auto make_numeric_scalar(T const& value)
+{
+  auto ret = cudf::make_numeric_scalar(cudf::data_type{cudf::type_to_id<T>()});
+  static_cast<cudf::detail::fixed_width_scalar<T>&>(*ret).set_value(value);
+  return ret;
+}
+
+TEST_F(GatherSanitizeStringTest, Sanity)
+{
+  auto input_strings = cudf::test::strings_column_wrapper(
+    {"All", "the", "leaves", "are", "brown"},
+    iterators::no_nulls()
+  ).release();
+
+  // Set some strings to be null.
+  cudf::detail::set_null_mask(input_strings->mutable_view().null_mask(), 1, 2, false);
+  cudf::detail::set_null_mask(input_strings->mutable_view().null_mask(), 3, 4, false);
+
+  // Expected: All, X, leaves, X, brown.
+  // print(input_strings->view());
+
+  auto gather_map = [&] {
+    // auto ret = cudf::make_numeric_column(data_type{type_id::INT32}, n_rows);
+    // thrust::sequence(thrust::device, ret->mutable_view().begin<int32_t>(), ret->mutable_view().end<int32_t>(), 0);
+    // return ret;
+    return cudf::sequence(input_strings->size(), *make_numeric_scalar(0), *make_numeric_scalar(1));
+  }();
+
+  // Identity gather:
+  auto gathered = cudf::gather(cudf::table_view{{input_strings->view()}}, gather_map->view());
+  std::cout << "Identity gathered output: " << std::endl;
+  print(gathered->view().column(0));
+  auto output_strings = cudf::strings_column_view(gathered->view().column(0));
+  std::cout << "Gathered offsets: " << std::endl;
+  print(output_strings.offsets());
+  std::cout << "Gathered chars: " << std::endl;
+  print(output_strings.chars());
+
+  
+}
+}
 
 class GatherTestStr : public cudf::test::BaseFixture {
 };
