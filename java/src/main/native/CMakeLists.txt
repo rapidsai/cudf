@@ -221,7 +221,12 @@ if(CUDF_JNI_LIBCUDF_STATIC)
   set(CUDF_LINK PRIVATE -Wl,--whole-archive cudf::cudf -Wl,--no-whole-archive PUBLIC cudf::cudf)
 endif()
 
-target_link_libraries(cudfjni ${CUDF_LINK} PRIVATE nvcomp)
+# When nvcomp is installed we need to use nvcomp::nvcomp but from the cudf build directory it will
+# just be nvcomp.
+target_link_libraries(
+  cudfjni ${CUDF_LINK} PRIVATE $<TARGET_NAME_IF_EXISTS:nvcomp>
+                               $<TARGET_NAME_IF_EXISTS:nvcomp::nvcomp>
+)
 
 # ##################################################################################################
 # * cudart options --------------------------------------------------------------------------------
