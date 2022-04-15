@@ -181,7 +181,7 @@ ConfigureBench(
   REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
   reduction/reduce.cpp reduction/scan.cpp
 )
-ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu)
+ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu reduction/rank.cpp)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------

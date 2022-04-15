@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf/io/types.hpp"
 #include <benchmark/benchmark.h>
 
 #include <benchmarks/common/generate_input.hpp>
@@ -23,6 +22,7 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/orc.hpp>
+#include <cudf/io/types.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
