@@ -207,8 +207,8 @@ class device_row_comparator {
         }
 
         // Non-empty structs have been modified to only have 1 child when using this.
-        lcol = lcol.children()[0];
-        rcol = rcol.children()[0];
+        lcol = detail::structs_column_device_view(lcol).sliced_child(0);
+        rcol = detail::structs_column_device_view(rcol).sliced_child(0);
         ++depth;
       }
 

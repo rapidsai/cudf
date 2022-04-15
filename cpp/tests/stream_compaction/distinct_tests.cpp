@@ -245,6 +245,66 @@ TEST_F(Distinct, ListOfStruct)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *sorted_result);
 }
 
+TEST_F(Distinct, StructOfStruct)
+{
+  using FWCW = cudf::test::fixed_width_column_wrapper<int>;
+  using MASK = std::vector<bool>;
+
+  /*
+    `@` indicates null
+
+       /+-------------+
+       |s1{s2{a,b}, c}|
+       +--------------+
+     0 |  { {1, 1}, 5}|
+     1 |  { {1, 2}, 4}|
+     2 |  {@{2, 1}, 6}|
+     3 |  {@{2, 2}, 4}|
+     4 | @{ {2, 2}, 3}|
+     5 | @{ {1, 1}, 3}|  // Same as 4
+     6 |  { {1, 1}, 5}|  // Same as 0
+     7 |  {@{1, 1}, 4}|  // Same as 3
+     8 |  { {2, 1}, 5}|
+       +--------------+
+  */
+
+  auto col_a   = FWCW{1, 1, 2, 2, 2, 1, 1, 1, 2};
+  auto col_b   = FWCW{1, 2, 1, 2, 2, 1, 1, 1, 1};
+  auto s2_mask = MASK{1, 1, 0, 0, 1, 1, 1, 0, 1};
+  auto col_c   = FWCW{5, 4, 6, 4, 3, 3, 5, 4, 5};
+  auto s1_mask = MASK{1, 1, 1, 1, 0, 0, 1, 1, 1};
+  auto idx     = FWCW{0, 1, 2, 3, 4, 5, 6, 7, 8};
+
+  std::vector<std::unique_ptr<cudf::column>> s2_children;
+  s2_children.push_back(col_a.release());
+  s2_children.push_back(col_b.release());
+  auto s2 = cudf::test::structs_column_wrapper(std::move(s2_children), s2_mask);
+
+  std::vector<std::unique_ptr<cudf::column>> s1_children;
+  s1_children.push_back(s2.release());
+  s1_children.push_back(col_c.release());
+  auto s1 = cudf::test::structs_column_wrapper(std::move(s1_children), s1_mask);
+
+  auto input = cudf::table_view({idx, s1});
+
+  auto expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 3, 4, 8};
+  auto expect     = cudf::gather(input, expect_map);
+
+  auto result        = cudf::distinct(input, {1});
+  auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect->get_column(1), sorted_result->get_column(1));
+
+  auto sliced_input      = cudf::slice(input, {1, 7});
+  auto sliced_expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 2, 3, 4, 6};
+  auto sliced_expect     = cudf::gather(input, sliced_expect_map);
+
+  auto sliced_result        = cudf::distinct(sliced_input, {1});
+  auto sorted_sliced_result = cudf::sort_by_key(*sliced_result, sliced_result->select({0}));
+  cudf::test::print(sorted_sliced_result->get_column(1));
+  cudf::test::print(sliced_expect->get_column(1));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sliced_expect->get_column(1), sorted_sliced_result->get_column(1));
+}
+
 TEST_F(Distinct, ListOfEmptyStruct)
 {
   // 0.  []             ==
