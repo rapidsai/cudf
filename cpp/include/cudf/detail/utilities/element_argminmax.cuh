@@ -16,10 +16,6 @@
 
 #pragma once
 
-/**
- * @brief Definition of the device operators
- * @file
- */
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/types.hpp>
