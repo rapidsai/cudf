@@ -398,6 +398,14 @@ TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
 #define XXX ""  // null placeholder
 
 struct SegmentedReductionStringTest : public cudf::test::BaseFixture {
+  std::pair<strings_column_wrapper, fixed_width_column_wrapper<size_type>> input()
+  {
+    return std::pair(
+      strings_column_wrapper{
+        {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX},
+        {true, true, false, true, true, true, true, true, true, false, false, false}},
+      fixed_width_column_wrapper<size_type>{0, 1, 4, 7, 9, 9, 10, 12});
+  }
 };
 
 TEST_F(SegmentedReductionStringTest, MaxIncludeNulls)
@@ -411,10 +419,7 @@ TEST_F(SegmentedReductionStringTest, MaxIncludeNulls)
   // outputs: {"world", XXX, "rapids", "zebras", XXX, XXX, XXX}
   // output nullmask: {1, 0, 1, 1, 0, 0, 0}
 
-  strings_column_wrapper input{
-    {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX},
-    {true, true, false, true, true, true, true, true, true, false, false, false}};
-  fixed_width_column_wrapper<size_type> offsets{0, 1, 4, 7, 9, 9, 10, 12};
+  auto const [input, offsets] = this->input();
   data_type output_dtype{type_id::STRING};
 
   strings_column_wrapper expect{{"world", XXX, "rapids", "zebras", XXX, XXX, XXX},
@@ -439,10 +444,7 @@ TEST_F(SegmentedReductionStringTest, MaxExcludeNulls)
   // outputs: {"world", "cudf", "rapids", "zebras", XXX, XXX, XXX}
   // output nullmask: {1, 1, 1, 1, 0, 0, 0}
 
-  strings_column_wrapper input{
-    {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX},
-    {true, true, false, true, true, true, true, true, true, false, false, false}};
-  fixed_width_column_wrapper<size_type> offsets{0, 1, 4, 7, 9, 9, 10, 12};
+  auto const [input, offsets] = this->input();
   data_type output_dtype{type_id::STRING};
 
   strings_column_wrapper expect{{"world", "cudf", "rapids", "zebras", XXX, XXX, XXX},
@@ -467,10 +469,7 @@ TEST_F(SegmentedReductionStringTest, MinIncludeNulls)
   // outputs: {"world", XXX, "ai", "apples", XXX, XXX, XXX}
   // output nullmask: {1, 0, 1, 1, 0, 0, 0}
 
-  strings_column_wrapper input{
-    {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX},
-    {true, true, false, true, true, true, true, true, true, false, false, false}};
-  fixed_width_column_wrapper<size_type> offsets{0, 1, 4, 7, 9, 9, 10, 12};
+  auto const [input, offsets] = this->input();
   data_type output_dtype{type_id::STRING};
 
   strings_column_wrapper expect{{"world", XXX, "ai", "apples", XXX, XXX, XXX},
@@ -495,10 +494,7 @@ TEST_F(SegmentedReductionStringTest, MinExcludeNulls)
   // outputs: {"world", "", "ai", "apples", XXX, XXX, XXX}
   // output nullmask: {1, 1, 1, 1, 0, 0, 0}
 
-  strings_column_wrapper input{
-    {"world", "cudf", XXX, "", "rapids", "i am", "ai", "apples", "zebras", XXX, XXX, XXX},
-    {true, true, false, true, true, true, true, true, true, false, false, false}};
-  fixed_width_column_wrapper<size_type> offsets{0, 1, 4, 7, 9, 9, 10, 12};
+  auto const [input, offsets] = this->input();
   data_type output_dtype{type_id::STRING};
 
   strings_column_wrapper expect{{"world", "", "ai", "apples", XXX, XXX, XXX},
