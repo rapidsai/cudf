@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include "cudf/detail/iterator.cuh"
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -308,11 +307,10 @@ std::unique_ptr<cudf::column> gather(
   thrust::transform(rmm::exec_policy(stream),
                     begin,
                     end,
-                    d_strings->optional_begin<string_view>(cudf::nullate::DYNAMIC{strings.has_nulls()}),
                     d_out_offsets,
-                    [d_in_offsets, strings_count] __device__(size_type in_idx, auto const& optional) {
+                    [d_strings = *d_strings, d_in_offsets, strings_count] __device__(size_type in_idx) {
                       if (NullifyOutOfBounds && (in_idx < 0 || in_idx >= strings_count)) return 0;
-                      if (not optional.has_value()) return 0;
+                      if (not d_strings.is_valid(in_idx)) return 0;
                       return d_in_offsets[in_idx + 1] - d_in_offsets[in_idx];
                     });
 

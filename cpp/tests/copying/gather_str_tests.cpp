@@ -78,8 +78,6 @@ TEST_F(GatherSanitizeStringTest, Sanity)
   print(output_strings.offsets());
   std::cout << "Gathered chars: " << std::endl;
   print(output_strings.chars());
-
-  
 }
 }
 
