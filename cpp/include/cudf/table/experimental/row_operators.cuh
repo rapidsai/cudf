@@ -94,7 +94,7 @@ class device_row_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * @param has_nulls Indicates if either input table contains columns with nulls.
+   * @param check_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
    * @param depth Optional, device array the same length as a row that contains starting depths of
@@ -107,7 +107,7 @@ class device_row_comparator {
    * `null_order::BEFORE` for all columns.
    */
   device_row_comparator(
-    Nullate has_nulls,
+    Nullate check_nulls,
     table_device_view lhs,
     table_device_view rhs,
     std::optional<device_span<int const>> depth                  = std::nullopt,
@@ -115,7 +115,7 @@ class device_row_comparator {
     std::optional<device_span<null_order const>> null_precedence = std::nullopt) noexcept
     : _lhs{lhs},
       _rhs{rhs},
-      _nulls{has_nulls},
+      _check_nulls{check_nulls},
       _depth{depth},
       _column_order{column_order},
       _null_precedence{null_precedence}
@@ -133,19 +133,19 @@ class device_row_comparator {
      *
      * @note `lhs` and `rhs` may be the same.
      *
-     * @param has_nulls Indicates if either input column contains nulls.
+     * @param check_nulls Indicates if either input column contains nulls.
      * @param lhs The column containing the first element
      * @param rhs The column containing the second element (may be the same as lhs)
      * @param null_precedence Indicates how null values are ordered with other values
      * @param depth The depth of the column if part of a nested column @see
      * preprocessed_table::depths
      */
-    __device__ element_comparator(Nullate has_nulls,
+    __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
                                   null_order null_precedence = null_order::BEFORE,
                                   int depth                  = 0)
-      : _lhs{lhs}, _rhs{rhs}, _nulls{has_nulls}, _null_precedence{null_precedence}, _depth{depth}
+      : _lhs{lhs}, _rhs{rhs}, _nulls{check_nulls}, _null_precedence{null_precedence}, _depth{depth}
     {
     }
 
@@ -248,7 +248,7 @@ class device_row_comparator {
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
       auto const comparator =
-        element_comparator{_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
+        element_comparator{_check_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
 
       weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
@@ -264,7 +264,7 @@ class device_row_comparator {
  private:
   table_device_view const _lhs;
   table_device_view const _rhs;
-  Nullate const _nulls{};
+  Nullate const _check_nulls{};
   std::optional<device_span<int const>> const _depth;
   std::optional<device_span<order const>> const _column_order;
   std::optional<device_span<null_order const>> const _null_precedence;
@@ -453,7 +453,7 @@ class device_row_comparator {
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(
-        l.type(), element_comparator{nulls, l, r, nulls_are_equal}, lhs_index, rhs_index);
+        l.type(), element_comparator{check_nulls, l, r, nulls_are_equal}, lhs_index, rhs_index);
     };
 
     return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
@@ -464,16 +464,16 @@ class device_row_comparator {
    * @brief Construct a function object for performing equality comparison between the rows of two
    * tables.
    *
-   * @param has_nulls Indicates if either input table contains columns with nulls.
+   * @param check_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    */
-  device_row_comparator(Nullate has_nulls,
+  device_row_comparator(Nullate check_nulls,
                         table_device_view lhs,
                         table_device_view rhs,
                         null_equality nulls_are_equal = null_equality::EQUAL) noexcept
-    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
+    : lhs{lhs}, rhs{rhs}, check_nulls{check_nulls}, nulls_are_equal{nulls_are_equal}
   {
   }
 
@@ -488,16 +488,16 @@ class device_row_comparator {
      *
      * @note `lhs` and `rhs` may be the same.
      *
-     * @param has_nulls Indicates if either input column contains nulls.
+     * @param check_nulls Indicates if either input column contains nulls.
      * @param lhs The column containing the first element
      * @param rhs The column containing the second element (may be the same as lhs)
      * @param nulls_are_equal Indicates if two null elements are treated as equivalent
      */
-    __device__ element_comparator(Nullate has_nulls,
+    __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
                                   null_equality nulls_are_equal = null_equality::EQUAL) noexcept
-      : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
+      : lhs{lhs}, rhs{rhs}, check_nulls{check_nulls}, nulls_are_equal{nulls_are_equal}
     {
     }
 
@@ -513,7 +513,7 @@ class device_row_comparator {
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
-      if (nulls) {
+      if (check_nulls) {
         bool const lhs_is_null{lhs.is_null(lhs_element_index)};
         bool const rhs_is_null{rhs.is_null(rhs_element_index)};
         if (lhs_is_null and rhs_is_null) {
@@ -543,7 +543,7 @@ class device_row_comparator {
       column_device_view lcol = lhs.slice(lhs_element_index, 1);
       column_device_view rcol = rhs.slice(rhs_element_index, 1);
       while (is_nested(lcol.type())) {
-        if (nulls) {
+        if (check_nulls) {
           auto lvalid = detail::make_validity_iterator<true>(lcol);
           auto rvalid = detail::make_validity_iterator<true>(rcol);
           if (nulls_are_equal == null_equality::UNEQUAL) {
@@ -580,8 +580,8 @@ class device_row_comparator {
         }
       }
 
-      auto comp =
-        column_comparator{element_comparator{nulls, lcol, rcol, nulls_are_equal}, lcol.size()};
+      auto comp = column_comparator{element_comparator{check_nulls, lcol, rcol, nulls_are_equal},
+                                    lcol.size()};
       return type_dispatcher<dispatch_void_if_nested>(lcol.type(), comp);
     }
 
@@ -622,13 +622,13 @@ class device_row_comparator {
 
     column_device_view const lhs;
     column_device_view const rhs;
-    Nullate const nulls;
+    Nullate const check_nulls;
     null_equality const nulls_are_equal;
   };
 
   table_device_view const lhs;
   table_device_view const rhs;
-  Nullate const nulls;
+  Nullate const check_nulls;
   null_equality const nulls_are_equal;
 };
 
@@ -733,7 +733,7 @@ class element_hasher {
     Nullate nulls,
     uint32_t seed             = DEFAULT_HASH_SEED,
     hash_value_type null_hash = std::numeric_limits<hash_value_type>::max()) noexcept
-    : _has_nulls(nulls), _seed(seed), _null_hash(null_hash)
+    : _check_nulls(nulls), _seed(seed), _null_hash(null_hash)
   {
   }
 
@@ -741,7 +741,7 @@ class element_hasher {
   __device__ hash_value_type operator()(column_device_view const& col,
                                         size_type row_index) const noexcept
   {
-    if (_has_nulls && col.is_null(row_index)) { return _null_hash; }
+    if (_check_nulls && col.is_null(row_index)) { return _null_hash; }
     return hash_function<T>{_seed}(col.element<T>(row_index));
   }
 
@@ -754,7 +754,7 @@ class element_hasher {
 
   uint32_t _seed;
   hash_value_type _null_hash;
-  Nullate _has_nulls;
+  Nullate _check_nulls;
 };
 
 /**
@@ -777,13 +777,13 @@ class device_row_hasher {
       cudf::detail::hash_combine(hash_value_type{0},
                                  type_dispatcher<dispatch_storage_type>(
                                    _table.column(0).type(),
-                                   element_hasher_adapter<hash_function>{_has_nulls, _seed},
+                                   element_hasher_adapter<hash_function>{_check_nulls, _seed},
                                    _table.column(0),
                                    row_index));
 
     auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
       return cudf::type_dispatcher<dispatch_storage_type>(
-        column.type(), element_hasher_adapter<hash_function>{_has_nulls}, column, row_index);
+        column.type(), element_hasher_adapter<hash_function>{_check_nulls}, column, row_index);
     });
 
     // Hash each element and combine all the hash values together
@@ -865,15 +865,15 @@ class device_row_hasher {
     Nullate _has_nulls;
   };
 
-  CUDF_HOST_DEVICE device_row_hasher(Nullate has_nulls,
+  CUDF_HOST_DEVICE device_row_hasher(Nullate check_nulls,
                                      table_device_view t,
                                      uint32_t seed = DEFAULT_HASH_SEED) noexcept
-    : _table{t}, _seed(seed), _has_nulls{has_nulls}
+    : _table{t}, _seed(seed), _check_nulls{check_nulls}
   {
   }
 
   table_device_view _table;
-  Nullate _has_nulls;
+  Nullate _check_nulls;
   uint32_t _seed;
 };
 
