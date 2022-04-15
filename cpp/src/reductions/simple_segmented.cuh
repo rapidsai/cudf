@@ -169,9 +169,8 @@ std::unique_ptr<column> string_simple_segmented_reduction(column_view const& col
       // Compute the logical AND of the segmented output null mask and the
       // result null mask to update the result null mask and null count.
       auto result_mview = result->mutable_view();
-      std::vector<bitmask_type const*> masks{
-        static_cast<bitmask_type const*>(result_mview.null_mask()),
-        static_cast<bitmask_type const*>(segmented_null_mask.data())};
+      std::vector masks{static_cast<bitmask_type const*>(result_mview.null_mask()),
+                        static_cast<bitmask_type const*>(segmented_null_mask.data())};
       std::vector<size_type> begin_bits{0, 0};
       auto const valid_count = cudf::detail::inplace_bitmask_and(
         device_span<bitmask_type>(static_cast<bitmask_type*>(result_mview.null_mask()),
