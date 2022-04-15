@@ -239,13 +239,10 @@ def test_misc_quantiles(data, q):
         cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
         cudf.Series([]),
         cudf.Series([-3]),
-        randomdata(
-            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
-        ),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_kurtosis(data, null_flag):
+def test_kurtosis_series(data, null_flag):
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
@@ -262,8 +259,13 @@ def test_kurtosis(data, null_flag):
     expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
+    got = data.kurt(numeric_only=False)
+    got = got if np.isscalar(got) else got.to_numpy()
+    expected = pdata.kurt(numeric_only=False)
+    np.testing.assert_array_almost_equal(got, expected)
+
     with pytest.raises(NotImplementedError):
-        data.kurt(numeric_only=False)
+        data.kurt(numeric_only=True)
 
 
 @pytest.mark.parametrize(
@@ -280,13 +282,10 @@ def test_kurtosis(data, null_flag):
         cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
         cudf.Series([]),
         cudf.Series([-3]),
-        randomdata(
-            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
-        ),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_skew(data, null_flag):
+def test_skew_series(data, null_flag):
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
@@ -298,8 +297,13 @@ def test_skew(data, null_flag):
     got = got if np.isscalar(got) else got.to_numpy()
     np.testing.assert_array_almost_equal(got, expected)
 
+    got = data.skew(numeric_only=False)
+    expected = pdata.skew(numeric_only=False)
+    got = got if np.isscalar(got) else got.to_numpy()
+    np.testing.assert_array_almost_equal(got, expected)
+
     with pytest.raises(NotImplementedError):
-        data.skew(numeric_only=False)
+        data.skew(numeric_only=True)
 
 
 @pytest.mark.parametrize("dtype", params_dtypes)
@@ -541,3 +545,62 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc_args_and_kwargs=([gsr],),
         compare_error_message=False,
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        randomdata(
+            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
+        ),
+    ],
+)
+@pytest.mark.parametrize("null_flag", [False, True])
+def test_kurtosis_df(data, null_flag):
+    pdata = data.to_pandas()
+
+    if null_flag and len(data) > 2:
+        data.iloc[[0, 2]] = None
+        pdata.iloc[[0, 2]] = None
+
+    got = data.kurtosis()
+    got = got if np.isscalar(got) else got.to_numpy()
+    expected = pdata.kurtosis()
+    np.testing.assert_array_almost_equal(got, expected)
+
+    got = data.kurt()
+    got = got if np.isscalar(got) else got.to_numpy()
+    expected = pdata.kurt()
+    np.testing.assert_array_almost_equal(got, expected)
+
+    got = data.kurt(numeric_only=True)
+    got = got if np.isscalar(got) else got.to_numpy()
+    expected = pdata.kurt(numeric_only=True)
+    np.testing.assert_array_almost_equal(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        randomdata(
+            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
+        ),
+    ],
+)
+@pytest.mark.parametrize("null_flag", [False, True])
+def test_skew_df(data, null_flag):
+    pdata = data.to_pandas()
+
+    if null_flag and len(data) > 2:
+        data.iloc[[0, 2]] = None
+        pdata.iloc[[0, 2]] = None
+
+    got = data.skew()
+    expected = pdata.skew()
+    got = got if np.isscalar(got) else got.to_numpy()
+    np.testing.assert_array_almost_equal(got, expected)
+
+    got = data.skew(numeric_only=True)
+    expected = pdata.skew(numeric_only=True)
+    got = got if np.isscalar(got) else got.to_numpy()
+    np.testing.assert_array_almost_equal(got, expected)

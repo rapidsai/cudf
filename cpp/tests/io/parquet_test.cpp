@@ -219,15 +219,21 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
   auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
+// Typed test fixture for all types
+template <typename T>
+struct ParquetWriterSchemaTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
-using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;
-TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
+TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, cudf::test::ChronoTypes);
 using SupportedTimestampTypes =
   cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
 TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
+TYPED_TEST_SUITE(ParquetWriterSchemaTest, cudf::test::AllTypes);
 
 // Base test fixture for chunked writer tests
 struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {

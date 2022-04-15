@@ -26,6 +26,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -38,7 +39,6 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-#include "cudf/utilities/traits.hpp"
 #include <queue>
 #include <vector>
 

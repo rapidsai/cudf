@@ -9098,7 +9098,7 @@ def test_groupby_cov_for_pandas_bug_case():
     ],
 )
 @pytest.mark.parametrize("periods", (-5, -1, 0, 1, 5))
-def test_diff_dataframe_numeric_dtypes(data, periods):
+def test_diff_numeric_dtypes(data, periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
@@ -9137,7 +9137,7 @@ def test_diff_decimal_dtypes(precision, scale, dtype):
     )
 
 
-def test_diff_dataframe_invalid_axis():
+def test_diff_invalid_axis():
     gdf = cudf.DataFrame(np.array([1.123, 2.343, 5.890, 0.0]))
     with pytest.raises(NotImplementedError, match="Only axis=0 is supported."):
         gdf.diff(periods=1, axis=1)
@@ -9152,16 +9152,30 @@ def test_diff_dataframe_invalid_axis():
             "string_col": ["a", "b", "c", "d", "e"],
         },
         ["a", "b", "c", "d", "e"],
-        [np.nan, None, np.nan, None],
     ],
 )
-def test_diff_dataframe_non_numeric_dypes(data):
+def test_diff_unsupported_dtypes(data):
     gdf = cudf.DataFrame(data)
     with pytest.raises(
-        NotImplementedError,
-        match="DataFrame.diff only supports numeric dtypes",
+        TypeError,
+        match=r"unsupported operand type\(s\)",
     ):
-        gdf.diff(periods=2, axis=0)
+        gdf.diff()
+
+
+def test_diff_many_dtypes():
+    pdf = pd.DataFrame(
+        {
+            "dates": pd.date_range("2020-01-01", "2020-01-06", freq="D"),
+            "bools": [True, True, True, False, True, True],
+            "floats": [1.0, 2.0, 3.5, np.nan, 5.0, -1.7],
+            "ints": [1, 2, 3, 3, 4, 5],
+            "nans_nulls": [np.nan, None, None, np.nan, np.nan, None],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.diff(), gdf.diff())
+    assert_eq(pdf.diff(periods=2), gdf.diff(periods=2))
 
 
 def test_dataframe_assign_cp_np_array():
@@ -9229,4 +9243,58 @@ def test_dataframe_pct_change(data, periods, fill_method):
     actual = gdf.pct_change(periods=periods, fill_method=fill_method)
     expected = pdf.pct_change(periods=periods, fill_method=fill_method)
 
+    assert_eq(expected, actual)
+
+
+def test_mean_timeseries():
+    gdf = cudf.datasets.timeseries()
+    pdf = gdf.to_pandas()
+
+    expected = pdf.mean(numeric_only=True)
+    actual = gdf.mean(numeric_only=True)
+
+    assert_eq(expected, actual)
+
+    with pytest.raises(TypeError):
+        gdf.mean()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+def test_std_different_dtypes(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = pdf.std(numeric_only=True)
+    actual = gdf.std(numeric_only=True)
+
+    assert_eq(expected, actual)
+
+    with pytest.raises(TypeError):
+        gdf.std()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+            "val1": ["v", "n", "k", "l", "m", "i", "y", "r", "w"],
+            "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
+        }
+    ],
+)
+def test_empty_numeric_only(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+    expected = pdf.prod(numeric_only=True)
+    actual = gdf.prod(numeric_only=True)
     assert_eq(expected, actual)
