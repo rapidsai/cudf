@@ -362,10 +362,12 @@ struct dispatch_index_of {
                              : tmp;
       }();
 
+      // todo make validity iterators for lists + child
+
       auto const child_cdv_ptr     = column_device_view::create(child, stream);
       auto const child_tdv_ptr     = table_device_view::create(child_flattened_children, stream);
       auto const keys_tdv_ptr      = table_device_view::create(keys_flattened, stream);
-      auto const key_validity_iter = cudf::detail::make_validity_iterator(*keys_dv_ptr);
+      auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
       auto const comp              = row_equality_comparator(
         nullate::DYNAMIC{has_any_nulls}, *child_tdv_ptr, *keys_tdv_ptr, null_equality::EQUAL);
 
