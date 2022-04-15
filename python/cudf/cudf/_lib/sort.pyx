@@ -145,21 +145,21 @@ def order_by(list columns_from_table, object ascending, str na_position):
     return Column.from_unique_ptr(move(c_result))
 
 
-def digitize(source_values_table, bins, bool right=False):
+def digitize(list source_columns, list bins, bool right=False):
     """
     Return the indices of the bins to which each value in source_table belongs.
 
     Parameters
     ----------
-    source_table : Input table to be binned.
-    bins : Frame containing columns of bins
+    source_columns : Input columns to be binned.
+    bins : List containing columns of bins
     right : Indicating whether the intervals include the
             right or the left bin edge.
     """
 
-    cdef table_view bins_view = table_view_from_table(bins)
-    cdef table_view source_values_table_view = table_view_from_table(
-        source_values_table
+    cdef table_view bins_view = table_view_from_columns(bins)
+    cdef table_view source_table_view = table_view_from_columns(
+        source_columns
     )
     cdef vector[order] column_order = (
         vector[order](
@@ -175,11 +175,11 @@ def digitize(source_values_table, bins, bool right=False):
     )
 
     cdef unique_ptr[column] c_result
-    if right is True:
+    if right:
         with nogil:
             c_result = move(lower_bound(
                 bins_view,
-                source_values_table_view,
+                source_table_view,
                 column_order,
                 null_precedence)
             )
@@ -187,7 +187,7 @@ def digitize(source_values_table, bins, bool right=False):
         with nogil:
             c_result = move(upper_bound(
                 bins_view,
-                source_values_table_view,
+                source_table_view,
                 column_order,
                 null_precedence)
             )
