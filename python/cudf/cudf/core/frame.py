@@ -2273,15 +2273,17 @@ class Frame(BinaryOperand, Scannable):
         # Get an int64 column consisting of the indices required to sort self
         # according to the columns specified in by.
 
-        to_sort = (
-            self
-            if by is None
-            else self._get_columns_by_label(list(by), downcast=False)
-        )
+        to_sort = [
+            *(
+                self
+                if by is None
+                else self._get_columns_by_label(list(by), downcast=False)
+            )._columns
+        ]
 
         # If given a scalar need to construct a sequence of length # of columns
         if np.isscalar(ascending):
-            ascending = [ascending] * to_sort._num_columns
+            ascending = [ascending] * len(to_sort)
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
 

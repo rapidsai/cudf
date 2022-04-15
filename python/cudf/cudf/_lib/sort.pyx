@@ -104,21 +104,21 @@ def is_sorted(
     return c_result
 
 
-def order_by(source_table, object ascending, str na_position):
+def order_by(list columns_from_table, object ascending, str na_position):
     """
-    Sorting the table ascending/descending
+    Get index to sort the table in ascending/descending order.
 
     Parameters
     ----------
-    source_table : table which will be sorted
-    ascending : list of boolean values which correspond to each column
+    columns_from_table : columns from the table which will be sorted
+    ascending : sequence of boolean values which correspond to each column
                 in source_table signifying order of each column
                 True - Ascending and False - Descending
     na_position : whether null value should show up at the "first" or "last"
                 position of **all** sorted column.
     """
-    cdef table_view source_table_view = table_view_from_table(
-        source_table, ignore_index=True
+    cdef table_view source_table_view = table_view_from_columns(
+        columns_from_table
     )
     cdef vector[order] column_order
     column_order.reserve(len(ascending))
