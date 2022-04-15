@@ -21,7 +21,6 @@ package ai.rapids.cudf;
 import ai.rapids.cudf.ColumnView.FindOptions;
 import ai.rapids.cudf.HostColumnVector.*;
 import com.google.common.collect.Lists;
-import org.apache.parquet.filter2.predicate.Operators;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
