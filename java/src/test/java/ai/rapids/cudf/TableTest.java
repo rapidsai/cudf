@@ -36,6 +36,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.junit.jupiter.api.Test;
@@ -7893,6 +7894,126 @@ public class TableTest extends CudfTestBase {
       }
       try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testParquetWriteWithFieldId() throws IOException {
+    // field IDs are:
+    // c1: -1, c2: 2, c3: 3, c31: 31, c32: 32, c4: -4, c5: not specified
+    ColumnWriterOptions.StructBuilder sBuilder =
+        structBuilder("c3", true, 3)
+            .withColumn(true, "c31", 31)
+            .withColumn(true, "c32", 32);
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withColumn(true, "c1", -1)
+        .withDecimalColumn("c2", 9, true, 2)
+        .withStructColumn(sBuilder.build())
+        .withTimestampColumn("c4", true, true, -4)
+        .withColumns( true, "c5")
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id", ".parquet");
+    try {
+      HostColumnVector.StructType structType = new HostColumnVector.StructType(
+          true,
+          new HostColumnVector.BasicType(true, DType.STRING),
+          new HostColumnVector.BasicType(true, DType.STRING));
+
+      try (Table table0 = new Table.TestBuilder()
+          .column(true, false) // c1
+          .decimal32Column(0, 298, 2473) // c2
+          .column(structType, // c3
+              new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
+          .timestampMicrosecondsColumn(1000L, 2000L) // c4
+          .column("a", "b") // c5
+          .build()) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(table0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()),
+          new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        assert (schema.getFields().get(0).getId().intValue() == -1);
+        assert (schema.getFields().get(1).getId().intValue() == 2);
+        assert (schema.getFields().get(2).getId().intValue() == 3);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(0).getId().intValue() == 31);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(1).getId().intValue() == 32);
+        assert (schema.getFields().get(3).getId().intValue() == -4);
+        assert (schema.getFields().get(4).getId() == null);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testParquetWriteWithFieldIdNestNotSpecified() throws IOException {
+    // field IDs are:
+    // c0: no field ID
+    // c1: 1
+    // c2: no field ID
+    //   c21: 21
+    //   c22: no field ID
+    // c3: 3
+    //   c31: 31
+    //   c32: no field ID
+    // c4: 0
+    ColumnWriterOptions.StructBuilder c2Builder =
+        structBuilder("c2", true)
+            .withColumn(true, "c21", 21)
+            .withColumns(true, "c22");
+    ColumnWriterOptions.StructBuilder c3Builder =
+        structBuilder("c3", true, 3)
+            .withColumn(true, "c31", 31)
+            .withColumns(true, "c32");
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withColumns(true, "c0")
+        .withDecimalColumn("c1", 9, true, 1)
+        .withStructColumn(c2Builder.build())
+        .withStructColumn(c3Builder.build())
+        .withColumn(true, "c4", 0)
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id", ".parquet");
+    try {
+      HostColumnVector.StructType structType = new HostColumnVector.StructType(
+          true,
+          new HostColumnVector.BasicType(true, DType.STRING),
+          new HostColumnVector.BasicType(true, DType.STRING));
+
+      try (Table table0 = new Table.TestBuilder()
+          .column(true, false) // c0
+          .decimal32Column(0, 298, 2473) // c1
+          .column(structType, // c2
+              new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
+          .column(structType, // c3
+              new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
+          .column("a", "b") // c4
+          .build()) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(table0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()),
+          new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        assert (schema.getFields().get(0).getId() == null);
+        assert (schema.getFields().get(1).getId().intValue() == 1);
+        assert (schema.getFields().get(2).getId() == null);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(0).getId().intValue() == 21);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(1).getId() == null);
+        assert (((GroupType) schema.getFields().get(3)).getFields().get(0).getId().intValue() == 31);
+        assert (((GroupType) schema.getFields().get(3)).getFields().get(1).getId() == null);
+        assert (schema.getFields().get(4).getId().intValue() == 0);
       }
     } finally {
       tempFile.delete();
