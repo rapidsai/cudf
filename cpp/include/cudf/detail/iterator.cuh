@@ -329,9 +329,12 @@ CUDF_HOST_DEVICE auto inline make_validity_iterator(column_device_view const& co
  *
  * For `p = *(iter + i)`, `p` is the validity of the scalar.
  *
+ * @tparam bool unused. This template parameter exists to enforce the same
+ *         template interface as @ref make_validity_iterator(column_device_view const&).
  * @param scalar_value The scalar to iterate
  * @return auto Iterator that returns scalar validity
  */
+template <bool safe = false>
 auto inline make_validity_iterator(scalar const& scalar_value)
 {
   return thrust::make_constant_iterator(scalar_value.is_valid());
