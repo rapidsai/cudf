@@ -571,8 +571,8 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-        dtype : str or numpy.dtype, optional
-            The dtype to pass to :meth:`numpy.asarray`.
+        dtype : str or :external:numpy+ref:`numpy.dtype`, optional
+            The dtype to pass to :external:numpy+ref:py:meth:`numpy.asarray`.
         copy : bool, default True
             Whether to ensure that the returned value is not a view on
             another array. This parameter must be ``True`` since cuDF must copy

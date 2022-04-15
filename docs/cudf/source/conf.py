@@ -22,6 +22,7 @@ import sys
 
 from docutils.nodes import Text
 from sphinx.addnodes import pending_xref
+
 import cudf
 
 sys.path.insert(0, os.path.abspath(cudf.__path__[0]))
@@ -231,9 +232,13 @@ def resolve_aliases(app, doctree):
 
 def ignore_internal_references(app, env, node, contnode):
     name = node.get("reftarget", None)
-    if name is not None and name in _internal_names_to_ignore:
+    if name == "cudf.core.index.GenericIndex":
+        node["reftarget"] = "cudf.Index"
+        return contnode
+    elif name is not None and name in _internal_names_to_ignore:
         node["reftarget"] = ""
         return contnode
+
 
 def process_class_docstrings(app, what, name, obj, options, lines):
     """
@@ -253,7 +258,10 @@ def process_class_docstrings(app, what, name, obj, options, lines):
 
 
 nitpick_ignore = [("py:class", "SeriesOrIndex"),]
-
+intersphinx_mapping = {
+        "numpy": ("https://numpy.org/doc/stable/", None),
+        "pyarrow": ("https://arrow.apache.org/docs/", None),
+    }
 
 def setup(app):
     app.add_css_file("params.css")
