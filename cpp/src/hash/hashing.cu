@@ -75,13 +75,13 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
         device_input.begin(),
         device_input.end(),
         seed,
-        [rindex = row_index, nulls] __device__(auto hash, auto column) {
+        [row_index, nulls] __device__(auto hash, auto column) {
           return cudf::type_dispatcher(
             column.type(),
             experimental::row::hash::element_hasher<hash_function, nullate::DYNAMIC>{
               nullate::DYNAMIC{nulls}, hash, hash},
             column,
-            rindex);
+            row_index);
         });
     });
 

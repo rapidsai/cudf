@@ -804,7 +804,8 @@ class device_row_hasher {
    */
   template <template <typename> class hash_fn>
   class element_hasher_adapter {
-    static constexpr hash_value_type NULL_HASH = std::numeric_limits<hash_value_type>::max();
+    static constexpr hash_value_type NULL_HASH     = std::numeric_limits<hash_value_type>::max();
+    static constexpr hash_value_type NON_NULL_HASH = 0;
 
    public:
     __device__ element_hasher_adapter(Nullate nulls, uint32_t seed = DEFAULT_HASH_SEED) noexcept
@@ -831,7 +832,7 @@ class device_row_hasher {
           auto validity_it = detail::make_validity_iterator<true>(curr_col);
           hash             = detail::accumulate(
             validity_it, validity_it + curr_col.size(), hash, [](auto hash, auto is_valid) {
-              return cudf::detail::hash_combine(hash, is_valid ? 0 : NULL_HASH);
+              return cudf::detail::hash_combine(hash, is_valid ? NON_NULL_HASH : NULL_HASH);
             });
         }
         if (curr_col.type().id() == type_id::STRUCT) {
@@ -843,7 +844,7 @@ class device_row_hasher {
           auto list_sizes = make_list_size_iterator(list_col);
           hash            = detail::accumulate(
             list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
-              return cudf::detail::hash_combine(hash, hash_fn<decltype(size)>{}(size));
+              return cudf::detail::hash_combine(hash, hash_fn<size_type>{}(size));
             });
           curr_col = list_col.sliced_child();
         }

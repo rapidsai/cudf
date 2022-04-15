@@ -120,7 +120,7 @@ struct null_replaced_value_accessor {
  * @brief validity accessor of column with null bitmask
  * A unary functor that returns validity at index `i`.
  *
- * @tparam safe If false, the accessor will throw logic_error if the column is not nullable. If
+ * @tparam safe If false, the accessor will throw a logic_error if the column is not nullable. If
  * true, the accessor checks for nullability and if col is not nullable, returns true.
  */
 template <bool safe = false>
@@ -311,7 +311,7 @@ auto make_pair_rep_iterator(column_device_view const& column)
  *
  * @throws cudf::logic_error if the column is not nullable and safe = false
  *
- * @tparam safe If false, the accessor with throw logic_error if the column is not nullable. If
+ * @tparam safe If false, the accessor will throw a logic_error if the column is not nullable. If
  * true, the accessor checks for nullability and if col is not nullable, returns true.
  * @param column The column to iterate
  * @return auto Iterator that returns validities of column elements.
