@@ -125,13 +125,13 @@ def order_by(list columns_from_table, object ascending, str na_position):
     cdef vector[null_order] null_precedence
     null_precedence.reserve(len(ascending))
 
-    for i in ascending:
-        if i is True:
+    for asc in ascending:
+        if asc:
             column_order.push_back(order.ASCENDING)
         else:
             column_order.push_back(order.DESCENDING)
 
-        if i ^ (na_position == "first"):
+        if asc ^ (na_position == "first"):
             null_precedence.push_back(null_order.AFTER)
         else:
             null_precedence.push_back(null_order.BEFORE)
