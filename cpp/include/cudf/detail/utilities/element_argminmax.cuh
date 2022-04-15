@@ -47,12 +47,12 @@ struct element_argminmax_fn {
     // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
     // github.com/NVIDIA/thrust/issues/1525
     // where invalid random values may be passed here by thrust::reduce_by_key
-    if (lhs_idx < 0 || lhs_idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(lhs_idx))) {
-      return rhs_idx;
-    }
-    if (rhs_idx < 0 || rhs_idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(rhs_idx))) {
-      return lhs_idx;
-    }
+    auto out_of_bound_or_null = [d_col     = &this->d_col,
+                                 has_nulls = &this->has_nulls](auto const& idx) {
+      return idx < 0 || idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(idx));
+    };
+    if (out_of_bound_or_null(lhs_idx)) { return rhs_idx; }
+    if (out_of_bound_or_null(rhs_idx)) { return lhs_idx; }
 
     // Return `lhs_idx` iff:
     //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
