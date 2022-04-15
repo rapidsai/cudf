@@ -2441,8 +2441,22 @@ class Frame(BinaryOperand, Scannable):
             Returns True, if sorted as expected by ``ascending`` and
             ``null_position``, False otherwise.
         """
+        if ascending is not None and not cudf.api.types.is_list_like(
+            ascending
+        ):
+            raise TypeError(
+                f"Expected a list-like or None for `ascending`, got "
+                f"{type(ascending)}"
+            )
+        if null_position is not None and not cudf.api.types.is_list_like(
+            null_position
+        ):
+            raise TypeError(
+                f"Expected a list-like or None for `null_position`, got "
+                f"{type(null_position)}"
+            )
         return libcudf.sort.is_sorted(
-            self, ascending=ascending, null_position=null_position
+            [*self._columns], ascending=ascending, null_position=null_position
         )
 
     @_cudf_nvtx_annotate

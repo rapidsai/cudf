@@ -1,6 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
-import pandas as pd
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -23,19 +21,24 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport null_order, null_policy, order
 from cudf._lib.sort cimport underlying_type_t_rank_method
-from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
+from cudf._lib.utils cimport (
+    columns_from_unique_ptr,
+    data_from_unique_ptr,
+    table_view_from_columns,
+    table_view_from_table,
+)
 
 
 def is_sorted(
-    source_table, object ascending=None, object null_position=None
+    list source_columns, object ascending=None, object null_position=None
 ):
     """
     Checks whether the rows of a `table` are sorted in lexicographical order.
 
     Parameters
     ----------
-    source_table : Frame
-        Frame whose columns are to be checked for sort order
+    source_columns : list of columns
+        columns to be checked for sort order
     ascending : None or list-like of booleans
         None or list-like of boolean values indicating expected sort order of
         each column. If list-like, size of list-like must be len(columns). If
@@ -58,51 +61,39 @@ def is_sorted(
     cdef vector[null_order] null_precedence
 
     if ascending is None:
-        column_order = vector[order](
-            source_table._num_columns, order.ASCENDING
-        )
-    elif pd.api.types.is_list_like(ascending):
-        if len(ascending) != source_table._num_columns:
+        column_order = vector[order](len(source_columns), order.ASCENDING)
+    else:
+        if len(ascending) != len(source_columns):
             raise ValueError(
-                f"Expected a list-like of length {source_table._num_columns}, "
+                f"Expected a list-like of length {len(source_columns)}, "
                 f"got length {len(ascending)} for `ascending`"
             )
         column_order = vector[order](
-            source_table._num_columns, order.DESCENDING
+            len(source_columns), order.DESCENDING
         )
         for idx, val in enumerate(ascending):
             if val:
                 column_order[idx] = order.ASCENDING
-    else:
-        raise TypeError(
-            f"Expected a list-like or None for `ascending`, got "
-            f"{type(ascending)}"
-        )
 
     if null_position is None:
         null_precedence = vector[null_order](
-            source_table._num_columns, null_order.AFTER
+            len(source_columns), null_order.AFTER
         )
-    elif pd.api.types.is_list_like(null_position):
-        if len(null_position) != source_table._num_columns:
+    else:
+        if len(null_position) != len(source_columns):
             raise ValueError(
-                f"Expected a list-like of length {source_table._num_columns}, "
+                f"Expected a list-like of length {len(source_columns)}, "
                 f"got length {len(null_position)} for `null_position`"
             )
         null_precedence = vector[null_order](
-            source_table._num_columns, null_order.AFTER
+            len(source_columns), null_order.AFTER
         )
         for idx, val in enumerate(null_position):
             if val:
                 null_precedence[idx] = null_order.BEFORE
-    else:
-        raise TypeError(
-            f"Expected a list-like or None for `null_position`, got "
-            f"{type(null_position)}"
-        )
 
     cdef bool c_result
-    cdef table_view source_table_view = table_view_from_table(source_table)
+    cdef table_view source_table_view = table_view_from_columns(source_columns)
     with nogil:
         c_result = cpp_is_sorted(
             source_table_view,
