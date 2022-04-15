@@ -263,6 +263,7 @@ intersphinx_mapping = {
         "pyarrow": ("https://arrow.apache.org/docs/", None),
     }
 
+
 def setup(app):
     app.add_css_file("params.css")
     app.connect("doctree-read", resolve_aliases)
