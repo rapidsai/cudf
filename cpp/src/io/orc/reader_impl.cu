@@ -25,6 +25,7 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
+#include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
@@ -39,8 +40,6 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <nvcomp/snappy.h>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -284,74 +283,6 @@ void decompress_check(device_span<gpu_inflate_status_s> stats,
   decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
 }
 
-__global__ void convert_nvcomp_status(device_span<nvcompStatus_t const> nvcomp_stats,
-                                      device_span<size_t const> actual_uncompressed_sizes,
-                                      device_span<gpu_inflate_status_s> stats)
-{
-  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < stats.size()) {
-    stats[tid].status        = nvcomp_stats[tid] == nvcompStatus_t::nvcompSuccess ? 0 : 1;
-    stats[tid].bytes_written = actual_uncompressed_sizes[tid];
-  }
-}
-
-void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
-                       device_span<gpu_inflate_status_s> comp_stat,
-                       size_t max_uncomp_page_size,
-                       rmm::cuda_stream_view stream)
-{
-  size_t num_blocks = comp_in.size();
-  size_t temp_size;
-
-  auto status =
-    nvcompBatchedSnappyDecompressGetTempSize(num_blocks, max_uncomp_page_size, &temp_size);
-  CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess == status,
-               "Unable to get scratch size for snappy decompression");
-
-  rmm::device_buffer scratch(temp_size, stream);
-  rmm::device_uvector<void const*> compressed_data_ptrs(num_blocks, stream);
-  rmm::device_uvector<size_t> compressed_data_sizes(num_blocks, stream);
-  rmm::device_uvector<void*> uncompressed_data_ptrs(num_blocks, stream);
-  rmm::device_uvector<size_t> uncompressed_data_sizes(num_blocks, stream);
-
-  rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_blocks, stream);
-  rmm::device_uvector<nvcompStatus_t> statuses(num_blocks, stream);
-
-  device_span<size_t const> actual_uncompressed_sizes_span(actual_uncompressed_data_sizes.data(),
-                                                           actual_uncompressed_data_sizes.size());
-  device_span<nvcompStatus_t const> statuses_span(statuses.data(), statuses.size());
-
-  // Prepare the vectors
-  auto comp_it = thrust::make_zip_iterator(compressed_data_ptrs.begin(),
-                                           compressed_data_sizes.begin(),
-                                           uncompressed_data_ptrs.begin(),
-                                           uncompressed_data_sizes.data());
-  thrust::transform(rmm::exec_policy(stream),
-                    comp_in.begin(),
-                    comp_in.end(),
-                    comp_it,
-                    [] __device__(gpu_inflate_input_s in) {
-                      return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice, in.dstSize);
-                    });
-
-  status = nvcompBatchedSnappyDecompressAsync(compressed_data_ptrs.data(),
-                                              compressed_data_sizes.data(),
-                                              uncompressed_data_sizes.data(),
-                                              actual_uncompressed_data_sizes.data(),
-                                              num_blocks,
-                                              scratch.data(),
-                                              scratch.size(),
-                                              uncompressed_data_ptrs.data(),
-                                              statuses.data(),
-                                              stream.value());
-  CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess == status, "unable to perform snappy decompression");
-
-  dim3 block(128);
-  dim3 grid(cudf::util::div_rounding_up_safe(num_blocks, static_cast<size_t>(block.x)));
-  convert_nvcomp_status<<<grid, block, 0, stream.value()>>>(
-    statuses_span, actual_uncompressed_sizes_span, comp_stat);
-}
-
 rmm::device_buffer reader::impl::decompress_stripe_data(
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   const std::vector<rmm::device_buffer>& stripe_data,
@@ -438,12 +369,24 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
         if (nvcomp_integration::is_stable_enabled()) {
           device_span<gpu_inflate_input_s> inflate_in_view{inflate_in.data(),
                                                            num_compressed_blocks};
-          snappy_decompress(inflate_in_view, inflate_out_view, max_uncomp_block_size, stream);
+          nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
+                                     inflate_in_view,
+                                     inflate_out_view,
+                                     max_uncomp_block_size,
+                                     stream);
         } else {
           CUDF_CUDA_TRY(
             gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
         }
         break;
+      case orc::ZSTD: {
+        device_span<gpu_inflate_input_s> inflate_in_view{inflate_in.data(), num_compressed_blocks};
+        nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
+                                   inflate_in_view,
+                                   inflate_out_view,
+                                   max_uncomp_block_size,
+                                   stream);
+      } break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
     decompress_check(inflate_out_view, any_block_failure.device_ptr(), stream);
