@@ -50,11 +50,11 @@ namespace detail {
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
  */
-template <typename Op,
-          typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          std::enable_if_t<is_fixed_width<OutputType>() &&
-                           not cudf::is_fixed_point<OutputType>()>* = nullptr>
+template <
+  typename Op,
+  typename InputIterator,
+  typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+  std::enable_if_t<is_fixed_width<OutputType>() && !cudf::is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
