@@ -7953,6 +7953,73 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testParquetWriteWithFieldIdNestNotSpecified() throws IOException {
+    // field IDs are:
+    // c0: no field ID
+    // c1: 1
+    // c2: no field ID
+    //   c21: 21
+    //   c22: no field ID
+    // c3: 3
+    //   c31: 31
+    //   c32: no field ID
+    // c4: 0
+    ColumnWriterOptions.StructBuilder c2Builder =
+        structBuilder("c2", true)
+            .withColumn(true, "c21", 21)
+            .withColumns(true, "c22");
+    ColumnWriterOptions.StructBuilder c3Builder =
+        structBuilder("c3", true, 3)
+            .withColumn(true, "c31", 31)
+            .withColumns(true, "c32");
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withColumns(true, "c0")
+        .withDecimalColumn("c1", 9, true, 1)
+        .withStructColumn(c2Builder.build())
+        .withStructColumn(c3Builder.build())
+        .withColumn(true, "c4", 0)
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id", ".parquet");
+    try {
+      HostColumnVector.StructType structType = new HostColumnVector.StructType(
+          true,
+          new HostColumnVector.BasicType(true, DType.STRING),
+          new HostColumnVector.BasicType(true, DType.STRING));
+
+      try (Table table0 = new Table.TestBuilder()
+          .column(true, false) // c0
+          .decimal32Column(0, 298, 2473) // c1
+          .column(structType, // c2
+              new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
+          .column(structType, // c3
+              new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
+          .column("a", "b") // c4
+          .build()) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(table0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()),
+          new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        assert (schema.getFields().get(0).getId() == null);
+        assert (schema.getFields().get(1).getId().intValue() == 1);
+        assert (schema.getFields().get(2).getId() == null);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(0).getId().intValue() == 21);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(1).getId() == null);
+        assert (((GroupType) schema.getFields().get(3)).getFields().get(0).getId().intValue() == 31);
+        assert (((GroupType) schema.getFields().get(3)).getFields().get(1).getId() == null);
+        assert (schema.getFields().get(4).getId().intValue() == 0);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
   /** Return a column where DECIMAL64 has been up-casted to DECIMAL128 */
   private ColumnVector castDecimal64To128(ColumnView c) {
     DType dtype = c.getType();

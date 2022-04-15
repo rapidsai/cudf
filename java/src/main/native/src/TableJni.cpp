@@ -673,6 +673,7 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
                         cudf::jni::native_jbooleanArray &is_int96,
                         cudf::jni::native_jintArray &precisions,
                         cudf::jni::native_jbooleanArray &is_map,
+                        cudf::jni::native_jbooleanArray &hasParquetFieldIds,
                         cudf::jni::native_jintArray &parquetFieldIds,
                         cudf::jni::native_jintArray &children, int num_children, int read_index) {
   int write_index = 0;
@@ -688,15 +689,15 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
     if (is_map[read_index]) {
       child.set_list_column_as_map();
     }
-    if (!parquetFieldIds.is_null()) {
+    if (!parquetFieldIds.is_null() && hasParquetFieldIds[read_index]) {
       child.set_parquet_field_id(parquetFieldIds[read_index]);
     }
     column_metadata.add_child(child);
     int childs_children = children[read_index++];
     if (childs_children > 0) {
       read_index = set_column_metadata(column_metadata.child(write_index), col_names, nullability,
-                                       is_int96, precisions, is_map, parquetFieldIds, children,
-                                       childs_children, read_index);
+                                       is_int96, precisions, is_map, hasParquetFieldIds,
+                                       parquetFieldIds, children, childs_children, read_index);
     }
   }
   return read_index;
@@ -741,9 +742,9 @@ void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_nam
     }
     int childs_children = children[read_index++];
     if (childs_children > 0) {
-      read_index = set_column_metadata(metadata.column_metadata[write_index], cpp_names,
-                                       col_nullability, is_int96, precisions, is_map,
-                                       parquetFieldIds, children, childs_children, read_index);
+      read_index = set_column_metadata(
+          metadata.column_metadata[write_index], cpp_names, col_nullability, is_int96, precisions,
+          is_map, hasParquetFieldIds, parquetFieldIds, children, childs_children, read_index);
     }
   }
 }
