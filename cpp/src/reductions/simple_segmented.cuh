@@ -147,10 +147,11 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   auto it                 = thrust::make_counting_iterator(0);
   auto const num_segments = static_cast<size_type>(offsets.size()) - 1;
 
-  bool const is_argmin = std::is_same_v<Op, cudf::reduction::op::min>;
+  bool constexpr is_argmin = std::is_same_v<Op, cudf::reduction::op::min>;
   auto string_comparator =
-    cudf::detail::element_argminmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
-  auto const identity = is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
+    element_arg_minmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
+  auto constexpr identity =
+    is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
 
   auto gather_map =
     cudf::reduction::detail::segmented_reduce(it,
@@ -186,9 +187,8 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
       // Compute the logical AND of the segmented output null mask and the
       // result null mask to update the result null mask and null count.
       auto result_mview = result->mutable_view();
-      std::vector<bitmask_type const*> masks{
-        static_cast<bitmask_type const*>(result_mview.null_mask()),
-        static_cast<bitmask_type const*>(segmented_null_mask.data())};
+      std::vector masks{static_cast<bitmask_type const*>(result_mview.null_mask()),
+                        static_cast<bitmask_type const*>(segmented_null_mask.data())};
       std::vector<size_type> begin_bits{0, 0};
       auto const valid_count = cudf::detail::inplace_bitmask_and(
         device_span<bitmask_type>(static_cast<bitmask_type*>(result_mview.null_mask()),
