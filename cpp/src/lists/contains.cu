@@ -381,7 +381,6 @@ struct dispatch_index_of {
                                 out_iter,
                                 stream);
     } else {  // other types that are not struct
-
       auto const child_cdv_ptr = column_device_view::create(child, stream);
       auto const elements_iter = cudf::detail::make_optional_iterator<Type>(
         *child_cdv_ptr, nullate::DYNAMIC{child.has_nulls()});
@@ -399,7 +398,7 @@ struct dispatch_index_of {
                                 stream);
     }
 
-    if (search_keys_have_nulls || lists.has_nulls() || child.has_nulls()) {
+    if (search_keys_have_nulls || lists.has_nulls()) {
       auto [null_mask, num_nulls] = cudf::detail::valid_if(
         out_validity.begin(), out_validity.end(), thrust::identity{}, stream, mr);
       out_positions->set_null_mask(std::move(null_mask), num_nulls);
@@ -476,7 +475,7 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
 {
   auto x = index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream);
   printf("line: %d\n", __LINE__);
-  cudf::test::print(x->view());
+  //  cudf::test::print(x->view());
 
   return to_contains(
     index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream), stream, mr);
