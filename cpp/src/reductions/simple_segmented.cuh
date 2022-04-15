@@ -149,7 +149,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
 
   bool constexpr is_argmin = std::is_same_v<Op, cudf::reduction::op::min>;
   auto string_comparator =
-    element_arg_minmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
+    cudf::detail::element_argminmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
   auto constexpr identity =
     is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
 

@@ -47,9 +47,9 @@ struct element_argminmax_fn {
     // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
     // github.com/NVIDIA/thrust/issues/1525
     // where invalid random values may be passed here by thrust::reduce_by_key
-    auto out_of_bound_or_null = [d_col     = &this->d_col,
-                                 has_nulls = &this->has_nulls](auto const& idx) {
-      return idx < 0 || idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(idx));
+    auto out_of_bound_or_null = [this] __device__(size_type const& idx) {
+      return idx < 0 || idx >= this->d_col.size() ||
+             (this->has_nulls && this->d_col.is_null_nocheck(idx));
     };
     if (out_of_bound_or_null(lhs_idx)) { return rhs_idx; }
     if (out_of_bound_or_null(rhs_idx)) { return lhs_idx; }
