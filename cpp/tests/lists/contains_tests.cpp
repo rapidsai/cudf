@@ -1250,6 +1250,74 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
   }
 }
 
+TYPED_TEST(TypedStructContainsTest, SlicedListsColumn)
+{
+  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto const lists_original = [] {
+    auto offsets = int32s_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
+    // clang-format off
+    auto data1    = tdata_col{0, 1, 2, 1,    // list0
+                              3, 4, 5,       // list1
+                              6, 7, 8,       // list2
+                              9, 0, 1, 3, 1, // list3
+                              2, 3, 4,       // list4
+                              5, 6, 7,       // list5
+                              8, 9, 0,       // list6
+                                             // list7
+                              1, 2, 1, 3     // list8
+                                             // list9
+    };
+    auto data2    = tdata_col{0, 1, 2, 3,    // list0
+                              0, 1, 2,       // list1
+                              0, 1, 2,       // list2
+                              1, 1, 2, 2, 2, // list3
+                              0, 1, 2,       // list4
+                              0, 1, 2,       // list5
+                              0, 1, 2,       // list6
+                                             // list7
+                              1, 0, 1, 1     // list8
+                                             // list9
+    };
+    // clang-format on
+
+    auto child = structs_col{{data1, data2}};
+    return make_lists_column(10, offsets.release(), child.release(), 0, {});
+  }();
+  auto const lists = cudf::slice(lists_original->view(), {3, 10})[0];
+
+  auto const key = [] {
+    auto child1 = tdata_col{1};
+    auto child2 = tdata_col{1};
+    return struct_scalar(std::vector<cudf::column_view>{child1, child2});
+  }();
+
+  {
+    // CONTAINS
+    auto const result   = lists::contains(lists, key);
+    auto const expected = bools_col{0, 0, 0, 0, 0, 1, 0};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  }
+  {
+    // CONTAINS NULLS
+    auto result   = lists::contains_nulls(lists);
+    auto expected = bools_col{0, 0, 0, 0, 0, 0, 0};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  }
+  {
+    // FIND_FIRST
+    auto result   = lists::index_of(lists, key, FIND_FIRST);
+    auto expected = int32s_col{ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  }
+  {
+    // FIND_LAST
+    auto result   = lists::index_of(lists, key, FIND_LAST);
+    auto expected = int32s_col{ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  }
+}
+
 }  // namespace test
 
 }  // namespace cudf
