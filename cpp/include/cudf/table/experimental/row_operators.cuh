@@ -81,7 +81,7 @@ namespace lexicographic {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate, bool NanConfig = false>
-class device_row_generic_comparator {
+class device_row_comparator {
   // private:
   // friend class device_row_comparator;
   // friend class template <Nullate> device_row_comparator;
@@ -102,7 +102,7 @@ class device_row_generic_comparator {
    * values compare to all other for every column. If `nullopt`, then null precedence would be
    * `null_order::BEFORE` for all columns.
    */
-  device_row_generic_comparator(
+  device_row_comparator(
     Nullate has_nulls,
     table_device_view lhs,
     table_device_view rhs,
@@ -175,13 +175,14 @@ class device_row_generic_comparator {
         }
       }
 
-      return cuda::std::make_pair(_nan_result == weak_ordering::EQUIVALENT
-                                    ? relational_compare(_lhs.element<Element>(lhs_element_index),
-                                                         _rhs.element<Element>(rhs_element_index))
-                                    : relational_compare(_lhs.element<Element>(lhs_element_index),
-                                                         _rhs.element<Element>(rhs_element_index),
-                                                         _nan_result),
-                                  std::numeric_limits<int>::max());
+      weak_ordering res = NanConfig
+                            // weak_ordering res = (_nan_result != weak_ordering::EQUIVALENT)
+                            ? relational_compare(_lhs.element<Element>(lhs_element_index),
+                                                 _rhs.element<Element>(rhs_element_index),
+                                                 _nan_result)
+                            : relational_compare(_lhs.element<Element>(lhs_element_index),
+                                                 _rhs.element<Element>(rhs_element_index));
+      return cuda::std::make_pair(res, std::numeric_limits<int>::max());
     }
 
     template <typename Element,
@@ -229,7 +230,7 @@ class device_row_generic_comparator {
     Nullate const _nulls;
     null_order const _null_precedence;
     int const _depth;
-    weak_ordering const _nan_result;
+    weak_ordering _nan_result;
   };
 
  public:
@@ -262,6 +263,7 @@ class device_row_generic_comparator {
                                        null_precedence,
                                        depth,
                                        ascending ? weak_ordering::GREATER : weak_ordering::LESS}
+
                   : element_comparator{_nulls,
                                        _lhs.column(i),
                                        _rhs.column(i),
@@ -289,7 +291,7 @@ class device_row_generic_comparator {
   std::optional<device_span<int const>> const _depth;
   std::optional<device_span<order const>> const _column_order;
   std::optional<device_span<null_order const>> const _null_precedence;
-};  // class device_row_generic_comparator
+};  // class device_row_comparator
 
 /**
  * @brief Computes whether one row is lexicographically *less* than another row.
@@ -307,9 +309,10 @@ class device_row_generic_comparator {
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate, bool NanConfig = false>
-class device_row_comparator {
+class device_less_comparator {
   friend class self_comparator;
 
+ public:
   /**
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
@@ -326,7 +329,7 @@ class device_row_comparator {
    * values compare to all other for every column. If `nullopt`, then null precedence would be
    * `null_order::BEFORE` for all columns.
    */
-  device_row_comparator(
+  device_less_comparator(
     Nullate has_nulls,
     table_device_view lhs,
     table_device_view rhs,
@@ -353,8 +356,8 @@ class device_row_comparator {
   }
 
  private:
-  device_row_generic_comparator<Nullate, NanConfig> comparator;
-};  // class device_row_comparator
+  device_row_comparator<Nullate, NanConfig> comparator;
+};  // class device_less_comparator
 
 struct preprocessed_table {
   using table_device_view_owner =
@@ -503,10 +506,10 @@ class self_comparator {
    *
    * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
    */
-  template <typename Nullate>
-  device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  template <typename Nullate, bool NanConfig = false>
+  device_less_comparator<Nullate, NanConfig> device_comparator(Nullate nullate = {}) const
   {
-    return device_row_comparator(
+    return device_less_comparator(
       nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence());
   }
 

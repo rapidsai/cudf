@@ -18,14 +18,15 @@
 
 #include <binaryop/compiled/binary_ops.hpp>
 #include <binaryop/compiled/operation.cuh>
-#include <binaryop/compiled/struct_binary_ops.cuh>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -290,9 +291,10 @@ void apply_binary_op(mutable_column_view& out,
                      rmm::cuda_stream_view stream)
 {
   if (is_struct(lhs.type()) && is_struct(rhs.type())) {
-    auto op_order = detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
-                      ? order::DESCENDING
-                      : order::ASCENDING;
+    auto op_order        = detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
+                             ? order::DESCENDING
+                             : order::ASCENDING;
+    auto accept_equality = detail::is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>;
     auto const nullability =
       structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
         ? structs::detail::column_nullability::FORCE
@@ -302,35 +304,35 @@ void apply_binary_op(mutable_column_view& out,
     auto const rhs_flattened =
       structs::detail::flatten_nested_columns(table_view{{rhs}}, {}, {}, nullability);
 
-    auto d_lhs = table_device_view::create(lhs_flattened);
-    auto d_rhs = table_device_view::create(rhs_flattened);
+    auto lhsd = table_device_view::create(lhs_flattened);
+    auto rhsd = table_device_view::create(rhs_flattened);
     auto compare_orders =
       cudf::detail::make_device_uvector_async(std::vector<order>(lhs.size(), op_order), stream);
-    detail::is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>
-      ? detail::struct_compare(
-          out,
-          row_lexicographic_or_equal_comparator<nullate::DYNAMIC, true>{
-            nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
-            *d_lhs,
-            *d_rhs,
-            compare_orders.data(),
-            nullptr},
-          is_lhs_scalar,
-          is_rhs_scalar,
-          false,
-          stream)
-      : detail::struct_compare(
-          out,
-          row_lexicographic_comparator<nullate::DYNAMIC, true>{
-            nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
-            *d_lhs,
-            *d_rhs,
-            compare_orders.data(),
-            nullptr},
-          is_lhs_scalar,
-          is_rhs_scalar,
-          false,
-          stream);
+    auto comparator =
+      experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC, true>{
+        nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
+        *lhsd,
+        *rhsd,
+        std::nullopt,
+        device_span<order const>{compare_orders},
+        std::nullopt};
+
+    auto outd = column_device_view::create(out, stream);
+    auto optional_iter =
+      cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      out.begin<bool>(),
+      out.end<bool>(),
+      [optional_iter, is_lhs_scalar, is_rhs_scalar, accept_equality, comparator] __device__(
+        size_type i) {
+        auto lhs = is_lhs_scalar ? 0 : i;
+        auto rhs = is_rhs_scalar ? 0 : i;
+        return optional_iter[i].has_value() &&
+               (accept_equality ? comparator(lhs, rhs) != weak_ordering::GREATER
+                                : comparator(lhs, rhs) == weak_ordering::LESS);
+      });
+
   } else {
     auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
 

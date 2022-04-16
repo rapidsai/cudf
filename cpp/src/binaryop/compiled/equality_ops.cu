@@ -15,7 +15,6 @@
  */
 
 #include <binaryop/compiled/binary_ops.cuh>
-#include <binaryop/compiled/struct_binary_ops.cuh>
 
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -40,22 +39,31 @@ void dispatch_equality_op(mutable_column_view& out,
       structs::detail::flatten_nested_columns(table_view{{lhs}}, {}, {}, nullability);
     auto const rhs_flattened =
       structs::detail::flatten_nested_columns(table_view{{rhs}}, {}, {}, nullability);
-    auto d_lhs = table_device_view::create(lhs_flattened);
-    auto d_rhs = table_device_view::create(rhs_flattened);
+    auto lhsd       = table_device_view::create(lhs_flattened);
+    auto rhsd       = table_device_view::create(rhs_flattened);
+    auto comparator = row_equality_comparator{
+      nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
+      *lhsd,
+      *rhsd,
+      null_equality::EQUAL,
+      nan_equality::UNEQUAL};
 
-    if (op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL)
-      detail::struct_compare(
-        out,
-        row_equality_comparator{
-          nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
-          *d_lhs,
-          *d_rhs,
-          null_equality::EQUAL,
-          nan_equality::UNEQUAL},
-        is_lhs_scalar,
-        is_rhs_scalar,
-        op == binary_operator::NOT_EQUAL,
-        stream);
+    auto outd = column_device_view::create(out, stream);
+    auto optional_iter =
+      cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out.begin<bool>(),
+                     out.end<bool>(),
+                     [optional_iter,
+                      is_lhs_scalar,
+                      is_rhs_scalar,
+                      flip_output = (op == binary_operator::NOT_EQUAL),
+                      comparator] __device__(size_type i) {
+                       auto lhs = is_lhs_scalar ? 0 : i;
+                       auto rhs = is_rhs_scalar ? 0 : i;
+                       return optional_iter[i].has_value() and
+                              (flip_output ? not comparator(lhs, rhs) : comparator(lhs, rhs));
+                     });
   } else {
     auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
     auto outd         = mutable_column_device_view::create(out, stream);
