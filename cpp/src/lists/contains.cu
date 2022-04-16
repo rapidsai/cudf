@@ -358,8 +358,9 @@ struct dispatch_index_of {
       // the input structs column.
       auto const child_flattened_children = [&] {
         auto const tmp = child_flattened.flattened_columns();
-        return has_any_nulls ? table_view{std::vector<column_view>{tmp.begin() + 1, tmp.end()}}
-                             : tmp;
+        return search_key_is_scalar && has_any_nulls
+                 ? table_view{std::vector<column_view>{tmp.begin() + 1, tmp.end()}}
+                 : tmp;
       }();
 
       // todo make validity iterators for lists + child
