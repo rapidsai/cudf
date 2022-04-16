@@ -32,6 +32,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/logical.h>
+#include <thrust/sequence.h>
+
 template <typename T>
 struct ChronoColumnTest : public cudf::test::BaseFixture {
   rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }

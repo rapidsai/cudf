@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -191,6 +191,34 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getNativeComputeMode(JNIEnv *env
     cudaDeviceProp device_prop;
     JNI_CUDA_TRY(env, -2, cudaGetDeviceProperties(&device_prop, device));
     return device_prop.computeMode;
+  }
+  CATCH_STD(env, -2);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getComputeCapabilityMajor(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    int device;
+    JNI_CUDA_TRY(env, -2, ::cudaGetDevice(&device));
+    int attribute_value;
+    JNI_CUDA_TRY(
+        env, -2,
+        ::cudaDeviceGetAttribute(&attribute_value, ::cudaDevAttrComputeCapabilityMajor, device));
+    return attribute_value;
+  }
+  CATCH_STD(env, -2);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getComputeCapabilityMinor(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    int device;
+    JNI_CUDA_TRY(env, -2, ::cudaGetDevice(&device));
+    int attribute_value;
+    JNI_CUDA_TRY(
+        env, -2,
+        ::cudaDeviceGetAttribute(&attribute_value, ::cudaDevAttrComputeCapabilityMinor, device));
+    return attribute_value;
   }
   CATCH_STD(env, -2);
 }

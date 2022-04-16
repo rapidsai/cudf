@@ -206,7 +206,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ``MultiIndex`` instance
 
         Returns
-        --------
+        -------
         None or MultiIndex
 
         Examples
@@ -591,7 +591,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             CuPy array of boolean values.
 
         Notes
-        -------
+        -----
         When `level` is None, `values` can only be MultiIndex, or a
         set/list-like tuples.
         When `level` is provided, `values` can be Index or MultiIndex,
@@ -1474,7 +1474,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
-        usage = sum(super().memory_usage(deep=deep).values())
+        usage = sum(col.memory_usage for col in self._data.columns)
         if self.levels:
             for level in self.levels:
                 usage += level.memory_usage(deep=deep)

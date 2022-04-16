@@ -27,6 +27,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 

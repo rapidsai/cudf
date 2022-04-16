@@ -138,7 +138,7 @@ ConfigureTest(
 
 # ##################################################################################################
 # * hash_map tests --------------------------------------------------------------------------------
-ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu hash_map/multimap_test.cu)
+ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu)
 
 # ##################################################################################################
 # * quantiles tests -------------------------------------------------------------------------------
@@ -156,6 +156,7 @@ ConfigureTest(
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
+  reductions/list_rank_test.cpp
   reductions/tdigest_tests.cu
 )
 

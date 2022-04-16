@@ -13,8 +13,12 @@ CSV
    read_csv
    DataFrame.to_csv
 
+Text
+~~~~
+.. autosummary::
+   :toctree: api/
 
-.. currentmodule:: cudf.io.json
+   read_text
 
 JSON
 ~~~~
@@ -22,9 +26,7 @@ JSON
    :toctree: api/
 
    read_json
-   to_json
-
-.. currentmodule:: cudf
+   DataFrame.to_json
 
 Parquet
 ~~~~~~~
@@ -42,8 +44,6 @@ ORC
 
    read_orc
    DataFrame.to_orc
-
-.. currentmodule:: cudf
 
 HDFStore: PyTables (HDF5)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -71,3 +71,9 @@ Feather
    Feather reader and writers are not GPU accelerated. These currently use CPU via Pandas.
    This may be GPU accelerated in the future.
 
+Avro
+~~~~
+.. autosummary::
+   :toctree: api/
+
+   read_avro

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 #
 # cudf documentation build configuration file, created by
 # sphinx-quickstart on Wed May  3 10:59:22 2017.
@@ -252,6 +252,7 @@ def process_class_docstrings(app, what, name, obj, options, lines):
             lines[:] = lines[:cut_index]
 
 
+nitpick_ignore = [("py:class", "SeriesOrIndex"),]
 
 
 def setup(app):

@@ -272,7 +272,7 @@ void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, for_each_kernel<decltype(f)>));
   // 2 elements per thread.
   const int grid_size = util::div_rounding_up_safe(size, 2 * block_size);
