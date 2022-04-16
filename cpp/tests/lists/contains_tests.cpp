@@ -108,7 +108,6 @@ using ContainsTestTypes = Concat<IntegralTypesNotBool, FloatingPointTypes, Chron
 struct ContainsTest : public BaseFixture {
 };
 
-#if 0
 template <typename T>
 struct TypedContainsTest : public ContainsTest {
 };
@@ -1077,14 +1076,11 @@ TYPED_TEST(TypedContainsDecimalsTest, VectorKey)
   }
 }
 
-#endif
-
 template <typename T>
 struct TypedStructContainsTest : public ContainsTest {
 };
 TYPED_TEST_SUITE(TypedStructContainsTest, ContainsTestTypes);
 
-#if 0
 TYPED_TEST(TypedStructContainsTest, EmptyInputTest)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
@@ -1520,7 +1516,6 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsNoNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
 }
-#endif
 
 TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
 {
