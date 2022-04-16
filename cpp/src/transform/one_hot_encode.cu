@@ -19,6 +19,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/strong_index.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -47,8 +48,8 @@ struct one_hot_encode_functor {
 
   bool __device__ operator()(size_type i)
   {
-    size_type const element_index  = i % _input_size;
-    size_type const category_index = i / _input_size;
+    cudf::lhs_index_type const element_index(i % _input_size);
+    cudf::rhs_index_type const category_index(i / _input_size);
     return _equality_comparator.template operator()<InputType>(element_index, category_index);
   }
 
