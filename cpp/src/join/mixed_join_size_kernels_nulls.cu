@@ -19,9 +19,7 @@
 namespace cudf {
 namespace detail {
 
-constexpr int default_join_block_size = 128;
-
-template __global__ void compute_mixed_join_output_size<default_join_block_size, true>(
+template __global__ void compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
