@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "cudf/column/column_view.hpp"
+#include <cudf/column/column_view.hpp>
 #include <cudf/sorting.hpp>
 
 #include <cudf_test/base_fixture.hpp>
