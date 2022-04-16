@@ -205,11 +205,11 @@ struct search_functor<Type, std::enable_if_t<is_struct_type<Type>()>> {
       thrust::seq,
       begin,
       end,
-      [d_child, d_offsets, comp, has_null_structs, search_key_is_scalar] __device__(
+      [d_child, d_offsets, list_idx, comp, has_null_structs, search_key_is_scalar] __device__(
         auto const idx) {
         auto const row_idx  = idx - *d_offsets;
         auto const is_valid = !has_null_structs || d_child.is_valid_nocheck(row_idx);
-        return is_valid && comp(row_idx, search_key_is_scalar ? 0 : row_idx);
+        return is_valid && comp(row_idx, search_key_is_scalar ? 0 : list_idx);
       });
     return distance<find_first>(begin, end, found_iter);
   }
