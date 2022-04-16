@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "cudf/detail/null_mask.hpp"
+#include "cudf_test/iterator_utilities.hpp"
 #include <tests/strings/utilities.h>
 
 #include <cudf/column/column_view.hpp>
@@ -438,3 +440,129 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
     }
   }
 }
+
+namespace cudf::test {
+
+using iterators::no_nulls;
+using iterators::null_at;
+using iterators::nulls_at;
+using gather_map_t = fixed_width_column_wrapper<size_type>;
+
+struct ListSanitizeTest : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+struct ListSanitizeTypedTest : public ListSanitizeTest {
+}; 
+
+/// Helper to run gather() on a single column, and extract the single column from the result.
+std::unique_ptr<cudf::column> gather(column_view const& input, gather_map_t const& gather_map)
+{
+  auto gathered = cudf::gather(cudf::table_view{{input}}, gather_map, out_of_bounds_policy::NULLIFY);
+  return std::move(gathered->release()[0]);
+}
+
+TYPED_TEST_SUITE(ListSanitizeTypedTest, FixedWidthTypesNotBool);
+
+// List<T>.
+TEST_F(ListSanitizeTest, FirstLevel)
+{
+  using T = int32_t;
+
+  auto const input = LCW<T>{{
+      {{1, 2, 3, 4}, null_at(2)}, 
+      {5}, 
+      {6, 7}, // <--- Will be set to NULL.
+      {8, 9, 10}}, 
+    no_nulls()}.release();
+
+  // Set nullmask, post construction.
+  cudf::detail::set_null_mask(input->mutable_view().null_mask(), 2, 3, false);
+
+  auto results = gather(input->view(), {1,2,0,3});
+  std::cout << "Output: " << std::endl;
+  print(*results);
+
+  auto expected = LCW<T>{
+    {
+      {5},
+      {}, // NULL.
+      {{1,2,3,4}, null_at(2)},
+      {8,9,10}
+    },
+    null_at(1)
+  };
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+// List<List<T>>.
+TEST_F(ListSanitizeTest, SecondLevel)
+{
+  using T = int32_t;
+
+  auto const input = LCW<T>{{
+      { {1,2,3}, {4,5,6,7}, {8}, {9,1}, {2} },
+      { {11,12}, {13,14,15}, {16,17,18}, {19} },
+      { {21}, {22,23}, {24,25,26} },
+      { {31,32}, {33,34,35,36}, {}, {37,38} }, //<--- Will be set to NULL.
+      { {41}, {42,43} }
+    }, no_nulls()}.release();
+
+  // Set nullmask, post construction.
+  cudf::detail::set_null_mask(input->mutable_view().null_mask(), 3, 4, false);
+
+  auto const results = gather(input->view(), {100, 3, 0, 1});
+  std::cout << "Result: " << std::endl;
+  print(*results);
+
+  auto const expected = LCW<T>{{
+      LCW<T>{}, // NULL, because of out of bounds.
+      LCW<T>{}, // NULL, because input row was null.
+      { {1,2,3}, {4,5,6,7}, {8}, {9,1}, {2} },  // i.e. input[0]
+      { {11,12}, {13,14,15}, {16,17,18}, {19} } // i.e. input[1]
+    }, nulls_at({0,1})};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  // TODO: Repeat for sliced input.
+  // TODO: Possibly also check that {31,32,33,34...} do not make it through.
+}
+
+// List<List<List<T>>>.
+TEST_F(ListSanitizeTest, ThirdLevel)
+{
+  using T = int32_t;
+
+  auto const input = LCW<T>{{
+      { {{1,2},{3}}, {{4,5},{6,7}}, {{8,8}, {}}, {{9,1}}, {{2,3}} },
+      { {{11,12}}, {{13}, {14,15}}, {{16,17,18}}, {{19,19}, {}} },
+      { {{21,21}}, {{22,23},{}}, {{24,25},{26}} },
+      { {{31,32}, {}}, {{33,34,35},{36}}, {}, {{37,38}} }, //<--- Will be set to NULL.
+      { {{41,41,41}}, {{42,43}} }
+    }, no_nulls()}.release();
+
+  // Set nullmask, post construction.
+  cudf::detail::set_null_mask(input->mutable_view().null_mask(), 3, 4, false);
+
+  std::cout << "Input: " << std::endl;
+  print(*input);
+
+  auto const results = gather(input->view(), {100, 3, 0, 1});
+  std::cout << "Result: " << std::endl;
+  print(*results);
+
+  auto const expected = LCW<T>{{
+      LCW<T>{}, // NULL, because of out of bounds.
+      LCW<T>{}, // NULL, because input row was null.
+      { {{1,2},{3}}, {{4,5},{6,7}}, {{8,8}, {}}, {{9,1}}, {{2,3}} }, // i.e. input[0]
+      { {{11,12}}, {{13}, {14,15}}, {{16,17,18}}, {{19,19}, {}} }    // i.e. input[1]
+    }, nulls_at({0,1})};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  // TODO: Repeat for sliced input.
+  // TODO: Possibly also check that {31,32,33,34...} do not make it through.
+}
+
+} // namespace cudf::test;

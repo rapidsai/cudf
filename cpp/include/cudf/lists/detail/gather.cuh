@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 
@@ -82,6 +83,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
   auto dst_offsets_c = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
   mutable_column_view dst_offsets_v = dst_offsets_c->mutable_view();
+  auto d_source_column = column_device_view::create(source_column.parent(), stream);
 
   // generate the compacted outgoing offsets.
   auto count_iter = thrust::make_counting_iterator<int32_t>(0);
@@ -90,11 +92,14 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
     count_iter,
     count_iter + offset_count,
     dst_offsets_v.begin<int32_t>(),
-    [gather_map, output_count, src_offsets, src_size] __device__(int32_t index) -> int32_t {
+    [d_source_column = *d_source_column, gather_map, output_count, src_offsets, src_size] __device__(int32_t index) -> int32_t {
       int32_t offset_index = index < output_count ? gather_map[index] : 0;
 
       // if this is an invalid index, this will be a NULL list
       if (NullifyOutOfBounds && ((offset_index < 0) || (offset_index >= src_size))) { return 0; }
+
+      // If the source row is null, the output row size must be 0.
+      if (not d_source_column.is_valid(offset_index)) { return 0; }
 
       // the length of this list
       return src_offsets[offset_index + 1] - src_offsets[offset_index];
