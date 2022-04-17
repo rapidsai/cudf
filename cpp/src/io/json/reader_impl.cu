@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,15 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/optional.h>
+#include <thrust/pair.h>
+#include <thrust/sort.h>
+#include <thrust/transform.h>
 
 using cudf::host_span;
 
@@ -266,7 +274,7 @@ rmm::device_uvector<uint64_t> find_record_starts(json_reader_options const& read
   // Manually adding an extra row to account for the first row in the file
   if (reader_opts.get_byte_range_offset() == 0) {
     find_result_ptr++;
-    CUDA_TRY(cudaMemsetAsync(rec_starts.data(), 0ull, sizeof(uint64_t), stream.value()));
+    CUDF_CUDA_TRY(cudaMemsetAsync(rec_starts.data(), 0ull, sizeof(uint64_t), stream.value()));
   }
 
   std::vector<char> chars_to_find{'\n'};
@@ -348,18 +356,18 @@ std::pair<std::vector<std::string>, col_map_ptr_type> get_column_names_and_map(
   uint64_t first_row_len = d_data.size();
   if (rec_starts.size() > 1) {
     // Set first_row_len to the offset of the second row, if it exists
-    CUDA_TRY(cudaMemcpyAsync(&first_row_len,
-                             rec_starts.data() + 1,
-                             sizeof(uint64_t),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(&first_row_len,
+                                  rec_starts.data() + 1,
+                                  sizeof(uint64_t),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
   }
   std::vector<char> first_row(first_row_len);
-  CUDA_TRY(cudaMemcpyAsync(first_row.data(),
-                           d_data.data(),
-                           first_row_len * sizeof(char),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(first_row.data(),
+                                d_data.data(),
+                                first_row_len * sizeof(char),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
   stream.synchronize();
 
   // Determine the row format between:

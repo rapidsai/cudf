@@ -110,8 +110,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
 
 
 def column_slicing_test(col, offset, size, cast_to_float=False):
-    sl = slice(offset, offset + size)
-    col_slice = col[sl]
+    col_slice = col.slice(offset, offset + size)
     series = cudf.Series(col)
     sliced_series = cudf.Series(col_slice)
 
@@ -128,11 +127,14 @@ def column_slicing_test(col, offset, size, cast_to_float=False):
         # However, we must compare these as frames, not raw arrays,  because
         # numpy comparison of categorical values won't work.
         assert_eq(
-            pd_series[sl].reset_index(drop=True),
+            pd_series[offset : offset + size].reset_index(drop=True),
             sliced_series.reset_index(drop=True),
         )
     else:
-        assert_eq(np.asarray(pd_series[sl]), sliced_series.to_numpy())
+        assert_eq(
+            np.asarray(pd_series[offset : offset + size]),
+            sliced_series.to_numpy(),
+        )
 
 
 @pytest.mark.parametrize("offset", [0, 1, 15])
@@ -355,25 +357,27 @@ def test_column_view_nulls_widths_even():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("slc", [slice(1, None), slice(None, 4), slice(2, 4)])
+@pytest.mark.parametrize("slc", [slice(1, 5), slice(0, 4), slice(2, 4)])
 def test_column_view_numeric_slice(slc):
 
     data = np.array([1, 2, 3, 4, 5], dtype="int32")
     sr = cudf.Series(data)
 
     expect = cudf.Series(data[slc].view("int64"))
-    got = cudf.Series(sr._column[slc].view("int64"))
+    got = cudf.Series(sr._column.slice(slc.start, slc.stop).view("int64"))
 
     assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
-    "slc", [slice(3, None), slice(None, 4), slice(2, 5), slice(1, 3)]
+    "slc", [slice(3, 5), slice(0, 4), slice(2, 5), slice(1, 3)]
 )
 def test_column_view_string_slice(slc):
     data = ["a", "bcde", "cd", "efg", "h"]
 
-    expect = cudf.Series(cudf.Series(data)._column[slc].view("int8"))
+    expect = cudf.Series(
+        cudf.Series(data)._column.slice(slc.start, slc.stop).view("int8")
+    )
     got = cudf.Series(str_host_view(data[slc], "int8"))
 
     assert_eq(expect, got)
@@ -415,8 +419,16 @@ def test_as_column_buffer(data, expected):
             {"type": pa.decimal128(3)},
             {"dtype": cudf.core.dtypes.Decimal128Dtype(3, 0)},
         ),
-        ([{"a": 1, "b": 3}, {"c": 2, "d": 4}], {}, {},),
-        ([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], {}, {},),
+        (
+            [{"a": 1, "b": 3}, {"c": 2, "d": 4}],
+            {},
+            {},
+        ),
+        (
+            [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]],
+            {},
+            {},
+        ),
     ],
 )
 def test_as_column_arrow_array(data, pyarrow_kwargs, cudf_kwargs):
@@ -533,7 +545,8 @@ def test_concatenate_large_column_strings():
     ],
 )
 @pytest.mark.parametrize(
-    "data", [[1, 2, 0]],
+    "data",
+    [[1, 2, 0]],
 )
 def test_astype_with_aliases(alias, expect_dtype, data):
     pd_data = pd.Series(data)

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
 import os
@@ -77,11 +77,6 @@ Examples
 0       10   hello
 1       20  rapids
 2       30      ai
-
-See Also
---------
-cudf.read_csv
-cudf.read_json
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -264,7 +259,6 @@ row_group_size_rows: integer or None, default None
 See Also
 --------
 cudf.read_parquet
-cudf.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
@@ -392,9 +386,6 @@ num_rows : int, default None
     If not None, the total number of rows to read.
 use_index : bool, default True
     If True, use row index if available for faster seeking.
-decimal_cols_as_float: list, default None
-    If specified, names of the columns that should be converted from
-    Decimal to Float64 in the resulting dataframe.
 use_python_file_object : boolean, default True
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
     AbstractBufferedFile objects at IO time. This option is likely to improve
@@ -421,8 +412,7 @@ Examples
 
 See Also
 --------
-cudf.read_parquet
-cudf.DataFrame.to_parquet
+cudf.DataFrame.to_orc
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -569,7 +559,7 @@ result : Series or DataFrame, depending on the value of `typ`.
 
 See Also
 --------
-.cudf.io.json.to_json
+cudf.DataFrame.to_json
 """
 doc_read_json = docfmt_partial(docstring=_docstring_read_json)
 
@@ -636,7 +626,7 @@ index : bool, default True
 
 See Also
 --------
-.cudf.io.json.read_json
+cudf.read_json
 """
 doc_to_json = docfmt_partial(docstring=_docstring_to_json)
 
@@ -1396,13 +1386,18 @@ def get_filepath_or_buffer(
         else:
             if use_python_file_object:
                 path_or_data = _open_remote_files(
-                    paths, fs, **(open_file_options or {}),
+                    paths,
+                    fs,
+                    **(open_file_options or {}),
                 )
             else:
                 path_or_data = [
                     BytesIO(
                         _fsspec_data_transfer(
-                            fpath, fs=fs, mode=mode, **kwargs,
+                            fpath,
+                            fs=fs,
+                            mode=mode,
+                            **kwargs,
                         )
                     )
                     for fpath in paths
@@ -1685,7 +1680,11 @@ def _fsspec_data_transfer(
         for b in range(0, file_size, bytes_per_thread)
     ]
     _read_byte_ranges(
-        path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
+        path_or_fob,
+        byte_ranges,
+        buf,
+        fs=fs,
+        **kwargs,
     )
 
     return buf.tobytes()
@@ -1717,19 +1716,25 @@ def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):
         # We have an open fsspec file object
         path_or_fob.seek(offset)
         local_buffer[offset : offset + nbytes] = np.frombuffer(
-            path_or_fob.read(nbytes), dtype="b",
+            path_or_fob.read(nbytes),
+            dtype="b",
         )
     else:
         # We have an fsspec filesystem and a path
         with fs.open(path_or_fob, mode="rb", cache_type="none") as fob:
             fob.seek(offset)
             local_buffer[offset : offset + nbytes] = np.frombuffer(
-                fob.read(nbytes), dtype="b",
+                fob.read(nbytes),
+                dtype="b",
             )
 
 
 def _read_byte_ranges(
-    path_or_fob, ranges, local_buffer, fs=None, **kwargs,
+    path_or_fob,
+    ranges,
+    local_buffer,
+    fs=None,
+    **kwargs,
 ):
     # Simple utility to copy remote byte ranges
     # into a local buffer for IO in libcudf

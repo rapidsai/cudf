@@ -19,7 +19,6 @@
 #include <map>
 
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 /**
@@ -172,6 +171,15 @@ struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::list_view
   cudf::size_type max_depth;
 };
 
+/**
+ * @brief Structs are parameterized by the maximal nesting level, and the leaf column types.
+ */
+template <typename T>
+struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>> {
+  std::vector<cudf::type_id> leaf_types;
+  cudf::size_type max_depth;
+};
+
 // Present for compilation only. To be implemented once reader/writers support the fixed width type.
 template <typename T>
 struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
@@ -215,12 +223,14 @@ class data_profile {
   distribution_params<cudf::string_view> string_dist_desc{{distribution_id::NORMAL, 0, 32}};
   distribution_params<cudf::list_view> list_dist_desc{
     cudf::type_id::INT32, {distribution_id::GEOMETRIC, 0, 100}, 2};
+  distribution_params<cudf::struct_view> struct_dist_desc{
+    {cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::STRING}, 2};
   std::map<cudf::type_id, distribution_params<__uint128_t>> decimal_params;
 
-  double bool_probability        = 0.5;
-  double null_frequency          = 0.01;
-  cudf::size_type cardinality    = 2000;
-  cudf::size_type avg_run_length = 4;
+  double bool_probability              = 0.5;
+  std::optional<double> null_frequency = 0.01;
+  cudf::size_type cardinality          = 2000;
+  cudf::size_type avg_run_length       = 4;
 
  public:
   template <typename T,
@@ -282,6 +292,12 @@ class data_profile {
     return list_dist_desc;
   }
 
+  template <typename T, std::enable_if_t<std::is_same_v<T, cudf::struct_view>>* = nullptr>
+  distribution_params<T> get_distribution_params() const
+  {
+    return struct_dist_desc;
+  }
+
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   distribution_params<typename T::rep> get_distribution_params() const
   {
@@ -341,13 +357,45 @@ class data_profile {
     }
   }
 
+  template <typename T, typename Type_enum, std::enable_if_t<cudf::is_chrono<T>(), T>* = nullptr>
+  void set_distribution_params(Type_enum type_or_group,
+                               distribution_id dist,
+                               typename T::rep lower_bound,
+                               typename T::rep upper_bound)
+  {
+    for (auto tid : get_type_or_group(static_cast<int32_t>(type_or_group))) {
+      int_params[tid] = {
+        dist, static_cast<uint64_t>(lower_bound), static_cast<uint64_t>(upper_bound)};
+    }
+  }
+
   void set_bool_probability(double p) { bool_probability = p; }
-  void set_null_frequency(double f) { null_frequency = f; }
+  void set_null_frequency(std::optional<double> f) { null_frequency = f; }
   void set_cardinality(cudf::size_type c) { cardinality = c; }
   void set_avg_run_length(cudf::size_type avg_rl) { avg_run_length = avg_rl; }
 
-  void set_list_depth(cudf::size_type max_depth) { list_dist_desc.max_depth = max_depth; }
+  void set_list_depth(cudf::size_type max_depth)
+  {
+    CUDF_EXPECTS(max_depth > 0, "List depth must be positive");
+    list_dist_desc.max_depth = max_depth;
+  }
+
   void set_list_type(cudf::type_id type) { list_dist_desc.element_type = type; }
+
+  void set_struct_depth(cudf::size_type max_depth)
+  {
+    CUDF_EXPECTS(max_depth > 0, "Struct depth must be positive");
+    struct_dist_desc.max_depth = max_depth;
+  }
+
+  void set_struct_types(std::vector<cudf::type_id> const& types)
+  {
+    CUDF_EXPECTS(
+      std::none_of(
+        types.cbegin(), types.cend(), [](auto& type) { return type == cudf::type_id::STRUCT; }),
+      "Cannot include STRUCT as its own subtype");
+    struct_dist_desc.leaf_types = types;
+  }
 };
 
 /**
@@ -399,14 +447,15 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
  * @param dtype_ids Vector of requested column types
  * @param num_rows Number of rows in the output table
  * @param null_probability optional, probability of a null value
- *  <0 implies no null mask, =0 implies all valids, >=1 implies all nulls
+ *  no value implies no null mask, =0 implies all valids, >=1 implies all nulls
  * @param seed optional, seed for the pseudo-random engine
  * @return A table with the sequence columns.
  */
-std::unique_ptr<cudf::table> create_sequence_table(std::vector<cudf::type_id> const& dtype_ids,
-                                                   row_count num_rows,
-                                                   float null_probability = -1.0,
-                                                   unsigned seed          = 1);
+std::unique_ptr<cudf::table> create_sequence_table(
+  std::vector<cudf::type_id> const& dtype_ids,
+  row_count num_rows,
+  std::optional<double> null_probability = std::nullopt,
+  unsigned seed                          = 1);
 
 /**
  * @brief Repeats the input data types cyclically to fill a vector of @ref num_cols
@@ -423,10 +472,9 @@ std::vector<cudf::type_id> cycle_dtypes(std::vector<cudf::type_id> const& dtype_
  *
  * @param size number of rows
  * @param null_probability probability of a null value
- *  <0 implies no null mask, =0 implies all valids, >=1 implies all nulls
+ *  no value implies no null mask, =0 implies all valids, >=1 implies all nulls
  * @param seed optional, seed for the pseudo-random engine
  * @return null mask device buffer with random null mask data and null count
  */
-std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(cudf::size_type size,
-                                                                       float null_probability,
-                                                                       unsigned seed = 1);
+std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
+  cudf::size_type size, std::optional<double> null_probability = std::nullopt, unsigned seed = 1);

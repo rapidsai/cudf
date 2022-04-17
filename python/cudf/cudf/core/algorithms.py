@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from warnings import warn
 
 import cupy as cp
@@ -21,7 +21,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
         Value to indicate missing category.
 
     Returns
-    --------
+    -------
     (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
         - *labels* contains the encoded values
         - *cats* contains the categories in order that the N-th

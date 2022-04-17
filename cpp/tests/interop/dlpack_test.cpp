@@ -22,6 +22,8 @@
 
 #include <dlpack/dlpack.h>
 
+#include <thrust/host_vector.h>
+
 using namespace cudf::test;
 
 struct dlpack_deleter {

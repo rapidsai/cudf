@@ -156,6 +156,21 @@ include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
 include(cmake/Modules/FindcuFile.cmake)
 
+# Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
+if(NOT BUILD_SHARED_LIBS)
+  include("${rapids-cmake-dir}/export/find_package_file.cmake")
+  list(APPEND METADATA_KINDS BUILD INSTALL)
+  foreach(METADATA_KIND IN LISTS METADATA_KINDS)
+    rapids_export_find_package_file(
+      ${METADATA_KIND} "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
+    )
+    rapids_export_package(${METADATA_KIND} cuco cudf-exports)
+    rapids_export_package(${METADATA_KIND} ZLIB cudf-exports)
+    rapids_export_package(${METADATA_KIND} cuFile cudf-exports)
+    rapids_export_package(${METADATA_KIND} nvcomp cudf-exports)
+  endforeach()
+endif()
+
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
 
@@ -300,12 +315,12 @@ add_library(
   src/io/orc/stripe_init.cu
   src/io/orc/timezone.cpp
   src/io/orc/writer_impl.cu
+  src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
-  src/io/parquet/parquet.cpp
   src/io/parquet/reader_impl.cu
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu
@@ -470,6 +485,7 @@ add_library(
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
+  src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp
@@ -626,8 +642,12 @@ add_library(cudf::cudf ALIAS cudf)
 
 add_library(
   cudftestutil STATIC
-  tests/utilities/base_fixture.cpp tests/utilities/column_utilities.cu
-  tests/utilities/table_utilities.cu tests/io/metadata_utilities.cpp tests/strings/utilities.cpp
+  tests/io/metadata_utilities.cpp
+  tests/quantiles/tdigest_utilities.cu
+  tests/utilities/base_fixture.cpp
+  tests/utilities/column_utilities.cu
+  tests/utilities/table_utilities.cu
+  tests/strings/utilities.cpp
 )
 
 set_target_properties(

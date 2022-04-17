@@ -32,7 +32,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/distance.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {
@@ -220,7 +225,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
-  auto offsets = count_matches(*d_strings, *d_prog, stream, rmm::mr::get_current_device_resource());
+  auto offsets      = count_matches(*d_strings, *d_prog, strings_count + 1, stream);
   auto offsets_view = offsets->mutable_view();
   auto d_offsets    = offsets_view.data<offset_type>();
 
@@ -282,7 +287,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
-  auto offsets      = count_matches(*d_strings, *d_prog, stream, mr);
+  auto offsets      = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
   auto offsets_view = offsets->mutable_view();
 
   // get the split tokens from the input column; this also converts the counts into offsets

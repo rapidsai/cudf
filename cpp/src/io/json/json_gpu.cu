@@ -37,7 +37,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
+#include <thrust/execution_policy.h>
 #include <thrust/find.h>
+#include <thrust/generate.h>
+#include <thrust/iterator/reverse_iterator.h>
+#include <thrust/mismatch.h>
+#include <thrust/optional.h>
+#include <thrust/pair.h>
 
 using cudf::device_span;
 
@@ -684,7 +690,7 @@ void convert_json_to_columns(parse_options_view const& opts,
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
+  CUDF_CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
     &min_grid_size, &block_size, convert_data_to_columns_kernel));
 
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
@@ -698,7 +704,7 @@ void convert_json_to_columns(parse_options_view const& opts,
                                                                                valid_fields,
                                                                                num_valid_fields);
 
-  CUDA_TRY(cudaGetLastError());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 /**
@@ -716,7 +722,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
   auto d_column_infos = [&]() {
@@ -758,7 +764,7 @@ void collect_keys_info(parse_options_view const& options,
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, collect_keys_info_kernel));
 
   // Calculate actual block count to use based on records count
@@ -767,7 +773,7 @@ void collect_keys_info(parse_options_view const& options,
   collect_keys_info_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, keys_cnt, keys_info);
 
-  CUDA_TRY(cudaGetLastError());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 }  // namespace gpu

@@ -25,7 +25,11 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
 #include <thrust/iterator/reverse_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/reverse.h>
 
 namespace cudf {
 
@@ -350,7 +354,6 @@ struct SparkMurmurHash3_32 {
 
   constexpr SparkMurmurHash3_32() = default;
   constexpr SparkMurmurHash3_32(uint32_t seed) : m_seed(seed) {}
-
 
   [[nodiscard]] __device__ inline uint32_t fmix32(uint32_t h) const
   {

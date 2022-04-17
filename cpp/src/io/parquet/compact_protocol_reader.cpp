@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
-#include "parquet.hpp"
+#include "compact_protocol_reader.hpp"
+
 #include <algorithm>
+#include <cstddef>
+#include <tuple>
 
 namespace cudf {
 namespace io {
@@ -153,6 +156,7 @@ bool CompactProtocolReader::read(SchemaElement* s)
                             ParquetFieldEnum<ConvertedType>(6, s->converted_type),
                             ParquetFieldInt32(7, s->decimal_scale),
                             ParquetFieldInt32(8, s->decimal_precision),
+                            ParquetFieldOptionalInt32(9, s->field_id),
                             ParquetFieldStruct(10, s->logical_type));
   return function_builder(this, op);
 }
@@ -198,7 +202,8 @@ bool CompactProtocolReader::read(TimestampType* t)
 bool CompactProtocolReader::read(TimeUnit* u)
 {
   auto op = std::make_tuple(ParquetFieldUnion(1, u->isset.MILLIS, u->MILLIS),
-                            ParquetFieldUnion(2, u->isset.MICROS, u->MICROS));
+                            ParquetFieldUnion(2, u->isset.MICROS, u->MICROS),
+                            ParquetFieldUnion(3, u->isset.NANOS, u->NANOS));
   return function_builder(this, op);
 }
 
