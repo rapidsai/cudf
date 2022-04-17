@@ -84,7 +84,7 @@ namespace lexicographic {
  * second letter in both words is the first non-equal letter, and `a < b`, thus
  * `aac < abb`.
  *
- * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
+ * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <typename Nullate>
 class device_row_comparator {
@@ -415,7 +415,7 @@ class self_comparator {
    *
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
-   * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
   device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
@@ -703,7 +703,7 @@ class self_comparator {
    *
    * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
    *
-   * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
   device_row_comparator<Nullate> device_comparator(
@@ -724,7 +724,7 @@ namespace hash {
  * @brief Computes the hash value of an element in the given column.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
- * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
+ * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
@@ -761,7 +761,7 @@ class element_hasher {
  * @brief Computes the hash value of a row in the given table.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
- * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
+ * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
 class device_row_hasher {
@@ -808,8 +808,9 @@ class device_row_hasher {
     static constexpr hash_value_type NON_NULL_HASH = 0;
 
    public:
-    __device__ element_hasher_adapter(Nullate nulls, uint32_t seed = DEFAULT_HASH_SEED) noexcept
-      : _has_nulls(nulls), _seed(seed)
+    __device__ element_hasher_adapter(Nullate check_nulls,
+                                      uint32_t seed = DEFAULT_HASH_SEED) noexcept
+      : _check_nulls(check_nulls), _seed(seed)
     {
     }
 
@@ -817,7 +818,7 @@ class device_row_hasher {
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
     {
-      return element_hasher<hash_fn, Nullate>(_has_nulls, _seed, NULL_HASH)
+      return element_hasher<hash_fn, Nullate>(_check_nulls, _seed, NULL_HASH)
         .template operator()<T>(col, row_index);
     }
 
@@ -828,7 +829,7 @@ class device_row_hasher {
       auto hash                   = hash_value_type{_seed};
       column_device_view curr_col = col.slice(row_index, 1);
       while (is_nested(curr_col.type())) {
-        if (_has_nulls) {
+        if (_check_nulls) {
           auto validity_it = detail::make_validity_iterator<true>(curr_col);
           hash             = detail::accumulate(
             validity_it, validity_it + curr_col.size(), hash, [](auto hash, auto is_valid) {
@@ -854,7 +855,7 @@ class device_row_hasher {
           hash,
           type_dispatcher<dispatch_void_if_nested>(
             curr_col.type(),
-            element_hasher<hash_fn, Nullate>{_has_nulls, DEFAULT_HASH_SEED, NULL_HASH},
+            element_hasher<hash_fn, Nullate>{_check_nulls, DEFAULT_HASH_SEED, NULL_HASH},
             curr_col,
             i));
       }
@@ -862,7 +863,7 @@ class device_row_hasher {
     }
 
     uint32_t _seed;
-    Nullate _has_nulls;
+    Nullate _check_nulls;
   };
 
   CUDF_HOST_DEVICE device_row_hasher(Nullate check_nulls,
@@ -914,7 +915,7 @@ class row_hasher {
    *
    * `F(i)` returns the hash of row i.
    *
-   * @tparam Nullate A cudf::nullate type describing the existence of nulls in the table
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <template <typename> class hash_function = default_hash, typename Nullate>
   device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
