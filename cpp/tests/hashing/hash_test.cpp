@@ -152,18 +152,18 @@ TEST_F(HashTest, BasicList)
   auto const output = cudf::hash(input);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
-  auto const expect_seeded = ICW{1607594254,
-                                 1607594254,
-                                 -636991801,
-                                 -134832713,
-                                 -636991801,
-                                 -1996562969,
-                                 -1027443037,
-                                 762283447,
-                                 762283447,
-                                 1338620691,
-                                 -1027443037,
-                                 -1027443037};
+  auto const expect_seeded = ICW{1607594268u,
+                                 1607594268u,
+                                 3658958173u,
+                                 4162508905u,
+                                 3658958173u,
+                                 2286117305u,
+                                 3271180885u,
+                                 761198477u,
+                                 761198477u,
+                                 1340178469u,
+                                 3271180885u,
+                                 3271180885u};
 
   auto const seeded_output = cudf::hash(input, cudf::hash_id::HASH_MURMUR3, 15);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_seeded, seeded_output->view(), verbosity);
@@ -192,17 +192,17 @@ TEST_F(HashTest, NullableList)
   auto const output = cudf::hash(cudf::table_view({col}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
-  auto const expect_seeded = ICW{-2022263846,
-                                 -2022263846,
-                                 -90253200,
-                                 -90253200,
-                                 -1500645278,
-                                 1870142208,
-                                 1870142208,
-                                 -2022267832,
-                                 -1500645278,
-                                 -1500645278,
-                                 -2022267832};
+  auto const expect_seeded = ICW{2271820643u,
+                                 2271820643u,
+                                 4263297392u,
+                                 4263297392u,
+                                 3089720935u,
+                                 1865775808u,
+                                 1865775808u,
+                                 2271820578u,
+                                 3089720935u,
+                                 3089720935u,
+                                 2271820578u};
 
   auto const seeded_output = cudf::hash(cudf::table_view({col}), cudf::hash_id::HASH_MURMUR3, 31);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_seeded, seeded_output->view(), verbosity);
@@ -249,23 +249,23 @@ TEST_F(HashTest, ListOfStruct)
   auto const output = cudf::hash(cudf::table_view({*list_column}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 
-  auto expect_seeded = cudf::test::fixed_width_column_wrapper<uint32_t>{-68769184,
-                                                                        -68769184,
-                                                                        -68749037,
-                                                                        -68749037,
-                                                                        942988162,
-                                                                        1666174064,
-                                                                        1666174064,
-                                                                        1666174064,
-                                                                        1666186563,
-                                                                        606249849,
-                                                                        1602107255,
-                                                                        -2002620773,
-                                                                        -2002620773,
-                                                                        669559144,
-                                                                        669559144,
-                                                                        1970172743,
-                                                                        1970172743};
+  auto expect_seeded = cudf::test::fixed_width_column_wrapper<uint32_t>{81710442u,
+                                                                        81710442u,
+                                                                        81729816u,
+                                                                        81729816u,
+                                                                        3532787573u,
+                                                                        3642097855u,
+                                                                        3642097855u,
+                                                                        3642097855u,
+                                                                        3642110391u,
+                                                                        3624905718u,
+                                                                        608933631u,
+                                                                        1899376347u,
+                                                                        1899376347u,
+                                                                        2058877614u,
+                                                                        2058877614u,
+                                                                        4013395891u,
+                                                                        4013395891u};
 
   auto const seeded_output =
     cudf::hash(cudf::table_view({*list_column}), cudf::hash_id::HASH_MURMUR3, 619);

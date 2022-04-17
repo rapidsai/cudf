@@ -772,26 +772,15 @@ class device_row_hasher {
 
   __device__ auto operator()(size_type row_index) const noexcept
   {
-    // Hash the first column w/ the seed
-    auto const initial_hash =
-      cudf::detail::hash_combine(hash_value_type{0},
-                                 type_dispatcher<dispatch_storage_type>(
-                                   _table.column(0).type(),
-                                   element_hasher_adapter<hash_function>{_check_nulls, _seed},
-                                   _table.column(0),
-                                   row_index));
-
     auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
       return cudf::type_dispatcher<dispatch_storage_type>(
         column.type(), element_hasher_adapter<hash_function>{_check_nulls}, column, row_index);
     });
 
     // Hash each element and combine all the hash values together
-    // note that this starts at 1 and not 0 since we already hashed the first column
-    return detail::accumulate(
-      it + 1, it + _table.num_columns(), initial_hash, [](auto hash, auto h) {
-        return cudf::detail::hash_combine(hash, h);
-      });
+    return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
+      return cudf::detail::hash_combine(hash, h);
+    });
   }
 
  private:
