@@ -244,7 +244,7 @@ struct MurmurHash3_32 {
       case 1:
         k1 ^= std::to_integer<uint8_t>(data[tail_offset]);
         k1 *= c1;
-        k1 = rotl32(k1, rot_c1);
+        k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
         k1 *= c2;
         h ^= k1;
     };
@@ -399,10 +399,10 @@ struct SparkMurmurHash3_32 {
       // casting byte-to-int, but C++ does not.
       uint32_t k1 = static_cast<uint32_t>(std::to_integer<int8_t>(data[i]));
       k1 *= c1;
-      k1 = rotl32(k1, rot_c1);
+      k1 = cudf::detail::rotate_bits_left(k1, rot_c1);
       k1 *= c2;
       h ^= k1;
-      h = rotl32(h, rot_c2);
+      h = cudf::detail::rotate_bits_left(h, rot_c2);
       h = h * 5 + c3;
     }
     return h;
