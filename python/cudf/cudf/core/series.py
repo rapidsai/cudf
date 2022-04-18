@@ -6,7 +6,7 @@ import functools
 import inspect
 import pickle
 import warnings
-from collections import abc as abc
+from collections import abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
 
