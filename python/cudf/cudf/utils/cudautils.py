@@ -14,27 +14,6 @@ import cudf
 #
 
 
-@cuda.jit
-def gpu_diff(in_col, out_col, out_mask, N):
-    """Calculate the difference between values at positions i and i - N in an
-    array and store the output in a new array.
-    """
-    i = cuda.grid(1)
-
-    if N > 0:
-        if i < in_col.size:
-            out_col[i] = in_col[i] - in_col[i - N]
-            out_mask[i] = True
-        if i < N:
-            out_mask[i] = False
-    else:
-        if i <= (in_col.size + N):
-            out_col[i] = in_col[i] - in_col[i - N]
-            out_mask[i] = True
-        if i >= (in_col.size + N) and i < in_col.size:
-            out_mask[i] = False
-
-
 # Find segments
 
 
@@ -249,7 +228,7 @@ def compile_udf(udf, type_signature):
       numpy types with `numba.numpy_support.from_dtype(...)`.
 
     Returns
-    --------
+    -------
     ptx_code:
       The compiled CUDA PTX
 
