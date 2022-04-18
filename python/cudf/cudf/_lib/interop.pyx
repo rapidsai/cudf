@@ -47,7 +47,7 @@ def from_dlpack(dlpack_capsule):
 
 def to_dlpack(list source_columns):
     """
-    Converts a cudf Frame into a DLPack Tensor PyCapsule.
+    Converts a list of columns into a DLPack Tensor PyCapsule.
 
     DLPack Tensor PyCapsule will have the name "dltensor".
     """
@@ -105,7 +105,8 @@ cdef vector[column_metadata] gather_metadata(object metadata) except *:
 
 
 def to_arrow(list source_columns, object metadata):
-    """Convert from cudf Frame to PyArrow Table.
+    """Convert a list of columns from
+    cudf Frame to a PyArrow Table.
 
     Parameters
     ----------
@@ -130,7 +131,7 @@ def to_arrow(list source_columns, object metadata):
 
 
 def from_arrow(object input_table):
-    """Convert from PyArrow Table to cudf Frame.
+    """Convert from PyArrow Table to a list of columns.
 
     Parameters
     ----------

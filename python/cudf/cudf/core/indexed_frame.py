@@ -2714,7 +2714,8 @@ class IndexedFrame(Frame):
 
         Examples
         --------
-        >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
+        >>> import cudf
+        >>> df  = cudf.Dataframe([[8, 4, 7], [5, 2, 3]])
         >>> count = 2
         >>> df.tile(df, count)
            0  1  2

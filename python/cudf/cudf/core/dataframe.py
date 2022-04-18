@@ -6189,7 +6189,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-        >>> df = DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
+        >>> import cudf
+        >>> df = cudf.DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
         >>> df
         0    [A1, A2, A3]
         1    [B1, B2, B3]
