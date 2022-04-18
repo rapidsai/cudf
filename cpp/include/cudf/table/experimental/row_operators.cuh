@@ -559,7 +559,7 @@ class device_row_comparator {
         if (lcol.type().id() == type_id::STRUCT) {
           if (lcol.num_child_columns() == 0) { return true; }
           lcol = lcol.child(0).slice(lhs_element_index, 1);
-          rcol = rcol.child(0).slice(lhs_element_index, 1);
+          rcol = rcol.child(0).slice(rhs_element_index, 1);
         } else if (lcol.type().id() == type_id::LIST) {
           auto l_list_col = detail::lists_column_device_view(lcol);
           auto r_list_col = detail::lists_column_device_view(rcol);
