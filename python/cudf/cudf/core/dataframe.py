@@ -2660,11 +2660,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis != 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        if not all(is_numeric_dtype(i) for i in self.dtypes):
-            raise NotImplementedError(
-                "DataFrame.diff only supports numeric dtypes"
-            )
-
         if abs(periods) > len(self):
             df = cudf.DataFrame._from_data(
                 {
@@ -5180,26 +5175,33 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
 
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
+        source = self
+        if numeric_only:
+            numeric_cols = (
+                name
+                for name in self._data.names
+                if is_numeric_dtype(self._data[name])
             )
-        axis = self._get_axis_from_axis_arg(axis)
+            source = self._get_columns_by_label(numeric_cols)
+            if source.empty:
+                return Series(index=cudf.StringIndex([]))
+
+        axis = source._get_axis_from_axis_arg(axis)
 
         if axis == 0:
             try:
                 result = [
-                    getattr(self._data[col], op)(**kwargs)
-                    for col in self._data.names
+                    getattr(source._data[col], op)(**kwargs)
+                    for col in source._data.names
                 ]
             except AttributeError:
-                raise TypeError(f"cannot perform {op} with type {self.dtype}")
+                raise TypeError(f"Not all column dtypes support op {op}")
 
             return Series._from_data(
-                {None: result}, as_index(self._data.names)
+                {None: result}, as_index(source._data.names)
             )
         elif axis == 1:
-            return self._apply_cupy_method_axis_1(op, **kwargs)
+            return source._apply_cupy_method_axis_1(op, **kwargs)
 
     @_cudf_nvtx_annotate
     def _scan(
