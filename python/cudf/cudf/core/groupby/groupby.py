@@ -590,19 +590,20 @@ class GroupBy(Serializable, Reducible, Scannable):
             .. code-block::
 
                 >>> df = pd.DataFrame({
-                    'a': [1, 1, 2, 2],
-                    'b': [1, 2, 1, 2],
-                    'c': [1, 2, 3, 4]})
+                ...     'a': [1, 1, 2, 2],
+                ...     'b': [1, 2, 1, 2],
+                ...     'c': [1, 2, 3, 4],
+                ... })
                 >>> gdf = cudf.from_pandas(df)
                 >>> df.groupby('a').apply(lambda x: x.iloc[[0]])
-                        a  b  c
-                    a
-                    1 0  1  1  1
-                    2 2  2  1  3
+                     a  b  c
+                a
+                1 0  1  1  1
+                2 2  2  1  3
                 >>> gdf.groupby('a').apply(lambda x: x.iloc[[0]])
-                        a  b  c
-                    0  1  1  1
-                    2  2  1  3
+                   a  b  c
+                0  1  1  1
+                2  2  1  3
         """
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
@@ -931,7 +932,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             to have a valid result.
 
         Returns
-        ----------
+        -------
         DataFrame
             Correlation matrix.
 

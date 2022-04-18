@@ -2,7 +2,7 @@
 
 import pickle
 from functools import cached_property
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Union
 
 import numpy as np
 import pyarrow as pa
@@ -15,12 +15,18 @@ from cudf._lib.lists import (
     contains_scalar,
     count_elements,
     drop_list_duplicates,
-    extract_element,
+    extract_element_column,
+    extract_element_scalar,
+    index_of,
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    is_list_dtype,
+    is_scalar,
+)
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
@@ -338,18 +344,27 @@ class ListMethods(ColumnMethods):
         super().__init__(parent=parent)
 
     def get(
-        self, index: int, default: Optional[ScalarLike] = None
+        self,
+        index: int,
+        default: Optional[Union[ScalarLike, ColumnLike]] = None,
     ) -> ParentType:
         """
-        Extract element at the given index from each list.
+        Extract element at the given index from each list in a Series of lists.
 
-        If the index is out of bounds for any list,
-        return <NA> or, if provided, ``default``.
-        Thus, this method never raises an ``IndexError``.
+        ``index`` can be an integer or a sequence of integers.  If
+        ``index`` is an integer, the element at position ``index`` is
+        extracted from each list.  If ``index`` is a sequence, it must
+        be of the same length as the Series, and ``index[i]``
+        specifies the position of the element to extract from the
+        ``i``-th list in the Series.
+
+        If the index is out of bounds for any list, return <NA> or, if
+        provided, ``default``.  Thus, this method never raises an
+        ``IndexError``.
 
         Parameters
         ----------
-        index : int
+        index : int or sequence of ints
         default : scalar, optional
 
         Returns
@@ -372,14 +387,23 @@ class ListMethods(ColumnMethods):
         2       6
         dtype: int64
 
-        >>> s = cudf.Series([[1, 2], [3, 4, 5], [4, 5, 6]])
         >>> s.list.get(2, default=0)
         0   0
         1   5
         2   6
         dtype: int64
+
+        >>> s.list.get([0, 1, 2])
+        0   1
+        1   4
+        2   6
+        dtype: int64
         """
-        out = extract_element(self._column, index)
+        if is_scalar(index):
+            out = extract_element_scalar(self._column, cudf.Scalar(index))
+        else:
+            index = as_column(index)
+            out = extract_element_column(self._column, as_column(index))
 
         if not (default is None or default is cudf.NA):
             # determine rows for which `index` is out-of-bounds
@@ -424,16 +448,25 @@ class ListMethods(ColumnMethods):
             )
         except RuntimeError as e:
             if (
-                "Type/Scale of search key does not"
-                "match list column element type" in str(e)
+                "Type/Scale of search key does not "
+                "match list column element type." in str(e)
             ):
-                raise TypeError(
-                    "Type/Scale of search key does not"
-                    "match list column element type"
-                ) from e
+                raise TypeError(str(e)) from e
             raise
-        else:
-            return res
+        return res
+
+    def index(self, search_key: ScalarLike) -> ParentType:
+        search_key = cudf.Scalar(search_key)
+        try:
+            res = self._return_or_inplace(index_of(self._column, search_key))
+        except RuntimeError as e:
+            if (
+                "Type/Scale of search key does not "
+                "match list column element type." in str(e)
+            ):
+                raise TypeError(str(e)) from e
+            raise
+        return res
 
     @property
     def leaves(self) -> ParentType:

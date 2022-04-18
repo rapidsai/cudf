@@ -673,6 +673,8 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
                         cudf::jni::native_jbooleanArray &is_int96,
                         cudf::jni::native_jintArray &precisions,
                         cudf::jni::native_jbooleanArray &is_map,
+                        cudf::jni::native_jbooleanArray &hasParquetFieldIds,
+                        cudf::jni::native_jintArray &parquetFieldIds,
                         cudf::jni::native_jintArray &children, int num_children, int read_index) {
   int write_index = 0;
   for (int i = 0; i < num_children; i++, write_index++) {
@@ -687,12 +689,15 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
     if (is_map[read_index]) {
       child.set_list_column_as_map();
     }
+    if (!parquetFieldIds.is_null() && hasParquetFieldIds[read_index]) {
+      child.set_parquet_field_id(parquetFieldIds[read_index]);
+    }
     column_metadata.add_child(child);
     int childs_children = children[read_index++];
     if (childs_children > 0) {
-      read_index =
-          set_column_metadata(column_metadata.child(write_index), col_names, nullability, is_int96,
-                              precisions, is_map, children, childs_children, read_index);
+      read_index = set_column_metadata(column_metadata.child(write_index), col_names, nullability,
+                                       is_int96, precisions, is_map, hasParquetFieldIds,
+                                       parquetFieldIds, children, childs_children, read_index);
     }
   }
   return read_index;
@@ -701,12 +706,15 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
 void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_names,
                          jintArray &j_children, jbooleanArray &j_col_nullability,
                          jbooleanArray &j_is_int96, jintArray &j_precisions,
-                         jbooleanArray &j_is_map, cudf::io::table_input_metadata &metadata) {
+                         jbooleanArray &j_is_map, cudf::io::table_input_metadata &metadata,
+                         jbooleanArray &j_hasParquetFieldIds, jintArray &j_parquetFieldIds) {
   cudf::jni::auto_set_device(env);
   cudf::jni::native_jstringArray col_names(env, j_col_names);
   cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
   cudf::jni::native_jbooleanArray is_int96(env, j_is_int96);
   cudf::jni::native_jintArray precisions(env, j_precisions);
+  cudf::jni::native_jbooleanArray hasParquetFieldIds(env, j_hasParquetFieldIds);
+  cudf::jni::native_jintArray parquetFieldIds(env, j_parquetFieldIds);
   cudf::jni::native_jintArray children(env, j_children);
   cudf::jni::native_jbooleanArray is_map(env, j_is_map);
 
@@ -729,11 +737,14 @@ void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_nam
     if (is_map[read_index]) {
       metadata.column_metadata[write_index].set_list_column_as_map();
     }
+    if (!parquetFieldIds.is_null() && hasParquetFieldIds[read_index]) {
+      metadata.column_metadata[write_index].set_parquet_field_id(parquetFieldIds[read_index]);
+    }
     int childs_children = children[read_index++];
     if (childs_children > 0) {
-      read_index =
-          set_column_metadata(metadata.column_metadata[write_index], cpp_names, col_nullability,
-                              is_int96, precisions, is_map, children, childs_children, read_index);
+      read_index = set_column_metadata(
+          metadata.column_metadata[write_index], cpp_names, col_nullability, is_int96, precisions,
+          is_map, hasParquetFieldIds, parquetFieldIds, children, childs_children, read_index);
     }
   }
 }
@@ -1539,7 +1550,8 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
     jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
     jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
-    jbooleanArray j_is_map, jobject consumer) {
+    jbooleanArray j_is_map, jbooleanArray j_hasParquetFieldIds, jintArray j_parquetFieldIds,
+    jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -1554,7 +1566,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     sink_info sink{data_sink.get()};
     table_input_metadata metadata;
     createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability, j_isInt96,
-                        j_precisions, j_is_map, metadata);
+                        j_precisions, j_is_map, metadata, j_hasParquetFieldIds, j_parquetFieldIds);
 
     auto meta_keys = cudf::jni::native_jstringArray{env, j_metadata_keys}.as_cpp_vector();
     auto meta_values = cudf::jni::native_jstringArray{env, j_metadata_values}.as_cpp_vector();
@@ -1583,7 +1595,8 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
     jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
     jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
-    jbooleanArray j_is_map, jstring j_output_path) {
+    jbooleanArray j_is_map, jbooleanArray j_hasParquetFieldIds, jintArray j_parquetFieldIds,
+    jstring j_output_path) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -1596,7 +1609,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     using namespace cudf::jni;
     table_input_metadata metadata;
     createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability, j_isInt96,
-                        j_precisions, j_is_map, metadata);
+                        j_precisions, j_is_map, metadata, j_hasParquetFieldIds, j_parquetFieldIds);
 
     auto meta_keys = cudf::jni::native_jstringArray{env, j_metadata_keys}.as_cpp_vector();
     auto meta_values = cudf::jni::native_jstringArray{env, j_metadata_values}.as_cpp_vector();
@@ -1721,8 +1734,12 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
     table_input_metadata metadata;
     // ORC has no `j_is_int96`, but `createTableMetaData` needs a lvalue.
     jbooleanArray j_is_int96 = NULL;
+    // ORC has no `j_parquetFieldIds`, but `createTableMetaData` needs a lvalue.
+    jbooleanArray j_hasParquetFieldIds = NULL;
+    jintArray j_parquetFieldIds = NULL;
+
     createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability, j_is_int96,
-                        j_precisions, j_is_map, metadata);
+                        j_precisions, j_is_map, metadata, j_hasParquetFieldIds, j_parquetFieldIds);
 
     auto meta_keys = cudf::jni::native_jstringArray{env, j_metadata_keys}.as_cpp_vector();
     auto meta_values = cudf::jni::native_jstringArray{env, j_metadata_values}.as_cpp_vector();
@@ -1766,8 +1783,11 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
     table_input_metadata metadata;
     // ORC has no `j_is_int96`, but `createTableMetaData` needs a lvalue.
     jbooleanArray j_is_int96 = NULL;
+    // ORC has no `j_parquetFieldIds`, but `createTableMetaData` needs a lvalue.
+    jbooleanArray j_hasParquetFieldIds = NULL;
+    jintArray j_parquetFieldIds = NULL;
     createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability, j_is_int96,
-                        j_precisions, j_is_map, metadata);
+                        j_precisions, j_is_map, metadata, j_hasParquetFieldIds, j_parquetFieldIds);
 
     auto meta_keys = cudf::jni::native_jstringArray{env, j_metadata_keys}.as_cpp_vector();
     auto meta_values = cudf::jni::native_jstringArray{env, j_metadata_values}.as_cpp_vector();

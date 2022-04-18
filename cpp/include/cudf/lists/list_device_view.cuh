@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -293,22 +294,34 @@ class list_device_view {
  *
  */
 struct list_size_functor {
-  column_device_view const d_column;
-  CUDF_HOST_DEVICE inline list_size_functor(column_device_view const& d_col) : d_column(d_col)
+  detail::lists_column_device_view const d_column;
+  CUDF_HOST_DEVICE inline list_size_functor(detail::lists_column_device_view const& d_col)
+    : d_column(d_col)
   {
-#if defined(__CUDA_ARCH__)
-    cudf_assert(d_col.type().id() == type_id::LIST && "Only list type column is supported");
-#else
-    CUDF_EXPECTS(d_col.type().id() == type_id::LIST, "Only list type column is supported");
-#endif
   }
   __device__ inline size_type operator()(size_type idx)
   {
     if (d_column.is_null(idx)) return size_type{0};
-    auto d_offsets =
-      d_column.child(lists_column_view::offsets_column_index).data<size_type>() + d_column.offset();
-    return d_offsets[idx + 1] - d_offsets[idx];
+    return d_column.offset_at(idx + 1) - d_column.offset_at(idx);
   }
 };
+
+/**
+ * @brief Makes an iterator that returns size of the list by row index
+ *
+ * Example:
+ * For a list_column_device_view with 3 rows, `l = {[1, 2, 3], [4, 5], [6, 7, 8, 9]}`,
+ * @code{.cpp}
+ * auto it = make_list_size_iterator(l);
+ * assert(it[0] == 3);
+ * assert(it[1] == 2);
+ * assert(it[2] == 4);
+ * @endcode
+ *
+ */
+CUDF_HOST_DEVICE auto inline make_list_size_iterator(detail::lists_column_device_view const& c)
+{
+  return detail::make_counting_transform_iterator(0, list_size_functor{c});
+}
 
 }  // namespace cudf
