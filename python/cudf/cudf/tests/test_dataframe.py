@@ -13,7 +13,6 @@ from contextlib import contextmanager
 from copy import copy
 
 import cupy
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -7332,7 +7331,7 @@ def test_sample_axis_0(
 
 @pytest.mark.parametrize("replace", [True, False])
 @pytest.mark.parametrize(
-    "random_state_lib", [cp.random.RandomState, np.random.RandomState]
+    "random_state_lib", [cupy.random.RandomState, np.random.RandomState]
 )
 def test_sample_reproducibility(replace, random_state_lib):
     df = cudf.DataFrame({"a": cupy.arange(0, 1024)})
@@ -7384,7 +7383,7 @@ def test_oversample_without_replace(n, frac, axis):
     )
 
 
-@pytest.mark.parametrize("random_state", [None, cp.random.RandomState(42)])
+@pytest.mark.parametrize("random_state", [None, cupy.random.RandomState(42)])
 def test_sample_unsupported_arguments(random_state):
     df = cudf.DataFrame({"float": [0.05, 0.2, 0.3, 0.2, 0.25]})
     with pytest.raises(
@@ -9098,7 +9097,7 @@ def test_groupby_cov_for_pandas_bug_case():
     ],
 )
 @pytest.mark.parametrize("periods", (-5, -1, 0, 1, 5))
-def test_diff_dataframe_numeric_dtypes(data, periods):
+def test_diff_numeric_dtypes(data, periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
@@ -9137,7 +9136,7 @@ def test_diff_decimal_dtypes(precision, scale, dtype):
     )
 
 
-def test_diff_dataframe_invalid_axis():
+def test_diff_invalid_axis():
     gdf = cudf.DataFrame(np.array([1.123, 2.343, 5.890, 0.0]))
     with pytest.raises(NotImplementedError, match="Only axis=0 is supported."):
         gdf.diff(periods=1, axis=1)
@@ -9152,16 +9151,30 @@ def test_diff_dataframe_invalid_axis():
             "string_col": ["a", "b", "c", "d", "e"],
         },
         ["a", "b", "c", "d", "e"],
-        [np.nan, None, np.nan, None],
     ],
 )
-def test_diff_dataframe_non_numeric_dypes(data):
+def test_diff_unsupported_dtypes(data):
     gdf = cudf.DataFrame(data)
     with pytest.raises(
-        NotImplementedError,
-        match="DataFrame.diff only supports numeric dtypes",
+        TypeError,
+        match=r"unsupported operand type\(s\)",
     ):
-        gdf.diff(periods=2, axis=0)
+        gdf.diff()
+
+
+def test_diff_many_dtypes():
+    pdf = pd.DataFrame(
+        {
+            "dates": pd.date_range("2020-01-01", "2020-01-06", freq="D"),
+            "bools": [True, True, True, False, True, True],
+            "floats": [1.0, 2.0, 3.5, np.nan, 5.0, -1.7],
+            "ints": [1, 2, 3, 3, 4, 5],
+            "nans_nulls": [np.nan, None, None, np.nan, np.nan, None],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.diff(), gdf.diff())
+    assert_eq(pdf.diff(periods=2), gdf.diff(periods=2))
 
 
 def test_dataframe_assign_cp_np_array():

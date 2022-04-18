@@ -156,6 +156,7 @@ bool CompactProtocolReader::read(SchemaElement* s)
                             ParquetFieldEnum<ConvertedType>(6, s->converted_type),
                             ParquetFieldInt32(7, s->decimal_scale),
                             ParquetFieldInt32(8, s->decimal_precision),
+                            ParquetFieldOptionalInt32(9, s->field_id),
                             ParquetFieldStruct(10, s->logical_type));
   return function_builder(this, op);
 }
