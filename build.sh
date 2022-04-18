@@ -148,10 +148,8 @@ function buildLibCudfJniInDocker {
                 -DCUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DPER_THREAD_DEFAULT_STREAM=ON \
-                -DRMM_LOGGING_LEVEL=OFF \
                 -DUSE_GDS=ON \
                 -DGPU_ARCHS=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
-                -DCUDF_JNI_ARROW_STATIC=ON \
                 -DCUDF_JNI_LIBCUDF_STATIC=ON \
                 -Dtest=*,!CuFileTest"
 }
