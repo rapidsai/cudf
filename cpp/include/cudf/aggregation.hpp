@@ -348,7 +348,8 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *
  * Note:
  *  1. This method could work faster with the rows that are presorted by the group keys and order_by
- *     columns.
+ *     columns. Though groupby object does not require order_by column to be sorted, groupby rank
+ *     scan aggregation does require the order_by column to be sorted if the keys are sorted.
  *  2. `RANK` aggregations are not compatible with exclusive scans.
  *  3. All rank methods except AVERAGE method and percentage=True returns size_type column.
  *     For AVERAGE method and percentage=True, the return type is double column.
@@ -418,7 +419,9 @@ std::unique_ptr<Base> make_rank_aggregation(rank_method method,
  * column containing the ordering columns.
  *
  * Note:
- *  1. This method requires that the rows are presorted by the group keys and order_by columns.
+ *  1. This method could work faster with the rows that are presorted by the group keys and order_by
+ *     columns. Though groupby object does not require order_by column to be sorted, groupby rank
+ *     scan aggregation does require the order_by column to be sorted if the keys are sorted.
  *  2. `ANSI_SQL_PERCENT_RANK` aggregations will return a fully valid column regardless of
  * null_handling policy specified in the scan.
  *  3. `ANSI_SQL_PERCENT_RANK` aggregations are not compatible with exclusive scans.
