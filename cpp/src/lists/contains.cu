@@ -345,7 +345,7 @@ struct dispatch_index_of {
       auto const child_tview = table_view{{child}};
       auto const keys_tview  = get_search_keys_table_view(search_keys);
 
-#if 1
+#if 0
       // Prepare to flatten the structs column and scalar.
       auto const has_any_nulls = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
       auto const flatten_nullability = has_any_nulls
