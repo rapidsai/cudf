@@ -2,7 +2,7 @@
 
 import logging
 import random
-from collections import abc as abc
+from collections import abc
 
 import numpy as np
 

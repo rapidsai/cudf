@@ -9,8 +9,7 @@ import numbers
 import pickle
 import sys
 import warnings
-from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections import abc, defaultdict
 from typing import (
     Any,
     Callable,
@@ -1857,7 +1856,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Optional[BaseIndex],
     ]:
         # Check built-in types first for speed.
-        if isinstance(other, (list, dict, Sequence, Mapping)):
+        if isinstance(other, (list, dict, abc.Sequence, abc.Mapping)):
             warnings.warn(
                 "Binary operations between host objects such as "
                 f"{type(other)} and cudf.DataFrame are deprecated and will be "
@@ -1878,7 +1877,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
-        elif isinstance(other, (list, Sequence)):
+        elif isinstance(other, (list, abc.Sequence)):
             rhs = {name: o for (name, o) in zip(self._data, other)}
         elif isinstance(other, Series):
             rhs = dict(zip(other.index.values_host, other.values_host))
@@ -1907,7 +1906,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # the fill value.
             left_default = fill_value
 
-        if not isinstance(rhs, (dict, Mapping)):
+        if not isinstance(rhs, (dict, abc.Mapping)):
             return NotImplemented, None
 
         operands = {
@@ -2961,7 +2960,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis == 0 or axis is not None:
             raise NotImplementedError("axis not implemented yet")
 
-        if isinstance(aggs, Iterable) and not isinstance(aggs, (str, dict)):
+        if isinstance(aggs, abc.Iterable) and not isinstance(
+            aggs, (str, dict)
+        ):
             result = DataFrame()
             # TODO : Allow simultaneous pass for multi-aggregation as
             # a future optimization
@@ -2997,13 +2998,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             f"'Series' object"
                         )
                     result[key] = getattr(col, value)()
-            elif all([isinstance(val, Iterable) for val in aggs.values()]):
+            elif all([isinstance(val, abc.Iterable) for val in aggs.values()]):
                 idxs = set()
                 for val in aggs.values():
-                    if isinstance(val, Iterable):
-                        idxs.update(val)
-                    elif isinstance(val, str):
+                    if isinstance(val, str):
                         idxs.add(val)
+                    elif isinstance(val, abc.Iterable):
+                        idxs.update(val)
                 idxs = sorted(list(idxs))
                 for agg in idxs:
                     if agg is callable:
@@ -3017,7 +3018,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         len(idxs), dtype=col.dtype, masked=True
                     )
                     ans = cudf.Series(data=col_empty, index=idxs)
-                    if isinstance(aggs.get(key), Iterable):
+                    if isinstance(aggs.get(key), abc.Iterable):
                         # TODO : Allow simultaneous pass for multi-aggregation
                         # as a future optimization
                         for agg in aggs.get(key):
@@ -6157,7 +6158,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: Iterable[str],
+        column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
