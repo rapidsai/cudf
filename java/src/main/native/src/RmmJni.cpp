@@ -329,8 +329,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
 
   try {
     // make sure the CUDA device is setup in the context
-    JNI_CUDA_CHECK(env, cudaFree(0));
-    JNI_CUDA_CHECK(env, cudaGetDevice(&device_id));
+    JNI_CUDA_CHECK(cudaFree(0));
+    JNI_CUDA_CHECK(cudaGetDevice(&device_id));
   }
   CATCH_CUDA_ERROR_AND_THROW(env, );
 

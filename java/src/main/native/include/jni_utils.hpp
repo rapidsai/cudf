@@ -782,7 +782,7 @@ inline void throw_jni_exception(const char *msg) {
     return ret_val;                                                                                \
   } while (0)
 
-#define JNI_CUDA_TRY(env, ret_val, call)                                                           \
+#define JNI_CUDA_TRY(ret_val, call)                                                                \
   do {                                                                                             \
     cudaError_t internal_cuda_status = (call);                                                     \
     if (cudaSuccess != internal_cuda_status) {                                                     \
@@ -791,7 +791,7 @@ inline void throw_jni_exception(const char *msg) {
     }                                                                                              \
   } while (0)
 
-#define JNI_CUDA_CHECK(env, cuda_status)                                                           \
+#define JNI_CUDA_CHECK(cuda_status)                                                                \
   do {                                                                                             \
     if (cudaSuccess != cuda_status) {                                                              \
       cudf::detail::throw_cuda_error(cuda_status, __FILE__, __LINE__);                             \

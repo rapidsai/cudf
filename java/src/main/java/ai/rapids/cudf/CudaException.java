@@ -15,7 +15,6 @@
  */
 package ai.rapids.cudf;
 
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -48,6 +47,7 @@ public class CudaException extends RuntimeException {
    * The Java mirror of cudaError, which facilities the tracking of CUDA errors in JVM.
    */
   public enum CudaError {
+    UnknownNativeError(-1), // native CUDA error type which Java doesn't have a representation
     cudaErrorInvalidValue(1),
     cudaErrorMemoryAllocation(2),
     cudaErrorInitializationError(3),
@@ -304,7 +304,7 @@ public class CudaException extends RuntimeException {
 
     public static CudaError parseErrorCode(int errorCode) {
       if (!codeToError.containsKey(errorCode)) {
-        throw new CudfException("Unknown Cuda error code: " + errorCode);
+        return UnknownNativeError;
       }
       return codeToError.get(errorCode);
     }
