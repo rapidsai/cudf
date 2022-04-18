@@ -13,7 +13,6 @@ from contextlib import contextmanager
 from copy import copy
 
 import cupy
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -7332,7 +7331,7 @@ def test_sample_axis_0(
 
 @pytest.mark.parametrize("replace", [True, False])
 @pytest.mark.parametrize(
-    "random_state_lib", [cp.random.RandomState, np.random.RandomState]
+    "random_state_lib", [cupy.random.RandomState, np.random.RandomState]
 )
 def test_sample_reproducibility(replace, random_state_lib):
     df = cudf.DataFrame({"a": cupy.arange(0, 1024)})
@@ -7384,7 +7383,7 @@ def test_oversample_without_replace(n, frac, axis):
     )
 
 
-@pytest.mark.parametrize("random_state", [None, cp.random.RandomState(42)])
+@pytest.mark.parametrize("random_state", [None, cupy.random.RandomState(42)])
 def test_sample_unsupported_arguments(random_state):
     df = cudf.DataFrame({"float": [0.05, 0.2, 0.3, 0.2, 0.25]})
     with pytest.raises(

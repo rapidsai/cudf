@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime as dt
+import datetime
 import locale
 import re
 from locale import nl_langinfo
@@ -237,9 +237,9 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(other, (cudf.Scalar, ColumnBase, cudf.DateOffset)):
             return other
 
-        if isinstance(other, dt.datetime):
+        if isinstance(other, datetime.datetime):
             other = np.datetime64(other)
-        elif isinstance(other, dt.timedelta):
+        elif isinstance(other, datetime.timedelta):
             other = np.timedelta64(other)
         elif isinstance(other, pd.Timestamp):
             other = other.to_datetime64()

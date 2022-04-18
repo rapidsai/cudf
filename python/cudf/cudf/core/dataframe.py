@@ -5596,14 +5596,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @ioutils.doc_to_parquet()
     def to_parquet(self, path, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import parquet as pq
+        from cudf.io import parquet
 
-        return pq.to_parquet(self, path, *args, **kwargs)
+        return parquet.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import feather as feather
+        from cudf.io import feather
 
         feather.to_feather(self, path, *args, **kwargs)
 
@@ -5623,7 +5623,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         **kwargs,
     ):
         """{docstring}"""
-        from cudf.io import csv as csv
+        from cudf.io import csv
 
         return csv.to_csv(
             self,
@@ -5643,7 +5643,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @ioutils.doc_to_orc()
     def to_orc(self, fname, compression=None, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import orc as orc
+        from cudf.io import orc
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
