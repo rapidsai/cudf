@@ -362,14 +362,15 @@ struct dispatch_unary_cast_to {
                                      rmm::mr::device_memory_resource*)
 
   {
-    if (!cudf::is_fixed_width<TargetT>())
+    if (!cudf::is_fixed_width<TargetT>()) {
       CUDF_FAIL("Column type must be numeric or chrono or decimal32/64/128");
-    else if (cudf::is_fixed_point<SourceT>())
+    } else if (cudf::is_fixed_point<SourceT>()) {
       CUDF_FAIL("Currently only decimal32/64/128 to floating point/integral is supported");
-    else if (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>())
+    } else if (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>()) {
       CUDF_FAIL("Timestamps can be created only from duration");
-    else
+    } else {
       CUDF_FAIL("Timestamps cannot be converted to numeric without converting it to a duration");
+    }
   }
 };
 
