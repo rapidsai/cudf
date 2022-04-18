@@ -25,7 +25,7 @@ from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 def from_dlpack(dlpack_capsule):
     """
-    Converts a DLPack Tensor PyCapsule into a cudf Frame object.
+    Converts a DLPack Tensor PyCapsule into a list of columns.
 
     DLPack Tensor PyCapsule is expected to have the name "dltensor".
     """
@@ -139,7 +139,7 @@ def from_arrow(object input_table):
 
     Returns
     -------
-    cudf Frame
+    A list of columns to construct Frame object
     """
     cdef shared_ptr[CTable] cpp_arrow_table = (
         pyarrow_unwrap_table(input_table)
