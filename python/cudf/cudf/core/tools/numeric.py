@@ -57,7 +57,7 @@ def to_numeric(arg, errors="raise", downcast=None):
         otherwise ndarray
 
     Notes
-    -------
+    -----
     An important difference from pandas is that this function does not accept
     mixed numeric/non-numeric type sequences. For example ``[1, 'a']``.
     A ``TypeError`` will be raised when such input is received, regardless of
