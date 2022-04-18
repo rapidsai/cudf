@@ -124,20 +124,26 @@ __device__ inline double stod(string_view const& d_str)
   exp_ten *= exp_sign;
   exp_ten += exp_off;
   exp_ten += num_digits - 1;
-  if (exp_ten > std::numeric_limits<double>::max_exponent10)
+  if (exp_ten > std::numeric_limits<double>::max_exponent10) {
     return sign > 0 ? std::numeric_limits<double>::infinity()
                     : -std::numeric_limits<double>::infinity();
-  else if (exp_ten < std::numeric_limits<double>::min_exponent10)
-    return double{0};
+  }
+  // else if (exp_ten < std::numeric_limits<double>::min_exponent10)
+  //  return double{0};
 
   double base = sign * static_cast<double>(digits);
 
   exp_ten += 1 - num_digits;
-  // extra floating-point division needed only in extreme range (e-287 - e-307)
-  // where num_digits may push exp_ten below min_exponent10 (e-307)
-  if (exp_ten < std::numeric_limits<double>::min_exponent10) {
-    base = base / exp10(static_cast<double>(num_digits - 1));
+  // If 10^exp_ten would result in a subnormal value, the base and
+  // exponent should be adjusted so that 10^exp_ten is a normal value
+  auto const subnormal_shift = std::numeric_limits<double>::min_exponent10 - exp_ten;
+  if (subnormal_shift > 0) {
+    // Handle subnormal values. Ensure that both base and exponent are
+    // normal values before computing their product.
+    base = base / exp10(static_cast<double>(num_digits - 1 + subnormal_shift));
     exp_ten += num_digits - 1;  // adjust exponent
+    auto const exponent = exp10(static_cast<double>(exp_ten + subnormal_shift));
+    return base * exponent;
   }
 
   double const exponent = exp10(static_cast<double>(std::abs(exp_ten)));
