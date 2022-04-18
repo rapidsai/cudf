@@ -23,6 +23,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+#include <stdexcept>
 
 class ScatterUntypedTests : public cudf::test::BaseFixture {
 };
@@ -181,8 +182,8 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarOutOfBounds)
 
   auto const target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::scatter(source_vector, upper_bound, target_table, true), cudf::logic_error);
-  EXPECT_THROW(cudf::scatter(source_vector, lower_bound, target_table, true), cudf::logic_error);
+  EXPECT_THROW(cudf::scatter(source_vector, upper_bound, target_table, true), std::out_of_range);
+  EXPECT_THROW(cudf::scatter(source_vector, lower_bound, target_table, true), std::out_of_range);
 }
 
 // Validate that each of the index types work
