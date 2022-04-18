@@ -201,7 +201,9 @@ class Merge:
             right_key.set(self.rhs, rcol_casted, validate=False)
 
         left_rows, right_rows = self._joiner(
-            left_join_cols, right_join_cols, how=self.how,
+            left_join_cols,
+            right_join_cols,
+            how=self.how,
         )
 
         gather_index = self._using_left_index or self._using_right_index
