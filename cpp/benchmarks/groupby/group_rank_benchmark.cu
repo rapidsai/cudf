@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/groupby.hpp>
@@ -22,102 +22,88 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-class Groupby : public cudf::benchmark {
-};
+#include <nvbench/nvbench.cuh>
 
 template <cudf::rank_method method>
-void BM_group_rank(benchmark::State& state)
+static void nvbench_groupby_rank(nvbench::state& state,
+                                 nvbench::type_list<nvbench::enum_type<method>>)
 {
   using namespace cudf;
+  using type           = int64_t;
+  constexpr auto dtype = type_to_id<int64_t>();
+  cudf::rmm_pool_raii pool_raii;
 
-  const size_type column_size{(size_type)state.range(0)};
-  const int num_groups = 100;
+  bool const is_sorted              = state.get_int64("is_sorted");
+  cudf::size_type const column_size = state.get_int64("data_size");
+  constexpr int num_groups          = 100;
 
   data_profile profile;
   profile.set_null_frequency(std::nullopt);
   profile.set_cardinality(0);
-  profile.set_distribution_params<int64_t>(
-    cudf::type_to_id<int64_t>(), distribution_id::UNIFORM, 0, num_groups);
+  profile.set_distribution_params<type>(dtype, distribution_id::UNIFORM, 0, num_groups);
 
-  auto source_table = create_random_table(
-    {cudf::type_to_id<int64_t>(), cudf::type_to_id<int64_t>()}, row_count{column_size}, profile);
+  auto source_table = create_random_table({dtype, dtype}, row_count{column_size}, profile);
 
-  // TODO values to be sorted too for groupby rank
-  // auto sorted_table = cudf::sort(*source_table);
+  // values to be pre-sorted too for groupby rank
+  if (is_sorted) source_table = cudf::sort(*source_table);
+
+  table_view keys{{source_table->view().column(0)}};
+  column_view order_by{source_table->view().column(1)};
 
   auto agg = cudf::make_rank_aggregation<groupby_scan_aggregation>(method);
   std::vector<groupby::scan_request> requests;
   requests.emplace_back(groupby::scan_request());
-  requests[0].values = source_table->view().column(1);
+  requests[0].values = order_by;
   requests[0].aggregations.push_back(std::move(agg));
 
-  groupby::groupby gb_obj(
-    table_view{{source_table->view().column(0)}}, null_policy::EXCLUDE, sorted::NO);
+  groupby::groupby gb_obj(keys, null_policy::EXCLUDE, is_sorted ? sorted::YES : sorted::NO);
 
-  for (auto _ : state) {
-    cuda_event_timer timer(state, true);
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    rmm::cuda_stream_view stream_view{launch.get_stream()};
     // groupby scan uses sort implementation
     auto result = gb_obj.scan(requests);
-  }
-}
-//
-
-BENCHMARK_DEFINE_F(Groupby, rank_dense)(::benchmark::State& state)
-{
-  BM_group_rank<cudf::rank_method::DENSE>(state);
+  });
 }
 
-BENCHMARK_REGISTER_F(Groupby, rank_dense)
-  ->Arg(1'000'000)
-  ->Arg(10'000'000)
-  ->Arg(100'000'000)
-  ->UseManualTime()
-  ->Unit(benchmark::kMillisecond);
+enum class rank_method : int32_t {};
 
-BENCHMARK_DEFINE_F(Groupby, rank_min)(::benchmark::State& state)
-{
-  BM_group_rank<cudf::rank_method::MIN>(state);
-}
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  cudf::rank_method,
+  [](cudf::rank_method value) {
+    switch (value) {
+      case cudf::rank_method::FIRST: return "FIRST";
+      case cudf::rank_method::AVERAGE: return "AVERAGE";
+      case cudf::rank_method::MIN: return "MIN";
+      case cudf::rank_method::MAX: return "MAX";
+      case cudf::rank_method::DENSE: return "DENSE";
+      default: return "unknown";
+    }
+  },
+  [](cudf::rank_method value) {
+    switch (value) {
+      case cudf::rank_method::FIRST: return "cudf::rank_method::FIRST";
+      case cudf::rank_method::AVERAGE: return "cudf::rank_method::AVERAGE";
+      case cudf::rank_method::MIN: return "cudf::rank_method::MIN";
+      case cudf::rank_method::MAX: return "cudf::rank_method::MAX";
+      case cudf::rank_method::DENSE: return "cudf::rank_method::DENSE";
+      default: return "unknown";
+    }
+  })
 
-BENCHMARK_REGISTER_F(Groupby, rank_min)
-  ->Arg(1'000'000)
-  ->Arg(10'000'000)
-  ->Arg(100'000'000)
-  ->UseManualTime()
-  ->Unit(benchmark::kMillisecond);
+using methods = nvbench::enum_type_list<cudf::rank_method::AVERAGE,
+                                        cudf::rank_method::DENSE,
+                                        cudf::rank_method::FIRST,
+                                        cudf::rank_method::MAX,
+                                        cudf::rank_method::MIN>;
 
-BENCHMARK_DEFINE_F(Groupby, rank_max)(::benchmark::State& state)
-{
-  BM_group_rank<cudf::rank_method::MAX>(state);
-}
+NVBENCH_BENCH_TYPES(nvbench_groupby_rank, NVBENCH_TYPE_AXES(methods))
+  .set_type_axes_names({"rank_method"})
+  .set_name("groupby_rank")
+  .add_int64_axis("data_size",
+                  {
+                    1000000,    // 1M
+                    10000000,   // 10M
+                    100000000,  // 100M
+                  })
 
-BENCHMARK_REGISTER_F(Groupby, rank_max)
-  ->Arg(1'000'000)
-  ->Arg(10'000'000)
-  ->Arg(100'000'000)
-  ->UseManualTime()
-  ->Unit(benchmark::kMillisecond);
-
-BENCHMARK_DEFINE_F(Groupby, rank_first)(::benchmark::State& state)
-{
-  BM_group_rank<cudf::rank_method::FIRST>(state);
-}
-
-BENCHMARK_REGISTER_F(Groupby, rank_first)
-  ->Arg(1'000'000)
-  ->Arg(10'000'000)
-  ->Arg(100'000'000)
-  ->UseManualTime()
-  ->Unit(benchmark::kMillisecond);
-
-BENCHMARK_DEFINE_F(Groupby, rank_average)(::benchmark::State& state)
-{
-  BM_group_rank<cudf::rank_method::AVERAGE>(state);
-}
-
-BENCHMARK_REGISTER_F(Groupby, rank_average)
-  ->Arg(1'000'000)
-  ->Arg(10'000'000)
-  ->Arg(100'000'000)
-  ->UseManualTime()
-  ->Unit(benchmark::kMillisecond);
+  .add_int64_axis("is_sorted", {0, 1});

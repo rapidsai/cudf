@@ -204,6 +204,8 @@ ConfigureBench(
   groupby/group_rank_benchmark.cu
 )
 
+ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank_benchmark.cu)
+
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
 ConfigureBench(HASHING_BENCH hashing/hash.cpp hashing/partition.cpp)
