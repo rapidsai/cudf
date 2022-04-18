@@ -797,9 +797,8 @@ class device_row_hasher {
     static constexpr hash_value_type NON_NULL_HASH = 0;
 
    public:
-    __device__ element_hasher_adapter(Nullate check_nulls,
-                                      uint32_t seed = DEFAULT_HASH_SEED) noexcept
-      : _check_nulls(check_nulls), _seed(seed)
+    __device__ element_hasher_adapter(Nullate check_nulls) noexcept
+      : _element_hasher(check_nulls), _check_nulls(check_nulls)
     {
     }
 
@@ -807,15 +806,14 @@ class device_row_hasher {
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
     {
-      return element_hasher<hash_fn, Nullate>(_check_nulls, _seed, NULL_HASH)
-        .template operator()<T>(col, row_index);
+      return _element_hasher.template operator()<T>(col, row_index);
     }
 
     template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
     __device__ hash_value_type operator()(column_device_view const& col,
                                           size_type row_index) const noexcept
     {
-      auto hash                   = hash_value_type{_seed};
+      auto hash                   = hash_value_type{0};
       column_device_view curr_col = col.slice(row_index, 1);
       while (is_nested(curr_col.type())) {
         if (_check_nulls) {
@@ -842,17 +840,13 @@ class device_row_hasher {
       for (int i = 0; i < curr_col.size(); ++i) {
         hash = cudf::detail::hash_combine(
           hash,
-          type_dispatcher<dispatch_void_if_nested>(
-            curr_col.type(),
-            element_hasher<hash_fn, Nullate>{_check_nulls, DEFAULT_HASH_SEED, NULL_HASH},
-            curr_col,
-            i));
+          type_dispatcher<dispatch_void_if_nested>(curr_col.type(), _element_hasher, curr_col, i));
       }
       return hash;
     }
 
-    uint32_t _seed;
-    Nullate _check_nulls;
+    element_hasher<hash_fn, Nullate> const _element_hasher;
+    Nullate const _check_nulls;
   };
 
   CUDF_HOST_DEVICE device_row_hasher(Nullate check_nulls,
@@ -862,9 +856,9 @@ class device_row_hasher {
   {
   }
 
-  table_device_view _table;
-  Nullate _check_nulls;
-  uint32_t _seed;
+  table_device_view const _table;
+  Nullate const _check_nulls;
+  uint32_t const _seed;
 };
 
 // Inject row::equality::preprocessed_table into the row::hash namespace
