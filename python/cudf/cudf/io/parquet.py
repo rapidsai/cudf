@@ -709,7 +709,7 @@ def _get_partitioned(
 
     for idx, keys in enumerate(part_names.itertuples(index=False)):
         current_offset = (part_offsets[idx], part_offsets[idx + 1])
-        # num_chunks = 1
+        num_chunks = 1
         if max_file_size is not None:
             start, end = current_offset
             sliced_df = grouped_df[start:end]
@@ -718,7 +718,7 @@ def _get_partitioned(
                 parts = current_file_size // max_file_size
                 new_offsets = list(range(start, end, parts))
                 new_offsets.append(end)
-                # num_chunks = len(new_offsets) - 1
+                num_chunks = len(new_offsets) - 1
                 full_offsets.extend(new_offsets)
             else:
                 full_offsets.append(end)
@@ -730,7 +730,20 @@ def _get_partitioned(
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdirs(prefix, exist_ok=True)
-        filename = filename or _generate_filename()
+        if max_file_size is not None:
+            curr_file_num = 0
+            while num_chunks > 0:
+                full_path = fs.sep.join(
+                    [prefix, filename + str(curr_file_num) + ".parquet"]
+                )
+                curr_file_num += 1
+                num_chunks -= 1
+                full_paths.append(full_path)
+                metadata_file_paths.append(
+                    fs.sep.join([subdir, filename + str(num_chunks)])
+                )
+        else:
+            filename = filename or _generate_filename()
         full_path = fs.sep.join([prefix, filename])
         full_paths.append(full_path)
         metadata_file_paths.append(fs.sep.join([subdir, filename]))
