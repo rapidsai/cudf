@@ -6211,11 +6211,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "interleave_columns does not support 'category' dtype."
             )
 
-        result = self._constructor_sliced._from_data(
+        return self._constructor_sliced._from_data(
             {None: libcudf.reshape.interleave_columns([*self._columns])}
         )
-
-        return result
 
 
 def from_dataframe(df, allow_copy=False):
