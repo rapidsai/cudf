@@ -3001,10 +3001,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             elif all([isinstance(val, abc.Iterable) for val in aggs.values()]):
                 idxs = set()
                 for val in aggs.values():
-                    if isinstance(val, abc.Iterable):
-                        idxs.update(val)
-                    elif isinstance(val, str):
+                    if isinstance(val, str):
                         idxs.add(val)
+                    elif isinstance(val, abc.Iterable):
+                        idxs.update(val)
                 idxs = sorted(list(idxs))
                 for agg in idxs:
                     if agg is callable:
