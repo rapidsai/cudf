@@ -486,7 +486,8 @@ def melt(
     1  b         B          3
     2  c         B          5
     """
-    assert col_level is None
+    if col_level is not None:
+        raise NotImplementedError("col_level != None is not supported yet.")
 
     # Arg cleaning
 
