@@ -21,11 +21,11 @@ package ai.rapids.cudf;
  * To continue using CUDA, the process must be terminated and relaunched.
  */
 public class CudaFatalException extends CudaException {
-  CudaFatalException(String message, String cudaErrorName) {
-    super(message, cudaErrorName);
+  CudaFatalException(String message, int errorCode) {
+    super(message, errorCode);
   }
 
-  CudaFatalException(String message, String cudaErrorName, Throwable cause) {
-    super(message, cudaErrorName, cause);
+  CudaFatalException(String message, int errorCode, Throwable cause) {
+    super(message, errorCode, cause);
   }
 }

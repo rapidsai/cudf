@@ -15,6 +15,10 @@
  */
 package ai.rapids.cudf;
 
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Exception from the cuda language/library.  Be aware that because of how cuda does asynchronous
  * processing exceptions from cuda can be thrown by method calls that did not cause the exception
@@ -28,14 +32,14 @@ package ai.rapids.cudf;
  * don't switch between threads for different parts of processing that can be retried as a chunk.
  */
 public class CudaException extends RuntimeException {
-  CudaException(String message, String cudaErrorName) {
+  CudaException(String message, int errorCode) {
     super(message);
-    cudaError = CudaError.valueOf(cudaErrorName);
+    cudaError = CudaError.parseErrorCode(errorCode);
   }
 
-  CudaException(String message, String cudaErrorName, Throwable cause) {
+  CudaException(String message, int errorCode, Throwable cause) {
     super(message, cause);
-    cudaError = CudaError.valueOf(cudaErrorName);
+    cudaError = CudaError.parseErrorCode(errorCode);
   }
 
   public final CudaError cudaError;
@@ -169,8 +173,140 @@ public class CudaException extends RuntimeException {
 
     final int code;
 
+    private static Map<Integer, CudaError> codeToError = new HashMap<Integer, CudaError>(){{
+      put(cudaErrorInvalidValue.code, cudaErrorInvalidValue);
+      put(cudaErrorMemoryAllocation.code, cudaErrorMemoryAllocation);
+      put(cudaErrorInitializationError.code, cudaErrorInitializationError);
+      put(cudaErrorCudartUnloading.code, cudaErrorCudartUnloading);
+      put(cudaErrorProfilerDisabled.code, cudaErrorProfilerDisabled);
+      put(cudaErrorProfilerNotInitialized.code, cudaErrorProfilerNotInitialized);
+      put(cudaErrorProfilerAlreadyStarted.code, cudaErrorProfilerAlreadyStarted);
+      put(cudaErrorProfilerAlreadyStopped.code, cudaErrorProfilerAlreadyStopped);
+      put(cudaErrorInvalidConfiguration.code, cudaErrorInvalidConfiguration);
+      put(cudaErrorInvalidPitchValue.code, cudaErrorInvalidPitchValue);
+      put(cudaErrorInvalidSymbol.code, cudaErrorInvalidSymbol);
+      put(cudaErrorInvalidHostPointer.code, cudaErrorInvalidHostPointer);
+      put(cudaErrorInvalidDevicePointer.code, cudaErrorInvalidDevicePointer);
+      put(cudaErrorInvalidTexture.code, cudaErrorInvalidTexture);
+      put(cudaErrorInvalidTextureBinding.code, cudaErrorInvalidTextureBinding);
+      put(cudaErrorInvalidChannelDescriptor.code, cudaErrorInvalidChannelDescriptor);
+      put(cudaErrorInvalidMemcpyDirection.code, cudaErrorInvalidMemcpyDirection);
+      put(cudaErrorAddressOfConstant.code, cudaErrorAddressOfConstant);
+      put(cudaErrorTextureFetchFailed.code, cudaErrorTextureFetchFailed);
+      put(cudaErrorTextureNotBound.code, cudaErrorTextureNotBound);
+      put(cudaErrorSynchronizationError.code, cudaErrorSynchronizationError);
+      put(cudaErrorInvalidFilterSetting.code, cudaErrorInvalidFilterSetting);
+      put(cudaErrorInvalidNormSetting.code, cudaErrorInvalidNormSetting);
+      put(cudaErrorMixedDeviceExecution.code, cudaErrorMixedDeviceExecution);
+      put(cudaErrorNotYetImplemented.code, cudaErrorNotYetImplemented);
+      put(cudaErrorMemoryValueTooLarge.code, cudaErrorMemoryValueTooLarge);
+      put(cudaErrorStubLibrary.code, cudaErrorStubLibrary);
+      put(cudaErrorInsufficientDriver.code, cudaErrorInsufficientDriver);
+      put(cudaErrorCallRequiresNewerDriver.code, cudaErrorCallRequiresNewerDriver);
+      put(cudaErrorInvalidSurface.code, cudaErrorInvalidSurface);
+      put(cudaErrorDuplicateVariableName.code, cudaErrorDuplicateVariableName);
+      put(cudaErrorDuplicateTextureName.code, cudaErrorDuplicateTextureName);
+      put(cudaErrorDuplicateSurfaceName.code, cudaErrorDuplicateSurfaceName);
+      put(cudaErrorDevicesUnavailable.code, cudaErrorDevicesUnavailable);
+      put(cudaErrorIncompatibleDriverContext.code, cudaErrorIncompatibleDriverContext);
+      put(cudaErrorMissingConfiguration.code, cudaErrorMissingConfiguration);
+      put(cudaErrorPriorLaunchFailure.code, cudaErrorPriorLaunchFailure);
+      put(cudaErrorLaunchMaxDepthExceeded.code, cudaErrorLaunchMaxDepthExceeded);
+      put(cudaErrorLaunchFileScopedTex.code, cudaErrorLaunchFileScopedTex);
+      put(cudaErrorLaunchFileScopedSurf.code, cudaErrorLaunchFileScopedSurf);
+      put(cudaErrorSyncDepthExceeded.code, cudaErrorSyncDepthExceeded);
+      put(cudaErrorLaunchPendingCountExceeded.code, cudaErrorLaunchPendingCountExceeded);
+      put(cudaErrorInvalidDeviceFunction.code, cudaErrorInvalidDeviceFunction);
+      put(cudaErrorNoDevice.code, cudaErrorNoDevice);
+      put(cudaErrorInvalidDevice.code, cudaErrorInvalidDevice);
+      put(cudaErrorDeviceNotLicensed.code, cudaErrorDeviceNotLicensed);
+      put(cudaErrorSoftwareValidityNotEstablished.code, cudaErrorSoftwareValidityNotEstablished);
+      put(cudaErrorStartupFailure.code, cudaErrorStartupFailure);
+      put(cudaErrorInvalidKernelImage.code, cudaErrorInvalidKernelImage);
+      put(cudaErrorDeviceUninitialized.code, cudaErrorDeviceUninitialized);
+      put(cudaErrorMapBufferObjectFailed.code, cudaErrorMapBufferObjectFailed);
+      put(cudaErrorUnmapBufferObjectFailed.code, cudaErrorUnmapBufferObjectFailed);
+      put(cudaErrorArrayIsMapped.code, cudaErrorArrayIsMapped);
+      put(cudaErrorAlreadyMapped.code, cudaErrorAlreadyMapped);
+      put(cudaErrorNoKernelImageForDevice.code, cudaErrorNoKernelImageForDevice);
+      put(cudaErrorAlreadyAcquired.code, cudaErrorAlreadyAcquired);
+      put(cudaErrorNotMapped.code, cudaErrorNotMapped);
+      put(cudaErrorNotMappedAsArray.code, cudaErrorNotMappedAsArray);
+      put(cudaErrorNotMappedAsPointer.code, cudaErrorNotMappedAsPointer);
+      put(cudaErrorECCUncorrectable.code, cudaErrorECCUncorrectable);
+      put(cudaErrorUnsupportedLimit.code, cudaErrorUnsupportedLimit);
+      put(cudaErrorDeviceAlreadyInUse.code, cudaErrorDeviceAlreadyInUse);
+      put(cudaErrorPeerAccessUnsupported.code, cudaErrorPeerAccessUnsupported);
+      put(cudaErrorInvalidPtx.code, cudaErrorInvalidPtx);
+      put(cudaErrorInvalidGraphicsContext.code, cudaErrorInvalidGraphicsContext);
+      put(cudaErrorNvlinkUncorrectable.code, cudaErrorNvlinkUncorrectable);
+      put(cudaErrorJitCompilerNotFound.code, cudaErrorJitCompilerNotFound);
+      put(cudaErrorUnsupportedPtxVersion.code, cudaErrorUnsupportedPtxVersion);
+      put(cudaErrorJitCompilationDisabled.code, cudaErrorJitCompilationDisabled);
+      put(cudaErrorUnsupportedExecAffinity.code, cudaErrorUnsupportedExecAffinity);
+      put(cudaErrorInvalidSource.code, cudaErrorInvalidSource);
+      put(cudaErrorFileNotFound.code, cudaErrorFileNotFound);
+      put(cudaErrorSharedObjectSymbolNotFound.code, cudaErrorSharedObjectSymbolNotFound);
+      put(cudaErrorSharedObjectInitFailed.code, cudaErrorSharedObjectInitFailed);
+      put(cudaErrorOperatingSystem.code, cudaErrorOperatingSystem);
+      put(cudaErrorInvalidResourceHandle.code, cudaErrorInvalidResourceHandle);
+      put(cudaErrorIllegalState.code, cudaErrorIllegalState);
+      put(cudaErrorSymbolNotFound.code, cudaErrorSymbolNotFound);
+      put(cudaErrorNotReady.code, cudaErrorNotReady);
+      put(cudaErrorIllegalAddress.code, cudaErrorIllegalAddress);
+      put(cudaErrorLaunchOutOfResources.code, cudaErrorLaunchOutOfResources);
+      put(cudaErrorLaunchTimeout.code, cudaErrorLaunchTimeout);
+      put(cudaErrorLaunchIncompatibleTexturing.code, cudaErrorLaunchIncompatibleTexturing);
+      put(cudaErrorPeerAccessAlreadyEnabled.code, cudaErrorPeerAccessAlreadyEnabled);
+      put(cudaErrorPeerAccessNotEnabled.code, cudaErrorPeerAccessNotEnabled);
+      put(cudaErrorSetOnActiveProcess.code, cudaErrorSetOnActiveProcess);
+      put(cudaErrorContextIsDestroyed.code, cudaErrorContextIsDestroyed);
+      put(cudaErrorAssert.code, cudaErrorAssert);
+      put(cudaErrorTooManyPeers.code, cudaErrorTooManyPeers);
+      put(cudaErrorHostMemoryAlreadyRegistered.code, cudaErrorHostMemoryAlreadyRegistered);
+      put(cudaErrorHostMemoryNotRegistered.code, cudaErrorHostMemoryNotRegistered);
+      put(cudaErrorHardwareStackError.code, cudaErrorHardwareStackError);
+      put(cudaErrorIllegalInstruction.code, cudaErrorIllegalInstruction);
+      put(cudaErrorMisalignedAddress.code, cudaErrorMisalignedAddress);
+      put(cudaErrorInvalidAddressSpace.code, cudaErrorInvalidAddressSpace);
+      put(cudaErrorInvalidPc.code, cudaErrorInvalidPc);
+      put(cudaErrorLaunchFailure.code, cudaErrorLaunchFailure);
+      put(cudaErrorCooperativeLaunchTooLarge.code, cudaErrorCooperativeLaunchTooLarge);
+      put(cudaErrorNotPermitted.code, cudaErrorNotPermitted);
+      put(cudaErrorNotSupported.code, cudaErrorNotSupported);
+      put(cudaErrorSystemNotReady.code, cudaErrorSystemNotReady);
+      put(cudaErrorSystemDriverMismatch.code, cudaErrorSystemDriverMismatch);
+      put(cudaErrorCompatNotSupportedOnDevice.code, cudaErrorCompatNotSupportedOnDevice);
+      put(cudaErrorMpsConnectionFailed.code, cudaErrorMpsConnectionFailed);
+      put(cudaErrorMpsRpcFailure.code, cudaErrorMpsRpcFailure);
+      put(cudaErrorMpsServerNotReady.code, cudaErrorMpsServerNotReady);
+      put(cudaErrorMpsMaxClientsReached.code, cudaErrorMpsMaxClientsReached);
+      put(cudaErrorMpsMaxConnectionsReached.code, cudaErrorMpsMaxConnectionsReached);
+      put(cudaErrorStreamCaptureUnsupported.code, cudaErrorStreamCaptureUnsupported);
+      put(cudaErrorStreamCaptureInvalidated.code, cudaErrorStreamCaptureInvalidated);
+      put(cudaErrorStreamCaptureMerge.code, cudaErrorStreamCaptureMerge);
+      put(cudaErrorStreamCaptureUnmatched.code, cudaErrorStreamCaptureUnmatched);
+      put(cudaErrorStreamCaptureUnjoined.code, cudaErrorStreamCaptureUnjoined);
+      put(cudaErrorStreamCaptureIsolation.code, cudaErrorStreamCaptureIsolation);
+      put(cudaErrorStreamCaptureImplicit.code, cudaErrorStreamCaptureImplicit);
+      put(cudaErrorCapturedEvent.code, cudaErrorCapturedEvent);
+      put(cudaErrorStreamCaptureWrongThread.code, cudaErrorStreamCaptureWrongThread);
+      put(cudaErrorTimeout.code, cudaErrorTimeout);
+      put(cudaErrorGraphExecUpdateFailure.code, cudaErrorGraphExecUpdateFailure);
+      put(cudaErrorExternalDevice.code, cudaErrorExternalDevice);
+      put(cudaErrorUnknown.code, cudaErrorUnknown);
+      put(cudaErrorApiFailureBase.code, cudaErrorApiFailureBase);
+    }};
+
     CudaError(int errorCode) {
       this.code = errorCode;
+    }
+
+    public static CudaError parseErrorCode(int errorCode) {
+      if (!codeToError.containsKey(errorCode)) {
+        throw new CudfException("Unknown Cuda error code: " + errorCode);
+      }
+      return codeToError.get(errorCode);
     }
 
   }

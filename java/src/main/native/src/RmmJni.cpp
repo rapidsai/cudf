@@ -325,12 +325,16 @@ extern "C" {
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, jclass clazz,
                                                                   jint allocation_mode, jint log_to,
                                                                   jstring jpath, jlong pool_size) {
+  int device_id;
+
   try {
     // make sure the CUDA device is setup in the context
     JNI_CUDA_CHECK(env, cudaFree(0));
-    int device_id;
     JNI_CUDA_CHECK(env, cudaGetDevice(&device_id));
+  }
+  CATCH_CUDA_ERROR_AND_THROW(env, );
 
+  try {
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
     bool use_arena_alloc = allocation_mode & 4;

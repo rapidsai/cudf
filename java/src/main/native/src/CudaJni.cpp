@@ -49,7 +49,7 @@ void auto_set_device(JNIEnv *env) {
       }
     }
   }
-  CATCH_STD(env, );
+  CATCH_CUDA_ERROR_AND_THROW(env, );
 }
 
 /** Fills all the bytes in the buffer 'buf' with 'value'. */
@@ -57,7 +57,7 @@ void device_memset_async(JNIEnv *env, rmm::device_buffer &buf, char value) {
   try {
     JNI_CUDA_CHECK(env, cudaMemsetAsync((void *)buf.data(), value, buf.size()));
   }
-  CATCH_STD(env, );
+  CATCH_CUDA_ERROR_AND_THROW(env, );
 }
 
 } // namespace jni
