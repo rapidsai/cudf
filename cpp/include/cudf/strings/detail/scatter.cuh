@@ -15,14 +15,13 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_device_view.cuh>
-//#include <cudf/detail/null_mask.hpp>
-//#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/scatter.h>

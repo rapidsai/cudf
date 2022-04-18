@@ -21,8 +21,7 @@
 #include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/detail/scatter_helper.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-//#include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
