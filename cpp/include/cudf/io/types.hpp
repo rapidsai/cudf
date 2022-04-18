@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -244,6 +244,7 @@ class column_in_metadata {
   bool _use_int96_timestamp = false;
   // bool _output_as_binary = false;
   thrust::optional<uint8_t> _decimal_precision;
+  thrust::optional<int32_t> _parquet_field_id;
   std::vector<column_in_metadata> children;
 
  public:
@@ -325,6 +326,18 @@ class column_in_metadata {
   }
 
   /**
+   * @brief Set the parquet field id of this column.
+   *
+   * @param field_id The parquet field id to set
+   * @return this for chaining
+   */
+  column_in_metadata& set_parquet_field_id(int32_t field_id)
+  {
+    _parquet_field_id = field_id;
+    return *this;
+  }
+
+  /**
    * @brief Get reference to a child of this column
    *
    * @param i Index of the child to get
@@ -378,6 +391,18 @@ class column_in_metadata {
    *         Check using `is_decimal_precision_set()` first.
    */
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
+
+  /**
+   * @brief Get whether parquet field id has been set for this column.
+   */
+  [[nodiscard]] bool is_parquet_field_id_set() const { return _parquet_field_id.has_value(); }
+
+  /**
+   * @brief Get the parquet field id that was set for this column.
+   * @throws If parquet field id was not set for this column.
+   *         Check using `is_parquet_field_id_set()` first.
+   */
+  [[nodiscard]] int32_t get_parquet_field_id() const { return _parquet_field_id.value(); }
 
   /**
    * @brief Get the number of children of this column
