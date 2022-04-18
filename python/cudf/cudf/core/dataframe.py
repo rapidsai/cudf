@@ -5688,7 +5688,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             index_names = [None] * len(new_index_columns)
         new_index = MultiIndex.from_frame(
-            DataFrame(
+            DataFrame._from_data(
                 dict(zip(range(0, len(new_index_columns)), new_index_columns))
             ),
             names=index_names,
@@ -5696,7 +5696,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Collect datatypes and cast columns as that type
         common_type = np.result_type(*self.dtypes)
-        homogenized = DataFrame(
+        homogenized = DataFrame._from_data(
             {
                 c: (
                     self._data[c].astype(common_type)
