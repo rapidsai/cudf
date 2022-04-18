@@ -34,6 +34,7 @@ from cudf.core.udf.typing import (
     _dstring_strip,
     _dstring_lstrip,
     _dstring_rstrip,
+    _dstring_append,
     _create_dstring_from_stringview,
     string_view,
     dstring
@@ -844,4 +845,33 @@ def masked_dstring_lstrip(context, builder, sig, args):
     result = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder)
     result.valid = source.valid
     result.value = builder.load(target_ptr)
+    return result._getvalue()
+
+def call_dstring_append(st, tgt):
+    return _dstring_append(st, tgt)
+
+@cuda_lower(operator.add, MaskedType(dstring), MaskedType(dstring))
+def masked_dstring_add(context, builder, sig, args):
+    source = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder, value=args[0])
+    target = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder, value=args[1])
+    
+    source_ptr = builder.alloca(source.value.type)
+    target_ptr = builder.alloca(source.value.type)
+
+
+    builder.store(source.value, source_ptr)
+    builder.store(target.value, target_ptr)
+
+    _ = context.compile_internal(
+        builder,
+        call_dstring_append,
+        nb_signature(
+            types.int32, types.CPointer(dstring), types.CPointer(dstring)
+        ),
+        (source_ptr, target_ptr),
+    )
+
+    result = cgutils.create_struct_proxy(MaskedType(dstring))(context, builder)
+    result.valid = source.valid
+    result.value = builder.load(source_ptr)
     return result._getvalue()

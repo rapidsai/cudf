@@ -504,6 +504,29 @@ class MaskedDstringSubstring(AbstractTemplate):
             # __getitem__ is actually a two argument function: (val, idx) -> ret
             return nb_signature(MaskedType(dstring), MaskedType(dstring), args[1])
 
+@cuda_decl_registry.register_global(operator.add)
+class MaskedDstringAppend(AbstractTemplate):
+    """
+    Typing for operations like st + 'abc' 
+    """
+
+    def generic(self, args, kws):
+        if (
+            isinstance(args[0], MaskedType)
+            and args[0].value_type == dstring
+            and (
+                # dstring + 'abc'
+                isinstance(args[1], types.StringLiteral)
+                or (
+                    # dstring + dstring
+                    isinstance(args[1], MaskedType) 
+                    and args[1].value_type == dstring
+                )
+            )
+        ):
+            return nb_signature(MaskedType(dstring), MaskedType(dstring), MaskedType(dstring))
+
+
 for binary_op in arith_ops + bitwise_ops + comparison_ops:
     # Every op shares the same typing class
     cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
@@ -701,6 +724,11 @@ _dstring_lstrip = cuda.declare_device(
 _dstring_rstrip = cuda.declare_device(
     "rstrip",
     types.int32(types.CPointer(dstring), types.CPointer(dstring), types.CPointer(dstring))
+)
+
+_dstring_append = cuda.declare_device(
+    "append",
+    types.int32(types.CPointer(dstring), types.CPointer(dstring))
 )
 
 _create_dstring_from_stringview = cuda.declare_device(
