@@ -295,12 +295,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedGather(
   JNI_NULL_CHECK(env, gather_map_list, "gather map is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto src_col = reinterpret_cast<cudf::lists_column_view *>(source_column);
-    auto gather_map = reinterpret_cast<cudf::lists_column_view *>(gather_map_list);
+    auto const &src_col =
+        cudf::lists_column_view(*reinterpret_cast<cudf::column_view *>(source_column));
+    auto const &gather_map =
+        cudf::lists_column_view(*reinterpret_cast<cudf::column_view *>(gather_map_list));
     auto out_bounds_policy = nullify_out_bounds ? cudf::out_of_bounds_policy::NULLIFY :
                                                   cudf::out_of_bounds_policy::DONT_CHECK;
-    return release_as_jlong(
-        cudf::lists::segmented_gather(*src_col, *gather_map, out_bounds_policy));
+    return release_as_jlong(cudf::lists::segmented_gather(src_col, gather_map, out_bounds_policy));
   }
   CATCH_STD(env, 0);
 }
