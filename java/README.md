@@ -75,16 +75,6 @@ If you decide to build without Docker and the build script, examining the cmake 
 settings in the [Java CI build script](ci/build-in-docker.sh) can be helpful if you are
 encountering difficulties during the build.
 
-## Dynamically Linking Arrow
-
-Since libcudf builds by default with a dynamically linked Arrow dependency, it may be
-desirable to build the Java bindings without requiring a statically-linked Arrow to avoid
-rebuilding an already built libcudf.so. To do so, specify the additional command-line flag
-`-DCUDF_JNI_ARROW_STATIC=OFF` when building the Java bindings with Maven.  However this will
-result in a jar that requires the correct Arrow version to be available in the runtime
-environment, and therefore is not recommended unless you are only performing local testing
-within the libcudf build environment.
-
 ## Statically Linking the CUDA Runtime
 
 If you use the default cmake options libcudart will be dynamically linked to libcudf and libcudfjni.
