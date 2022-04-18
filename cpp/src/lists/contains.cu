@@ -342,10 +342,11 @@ struct dispatch_index_of {
     auto const searcher = search_functor<Type>{};
 
     if constexpr (std::is_same_v<Type, cudf::struct_view>) {
+      auto const child_tview = table_view{{child}};
+      auto const keys_tview  = get_search_keys_table_view(search_keys);
+
 #if 1
       // Prepare to flatten the structs column and scalar.
-      auto const child_tview   = table_view{{child}};
-      auto const keys_tview    = get_search_keys_table_view(search_keys);
       auto const has_any_nulls = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
       auto const flatten_nullability = has_any_nulls
                                          ? structs::detail::column_nullability::FORCE
@@ -357,29 +358,14 @@ struct dispatch_index_of {
         structs::detail::flatten_nested_columns(child_tview, {}, {}, flatten_nullability);
       auto const keys_flattened =
         structs::detail::flatten_nested_columns(keys_tview, {}, {}, flatten_nullability);
-
-      // The struct scalar only contains the struct member columns.
-      // Thus, if there is any null in the input, we must exclude the first column in the flattened
-      // table of the input column from searching because that column is the materialized bitmask of
-      // the input structs column.
       auto const child_flattened_children = child_flattened.flattened_columns();
-      //      [&] {
-      //        auto const tmp = child_flattened.flattened_columns();
-      //        return search_key_is_scalar && has_any_nulls
-      //                 ? table_view{std::vector<column_view>{tmp.begin() + 1, tmp.end()}}
-      //                 : tmp;
-      //      }();
 
       auto const child_tdv_ptr = table_device_view::create(child_flattened_children, stream);
       auto const keys_tdv_ptr  = table_device_view::create(keys_flattened, stream);
       auto const dcomp         = row_equality_comparator(
         nullate::DYNAMIC{has_any_nulls}, *child_tdv_ptr, *keys_tdv_ptr, null_equality::EQUAL);
 #else
-      // Convert the input scalar value into a structs column of one row.
-      auto const child_tview   = table_view{{child}};
-      auto const keys_tview    = get_search_keys_table_view(search_keys);
       auto const has_any_nulls = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
-
       auto const comp =
         cudf::experimental::row::equality::table_comparator(child_tview, keys_tview, stream);
       auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
