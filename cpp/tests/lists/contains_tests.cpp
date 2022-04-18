@@ -1138,8 +1138,8 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullLists)
                                              // list9
     };
     // clang-format on
-
     auto child = structs_col{{data1, data2}};
+
     return make_lists_column(10, offsets.release(), child.release(), 0, {});
   }();
 
@@ -1209,8 +1209,8 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
                                              // list10
     };
     // clang-format on
+    auto child = structs_col{{data1, data2}};
 
-    auto child               = structs_col{{data1, data2}};
     auto const validity_iter = nulls_at({3, 10});
     return make_lists_column(11,
                              offsets.release(),
@@ -1283,8 +1283,8 @@ TYPED_TEST(TypedStructContainsTest, SlicedListsColumnNoNulls)
                                              // list9
     };
     // clang-format on
-
     auto child = structs_col{{data1, data2}};
+
     return make_lists_column(10, offsets.release(), child.release(), 0, {});
   }();
   auto const lists = cudf::slice(lists_original->view(), {3, 10})[0];
@@ -1351,8 +1351,8 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullListsWithNullStructs)
                                              // list9
     };
     // clang-format on
-
     auto child = structs_col{{data1, data2}, nulls_at({1, 10, 15, 24})};
+
     return make_lists_column(10, offsets.release(), child.release(), 0, {});
   }();
 
@@ -1420,8 +1420,8 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyNoNullLists)
                                              // list9
     };
     // clang-format on
-
     auto child = structs_col{{data1, data2}};
+
     return make_lists_column(10, offsets.release(), child.release(), 0, {});
   }();
 
@@ -1483,8 +1483,8 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsNoNulls)
                                              // list9
     };
     // clang-format on
-
     auto child = structs_col{{data1, data2}};
+
     return make_lists_column(10, offsets.release(), child.release(), 0, {});
   }();
 
@@ -1549,8 +1549,8 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
                                              // list10
     };
     // clang-format on
+    auto child = structs_col{{data1, data2}, nulls_at({1, 10, 15, 24})};
 
-    auto child               = structs_col{{data1, data2}, nulls_at({1, 10, 15, 24})};
     auto const validity_iter = nulls_at({3, 10});
     return make_lists_column(11,
                              offsets.release(),
