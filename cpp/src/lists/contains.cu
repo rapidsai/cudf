@@ -479,10 +479,6 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  auto x = index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream);
-  printf("line: %d\n", __LINE__);
-  //  cudf::test::print(x->view());
-
   return to_contains(
     index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
