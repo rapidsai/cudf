@@ -63,6 +63,10 @@ instructions are tested on Ubuntu Linux LTS releases. Use these instructions to 
 source and contribute to its development. Other operating systems may be compatible, but are not
 currently tested.
 
+Building cudf with the provided conda environment is recommended for users who wish to enable all
+library features. The following instructions are for building with a conda environment. Dependencies
+for a minimal build of libcudf without using conda are also listed below.
+
 ### General requirements
 
 Compilers:
@@ -255,6 +259,14 @@ pytest -v custreamz
 
 Done! You are ready to develop for the cuDF project. Please review the project's
 [code formatting guidelines](#code-formatting).
+
+### Building without a conda environment
+
+A minimal build of libcudf has the following dependencies (in addition to those listed in the
+[General requirements](#general-requirements)). The packages listed below use Ubuntu package names.
+
+- `libssl-dev`
+- `libz-dev`
 
 ## Debugging cuDF
 
