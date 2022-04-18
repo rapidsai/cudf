@@ -128,8 +128,6 @@ __device__ inline double stod(string_view const& d_str)
     return sign > 0 ? std::numeric_limits<double>::infinity()
                     : -std::numeric_limits<double>::infinity();
   }
-  // else if (exp_ten < std::numeric_limits<double>::min_exponent10)
-  //  return double{0};
 
   double base = sign * static_cast<double>(digits);
 

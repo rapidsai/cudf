@@ -131,7 +131,7 @@ TEST_F(StringsConvertTest, ToFloats64)
     "-.002",  "",         "-0.0",     "1.28e256",      "NaN",     "abc123",
     "123abc", "456e",     "-1.78e+5", "-122.33644782", "12e+309", "1.7976931348623159E308",
     "-Inf",   "-INFINITY", "1.0",     "1.7976931348623157e+308",  "1.7976931348623157e-307",
-    // subnormal numbers
+    // subnormal numbers:           v--- smallest double               v--- result is 0
     "4e-308", "3.3333333333e-320", "4.940656458412465441765688e-324", "1.e-324" };
   // clang-format on
   cudf::test::strings_column_wrapper strings(
