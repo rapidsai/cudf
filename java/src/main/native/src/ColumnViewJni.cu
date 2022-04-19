@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,4 +51,20 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
   return deep_copy;
 }
 
+std::unique_ptr<cudf::column> generate_list_offsets(cudf::column_view const &index,
+                                                    rmm::cuda_stream_view stream) {
+  CUDF_EXPECTS(index.type().id() == cudf::type_id::INT32,
+               "Input column does not have type INT32.");
+
+  auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
+                                           index.size() + 1,
+                                           cudf::mask_state::UNALLOCATED);
+  auto output_view = offsets->mutable_column_view();
+  thrust::inclusive_scan(rmm::exec_policy(stream),
+                         index.template begin<offset_type>(),
+                         index.template end<offset_type>(),
+                         output_view.template begin<offset_type>() + 1);
+
+  return offsets;
+}
 } // namespace cudf::jni

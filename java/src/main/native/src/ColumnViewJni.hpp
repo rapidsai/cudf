@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,5 +34,9 @@ namespace cudf::jni {
 std::unique_ptr<cudf::column>
 new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
                                            cudf::column_view const &bool_column);
+
+std::unique_ptr<cudf::column>
+generate_list_offsets(cudf::column_view const &index,
+                      rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 } // namespace cudf::jni

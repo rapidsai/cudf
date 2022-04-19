@@ -3474,6 +3474,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   *
+   */
+  public final ColumnVector generateListOffsets() {
+    assert type.typeId == DType.DTypeEnum.INT32;
+    return new ColumnVector(generateListOffsets(getNativeView()));
+  }
+
+  /**
    * Get a single item from the column at the specified index as a Scalar.
    *
    * Be careful. This is expensive and may involve running a kernel to copy the data out.
@@ -4161,6 +4169,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native long getDeviceMemorySize(long viewHandle) throws CudfException;
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
+
+  static native long generateListOffsets(long handle) throws CudfException;
 
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when
