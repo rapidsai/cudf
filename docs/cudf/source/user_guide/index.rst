@@ -6,7 +6,7 @@ User Guide
 .. toctree::
    :maxdepth: 2
 
-   10min.ipynb
-   10min-cudf-cupy.ipynb
-   guide-to-udfs.ipynb
-   Working-with-missing-data.ipynb
+   10min.md
+   10min-cudf-cupy.md
+   guide-to-udfs.md
+   Working-with-missing-data.md
