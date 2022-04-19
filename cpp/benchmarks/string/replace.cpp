@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
+#include "string_bench_args.hpp"
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <limits>
-
-#include "string_bench_args.hpp"
 
 class StringReplace : public cudf::benchmark {
 };
