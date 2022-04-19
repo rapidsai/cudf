@@ -1244,7 +1244,7 @@ def struct_gen(gen, skip_rows, num_rows, include_validity=False):
 def test_parquet_reader_struct_basic(tmpdir, data):
     expect = pa.Table.from_pydict({"struct": data})
     fname = tmpdir.join("test_parquet_reader_struct_basic.parquet")
-    pa.parquet.write_table(expect, fname)
+    pa.parquet.write_table(expect, fname, compression="zstd")
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
     assert expect.equals(got.to_arrow())
@@ -1321,7 +1321,7 @@ def test_parquet_reader_struct_select_columns(tmpdir, data, columns):
     table = pa.Table.from_pydict({"struct": data})
     buff = BytesIO()
 
-    pa.parquet.write_table(table, buff)
+    pa.parquet.write_table(table, buff, compression="zstd")
 
     expect = pq.ParquetFile(buff).read(columns=columns)
     got = cudf.read_parquet(buff, columns=columns)
@@ -1339,7 +1339,7 @@ def test_parquet_reader_struct_los_large(tmpdir):
     ]
     expect = pa.Table.from_pydict({"los": data})
     fname = tmpdir.join("test_parquet_reader_struct_los_large.parquet")
-    pa.parquet.write_table(expect, fname)
+    pa.parquet.write_table(expect, fname, compression="zstd")
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
     assert expect.equals(got.to_arrow())
@@ -1377,7 +1377,7 @@ def test_parquet_reader_struct_sol_table(tmpdir, params):
     )
     expect = pa.Table.from_pydict({"sol": data})
     fname = tmpdir.join("test_parquet_reader_struct_sol_table.parquet")
-    pa.parquet.write_table(expect, fname)
+    pa.parquet.write_table(expect, fname, compression="zstd")
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
     assert expect.equals(got.to_arrow())
