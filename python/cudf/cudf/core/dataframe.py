@@ -6190,10 +6190,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Examples
         --------
         >>> import cudf
-        >>> df = cudf.DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
+        >>> df = cudf.DataFrame({0: ['A1', 'A2', 'A3'], 1: ['B1', 'B2', 'B3']})
         >>> df
-        0    [A1, A2, A3]
-        1    [B1, B2, B3]
+            0   1
+        0  A1  B1
+        1  A2  B2
+        2  A3  B3
         >>> df.interleave_columns()
         0    A1
         1    B1
@@ -6201,6 +6203,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3    B2
         4    A3
         5    B3
+        dtype: object
 
         Returns
         -------
