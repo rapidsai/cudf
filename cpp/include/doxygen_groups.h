@@ -129,6 +129,7 @@
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
  *   @defgroup strings_json JSON
+ *   @defgroup strings_udfs UDF Support
  * @}
  * @defgroup dictionary_apis Dictionary
  * @{

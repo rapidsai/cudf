@@ -479,6 +479,7 @@ add_library(
   src/strings/strip.cu
   src/strings/substring.cu
   src/strings/translate.cu
+  src/strings/udf/column_functions.cu
   src/strings/utilities.cu
   src/strings/wrap.cu
   src/structs/copying/concatenate.cu

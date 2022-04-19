@@ -390,6 +390,7 @@ ConfigureTest(
   strings/concatenate_tests.cpp
   strings/contains_tests.cpp
   strings/datetime_tests.cpp
+  strings/dstring_tests.cu
   strings/durations_tests.cpp
   strings/extract_tests.cpp
   strings/factories_test.cu

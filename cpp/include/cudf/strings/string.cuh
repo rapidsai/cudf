@@ -17,13 +17,21 @@
 
 #include <cudf/strings/string_view.cuh>
 
-#include <thrust/distance.h>
-#include <thrust/execution_policy.h>
-#include <thrust/logical.h>
-
 namespace cudf {
 namespace strings {
-namespace string {
+namespace detail {
+
+__device__ inline static cudf::size_type bytes_in_null_terminated_string(char const* str)
+{
+  if (!str) return 0;
+  cudf::size_type bytes = 0;
+  while (*str++)
+    ++bytes;
+  return bytes;
+}
+
+}  // namespace detail
+
 /**
  * @addtogroup strings_classes
  * @{
@@ -50,9 +58,12 @@ inline __device__ bool is_integer(string_view const& d_str)
   auto begin = d_str.begin();
   auto end   = d_str.end();
   if (*begin == '+' || *begin == '-') ++begin;
-  return (thrust::distance(begin, end) > 0) &&
-         thrust::all_of(
-           thrust::seq, begin, end, [] __device__(auto chr) { return chr >= '0' && chr <= '9'; });
+  auto const result = begin < end;
+  while (begin < end) {
+    if (*begin < '0' || *begin > '9') { return false; }
+    ++begin;
+  }
+  return result;
 }
 
 /**
@@ -149,7 +160,44 @@ inline __device__ bool is_float(string_view const& d_str)
   return result;
 }
 
+__device__ inline bool starts_with(cudf::string_view const dstr,
+                                   char const* tgt,
+                                   cudf::size_type bytes)
+{
+  if (bytes > dstr.size_bytes()) { return false; }
+  auto const start_str = cudf::string_view{dstr.data(), bytes};
+  return start_str.compare(tgt, bytes) == 0;
+}
+
+__device__ inline bool starts_with(cudf::string_view const dstr, char const* tgt)
+{
+  return starts_with(dstr, tgt, detail::bytes_in_null_terminated_string(tgt));
+}
+
+__device__ inline bool starts_with(cudf::string_view const dstr, cudf::string_view const& tgt)
+{
+  return starts_with(dstr, tgt.data(), tgt.size_bytes());
+}
+
+__device__ inline bool ends_with(cudf::string_view const dstr,
+                                 char const* tgt,
+                                 cudf::size_type bytes)
+{
+  if (bytes > dstr.size_bytes()) { return false; }
+  auto const end_str = cudf::string_view{dstr.data() + dstr.size_bytes() - bytes, bytes};
+  return end_str.compare(tgt, bytes) == 0;
+}
+
+__device__ inline bool ends_with(cudf::string_view const dstr, char const* tgt)
+{
+  return ends_with(dstr, tgt, detail::bytes_in_null_terminated_string(tgt));
+}
+
+__device__ inline bool ends_with(cudf::string_view const dstr, cudf::string_view const& tgt)
+{
+  return starts_with(dstr, tgt.data(), tgt.size_bytes());
+}
+
 /** @} */  // end of group
-}  // namespace string
 }  // namespace strings
 }  // namespace cudf
