@@ -505,9 +505,9 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   // of memory of size (# input rows * sizeof(row_span) * max_branch_depth).
   auto const shmem_per_thread = sizeof(row_span) * h_info.max_branch_depth;
   int device_id;
-  CUDA_TRY(cudaGetDevice(&device_id));
+  CUDF_CUDA_TRY(cudaGetDevice(&device_id));
   int shmem_limit_per_block;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
   constexpr int max_block_size = 256;
   auto const block_size =

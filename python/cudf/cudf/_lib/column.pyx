@@ -7,7 +7,7 @@ import pandas as pd
 import rmm
 
 import cudf
-import cudf._lib as libcudfxx
+import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import Buffer
 
@@ -160,7 +160,7 @@ cdef class Column:
             if self.base_mask is None or self.offset == 0:
                 self._mask = self.base_mask
             else:
-                self._mask = libcudfxx.null_mask.copy_bitmask(self)
+                self._mask = libcudf.null_mask.copy_bitmask(self)
         return self._mask
 
     @property

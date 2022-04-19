@@ -26,6 +26,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -38,7 +39,6 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-#include "cudf/utilities/traits.hpp"
 #include <queue>
 #include <vector>
 
@@ -139,7 +139,7 @@ void materialize_bitmask(column_view const& left_col,
     }
   }
 
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 struct side_index_generator {
@@ -212,7 +212,7 @@ index_vector generate_merged_indices(table_view const& left_table,
                   ineq_op);
   }
 
-  CHECK_CUDA(stream.value());
+  CUDF_CHECK_CUDA(stream.value());
 
   return merged_indices;
 }

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pickle
-from collections.abc import MutableSequence
+from collections import abc
 from functools import cached_property
 from typing import (
     TYPE_CHECKING,
@@ -1066,8 +1066,18 @@ class CategoricalColumn(column.ColumnBase):
         )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            fill_value = df._data["new"][df._data["old"].isnull()][0]
-            if fill_value in self.categories:
+            fill_value = (
+                df._data["new"]
+                .apply_boolean_mask(df._data["old"].isnull())
+                .element_indexing(0)
+            )
+            # TODO: This line of code does not work because we cannot use the
+            # `in` operator on self.categories (which is a column). mypy
+            # realizes that this is wrong because __iter__ is not implemented.
+            # However, it seems that this functionality has been broken for a
+            # long time so for now we're just having mypy ignore and we'll come
+            # back to this.
+            if fill_value in self.categories:  # type: ignore
                 replaced = self.fillna(fill_value)
             else:
                 new_categories = self.categories.append(
@@ -1081,11 +1091,13 @@ class CategoricalColumn(column.ColumnBase):
         else:
             replaced = self
         if df._data["new"].null_count > 0:
-            drop_values = df._data["old"][df._data["new"].isnull()]
+            drop_values = df._data["old"].apply_boolean_mask(
+                df._data["new"].isnull()
+            )
             cur_categories = replaced.categories
-            new_categories = cur_categories[
+            new_categories = cur_categories.apply_boolean_mask(
                 ~cudf.Series(cur_categories.isin(drop_values))
-            ]
+            )
             replaced = replaced._set_categories(new_categories)
             df = df.dropna(subset=["new"])
             to_replace_col = df._data["old"]
@@ -1367,7 +1379,9 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     @staticmethod
-    def _concat(objs: MutableSequence[CategoricalColumn]) -> CategoricalColumn:
+    def _concat(
+        objs: abc.MutableSequence[CategoricalColumn],
+    ) -> CategoricalColumn:
         # TODO: This function currently assumes it is being called from
         # column.concat_columns, at least to the extent that all the
         # preprocessing in that function has already been done. That should be

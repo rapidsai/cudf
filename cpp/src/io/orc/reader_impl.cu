@@ -431,7 +431,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     device_span<gpu_inflate_status_s> inflate_out_view(inflate_out.data(), num_compressed_blocks);
     switch (decompressor->GetKind()) {
       case orc::ZLIB:
-        CUDA_TRY(
+        CUDF_CUDA_TRY(
           gpuinflate(inflate_in.data(), inflate_out.data(), num_compressed_blocks, 0, stream));
         break;
       case orc::SNAPPY:
@@ -440,7 +440,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                                                            num_compressed_blocks};
           snappy_decompress(inflate_in_view, inflate_out_view, max_uncomp_block_size, stream);
         } else {
-          CUDA_TRY(
+          CUDF_CUDA_TRY(
             gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
         }
         break;
@@ -449,7 +449,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     decompress_check(inflate_out_view, any_block_failure.device_ptr(), stream);
   }
   if (num_uncompressed_blocks > 0) {
-    CUDA_TRY(gpu_copy_uncompressed_blocks(
+    CUDF_CUDA_TRY(gpu_copy_uncompressed_blocks(
       inflate_in.data() + num_compressed_blocks, num_uncompressed_blocks, stream));
   }
   gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
@@ -1129,7 +1129,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                 _metadata.per_file_metadata[stripe_source_mapping.source_idx].source->host_read(
                   offset, len);
               CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
-              CUDA_TRY(cudaMemcpyAsync(
+              CUDF_CUDA_TRY(cudaMemcpyAsync(
                 d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
               stream.synchronize();
             }

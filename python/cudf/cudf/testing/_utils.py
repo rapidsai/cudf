@@ -3,7 +3,7 @@
 import itertools
 import re
 import warnings
-from collections.abc import Mapping, Sequence
+from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
 
@@ -15,7 +15,7 @@ from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
-from cudf.core.column.datetime import _numpy_to_pandas_conversion
+from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
@@ -238,9 +238,9 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
     else:
         if len(func_args_and_kwargs) == 1:
             func_args, func_kwargs = [], {}
-            if isinstance(func_args_and_kwargs[0], Sequence):
+            if isinstance(func_args_and_kwargs[0], abc.Sequence):
                 func_args = func_args_and_kwargs[0]
-            elif isinstance(func_args_and_kwargs[0], Mapping):
+            elif isinstance(func_args_and_kwargs[0], abc.Mapping):
                 func_kwargs = func_args_and_kwargs[0]
             else:
                 raise ValueError(
@@ -248,12 +248,12 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
                     "either a Sequence or a Mapping"
                 )
         elif len(func_args_and_kwargs) == 2:
-            if not isinstance(func_args_and_kwargs[0], Sequence):
+            if not isinstance(func_args_and_kwargs[0], abc.Sequence):
                 raise ValueError(
                     "Positional argument at 1st position of "
                     "func_args_and_kwargs should be a sequence."
                 )
-            if not isinstance(func_args_and_kwargs[1], Mapping):
+            if not isinstance(func_args_and_kwargs[1], abc.Mapping):
                 raise ValueError(
                     "Key-word argument at 2nd position of "
                     "func_args_and_kwargs should be a dictionary mapping."
@@ -300,7 +300,7 @@ def gen_rand(dtype, size, **kwargs):
         time_unit, _ = np.datetime_data(dtype)
         high = kwargs.get(
             "high",
-            1000000000000000000 / _numpy_to_pandas_conversion[time_unit],
+            int(1e18) / _unit_to_nanoseconds_conversion[time_unit],
         )
         return pd.to_datetime(
             np.random.randint(low=low, high=high, size=size), unit=time_unit

@@ -378,11 +378,11 @@ void write_chunked(data_sink* out_sink,
   } else {
     // copy the bytes to host to write them out
     thrust::host_vector<char> h_bytes(total_num_bytes);
-    CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
-                             ptr_all_bytes,
-                             total_num_bytes * sizeof(char),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
+                                  ptr_all_bytes,
+                                  total_num_bytes * sizeof(char),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
     stream.synchronize();
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);

@@ -824,16 +824,16 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
     auto num_bitmasks = num_bitmask_words(c.size());
     std::vector<bitmask_type> host_bitmask(num_bitmasks);
     if (c.offset() == 0) {
-      CUDA_TRY(cudaMemcpy(host_bitmask.data(),
-                          c.null_mask(),
-                          num_bitmasks * sizeof(bitmask_type),
-                          cudaMemcpyDeviceToHost));
+      CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
+                               c.null_mask(),
+                               num_bitmasks * sizeof(bitmask_type),
+                               cudaMemcpyDeviceToHost));
     } else {
       auto mask = copy_bitmask(c.null_mask(), c.offset(), c.offset() + c.size());
-      CUDA_TRY(cudaMemcpy(host_bitmask.data(),
-                          mask.data(),
-                          num_bitmasks * sizeof(bitmask_type),
-                          cudaMemcpyDeviceToHost));
+      CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
+                               mask.data(),
+                               num_bitmasks * sizeof(bitmask_type),
+                               cudaMemcpyDeviceToHost));
     }
 
     return host_bitmask;
