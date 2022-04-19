@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/string/string_bench_args.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/strings/strings_column_view.hpp>
+
 #include <nvtext/replace.hpp>
+
+#include <random>
 
 class TextReplace : public cudf::benchmark {
 };

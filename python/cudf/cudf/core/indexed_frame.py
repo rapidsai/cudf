@@ -818,7 +818,8 @@ class IndexedFrame(Frame):
         # calculation, necessitating the unfortunate circular reference to the
         # child class here.
         return cudf.Series._from_data(
-            {None: libcudf.hash.hash(self, method)}, index=self.index
+            {None: libcudf.hash.hash([*self._columns], method)},
+            index=self.index,
         )
 
     def _gather(
@@ -2690,21 +2691,52 @@ class IndexedFrame(Frame):
         if not ignore_index and self._index is not None:
             explode_column_num += self._index.nlevels
 
-        data, index = libcudf.lists.explode_outer(
-            self, explode_column_num, ignore_index
-        )
-        res = self.__class__._from_data(
-            ColumnAccessor(
-                data,
-                multiindex=self._data.multiindex,
-                level_names=self._data._level_names,
-            ),
-            index=index,
+        exploded = libcudf.lists.explode_outer(
+            [
+                *(self._index._data.columns if not ignore_index else ()),
+                *self._columns,
+            ],
+            explode_column_num,
         )
 
-        if not ignore_index and self._index is not None:
-            res.index.names = self._index.names
-        return res
+        return self._from_columns_like_self(
+            exploded,
+            self._column_names,
+            self._index_names if not ignore_index else None,
+        )
+
+    @_cudf_nvtx_annotate
+    def tile(self, count):
+        """Repeats the rows `count` times to form a new Frame.
+
+        Parameters
+        ----------
+        self : input Table containing columns to interleave.
+        count : Number of times to tile "rows". Must be non-negative.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df  = cudf.Dataframe([[8, 4, 7], [5, 2, 3]])
+        >>> count = 2
+        >>> df.tile(df, count)
+           0  1  2
+        0  8  4  7
+        1  5  2  3
+        0  8  4  7
+        1  5  2  3
+
+        Returns
+        -------
+        The indexed frame containing the tiled "rows".
+        """
+        return self._from_columns_like_self(
+            libcudf.reshape.tile(
+                [*self._index._columns, *self._columns], count
+            ),
+            column_names=self._column_names,
+            index_names=self._index_names,
+        )
 
     @_cudf_nvtx_annotate
     @docutils.doc_apply(

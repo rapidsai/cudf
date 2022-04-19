@@ -960,10 +960,16 @@ class Frame(BinaryOperand, Scannable):
                     f"ERROR: map_size must be >= {count} (got {map_size})."
                 )
 
-        data, index, output_offsets = libcudf.partitioning.partition(
-            self, map_index, map_size, keep_index
+        partitioned_columns, output_offsets = libcudf.partitioning.partition(
+            [*(self._index._columns if keep_index else ()), *self._columns],
+            map_index,
+            map_size,
         )
-        partitioned = self.__class__._from_data(data, index)
+        partitioned = self._from_columns_like_self(
+            partitioned_columns,
+            column_names=self._column_names,
+            index_names=self._index_names if keep_index else None,
+        )
 
         # due to the split limitation mentioned
         # here: https://github.com/rapidsai/cudf/issues/4607
@@ -972,9 +978,6 @@ class Frame(BinaryOperand, Scannable):
         output_offsets = output_offsets[1:-1]
 
         result = partitioned._split(output_offsets, keep_index=keep_index)
-
-        for frame in result:
-            frame._copy_type_metadata(self, include_index=keep_index)
 
         if map_size:
             result += [
@@ -1274,19 +1277,17 @@ class Frame(BinaryOperand, Scannable):
             libcudf.types.NullOrder[key] for key in null_precedence
         ]
 
-        result = self.__class__._from_data(
-            *libcudf.quantiles.quantiles(
-                self,
+        return self._from_columns_like_self(
+            libcudf.quantiles.quantiles(
+                [*self._columns],
                 q,
                 interpolation,
                 is_sorted,
                 column_order,
                 null_precedence,
-            )
+            ),
+            column_names=self._column_names,
         )
-
-        result._copy_type_metadata(self)
-        return result
 
     @_cudf_nvtx_annotate
     def rank(
@@ -1466,30 +1467,33 @@ class Frame(BinaryOperand, Scannable):
 
             dict_indices_table = pa.table(dict_indices)
             data = data.drop(dict_indices_table.column_names)
-            cudf_indices_frame, _ = libcudf.interop.from_arrow(
-                dict_indices_table, dict_indices_table.column_names
-            )
+            indices_columns = libcudf.interop.from_arrow(dict_indices_table)
             # as dictionary size can vary, it can't be a single table
             cudf_dictionaries_columns = {
                 name: ColumnBase.from_arrow(dict_dictionaries[name])
                 for name in dict_dictionaries.keys()
             }
 
-            for name, codes in cudf_indices_frame.items():
-                cudf_category_frame[name] = build_categorical_column(
+            cudf_category_frame = {
+                name: build_categorical_column(
                     cudf_dictionaries_columns[name],
                     codes,
                     mask=codes.base_mask,
                     size=codes.size,
                     ordered=dict_ordered[name],
                 )
+                for name, codes in zip(
+                    dict_indices_table.column_names, indices_columns
+                )
+            }
 
         # Handle non-dict arrays
-        cudf_non_category_frame = (
-            {}
-            if data.num_columns == 0
-            else libcudf.interop.from_arrow(data, data.column_names)[0]
-        )
+        cudf_non_category_frame = {
+            name: col
+            for name, col in zip(
+                data.column_names, libcudf.interop.from_arrow(data)
+            )
+        }
 
         result = {**cudf_non_category_frame, **cudf_category_frame}
 
@@ -2028,76 +2032,6 @@ class Frame(BinaryOperand, Scannable):
     notna = notnull
 
     @_cudf_nvtx_annotate
-    def interleave_columns(self):
-        """
-        Interleave Series columns of a table into a single column.
-
-        Converts the column major table `cols` into a row major column.
-
-        Parameters
-        ----------
-        cols : input Table containing columns to interleave.
-
-        Examples
-        --------
-        >>> df = DataFrame([['A1', 'A2', 'A3'], ['B1', 'B2', 'B3']])
-        >>> df
-        0    [A1, A2, A3]
-        1    [B1, B2, B3]
-        >>> df.interleave_columns()
-        0    A1
-        1    B1
-        2    A2
-        3    B2
-        4    A3
-        5    B3
-
-        Returns
-        -------
-        The interleaved columns as a single column
-        """
-        if ("category" == self.dtypes).any():
-            raise ValueError(
-                "interleave_columns does not support 'category' dtype."
-            )
-
-        result = self._constructor_sliced(
-            libcudf.reshape.interleave_columns(self)
-        )
-
-        return result
-
-    @_cudf_nvtx_annotate
-    def tile(self, count):
-        """
-        Repeats the rows from `self` DataFrame `count` times to form a
-        new DataFrame.
-
-        Parameters
-        ----------
-        self : input Table containing columns to interleave.
-        count : Number of times to tile "rows". Must be non-negative.
-
-        Examples
-        --------
-        >>> df  = Dataframe([[8, 4, 7], [5, 2, 3]])
-        >>> count = 2
-        >>> df.tile(df, count)
-           0  1  2
-        0  8  4  7
-        1  5  2  3
-        0  8  4  7
-        1  5  2  3
-
-        Returns
-        -------
-        The table containing the tiled "rows".
-        """
-        result = self.__class__._from_data(*libcudf.reshape.tile(self, count))
-        result._copy_type_metadata(self)
-        return result
-
-    @_cudf_nvtx_annotate
     def searchsorted(
         self, values, side="left", ascending=True, na_position="last"
     ):
@@ -2166,12 +2100,24 @@ class Frame(BinaryOperand, Scannable):
             scalar_flag = True
 
         if not isinstance(values, Frame):
-            values = as_column(values)
-            if values.dtype != self.dtype:
-                self = self.astype(values.dtype)
-            values = values.as_frame()
+            values = [as_column(values)]
+        else:
+            values = [*values._columns]
+        if len(values) != len(self._data):
+            raise ValueError("Mismatch number of columns to search for.")
+
+        sources = [
+            col
+            if is_dtype_equal(col.dtype, val.dtype)
+            else col.astype(val.dtype)
+            for col, val in zip(self._columns, values)
+        ]
         outcol = libcudf.search.search_sorted(
-            self, values, side, ascending=ascending, na_position=na_position
+            sources,
+            values,
+            side,
+            ascending=ascending,
+            na_position=na_position,
         )
 
         # Retrun result as cupy array if the values is non-scalar
@@ -2462,10 +2408,8 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def _encode(self):
-        data, index, indices = libcudf.transform.table_encode(self)
-        for name, col in data.items():
-            data[name] = col._with_type_metadata(self._data[name].dtype)
-        keys = self.__class__._from_data(data, index)
+        columns, indices = libcudf.transform.table_encode([*self._columns])
+        keys = self._from_columns_like_self(columns)
         return keys, indices
 
     @_cudf_nvtx_annotate
