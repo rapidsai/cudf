@@ -20,6 +20,7 @@
 #include <iostream>
 #include <limits>
 
+#include <cudf/utilities/error.hpp>
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/cuda_async_memory_resource.hpp>
@@ -329,8 +330,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
 
   try {
     // make sure the CUDA device is setup in the context
-    JNI_CUDA_CHECK(cudaFree(0));
-    JNI_CUDA_CHECK(cudaGetDevice(&device_id));
+    CUDF_CUDA_TRY(cudaFree(0));
+    CUDF_CUDA_TRY(cudaGetDevice(&device_id));
   }
   CATCH_CUDA_ERROR_AND_THROW(env, );
 
