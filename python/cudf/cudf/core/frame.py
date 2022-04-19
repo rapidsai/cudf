@@ -1278,7 +1278,7 @@ class Frame(BinaryOperand, Scannable):
         ]
 
         return self._from_columns_like_self(
-            *libcudf.quantiles.quantiles(
+            libcudf.quantiles.quantiles(
                 [*self._columns],
                 q,
                 interpolation,
