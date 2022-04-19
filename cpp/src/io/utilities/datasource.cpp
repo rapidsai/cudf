@@ -75,7 +75,6 @@ class file_source : public datasource {
                      uint8_t* dst,
                      rmm::cuda_stream_view stream) override
   {
-    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
     return device_read_async(offset, size, dst, stream).get();
   }
 
@@ -83,8 +82,6 @@ class file_source : public datasource {
                                                   size_t size,
                                                   rmm::cuda_stream_view stream) override
   {
-    CUDF_EXPECTS(supports_device_read(), "Device reads are not supported for this file.");
-
     rmm::device_buffer out_data(size, stream);
     size_t read = device_read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
     out_data.resize(read, stream);
