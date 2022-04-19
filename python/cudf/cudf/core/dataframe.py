@@ -6237,6 +6237,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return self._constructor_sliced._from_data(
             {None: libcudf.reshape.interleave_columns([*self._columns])}
+        )
 
     @_cudf_nvtx_annotate
     def eval(self, expr: "str", inplace: "bool" = False, **kwargs):
