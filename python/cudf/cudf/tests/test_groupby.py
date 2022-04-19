@@ -291,6 +291,14 @@ def test_groupby_apply():
     got = got_grpby.apply(foo)
     assert_groupby_results_equal(expect, got)
 
+    def foo_args(df, k):
+        df["out"] = df["val1"] + df["val2"] + k
+        return df
+
+    expect = expect_grpby.apply(foo_args, 2)
+    got = got_grpby.apply(foo_args, 2)
+    assert_groupby_results_equal(expect, got)
+
 
 def test_groupby_apply_grouped():
     np.random.seed(0)
@@ -1626,6 +1634,17 @@ def test_groupby_apply_return_scalars():
 
     assert_groupby_results_equal(expected, actual)
 
+    def custom_map_func_args(x, k):
+        x = x[~x["B"].isna()]
+        ticker = x.shape[0]
+        full = ticker / 10 + k
+        return full + 1.8 / k
+
+    expected = pdf.groupby("A").apply(custom_map_func_args, 2)
+    actual = gdf.groupby("A").apply(custom_map_func_args, 2)
+
+    assert_groupby_results_equal(expected, actual)
+
 
 @pytest.mark.parametrize(
     "cust_func",
@@ -1639,6 +1658,21 @@ def test_groupby_apply_return_series_dataframe(cust_func):
 
     expected = pdf.groupby(["key"]).apply(cust_func)
     actual = gdf.groupby(["key"]).apply(cust_func)
+
+    assert_groupby_results_equal(expected, actual)
+
+
+def test_groupby_apply_return_series_dataframe_args():
+    pdf = pd.DataFrame(
+        {"key": [0, 0, 1, 1, 2, 2, 2], "val": [0, 1, 2, 3, 4, 5, 6]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    def cust_func(x, k):
+        return x - x.min() + k
+
+    expected = pdf.groupby(["key"]).apply(cust_func, 2)
+    actual = gdf.groupby(["key"]).apply(cust_func, 2)
 
     assert_groupby_results_equal(expected, actual)
 
@@ -2211,6 +2245,12 @@ def test_groupby_apply_series():
     expect = make_frame(pd.DataFrame, 100).groupby("x").y.apply(foo)
 
     assert_groupby_results_equal(expect, got)
+
+    def foo_args(x, k):
+        return x.sum() + k
+
+    got = make_frame(DataFrame, 100).groupby("x").y.apply(foo_args, 2)
+    expect = make_frame(pd.DataFrame, 100).groupby("x").y.apply(foo_args, 2)
 
 
 @pytest.mark.parametrize("label", [None, "left", "right"])
