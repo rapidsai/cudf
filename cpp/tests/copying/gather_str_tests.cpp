@@ -50,10 +50,9 @@ auto make_numeric_scalar(T const& value)
 
 TEST_F(GatherSanitizeStringTest, Sanity)
 {
-  auto input_strings = cudf::test::strings_column_wrapper(
-    {"All", "the", "leaves", "are", "brown"},
-    iterators::no_nulls()
-  ).release();
+  auto input_strings = cudf::test::strings_column_wrapper({"All", "the", "leaves", "are", "brown"},
+                                                          iterators::no_nulls())
+                         .release();
 
   // Set some strings to be null.
   cudf::detail::set_null_mask(input_strings->mutable_view().null_mask(), 1, 2, false);
@@ -64,8 +63,8 @@ TEST_F(GatherSanitizeStringTest, Sanity)
 
   auto gather_map = [&] {
     // auto ret = cudf::make_numeric_column(data_type{type_id::INT32}, n_rows);
-    // thrust::sequence(thrust::device, ret->mutable_view().begin<int32_t>(), ret->mutable_view().end<int32_t>(), 0);
-    // return ret;
+    // thrust::sequence(thrust::device, ret->mutable_view().begin<int32_t>(),
+    // ret->mutable_view().end<int32_t>(), 0); return ret;
     return cudf::sequence(input_strings->size(), *make_numeric_scalar(0), *make_numeric_scalar(1));
   }();
 
@@ -79,7 +78,7 @@ TEST_F(GatherSanitizeStringTest, Sanity)
   std::cout << "Gathered chars: " << std::endl;
   print(output_strings.chars());
 }
-}
+}  // namespace cudf::test
 
 class GatherTestStr : public cudf::test::BaseFixture {
 };
