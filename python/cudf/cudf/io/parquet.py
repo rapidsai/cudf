@@ -674,7 +674,7 @@ def _generate_filename():
 
 def get_estimated_file_size(df):
     df_mem_usage = df.memory_usage().sum()
-    file_size = df_mem_usage // 2500
+    file_size = df_mem_usage // 2.5
     return file_size
 
 
@@ -705,7 +705,7 @@ def _get_partitioned(
 
     full_paths = []
     metadata_file_paths = []
-    full_offsets = []
+    full_offsets = [0]
 
     for idx, keys in enumerate(part_names.itertuples(index=False)):
         current_offset = (part_offsets[idx], part_offsets[idx + 1])
@@ -734,21 +734,49 @@ def _get_partitioned(
             curr_file_num = 0
             while num_chunks > 0:
                 full_path = fs.sep.join(
-                    [prefix, filename + str(curr_file_num) + ".parquet"]
+                    [prefix, filename + "_" + str(curr_file_num) + ".parquet"]
                 )
-                curr_file_num += 1
-                num_chunks -= 1
                 full_paths.append(full_path)
                 metadata_file_paths.append(
-                    fs.sep.join([subdir, filename + str(num_chunks)])
+                    fs.sep.join(
+                        [
+                            subdir,
+                            filename + "_" + str(curr_file_num) + ".parquet",
+                        ]
+                    )
                 )
+                num_chunks -= 1
+                curr_file_num += 1
         else:
             filename = filename or _generate_filename()
-        full_path = fs.sep.join([prefix, filename])
-        full_paths.append(full_path)
-        metadata_file_paths.append(fs.sep.join([subdir, filename]))
+            full_path = fs.sep.join([prefix, filename])
+            full_paths.append(full_path)
+            metadata_file_paths.append(fs.sep.join([subdir, filename]))
 
     return full_paths, metadata_file_paths, grouped_df, part_offsets, filename
+
+
+@_cudf_nvtx_annotate
+def _get_partitioned_new(
+    df,
+    partition_cols,
+    preserve_index=False,
+    **kwargs,
+):
+
+    if not (set(df._data) - set(partition_cols)):
+        raise ValueError("No data left to save outside partition columns")
+
+    part_names, part_offsets, _, grouped_df = df.groupby(
+        partition_cols
+    )._grouped()
+    if not preserve_index:
+        grouped_df.reset_index(drop=True, inplace=True)
+    grouped_df.drop(columns=partition_cols, inplace=True)
+    # Copy the entire keys df in one operation rather than using iloc
+    part_names = part_names.to_pandas().to_frame(index=False)
+
+    return part_names, grouped_df, part_offsets
 
 
 ParquetWriter = libparquet.ParquetWriter
@@ -838,26 +866,95 @@ class ParquetDatasetWriter:
             raise ValueError(
                 "file_name_prefix cannot be None if max_file_size is passed"
             )
+        self._file_sizes: Dict[str, int] = {}
 
     @_cudf_nvtx_annotate
     def write_table(self, df):
         """
         Write a dataframe to the file/dataset
         """
-        (
-            paths,
-            metadata_file_paths,
-            grouped_df,
-            offsets,
-            self.filename,
-        ) = _get_partitioned(
-            df,
-            self.path,
-            self.partition_cols,
+        (part_names, grouped_df, part_offsets,) = _get_partitioned_new(
+            df=df,
+            partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],
-            filename=self.filename,
         )
+        fs = ioutils._ensure_filesystem(None, self.path)
+        fs.mkdirs(self.path, exist_ok=True)
 
+        full_paths = []
+        metadata_file_paths = []
+        full_offsets = [0]
+
+        for idx, keys in enumerate(part_names.itertuples(index=False)):
+            subdir = fs.sep.join(
+                [
+                    f"{name}={val}"
+                    for name, val in zip(self.partition_cols, keys)
+                ]
+            )
+            prefix = fs.sep.join([self.path, subdir])
+            fs.mkdirs(prefix, exist_ok=True)
+            current_offset = (part_offsets[idx], part_offsets[idx + 1])
+            num_chunks = 1
+            if self.max_file_size is not None:
+                start, end = current_offset
+                sliced_df = grouped_df[start:end]
+                current_file_size = get_estimated_file_size(sliced_df)
+                if current_file_size > self.max_file_size:
+                    parts = current_file_size // self.max_file_size
+                    new_offsets = list(range(start, end, parts))
+                    new_offsets.append(end)
+                    num_chunks = len(new_offsets) - 1
+                    full_offsets.extend(new_offsets)
+                else:
+                    full_offsets.append(end)
+
+                curr_file_num = 0
+                while num_chunks > 0:
+                    new_file_name = (
+                        self.filename + "_" + str(curr_file_num) + ".parquet"
+                    )
+                    new_full_path = fs.sep.join([prefix, new_file_name])
+                    while (
+                        new_full_path in self._file_sizes
+                        and (
+                            self._file_sizes[new_full_path]
+                            + (current_file_size / num_chunks)
+                        )
+                        > self.max_file_size
+                    ):
+                        curr_file_num += 1
+                        new_file_name = (
+                            self.filename
+                            + "_"
+                            + str(curr_file_num)
+                            + ".parquet"
+                        )
+                        new_full_path = fs.sep.join([prefix, new_file_name])
+
+                    self._file_sizes[new_full_path] = (
+                        current_file_size / num_chunks
+                    )
+                    full_paths.append(new_full_path)
+                    metadata_file_paths.append(
+                        fs.sep.join([subdir, new_file_name])
+                    )
+                    num_chunks -= 1
+                    curr_file_num += 1
+            else:
+                filename = _generate_filename()
+                full_path = fs.sep.join([prefix, filename])
+                full_paths.append(full_path)
+                metadata_file_paths.append(fs.sep.join([subdir, filename]))
+                full_offsets.extend(current_offset)
+
+        # return full_paths, metadata_file_paths, grouped_df,
+        # part_offsets, filename
+        paths, metadata_file_paths, offsets = (
+            full_paths,
+            metadata_file_paths,
+            part_offsets,
+        )
         existing_cw_batch = defaultdict(dict)
         new_cw_paths = []
 
