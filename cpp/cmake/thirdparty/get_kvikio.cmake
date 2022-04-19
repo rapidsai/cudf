@@ -19,10 +19,8 @@ function(find_and_configure_kvikio VERSION)
     KvikIO ${VERSION}
     GLOBAL_TARGETS kvikio::kvikio
     CPM_ARGS
-    GIT_REPOSITORY https://github.com/madsbk/kvikio.git
-    # GIT_REPOSITORY https://github.com/rapidsai/kvikio.git TODO: use this before merge of PR
-    GIT_TAG used_by_cudf_for_testing
-    # GIT_TAG branch-${VERSION} TODO: use this before merge of PR
+    GIT_REPOSITORY https://github.com/rapidsai/kvikio.git
+    GIT_TAG branch-${VERSION}
     GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
     OPTIONS "KvikIO_BUILD_EXAMPLES OFF"
   )
