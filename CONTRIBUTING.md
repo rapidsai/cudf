@@ -94,6 +94,11 @@ git clone https://github.com/rapidsai/cudf.git $CUDF_HOME
 cd $CUDF_HOME
 ```
 
+#### Building with a conda environment
+
+**Note:** Using a conda environment is the easiest way to satisfy the library's dependencies.
+Instructions for a minimal build environment without conda are included below.
+
 - Create the conda development environment `cudf_dev`:
 
 ```bash
@@ -111,6 +116,16 @@ conda activate cudf_dev
 
 - For other CUDA versions, check the corresponding `cudf_dev_cuda*.yml` file in
   `conda/environments/`.
+
+#### Building without a conda environment
+
+- libcudf has the following minimal dependencies (in addition to those listed in the [General
+  requirements](#general-requirements)). The packages listed below use Ubuntu package names:
+
+  - `build-essential`
+  - `libssl-dev`
+  - `libz-dev`
+  - `libpython3-dev` (required if building cudf)
 
 ### Build cuDF from source
 
@@ -259,14 +274,6 @@ pytest -v custreamz
 
 Done! You are ready to develop for the cuDF project. Please review the project's
 [code formatting guidelines](#code-formatting).
-
-### Building without a conda environment
-
-A minimal build of libcudf has the following dependencies (in addition to those listed in the
-[General requirements](#general-requirements)). The packages listed below use Ubuntu package names.
-
-- `libssl-dev`
-- `libz-dev`
 
 ## Debugging cuDF
 
