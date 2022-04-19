@@ -715,7 +715,7 @@ def _get_partitioned(
             sliced_df = grouped_df[start:end]
             current_file_size = get_estimated_file_size(sliced_df)
             if current_file_size > max_file_size:
-                parts = current_file_size // max_file_size
+                parts = int(current_file_size // max_file_size)
                 new_offsets = list(range(start, end, parts))
                 new_offsets.append(end)
                 num_chunks = len(new_offsets) - 1
@@ -901,10 +901,10 @@ class ParquetDatasetWriter:
                 sliced_df = grouped_df[start:end]
                 current_file_size = get_estimated_file_size(sliced_df)
                 if current_file_size > self.max_file_size:
-                    parts = current_file_size // self.max_file_size
-                    new_offsets = list(range(start, end, parts))
+                    parts = int(current_file_size // self.max_file_size)
+                    new_offsets = list(range(start, end, parts))[1:]
                     new_offsets.append(end)
-                    num_chunks = len(new_offsets) - 1
+                    num_chunks = len(new_offsets)
                     full_offsets.extend(new_offsets)
                 else:
                     full_offsets.append(end)
@@ -948,14 +948,14 @@ class ParquetDatasetWriter:
                 metadata_file_paths.append(
                     fs.sep.join([subdir, self.filename])
                 )
-                full_offsets.extend(current_offset)
+                full_offsets.append(current_offset[1])
 
         # return full_paths, metadata_file_paths, grouped_df,
         # part_offsets, filename
         paths, metadata_file_paths, offsets = (
             full_paths,
             metadata_file_paths,
-            part_offsets,
+            full_offsets,
         )
         existing_cw_batch = defaultdict(dict)
         new_cw_paths = []
