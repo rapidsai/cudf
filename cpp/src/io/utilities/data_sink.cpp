@@ -39,8 +39,7 @@ class file_sink : public data_sink {
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath, "w");
     } else {
-      _cufile_out =
-        detail::make_cufile_output(filepath);
+      _cufile_out = detail::make_cufile_output(filepath);
     }
   }
 
