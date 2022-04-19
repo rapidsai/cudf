@@ -40,9 +40,9 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
  * @brief Generates list offsets with lengths of each list.
  *
  * For example,
- * Here is a list column: [[1,2,3], [4,5], [6], [], [7,8]]
- * The list lengths: [3, 2, 1, 0, 2]
- * The list offsets: [0, 3, 5, 6, 6, 8]
+ * Given a list column: [[1,2,3], [4,5], [6], [], [7,8]]
+ * The list lengths of it: [3, 2, 1, 0, 2]
+ * The list offsets of it: [0, 3, 5, 6, 6, 8]
  *
  * @param list_length The column represents list lengths.
  * @return The column represents list offsets.
