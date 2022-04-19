@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf::jni {
 
@@ -35,8 +36,19 @@ std::unique_ptr<cudf::column>
 new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
                                            cudf::column_view const &bool_column);
 
+/**
+ * @brief Generates list offsets with lengths of each list.
+ *
+ * For example,
+ * Here is a list column: [[1,2,3], [4,5], [6], [], [7,8]]
+ * The list lengths: [3, 2, 1, 0, 2]
+ * The list offsets: [0, 3, 5, 6, 6, 8]
+ *
+ * @param list_length The column represents list lengths.
+ * @return The column represents list offsets.
+ */
 std::unique_ptr<cudf::column>
-generate_list_offsets(cudf::column_view const &index,
+generate_list_offsets(cudf::column_view const &list_length,
                       rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 } // namespace cudf::jni

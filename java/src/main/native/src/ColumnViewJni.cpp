@@ -624,8 +624,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listSortRows(JNIEnv *env,
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeListOffsets(JNIEnv *env, jclass,
-                                                                       jlong handle) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_generateListOffsets(JNIEnv *env, jclass,
+                                                                           jlong handle) {
   JNI_NULL_CHECK(env, handle, "handle is null", 0)
   try {
     cudf::jni::auto_set_device(env);

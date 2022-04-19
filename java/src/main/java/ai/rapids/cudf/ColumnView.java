@@ -3474,10 +3474,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Generate list offsets from sizes of each list.
+   * NOTICE: This column should type in INT32. And no null and negative value is allowed.
    *
+   * @return a column of list offsets whose size is N + 1
    */
   public final ColumnVector generateListOffsets() {
-    assert type.typeId == DType.DTypeEnum.INT32;
     return new ColumnVector(generateListOffsets(getNativeView()));
   }
 
