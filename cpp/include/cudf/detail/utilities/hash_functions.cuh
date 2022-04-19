@@ -239,8 +239,8 @@ struct MurmurHash3_32 {
     // Process remaining bytes that do not fill a four-byte chunk.
     uint32_t k1 = 0;
     switch (len % 4) {
-      case 3: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 2]) << 16;
-      case 2: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 1]) << 8;
+      case 3: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 2]) << 16; [[fallthrough]];
+      case 2: k1 ^= std::to_integer<uint8_t>(data[tail_offset + 1]) << 8; [[fallthrough]];
       case 1:
         k1 ^= std::to_integer<uint8_t>(data[tail_offset]);
         k1 *= c1;
