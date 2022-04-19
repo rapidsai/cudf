@@ -13,20 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-
-#include <benchmark/benchmark.h>
-
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <algorithm>
 #include <random>

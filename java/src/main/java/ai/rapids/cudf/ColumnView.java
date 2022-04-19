@@ -1547,6 +1547,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Segmented gather of the elements within a list element in each row of a list column.
+   * For each list, assuming the size is N, valid indices of gather map ranges in [-N, N).
+   * Out of bound indices refer to null.
+   * @param gatherMap ListColumnView carrying lists of integral indices which maps the
+   * element in list of each row in the source columns to rows of lists in the result columns.
+   * @return the result.
+   */
+  public ColumnVector segmentedGather(ColumnView gatherMap) {
+    return segmentedGather(gatherMap, OutOfBoundsPolicy.NULLIFY);
+  }
+
+  /**
+   * Segmented gather of the elements within a list element in each row of a list column.
+   * @param gatherMap ListColumnView carrying lists of integral indices which maps the
+   * element in list of each row in the source columns to rows of lists in the result columns.
+   * @param policy OutOfBoundsPolicy, `DONT_CHECK` leads to undefined behaviour; `NULLIFY`
+   * replaces out of bounds with null.
+   * @return the result.
+   */
+  public ColumnVector segmentedGather(ColumnView gatherMap, OutOfBoundsPolicy policy) {
+    return new ColumnVector(segmentedGather(getNativeView(), gatherMap.getNativeView(),
+        policy.equals(OutOfBoundsPolicy.NULLIFY)));
+  }
+
+  /**
    * Do a reduction on the values in a list. The output type will be the type of the data column
    * of this list.
    * @param aggregation the aggregation to perform
@@ -3997,6 +4022,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long segmentedReduce(long dataViewHandle, long offsetsViewHandle,
       long aggregation, boolean includeNulls, int dtype, int scale) throws CudfException;
+
+  private static native long segmentedGather(long sourceColumnHandle, long gatherMapListHandle,
+      boolean isNullifyOutBounds) throws CudfException;
 
   private static native long isNullNative(long viewHandle);
 

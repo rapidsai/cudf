@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import itertools
+from collections import abc
 from typing import Dict, Optional
 
 import numpy as np
@@ -485,14 +486,14 @@ def melt(
     1  b         B          3
     2  c         B          5
     """
-    assert col_level in (None,)
+    if col_level is not None:
+        raise NotImplementedError("col_level != None is not supported yet.")
 
     # Arg cleaning
-    import collections
 
     # id_vars
     if id_vars is not None:
-        if not isinstance(id_vars, collections.abc.Sequence):
+        if not isinstance(id_vars, abc.Sequence):
             id_vars = [id_vars]
         id_vars = list(id_vars)
         missing = set(id_vars) - set(frame._column_names)
@@ -506,7 +507,7 @@ def melt(
 
     # value_vars
     if value_vars is not None:
-        if not isinstance(value_vars, collections.abc.Sequence):
+        if not isinstance(value_vars, abc.Sequence):
             value_vars = [value_vars]
         value_vars = list(value_vars)
         missing = set(value_vars) - set(frame._column_names)

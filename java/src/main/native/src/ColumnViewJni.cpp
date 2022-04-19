@@ -31,6 +31,7 @@
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/lists/extract.hpp>
+#include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/null_mask.hpp>
@@ -284,6 +285,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedReduce(
     cudf::data_type out_dtype = cudf::jni::make_data_type(j_dtype, scale);
     return release_as_jlong(
         cudf::segmented_reduce(*data, *offsets, *s_agg, out_dtype, null_policy));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedGather(
+    JNIEnv *env, jclass, jlong source_column, jlong gather_map_list, jboolean nullify_out_bounds) {
+  JNI_NULL_CHECK(env, source_column, "source column view is null", 0);
+  JNI_NULL_CHECK(env, gather_map_list, "gather map is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const &src_col =
+        cudf::lists_column_view(*reinterpret_cast<cudf::column_view *>(source_column));
+    auto const &gather_map =
+        cudf::lists_column_view(*reinterpret_cast<cudf::column_view *>(gather_map_list));
+    auto out_bounds_policy = nullify_out_bounds ? cudf::out_of_bounds_policy::NULLIFY :
+                                                  cudf::out_of_bounds_policy::DONT_CHECK;
+    return release_as_jlong(cudf::lists::segmented_gather(src_col, gather_map, out_bounds_policy));
   }
   CATCH_STD(env, 0);
 }

@@ -113,9 +113,7 @@ class ListColumn(ColumnBase):
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
-                return concatenate_rows(
-                    cudf.core.frame.Frame({0: self, 1: other})
-                )
+                return concatenate_rows([self, other])
             else:
                 raise NotImplementedError(
                     "Lists concatenation for this operation is not yet"
