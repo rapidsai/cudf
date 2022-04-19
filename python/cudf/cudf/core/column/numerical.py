@@ -774,6 +774,4 @@ def digitize(
     if bin_col.nullable:
         raise ValueError("`bins` cannot contain null entries.")
 
-    return as_column(
-        libcudf.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
-    )
+    return as_column(libcudf.sort.digitize([column], [bin_col], right))
