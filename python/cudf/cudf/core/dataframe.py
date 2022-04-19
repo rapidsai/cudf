@@ -3933,19 +3933,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         partitioned: list of DataFrame
         """
-        idx = (
-            0
-            if (self._index is None or keep_index is False)
-            else self._index._num_columns
-        )
-        key_indices = [self._data.names.index(k) + idx for k in columns]
 
-        output_data, output_index, offsets = libcudf.hash.hash_partition(
-            self, key_indices, nparts, keep_index
+        key_indices = [self._column_names.index(k) for k in columns]
+        output_columns, offsets = libcudf.hash.hash_partition(
+            [*self._columns], key_indices, nparts
         )
-        outdf = self.__class__._from_data(output_data, output_index)
-        outdf._copy_type_metadata(self, include_index=keep_index)
-
+        outdf = self._from_columns_like_self(
+            [*(self._index._columns if keep_index else ()), *output_columns],
+            self._column_names,
+            self._index_names if keep_index else None,
+        )
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
@@ -5678,22 +5675,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         assert level in (None, -1)
         repeated_index = self.index.repeat(self.shape[1])
-        name_index = cudf.DataFrame._from_data({0: self._column_names}).tile(
-            self.shape[0]
+        name_index = libcudf.reshape.tile(
+            [as_column(self._column_names)], self.shape[0]
         )
-        new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        new_index_columns = [*repeated_index._columns, *name_index]
         if isinstance(self._index, MultiIndex):
             index_names = self._index.names + [None]
         else:
-            index_names = [None] * len(new_index)
+            index_names = [None] * len(new_index_columns)
         new_index = MultiIndex.from_frame(
-            DataFrame(dict(zip(range(0, len(new_index)), new_index))),
+            DataFrame._from_data(
+                dict(zip(range(0, len(new_index_columns)), new_index_columns))
+            ),
             names=index_names,
         )
 
         # Collect datatypes and cast columns as that type
         common_type = np.result_type(*self.dtypes)
-        homogenized = DataFrame(
+        homogenized = DataFrame._from_data(
             {
                 c: (
                     self._data[c].astype(common_type)
@@ -5704,9 +5703,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             }
         )
 
-        data_col = libcudf.reshape.interleave_columns(homogenized)
+        result = Series._from_data(
+            {
+                None: libcudf.reshape.interleave_columns(
+                    [*homogenized._columns]
+                )
+            },
+            index=new_index,
+        )
 
-        result = Series(data=data_col, index=new_index)
         if dropna:
             return result.dropna()
         else:
@@ -6166,6 +6171,48 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         result._set_column_names_like(self)
         return result
+
+    @_cudf_nvtx_annotate
+    def interleave_columns(self):
+        """
+        Interleave Series columns of a table into a single column.
+
+        Converts the column major table `cols` into a row major column.
+
+        Parameters
+        ----------
+        cols : input Table containing columns to interleave.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({0: ['A1', 'A2', 'A3'], 1: ['B1', 'B2', 'B3']})
+        >>> df
+            0   1
+        0  A1  B1
+        1  A2  B2
+        2  A3  B3
+        >>> df.interleave_columns()
+        0    A1
+        1    B1
+        2    A2
+        3    B2
+        4    A3
+        5    B3
+        dtype: object
+
+        Returns
+        -------
+        The interleaved columns as a single column
+        """
+        if ("category" == self.dtypes).any():
+            raise ValueError(
+                "interleave_columns does not support 'category' dtype."
+            )
+
+        return self._constructor_sliced._from_data(
+            {None: libcudf.reshape.interleave_columns([*self._columns])}
+        )
 
 
 def from_dataframe(df, allow_copy=False):
