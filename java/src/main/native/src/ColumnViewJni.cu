@@ -54,17 +54,15 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
   return deep_copy;
 }
 
-std::unique_ptr<cudf::column>
-generate_list_offsets(cudf::column_view const &list_length, rmm::cuda_stream_view stream) {
+std::unique_ptr<cudf::column> generate_list_offsets(cudf::column_view const &list_length,
+                                                    rmm::cuda_stream_view stream) {
   CUDF_EXPECTS(list_length.type().id() == cudf::type_id::INT32,
                "Input column does not have type INT32.");
 
   auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
-                                           list_length.size() + 1,
-                                           cudf::mask_state::UNALLOCATED);
+                                           list_length.size() + 1, cudf::mask_state::UNALLOCATED);
   auto output_view = offsets->mutable_view();
-  thrust::inclusive_scan(rmm::exec_policy(stream),
-                         list_length.template begin<offset_type>(),
+  thrust::inclusive_scan(rmm::exec_policy(stream), list_length.template begin<offset_type>(),
                          list_length.template end<offset_type>(),
                          output_view.template begin<offset_type>() + 1);
 
