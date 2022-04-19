@@ -41,7 +41,7 @@ class file_source : public datasource {
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath);
     } else {
-      _cufile_in = std::unique_ptr<detail::cufile_input_impl>(detail::make_cufile_input(filepath));
+      _cufile_in = detail::make_cufile_input(filepath);
     }
   }
 

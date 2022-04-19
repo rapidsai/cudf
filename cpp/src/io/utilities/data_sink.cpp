@@ -40,7 +40,7 @@ class file_sink : public data_sink {
       _kvikio_file = kvikio::FileHandle(filepath, "w");
     } else {
       _cufile_out =
-        std::unique_ptr<detail::cufile_output_impl>(detail::make_cufile_output(filepath));
+        detail::make_cufile_output(filepath);
     }
   }
 
