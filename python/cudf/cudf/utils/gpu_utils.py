@@ -56,7 +56,9 @@ def validate_setup():
         # If there is no GPU detected, set `gpus_count` to -1
         gpus_count = -1
     except RuntimeError as e:
-        # could indicate that `libcuda.so` is missing
+        # getDeviceCount() can raise a RuntimeError
+        # when ``libcuda.so`` is missing.
+        # We don't want this to propagate up to the user.
         warnings.warn(str(e))
         return
 
