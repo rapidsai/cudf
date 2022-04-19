@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 import numbers
 import pickle
-from collections.abc import Sequence
+from collections import abc
 from functools import cached_property
 from numbers import Integral
 from typing import Any, List, MutableMapping, Tuple, Union
@@ -95,7 +95,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
         if not isinstance(codes, cudf.DataFrame) and not isinstance(
-            codes[0], (Sequence, np.ndarray)
+            codes[0], (abc.Sequence, np.ndarray)
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 
@@ -206,7 +206,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ``MultiIndex`` instance
 
         Returns
-        --------
+        -------
         None or MultiIndex
 
         Examples
@@ -591,7 +591,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             CuPy array of boolean values.
 
         Notes
-        -------
+        -----
         When `level` is None, `values` can only be MultiIndex, or a
         set/list-like tuples.
         When `level` is provided, `values` can be Index or MultiIndex,
@@ -912,7 +912,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def __getitem__(self, index):
         flatten = isinstance(index, int)
 
-        if isinstance(index, (Integral, Sequence)):
+        if isinstance(index, (Integral, abc.Sequence)):
             index = np.array(index)
         elif isinstance(index, slice):
             start, stop, step = index.indices(len(self))

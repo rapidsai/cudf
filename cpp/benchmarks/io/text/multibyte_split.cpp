@@ -137,6 +137,7 @@ static void BM_multibyte_split(benchmark::State& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
+    try_drop_l3_cache();
     cuda_event_timer raii(state, true);
     auto output = cudf::io::text::multibyte_split(*source, delim);
   }
