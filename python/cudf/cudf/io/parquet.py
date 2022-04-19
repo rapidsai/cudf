@@ -942,10 +942,12 @@ class ParquetDatasetWriter:
                     num_chunks -= 1
                     curr_file_num += 1
             else:
-                filename = _generate_filename()
-                full_path = fs.sep.join([prefix, filename])
+                self.filename = self.filename or _generate_filename()
+                full_path = fs.sep.join([prefix, self.filename])
                 full_paths.append(full_path)
-                metadata_file_paths.append(fs.sep.join([subdir, filename]))
+                metadata_file_paths.append(
+                    fs.sep.join([subdir, self.filename])
+                )
                 full_offsets.extend(current_offset)
 
         # return full_paths, metadata_file_paths, grouped_df,
