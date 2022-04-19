@@ -250,6 +250,7 @@ ConfigureTest(
   copying/get_value_tests.cpp
   copying/pack_tests.cpp
   copying/sample_tests.cpp
+  copying/sanitize_tests.cpp
   copying/scatter_tests.cpp
   copying/scatter_list_tests.cpp
   copying/scatter_list_scalar_tests.cpp
