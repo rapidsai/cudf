@@ -333,7 +333,7 @@ __global__ void __launch_bounds__(block_size, 1)
   cooperative_load(state.group, &groups[blockIdx.x]);
   __syncthreads();
 
-  type_dispatcher(state.group.col_type,
+  type_dispatcher(state.group.col_dtype,
                   merge_group_statistics_functor<block_size, IO>(storage),
                   state,
                   chunks_in + state.group.start_chunk,

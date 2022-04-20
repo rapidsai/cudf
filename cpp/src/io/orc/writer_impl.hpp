@@ -291,7 +291,8 @@ class writer::impl {
    *
    */
   struct intermediate_statistics {
-    intermediate_statistics(rmm::cuda_stream_view stream) : stripe_stat_chunks(0, stream){};
+    explicit intermediate_statistics(rmm::cuda_stream_view stream)
+      : stripe_stat_chunks(0, stream){};
     intermediate_statistics(std::vector<ColStatsBlob> rb,
                             rmm::device_uvector<statistics_chunk> sc,
                             hostdevice_vector<statistics_merge_group> smg,
@@ -323,13 +324,14 @@ class writer::impl {
       stripe_stat_merge.clear();
       stats_dtypes.clear();
       col_types.clear();
+      num_rows = 0;
     }
 
     std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
     std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
     std::vector<statistics_dtype> stats_dtypes;
     std::vector<data_type> col_types;
-    int num_rows;
+    int num_rows = 0;
   };
 
   /**
