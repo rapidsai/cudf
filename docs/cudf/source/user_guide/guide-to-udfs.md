@@ -45,7 +45,7 @@ Using `apply` or is simpler, but writing a Numba kernel offers the flexibility t
 
 +++
 
-#  `cudf.Series.apply`
+### `cudf.Series.apply`
 
 +++
 
@@ -186,7 +186,7 @@ Like `cudf.Series`, there are multiple ways of using UDFs on dataframes, which e
 
 +++
 
-# `cudf.DataFrame.apply`
+### `cudf.DataFrame.apply`
 
 +++
 
@@ -333,7 +333,7 @@ df
 df.apply(f, axis=1)
 ```
 
-# Numba kernels for DataFrames
+### Numba kernels for DataFrames
 
 +++
 
@@ -374,7 +374,7 @@ As expected, we see our conditional addition worked. At this point, we've succes
 
 +++
 
-## Null Handling in `apply_rows` and `apply_chunks`
+### Null Handling in `apply_rows` and `apply_chunks`
 
 By default, DataFrame methods for applying UDFs like `apply_rows` will handle nulls pessimistically (all rows with a null value will be removed from the output if they are used in the kernel). Exploring how not handling not pessimistically can lead to undefined behavior is outside the scope of this guide. Suffice it to say, pessimistic null handling is the safe and consistent approach. You can see an example below.
 
