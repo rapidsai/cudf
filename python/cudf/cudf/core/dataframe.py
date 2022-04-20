@@ -386,17 +386,31 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     )
             else:
                 value = np.array(value)
-                value = value.reshape((-1, value.shape[0]))
-                if value.shape != self._frame.loc[key[0]].shape:
-                    raise ValueError(
-                        template.format(
-                            value1=value.shape,
-                            value2=self._frame.loc[key[0]].shape,
+                # Given a 2d value, assign each corresponding column
+                if np.ndim(value) == 2:
+                    if value.shape != self._frame.loc[key].shape:
+                        raise ValueError(
+                            template.format(
+                                value1=value.shape,
+                                value2=self._frame.loc[key].shape,
+                            )
                         )
-                    )
-                scatter_map = _indices_from_labels(self._frame, key[0])
-                for i, col in enumerate(columns_df._column_names):
-                    self._frame._data[col][scatter_map] = value[:, i]
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame[col].loc[key[0]] = value[:, i]
+                else:
+                    # If the column axis key is 0d, the indexed object
+                    # is a series, the 1d array is assigned to the
+                    # series along the column.
+                    if is_scalar(key[1]):
+                        for i, col in enumerate(columns_df._column_names):
+                            self._frame[col].loc[key[0]] = value
+                    # Otherwise, there are two situations. The row axis
+                    # is 0d or the key is a 2d indexer. In either of the
+                    # situation, the ith element in value corresponds to
+                    # the ith column in the indexed object.
+                    else:
+                        for i, col in enumerate(columns_df._column_names):
+                            self._frame[col].loc[key[0]] = value[i]
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
@@ -485,16 +499,23 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 )
         else:
             value = np.array(value)
-            value = value.reshape((-1, value.shape[0]))
-            if value.shape != self._frame.iloc[key].shape:
-                raise ValueError(
-                    template.format(
-                        value1=value.shape,
-                        value2=self._frame.iloc[key].shape,
+            if np.ndim(value) == 2:
+                if value.shape != self._frame.iloc[key].shape:
+                    raise ValueError(
+                        template.format(
+                            value1=value.shape,
+                            value2=self._frame.iloc[key].shape,
+                        )
                     )
-                )
-            for i, col in enumerate(columns_df._column_names):
-                self._frame._data[col][key[0]] = value[:, i]
+                for i, col in enumerate(columns_df._column_names):
+                    self._frame._data[col][key[0]] = value[:, i]
+            else:
+                if is_scalar(key[1]):
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame[col].iloc[key[0]] = value
+                else:
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame[col].iloc[key[0]] = value[i]
 
     def _getitem_scalar(self, arg):
         col = self._frame.columns[arg[1]]
