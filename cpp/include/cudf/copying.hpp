@@ -939,5 +939,7 @@ std::unique_ptr<table> sample(
   int64_t const seed                  = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+bool needs_sanitize(column_view const& input);
+
 /** @} */
 }  // namespace cudf

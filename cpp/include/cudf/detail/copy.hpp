@@ -299,5 +299,14 @@ std::unique_ptr<scalar> get_element(
   size_type index,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::needs_sanitize
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+bool needs_sanitize(column_view const& input,
+                    rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
 }  // namespace detail
 }  // namespace cudf

@@ -233,6 +233,7 @@ add_library(
   src/copying/pack.cpp
   src/copying/reverse.cu
   src/copying/sample.cu
+  src/copying/sanitize.cu
   src/copying/scatter.cu
   src/copying/shift.cu
   src/copying/slice.cu
