@@ -55,7 +55,7 @@ struct equality_functor {
 template <typename T>
 struct hash_functor {
   column_device_view const& col;
-  __device__ auto operator()(size_type idx)
+  __device__ auto operator()(size_type idx) const
   {
     return cudf::detail::MurmurHash3_32<T>{}(col.element<T>(idx));
   }
