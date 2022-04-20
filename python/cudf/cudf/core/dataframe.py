@@ -79,7 +79,7 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.core.udf.row_function import _get_row_kernel
-from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
+from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
@@ -1173,9 +1173,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             allow_non_unique=True,
                         )
                     if is_scalar(value):
-                        self._data[arg] = utils.scalar_broadcast_to(
-                            value, len(self)
-                        )
+                        self._data[arg] = column.full(len(self), value)
                     else:
                         value = as_column(value)
                         self._data[arg] = value
@@ -2573,7 +2571,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if _is_scalar_or_zero_d_array(value):
-            value = utils.scalar_broadcast_to(value, len(self))
+            # value = utils.scalar_broadcast_to(value, len(self))
+            value = column.full(
+                len(self),
+                value,
+                "str" if libcudf.scalar._is_null_host_scalar(value) else None,
+            )
 
         if len(self) == 0:
             if isinstance(value, (pd.Series, Series)):

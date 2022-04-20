@@ -40,6 +40,7 @@ from cudf.core.column import (
     as_column,
     build_categorical_column,
     deserialize_columns,
+    full,
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
@@ -3655,7 +3656,7 @@ def _get_replacement_values_for_columns(
             values_columns = {
                 col: [value]
                 if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
-                else cudf.utils.utils.scalar_broadcast_to(
+                else full(
                     value,
                     (len(to_replace),),
                     cudf.dtype(type(value)),
