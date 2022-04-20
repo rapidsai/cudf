@@ -8,7 +8,6 @@ import traceback
 from functools import partial
 from typing import FrozenSet, Set, Union
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 from nvtx import annotate
@@ -428,25 +427,6 @@ def _categorical_scalar_broadcast_to(cat_scalar, size):
         offset=codes.offset,
         ordered=ordered,
     )
-
-
-def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
-    """Makes best effort to convert an array of indices into a python slice.
-    If the conversion is not possible, return input. `indices` are expected
-    to be valid.
-    """
-    # TODO: improve efficiency by avoiding sync.
-    if len(indices) == 1:
-        x = indices[0].item()
-        return slice(x, x + 1)
-    if len(indices) == 2:
-        x1, x2 = indices[0].item(), indices[1].item()
-        return slice(x1, x2 + 1, x2 - x1)
-    start, step = indices[0].item(), (indices[1] - indices[0]).item()
-    stop = start + step * len(indices)
-    if (indices == cp.arange(start, stop, step)).all():
-        return slice(start, stop, step)
-    return indices
 
 
 def _get_color_for_nvtx(name):
