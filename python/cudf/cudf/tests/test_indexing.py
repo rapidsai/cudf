@@ -1531,7 +1531,13 @@ def test_dataframe_loc_inplace_update_string_index():
 
 @pytest.mark.parametrize(
     ("key, value"),
-    [([0], [10, 20]), ([0, 2], [[10, 30], [20, 40]])],
+    [
+        ([0], [10, 20]),
+        ([0, 2], [[10, 30], [20, 40]]),
+        (([0, 2], [0, 1]), [[10, 30], [20, 40]]),
+        (([0, 2], 0), [10, 30]),
+        ((0, [0, 1]), [20, 40]),
+    ],
 )
 def test_dataframe_iloc_inplace_update(key, value):
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
