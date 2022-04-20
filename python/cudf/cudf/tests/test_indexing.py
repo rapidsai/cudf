@@ -1486,3 +1486,113 @@ def test_iloc_decimal():
         ["4.00", "3.00", "2.00", "1.00"],
     ).astype(cudf.Decimal64Dtype(scale=2, precision=3))
     assert_eq(expect.reset_index(drop=True), got.reset_index(drop=True))
+
+
+@pytest.mark.parametrize(
+    ("key, value"),
+    [
+        (
+            ([0], ["x", "y"]),
+            [10, 20],
+        ),
+        (
+            ([0, 2], ["x", "y"]),
+            [[10, 30], [20, 40]],
+        ),
+        (
+            (0, ["x", "y"]),
+            [10, 20],
+        ),
+        (
+            ([0, 2], "x"),
+            [10, 20],
+        ),
+    ],
+)
+def test_dataframe_loc_inplace_update(key, value):
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[key] = value
+    expected = pdf.loc[key] = value
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_loc_inplace_update_string_index():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]}, index=list("abc"))
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[["a"], ["x", "y"]] = [10, 20]
+    expected = pdf.loc[["a"], ["x", "y"]] = [10, 20]
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    ("key, value"),
+    [([0], [10, 20]), ([0, 2], [[10, 30], [20, 40]])],
+)
+def test_dataframe_iloc_inplace_update(key, value):
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.iloc[key] = value
+    expected = pdf.iloc[key] = value
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "loc_key",
+    [([0, 2], ["x", "y"])],
+)
+@pytest.mark.parametrize(
+    "iloc_key",
+    [[0, 2]],
+)
+@pytest.mark.parametrize(
+    ("data, index"),
+    [
+        (
+            {"x": [10, 20], "y": [30, 40]},
+            [0, 2],
+        )
+    ],
+)
+def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe(
+    loc_key, iloc_key, data, index
+):
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[loc_key] = cudf.DataFrame(data, index=cudf.Index([0, 2]))
+    expected = pdf.loc[loc_key] = pd.DataFrame(data, index=pd.Index([0, 2]))
+    assert_eq(expected, actual)
+
+    actual = gdf.iloc[iloc_key] = cudf.DataFrame(
+        data, index=cudf.Index([0, 2])
+    )
+    expected = pdf.iloc[iloc_key] = pd.DataFrame(data, index=pd.Index([0, 2]))
+    assert_eq(expected, actual)
+
+
+def test_dataframe_loc_inplace_update_with_invalid_RHS_columns():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    actual = gdf.loc[[0, 2], ["x", "y"]] = cudf.DataFrame(
+        {"b": [10, 20], "y": [30, 40]}, index=cudf.Index([0, 2])
+    )
+    expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
+        {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_loc_inplace_update_shape_mismatch():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    with pytest.raises(ValueError, match="shape mismatch:"):
+        gdf.loc[[0, 2], ["x", "y"]] = [[10, 30, 50], [20, 40, 60]]
+        gdf.iloc[[0, 2]] = [[10, 30, 50], [20, 40, 60]]
