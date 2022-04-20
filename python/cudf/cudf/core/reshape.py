@@ -772,10 +772,10 @@ def merge_sorted(
 
     Parameters
     ----------
-    objs : list of DataFrame, Series, or Index
+    objs : list of DataFrame or Series
     keys : list, default None
         List of Column names to sort by. If None, all columns used
-        (Ignored if `index=True`)
+        (Ignored if `by_index=True`)
     by_index : bool, default False
         Use index for sorting. `keys` input will be ignored if True
     ignore_index : bool, default False
@@ -806,18 +806,38 @@ def merge_sorted(
     if by_index and ignore_index:
         raise ValueError("`by_index` and `ignore_index` cannot both be True")
 
-    result = objs[0].__class__._from_data(
-        *cudf._lib.merge.merge_sorted(
-            objs,
-            keys=keys,
-            by_index=by_index,
-            ignore_index=ignore_index,
+    if by_index:
+        key_columns_indices = list(range(0, objs[0]._index.nlevels))
+    else:
+        if keys is None:
+            key_columns_indices = list(range(0, objs[0]._num_columns))
+        else:
+            key_columns_indices = [
+                objs[0]._column_names.index(key) for key in keys
+            ]
+        if not ignore_index:
+            key_columns_indices = [
+                idx + objs[0]._index.nlevels for idx in key_columns_indices
+            ]
+
+    columns = [
+        [
+            *(obj._index._data.columns if not ignore_index else ()),
+            *obj._columns,
+        ]
+        for obj in objs
+    ]
+
+    return objs[0]._from_columns_like_self(
+        cudf._lib.merge.merge_sorted(
+            list_of_columns=columns,
+            key_columns_indices=key_columns_indices,
             ascending=ascending,
             na_position=na_position,
-        )
+        ),
+        column_names=objs[0]._column_names,
+        index_names=None if ignore_index else objs[0]._index_names,
     )
-    result._copy_type_metadata(objs[0])
-    return result
 
 
 def _pivot(df, index, columns):
