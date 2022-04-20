@@ -739,7 +739,6 @@ class ListMethods(ColumnMethods):
 
         Examples
         --------
-        >>> import cudf
         >>> s = cudf.Series([[1, 2], [3, 4]])
         >>> s.dtype
         ListDtype(int64)
