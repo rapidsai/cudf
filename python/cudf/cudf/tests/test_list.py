@@ -11,13 +11,13 @@ import pytest
 import cudf
 from cudf import NA
 from cudf._lib.copying import get_element
+from cudf.api.types import is_scalar
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
 )
-from cudf.api.types import is_scalar
 
 
 @pytest.mark.parametrize(
@@ -477,7 +477,9 @@ def test_index(data, search_key, expect):
     if is_scalar(search_key):
         got = sr.list.index(cudf.Scalar(search_key, sr.dtype.element_type))
     else:
-        got = sr.list.index(cudf.Series(search_key, dtype=sr.dtype.element_type))
+        got = sr.list.index(
+            cudf.Series(search_key, dtype=sr.dtype.element_type)
+        )
 
     assert_eq(expect, got)
 
@@ -494,8 +496,8 @@ def test_index(data, search_key, expect):
             2,
         ),
         (
-            [["e", "s"],["t", "w"]],
-            [5,6],
+            [["e", "s"], ["t", "w"]],
+            [5, 6],
         ),
     ],
 )

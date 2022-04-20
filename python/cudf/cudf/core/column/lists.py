@@ -17,8 +17,8 @@ from cudf._lib.lists import (
     drop_list_duplicates,
     extract_element_column,
     extract_element_scalar,
-    index_of_scalar,
     index_of_column,
+    index_of_scalar,
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
@@ -458,9 +458,13 @@ class ListMethods(ColumnMethods):
 
         try:
             if is_scalar(search_key):
-                res = self._return_or_inplace(index_of_scalar(self._column, cudf.Scalar(search_key)))
+                res = self._return_or_inplace(
+                    index_of_scalar(self._column, cudf.Scalar(search_key))
+                )
             else:
-                res = self._return_or_inplace(index_of_column(self._column, as_column(search_key)))
+                res = self._return_or_inplace(
+                    index_of_column(self._column, as_column(search_key))
+                )
 
         except RuntimeError as e:
             if (

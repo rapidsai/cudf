@@ -202,9 +202,9 @@ def index_of_column(Column col, Column search_keys):
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
     )
-    
+
     cdef unique_ptr[column] c_result
-    
+
     with nogil:
         c_result = move(cpp_index_of(
             list_view.get()[0],
