@@ -144,59 +144,6 @@ std::size_t compute_join_output_size(table_device_view build_table,
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table(
   table_view const& probe, table_view const& build);
 
-/**
- * @brief Probes the `hash_table` built from `build_table` for tuples in `probe_table`,
- * and returns the output indices of `build_table` and `probe_table` as a combined table.
- * Behavior is undefined if the provided `output_size` is smaller than the actual output size.
- *
- * @tparam JoinKind The type of join to be performed.
- *
- * @param build_table Table of build side columns to join.
- * @param probe_table Table of probe side columns to join.
- * @param hash_table Hash table built from `build_table`.
- * @param compare_nulls Controls whether null join-key values should match or not.
- * @param output_size Optional value which allows users to specify the exact output size.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned vectors.
- *
- * @return Join output indices vector pair.
- */
-template <join_kind JoinKind, typename multimap_type>
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-probe_join_hash_table(cudf::table_device_view build_table,
-                      cudf::table_device_view probe_table,
-                      multimap_type const& hash_table,
-                      bool has_nulls,
-                      null_equality compare_nulls,
-                      std::optional<std::size_t> output_size,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr);
-
-/**
- * @brief Probes the `hash_table` built from `build_table` for tuples in `probe_table` twice,
- * and returns the output size of a full join operation between `build_table` and `probe_table`.
- * TODO: this is a temporary solution as part of `full_join_size`. To be refactored during
- * cuco integration.
- *
- * @param build_table Table of build side columns to join.
- * @param probe_table Table of probe side columns to join.
- * @param hash_table Hash table built from `build_table`.
- * @param compare_nulls Controls whether null join-key values should match or not.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the intermediate vectors.
- *
- * @return Output size of full join.
- */
-template <typename multimap_type>
-std::size_t get_full_join_size(cudf::table_device_view build_table,
-                               cudf::table_device_view probe_table,
-                               multimap_type const& hash_table,
-                               bool const has_nulls,
-                               null_equality const compare_nulls,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
-
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
                                                 std::unique_ptr<cudf::table>&& right);
 

@@ -33,6 +33,7 @@
 #include <utility>
 #include <vector>
 
+// Forward declaration
 template <typename T>
 class default_allocator;
 
