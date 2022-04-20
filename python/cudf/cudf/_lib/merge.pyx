@@ -15,11 +15,11 @@ from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 def merge_sorted(
     list list_of_columns,
-    list key_columns_idx,
+    list key_columns_indices,
     bool ascending=True,
     str na_position="last",
 ):
-    cdef vector[libcudf_types.size_type] c_column_keys = key_columns_idx
+    cdef vector[libcudf_types.size_type] c_column_keys = key_columns_indices
     cdef vector[table_view] c_input_tables
     cdef vector[libcudf_types.order] c_column_order
     cdef vector[libcudf_types.null_order] c_null_precedence
@@ -29,7 +29,7 @@ def merge_sorted(
         c_input_tables.push_back(
             table_view_from_columns(source_columns))
 
-    num_keys = len(key_columns_idx)
+    num_keys = len(key_columns_indices)
 
     cdef libcudf_types.order column_order = (
         libcudf_types.order.ASCENDING if ascending
