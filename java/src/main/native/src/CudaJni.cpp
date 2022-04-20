@@ -42,23 +42,19 @@ void set_cudf_device(int device) {
  * is using the same device.
  */
 void auto_set_device(JNIEnv *env) {
-  try {
-    if (Cudf_device != cudaInvalidDeviceId) {
-      if (Thread_device != Cudf_device) {
-        CUDF_CUDA_TRY(cudaSetDevice(Cudf_device));
-        Thread_device = Cudf_device;
-      }
+  if (Cudf_device != cudaInvalidDeviceId) {
+    if (Thread_device != Cudf_device) {
+      cudaError_t cuda_status = cudaSetDevice(Cudf_device);
+      jni_cuda_check(env, cuda_status);
+      Thread_device = Cudf_device;
     }
   }
-  CATCH_CUDA_ERROR_AND_THROW(env, );
 }
 
 /** Fills all the bytes in the buffer 'buf' with 'value'. */
 void device_memset_async(JNIEnv *env, rmm::device_buffer &buf, char value) {
-  try {
-    CUDF_CUDA_TRY(cudaMemsetAsync((void *)buf.data(), value, buf.size()));
-  }
-  CATCH_CUDA_ERROR_AND_THROW(env, );
+  cudaError_t cuda_status = cudaMemsetAsync((void *)buf.data(), value, buf.size());
+  jni_cuda_check(env, cuda_status);
 }
 
 } // namespace jni

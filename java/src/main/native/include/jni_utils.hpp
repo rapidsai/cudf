@@ -734,8 +734,49 @@ public:
   }
 };
 
-inline void throw_jni_exception(const char *msg) {
-  throw jni_exception(msg);
+/**
+ * @brief create a cuda exception from a given cudaError_t
+ */
+inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowable cause = NULL) {
+  const char *ex_class_name;
+
+  cudaGetLastError();
+  auto const last = cudaGetLastError();
+  if (status == last && last == cudaDeviceSynchronize()) {
+    ex_class_name = cudf::jni::CUDA_FATAL_ERROR_CLASS;
+  } else {
+    ex_class_name = cudf::jni::CUDA_ERROR_CLASS;
+  }
+
+  jclass ex_class = env->FindClass(ex_class_name);
+  if (ex_class == NULL) {
+    return NULL;
+  }
+  jmethodID ctor_id =
+      env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;ILjava/lang/Throwable;)V");
+  if (ctor_id == NULL) {
+    return NULL;
+  }
+
+  jstring msg = env->NewStringUTF(cudaGetErrorString(status));
+  if (msg == NULL) {
+    return NULL;
+  }
+
+  jint err_code = static_cast<jint>(status);
+
+  jobject ret = env->NewObject(ex_class, ctor_id, msg, err_code, cause);
+  return (jthrowable)ret;
+}
+
+inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
+  if (cudaSuccess != cuda_status) {
+    jthrowable jt = cuda_exception(env, cuda_status);
+    if (jt != NULL) {
+      env->Throw(jt);
+      throw jni_exception("CUDA ERROR");
+    }
+  }
 }
 
 } // namespace jni
@@ -776,19 +817,8 @@ inline void throw_jni_exception(const char *msg) {
     }                                                                                              \
     jobject cuda_error = env->NewObject(ex_class, ctor_id, j_msg, e_code);                         \
     env->Throw((jthrowable)cuda_error);                                                            \
-  }
-
-#define JNI_CHECK_CUDA_ERROR_RETURN(env, class_name, e, ret_val)                                   \
-  do {                                                                                             \
-    JNI_CHECK_CUDA_ERROR(env, class_name, e, ret_val);                                             \
     return ret_val;                                                                                \
-  } while (0)
-
-#define JNI_CHECK_CUDA_ERROR_THROW(env, class_name, e, ret_val)                                    \
-  do {                                                                                             \
-    JNI_CHECK_CUDA_ERROR(env, class_name, e, ret_val);                                             \
-    cudf::jni::throw_jni_exception("CUDA ERROR");                                                  \
-  } while (0)
+  }
 
 #define JNI_NULL_CHECK(env, obj, error_msg, ret_val)                                               \
   {                                                                                                \
@@ -811,14 +841,6 @@ inline void throw_jni_exception(const char *msg) {
     }                                                                                              \
   }
 
-#define CATCH_CUDA_ERROR_AND_THROW(env, ret_val)                                                   \
-  catch (const cudf::fatal_cuda_error &e) {                                                        \
-    JNI_CHECK_CUDA_ERROR_THROW(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e, ret_val);                \
-  }                                                                                                \
-  catch (const cudf::cuda_error &e) {                                                              \
-    JNI_CHECK_CUDA_ERROR_THROW(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                      \
-  }
-
 #define CATCH_STD_CLASS(env, class_name, ret_val)                                                  \
   catch (const rmm::out_of_memory &e) {                                                            \
     auto what =                                                                                    \
@@ -826,10 +848,10 @@ inline void throw_jni_exception(const char *msg) {
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
   catch (const cudf::fatal_cuda_error &e) {                                                        \
-    JNI_CHECK_CUDA_ERROR_RETURN(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e, ret_val);               \
+    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e, ret_val);                      \
   }                                                                                                \
   catch (const cudf::cuda_error &e) {                                                              \
-    JNI_CHECK_CUDA_ERROR_RETURN(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                     \
+    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                            \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
