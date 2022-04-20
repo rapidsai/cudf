@@ -18,6 +18,8 @@
 
 #include "parquet_common.hpp"
 
+#include <thrust/optional.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -145,6 +147,7 @@ struct SchemaElement {
   int32_t num_children                = 0;
   int32_t decimal_scale               = 0;
   int32_t decimal_precision           = 0;
+  thrust::optional<int32_t> field_id  = thrust::nullopt;
 
   // The following fields are filled in later during schema initialization
   int max_definition_level = 0;
@@ -157,7 +160,8 @@ struct SchemaElement {
     return type == other.type && converted_type == other.converted_type &&
            type_length == other.type_length && repetition_type == other.repetition_type &&
            name == other.name && num_children == other.num_children &&
-           decimal_scale == other.decimal_scale && decimal_precision == other.decimal_precision;
+           decimal_scale == other.decimal_scale && decimal_precision == other.decimal_precision &&
+           field_id == other.field_id;
   }
 
   // the parquet format is a little squishy when it comes to interpreting

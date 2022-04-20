@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import datetime as dt
+import datetime
 from collections import namedtuple
 from decimal import Decimal
 
@@ -259,9 +259,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
     ) or cudf.api.types.is_string_dtype(dtype):
         dtype = "str"
 
-    if isinstance(val, dt.datetime):
+    if isinstance(val, datetime.datetime):
         val = np.datetime64(val)
-    elif isinstance(val, dt.timedelta):
+    elif isinstance(val, datetime.timedelta):
         val = np.timedelta64(val)
     elif isinstance(val, pd.Timestamp):
         val = val.to_datetime64()
