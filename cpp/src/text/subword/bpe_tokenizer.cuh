@@ -36,12 +36,12 @@ namespace detail {
 
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 
-using merge_pairs_map_type = cuco::static_map<hash_value_type,
+using merge_pairs_map_type = cuco::static_map<cudf::hash_value_type,
                                               cudf::size_type,
                                               cuda::thread_scope_device,
                                               hash_table_allocator_type>;
 
-using string_hasher_type = MurmurHash3_32<cudf::string_view>;
+using string_hasher_type = cudf::detail::MurmurHash3_32<cudf::string_view>;
 
 }  // namespace detail
 
