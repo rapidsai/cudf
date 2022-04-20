@@ -299,7 +299,9 @@ class ListColumn(ColumnBase):
         """
         Create a strings column from a list column
         """
-        lc = self._transform_leaves(lambda col: col.as_string_column(dtype))
+        lc = self._transform_leaves(
+            lambda col, dtype: col.as_string_column(dtype), dtype
+        )
 
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
@@ -747,5 +749,7 @@ class ListMethods(ColumnMethods):
         ListDtype(float64)
         """
         return self._return_or_inplace(
-            self._column._transform_leaves(lambda col: col.astype(dtype))
+            self._column._transform_leaves(
+                lambda col, dtype: col.astype(dtype), dtype
+            )
         )
