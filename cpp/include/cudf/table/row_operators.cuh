@@ -20,7 +20,6 @@
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include <cudf/detail/utilities/strong_index.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
@@ -199,12 +198,12 @@ class element_equality_comparator {
    */
   template <typename Element,
             std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
-  __device__ bool operator()(cudf::lhs_index_type lhs_element_index,
-                             cudf::rhs_index_type rhs_element_index) const noexcept
+  __device__ bool operator()(size_type lhs_element_index,
+                             size_type rhs_element_index) const noexcept
   {
     if (nulls) {
-      bool const lhs_is_null{lhs.is_null(lhs_element_index.value())};
-      bool const rhs_is_null{rhs.is_null(rhs_element_index.value())};
+      bool const lhs_is_null{lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{rhs.is_null(rhs_element_index)};
       if (lhs_is_null and rhs_is_null) {
         return nulls_are_equal == null_equality::EQUAL;
       } else if (lhs_is_null != rhs_is_null) {
@@ -212,22 +211,15 @@ class element_equality_comparator {
       }
     }
 
-    return equality_compare(lhs.element<Element>(lhs_element_index.value()),
-                            rhs.element<Element>(rhs_element_index.value()));
+    return equality_compare(lhs.element<Element>(lhs_element_index),
+                            rhs.element<Element>(rhs_element_index));
   }
 
   template <typename Element,
             std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
-  __device__ bool operator()(cudf::lhs_index_type lhs_element_index,
-                             cudf::rhs_index_type rhs_element_index) const noexcept
+  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
     CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
-  }
-
-  __device__ bool operator()(cudf::rhs_index_type rhs_element_index,
-                             cudf::lhs_index_type lhs_element_index) const noexcept
-  {
-    return operator()(lhs_element_index, rhs_element_index);
   }
 
  private:
@@ -254,8 +246,8 @@ class row_equality_comparator {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(l.type(),
                                    element_equality_comparator{nulls, l, r, nulls_are_equal},
-                                   cudf::lhs_index_type(lhs_row_index),
-                                   cudf::rhs_index_type(rhs_row_index));
+                                   lhs_row_index,
+                                   rhs_row_index);
     };
 
     return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);

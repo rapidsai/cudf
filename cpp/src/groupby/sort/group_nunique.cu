@@ -17,7 +17,6 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/strong_index.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -63,11 +62,9 @@ struct nunique_functor {
          group_labels  = group_labels.data()] __device__(auto i) -> size_type {
           bool is_input_countable =
             (null_handling == null_policy::INCLUDE || v.is_valid_nocheck(i));
-          bool is_unique =
-            is_input_countable &&
-            (group_offsets[group_labels[i]] == i ||  // first element or
-             (not equal.operator()<T>(cudf::lhs_index_type(i),
-                                      cudf::rhs_index_type(i - 1))));  // new unique value in sorted
+          bool is_unique = is_input_countable &&
+                           (group_offsets[group_labels[i]] == i ||  // first element or
+                            (not equal.operator()<T>(i, i - 1)));   // new unique value in sorted
           return static_cast<size_type>(is_unique);
         });
 
@@ -85,10 +82,8 @@ struct nunique_functor {
          equal,
          group_offsets = group_offsets.data(),
          group_labels  = group_labels.data()] __device__(auto i) -> size_type {
-          bool is_unique =
-            group_offsets[group_labels[i]] == i ||  // first element or
-            (not equal.operator()<T>(cudf::lhs_index_type(i),
-                                     cudf::rhs_index_type(i - 1)));  // new unique value in sorted
+          bool is_unique = group_offsets[group_labels[i]] == i ||  // first element or
+                           (not equal.operator()<T>(i, i - 1));    // new unique value in sorted
           return static_cast<size_type>(is_unique);
         });
       thrust::reduce_by_key(rmm::exec_policy(stream),
