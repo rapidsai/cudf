@@ -740,8 +740,12 @@ public:
 inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowable cause = NULL) {
   const char *ex_class_name;
 
+  // Calls cudaGetLastError twice. It is nearly certain that a fatal error occurred if the second
+  // call doesn't return with cudaSuccess.
   cudaGetLastError();
   auto const last = cudaGetLastError();
+  // Call cudaDeviceSynchronize to ensure `last` did not result from an asynchronous error.
+  // between two calls.
   if (status == last && last == cudaDeviceSynchronize()) {
     ex_class_name = cudf::jni::CUDA_FATAL_ERROR_CLASS;
   } else {
