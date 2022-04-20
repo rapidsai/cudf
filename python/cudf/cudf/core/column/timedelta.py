@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime as dt
+import datetime
 from typing import Any, Sequence, cast
 
 import numpy as np
@@ -211,7 +211,7 @@ class TimeDeltaColumn(ColumnBase):
     def normalize_binop_value(self, other) -> ColumnBinaryOperand:
         if isinstance(other, (ColumnBase, cudf.Scalar)):
             return other
-        if isinstance(other, dt.timedelta):
+        if isinstance(other, datetime.timedelta):
             other = np.timedelta64(other)
         elif isinstance(other, pd.Timestamp):
             other = other.to_datetime64()

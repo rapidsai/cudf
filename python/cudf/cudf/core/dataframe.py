@@ -347,9 +347,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 "could not be broadcast to indexing result of "
                 "shape {value2}"
             )
-            if is_scalar(value):
+            if is_scalar(value) or isinstance(value, range):
                 for col in columns_df._column_names:
                     self._frame[col].loc[key[0]] = value
+
             elif isinstance(value, (cupy.ndarray, np.ndarray)):
                 value_df = DataFrame(value)
                 if value_df.shape[1] != columns_df.shape[1]:
@@ -368,6 +369,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     value_cols = value_df._data.columns
                 for i, col in enumerate(columns_df._column_names):
                     self._frame[col].loc[key[0]] = value_cols[i]
+
             elif isinstance(value, cudf.DataFrame):
                 if value.shape != self._frame.loc[key[0]].shape:
                     raise ValueError(
@@ -384,6 +386,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         if col in value_column_names
                         else cudf.NA
                     )
+
             else:
                 value = np.array(value)
                 # Given a 2d value, assign each corresponding column
@@ -482,9 +485,27 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             "could not be broadcast to indexing result of "
             "shape {value2}"
         )
-        if is_scalar(value):
+        if is_scalar(value) or isinstance(value, range):
             for col in columns_df._column_names:
                 self._frame[col].iloc[key[0]] = value
+
+        elif isinstance(value, (cupy.ndarray, np.ndarray)):
+            value_df = DataFrame(value)
+            if value_df.shape[1] != columns_df.shape[1]:
+                if value_df.shape[1] == 1:
+                    value_cols = value_df._data.columns * columns_df.shape[1]
+                else:
+                    raise ValueError(
+                        error_msg.format(
+                            value1=value_df.shape,
+                            value2=columns_df.shape,
+                        )
+                    )
+            else:
+                value_cols = value_df._data.columns
+            for i, col in enumerate(columns_df._column_names):
+                self._frame[col].iloc[key[0]] = value_cols[i]
+
         elif isinstance(value, cudf.DataFrame):
             if value.shape != self._frame.iloc[key[0]].shape:
                 raise ValueError(
@@ -498,6 +519,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 columns_df[col][key[0]] = (
                     value._data[col] if col in value_column_names else cudf.NA
                 )
+
         else:
             # TODO: consolidate code path with identical counterpart
             # in `_DataFrameLocIndexer._setitem_tuple_arg`
@@ -5688,14 +5710,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @ioutils.doc_to_parquet()
     def to_parquet(self, path, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import parquet as pq
+        from cudf.io import parquet
 
-        return pq.to_parquet(self, path, *args, **kwargs)
+        return parquet.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import feather as feather
+        from cudf.io import feather
 
         feather.to_feather(self, path, *args, **kwargs)
 
@@ -5715,7 +5737,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         **kwargs,
     ):
         """{docstring}"""
-        from cudf.io import csv as csv
+        from cudf.io import csv
 
         return csv.to_csv(
             self,
@@ -5735,7 +5757,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @ioutils.doc_to_orc()
     def to_orc(self, fname, compression=None, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import orc as orc
+        from cudf.io import orc
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
