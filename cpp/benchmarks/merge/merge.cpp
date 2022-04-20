@@ -14,17 +14,14 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
-#include <cudf/column/column.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-
-#include <cudf/merge.hpp>
-
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/merge.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 

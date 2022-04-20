@@ -16,11 +16,11 @@
 
 #pragma once
 
+#include <cudf_test/file_utilities.hpp>
+
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/types.hpp>
-
-#include <cudf_test/file_utilities.hpp>
 
 using cudf::io::io_type;
 

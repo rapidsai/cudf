@@ -365,9 +365,7 @@ class StringMethods(ColumnMethods):
             other_cols = _get_cols_list(self._parent, others)
             all_cols = [self._column] + other_cols
             data = libstrings.concatenate(
-                cudf.DataFrame(
-                    {index: value for index, value in enumerate(all_cols)}
-                ),
+                all_cols,
                 cudf.Scalar(sep),
                 cudf.Scalar(na_rep, "str"),
             )
@@ -5531,7 +5529,7 @@ class StringColumn(column.ColumnBase):
                 return cast(
                     "column.ColumnBase",
                     libstrings.concatenate(
-                        cudf.DataFrame._from_data(data={0: lhs, 1: rhs}),
+                        [lhs, rhs],
                         sep=cudf.Scalar(""),
                         na_rep=cudf.Scalar(None, "str"),
                     ),

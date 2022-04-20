@@ -818,7 +818,8 @@ class IndexedFrame(Frame):
         # calculation, necessitating the unfortunate circular reference to the
         # child class here.
         return cudf.Series._from_data(
-            {None: libcudf.hash.hash(self, method)}, index=self.index
+            {None: libcudf.hash.hash([*self._columns], method)},
+            index=self.index,
         )
 
     def _gather(
@@ -2690,21 +2691,52 @@ class IndexedFrame(Frame):
         if not ignore_index and self._index is not None:
             explode_column_num += self._index.nlevels
 
-        data, index = libcudf.lists.explode_outer(
-            self, explode_column_num, ignore_index
-        )
-        res = self.__class__._from_data(
-            ColumnAccessor(
-                data,
-                multiindex=self._data.multiindex,
-                level_names=self._data._level_names,
-            ),
-            index=index,
+        exploded = libcudf.lists.explode_outer(
+            [
+                *(self._index._data.columns if not ignore_index else ()),
+                *self._columns,
+            ],
+            explode_column_num,
         )
 
-        if not ignore_index and self._index is not None:
-            res.index.names = self._index.names
-        return res
+        return self._from_columns_like_self(
+            exploded,
+            self._column_names,
+            self._index_names if not ignore_index else None,
+        )
+
+    @_cudf_nvtx_annotate
+    def tile(self, count):
+        """Repeats the rows `count` times to form a new Frame.
+
+        Parameters
+        ----------
+        self : input Table containing columns to interleave.
+        count : Number of times to tile "rows". Must be non-negative.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df  = cudf.Dataframe([[8, 4, 7], [5, 2, 3]])
+        >>> count = 2
+        >>> df.tile(df, count)
+           0  1  2
+        0  8  4  7
+        1  5  2  3
+        0  8  4  7
+        1  5  2  3
+
+        Returns
+        -------
+        The indexed frame containing the tiled "rows".
+        """
+        return self._from_columns_like_self(
+            libcudf.reshape.tile(
+                [*self._index._columns, *self._columns], count
+            ),
+            column_names=self._column_names,
+            index_names=self._index_names,
+        )
 
     @_cudf_nvtx_annotate
     @docutils.doc_apply(
@@ -3544,6 +3576,93 @@ class IndexedFrame(Frame):
         return self._binaryop(
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
+
+    @_cudf_nvtx_annotate
+    def rank(
+        self,
+        axis=0,
+        method="average",
+        numeric_only=None,
+        na_option="keep",
+        ascending=True,
+        pct=False,
+    ):
+        """
+        Compute numerical data ranks (1 through n) along axis.
+
+        By default, equal values are assigned a rank that is the average of the
+        ranks of those values.
+
+        Parameters
+        ----------
+        axis : {0 or 'index'}, default 0
+            Index to direct ranking.
+        method : {'average', 'min', 'max', 'first', 'dense'}, default 'average'
+            How to rank the group of records that have the same value
+            (i.e. ties):
+            * average: average rank of the group
+            * min: lowest rank in the group
+            * max: highest rank in the group
+            * first: ranks assigned in order they appear in the array
+            * dense: like 'min', but rank always increases by 1 between groups.
+        numeric_only : bool, optional
+            For DataFrame objects, rank only numeric columns if set to True.
+        na_option : {'keep', 'top', 'bottom'}, default 'keep'
+            How to rank NaN values:
+            * keep: assign NaN rank to NaN values
+            * top: assign smallest rank to NaN values if ascending
+            * bottom: assign highest rank to NaN values if ascending.
+        ascending : bool, default True
+            Whether or not the elements should be ranked in ascending order.
+        pct : bool, default False
+            Whether or not to display the returned rankings in percentile
+            form.
+
+        Returns
+        -------
+        same type as caller
+            Return a Series or DataFrame with data ranks as values.
+        """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Index.rank is deprecated and will be removed.",
+                FutureWarning,
+            )
+
+        if method not in {"average", "min", "max", "first", "dense"}:
+            raise KeyError(method)
+
+        method_enum = libcudf.sort.RankMethod[method.upper()]
+        if na_option not in {"keep", "top", "bottom"}:
+            raise ValueError(
+                "na_option must be one of 'keep', 'top', or 'bottom'"
+            )
+
+        if axis not in (0, "index"):
+            raise NotImplementedError(
+                f"axis must be `0`/`index`, "
+                f"axis={axis} is not yet supported in rank"
+            )
+
+        source = self
+        if numeric_only:
+            numeric_cols = (
+                name
+                for name in self._data.names
+                if _is_non_decimal_numeric_dtype(self._data[name])
+            )
+            source = self._get_columns_by_label(numeric_cols)
+            if source.empty:
+                return source.astype("float64")
+
+        result_columns = libcudf.sort.rank_columns(
+            [*source._columns], method_enum, na_option, ascending, pct
+        )
+
+        return self.__class__._from_data(
+            dict(zip(source._column_names, result_columns)),
+            index=source._index,
+        ).astype(np.float64)
 
 
 def _check_duplicate_level_names(specified, level_names):
