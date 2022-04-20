@@ -271,7 +271,7 @@ TEST_F(SanitizedGatherTest, UnsanitizedListOfUnsanitizedStrings)
   auto strings =
     strings_column_wrapper{
       {"1", "22", "3", "44", "5", "66", "7", "8888", "9", "1010"},  //<--- "8888" will be
-                                                                    //unsanitized.
+                                                                    // unsanitized.
       no_nulls()}
       .release();
 

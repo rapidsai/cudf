@@ -119,15 +119,20 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
 
   // generate the base offsets
   rmm::device_uvector<int32_t> base_offsets = rmm::device_uvector<int32_t>(output_count, stream);
-  thrust::transform(rmm::exec_policy(stream),
-                    gather_map,
-                    gather_map + output_count,
-                    base_offsets.data(),
-                    [src_offsets, src_size, shift] __device__(int32_t index) {
-                      // if this is an invalid index, this will be a NULL list
-                      if (NullifyOutOfBounds && ((index < 0) || (index >= src_size))) { return 0; }
-                      return src_offsets[index] - shift;
-                    });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    gather_map,
+    gather_map + output_count,
+    base_offsets.data(),
+    [d_source_column = *d_source_column, src_offsets, src_size, shift] __device__(int32_t index) {
+      // if this is an invalid index, this will be a NULL list
+      if (NullifyOutOfBounds && ((index < 0) || (index >= src_size))) { return 0; }
+
+      // If the source row is null, the output row size must be 0.
+      if (not d_source_column.is_valid(index)) { return 0; }
+
+      return src_offsets[index] - shift;
+    });
 
   // Retrieve size of the resulting gather map for level N+1 (the last offset)
   size_type child_gather_map_size =
