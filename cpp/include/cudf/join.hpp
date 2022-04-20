@@ -635,7 +635,7 @@ class hash_join {
 
  private:
   struct hash_join_impl;
-  const std::unique_ptr<const hash_join_impl> impl;
+  const std::unique_ptr<const hash_join_impl> _impl_wrapper;
 };
 
 /**

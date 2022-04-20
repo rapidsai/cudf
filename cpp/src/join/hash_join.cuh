@@ -20,6 +20,7 @@
 
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/join.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -143,6 +144,59 @@ std::size_t compute_join_output_size(table_device_view build_table,
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table(
   table_view const& probe, table_view const& build);
 
+/**
+ * @brief Probes the `hash_table` built from `build_table` for tuples in `probe_table`,
+ * and returns the output indices of `build_table` and `probe_table` as a combined table.
+ * Behavior is undefined if the provided `output_size` is smaller than the actual output size.
+ *
+ * @tparam JoinKind The type of join to be performed.
+ *
+ * @param build_table Table of build side columns to join.
+ * @param probe_table Table of probe side columns to join.
+ * @param hash_table Hash table built from `build_table`.
+ * @param compare_nulls Controls whether null join-key values should match or not.
+ * @param output_size Optional value which allows users to specify the exact output size.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned vectors.
+ *
+ * @return Join output indices vector pair.
+ */
+template <join_kind JoinKind, typename multimap_type>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+probe_join_hash_table(cudf::table_device_view build_table,
+                      cudf::table_device_view probe_table,
+                      multimap_type const& hash_table,
+                      bool has_nulls,
+                      null_equality compare_nulls,
+                      std::optional<std::size_t> output_size,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Probes the `hash_table` built from `build_table` for tuples in `probe_table` twice,
+ * and returns the output size of a full join operation between `build_table` and `probe_table`.
+ * TODO: this is a temporary solution as part of `full_join_size`. To be refactored during
+ * cuco integration.
+ *
+ * @param build_table Table of build side columns to join.
+ * @param probe_table Table of probe side columns to join.
+ * @param hash_table Hash table built from `build_table`.
+ * @param compare_nulls Controls whether null join-key values should match or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the intermediate vectors.
+ *
+ * @return Output size of full join.
+ */
+template <typename multimap_type>
+std::size_t get_full_join_size(cudf::table_device_view build_table,
+                               cudf::table_device_view probe_table,
+                               multimap_type const& hash_table,
+                               bool const has_nulls,
+                               null_equality const compare_nulls,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
+
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
                                                 std::unique_ptr<cudf::table>&& right);
 
@@ -190,20 +244,12 @@ void build_join_hash_table(cudf::table_view const& build,
 
 struct hash_join::hash_join_impl {
  public:
-  hash_join_impl() = delete;
-  ~hash_join_impl();
+  hash_join_impl()                      = delete;
+  ~hash_join_impl()                     = default;
   hash_join_impl(hash_join_impl const&) = delete;
   hash_join_impl(hash_join_impl&&)      = delete;
   hash_join_impl& operator=(hash_join_impl const&) = delete;
   hash_join_impl& operator=(hash_join_impl&&) = delete;
-
- private:
-  bool const _is_empty;
-  cudf::null_equality const _nulls_equal;
-  cudf::table_view _build;
-  std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
-  cudf::structs::detail::flattened_table _flattened_build_table;
-  cudf::detail::multimap_type _hash_table;
 
  public:
   /**
@@ -252,38 +298,7 @@ struct hash_join::hash_join_impl {
                              rmm::mr::device_memory_resource* mr) const;
 
  private:
-  template <cudf::detail::join_kind JoinKind>
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  compute_hash_join(cudf::table_view const& probe,
-                    std::optional<std::size_t> output_size,
-                    rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr) const;
-
-  /**
-   * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
-   * and returns the output indices of `build_table` and `probe_table` as a combined table,
-   * i.e. if full join is specified as the join type then left join is called. Behavior
-   * is undefined if the provided `output_size` is smaller than the actual output size.
-   *
-   * @throw cudf::logic_error if hash table is null.
-   *
-   * @tparam JoinKind The type of join to be performed.
-   *
-   * @param probe_table Table of probe side columns to join.
-   * @param output_size Optional value which allows users to specify the exact output size.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   * @param mr Device memory resource used to allocate the returned vectors.
-   *
-   * @return Join output indices vector pair.
-   */
-  template <cudf::detail::join_kind JoinKind>
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  probe_join_indices(cudf::table_view const& probe_table,
-                     std::optional<std::size_t> output_size,
-                     rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr) const;
+  cudf::detail::hash_join<default_hash<hash_value_type>> _impl;
 };
 
 }  // namespace cudf
