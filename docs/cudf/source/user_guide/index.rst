@@ -13,7 +13,6 @@ User Guide
    groupby.rst
    guide-to-udfs.md
    cupy-interop.md
-   guide-to-udfs.md
    dask-cudf.rst
    internals.rst
    PandasCompat.rst
