@@ -23,7 +23,7 @@ This environment variable also affects how cuDF treats GDS errors.
 When ``LIBCUDF_CUFILE_POLICY`` is set to "GDS" and a GDS API call fails for any reason, cuDF falls back to the internal implementation with bounce buffers.
 When ``LIBCUDF_CUFILE_POLICY`` is set to "ALWAYS" and a GDS API call fails for any reason (unlikely, given that the compatibility mode is on),
 cuDF throws an exception to propagate the error to the user.
-When ``LIBCUDF_CUFILE_POLICY`` is set to "KVIKIO" and a GDS API call fails for any reason cuDF throws an exception to propagate the error to the user.
+When ``LIBCUDF_CUFILE_POLICY`` is set to "KVIKIO" and a KvikIO API call fails for any reason (unlikely, given that the KvikIO implements its own compatibility mode) cuDF throws an exception to propagate the error to the user.
 For more information about error handling, compatibility mode, and tuning parameters in KvikIO see: https://github.com/rapidsai/kvikio
 
 Operations that support the use of GPUDirect Storage:
