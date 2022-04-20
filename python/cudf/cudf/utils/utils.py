@@ -430,9 +430,7 @@ def _categorical_scalar_broadcast_to(cat_scalar, size):
     )
 
 
-def _create_pandas_series(
-    data=None, index=None, dtype=None, name=None, copy=False, fastpath=False
-):
+def _create_pandas_series(data=None, index=None):
     """
     Wrapper to create a Pandas Series. If the length of data is 0 and
     dtype is not passed, this wrapper defaults the dtype to `float64`.
@@ -461,15 +459,14 @@ def _create_pandas_series(
     -------
     pd.Series
     """
-    if (data is None or len(data) == 0) and dtype is None:
+    if data is None or len(data) == 0:
         dtype = "float64"
+    else:
+        dtype = None
     return pd.Series(
         data=data,
         index=index,
         dtype=dtype,
-        name=name,
-        copy=copy,
-        fastpath=fastpath,
     )
 
 
