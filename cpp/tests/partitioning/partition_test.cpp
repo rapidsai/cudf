@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/copying.hpp>
-#include <cudf/partitioning.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include "cudf/sorting.hpp"
+#include <cudf/copying.hpp>
+#include <cudf/partitioning.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
 
 template <typename T>
 class PartitionTest : public cudf::test::BaseFixture {

@@ -491,6 +491,13 @@ std::vector<schema_tree_node> construct_schema_tree(
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
       bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
 
+      auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
+                                                column_in_metadata const& col_meta) {
+        if (schema[parent_idx].name != "list" and col_meta.is_parquet_field_id_set()) {
+          s.field_id = col_meta.get_parquet_field_id();
+        }
+      };
+
       if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
         schema_tree_node struct_schema{};
@@ -500,6 +507,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         struct_schema.num_children = col->children.size();
         struct_schema.parent_idx   = parent_idx;
+        set_field_id(struct_schema, col_meta);
         schema.push_back(std::move(struct_schema));
 
         auto struct_node_index = schema.size() - 1;
@@ -524,6 +532,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         list_schema_1.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         list_schema_1.num_children = 1;
         list_schema_1.parent_idx   = parent_idx;
+        set_field_id(list_schema_1, col_meta);
         schema.push_back(std::move(list_schema_1));
 
         schema_tree_node list_schema_2{};
@@ -555,7 +564,10 @@ std::vector<schema_tree_node> construct_schema_tree(
         map_schema.converted_type = ConvertedType::MAP;
         map_schema.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
-        map_schema.name         = col_meta.get_name();
+        map_schema.name = col_meta.get_name();
+        if (col_meta.is_parquet_field_id_set()) {
+          map_schema.field_id = col_meta.get_parquet_field_id();
+        }
         map_schema.num_children = 1;
         map_schema.parent_idx   = parent_idx;
         schema.push_back(std::move(map_schema));
@@ -612,6 +624,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
+        set_field_id(col_schema, col_meta);
         schema.push_back(col_schema);
       }
     };
@@ -882,7 +895,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   chunks.host_to_device(stream);
 
   gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
-  gpu::populate_chunk_hash_maps(chunks, frags, stream);
+  gpu::populate_chunk_hash_maps(frags, stream);
 
   chunks.device_to_host(stream, true);
 
@@ -931,7 +944,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   }
   chunks.host_to_device(stream);
   gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
-  gpu::get_dictionary_indices(chunks.device_view(), frags, stream);
+  gpu::get_dictionary_indices(frags, stream);
 
   return std::make_pair(std::move(dict_data), std::move(dict_index));
 }

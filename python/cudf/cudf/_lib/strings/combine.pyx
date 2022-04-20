@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -18,10 +18,10 @@ from cudf._lib.cpp.strings.combine cimport (
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport table_view_from_table
+from cudf._lib.utils cimport table_view_from_columns
 
 
-def concatenate(source_strings,
+def concatenate(list source_strings,
                 object sep,
                 object na_rep):
     """
@@ -33,8 +33,7 @@ def concatenate(source_strings,
     cdef DeviceScalar narep = na_rep.device_value
 
     cdef unique_ptr[column] c_result
-    cdef table_view source_view = table_view_from_table(
-        source_strings, ignore_index=True)
+    cdef table_view source_view = table_view_from_columns(source_strings)
 
     cdef const string_scalar* scalar_separator = \
         <const string_scalar*>(separator.get_raw_ptr())
