@@ -342,7 +342,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 )
             self._frame._data.insert(key[1], new_col)
         else:
-            template = (
+            error_msg = (
                 "shape mismatch: value array of shape {value1} "
                 "could not be broadcast to indexing result of "
                 "shape {value2}"
@@ -359,7 +359,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         )
                     else:
                         raise ValueError(
-                            template.format(
+                            error_msg.format(
                                 value1=value_df.shape,
                                 value2=columns_df.shape,
                             )
@@ -371,7 +371,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             elif isinstance(value, cudf.DataFrame):
                 if value.shape != self._frame.loc[key[0]].shape:
                     raise ValueError(
-                        template.format(
+                        error_msg.format(
                             value1=value.shape,
                             value2=self._frame.loc[key[0]].shape,
                         )
@@ -388,11 +388,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 value = np.array(value)
                 # Given a 2d value, assign each corresponding column
                 if np.ndim(value) == 2:
-                    if value.shape != self._frame.loc[key].shape:
+                    indexed_shape = self._frame.loc[key].shape
+                    if value.shape != indexed_shape:
                         raise ValueError(
-                            template.format(
+                            error_msg.format(
                                 value1=value.shape,
-                                value2=self._frame.loc[key].shape,
+                                value2=indexed_shape,
                             )
                         )
                     for i, col in enumerate(columns_df._column_names):
@@ -476,7 +477,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             self._frame._data.select_by_index(key[1]), self._frame._index
         )
 
-        template = (
+        error_msg = (
             "shape mismatch: value array of shape {value1} "
             "could not be broadcast to indexing result of "
             "shape {value2}"
@@ -487,7 +488,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         elif isinstance(value, cudf.DataFrame):
             if value.shape != self._frame.iloc[key[0]].shape:
                 raise ValueError(
-                    template.format(
+                    error_msg.format(
                         value1=value.shape,
                         value2=self._frame.loc[key[0]].shape,
                     )
@@ -498,13 +499,16 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     value._data[col] if col in value_column_names else cudf.NA
                 )
         else:
+            # TODO: consolidate code path with identical counterpart
+            # in `_DataFrameLocIndexer._setitem_tuple_arg`
             value = np.array(value)
             if np.ndim(value) == 2:
-                if value.shape != self._frame.iloc[key].shape:
+                indexed_shape = self._frame.iloc[key].shape
+                if value.shape != indexed_shape:
                     raise ValueError(
-                        template.format(
+                        error_msg.format(
                             value1=value.shape,
-                            value2=self._frame.iloc[key].shape,
+                            value2=indexed_shape,
                         )
                     )
                 for i, col in enumerate(columns_df._column_names):
