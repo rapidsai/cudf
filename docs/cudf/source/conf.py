@@ -252,6 +252,7 @@ def process_class_docstrings(app, what, name, obj, options, lines):
             lines[:] = lines[:cut_index]
 
 
+nitpick_ignore = [("py:class", "SeriesOrIndex"),]
 
 
 def setup(app):

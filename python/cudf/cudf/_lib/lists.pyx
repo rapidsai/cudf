@@ -42,7 +42,7 @@ from cudf.core.dtypes import ListDtype
 
 from cudf._lib.cpp.lists.contains cimport contains, index_of as cpp_index_of
 from cudf._lib.cpp.lists.extract cimport extract_list_element
-from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def count_elements(Column col):
@@ -61,8 +61,10 @@ def count_elements(Column col):
     return result
 
 
-def explode_outer(tbl, int explode_column_idx, bool ignore_index=False):
-    cdef table_view c_table_view = table_view_from_table(tbl, ignore_index)
+def explode_outer(
+    list source_columns, int explode_column_idx
+):
+    cdef table_view c_table_view = table_view_from_columns(source_columns)
     cdef size_type c_explode_column_idx = explode_column_idx
 
     cdef unique_ptr[table] c_result
@@ -70,11 +72,7 @@ def explode_outer(tbl, int explode_column_idx, bool ignore_index=False):
     with nogil:
         c_result = move(cpp_explode_outer(c_table_view, c_explode_column_idx))
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=tbl._column_names,
-        index_names=None if ignore_index else tbl._index_names
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
 def drop_list_duplicates(Column col, bool nulls_equal, bool nans_all_equal):
@@ -197,18 +195,17 @@ def index_of(Column col, object py_search_key):
     return Column.from_unique_ptr(move(c_result))
 
 
-def concatenate_rows(tbl):
+def concatenate_rows(list source_columns):
     cdef unique_ptr[column] c_result
 
-    cdef table_view c_table_view = table_view_from_table(tbl)
+    cdef table_view c_table_view = table_view_from_columns(source_columns)
 
     with nogil:
         c_result = move(cpp_concatenate_rows(
             c_table_view,
         ))
 
-    result = Column.from_unique_ptr(move(c_result))
-    return result
+    return Column.from_unique_ptr(move(c_result))
 
 
 def concatenate_list_elements(Column input_column, dropna=False):
