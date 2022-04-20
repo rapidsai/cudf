@@ -47,19 +47,19 @@ enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_AN
 template <typename Hasher>
 struct hash_join {
  public:
-  hash_join()                 = delete;
-  ~hash_join()                = default;
-  hash_join(hash_join const&) = delete;
-  hash_join(hash_join&&)      = delete;
-  hash_join& operator=(hash_join const&) = delete;
-  hash_join& operator=(hash_join&&) = delete;
-
   using map_type =
     cuco::static_multimap<hash_value_type,
                           cudf::size_type,
                           cuda::thread_scope_device,
                           rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
                           cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
+
+  hash_join()                 = delete;
+  ~hash_join()                = default;
+  hash_join(hash_join const&) = delete;
+  hash_join(hash_join&&)      = delete;
+  hash_join& operator=(hash_join const&) = delete;
+  hash_join& operator=(hash_join&&) = delete;
 
  private:
   bool const _is_empty;
@@ -139,6 +139,5 @@ struct hash_join {
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr) const;
 };
-
 }  // namespace detail
 }  // namespace cudf
