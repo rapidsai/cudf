@@ -198,16 +198,6 @@ struct hash_join::hash_join_impl {
   hash_join_impl& operator=(hash_join_impl&&) = delete;
 
  public:
-  /**
-   * @brief Constructor that internally builds the hash table based on the given `build` table
-   *
-   * @throw cudf::logic_error if the number of columns in `build` table is 0.
-   * @throw cudf::logic_error if the number of rows in `build` table exceeds MAX_JOIN_SIZE.
-   *
-   * @param build The build table, from which the hash table is built.
-   * @param compare_nulls Controls whether null join-key values should match or not.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   */
   hash_join_impl(cudf::table_view const& build,
                  null_equality compare_nulls,
                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);

@@ -377,41 +377,6 @@ template <typename Hasher>
 template <cudf::detail::join_kind JoinKind>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
-                                     std::optional<std::size_t> output_size,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
-{
-  CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
-  CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
-               "Probe column size is too big for hash join");
-
-  auto flattened_probe = structs::detail::flatten_nested_columns(
-    probe, {}, {}, structs::detail::column_nullability::FORCE);
-  auto const flattened_probe_table = flattened_probe.flattened_columns();
-
-  CUDF_EXPECTS(_build.num_columns() == flattened_probe_table.num_columns(),
-               "Mismatch in number of columns to be joined on");
-
-  if (is_trivial_join(flattened_probe_table, _build, JoinKind)) {
-    return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
-  }
-
-  CUDF_EXPECTS(std::equal(std::cbegin(_build),
-                          std::cend(_build),
-                          std::cbegin(flattened_probe_table),
-                          std::cend(flattened_probe_table),
-                          [](const auto& b, const auto& p) { return b.type() == p.type(); }),
-               "Mismatch in joining column data types");
-
-  return probe_join_indices<JoinKind>(flattened_probe_table, output_size, stream, mr);
-}
-
-template <typename Hasher>
-template <cudf::detail::join_kind JoinKind>
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
                                       std::optional<std::size_t> output_size,
                                       rmm::cuda_stream_view stream,
@@ -443,6 +408,41 @@ hash_join<Hasher>::probe_join_indices(cudf::table_view const& probe_table,
     join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
   }
   return join_indices;
+}
+
+template <typename Hasher>
+template <cudf::detail::join_kind JoinKind>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
+                                     std::optional<std::size_t> output_size,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
+{
+  CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
+  CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
+               "Probe column size is too big for hash join");
+
+  auto flattened_probe = structs::detail::flatten_nested_columns(
+    probe, {}, {}, structs::detail::column_nullability::FORCE);
+  auto const flattened_probe_table = flattened_probe.flattened_columns();
+
+  CUDF_EXPECTS(_build.num_columns() == flattened_probe_table.num_columns(),
+               "Mismatch in number of columns to be joined on");
+
+  if (is_trivial_join(flattened_probe_table, _build, JoinKind)) {
+    return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+  }
+
+  CUDF_EXPECTS(std::equal(std::cbegin(_build),
+                          std::cend(_build),
+                          std::cbegin(flattened_probe_table),
+                          std::cend(flattened_probe_table),
+                          [](const auto& b, const auto& p) { return b.type() == p.type(); }),
+               "Mismatch in joining column data types");
+
+  return probe_join_indices<JoinKind>(flattened_probe_table, output_size, stream, mr);
 }
 }  // namespace detail
 

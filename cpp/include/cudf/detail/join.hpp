@@ -44,6 +44,14 @@ constexpr int DEFAULT_JOIN_CG_SIZE = 2;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 
+/**
+ * @brief Hash join that builds hash table in creation and probes results in subsequent `*_join`
+ * member functions.
+ *
+ * User-defined hash function can be passed via the template parameter `Hasher`
+ *
+ * @tparam Hasher Unary callable type
+ */
 template <typename Hasher>
 struct hash_join {
  public:
@@ -62,18 +70,31 @@ struct hash_join {
   hash_join& operator=(hash_join&&) = delete;
 
  private:
-  bool const _is_empty;
-  cudf::null_equality const _nulls_equal;
-  cudf::table_view _build;
-  std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
-  cudf::structs::detail::flattened_table _flattened_build_table;
-  map_type _hash_table;
+  bool const _is_empty;                    ///< true if `_hash_table` is empty
+  cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
+  cudf::table_view _build;                 ///< input table to build the hash map
+  cudf::structs::detail::flattened_table
+    _flattened_build_table;  ///< flattened data structures for `_build`
+  map_type _hash_table;      ///< hash table built on `_build`
 
  public:
+  /**
+   * @brief Constructor that internally builds the hash table based on the given `build` table.
+   *
+   * @throw cudf::logic_error if the number of columns in `build` table is 0.
+   * @throw cudf::logic_error if the number of rows in `build` table exceeds MAX_JOIN_SIZE.
+   *
+   * @param build The build table, from which the hash table is built.
+   * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
   hash_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls,
             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
+  /**
+   * @copydoc cudf::hash_join::inner_join
+   */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
@@ -81,6 +102,9 @@ struct hash_join {
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr) const;
 
+  /**
+   * @copydoc cudf::hash_join::left_join
+   */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
@@ -88,6 +112,9 @@ struct hash_join {
             rmm::cuda_stream_view stream,
             rmm::mr::device_memory_resource* mr) const;
 
+  /**
+   * @copydoc cudf::hash_join::full_join
+   */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
@@ -95,25 +122,26 @@ struct hash_join {
             rmm::cuda_stream_view stream,
             rmm::mr::device_memory_resource* mr) const;
 
+  /**
+   * @copydoc cudf::hash_join::inner_join_size
+   */
   [[nodiscard]] std::size_t inner_join_size(cudf::table_view const& probe,
                                             rmm::cuda_stream_view stream) const;
 
+  /**
+   * @copydoc cudf::hash_join::left_join_size
+   */
   [[nodiscard]] std::size_t left_join_size(cudf::table_view const& probe,
                                            rmm::cuda_stream_view stream) const;
 
+  /**
+   * @copydoc cudf::hash_join::full_join_size
+   */
   std::size_t full_join_size(cudf::table_view const& probe,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr) const;
 
  private:
-  template <cudf::detail::join_kind JoinKind>
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  compute_hash_join(cudf::table_view const& probe,
-                    std::optional<std::size_t> output_size,
-                    rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr) const;
-
   /**
    * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
    * and returns the output indices of `build_table` and `probe_table` as a combined table,
@@ -138,6 +166,21 @@ struct hash_join {
                      std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr) const;
+
+  /**
+   * @copydoc cudf::detail::hash_join::probe_join_indices
+   *
+   * @throw cudf::logic_error if the size of probe table exceeds `MAX_JOIN_SIZE`.
+   * @throw cudf::logic_error if the number of columns in build table and probe table do not match.
+   * @throw cudf::logic_error if the column data types in build table and probe table do not match.
+   */
+  template <cudf::detail::join_kind JoinKind>
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  compute_hash_join(cudf::table_view const& probe,
+                    std::optional<std::size_t> output_size,
+                    rmm::cuda_stream_view stream,
+                    rmm::mr::device_memory_resource* mr) const;
 };
 }  // namespace detail
 }  // namespace cudf
