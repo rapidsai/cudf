@@ -22,7 +22,6 @@
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -31,24 +30,13 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/reverse_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/logical.h>
-
 #include <thrust/execution_policy.h>
-#include <thrust/find.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/pair.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <type_traits>
 
@@ -275,6 +263,7 @@ struct dispatch_index_of {
                    "Number of search keys must match list column size.");
     }
 
+    // todo: explain why not sliced
     auto const child = lists.child();
     CUDF_EXPECTS(!cudf::is_nested(child.type()) || child.type().id() == type_id::STRUCT,
                  "Nested types except STRUCT are not supported in list search operations.");
@@ -294,6 +283,8 @@ struct dispatch_index_of {
     auto const lists_cdv_ptr = column_device_view::create(lists.parent(), stream);
     auto const lists_cdv     = cudf::detail::lists_column_device_view{*lists_cdv_ptr};
     auto const keys_dv_ptr   = get_search_keys_device_view_ptr(search_keys, stream);
+
+    auto const output_has_nulls = search_keys_have_nulls || lists.has_nulls();
 
     auto out_positions = make_numeric_column(
       data_type{type_id::INT32}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
@@ -320,7 +311,7 @@ struct dispatch_index_of {
       search_functor<Type>::search_all_lists(lists_cdv, keys_iter, find_option, out_iter, stream);
     }
 
-    if (search_keys_have_nulls || lists.has_nulls()) {
+    if (output_has_nulls) {
       auto [null_mask, num_nulls] = cudf::detail::valid_if(
         out_validity.begin(), out_validity.end(), thrust::identity{}, stream, mr);
       out_positions->set_null_mask(std::move(null_mask), num_nulls);
