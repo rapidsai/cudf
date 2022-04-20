@@ -64,12 +64,12 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
  *
  * @return Join output indices vector pair.
  */
-template <join_kind JoinKind, typename multimap_type>
+template <join_kind JoinKind>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 probe_join_hash_table(cudf::table_device_view build_table,
                       cudf::table_device_view probe_table,
-                      multimap_type const& hash_table,
+                      cudf::detail::multimap_type const& hash_table,
                       bool has_nulls,
                       null_equality compare_nulls,
                       std::optional<std::size_t> output_size,
@@ -143,10 +143,9 @@ probe_join_hash_table(cudf::table_device_view build_table,
  *
  * @return Output size of full join.
  */
-template <typename multimap_type>
 std::size_t get_full_join_size(cudf::table_device_view build_table,
                                cudf::table_device_view probe_table,
-                               multimap_type const& hash_table,
+                               cudf::detail::multimap_type const& hash_table,
                                bool const has_nulls,
                                null_equality const compare_nulls,
                                rmm::cuda_stream_view stream,

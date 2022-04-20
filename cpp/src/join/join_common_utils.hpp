@@ -45,6 +45,9 @@ using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
 
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 
+using hash_join_impl_type = typename cudf::detail::hash_join<default_hash<hash_value_type>>;
+using multimap_type       = hash_join_impl_type::map_type;
+
 // Multimap type used for mixed joins. TODO: This is a temporary alias used
 // until the mixed joins are converted to using CGs properly. Right now it's
 // using a cooperative group of size 1.

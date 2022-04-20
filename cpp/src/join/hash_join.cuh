@@ -85,7 +85,6 @@ class make_pair_function {
  * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
  *
  * @tparam JoinKind The type of join to be performed
- * @tparam multimap_type The type of the hash table
  *
  * @param build_table The right hand table
  * @param probe_table The left hand table
@@ -96,10 +95,10 @@ class make_pair_function {
  *
  * @return The exact size of the output of the join operation
  */
-template <join_kind JoinKind, typename multimap_type>
+template <join_kind JoinKind>
 std::size_t compute_join_output_size(table_device_view build_table,
                                      table_device_view probe_table,
-                                     multimap_type const& hash_table,
+                                     cudf::detail::multimap_type const& hash_table,
                                      bool const has_nulls,
                                      cudf::null_equality const nulls_equal,
                                      rmm::cuda_stream_view stream)
@@ -245,7 +244,7 @@ struct hash_join::hash_join_impl {
                              rmm::mr::device_memory_resource* mr) const;
 
  private:
-  cudf::detail::hash_join<default_hash<hash_value_type>> _impl;
+  cudf::detail::hash_join_impl_type _impl;
 };
 
 }  // namespace cudf

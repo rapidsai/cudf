@@ -54,18 +54,20 @@ struct hash_join {
   hash_join& operator=(hash_join const&) = delete;
   hash_join& operator=(hash_join&&) = delete;
 
+  using map_type =
+    cuco::static_multimap<hash_value_type,
+                          cudf::size_type,
+                          cuda::thread_scope_device,
+                          rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
+                          cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
+
  private:
   bool const _is_empty;
   cudf::null_equality const _nulls_equal;
   cudf::table_view _build;
   std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
   cudf::structs::detail::flattened_table _flattened_build_table;
-  cuco::static_multimap<hash_value_type,
-                        cudf::size_type,
-                        cuda::thread_scope_device,
-                        rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
-                        cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>
-    _hash_table;
+  map_type _hash_table;
 
  public:
   hash_join(cudf::table_view const& build,
