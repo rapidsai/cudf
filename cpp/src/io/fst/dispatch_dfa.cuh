@@ -119,7 +119,7 @@ struct DispatchFSM : DeviceFSMPolicy {
   TransducedIndexOutItT transduced_out_idx_it;
   TransducedCountOutItT d_num_transduced_out_it;
   cudaStream_t stream;
-  int ptx_version;
+  int const ptx_version;
 
   //------------------------------------------------------------------------------
   // CONSTRUCTOR
@@ -422,7 +422,7 @@ struct DispatchFSM : DeviceFSMPolicy {
     // COMPUTE STATE-TRANSITION VECTORS
     //------------------------------------------------------------------------------
     ScanTileStateT stv_tile_state;
-    if constexpr(SINGLE_PASS_STV) {
+    if constexpr (SINGLE_PASS_STV) {
       // Construct the tile status (aliases memory internally et al.)
       error = stv_tile_state.Init(
         num_blocks, allocations[MEM_SINGLE_PASS_STV], allocation_sizes[MEM_SINGLE_PASS_STV]);
