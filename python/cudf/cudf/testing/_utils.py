@@ -2,14 +2,12 @@
 
 import itertools
 import re
-import string
 import warnings
 from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
 
 import cupy
-import mimesis
 import numpy as np
 import pandas as pd
 import pytest
@@ -308,15 +306,7 @@ def gen_rand(dtype, size, **kwargs):
             np.random.randint(low=low, high=high, size=size), unit=time_unit
         )
     elif dtype.kind in ("O", "U"):
-        return np.array(
-            [
-                mimesis.random.random.schoice(
-                    string.printable,
-                    np.random.randint(low=0, high=50, size=1)[0],
-                )
-                for _ in range(size)
-            ]
-        )
+        return pd.util.testing.rands_array(10, size)
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 
