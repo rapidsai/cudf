@@ -388,7 +388,6 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
             else:
                 value = np.array(value)
-                # Given a 2d value, assign each corresponding column
                 if np.ndim(value) == 2:
                     indexed_shape = self._frame.loc[key].shape
                     if value.shape != indexed_shape:
