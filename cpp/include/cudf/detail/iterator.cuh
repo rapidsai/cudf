@@ -440,36 +440,21 @@ struct scalar_optional_accessor : public scalar_value_accessor<Element> {
   }
 
   /**
-   * @brief returns a thrust::optional<Element>.
-   *
-   * This function does not participate in overload resolution if
-   * `is_rep_layout_compatible<Element>` is false.
-   *
-   * @return a thrust::optional<Element> for the scalar value.
+   * @brief returns a thrust::optional<Element> for the scalar value.
    */
-  template <typename T = Element,
-            CUDF_ENABLE_IF(is_rep_layout_compatible<T>() || std::is_same_v<T, string_view>)>
-  __device__ inline const value_type operator()(size_type) const
-  {
-    if (has_nulls && !super_t::dscalar.is_valid()) { return value_type{thrust::nullopt}; }
-    return Element{super_t::dscalar.value()};
-  }
-
-  /**
-   * @brief returns a thrust::optional<Element> when Element is of `fixed_point` type.
-   *
-   * @return a thrust::optional<Element> for the scalar value.
-   */
-  template <typename T = Element, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
   __device__ inline const value_type operator()(size_type) const
   {
     if (has_nulls && !super_t::dscalar.is_valid()) { return value_type{thrust::nullopt}; }
 
-    using namespace numeric;
-    using rep        = typename T::rep;
-    auto const value = super_t::dscalar.rep();
-    auto const scale = scale_type{super_t::dscalar.type().scale()};
-    return Element{scaled_integer<rep>{value, scale}};
+    if constexpr (cudf::is_fixed_point<Element>()) {
+      using namespace numeric;
+      using rep        = typename Element::rep;
+      auto const value = super_t::dscalar.rep();
+      auto const scale = scale_type{super_t::dscalar.type().scale()};
+      return Element{scaled_integer<rep>{value, scale}};
+    } else {
+      return Element{super_t::dscalar.value()};
+    }
   }
 
   Nullate has_nulls{};
