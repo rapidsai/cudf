@@ -17,6 +17,7 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
 )
+from cudf.api.types import is_scalar
 
 
 @pytest.mark.parametrize(
@@ -425,7 +426,7 @@ def test_contains_invalid(data, scalar):
 
 
 @pytest.mark.parametrize(
-    "data, scalar, expect",
+    "data, search_key, expect",
     [
         (
             [[1, 2, 3], [], [3, 4, 5]],
@@ -449,6 +450,16 @@ def test_contains_invalid(data, scalar):
             [3, -1],
         ),
         (
+            [["h", "a", None], ["t", "g"]],
+            ["a", "b"],
+            [1, -1],
+        ),
+        (
+            [None, ["h", "i"], ["p", "k", "z"]],
+            ["x", None, "z"],
+            [None, None, 2],
+        ),
+        (
             [["d", None, "e"], [None, "f"], []],
             cudf.Scalar(cudf.NA, "O"),
             [None, None, None],
@@ -460,15 +471,19 @@ def test_contains_invalid(data, scalar):
         ),
     ],
 )
-def test_index(data, scalar, expect):
+def test_index(data, search_key, expect):
     sr = cudf.Series(data)
     expect = cudf.Series(expect, dtype="int32")
-    got = sr.list.index(cudf.Scalar(scalar, sr.dtype.element_type))
+    if is_scalar(search_key):
+        got = sr.list.index(cudf.Scalar(search_key, sr.dtype.element_type))
+    else:
+        got = sr.list.index(cudf.Series(search_key, dtype=sr.dtype.element_type))
+
     assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
-    "data, scalar",
+    "data, search_key",
     [
         (
             [[9, None, 8], [], [7, 6, 5]],
@@ -478,16 +493,20 @@ def test_index(data, scalar, expect):
             [["a", "b", "c"], None, [None, "d"]],
             2,
         ),
+        (
+            [["e", "s"],["t", "w"]],
+            [5,6],
+        ),
     ],
 )
-def test_index_invalid(data, scalar):
+def test_index_invalid(data, search_key):
     sr = cudf.Series(data)
     with pytest.raises(
         TypeError,
         match="Type/Scale of search key does not "
         "match list column element type.",
     ):
-        sr.list.index(scalar)
+        sr.list.index(search_key)
 
 
 @pytest.mark.parametrize(
