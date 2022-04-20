@@ -19,9 +19,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-
 #include <rmm/exec_policy.hpp>
-
 #include <thrust/scan.h>
 
 #include "ColumnViewJni.hpp"
@@ -57,8 +55,8 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
   return deep_copy;
 }
 
-std::unique_ptr<cudf::column>
-generate_list_offsets(cudf::column_view const &list_length, rmm::cuda_stream_view stream) {
+std::unique_ptr<cudf::column> generate_list_offsets(cudf::column_view const &list_length,
+                                                    rmm::cuda_stream_view stream) {
   CUDF_EXPECTS(list_length.type().id() == cudf::type_id::INT32,
                "Input column does not have type INT32.");
 
