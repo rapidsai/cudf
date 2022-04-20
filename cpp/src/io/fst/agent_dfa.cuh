@@ -17,8 +17,6 @@
 
 #include "in_reg_array.cuh"
 
-#include <cudf/types.hpp>
-
 #include <cub/cub.cuh>
 
 namespace cudf {
@@ -40,13 +38,13 @@ template <typename StateIndexT, int32_t NUM_ITEMS>
 class MultiItemStateVector {
  public:
   template <typename IndexT>
-  constexpr CUDF_HOST_DEVICE void Set(IndexT index, StateIndexT value) noexcept
+  __host__ __device__ __forceinline__ void Set(IndexT index, StateIndexT value) noexcept
   {
     state_[index] = value;
   }
 
   template <typename IndexT>
-  constexpr CUDF_HOST_DEVICE StateIndexT Get(IndexT index) const noexcept
+  __host__ __device__ __forceinline__ StateIndexT Get(IndexT index) const noexcept
   {
     return state_[index];
   }
@@ -71,7 +69,7 @@ class MultiItemStateVector {
 template <int32_t NUM_ITEMS>
 struct VectorCompositeOp {
   template <typename VectorT>
-  constexpr CUDF_HOST_DEVICE VectorT operator()(VectorT const& lhs, VectorT const& rhs)
+  __host__ __device__ __forceinline__ VectorT operator()(VectorT const& lhs, VectorT const& rhs)
   {
     VectorT res;
     for (int32_t i = 0; i < NUM_ITEMS; ++i) {
@@ -109,8 +107,7 @@ class DFASimulationCallbackWrapper {
     uint32_t count = transducer_table(old_state.Get(0), symbol_id);
     if (write) {
       for (uint32_t out_char = 0; out_char < count; out_char++) {
-        out_it[out_count + out_char] =
-          transducer_table(old_state.Get(0), symbol_id, out_char);
+        out_it[out_count + out_char]     = transducer_table(old_state.Get(0), symbol_id, out_char);
         out_idx_it[out_count + out_char] = offset + character_index;
       }
     }
@@ -188,8 +185,8 @@ struct StateTransitionOp {
   __host__ __device__ __forceinline__ void ReadSymbol(const CharIndexT& character_index,
                                                       const SymbolIndexT& read_symbol_id)
   {
-    using TransitionVectorT=  typename TransitionTableT::TransitionVectorT ;
-    old_state_vector = state_vector;
+    using TransitionVectorT = typename TransitionTableT::TransitionVectorT;
+    old_state_vector        = state_vector;
     state_vector.Set(0, transition_table(state_vector.Get(0), read_symbol_id));
     callback_op.ReadSymbol(character_index, old_state_vector, state_vector, read_symbol_id);
   }
@@ -344,7 +341,8 @@ struct AgentDFA {
   {
     AliasedLoadT thread_units[UINTS_PER_THREAD];
 
-    const AliasedLoadT* d_block_symbols = reinterpret_cast<const AliasedLoadT*>(d_chars + block_offset);
+    const AliasedLoadT* d_block_symbols =
+      reinterpret_cast<const AliasedLoadT*>(d_chars + block_offset);
     cub::LoadDirectStriped<BLOCK_THREADS>(threadIdx.x, d_block_symbols, thread_units);
 
 #pragma unroll
@@ -370,7 +368,8 @@ struct AgentDFA {
     OffsetT num_total_units =
       CUB_QUOTIENT_CEILING(num_total_symbols - block_offset, sizeof(AliasedLoadT));
 
-    const AliasedLoadT* d_block_symbols = reinterpret_cast<const AliasedLoadT*>(d_chars + block_offset);
+    const AliasedLoadT* d_block_symbols =
+      reinterpret_cast<const AliasedLoadT*>(d_chars + block_offset);
     cub::LoadDirectStriped<BLOCK_THREADS>(
       threadIdx.x, d_block_symbols, thread_units, num_total_units);
 
@@ -419,7 +418,8 @@ struct AgentDFA {
     const OffsetT num_total_symbols,
     StateVectorT& state_vector)
   {
-    using StateVectorTransitionOpT = StateVectorTransitionOp<NUM_STATES, StateVectorT, TransitionTableT>;
+    using StateVectorTransitionOpT =
+      StateVectorTransitionOp<NUM_STATES, StateVectorT, TransitionTableT>;
 
     // Start parsing and to transition states
     StateVectorTransitionOpT transition_op(transition_table, state_vector);
@@ -650,7 +650,9 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
     }
 
     // Perform finite-state machine simulation, computing size of transduced output
-    DFASimulationCallbackWrapper<decltype(dfa.InitTranslationTable(transducer_table_storage)), TransducedOutItT, TransducedIndexOutItT>
+    DFASimulationCallbackWrapper<decltype(dfa.InitTranslationTable(transducer_table_storage)),
+                                 TransducedOutItT,
+                                 TransducedIndexOutItT>
       callback_wrapper(transducer_table, transduced_out_it, transduced_out_idx_it);
 
     MultiItemStateVector<int32_t, SINGLE_ITEM_COUNT> t_start_state;
