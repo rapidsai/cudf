@@ -7,6 +7,13 @@ User Guide
    :maxdepth: 2
 
    10min.md
-   10min-cudf-cupy.md
-   guide-to-udfs.md
+   data_types.rst
+   io.rst
    Working-with-missing-data.md
+   groupby.rst
+   guide-to-udfs.md
+   cupy-interop.md
+   guide-to-udfs.md
+   dask-cudf.rst
+   internals.rst
+   PandasCompat.rst

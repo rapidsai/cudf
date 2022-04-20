@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# 10 Minutes to cuDF and CuPy
+# Interoperability of cuDF with CuPy
 
 This notebook provides introductory examples of how you can use cuDF and CuPy together to take advantage of CuPy array functionality (such as advanced linear algebra operations).
 
