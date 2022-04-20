@@ -341,7 +341,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 )
             self._frame._data.insert(key[1], new_col)
         else:
-            template = (
+            error_msg = (
                 "shape mismatch: value array of shape {value1} "
                 "could not be broadcast to indexing result of "
                 "shape {value2}"
@@ -359,7 +359,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         )
                     else:
                         raise ValueError(
-                            template.format(
+                            error_msg.format(
                                 value1=value_df.shape,
                                 value2=columns_df.shape,
                             )
@@ -372,7 +372,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             elif isinstance(value, cudf.DataFrame):
                 if value.shape != self._frame.loc[key[0]].shape:
                     raise ValueError(
-                        template.format(
+                        error_msg.format(
                             value1=value.shape,
                             value2=self._frame.loc[key[0]].shape,
                         )
@@ -388,30 +388,32 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
             else:
                 value = np.array(value)
-                if len(value.shape) == 2:
-                    value = value.reshape((-1, value.shape[0]))
-                elif len(value.shape) == 1:
-                    value = value.reshape((1, value.shape[0]))
-                self._setitem_tuple_arg(key, value)
-
-                # if isinstance(value, cupy.ndarray):
-                #         tile = cupy.tile
-                # else:
-                #     tile = np.tile
-                # if value.shape[0] == 1:
-                #     value = tile(value, (len(columns_df._columns), 1))
-                # index_dim = self._frame.loc[key].shape
-                # if len(index_dim) == 1:
-                #     index_dim = (1, index_dim[0])
-                # if value.shape != index_dim:
-                #     raise ValueError(
-                #         template.format(
-                #             value1=value.shape,
-                #             value2=index_dim,
-                #         )
-                # )
-                # for i, col in enumerate(columns_df._column_names):
-                #     self._frame[col].loc[key[0]] = value[:, i]
+                # Given a 2d value, assign each corresponding column
+                if np.ndim(value) == 2:
+                    indexed_shape = self._frame.loc[key].shape
+                    if value.shape != indexed_shape:
+                        raise ValueError(
+                            error_msg.format(
+                                value1=value.shape,
+                                value2=indexed_shape,
+                            )
+                        )
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame[col].loc[key[0]] = value[:, i]
+                else:
+                    # If the column axis key is 0d, the indexed object
+                    # is a series, the 1d array is assigned to the
+                    # series along the column.
+                    if is_scalar(key[1]):
+                        for i, col in enumerate(columns_df._column_names):
+                            self._frame[col].loc[key[0]] = value
+                    # Otherwise, there are two situations. The row axis
+                    # is 0d or the key is a 2d indexer. In either of the
+                    # situation, the ith element in value corresponds to
+                    # the ith column in the indexed object.
+                    else:
+                        for i, col in enumerate(columns_df._column_names):
+                            self._frame[col].loc[key[0]] = value[i]
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
@@ -477,7 +479,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             self._frame._data.select_by_index(key[1]), self._frame._index
         )
 
-        template = (
+        error_msg = (
             "shape mismatch: value array of shape {value1} "
             "could not be broadcast to indexing result of "
             "shape {value2}"
@@ -493,7 +495,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     value_cols = value_df._data.columns * columns_df.shape[1]
                 else:
                     raise ValueError(
-                        template.format(
+                        error_msg.format(
                             value1=value_df.shape,
                             value2=columns_df.shape,
                         )
@@ -506,7 +508,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         elif isinstance(value, cudf.DataFrame):
             if value.shape != self._frame.iloc[key[0]].shape:
                 raise ValueError(
-                    template.format(
+                    error_msg.format(
                         value1=value.shape,
                         value2=self._frame.loc[key[0]].shape,
                     )
@@ -518,10 +520,27 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 )
 
         else:
+            # TODO: consolidate code path with identical counterpart
+            # in `_DataFrameLocIndexer._setitem_tuple_arg`
             value = np.array(value)
-            if len(value.shape) == 2:
-                value = value.reshape((-1, value.shape[0]))
-            self._setitem_tuple_arg(key, value)
+            if np.ndim(value) == 2:
+                indexed_shape = self._frame.iloc[key].shape
+                if value.shape != indexed_shape:
+                    raise ValueError(
+                        error_msg.format(
+                            value1=value.shape,
+                            value2=indexed_shape,
+                        )
+                    )
+                for i, col in enumerate(columns_df._column_names):
+                    self._frame._data[col][key[0]] = value[:, i]
+            else:
+                if is_scalar(key[1]):
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame[col].iloc[key[0]] = value
+                else:
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame[col].iloc[key[0]] = value[i]
 
     def _getitem_scalar(self, arg):
         col = self._frame.columns[arg[1]]
