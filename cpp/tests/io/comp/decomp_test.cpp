@@ -55,11 +55,11 @@ struct DecompressTest : public cudf::test::BaseFixture {
                   const uint8_t* compressed,
                   size_t compressed_size)
   {
+    rmm::device_buffer src{compressed, compressed_size, rmm::cuda_stream_default};
     rmm::device_uvector<uint8_t> dst{decompressed->size(), rmm::cuda_stream_default};
 
-    inf_args->src       = {compressed, compressed_size};
-    inf_args->dstDevice = dst.data();
-    inf_args->dstSize   = dst.size();
+    inf_args->src = {static_cast<const uint8_t*>(src.data()), src.size()};
+    inf_args->dst = dst;
     rmm::device_uvector<cudf::io::device_decompress_input> d_inf_args(1, rmm::cuda_stream_default);
     rmm::device_uvector<cudf::io::decompress_status> d_inf_stat(1, rmm::cuda_stream_default);
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_inf_args.data(),
@@ -73,8 +73,8 @@ struct DecompressTest : public cudf::test::BaseFixture {
       static_cast<Decompressor*>(this)->dispatch(d_inf_args.data(), d_inf_stat.data()));
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
       inf_stat, d_inf_stat.data(), sizeof(cudf::io::decompress_status), cudaMemcpyDeviceToHost, 0));
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
-      decompressed->data(), inf_args->dstDevice, inf_args->dstSize, cudaMemcpyDeviceToHost, 0));
+    ASSERT_CUDA_SUCCEEDED(
+      cudaMemcpyAsync(decompressed->data(), dst.data(), dst.size(), cudaMemcpyDeviceToHost, 0));
     ASSERT_CUDA_SUCCEEDED(cudaStreamSynchronize(0));
   }
 

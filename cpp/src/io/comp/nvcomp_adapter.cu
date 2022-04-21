@@ -67,7 +67,7 @@ batched_inputs create_batched_inputs(device_span<device_decompress_input const> 
                     comp_it,
                     [] __device__(device_decompress_input in) {
                       return thrust::make_tuple(
-                        in.src.data(), in.src.size(), in.dstDevice, in.dstSize);
+                        in.src.data(), in.src.size(), in.dst.data(), in.dst.size());
                     });
 
   return {std::move(compressed_data_ptrs),

@@ -1100,8 +1100,8 @@ __global__ void __launch_bounds__(128, 8)
   if (t == 0) {
     pages[blockIdx.x] = s->page;
     if (not comp_in.empty())
-      comp_in[blockIdx.x] = {
-        {s->comp_src_ptr, s->comp_src_size}, s->comp_dst_ptr, s->comp_dst_size};
+      comp_in[blockIdx.x] = {{s->comp_src_ptr, s->comp_src_size},
+                             {s->comp_dst_ptr, s->comp_dst_size}};
     if (not comp_stat.empty()) {
       comp_stat[blockIdx.x]       = s->comp_stat;
       pages[blockIdx.x].comp_stat = &comp_stat[blockIdx.x];

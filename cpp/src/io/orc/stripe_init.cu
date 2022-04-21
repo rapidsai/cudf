@@ -96,9 +96,8 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
         num_compressed_blocks++;
       }
       if (!lane_id && init_ctl) {
-        s->ctl.src       = {cur, block_len};
-        s->ctl.dstDevice = uncompressed + max_uncompressed_size;
-        s->ctl.dstSize   = uncompressed_size;
+        s->ctl.src = {cur, block_len};
+        s->ctl.dst = {uncompressed + max_uncompressed_size, uncompressed_size};
       }
       __syncwarp();
       if (init_ctl && lane_id == 0) *init_ctl = s->ctl;
@@ -161,10 +160,10 @@ extern "C" __global__ void __launch_bounds__(128, 8)
           // Decompression failed, not much point in doing anything else
           break;
         }
-        uncompressed_size_est =
-          shuffle((lane_id == 0) ? *(const uint32_t*)&dec_in[num_compressed_blocks].dstSize : 0);
-        uncompressed_size_actual = shuffle(
-          (lane_id == 0) ? *(const uint32_t*)&dec_out[num_compressed_blocks].bytes_written : 0);
+        uint32_t const dst_size      = dec_in[num_compressed_blocks].dst.size();
+        uncompressed_size_est        = shuffle((lane_id == 0) ? dst_size : 0);
+        uint32_t const bytes_written = dec_out[num_compressed_blocks].bytes_written;
+        uncompressed_size_actual     = shuffle((lane_id == 0) ? bytes_written : 0);
       }
       // In practice, this should never happen with a well-behaved writer, as we would expect the
       // uncompressed size to always be equal to the compression block size except for the last

@@ -1048,9 +1048,9 @@ __global__ void __launch_bounds__(block_size)
       }
     }
     // Initialize shared state
-    state->out              = static_cast<uint8_t*>(inputs[z].dstDevice);
+    state->out              = static_cast<uint8_t*>(inputs[z].dst.data());
     state->outbase          = state->out;
-    state->outend           = state->out + inputs[z].dstSize;
+    state->outend           = state->out + inputs[z].dst.size();
     state->end              = p + src_size;
     auto const prefix_bytes = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
@@ -1156,8 +1156,8 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(device_decompre
 
   if (!t) {
     src        = inputs[z].src.data();
-    dst        = inputs[z].dstDevice;
-    len        = min((uint32_t)inputs[z].src.size(), (uint32_t)inputs[z].dstSize);
+    dst        = inputs[z].dst.data();
+    len        = min((uint32_t)inputs[z].src.size(), (uint32_t)inputs[z].dst.size());
     src_g      = src;
     dst_g      = dst;
     copy_len_g = len;

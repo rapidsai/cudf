@@ -270,8 +270,8 @@ __global__ void __launch_bounds__(128)
   if (!t) {
     auto const src     = inputs[blockIdx.x].src.data();
     auto src_len       = static_cast<uint32_t>(inputs[blockIdx.x].src.size());
-    auto dst           = inputs[blockIdx.x].dstDevice;
-    auto const dst_len = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);
+    auto dst           = inputs[blockIdx.x].dst.data();
+    auto const dst_len = static_cast<uint32_t>(inputs[blockIdx.x].dst.size());
     auto const end     = dst + dst_len;
     s->src             = src;
     s->src_len         = src_len;

@@ -497,9 +497,9 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
 template <typename Storage>
 __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_storage)
 {
-  const uint8_t* literal_base = s->base;
-  auto* out                   = static_cast<uint8_t*>(s->in.dstDevice);
-  int batch                   = 0;
+  auto const literal_base = s->base;
+  auto out                = s->in.dst.data();
+  int batch               = 0;
 
   do {
     volatile unsnap_batch_s* b = &s->q.batch[batch * batch_size];
@@ -672,7 +672,7 @@ __global__ void __launch_bounds__(block_size)
       s->bytes_left        = uncompressed_size;
       s->base              = cur;
       s->end               = end;
-      if ((cur >= end && uncompressed_size != 0) || (uncompressed_size > s->in.dstSize)) {
+      if ((cur >= end && uncompressed_size != 0) || (uncompressed_size > s->in.dst.size())) {
         s->error = -1;
       }
     } else {

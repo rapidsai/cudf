@@ -1179,8 +1179,8 @@ __global__ void __launch_bounds__(256)
     decompress_status* blk_out      = &comp_out[ss.first_block + b];
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
     blk_in->src       = {src + b * comp_blk_size, blk_size};
-    blk_in->dstDevice = dst + b * (BLOCK_HEADER_SIZE + max_comp_blk_size) + BLOCK_HEADER_SIZE;
-    blk_in->dstSize   = max_comp_blk_size;
+    blk_in->dst       = {dst + b * (BLOCK_HEADER_SIZE + max_comp_blk_size) + BLOCK_HEADER_SIZE,
+                   max_comp_blk_size};
     blk_out->bytes_written = blk_size;
     blk_out->status        = 1;
     blk_out->reserved      = 0;
@@ -1241,7 +1241,7 @@ __global__ void __launch_bounds__(1024)
         blk_size24             = dst_len * 2 + 1;
       } else {
         // Compressed block
-        src        = blk_in->dstDevice;
+        src        = blk_in->dst.data();
         blk_size24 = dst_len * 2 + 0;
       }
       dst[0]     = static_cast<uint8_t>(blk_size24 >> 0);
@@ -1342,7 +1342,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                           comp_in.end(),
                           comp_it,
                           [] __device__(device_decompress_input in) {
-                            return thrust::make_tuple(in.src.data(), in.src.size(), in.dstDevice);
+                            return thrust::make_tuple(in.src.data(), in.src.size(), in.dst.data());
                           });
         nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
                                                          uncompressed_data_sizes.data(),

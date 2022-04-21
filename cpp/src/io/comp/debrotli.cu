@@ -1930,15 +1930,16 @@ extern "C" __global__ void __launch_bounds__(block_size, 2)
     auto const src        = inputs[z].src.data();
     size_t const src_size = inputs[z].src.size();
     if (src && src_size >= 8) {
-      s->error = 0;
-      s->out = s->outbase = inputs[z].dstDevice;
-      s->bytes_left       = inputs[z].dstSize;
-      s->mtf_upper_bound  = 63;
-      s->dist_rb[0]       = 16;
-      s->dist_rb[1]       = 15;
-      s->dist_rb[2]       = 11;
-      s->dist_rb[3]       = 4;
-      s->dist_rb_idx      = 0;
+      s->error           = 0;
+      s->out             = inputs[z].dst.data();
+      s->outbase         = inputs[z].dst.data();
+      s->bytes_left      = inputs[z].dst.size();
+      s->mtf_upper_bound = 63;
+      s->dist_rb[0]      = 16;
+      s->dist_rb[1]      = 15;
+      s->dist_rb[2]      = 11;
+      s->dist_rb[3]      = 4;
+      s->dist_rb_idx     = 0;
       s->p1 = s->p2 = 0;
       initbits(s, src, src_size);
       DecodeStreamHeader(s);
