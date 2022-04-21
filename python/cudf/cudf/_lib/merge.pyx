@@ -14,7 +14,7 @@ from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def merge_sorted(
-    list list_of_columns,
+    list input_columns,
     list key_columns_indices,
     bool ascending=True,
     str na_position="last",
