@@ -80,6 +80,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     list(APPEND ARROW_PYTHON_OPTIONS "ARROW_PYTHON ON")
     # Arrow's logic to build Boost from source is busted, so we have to get it from the system.
     list(APPEND ARROW_PYTHON_OPTIONS "BOOST_SOURCE SYSTEM")
+    list(APPEND ARROW_PYTHON_OPTIONS "ARROW_DEPENDENCY_SOURCE AUTO")
   endif()
 
   set(ARROW_PARQUET_OPTIONS "")
