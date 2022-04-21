@@ -38,6 +38,7 @@ Unlike Pandas, *all* data types in cuDF are nullable,
 meaning they can contain missing values (represented by ``cudf.NA``).
 
 .. code:: python
+          
     >>> s = cudf.Series([1, 2, cudf.NA])
     >>> s
     >>> s
@@ -50,6 +51,7 @@ Nulls are not coerced to ``nan`` in any situation;
 compare the behaviour of cuDF with Pandas below:
 
 .. code:: python
+          
     >>> s = cudf.Series([1, 2, cudf.NA], dtype="category")
     >>> s
     0       1
@@ -138,6 +140,7 @@ collections of arbitrary Python objects.  For example, in Pandas you
 can do the following:
 
 .. code:: python
+          
     >>> import pandas as pd
     >>> s = pd.Series(["a", 1, [1, 2, 3]])
     0            a
