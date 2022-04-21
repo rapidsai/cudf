@@ -163,12 +163,16 @@ if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
-    rapids_export_find_package_file(
-      ${METADATA_KIND} "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
-    )
+    if(TARGET cuFile::cuFile_interface)
+      rapids_export_find_package_file(
+        ${METADATA_KIND} "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
+      )
+      rapids_export_package(${METADATA_KIND} cuFile cudf-exports)
+    endif()
+
     rapids_export_package(${METADATA_KIND} cuco cudf-exports)
+    rapids_export_package(${METADATA_KIND} KvikIO cudf-exports)
     rapids_export_package(${METADATA_KIND} ZLIB cudf-exports)
-    rapids_export_package(${METADATA_KIND} cuFile cudf-exports)
     rapids_export_package(${METADATA_KIND} nvcomp cudf-exports)
   endforeach()
 endif()
