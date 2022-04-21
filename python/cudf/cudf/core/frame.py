@@ -3657,8 +3657,8 @@ def _get_replacement_values_for_columns(
                 col: [value]
                 if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
                 else full(
+                    len(to_replace),
                     value,
-                    (len(to_replace),),
                     cudf.dtype(type(value)),
                 )
                 for col in columns_dtype_map
