@@ -1,5 +1,3 @@
-.. _basics.datatypes:
-
 Supported Data Types
 ====================
 
