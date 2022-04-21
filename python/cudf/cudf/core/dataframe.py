@@ -535,7 +535,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 for i, col in enumerate(columns_df._column_names):
                     self._frame._data[col][key[0]] = value[:, i]
             else:
-                if isinstance(value, range) or is_scalar(key[1]):
+                if is_scalar(key[1]):
                     for col in columns_df._column_names:
                         self._frame[col].iloc[key[0]] = value
                 else:
