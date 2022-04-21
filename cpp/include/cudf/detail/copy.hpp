@@ -308,5 +308,15 @@ std::unique_ptr<scalar> get_element(
 bool needs_sanitize(column_view const& input,
                     rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
+/**
+ * @copydoc cudf::sanitize
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> sanitize(
+  column_view const& input,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
 }  // namespace cudf

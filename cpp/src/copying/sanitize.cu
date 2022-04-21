@@ -13,13 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "rmm/cuda_stream_view.hpp"
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
-#include <cudf/detail/indexalator.cuh>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -88,11 +85,36 @@ bool needs_sanitize(cudf::column_view const& input, rmm::cuda_stream_view stream
   return false;
 }
 
+/**
+ * @copydoc cudf::detail::sanitize
+ */
+std::unique_ptr<cudf::column> sanitize(column_view const& input,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  // Implement via identity gather.
+  auto const gather_begin = thrust::make_counting_iterator<cudf::size_type>(0);
+  auto const gather_end   = gather_begin + input.size();
+
+  auto gathered_table = cudf::detail::gather(
+    table_view{{input}}, gather_begin, gather_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
+  return std::move(gathered_table->release()[0]);
+}
+
 }  // namespace detail
 
 /**
  * @copydoc cudf::needs_sanitize
  */
 bool needs_sanitize(column_view const& input) { return detail::needs_sanitize(input); }
+
+/**
+ * @copydoc cudf::sanitize
+ */
+std::unique_ptr<cudf::column> sanitize(column_view const& input,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  return detail::sanitize(input, rmm::cuda_stream_default, mr);
+}
 
 }  // namespace cudf

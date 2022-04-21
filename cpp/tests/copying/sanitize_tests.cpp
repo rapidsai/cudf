@@ -13,13 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "cudf/strings/strings_column_view.hpp"
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -43,15 +43,23 @@ template <typename T>
 using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
 struct SanitizedGatherTest : public cudf::test::BaseFixture {
-};
+  /// Helper to run gather() on a single column, and extract the single column from the result.
+  std::unique_ptr<cudf::column> gather(column_view const& input, gather_map_t const& gather_map)
+  {
+    auto gathered =
+      cudf::gather(cudf::table_view{{input}}, gather_map, out_of_bounds_policy::NULLIFY);
+    return std::move(gathered->release()[0]);
+  }
 
-/// Helper to run gather() on a single column, and extract the single column from the result.
-std::unique_ptr<cudf::column> gather(column_view const& input, gather_map_t const& gather_map)
-{
-  auto gathered =
-    cudf::gather(cudf::table_view{{input}}, gather_map, out_of_bounds_policy::NULLIFY);
-  return std::move(gathered->release()[0]);
-}
+  /// Verify that the result of `sanitize()` is equivalent to the unsanitized input,
+  /// except that the null rows are also empty.
+  void test_sanitize(cudf::column_view const& unsanitized)
+  {
+    auto const sanitized = cudf::sanitize(unsanitized);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(unsanitized, *sanitized);
+    EXPECT_FALSE(cudf::needs_sanitize(*sanitized));
+  }
+};
 
 // List<T>.
 TEST_F(SanitizedGatherTest, SingleLevelList)
@@ -69,6 +77,8 @@ TEST_F(SanitizedGatherTest, SingleLevelList)
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(input->mutable_view().null_mask(), 2, 3, false);
   EXPECT_TRUE(cudf::needs_sanitize(*input));
+
+  test_sanitize(*input);
 
   {
     // Selecting all rows from input, in different order.
@@ -146,30 +156,36 @@ TEST_F(SanitizedGatherTest, TwoLevelList)
   cudf::detail::set_null_mask(input->mutable_view().null_mask(), 3, 4, false);
   EXPECT_TRUE(cudf::needs_sanitize(*input));
 
-  auto const results            = gather(input->view(), {100, 3, 0, 1});
-  auto const results_lists_view = lists_column_view(*results);
+  test_sanitize(*input);
 
-  auto const expected = LCW<T>{{
-                                 LCW<T>{},  // NULL, because of out of bounds.
-                                 LCW<T>{},  // NULL, because input row was null.
-                                 {{1, 2, 3}, {4, 5, 6, 7}, {8}, {9, 1}, {2}},  // i.e. input[0]
-                                 {{11, 12}, {13, 14, 15}, {16, 17, 18}, {19}}  // i.e. input[1]
-                               },
-                               nulls_at({0, 1})};
+  {
+    // Verify that gather() output is sanitized.
+    auto const results            = gather(input->view(), {100, 3, 0, 1});
+    auto const results_lists_view = lists_column_view(*results);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.offsets(), offsets_col_t{0, 0, 0, 5, 9});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    results_lists_view.child(),
-    LCW<T>{{1, 2, 3}, {4, 5, 6, 7}, {8}, {9, 1}, {2}, {11, 12}, {13, 14, 15}, {16, 17, 18}, {19}});
+    auto const expected = LCW<T>{{
+                                   LCW<T>{},  // NULL, because of out of bounds.
+                                   LCW<T>{},  // NULL, because input row was null.
+                                   {{1, 2, 3}, {4, 5, 6, 7}, {8}, {9, 1}, {2}},  // i.e. input[0]
+                                   {{11, 12}, {13, 14, 15}, {16, 17, 18}, {19}}  // i.e. input[1]
+                                 },
+                                 nulls_at({0, 1})};
 
-  auto const child_lists_view = lists_column_view(results_lists_view.child());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(child_lists_view.offsets(),
-                                 offsets_col_t{0, 3, 7, 8, 10, 11, 13, 16, 19, 20});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    child_lists_view.child(),
-    values_col_t{1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 11, 12, 13, 14, 15, 16, 17, 18, 19});
-  EXPECT_FALSE(cudf::needs_sanitize(*results));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.offsets(), offsets_col_t{0, 0, 0, 5, 9});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      results_lists_view.child(),
+      LCW<T>{
+        {1, 2, 3}, {4, 5, 6, 7}, {8}, {9, 1}, {2}, {11, 12}, {13, 14, 15}, {16, 17, 18}, {19}});
+
+    auto const child_lists_view = lists_column_view(results_lists_view.child());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(child_lists_view.offsets(),
+                                   offsets_col_t{0, 3, 7, 8, 10, 11, 13, 16, 19, 20});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      child_lists_view.child(),
+      values_col_t{1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 11, 12, 13, 14, 15, 16, 17, 18, 19});
+    EXPECT_FALSE(cudf::needs_sanitize(*results));
+  }
 }
 
 // List<List<List<T>>>.
@@ -193,31 +209,35 @@ TEST_F(SanitizedGatherTest, ThreeLevelList)
   cudf::detail::set_null_mask(input->mutable_view().null_mask(), 3, 4, false);
   EXPECT_TRUE(cudf::needs_sanitize(*input));
 
-  auto const results            = gather(input->view(), {100, 3, 0, 1});
-  auto const results_lists_view = lists_column_view(*results);
+  test_sanitize(*input);
 
-  auto const expected =
-    LCW<T>{{
-             LCW<T>{},  // NULL, because of out of bounds.
-             LCW<T>{},  // NULL, because input row was null.
-             {{{1, 2}, {3}}, {{4, 5}, {6, 7}}, {{8, 8}, {}}, {{9, 1}}, {{2, 3}}},  // i.e. input[0]
-             {{{11, 12}}, {{13}, {14, 15}}, {{16, 17, 18}}, {{19, 19}, {}}}        // i.e. input[1]
-           },
-           nulls_at({0, 1})};
+  {
+    auto const results            = gather(input->view(), {100, 3, 0, 1});
+    auto const results_lists_view = lists_column_view(*results);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.offsets(), offsets_col_t{0, 0, 0, 5, 9});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.child(),
-                                 LCW<T>{{{1, 2}, {3}},
-                                        {{4, 5}, {6, 7}},
-                                        {{8, 8}, {}},
-                                        {{9, 1}},
-                                        {{2, 3}},
-                                        {{11, 12}},
-                                        {{13}, {14, 15}},
-                                        {{16, 17, 18}},
-                                        {{19, 19}, {}}});
-  EXPECT_FALSE(cudf::needs_sanitize(*results));
+    auto const expected = LCW<T>{
+      {
+        LCW<T>{},  // NULL, because of out of bounds.
+        LCW<T>{},  // NULL, because input row was null.
+        {{{1, 2}, {3}}, {{4, 5}, {6, 7}}, {{8, 8}, {}}, {{9, 1}}, {{2, 3}}},  // i.e. input[0]
+        {{{11, 12}}, {{13}, {14, 15}}, {{16, 17, 18}}, {{19, 19}, {}}}        // i.e. input[1]
+      },
+      nulls_at({0, 1})};
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.offsets(), offsets_col_t{0, 0, 0, 5, 9});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.child(),
+                                   LCW<T>{{{1, 2}, {3}},
+                                          {{4, 5}, {6, 7}},
+                                          {{8, 8}, {}},
+                                          {{9, 1}},
+                                          {{2, 3}},
+                                          {{11, 12}},
+                                          {{13}, {14, 15}},
+                                          {{16, 17, 18}},
+                                          {{19, 19}, {}}});
+    EXPECT_FALSE(cudf::needs_sanitize(*results));
+  }
 }
 
 // List<string>.
@@ -238,6 +258,8 @@ TEST_F(SanitizedGatherTest, ListOfStrings)
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(input->mutable_view().null_mask(), 2, 3, false);
   EXPECT_TRUE(cudf::needs_sanitize(*input));
+
+  test_sanitize(*input);
 
   {
     // Selecting all rows from input, in different order.
@@ -297,6 +319,8 @@ TEST_F(SanitizedGatherTest, UnsanitizedListOfUnsanitizedStrings)
   set_null_mask(strings->mutable_view().null_mask(), 7, 8, false);
   EXPECT_TRUE(cudf::needs_sanitize(*strings));
 
+  test_sanitize(*strings);
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     strings_column_view(*strings).offsets(), offsets_col_t{0, 1, 3, 4, 6, 7, 9, 10, 14, 15, 19}
     // 10-14 indicates that "8888" is unsanitized.
@@ -313,6 +337,8 @@ TEST_F(SanitizedGatherTest, UnsanitizedListOfUnsanitizedStrings)
   // Set lists nullmask, post construction.
   cudf::detail::set_null_mask(lists->mutable_view().null_mask(), 2, 3, false);
   EXPECT_TRUE(cudf::needs_sanitize(*lists));
+
+  test_sanitize(*lists);
 
   // At this point,
   // 1. {"66", "7"} will be unsanitized.
@@ -359,7 +385,10 @@ TEST_F(SanitizedGatherTest, StructOfList)
       return structs_column_wrapper{{child}, null_at(2)};
     }()
       .release();
+
   EXPECT_TRUE(cudf::needs_sanitize(*structs_input));
+
+  test_sanitize(*structs_input);
 
   // At this point, even though the structs column has a null at index 2,
   // the child column has a non-empty list row at index 2: {6, 7}.
