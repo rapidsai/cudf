@@ -9293,6 +9293,7 @@ def df_eval():
         ("a", int),
         ("+a", int),
         ("a + b", int),
+        ("a == b", int),
         ("a / b", float),
         ("a * b", int),
         ("a > b", int),
@@ -9331,7 +9332,7 @@ def test_dataframe_eval(df_eval, expr, dtype):
     assert_eq(expect, got, check_names=False)
 
     # Test inplace
-    if "=" in expr:
+    if re.search("[^=]=[^=]", expr) is not None:
         pdf_eval = df_eval.to_pandas()
         pdf_eval.eval(expr, inplace=True)
         df_eval.eval(expr, inplace=True)

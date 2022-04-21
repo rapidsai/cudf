@@ -7,6 +7,7 @@ import inspect
 import itertools
 import numbers
 import pickle
+import re
 import sys
 import warnings
 from collections import abc, defaultdict
@@ -6339,7 +6340,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  4   4   8  0
         4  5   2   7  3
         """
-        includes_assignment = "=" in expr
+        # Have to use a regex match to avoid capturing "=="
+        includes_assignment = re.search("[^=]=[^=]", expr) is not None
 
         # Check if there were multiple statements. Filter out empty lines.
         exprs = tuple(filter(None, expr.strip().split("\n")))
