@@ -34,7 +34,7 @@ namespace cudf::test {
 using iterators::no_nulls;
 using iterators::null_at;
 using iterators::nulls_at;
-using T = int32_t; // The actual type of the leaf node isn't really important.
+using T             = int32_t;  // The actual type of the leaf node isn't really important.
 using values_col_t  = fixed_width_column_wrapper<T>;
 using offsets_col_t = fixed_width_column_wrapper<size_type>;
 using gather_map_t  = fixed_width_column_wrapper<size_type>;
