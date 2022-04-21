@@ -1106,8 +1106,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   std::array codecs{codec_stats{parquet::GZIP, 0, 0},
                     codec_stats{parquet::SNAPPY, 0, 0},
-                    codec_stats{parquet::BROTLI, 0, 0},
-                    codec_stats{parquet::ZSTD, 0, 0}};
+                    codec_stats{parquet::BROTLI, 0, 0}};
 
   auto is_codec_supported = [&codecs](int8_t codec) {
     if (codec == parquet::UNCOMPRESSED) return true;
@@ -1209,13 +1208,6 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                      debrotli_scratch.size(),
                                      argc - start_pos,
                                      stream));
-          break;
-        case parquet::ZSTD:
-          nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
-                                     inflate_in_view.subspan(start_pos, argc - start_pos),
-                                     inflate_out_view.subspan(start_pos, argc - start_pos),
-                                     codec.max_decompressed_size,
-                                     stream);
           break;
         default: CUDF_FAIL("Unexpected decompression dispatch"); break;
       }

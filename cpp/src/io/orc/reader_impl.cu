@@ -379,14 +379,6 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
             gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
         }
         break;
-      case orc::ZSTD: {
-        device_span<gpu_inflate_input_s> inflate_in_view{inflate_in.data(), num_compressed_blocks};
-        nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
-                                   inflate_in_view,
-                                   inflate_out_view,
-                                   max_uncomp_block_size,
-                                   stream);
-      } break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
     decompress_check(inflate_out_view, any_block_failure.device_ptr(), stream);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,8 +124,8 @@ struct inflate_state_s {
   uint8_t* outbase;  ///< start of output buffer
   uint8_t* outend;   ///< end of output buffer
   // Input state
-  uint8_t const * cur;  ///< input buffer
-  uint8_t const * end;  ///< end of input buffer
+  uint8_t const* cur;  ///< input buffer
+  uint8_t const* end;  ///< end of input buffer
 
   uint2 bitbuf;     ///< bit buffer (64-bit)
   uint32_t bitpos;  ///< position in bit buffer
@@ -180,10 +180,10 @@ inline __device__ void skipbits(inflate_state_s* s, uint32_t n)
 {
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
-    auto* cur = s->cur + 8;
-    s->bitbuf.x  = s->bitbuf.y;
-    s->bitbuf.y  = (cur < s->end) ? *reinterpret_cast<uint32_t const*>(cur) : 0;
-    s->cur       = cur - 4;
+    auto* cur   = s->cur + 8;
+    s->bitbuf.x = s->bitbuf.y;
+    s->bitbuf.y = (cur < s->end) ? *reinterpret_cast<uint32_t const*>(cur) : 0;
+    s->cur      = cur - 4;
     bitpos &= 0x1f;
   }
   s->bitpos = bitpos;
@@ -510,8 +510,8 @@ __device__ void decode_symbols(inflate_state_s* s)
 {
   uint32_t bitpos = s->bitpos;
   uint2 bitbuf    = s->bitbuf;
-  auto* cur    = s->cur;
-  auto* end    = s->end;
+  auto* cur       = s->cur;
+  auto* end       = s->end;
   int32_t batch   = 0;
   int32_t sym, batch_len;
 
@@ -871,10 +871,10 @@ __device__ int init_stored(inflate_state_s* s)
 /// Copy bytes from stored block to destination
 __device__ void copy_stored(inflate_state_s* s, int t)
 {
-  auto len         = s->stored_blk_len;
-  auto cur    = s->cur + (s->bitpos >> 3);
-  auto out    = s->out;
-  auto outend = s->outend;
+  auto len              = s->stored_blk_len;
+  auto cur              = s->cur + (s->bitpos >> 3);
+  auto out              = s->out;
+  auto outend           = s->outend;
   auto const slow_bytes = min(len, (int)((16 - (size_t)out) & 0xf));
 
   // Slow copy until output is 16B aligned
@@ -924,7 +924,7 @@ __device__ void copy_stored(inflate_state_s* s, int t)
   __syncthreads();
   if (t == 0) {
     // Reset bitstream to end of block
-    auto p        = cur + len;
+    auto p            = cur + len;
     auto prefix_bytes = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     s->cur      = p;
@@ -1033,7 +1033,7 @@ __global__ void __launch_bounds__(block_size)
   inflate_state_s* state = &state_g;
 
   if (!t) {
-    auto p         = static_cast<uint8_t const*>(inputs[z].srcDevice);
+    auto p          = static_cast<uint8_t const*>(inputs[z].srcDevice);
     size_t src_size = inputs[z].srcSize;
     uint32_t prefix_bytes;
     // Parse header if needed
@@ -1049,7 +1049,7 @@ __global__ void __launch_bounds__(block_size)
       }
     }
     // Initialize shared state
-    state->out     = static_cast<uint8_t *>(inputs[z].dstDevice);
+    state->out     = static_cast<uint8_t*>(inputs[z].dstDevice);
     state->outbase = state->out;
     state->outend  = state->out + inputs[z].dstSize;
     state->end     = p + src_size;

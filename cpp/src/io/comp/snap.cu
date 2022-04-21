@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -268,15 +268,15 @@ __global__ void __launch_bounds__(128)
   const uint8_t* src;
 
   if (!t) {
-     auto src = static_cast<const uint8_t*>(inputs[blockIdx.x].srcDevice);
-    auto src_len    = static_cast<uint32_t>(inputs[blockIdx.x].srcSize);
-    auto dst       = static_cast<uint8_t*>(inputs[blockIdx.x].dstDevice);
-    auto dst_len    = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);
-    uint8_t* end    = dst + dst_len;
-    s->src          = src;
-    s->src_len      = src_len;
-    s->dst_base     = dst;
-    s->end          = end;
+    auto src     = static_cast<const uint8_t*>(inputs[blockIdx.x].srcDevice);
+    auto src_len = static_cast<uint32_t>(inputs[blockIdx.x].srcSize);
+    auto dst     = static_cast<uint8_t*>(inputs[blockIdx.x].dstDevice);
+    auto dst_len = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);
+    uint8_t* end = dst + dst_len;
+    s->src       = src;
+    s->src_len   = src_len;
+    s->dst_base  = dst;
+    s->end       = end;
     while (src_len > 0x7f) {
       if (dst < end) { dst[0] = src_len | 0x80; }
       dst++;
