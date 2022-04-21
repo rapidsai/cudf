@@ -19,13 +19,17 @@ def merge_sorted(
     bool ascending=True,
     str na_position="last",
 ):
+    """Merge multiple lists of lexicographically sorted columns into one list.
+
+    `input_columns` is a list of lists of columns to be merged.
+    """
     cdef vector[libcudf_types.size_type] c_column_keys = key_columns_indices
     cdef vector[table_view] c_input_tables
     cdef vector[libcudf_types.order] c_column_order
     cdef vector[libcudf_types.null_order] c_null_precedence
 
-    c_input_tables.reserve(len(list_of_columns))
-    for source_columns in list_of_columns:
+    c_input_tables.reserve(len(input_columns))
+    for source_columns in input_columns:
         c_input_tables.push_back(
             table_view_from_columns(source_columns))
 
