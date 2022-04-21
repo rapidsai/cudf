@@ -779,6 +779,9 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     if (jt != NULL) {
       env->Throw(jt);
       throw jni_exception("CUDA ERROR");
+    } else {
+      throw jni_exception(std::string("CUDA ERROR: code ") +
+                          std::to_string(static_cast<int>(cuda_status)));
     }
   }
 }
@@ -815,11 +818,17 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     jstring j_msg = env->NewStringUTF(n_msg.c_str());                                              \
     jint e_code = static_cast<jint>(e.error_code());                                               \
     jclass ex_class = env->FindClass(class_name);                                                  \
+    if (ex_class == NULL) {                                                                        \
+      return ret_val;                                                                              \
+    }                                                                                              \
     jmethodID ctor_id = env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;I)V");            \
     if (ctor_id == NULL) {                                                                         \
       return ret_val;                                                                              \
     }                                                                                              \
     jobject cuda_error = env->NewObject(ex_class, ctor_id, j_msg, e_code);                         \
+    if (cuda_error == NULL) {                                                                      \
+      return ret_val;                                                                              \
+    }                                                                                              \
     env->Throw((jthrowable)cuda_error);                                                            \
     return ret_val;                                                                                \
   }
