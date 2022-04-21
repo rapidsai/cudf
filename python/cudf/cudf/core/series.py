@@ -70,8 +70,9 @@ from cudf.utils.dtypes import (
     find_common_type,
     is_mixed_with_object_dtype,
     min_scalar_type,
+    to_cudf_compatible_scalar,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate, to_cudf_compatible_scalar
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
