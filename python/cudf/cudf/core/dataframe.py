@@ -404,7 +404,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # If the value is a range object or if the column axis
                     # key is 0d, the indexed object is a series; therefore
                     # the 1d array is assigned to the series along the column.
-                    if isinstance(value, range) or is_scalar(key[1]):
+                    if is_scalar(key[1]):
                         for col in columns_df._column_names:
                             self._frame[col].loc[key[0]] = value
                     # Otherwise, there are two situations. The row axis key
