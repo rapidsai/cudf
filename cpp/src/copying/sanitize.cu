@@ -35,7 +35,7 @@ bool may_have_nonempty_nulls(cudf::type_id const& type)
 /// Check if the (STRING/LIST) column has any null rows with non-zero length.
 bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_view stream)
 {
-  if (not input.nullable()) { return false; }  // No nulls => no dirty rows.
+  if (not input.has_nulls()) { return false; }  // No nulls => no dirty rows.
 
   // Cross-reference nullmask and offsets.
   auto const type         = input.type().id();
