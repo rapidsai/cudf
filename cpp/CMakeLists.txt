@@ -163,7 +163,7 @@ if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
-    if(TARGET cuFile::cuFile_interface)
+    if(TARGET cufile::cuFile_interface)
       rapids_export_find_package_file(
         ${METADATA_KIND} "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
       )
@@ -601,8 +601,8 @@ if(TARGET conda_env)
 endif()
 
 # Add cuFile interface if available
-if(TARGET cuFile::cuFile_interface)
-  target_link_libraries(cudf PRIVATE cuFile::cuFile_interface)
+if(TARGET cufile::cuFile_interface)
+  target_link_libraries(cudf PRIVATE cufile::cuFile_interface)
 endif()
 
 if(CUDA_STATIC_RUNTIME)
