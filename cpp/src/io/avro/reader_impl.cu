@@ -213,12 +213,14 @@ rmm::device_buffer decompress_data(datasource& source,
           std::accumulate(actual_uncomp_sizes.cbegin(), actual_uncomp_sizes.cend(), 0ul);
         if (total_actual_uncomp_size > uncomp_size) {
           decomp_block_data.resize(total_actual_uncomp_size, stream);
-          for (size_t i = 0, dst_pos = 0; i < meta.block_list.size(); i++) {
-            auto const dst_base       = static_cast<uint8_t*>(decomp_block_data.data());
-            inflate_in[i].dst         = {dst_base + dst_pos, actual_uncomp_sizes[i]};
-            meta.block_list[i].offset = dst_pos;
-            meta.block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dst.size());
-            dst_pos += meta.block_list[i].size;
+          for (size_t i = 0; i < meta.block_list.size(); ++i) {
+            meta.block_list[i].offset =
+              i > 0 ? (meta.block_list[i - 1].size + meta.block_list[i - 1].offset) : 0;
+            meta.block_list[i].size = static_cast<uint32_t>(actual_uncomp_sizes[i]);
+
+            inflate_in[i].dst = {
+              static_cast<uint8_t*>(decomp_block_data.data()) + meta.block_list[i].offset,
+              meta.block_list[i].size};
           }
         } else {
           break;
