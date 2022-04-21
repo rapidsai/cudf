@@ -1088,10 +1088,10 @@ __global__ void __launch_bounds__(128, 8)
     auto actual_data_size        = static_cast<uint32_t>(s->cur - base);
     uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
     s->page.max_data_size        = actual_data_size;
-    s->comp_src_ptr         = base;
-    s->comp_src_size         = actual_data_size;
-    s->comp_dst_ptr         = s->page.compressed_data + s->page.max_hdr_size;
-    s->comp_dst_size           = compressed_bfr_size;
+    s->comp_src_ptr              = base;
+    s->comp_src_size             = actual_data_size;
+    s->comp_dst_ptr              = s->page.compressed_data + s->page.max_hdr_size;
+    s->comp_dst_size             = compressed_bfr_size;
     s->comp_stat.bytes_written   = 0;
     s->comp_stat.status          = ~0;
     s->comp_stat.reserved        = 0;
@@ -1099,7 +1099,9 @@ __global__ void __launch_bounds__(128, 8)
   __syncthreads();
   if (t == 0) {
     pages[blockIdx.x] = s->page;
-    if (not comp_in.empty()) comp_in[blockIdx.x] = {{s->comp_src_ptr, s->comp_src_size},s->comp_dst_ptr, s->comp_dst_size};
+    if (not comp_in.empty())
+      comp_in[blockIdx.x] = {
+        {s->comp_src_ptr, s->comp_src_size}, s->comp_dst_ptr, s->comp_dst_size};
     if (not comp_stat.empty()) {
       comp_stat[blockIdx.x]       = s->comp_stat;
       pages[blockIdx.x].comp_stat = &comp_stat[blockIdx.x];

@@ -29,7 +29,7 @@ namespace io {
  */
 struct device_decompress_input {
   device_span<uint8_t const> src;
-  uint8_t * dstDevice;
+  uint8_t* dstDevice;
   uint64_t dstSize;
 };
 

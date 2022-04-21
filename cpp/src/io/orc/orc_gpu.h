@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,8 +55,8 @@ struct CompressedStreamInfo {
   const uint8_t* compressed_data;  // [in] base ptr to compressed stream data
   uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
   size_t compressed_data_size;      // [in] compressed data size for this stream
-  device_decompress_input* decctl;      // [in] base ptr to decompression structure to be filled
-  decompress_status* decstatus;  // [in] results of decompression
+  device_decompress_input* decctl;  // [in] base ptr to decompression structure to be filled
+  decompress_status* decstatus;     // [in] results of decompression
   device_decompress_input*
     copyctl;  // [in] base ptr to copy structure to be filled for uncompressed blocks
   uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed

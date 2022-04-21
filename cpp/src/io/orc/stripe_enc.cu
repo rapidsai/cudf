@@ -1175,10 +1175,10 @@ __global__ void __launch_bounds__(256)
   dst        = compressed_bfr + ss.bfr_offset;
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
   for (uint32_t b = t; b < num_blocks; b += 256) {
-    device_decompress_input* blk_in   = &comp_in[ss.first_block + b];
-    decompress_status* blk_out = &comp_out[ss.first_block + b];
+    device_decompress_input* blk_in = &comp_in[ss.first_block + b];
+    decompress_status* blk_out      = &comp_out[ss.first_block + b];
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-    blk_in->src = {src + b * comp_blk_size, blk_size};
+    blk_in->src       = {src + b * comp_blk_size, blk_size};
     blk_in->dstDevice = dst + b * (BLOCK_HEADER_SIZE + max_comp_blk_size) + BLOCK_HEADER_SIZE;
     blk_in->dstSize   = max_comp_blk_size;
     blk_out->bytes_written = blk_size;
@@ -1227,11 +1227,11 @@ __global__ void __launch_bounds__(1024)
   b          = 0;
   do {
     if (t == 0) {
-      device_decompress_input* blk_in   = &comp_in[ss.first_block + b];
-      decompress_status* blk_out = &comp_out[ss.first_block + b];
+      device_decompress_input* blk_in = &comp_in[ss.first_block + b];
+      decompress_status* blk_out      = &comp_out[ss.first_block + b];
       auto const src_len =
         min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-      auto  dst_len = (blk_out->status == 0) ? blk_out->bytes_written : src_len;
+      auto dst_len = (blk_out->status == 0) ? blk_out->bytes_written : src_len;
       uint32_t blk_size24{};
       if (dst_len >= src_len) {
         // Copy from uncompressed source

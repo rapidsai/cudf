@@ -1033,7 +1033,7 @@ __global__ void __launch_bounds__(block_size)
   inflate_state_s* state = &state_g;
 
   if (!t) {
-    auto p          = inputs[z].src.data();
+    auto p        = inputs[z].src.data();
     auto src_size = inputs[z].src.size();
     // Parse header if needed
     state->err = 0;
@@ -1048,11 +1048,11 @@ __global__ void __launch_bounds__(block_size)
       }
     }
     // Initialize shared state
-    state->out     = static_cast<uint8_t*>(inputs[z].dstDevice);
-    state->outbase = state->out;
-    state->outend  = state->out + inputs[z].dstSize;
-    state->end     = p + src_size;
-    auto const prefix_bytes   = (uint32_t)(((size_t)p) & 3);
+    state->out              = static_cast<uint8_t*>(inputs[z].dstDevice);
+    state->outbase          = state->out;
+    state->outend           = state->out + inputs[z].dstSize;
+    state->end              = p + src_size;
+    auto const prefix_bytes = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     state->cur      = p;
     state->bitbuf.x = (p < state->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ struct unsnap_state_s {
   int32_t error;               ///< current error status
   uint32_t tstart;             ///< start time for perf logging
   volatile unsnap_queue_s q;   ///< queue for cross-warp communication
-  device_decompress_input in;      ///< input parameters for current block
+  device_decompress_input in;  ///< input parameters for current block
 };
 
 inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
@@ -639,9 +639,9 @@ __global__ void __launch_bounds__(block_size)
   if (t < batch_count) { s->q.batch_len[t] = 0; }
   __syncthreads();
   if (!t) {
-    auto cur    = s->in.src.begin();
+    auto cur       = s->in.src.begin();
     auto const end = s->in.src.end();
-    s->error           = 0;
+    s->error       = 0;
     if (log_cyclecount) { s->tstart = clock(); }
     if (cur < end) {
       // Read uncompressed size (varint), limited to 32-bit

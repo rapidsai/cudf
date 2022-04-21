@@ -96,7 +96,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
         num_compressed_blocks++;
       }
       if (!lane_id && init_ctl) {
-        s->ctl.src = {cur, block_len};
+        s->ctl.src       = {cur, block_len};
         s->ctl.dstDevice = uncompressed + max_uncompressed_size;
         s->ctl.dstSize   = uncompressed_size;
       }
@@ -136,14 +136,14 @@ extern "C" __global__ void __launch_bounds__(128, 8)
       s->info.num_compressed_blocks + s->info.num_uncompressed_blocks > 0 &&
       s->info.max_uncompressed_size > 0) {
     // Walk through the compressed blocks
-    const uint8_t* cur                  = s->info.compressed_data;
-    const uint8_t* end                  = cur + s->info.compressed_data_size;
-    const device_decompress_input* dec_in   = s->info.decctl;
-    const decompress_status* dec_out = s->info.decstatus;
-    uint8_t* uncompressed_actual        = s->info.uncompressed_data;
-    uint8_t* uncompressed_estimated     = uncompressed_actual;
-    uint32_t num_compressed_blocks      = 0;
-    uint32_t max_compressed_blocks      = s->info.num_compressed_blocks;
+    const uint8_t* cur                    = s->info.compressed_data;
+    const uint8_t* end                    = cur + s->info.compressed_data_size;
+    const device_decompress_input* dec_in = s->info.decctl;
+    const decompress_status* dec_out      = s->info.decstatus;
+    uint8_t* uncompressed_actual          = s->info.uncompressed_data;
+    uint8_t* uncompressed_estimated       = uncompressed_actual;
+    uint32_t num_compressed_blocks        = 0;
+    uint32_t max_compressed_blocks        = s->info.num_compressed_blocks;
 
     while (cur + BLOCK_HEADER_SIZE < end) {
       uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
@@ -359,11 +359,11 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
   if (strm_len > 0) {
     int32_t compressed_offset = (t < num_rowgroups) ? s->compressed_offset[t][ci_id] : 0;
     if (compressed_offset > 0) {
-      const uint8_t* start            = s->strm_info[ci_id].compressed_data;
-      const uint8_t* cur              = start;
-      const uint8_t* end              = cur + s->strm_info[ci_id].compressed_data_size;
+      const uint8_t* start         = s->strm_info[ci_id].compressed_data;
+      const uint8_t* cur           = start;
+      const uint8_t* end           = cur + s->strm_info[ci_id].compressed_data_size;
       decompress_status* decstatus = s->strm_info[ci_id].decstatus;
-      uint32_t uncomp_offset          = 0;
+      uint32_t uncomp_offset       = 0;
       for (;;) {
         uint32_t block_len, is_uncompressed;
 

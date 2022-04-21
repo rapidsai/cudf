@@ -34,9 +34,9 @@ template <typename Decompressor>
 struct DecompressTest : public cudf::test::BaseFixture {
   void SetUp() override
   {
-    ASSERT_CUDA_SUCCEEDED(cudaMallocHost((void**)&inf_args, sizeof(cudf::io::device_decompress_input)));
     ASSERT_CUDA_SUCCEEDED(
-      cudaMallocHost((void**)&inf_stat, sizeof(cudf::io::decompress_status)));
+      cudaMallocHost((void**)&inf_args, sizeof(cudf::io::device_decompress_input)));
+    ASSERT_CUDA_SUCCEEDED(cudaMallocHost((void**)&inf_stat, sizeof(cudf::io::decompress_status)));
   }
 
   void TearDown() override
@@ -57,7 +57,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
   {
     rmm::device_uvector<uint8_t> dst{decompressed->size(), rmm::cuda_stream_default};
 
-    inf_args->src = {compressed, compressed_size};
+    inf_args->src       = {compressed, compressed_size};
     inf_args->dstDevice = dst.data();
     inf_args->dstSize   = dst.size();
     rmm::device_uvector<cudf::io::device_decompress_input> d_inf_args(1, rmm::cuda_stream_default);
@@ -67,24 +67,18 @@ struct DecompressTest : public cudf::test::BaseFixture {
                                           sizeof(cudf::io::device_decompress_input),
                                           cudaMemcpyHostToDevice,
                                           0));
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_inf_stat.data(),
-                                          inf_stat,
-                                          sizeof(cudf::io::decompress_status),
-                                          cudaMemcpyHostToDevice,
-                                          0));
+    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
+      d_inf_stat.data(), inf_stat, sizeof(cudf::io::decompress_status), cudaMemcpyHostToDevice, 0));
     ASSERT_CUDA_SUCCEEDED(
       static_cast<Decompressor*>(this)->dispatch(d_inf_args.data(), d_inf_stat.data()));
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(inf_stat,
-                                          d_inf_stat.data(),
-                                          sizeof(cudf::io::decompress_status),
-                                          cudaMemcpyDeviceToHost,
-                                          0));
+    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
+      inf_stat, d_inf_stat.data(), sizeof(cudf::io::decompress_status), cudaMemcpyDeviceToHost, 0));
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
       decompressed->data(), inf_args->dstDevice, inf_args->dstSize, cudaMemcpyDeviceToHost, 0));
     ASSERT_CUDA_SUCCEEDED(cudaStreamSynchronize(0));
   }
 
-  cudf::io::device_decompress_input* inf_args  = nullptr;
+  cudf::io::device_decompress_input* inf_args = nullptr;
   cudf::io::device_decompress_input* inf_stat = nullptr;
 };
 

@@ -368,7 +368,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
       case orc::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
           device_span<device_decompress_input> inflate_in_view{inflate_in.data(),
-                                                           num_compressed_blocks};
+                                                               num_compressed_blocks};
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      inflate_in_view,
                                      inflate_out_view,

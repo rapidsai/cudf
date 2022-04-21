@@ -1927,7 +1927,7 @@ extern "C" __global__ void __launch_bounds__(block_size, 2)
   if (z >= count) { return; }
   // Thread0: initializes shared state and decode stream header
   if (!t) {
-    auto const src = inputs[z].src.data();
+    auto const src        = inputs[z].src.data();
     size_t const src_size = inputs[z].src.size();
     if (src && src_size >= 8) {
       s->error = 0;
