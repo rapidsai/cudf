@@ -1,5 +1,4 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
-import warnings
 from contextlib import ExitStack
 from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
@@ -353,7 +352,6 @@ def read_parquet(
     path,
     columns=None,
     split_row_groups=None,
-    row_groups_per_part=None,
     **kwargs,
 ):
     """Read parquet files into a Dask DataFrame
@@ -375,15 +373,6 @@ def read_parquet(
     """
     if isinstance(columns, str):
         columns = [columns]
-
-    if row_groups_per_part:
-        warnings.warn(
-            "row_groups_per_part is deprecated. "
-            "Pass an integer value to split_row_groups instead.",
-            FutureWarning,
-        )
-        if split_row_groups is None:
-            split_row_groups = row_groups_per_part
 
     return dd.read_parquet(
         path,
