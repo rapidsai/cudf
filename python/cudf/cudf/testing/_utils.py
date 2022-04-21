@@ -3,7 +3,7 @@
 import itertools
 import re
 import warnings
-from collections.abc import Mapping, Sequence
+from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
 
@@ -238,9 +238,9 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
     else:
         if len(func_args_and_kwargs) == 1:
             func_args, func_kwargs = [], {}
-            if isinstance(func_args_and_kwargs[0], Sequence):
+            if isinstance(func_args_and_kwargs[0], abc.Sequence):
                 func_args = func_args_and_kwargs[0]
-            elif isinstance(func_args_and_kwargs[0], Mapping):
+            elif isinstance(func_args_and_kwargs[0], abc.Mapping):
                 func_kwargs = func_args_and_kwargs[0]
             else:
                 raise ValueError(
@@ -248,12 +248,12 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
                     "either a Sequence or a Mapping"
                 )
         elif len(func_args_and_kwargs) == 2:
-            if not isinstance(func_args_and_kwargs[0], Sequence):
+            if not isinstance(func_args_and_kwargs[0], abc.Sequence):
                 raise ValueError(
                     "Positional argument at 1st position of "
                     "func_args_and_kwargs should be a sequence."
                 )
-            if not isinstance(func_args_and_kwargs[1], Mapping):
+            if not isinstance(func_args_and_kwargs[1], abc.Mapping):
                 raise ValueError(
                     "Key-word argument at 2nd position of "
                     "func_args_and_kwargs should be a dictionary mapping."

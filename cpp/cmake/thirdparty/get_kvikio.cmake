@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -12,24 +12,20 @@
 # the License.
 # =============================================================================
 
-# This function finds cucollections and sets any additional necessary environment variables.
-function(find_and_configure_cucollections)
+# This function finds KvikIO
+function(find_and_configure_kvikio VERSION)
 
-  # Find or install cuCollections
   rapids_cpm_find(
-    # cuCollections doesn't have a version yet
-    cuco 0.0.1
-    GLOBAL_TARGETS cuco::cuco
-    BUILD_EXPORT_SET cudf-exports
-    CPM_ARGS GITHUB_REPOSITORY NVIDIA/cuCollections
-    GIT_TAG fb58a38701f1c24ecfe07d8f1f208bbe80930da5
-    EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS}
-    OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
+    KvikIO ${VERSION}
+    GLOBAL_TARGETS kvikio::kvikio
+    CPM_ARGS
+    GIT_REPOSITORY https://github.com/rapidsai/kvikio.git
+    GIT_TAG branch-${VERSION}
+    GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
+    OPTIONS "KvikIO_BUILD_EXAMPLES OFF"
   )
-  if(NOT BUILD_SHARED_LIBS)
-    rapids_export_package(INSTALL cuco cudf-exports)
-  endif()
 
 endfunction()
 
-find_and_configure_cucollections()
+set(KVIKIO_MIN_VERSION_cudf "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")
+find_and_configure_kvikio(${KVIKIO_MIN_VERSION_cudf})

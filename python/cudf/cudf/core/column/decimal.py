@@ -1,8 +1,8 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
+import warnings
 from decimal import Decimal
 from typing import Any, Sequence, Tuple, Union, cast
-from warnings import warn
 
 import cupy as cp
 import numpy as np
@@ -43,7 +43,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             isinstance(dtype, cudf.core.dtypes.DecimalDtype)
             and dtype.scale < self.dtype.scale
         ):
-            warn(
+            warnings.warn(
                 "cuDF truncates when downcasting decimals to a lower scale. "
                 "To round, use Series.round() or DataFrame.round()."
             )

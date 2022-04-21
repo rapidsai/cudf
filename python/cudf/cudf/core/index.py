@@ -76,10 +76,10 @@ def _lexsorted_equal_range(
         sort_inds = None
         sort_vals = idx
     lower_bound = search_sorted(
-        sort_vals, key_as_table, side="left"
+        [*sort_vals._data.columns], [*key_as_table._columns], side="left"
     ).element_indexing(0)
     upper_bound = search_sorted(
-        sort_vals, key_as_table, side="right"
+        [*sort_vals._data.columns], [*key_as_table._columns], side="right"
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds

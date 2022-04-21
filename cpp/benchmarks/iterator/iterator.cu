@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+
+#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -30,8 +31,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
-
-#include <benchmark/benchmark.h>
 
 #include <random>
 

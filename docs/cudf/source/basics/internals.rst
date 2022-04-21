@@ -54,7 +54,7 @@ As another example, the ``StringColumn`` backing the Series
 2. No mask buffer as there are no nulls in the Series
 3. Two children columns:
 
-    -  A column of 8-bit characters
+    -  A column of UTF-8 characters
        ``['d', 'o', 'y', 'o', 'u', h' ... '?']``
     -  A column of "offsets" to the characters column (in this case,
        ``[0, 2, 5, 9, 12, 19]``)
@@ -172,7 +172,7 @@ Selecting columns by index:
     >>> ca.select_by_index(1)
     ColumnAccessor(OrderedColumnDict([('y', <cudf.core.column.string.StringColumn object at 0x7f5a7d578830>)]), multiindex=False, level_names=(None,))
     >>> ca.select_by_index([0, 1])
-    ColumnAccessor(OrderedColumnDict([('x', <cudf.core.column.numerical.NumericalColumn object at 0x7f5a7d5789e0>), ('y', <cudf.core.column.string.StringColumn object at 0x7f5a7d578830>)]), multiindex=False, level_names=(None,))    
+    ColumnAccessor(OrderedColumnDict([('x', <cudf.core.column.numerical.NumericalColumn object at 0x7f5a7d5789e0>), ('y', <cudf.core.column.string.StringColumn object at 0x7f5a7d578830>)]), multiindex=False, level_names=(None,))
     >>> ca.select_by_index(slice(1, 3))
     ColumnAccessor(OrderedColumnDict([('y', <cudf.core.column.string.StringColumn object at 0x7f5a7d578830>), ('z', <cudf.core.column.numerical.NumericalColumn object at 0x7f5a7d5788c0>)]), multiindex=False, level_names=(None,))
 

@@ -529,12 +529,10 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
 /**
  * @brief Insert chunk values into their respective hash maps
  *
- * @param chunks Column chunks [rowgroup][column]
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                              cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void populate_chunk_hash_maps(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                               rmm::cuda_stream_view stream);
 
 /**
@@ -554,12 +552,10 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
  * Since dict_data itself contains indices into the original cudf column, this means that
  * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
  *
- * @param chunks Column chunks [rowgroup][column]
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                            cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
 /**

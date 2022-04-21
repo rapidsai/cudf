@@ -19,8 +19,6 @@
 
 #include <cudf/null_mask.hpp>
 
-#include <benchmark/benchmark.h>
-
 class SetNullmask : public cudf::benchmark {
 };
 
