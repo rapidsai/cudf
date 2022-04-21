@@ -7,7 +7,8 @@ User Guide
    :maxdepth: 2
 
    10min.md
-   data_types.rst
+   pandas-comparison.rst
+   data-types.rst
    io.rst
    Working-with-missing-data.md
    groupby.rst
