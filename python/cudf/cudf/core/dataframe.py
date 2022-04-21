@@ -2570,8 +2570,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 f"{num_cols * (num_cols > 0)}"
             )
 
+        # TODO: This check is currently necessary because
+        # _is_scalar_or_zero_d_array below will treat a length 1 pd.Categorical
+        # as a scalar and attempt to use column.full, which can't handle it.
+        # Maybe _is_scalar_or_zero_d_array should be changed, or maybe we just
+        # shouldn't support pd.Categorical at all, but those changes will at
+        # least require a deprecation cycle because we currently support
+        # inserting a pd.Categorical.
+        if isinstance(value, pd.Categorical):
+            value = cudf.core.column.categorical.pandas_categorical_as_column(
+                value
+            )
+
         if _is_scalar_or_zero_d_array(value):
-            # value = utils.scalar_broadcast_to(value, len(self))
             value = column.full(
                 len(self),
                 value,
