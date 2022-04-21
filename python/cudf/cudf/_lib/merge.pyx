@@ -19,9 +19,9 @@ def merge_sorted(
     bool ascending=True,
     str na_position="last",
 ):
-    """Merge multiple lists of lexicographically sorted columns into one list.
-
-    `input_columns` is a list of lists of columns to be merged.
+    """Merge multiple lists of lexicographically sorted columns into one list
+    of sorted columns. `input_columns` is a list of lists of columns to be
+    merged.
     """
     cdef vector[libcudf_types.size_type] c_column_keys = key_columns_indices
     cdef vector[table_view] c_input_tables
