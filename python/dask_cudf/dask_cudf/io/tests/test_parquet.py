@@ -36,8 +36,12 @@ df = pd.DataFrame(
 ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
-# Helper function to handle upcomming
-# `gather_statistics` deprecation
+# Helper function to make it easier to handle the
+# upcoming deprecation of `gather_statistics`.
+# See: https://github.com/dask/dask/issues/8937
+# TODO: This function should be used to switch to
+# the "new" `calculate_divisions` kwarg (for newer
+# Dask versions) once it is introduced
 def _divisions(setting):
     return {"gather_statistics": setting}
 
