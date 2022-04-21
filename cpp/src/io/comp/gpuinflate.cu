@@ -180,7 +180,7 @@ inline __device__ void skipbits(inflate_state_s* s, uint32_t n)
 {
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
-    auto cur   = s->cur + 8;
+    auto cur    = s->cur + 8;
     s->bitbuf.x = s->bitbuf.y;
     s->bitbuf.y = (cur < s->end) ? *reinterpret_cast<uint32_t const*>(cur) : 0;
     s->cur      = cur - 4;
@@ -510,8 +510,8 @@ __device__ void decode_symbols(inflate_state_s* s)
 {
   uint32_t bitpos = s->bitpos;
   uint2 bitbuf    = s->bitbuf;
-  auto cur       = s->cur;
-  auto end       = s->end;
+  auto cur        = s->cur;
+  auto end        = s->end;
   int32_t batch   = 0;
   int32_t sym, batch_len;
 
