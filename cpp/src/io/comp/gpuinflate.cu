@@ -1024,7 +1024,7 @@ __device__ int parse_gzip_header(const uint8_t* src, size_t src_size)
  */
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  inflate_kernel(gpu_inflate_input_s* inputs, gpu_inflate_status_s* outputs, int parse_hdr)
+  inflate_kernel(device_decompress_input* inputs, decompress_status* outputs, int parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
 
@@ -1143,7 +1143,7 @@ __global__ void __launch_bounds__(block_size)
  *
  * @param inputs Source and destination information per block
  */
-__global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_input_s* inputs)
+__global__ void __launch_bounds__(1024) copy_uncompressed_kernel(device_decompress_input* inputs)
 {
   __shared__ const uint8_t* volatile src_g;
   __shared__ uint8_t* volatile dst_g;
@@ -1193,8 +1193,8 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
   if (t < len) { dst[t] = src[t]; }
 }
 
-cudaError_t __host__ gpuinflate(gpu_inflate_input_s* inputs,
-                                gpu_inflate_status_s* outputs,
+cudaError_t __host__ gpuinflate(device_decompress_input* inputs,
+                                decompress_status* outputs,
                                 int count,
                                 int parse_hdr,
                                 rmm::cuda_stream_view stream)
@@ -1207,7 +1207,7 @@ cudaError_t __host__ gpuinflate(gpu_inflate_input_s* inputs,
   return cudaSuccess;
 }
 
-cudaError_t __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s* inputs,
+cudaError_t __host__ gpu_copy_uncompressed_blocks(device_decompress_input* inputs,
                                                   int count,
                                                   rmm::cuda_stream_view stream)
 {

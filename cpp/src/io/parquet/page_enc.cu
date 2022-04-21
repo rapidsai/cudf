@@ -81,8 +81,8 @@ struct page_enc_state_s {
   EncPage page;
   EncColumnChunk ck;
   parquet_column_device_view col;
-  gpu_inflate_input_s comp_in;
-  gpu_inflate_status_s comp_stat;
+  device_decompress_input comp_in;
+  decompress_status comp_stat;
   uint16_t vals[rle_buffer_size];
 };
 
@@ -749,8 +749,8 @@ static __device__ std::pair<duration_ns, duration_D> convert_nanoseconds(timesta
 template <int block_size>
 __global__ void __launch_bounds__(128, 8)
   gpuEncodePages(device_span<gpu::EncPage> pages,
-                 device_span<gpu_inflate_input_s> comp_in,
-                 device_span<gpu_inflate_status_s> comp_stat)
+                 device_span<device_decompress_input> comp_in,
+                 device_span<decompress_status> comp_stat)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
   using block_scan = cub::BlockScan<uint32_t, block_size>;
@@ -1316,7 +1316,7 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
-                       device_span<gpu_inflate_status_s const> comp_stat,
+                       device_span<decompress_status const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats)
 {
@@ -1953,8 +1953,8 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
 }
 
 void EncodePages(device_span<gpu::EncPage> pages,
-                 device_span<gpu_inflate_input_s> comp_in,
-                 device_span<gpu_inflate_status_s> comp_stat,
+                 device_span<device_decompress_input> comp_in,
+                 device_span<decompress_status> comp_stat,
                  rmm::cuda_stream_view stream)
 {
   auto num_pages = pages.size();
@@ -1969,7 +1969,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<gpu_inflate_status_s const> comp_stat,
+                       device_span<decompress_status const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream)

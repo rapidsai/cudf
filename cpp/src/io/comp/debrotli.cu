@@ -1912,8 +1912,8 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
  * @param count Number of blocks to decompress
  */
 extern "C" __global__ void __launch_bounds__(block_size, 2)
-  gpu_debrotli_kernel(gpu_inflate_input_s* inputs,
-                      gpu_inflate_status_s* outputs,
+  gpu_debrotli_kernel(device_decompress_input* inputs,
+                      decompress_status* outputs,
                       uint8_t* scratch,
                       uint32_t scratch_size,
                       uint32_t count)
@@ -2075,8 +2075,8 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
 #include <stdio.h>
 #endif
 
-cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s* inputs,
-                                  gpu_inflate_status_s* outputs,
+cudaError_t __host__ gpu_debrotli(device_decompress_input* inputs,
+                                  decompress_status* outputs,
                                   void* scratch,
                                   size_t scratch_size,
                                   int count,

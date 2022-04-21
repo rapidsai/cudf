@@ -23,7 +23,7 @@ namespace cudf::io::nvcomp {
 __global__ void convert_status_kernel(
   device_span<nvcompStatus_t const> nvcomp_stats,
   device_span<size_t const> actual_uncompressed_sizes,  // TODO optional
-  device_span<gpu_inflate_status_s> cudf_stats)
+  device_span<decompress_status> cudf_stats)
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid < cudf_stats.size()) {
@@ -34,7 +34,7 @@ __global__ void convert_status_kernel(
 
 __host__ void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
                              device_span<size_t const> actual_uncompressed_sizes,
-                             device_span<gpu_inflate_status_s> cudf_stats,
+                             device_span<decompress_status> cudf_stats,
                              rmm::cuda_stream_view stream)
 {
   dim3 block(128);
@@ -43,7 +43,7 @@ __host__ void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
     nvcomp_stats, actual_uncompressed_sizes, cudf_stats);
 }
 
-batched_inputs create_batched_inputs(device_span<gpu_inflate_input_s const> cudf_comp_in,
+batched_inputs create_batched_inputs(device_span<device_decompress_input const> cudf_comp_in,
                                      rmm::cuda_stream_view stream)
 {
   size_t num_comp_pages = cudf_comp_in.size();
@@ -65,7 +65,7 @@ batched_inputs create_batched_inputs(device_span<gpu_inflate_input_s const> cudf
                     cudf_comp_in.begin(),
                     cudf_comp_in.end(),
                     comp_it,
-                    [] __device__(gpu_inflate_input_s in) {
+                    [] __device__(device_decompress_input in) {
                       return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice, in.dstSize);
                     });
 

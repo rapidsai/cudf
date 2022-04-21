@@ -54,8 +54,8 @@ size_t get_temp_size(compression_type type, size_t num_chunks, size_t max_uncomp
 }
 
 void batched_decompress(compression_type type,
-                        device_span<gpu_inflate_input_s const> comp_in,
-                        device_span<gpu_inflate_status_s> comp_stat,
+                        device_span<device_decompress_input const> comp_in,
+                        device_span<decompress_status> comp_stat,
                         size_t max_uncomp_chunk_size,
                         rmm::cuda_stream_view stream)
 {

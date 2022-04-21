@@ -164,8 +164,8 @@ rmm::device_buffer decompress_data(datasource& source,
   if (meta.codec == "deflate") {
     size_t uncompressed_data_size = 0;
 
-    auto inflate_in  = hostdevice_vector<gpu_inflate_input_s>(meta.block_list.size(), stream);
-    auto inflate_out = hostdevice_vector<gpu_inflate_status_s>(meta.block_list.size(), stream);
+    auto inflate_in  = hostdevice_vector<device_decompress_input>(meta.block_list.size(), stream);
+    auto inflate_out = hostdevice_vector<decompress_status>(meta.block_list.size(), stream);
 
     // Guess an initial maximum uncompressed block size
     uint32_t initial_blk_len = (meta.max_block_size * 2 + 0xfff) & ~0xfff;

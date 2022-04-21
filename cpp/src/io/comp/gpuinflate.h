@@ -25,7 +25,7 @@ namespace io {
 /**
  * @brief Input parameters for the decompression interface
  */
-struct gpu_inflate_input_s {
+struct device_decompress_input {
   const void* srcDevice;
   uint64_t srcSize;
   void* dstDevice;
@@ -35,7 +35,7 @@ struct gpu_inflate_input_s {
 /**
  * @brief Output parameters for the decompression interface
  */
-struct gpu_inflate_status_s {
+struct decompress_status {
   uint64_t bytes_written;
   uint32_t status;
   uint32_t reserved;
@@ -45,7 +45,7 @@ struct gpu_inflate_status_s {
  * @brief Interface for decompressing GZIP-compressed data
  *
  * Multiple, independent chunks of compressed data can be decompressed by using
- * separate gpu_inflate_input_s/gpu_inflate_status_s pairs for each chunk.
+ * separate device_decompress_input/decompress_status pairs for each chunk.
  *
  * @param[in] inputs List of input argument structures
  * @param[out] outputs List of output status structures
@@ -53,8 +53,8 @@ struct gpu_inflate_status_s {
  * @param[in] parse_hdr Whether or not to parse GZIP header
  * @param[in] stream CUDA stream to use
  */
-cudaError_t gpuinflate(gpu_inflate_input_s* inputs,
-                       gpu_inflate_status_s* outputs,
+cudaError_t gpuinflate(device_decompress_input* inputs,
+                       decompress_status* outputs,
                        int count,
                        int parse_hdr,
                        rmm::cuda_stream_view stream);
@@ -66,7 +66,7 @@ cudaError_t gpuinflate(gpu_inflate_input_s* inputs,
  * @param[in] count Number of input structures
  * @param[in] stream CUDA stream to use
  */
-cudaError_t gpu_copy_uncompressed_blocks(gpu_inflate_input_s* inputs,
+cudaError_t gpu_copy_uncompressed_blocks(device_decompress_input* inputs,
                                          int count,
                                          rmm::cuda_stream_view stream);
 
@@ -74,15 +74,15 @@ cudaError_t gpu_copy_uncompressed_blocks(gpu_inflate_input_s* inputs,
  * @brief Interface for decompressing Snappy-compressed data
  *
  * Multiple, independent chunks of compressed data can be decompressed by using
- * separate gpu_inflate_input_s/gpu_inflate_status_s pairs for each chunk.
+ * separate device_decompress_input/decompress_status pairs for each chunk.
  *
  * @param[in] inputs List of input argument structures
  * @param[out] outputs List of output status structures
  * @param[in] count Number of input/output structures
  * @param[in] stream CUDA stream to use
  */
-cudaError_t gpu_unsnap(gpu_inflate_input_s* inputs,
-                       gpu_inflate_status_s* outputs,
+cudaError_t gpu_unsnap(device_decompress_input* inputs,
+                       decompress_status* outputs,
                        int count,
                        rmm::cuda_stream_view stream);
 
@@ -99,7 +99,7 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
  * @brief Interface for decompressing Brotli-compressed data
  *
  * Multiple, independent chunks of compressed data can be decompressed by using
- * separate gpu_inflate_input_s/gpu_inflate_status_s pairs for each chunk.
+ * separate device_decompress_input/decompress_status pairs for each chunk.
  *
  * @param[in] inputs List of input argument structures
  * @param[out] outputs List of output status structures
@@ -108,8 +108,8 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
  * @param[in] count Number of input/output structures
  * @param[in] stream CUDA stream to use
  */
-cudaError_t gpu_debrotli(gpu_inflate_input_s* inputs,
-                         gpu_inflate_status_s* outputs,
+cudaError_t gpu_debrotli(device_decompress_input* inputs,
+                         decompress_status* outputs,
                          void* scratch,
                          size_t scratch_size,
                          int count,
@@ -119,15 +119,15 @@ cudaError_t gpu_debrotli(gpu_inflate_input_s* inputs,
  * @brief Interface for compressing data with Snappy
  *
  * Multiple, independent chunks of compressed data can be compressed by using
- * separate gpu_inflate_input_s/gpu_inflate_status_s pairs for each chunk.
+ * separate device_decompress_input/decompress_status pairs for each chunk.
  *
  * @param[in] inputs List of input argument structures
  * @param[out] outputs List of output status structures
  * @param[in] count Number of input/output structures
  * @param[in] stream CUDA stream to use
  */
-cudaError_t gpu_snap(gpu_inflate_input_s* inputs,
-                     gpu_inflate_status_s* outputs,
+cudaError_t gpu_snap(device_decompress_input* inputs,
+                     decompress_status* outputs,
                      int count,
                      rmm::cuda_stream_view stream);
 

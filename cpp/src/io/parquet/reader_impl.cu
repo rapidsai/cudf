@@ -1049,7 +1049,7 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& 
   pages.device_to_host(stream, true);
 }
 
-__global__ void decompress_check_kernel(device_span<gpu_inflate_status_s const> stats,
+__global__ void decompress_check_kernel(device_span<decompress_status const> stats,
                                         bool* any_block_failure)
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1060,7 +1060,7 @@ __global__ void decompress_check_kernel(device_span<gpu_inflate_status_s const> 
   }
 }
 
-void decompress_check(device_span<gpu_inflate_status_s> stats,
+void decompress_check(device_span<decompress_status> stats,
                       bool* any_block_failure,
                       rmm::cuda_stream_view stream)
 {
@@ -1136,15 +1136,15 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   // Dispatch batches of pages to decompress for each codec
   rmm::device_buffer decomp_pages(total_decomp_size, stream);
-  hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_comp_pages, stream);
-  hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_comp_pages, stream);
+  hostdevice_vector<device_decompress_input> inflate_in(0, num_comp_pages, stream);
+  hostdevice_vector<decompress_status> inflate_out(0, num_comp_pages, stream);
 
   hostdevice_vector<bool> any_block_failure(1, stream);
   any_block_failure[0] = false;
   any_block_failure.host_to_device(stream);
 
-  device_span<gpu_inflate_input_s> inflate_in_view(inflate_in.device_ptr(), inflate_in.size());
-  device_span<gpu_inflate_status_s> inflate_out_view(inflate_out.device_ptr(), inflate_out.size());
+  device_span<device_decompress_input> inflate_in_view(inflate_in.device_ptr(), inflate_in.size());
+  device_span<decompress_status> inflate_out_view(inflate_out.device_ptr(), inflate_out.size());
 
   size_t decomp_offset = 0;
   int32_t argc         = 0;

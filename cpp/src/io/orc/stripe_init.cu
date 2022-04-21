@@ -28,7 +28,7 @@ namespace orc {
 namespace gpu {
 struct compressed_stream_s {
   CompressedStreamInfo info;
-  gpu_inflate_input_s ctl;
+  device_decompress_input ctl;
 };
 
 // blockDim {128,1,1}
@@ -57,7 +57,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
       uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
       uint32_t uncompressed_size;
-      gpu_inflate_input_s* init_ctl = nullptr;
+      device_decompress_input* init_ctl = nullptr;
       block_len >>= 1;
       cur += BLOCK_HEADER_SIZE;
       if (block_len > block_size || cur + block_len > end) {
@@ -139,8 +139,8 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     // Walk through the compressed blocks
     const uint8_t* cur                  = s->info.compressed_data;
     const uint8_t* end                  = cur + s->info.compressed_data_size;
-    const gpu_inflate_input_s* dec_in   = s->info.decctl;
-    const gpu_inflate_status_s* dec_out = s->info.decstatus;
+    const device_decompress_input* dec_in   = s->info.decctl;
+    const decompress_status* dec_out = s->info.decstatus;
     uint8_t* uncompressed_actual        = s->info.uncompressed_data;
     uint8_t* uncompressed_estimated     = uncompressed_actual;
     uint32_t num_compressed_blocks      = 0;
@@ -363,7 +363,7 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
       const uint8_t* start            = s->strm_info[ci_id].compressed_data;
       const uint8_t* cur              = start;
       const uint8_t* end              = cur + s->strm_info[ci_id].compressed_data_size;
-      gpu_inflate_status_s* decstatus = s->strm_info[ci_id].decstatus;
+      decompress_status* decstatus = s->strm_info[ci_id].decstatus;
       uint32_t uncomp_offset          = 0;
       for (;;) {
         uint32_t block_len, is_uncompressed;

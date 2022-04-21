@@ -27,8 +27,8 @@ namespace cudf::io::nvcomp {
 enum class compression_type { SNAPPY };
 
 void batched_decompress(compression_type type,
-                        device_span<gpu_inflate_input_s const> comp_in,
-                        device_span<gpu_inflate_status_s> comp_stat,
+                        device_span<device_decompress_input const> comp_in,
+                        device_span<decompress_status> comp_stat,
                         size_t max_uncomp_page_size,
                         rmm::cuda_stream_view stream);
 }  // namespace cudf::io::nvcomp

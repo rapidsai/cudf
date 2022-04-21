@@ -1151,8 +1151,8 @@ __global__ void __launch_bounds__(1024)
 __global__ void __launch_bounds__(256)
   gpuInitCompressionBlocks(device_2dspan<StripeStream const> strm_desc,
                            device_2dspan<encoder_chunk_streams> streams,  // const?
-                           device_span<gpu_inflate_input_s> comp_in,
-                           device_span<gpu_inflate_status_s> comp_out,
+                           device_span<device_decompress_input> comp_in,
+                           device_span<decompress_status> comp_out,
                            uint8_t* compressed_bfr,
                            uint32_t comp_blk_size,
                            uint32_t max_comp_blk_size)
@@ -1175,8 +1175,8 @@ __global__ void __launch_bounds__(256)
   dst        = compressed_bfr + ss.bfr_offset;
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
   for (uint32_t b = t; b < num_blocks; b += 256) {
-    gpu_inflate_input_s* blk_in   = &comp_in[ss.first_block + b];
-    gpu_inflate_status_s* blk_out = &comp_out[ss.first_block + b];
+    device_decompress_input* blk_in   = &comp_in[ss.first_block + b];
+    decompress_status* blk_out = &comp_out[ss.first_block + b];
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
     blk_in->srcDevice = src + b * comp_blk_size;
     blk_in->srcSize   = blk_size;
@@ -1203,8 +1203,8 @@ __global__ void __launch_bounds__(256)
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
   gpuCompactCompressedBlocks(device_2dspan<StripeStream> strm_desc,
-                             device_span<gpu_inflate_input_s> comp_in,
-                             device_span<gpu_inflate_status_s> comp_out,
+                             device_span<device_decompress_input> comp_in,
+                             device_span<decompress_status> comp_out,
                              uint8_t* compressed_bfr,
                              uint32_t comp_blk_size,
                              uint32_t max_comp_blk_size)
@@ -1228,8 +1228,8 @@ __global__ void __launch_bounds__(1024)
   b          = 0;
   do {
     if (t == 0) {
-      gpu_inflate_input_s* blk_in   = &comp_in[ss.first_block + b];
-      gpu_inflate_status_s* blk_out = &comp_out[ss.first_block + b];
+      device_decompress_input* blk_in   = &comp_in[ss.first_block + b];
+      decompress_status* blk_out = &comp_out[ss.first_block + b];
       uint32_t src_len =
         min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
       uint32_t dst_len = (blk_out->status == 0) ? blk_out->bytes_written : src_len;
@@ -1311,8 +1311,8 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t max_comp_blk_size,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<gpu_inflate_input_s> comp_in,
-                            device_span<gpu_inflate_status_s> comp_out,
+                            device_span<device_decompress_input> comp_in,
+                            device_span<decompress_status> comp_out,
                             rmm::cuda_stream_view stream)
 {
   dim3 dim_block_init(256, 1);
@@ -1342,7 +1342,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                           comp_in.begin(),
                           comp_in.end(),
                           comp_it,
-                          [] __device__(gpu_inflate_input_s in) {
+                          [] __device__(device_decompress_input in) {
                             return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice);
                           });
         nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
@@ -1363,7 +1363,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                           compressed_bytes_written.end(),
                           comp_out.begin(),
                           [] __device__(size_t size) {
-                            gpu_inflate_status_s status{};
+                            decompress_status status{};
                             status.bytes_written = size;
                             return status;
                           });
@@ -1373,7 +1373,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
         thrust::for_each(rmm::exec_policy(stream),
                          comp_out.begin(),
                          comp_out.end(),
-                         [] __device__(gpu_inflate_status_s & stat) { stat.status = 1; });
+                         [] __device__(decompress_status & stat) { stat.status = 1; });
       };
 
     } else {

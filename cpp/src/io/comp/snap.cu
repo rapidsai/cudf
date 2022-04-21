@@ -258,7 +258,7 @@ static __device__ uint32_t Match60(const uint8_t* src1,
  * @param[in] count Number of blocks to compress
  */
 __global__ void __launch_bounds__(128)
-  snap_kernel(gpu_inflate_input_s* inputs, gpu_inflate_status_s* outputs, int count)
+  snap_kernel(device_decompress_input* inputs, decompress_status* outputs, int count)
 {
   __shared__ __align__(16) snap_state_s state_g;
 
@@ -341,8 +341,8 @@ __global__ void __launch_bounds__(128)
   }
 }
 
-cudaError_t __host__ gpu_snap(gpu_inflate_input_s* inputs,
-                              gpu_inflate_status_s* outputs,
+cudaError_t __host__ gpu_snap(device_decompress_input* inputs,
+                              decompress_status* outputs,
                               int count,
                               rmm::cuda_stream_view stream)
 {

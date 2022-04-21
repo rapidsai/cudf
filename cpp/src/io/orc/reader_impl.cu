@@ -261,7 +261,7 @@ auto decimal_column_type(std::vector<std::string> const& decimal128_columns,
 
 }  // namespace
 
-__global__ void decompress_check_kernel(device_span<gpu_inflate_status_s const> stats,
+__global__ void decompress_check_kernel(device_span<decompress_status const> stats,
                                         bool* any_block_failure)
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -272,7 +272,7 @@ __global__ void decompress_check_kernel(device_span<gpu_inflate_status_s const> 
   }
 }
 
-void decompress_check(device_span<gpu_inflate_status_s> stats,
+void decompress_check(device_span<decompress_status> stats,
                       bool* any_block_failure,
                       rmm::cuda_stream_view stream)
 {
@@ -327,9 +327,9 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   CUDF_EXPECTS(total_decomp_size > 0, "No decompressible data found");
 
   rmm::device_buffer decomp_data(total_decomp_size, stream);
-  rmm::device_uvector<gpu_inflate_input_s> inflate_in(
+  rmm::device_uvector<device_decompress_input> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
-  rmm::device_uvector<gpu_inflate_status_s> inflate_out(num_compressed_blocks, stream);
+  rmm::device_uvector<decompress_status> inflate_out(num_compressed_blocks, stream);
 
   // Parse again to populate the decompression input/output buffers
   size_t decomp_offset           = 0;
@@ -359,7 +359,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
 
   // Dispatch batches of blocks to decompress
   if (num_compressed_blocks > 0) {
-    device_span<gpu_inflate_status_s> inflate_out_view(inflate_out.data(), num_compressed_blocks);
+    device_span<decompress_status> inflate_out_view(inflate_out.data(), num_compressed_blocks);
     switch (decompressor->GetKind()) {
       case orc::ZLIB:
         CUDF_CUDA_TRY(
@@ -367,7 +367,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
         break;
       case orc::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
-          device_span<gpu_inflate_input_s> inflate_in_view{inflate_in.data(),
+          device_span<device_decompress_input> inflate_in_view{inflate_in.data(),
                                                            num_compressed_blocks};
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      inflate_in_view,

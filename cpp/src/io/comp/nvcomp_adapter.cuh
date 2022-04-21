@@ -31,11 +31,11 @@ struct batched_inputs {
   rmm::device_uvector<size_t> uncompressed_data_sizes;
 };
 
-batched_inputs create_batched_inputs(device_span<gpu_inflate_input_s const> cudf_comp_in,
+batched_inputs create_batched_inputs(device_span<device_decompress_input const> cudf_comp_in,
                                      rmm::cuda_stream_view stream);
 
 __host__ void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
                              device_span<size_t const> actual_uncompressed_sizes,
-                             device_span<gpu_inflate_status_s> cudf_stats,
+                             device_span<decompress_status> cudf_stats,
                              rmm::cuda_stream_view stream);
 }  // namespace cudf::io::nvcomp
