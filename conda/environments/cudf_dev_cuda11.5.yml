@@ -56,7 +56,6 @@ dependencies:
   - sphinx-copybutton
   - sphinx-autobuild
   - myst-nb
-  - jupytext
   - scipy
   - dask-cuda
   - mimesis<4.1
