@@ -940,16 +940,16 @@ std::unique_ptr<table> sample(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief (Thoroughly) Checks whether a column or its descendants have null rows 
+ * @brief (Thoroughly) Checks whether a column or its descendants have null rows
  * that are not also empty.
- * 
+ *
  * @note This function is potentially expensive. The offsets values of the specified column
  * and all its children/descendants will be examined for empty rows, for all its null rows.
  *
  * A LIST or STRING column might have non-empty rows that are marked as null.
  * A STRUCT OR LIST column might have child columns that have non-empty null rows.
  * Other types of columns are deemed incapable of having non-empty null rows.
- * E.g. Fixed width columns have no concept of an "empty" row. 
+ * E.g. Fixed width columns have no concept of an "empty" row.
  *
  * @param input The column which is (and whose descendants are) to be checked for
  * non-empty null rows.
@@ -959,16 +959,16 @@ std::unique_ptr<table> sample(
 bool has_nonempty_nulls(column_view const& input);
 
 /**
- * @brief Checks whether a column or its descendants might potentially have null rows 
+ * @brief Checks whether a column or its descendants might potentially have null rows
  * that are not also empty
  *
  * @note This function is a fast check, and is not thorough. It only checks whether
  * the columns have null rows, and not whether the null rows are empty.
- * 
+ *
  * A return value of `false` implies that the column and its descendants are guaranteed
  * not to have null rows that are not also empty.
  * If `true` is returned, it only implies the potential for null rows to be non-empty.
- * 
+ *
  * @param input The column which is (and whose descendants are) to be checked for
  * non-empty null rows
  * @return true If either the column or its decendants have null rows
@@ -1002,7 +1002,7 @@ bool may_have_nonempty_nulls(column_view const& input);
  * The purge operation only applies directly to LIST and STRING columns, but it
  * applies indirectly to STRUCT columns as well, since LIST and STRUCT columns
  * may have child/decendant columns that are LIST or STRING.
- * 
+ *
  * @param input The column whose null rows are to be checked and purged
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> Column with equivalent contents to `input`, but with
