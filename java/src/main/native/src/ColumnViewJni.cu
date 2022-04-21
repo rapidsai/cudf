@@ -19,8 +19,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 
-#include "ColumnViewJni.hpp"
 #include "rmm/exec_policy.hpp"
+
+#include "ColumnViewJni.hpp"
 
 namespace cudf::jni {
 
