@@ -7,6 +7,18 @@ there are some differences between cuDF and Pandas, both in terms API
 and behavior. This page documents the similarities and differences
 between cuDF and Pandas.
 
+Supported operations
+--------------------
+
+cuDF supports many of the same data structures and operations as
+Pandas.  This includes ``Series``, ``DataFrame``, ``Index`` and
+operations on them such as unary and binary operations, indexing,
+filtering, concatenating, joining, groupby and window operations -
+among many others.
+
+The best way to see if we support a particular Pandas API is to search
+our `API docs <https://docs.rapids.ai/api/cudf/stable/>`_.
+
 Data types
 ----------
 
@@ -18,6 +30,44 @@ details.
 
 Note that we do not support custom data types like Pandas'
 ``ExtensionDtype``.
+
+Null (or "missing") values
+--------------------------
+
+Unlike Pandas, *all* data types in cuDF are nullable,
+meaning they can contain missing values (represented by ``cudf.NA``).
+
+.. code:: python
+    >>> s = cudf.Series([1, 2, cudf.NA])
+    >>> s
+    >>> s
+    0       1
+    1       2
+    2    <NA>
+    dtype: int64
+
+Nulls are not coerced to ``nan`` in any situation;
+compare the behaviour of cuDF with Pandas below:
+
+.. code:: python
+    >>> s = cudf.Series([1, 2, cudf.NA], dtype="category")
+    >>> s
+    0       1
+    1       2
+    2    <NA>
+    dtype: category
+    Categories (2, int64): [1, 2]
+
+    >>> s = pd.Series([1, 2, pd.NA], dtype="category")
+    >>> s
+    0      1
+    1      2
+    2    NaN
+    dtype: category
+    Categories (2, int64): [1, 2]
+
+See our :doc:`docs on missing data<Working-with-missing-data>`
+for details.
 
 Result ordering
 ---------------
@@ -94,10 +144,4 @@ value of a ``Series``, ``DataFrame``, or in the case of a groupby,
 each group.  cuDF also supports ``apply()``, but it relies on Numba to
 JIT compile the UDF and execute it on the GPU. This can be extremely
 fast, but imposes a few limitations on what operations are allowed in
-the UDF. See our :doc:`UDF docs <guide-to-udf>` for details.
-
-How to check if a particular Pandas feature is available in cuDF?
------------------------------------------------------------------
-
-The best way to see if we support a particular feature is to search
-our `API docs <https://docs.rapids.ai/api/cudf/stable/>`_.
+the UDF. See our :doc:`UDF docs <guide-to-udfs>` for details.
