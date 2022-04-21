@@ -69,6 +69,20 @@ compare the behaviour of cuDF with Pandas below:
 See our :doc:`docs on missing data<Working-with-missing-data>`
 for details.
 
+Iteration
+---------
+
+Iterating over a cuDF ``Series``, ``DataFrame`` or ``Index`` is not
+supported. This is because iterating over data that resides on the GPU
+will yield *extremely* poor performance, as GPUs are optimized for
+highly parallel operations rather than sequential operations.
+
+In the vast majority of cases, it is possible to avoid iteration and
+use an existing function or method to accomplish the same task. If you
+absolutely must iterate, copy the data from GPU to CPU by using
+``.to_arrow()`` or ``.to_pandas()``, then copy the result back to GPU
+using ``.from_arrow()`` or ``.from_pandas()``.
+
 Result ordering
 ---------------
 
