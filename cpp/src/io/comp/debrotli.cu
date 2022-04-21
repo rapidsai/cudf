@@ -1927,11 +1927,11 @@ extern "C" __global__ void __launch_bounds__(block_size, 2)
   if (z >= count) { return; }
   // Thread0: initializes shared state and decode stream header
   if (!t) {
-    auto const* src = static_cast<uint8_t const*>(inputs[z].srcDevice);
-    size_t src_size = inputs[z].srcSize;
+    auto const src = inputs[z].src.data();
+    size_t const src_size = inputs[z].src.size();
     if (src && src_size >= 8) {
       s->error = 0;
-      s->out = s->outbase = static_cast<uint8_t*>(inputs[z].dstDevice);
+      s->out = s->outbase = inputs[z].dstDevice;
       s->bytes_left       = inputs[z].dstSize;
       s->mtf_upper_bound  = 63;
       s->dist_rb[0]       = 16;

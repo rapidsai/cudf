@@ -1033,9 +1033,8 @@ __global__ void __launch_bounds__(block_size)
   inflate_state_s* state = &state_g;
 
   if (!t) {
-    auto p          = static_cast<uint8_t const*>(inputs[z].srcDevice);
-    size_t src_size = inputs[z].srcSize;
-    uint32_t prefix_bytes;
+    auto p          = inputs[z].src.data();
+    auto src_size = inputs[z].src.size();
     // Parse header if needed
     state->err = 0;
     if (parse_hdr) {
@@ -1053,7 +1052,7 @@ __global__ void __launch_bounds__(block_size)
     state->outbase = state->out;
     state->outend  = state->out + inputs[z].dstSize;
     state->end     = p + src_size;
-    prefix_bytes   = (uint32_t)(((size_t)p) & 3);
+    auto const prefix_bytes   = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     state->cur      = p;
     state->bitbuf.x = (p < state->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
@@ -1156,9 +1155,9 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(device_decompre
   uint32_t len, src_align_bytes, src_align_bits, dst_align_bytes;
 
   if (!t) {
-    src        = static_cast<const uint8_t*>(inputs[z].srcDevice);
-    dst        = static_cast<uint8_t*>(inputs[z].dstDevice);
-    len        = min((uint32_t)inputs[z].srcSize, (uint32_t)inputs[z].dstSize);
+    src        = inputs[z].src.data();
+    dst        = inputs[z].dstDevice;
+    len        = min((uint32_t)inputs[z].src.size(), (uint32_t)inputs[z].dstSize);
     src_g      = src;
     dst_g      = dst;
     copy_len_g = len;

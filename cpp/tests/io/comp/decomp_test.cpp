@@ -55,12 +55,10 @@ struct DecompressTest : public cudf::test::BaseFixture {
                   const uint8_t* compressed,
                   size_t compressed_size)
   {
-    rmm::device_buffer src{compressed, compressed_size, rmm::cuda_stream_default};
-    rmm::device_buffer dst{decompressed->size(), rmm::cuda_stream_default};
+    rmm::device_uvector<uint8_t> dst{decompressed->size(), rmm::cuda_stream_default};
 
-    inf_args->srcDevice = static_cast<const uint8_t*>(src.data());
-    inf_args->dstDevice = static_cast<uint8_t*>(dst.data());
-    inf_args->srcSize   = src.size();
+    inf_args->src = {compressed, compressed_size};
+    inf_args->dstDevice = dst.data();
     inf_args->dstSize   = dst.size();
     rmm::device_uvector<cudf::io::device_decompress_input> d_inf_args(1, rmm::cuda_stream_default);
     rmm::device_uvector<cudf::io::decompress_status> d_inf_stat(1, rmm::cuda_stream_default);

@@ -1020,7 +1020,7 @@ void snappy_compress(device_span<device_decompress_input const> comp_in,
                       comp_in.end(),
                       comp_it,
                       [] __device__(device_decompress_input in) {
-                        return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice);
+                        return thrust::make_tuple(in.src.data(), in.src.size(), in.dstDevice);
                       });
     nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
                                                      uncompressed_data_sizes.data(),

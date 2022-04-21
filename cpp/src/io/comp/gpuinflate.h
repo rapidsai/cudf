@@ -16,9 +16,11 @@
 
 #pragma once
 
-#include <cstdint>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cstdint>
 
 namespace cudf {
 namespace io {
@@ -26,9 +28,8 @@ namespace io {
  * @brief Input parameters for the decompression interface
  */
 struct device_decompress_input {
-  const void* srcDevice;
-  uint64_t srcSize;
-  void* dstDevice;
+  device_span<uint8_t const> src;
+  uint8_t * dstDevice;
   uint64_t dstSize;
 };
 

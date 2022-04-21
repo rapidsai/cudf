@@ -96,8 +96,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
         num_compressed_blocks++;
       }
       if (!lane_id && init_ctl) {
-        s->ctl.srcDevice = cur;
-        s->ctl.srcSize   = block_len;
+        s->ctl.src = {cur, block_len};
         s->ctl.dstDevice = uncompressed + max_uncompressed_size;
         s->ctl.dstSize   = uncompressed_size;
       }

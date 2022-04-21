@@ -639,8 +639,8 @@ __global__ void __launch_bounds__(block_size)
   if (t < batch_count) { s->q.batch_len[t] = 0; }
   __syncthreads();
   if (!t) {
-    const auto* cur    = static_cast<const uint8_t*>(s->in.srcDevice);
-    const uint8_t* end = cur + s->in.srcSize;
+    auto cur    = s->in.src.begin();
+    auto const end = s->in.src.end();
     s->error           = 0;
     if (log_cyclecount) { s->tstart = clock(); }
     if (cur < end) {

@@ -1154,8 +1154,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
       for_each_codec_page(codec.compression_type, [&](size_t page) {
         auto dst_base              = static_cast<uint8_t*>(decomp_pages.data());
-        inflate_in[argc].srcDevice = pages[page].page_data;
-        inflate_in[argc].srcSize   = pages[page].compressed_page_size;
+        inflate_in[argc].src = {pages[page].page_data, static_cast<size_t>(pages[page].compressed_page_size)};
         inflate_in[argc].dstDevice = dst_base + decomp_offset;
         inflate_in[argc].dstSize   = pages[page].uncompressed_page_size;
 

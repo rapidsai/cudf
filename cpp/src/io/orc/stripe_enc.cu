@@ -1178,8 +1178,7 @@ __global__ void __launch_bounds__(256)
     device_decompress_input* blk_in   = &comp_in[ss.first_block + b];
     decompress_status* blk_out = &comp_out[ss.first_block + b];
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-    blk_in->srcDevice = src + b * comp_blk_size;
-    blk_in->srcSize   = blk_size;
+    blk_in->src = {src + b * comp_blk_size, blk_size};
     blk_in->dstDevice = dst + b * (BLOCK_HEADER_SIZE + max_comp_blk_size) + BLOCK_HEADER_SIZE;
     blk_in->dstSize   = max_comp_blk_size;
     blk_out->bytes_written = blk_size;
@@ -1230,19 +1229,19 @@ __global__ void __launch_bounds__(1024)
     if (t == 0) {
       device_decompress_input* blk_in   = &comp_in[ss.first_block + b];
       decompress_status* blk_out = &comp_out[ss.first_block + b];
-      uint32_t src_len =
+      auto const src_len =
         min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-      uint32_t dst_len = (blk_out->status == 0) ? blk_out->bytes_written : src_len;
-      uint32_t blk_size24;
+      auto  dst_len = (blk_out->status == 0) ? blk_out->bytes_written : src_len;
+      uint32_t blk_size24{};
       if (dst_len >= src_len) {
         // Copy from uncompressed source
-        src                    = static_cast<const uint8_t*>(blk_in->srcDevice);
+        src                    = blk_in->src.data();
         blk_out->bytes_written = src_len;
         dst_len                = src_len;
         blk_size24             = dst_len * 2 + 1;
       } else {
         // Compressed block
-        src        = static_cast<const uint8_t*>(blk_in->dstDevice);
+        src        = blk_in->dstDevice;
         blk_size24 = dst_len * 2 + 0;
       }
       dst[0]     = static_cast<uint8_t>(blk_size24 >> 0);
@@ -1343,7 +1342,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                           comp_in.end(),
                           comp_it,
                           [] __device__(device_decompress_input in) {
-                            return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice);
+                            return thrust::make_tuple(in.src.data(), in.src.size(), in.dstDevice);
                           });
         nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
                                                          uncompressed_data_sizes.data(),

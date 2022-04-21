@@ -180,8 +180,7 @@ rmm::device_buffer decompress_data(datasource& source,
     for (size_t i = 0, dst_pos = 0; i < meta.block_list.size(); i++) {
       auto const src_pos = meta.block_list[i].offset - base_offset;
 
-      inflate_in[i].srcDevice = static_cast<uint8_t const*>(comp_block_data.data()) + src_pos;
-      inflate_in[i].srcSize   = meta.block_list[i].size;
+      inflate_in[i].src = {static_cast<uint8_t const*>(comp_block_data.data()) + src_pos,  meta.block_list[i].size};
       inflate_in[i].dstDevice = static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos;
 
       // Update blocks offsets & sizes to refer to uncompressed data
