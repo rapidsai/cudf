@@ -45,45 +45,23 @@
 
 namespace cudf {
 namespace {
-template <typename DataIterator,
-          typename ValuesIterator,
-          typename OutputIterator,
-          typename Comparator>
-void launch_search(DataIterator it_data,
-                   ValuesIterator it_vals,
-                   size_type data_size,
-                   size_type values_size,
-                   OutputIterator it_output,
-                   Comparator comp,
-                   bool find_first,
-                   rmm::cuda_stream_view stream)
+template <typename... Args>
+void search_bound(bool find_lower_bound, Args&&... args)
 {
-  if (find_first) {
-    thrust::lower_bound(rmm::exec_policy(stream),
-                        it_data,
-                        it_data + data_size,
-                        it_vals,
-                        it_vals + values_size,
-                        it_output,
-                        comp);
+  if (find_lower_bound) {
+    thrust::lower_bound(args...);
   } else {
-    thrust::upper_bound(rmm::exec_policy(stream),
-                        it_data,
-                        it_data + data_size,
-                        it_vals,
-                        it_vals + values_size,
-                        it_output,
-                        comp);
+    thrust::upper_bound(args...);
   }
 }
 
-std::unique_ptr<column> search_ordered(table_view const& t,
-                                       table_view const& values,
-                                       bool find_first,
-                                       std::vector<order> const& column_order,
-                                       std::vector<null_order> const& null_precedence,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> search_bound(table_view const& t,
+                                     table_view const& values,
+                                     bool find_lower_bound,
+                                     std::vector<order> const& column_order,
+                                     std::vector<null_order> const& null_precedence,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(
     column_order.empty() or static_cast<std::size_t>(t.num_columns()) == column_order.size(),
@@ -95,12 +73,12 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   // Allocate result column
   auto result = make_numeric_column(
     data_type{type_to_id<size_type>()}, values.num_rows(), mask_state::UNALLOCATED, stream, mr);
-  auto const result_out = result->mutable_view().data<size_type>();
+  auto const out_it = result->mutable_view().data<size_type>();
 
   // Handle empty inputs
   if (t.num_rows() == 0) {
     CUDF_CUDA_TRY(
-      cudaMemsetAsync(result_out, 0, values.num_rows() * sizeof(size_type), stream.value()));
+      cudaMemsetAsync(out_it, 0, values.num_rows() * sizeof(size_type), stream.value()));
     return result;
   }
 
@@ -122,8 +100,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
   auto const t_d      = table_device_view::create(t_flattened, stream);
   auto const values_d = table_device_view::create(values_flattened, stream);
-  auto const& lhs     = find_first ? *t_d : *values_d;
-  auto const& rhs     = find_first ? *values_d : *t_d;
+  auto const& lhs     = find_lower_bound ? *t_d : *values_d;
+  auto const& rhs     = find_lower_bound ? *values_d : *t_d;
 
   auto const& column_order_flattened    = t_flattened.orders();
   auto const& null_precedence_flattened = t_flattened.null_orders();
@@ -134,9 +112,15 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto const count_it = thrust::make_counting_iterator<size_type>(0);
   auto const comp     = row_lexicographic_comparator(
     nullate::DYNAMIC{has_any_nulls}, lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
-  launch_search(
-    count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
 
+  search_bound(find_lower_bound,
+               rmm::exec_policy(stream),
+               count_it,
+               count_it + t.num_rows(),
+               count_it,
+               count_it + values.num_rows(),
+               out_it,
+               comp);
   return result;
 }
 
@@ -384,7 +368,7 @@ std::unique_ptr<column> lower_bound(table_view const& t,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  return search_ordered(t, values, true, column_order, null_precedence, stream, mr);
+  return search_bound(t, values, true, column_order, null_precedence, stream, mr);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& t,
@@ -394,7 +378,7 @@ std::unique_ptr<column> upper_bound(table_view const& t,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  return search_ordered(t, values, false, column_order, null_precedence, stream, mr);
+  return search_bound(t, values, false, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace detail
