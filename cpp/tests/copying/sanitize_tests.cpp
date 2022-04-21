@@ -28,14 +28,14 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
 namespace cudf::test {
 
 using iterators::no_nulls;
 using iterators::null_at;
 using iterators::nulls_at;
-using values_col_t  = fixed_width_column_wrapper<int32_t>;
+using T = int32_t; // The actual type of the leaf node isn't really important.
+using values_col_t  = fixed_width_column_wrapper<T>;
 using offsets_col_t = fixed_width_column_wrapper<size_type>;
 using gather_map_t  = fixed_width_column_wrapper<size_type>;
 
@@ -64,8 +64,6 @@ struct SanitizedGatherTest : public cudf::test::BaseFixture {
 // List<T>.
 TEST_F(SanitizedGatherTest, SingleLevelList)
 {
-  using T = int32_t;
-
   auto const input = LCW<T>{{{{1, 2, 3, 4}, null_at(2)},
                              {5},
                              {6, 7},  // <--- Will be set to NULL. Unsanitized row.
@@ -139,8 +137,6 @@ TEST_F(SanitizedGatherTest, SingleLevelList)
 // List<List<T>>.
 TEST_F(SanitizedGatherTest, TwoLevelList)
 {
-  using T = int32_t;
-
   auto const input =
     LCW<T>{
       {{{1, 2, 3}, {4, 5, 6, 7}, {8}, {9, 1}, {2}},
@@ -191,8 +187,6 @@ TEST_F(SanitizedGatherTest, TwoLevelList)
 // List<List<List<T>>>.
 TEST_F(SanitizedGatherTest, ThreeLevelList)
 {
-  using T = int32_t;
-
   auto const input = LCW<T>{{{{{1, 2}, {3}}, {{4, 5}, {6, 7}}, {{8, 8}, {}}, {{9, 1}}, {{2, 3}}},
                              {{{11, 12}}, {{13}, {14, 15}}, {{16, 17, 18}}, {{19, 19}, {}}},
                              {{{21, 21}}, {{22, 23}, {}}, {{24, 25}, {26}}},
@@ -372,8 +366,6 @@ TEST_F(SanitizedGatherTest, UnsanitizedListOfUnsanitizedStrings)
 // Struct<List<T>>.
 TEST_F(SanitizedGatherTest, StructOfList)
 {
-  using T = int32_t;
-
   auto const structs_input =
     [] {
       auto child = LCW<T>{{{{1, 2, 3, 4}, null_at(2)},

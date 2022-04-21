@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "rmm/cuda_stream_view.hpp"
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
@@ -53,6 +52,7 @@ bool has_dirty_rows(cudf::column_view const& input, rmm::cuda_stream_view stream
   return thrust::any_of(rmm::exec_policy(stream), row_begin, row_end, is_dirty_row);
 }
 
+/// Check if any child columns of the `input` need sanitizing.
 bool has_dirty_children(cudf::column_view const& input, rmm::cuda_stream_view stream)
 {
   return std::any_of(input.child_begin(), input.child_end(), [stream](auto const& child) {
