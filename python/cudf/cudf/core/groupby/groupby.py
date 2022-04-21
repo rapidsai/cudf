@@ -1,9 +1,9 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import collections
 import itertools
 import pickle
 import warnings
+from collections import abc
 from functools import cached_property
 from typing import Any, Iterable, List, Tuple, Union
 
@@ -1129,16 +1129,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             for i in range(0, len(cols_list), num_cols)
         ]
 
-        def combine_columns(gb_cov_corr, ys):
-            list_of_columns = [gb_cov_corr._data[y] for y in ys]
-            frame = cudf.core.frame.Frame._from_columns(list_of_columns, ys)
-            return interleave_columns(frame)
-
         # interleave: combines the correlation or covariance results for each
         # column-pair into a single column
         res = cudf.DataFrame._from_data(
             {
-                x: combine_columns(gb_cov_corr, ys)
+                x: interleave_columns([gb_cov_corr._data[y] for y in ys])
                 for ys, x in zip(cols_split, column_names)
             }
         )
@@ -1662,7 +1657,7 @@ class _Grouping(Serializable):
                     self._handle_series(by)
                 elif isinstance(by, cudf.BaseIndex):
                     self._handle_index(by)
-                elif isinstance(by, collections.abc.Mapping):
+                elif isinstance(by, abc.Mapping):
                     self._handle_mapping(by)
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
@@ -1781,7 +1776,7 @@ def _is_multi_agg(aggs):
     Returns True if more than one aggregation is performed
     on any of the columns as specified in `aggs`.
     """
-    if isinstance(aggs, collections.abc.Mapping):
+    if isinstance(aggs, abc.Mapping):
         return any(is_list_like(agg) for agg in aggs.values())
     if is_list_like(aggs):
         return True

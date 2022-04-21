@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pickle
-from collections.abc import MutableSequence
+from collections import abc
 from functools import cached_property
 from typing import (
     TYPE_CHECKING,
@@ -1379,7 +1379,9 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     @staticmethod
-    def _concat(objs: MutableSequence[CategoricalColumn]) -> CategoricalColumn:
+    def _concat(
+        objs: abc.MutableSequence[CategoricalColumn],
+    ) -> CategoricalColumn:
         # TODO: This function currently assumes it is being called from
         # column.concat_columns, at least to the extent that all the
         # preprocessing in that function has already been done. That should be

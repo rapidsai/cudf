@@ -65,6 +65,7 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_us,
 )
 from cudf._lib.utils cimport (
+    columns_from_table_view,
     data_from_table_view,
     table_view_from_columns,
     table_view_from_table,
@@ -361,8 +362,8 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
             names=columns
         )
 
-    data, _ = from_arrow(pyarrow_table, column_names=columns)
-    cdef table_view struct_view = table_view_from_columns(data.values())
+    data = from_arrow(pyarrow_table)
+    cdef table_view struct_view = table_view_from_columns(data)
 
     s.reset(
         new struct_scalar(struct_view, valid)
@@ -373,18 +374,10 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
         return cudf.NA
 
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
-    columns = [str(i) for i in range(struct_table_view.num_columns())]
+    column_names = [str(i) for i in range(struct_table_view.num_columns())]
 
-    data, _ = data_from_table_view(
-        struct_table_view,
-        None,
-        column_names=columns
-    )
-    to_arrow_table = cudf.core.frame.Frame(
-        cudf.core.column_accessor.ColumnAccessor(data)
-    )
-
-    python_dict = to_arrow(to_arrow_table, columns).to_pydict()
+    columns = columns_from_table_view(struct_table_view, None)
+    python_dict = to_arrow(columns, column_names).to_pydict()
 
     return {k: _nested_na_replace(python_dict[k])[0] for k in python_dict}
 
@@ -415,9 +408,8 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s):
 
     cdef column_view list_col_view = (<list_scalar*>s.get()).view()
     cdef Column list_col = Column.from_column_view(list_col_view, None)
-    to_arrow_table = cudf.core.frame.Frame({"col": list_col})
 
-    arrow_table = to_arrow(to_arrow_table, [["col", []]])
+    arrow_table = to_arrow([list_col], [["col", []]])
     result = arrow_table['col'].to_pylist()
     return _nested_na_replace(result)
 
