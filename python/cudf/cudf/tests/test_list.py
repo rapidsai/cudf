@@ -501,12 +501,34 @@ def test_index(data, search_key, expect):
         ),
     ],
 )
-def test_index_invalid(data, search_key):
+def test_index_invalid_type(data, search_key):
     sr = cudf.Series(data)
     with pytest.raises(
         TypeError,
         match="Type/Scale of search key does not "
         "match list column element type.",
+    ):
+        sr.list.index(search_key)
+
+
+@pytest.mark.parametrize(
+    "data, search_key",
+    [
+        (
+            [[5, 8], [2, 6]],
+            [8, 2, 4],
+        ),
+        (
+            [["h", "j"], ["p", None], ["t", "z"]],
+            ["j", "a"],
+        ),
+    ],
+)
+def test_index_invalid_length(data, search_key):
+    sr = cudf.Series(data)
+    with pytest.raises(
+        RuntimeError,
+        match="Number of search keys must match list column size.",
     ):
         sr.list.index(search_key)
 

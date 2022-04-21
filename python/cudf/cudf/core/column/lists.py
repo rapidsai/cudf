@@ -456,13 +456,15 @@ class ListMethods(ColumnMethods):
 
     def index(self, search_key: Union[ScalarLike, ColumnLike]) -> ParentType:
         """
-        Return integers representing the index of the search key for each row.
+        Returns integers representing the index of the search key for each row.
+
         If ``search_key`` is a sequence, it must be the same length as the
         Series and ``search_key[i]`` represents the search key for the
         ``i``-th row of the Series.
 
-        If the search key is not contained in a row, return -1.
-        If either the row or the search key are null, return <NA>.
+        If the search key is not contained in a row, -1 is returned. If either
+        the row or the search key are null, <NA> is returned. If the search key
+        is contained multiple times, the smallest matching index is returned.
 
         Parameters
         ----------
@@ -495,15 +497,20 @@ class ListMethods(ColumnMethods):
         1    <NA>
         2       1
         dtype: int32
+
+        Notes
+        -----
+        ``index`` only supports list search operations on numeric types,
+        decimals, chrono types, and strings.
         """
 
         try:
             if is_scalar(search_key):
-                res = self._return_or_inplace(
+                return self._return_or_inplace(
                     index_of_scalar(self._column, cudf.Scalar(search_key))
                 )
             else:
-                res = self._return_or_inplace(
+                return self._return_or_inplace(
                     index_of_column(self._column, as_column(search_key))
                 )
 
@@ -514,7 +521,6 @@ class ListMethods(ColumnMethods):
             ):
                 raise TypeError(str(e)) from e
             raise
-        return res
 
     @property
     def leaves(self) -> ParentType:
