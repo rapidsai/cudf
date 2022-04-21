@@ -939,9 +939,76 @@ std::unique_ptr<table> sample(
   int64_t const seed                  = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-bool needs_sanitize(column_view const& input);
+/**
+ * @brief (Thoroughly) Checks whether a column or its descendants have null rows 
+ * that are not also empty.
+ * 
+ * @note This function is potentially expensive. The offsets values of the specified column
+ * and all its children/descendants will be examined for empty rows, for all its null rows.
+ *
+ * A LIST or STRING column might have non-empty rows that are marked as null.
+ * A STRUCT OR LIST column might have child columns that have non-empty null rows.
+ * Other types of columns are deemed incapable of having non-empty null rows.
+ * E.g. Fixed width columns have no concept of an "empty" row. 
+ *
+ * @param input The column which is (and whose descendants are) to be checked for
+ * non-empty null rows.
+ * @return true If either the column or its descendants have non-empty null rows.
+ * @return false If neither the column or its descendants have non-empty null rows.
+ */
+bool has_nonempty_nulls(column_view const& input);
 
-std::unique_ptr<column> sanitize(
+/**
+ * @brief Checks whether a column or its descendants might potentially have null rows 
+ * that are not also empty
+ *
+ * @note This function is a fast check, and is not thorough. It only checks whether
+ * the columns have null rows, and not whether the null rows are empty.
+ * 
+ * A return value of `false` implies that the column and its descendants are guaranteed
+ * not to have null rows that are not also empty.
+ * If `true` is returned, it only implies the potential for null rows to be non-empty.
+ * 
+ * @param input The column which is (and whose descendants are) to be checked for
+ * non-empty null rows
+ * @return true If either the column or its decendants have null rows
+ * @return false If neither the column nor its descendants have null rows
+ */
+bool may_have_nonempty_nulls(column_view const& input);
+
+/**
+ * @brief Purges contents of all non-empty null rows in a column, and its descendants.
+ *
+ * LIST and STRING columns might have null rows that are not also empty.
+ * For example:
+ * @code{.pseudo}
+ *
+ * auto const lists   = lists_column_wrapper<int32_t>{ {0,1}, {2,3}, {4,5} };
+ * auto const structs = structs_column_wrapper{ {lists}, null_at(1) };
+ *
+ * structs[1].child is now null, but the lists column still stores `{2,3}`.
+ * The lists column contents will be:
+ *   Validity: 101
+ *   Offsets:  [0, 2, 4, 6]
+ *   Child:    [0, 1, 2, 3, 4, 5]
+ *
+ * After purging the contents of the list's null rows, the column's contents
+ * will be:
+ *   Validity: 101
+ *   Offsets:  [0, 2, 2, 4]
+ *   Child:    [0, 1, 4, 5]
+ * @endcode
+ *
+ * The purge operation only applies directly to LIST and STRING columns, but it
+ * applies indirectly to STRUCT columns as well, since LIST and STRUCT columns
+ * may have child/decendant columns that are LIST or STRING.
+ * 
+ * @param input The column whose null rows are to be checked and purged
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return std::unique_ptr<column> Column with equivalent contents to `input`, but with
+ * the contents of null rows purged
+ */
+std::unique_ptr<column> purge_nonempty_nulls(
   column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

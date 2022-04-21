@@ -301,19 +301,27 @@ std::unique_ptr<scalar> get_element(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::needs_sanitize
+ * @copydoc cudf::has_nonempty_nulls
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-bool needs_sanitize(column_view const& input,
-                    rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+bool has_nonempty_nulls(column_view const& input,
+                        rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
- * @copydoc cudf::sanitize
+ * @copydoc cudf::may_have_nonempty_nulls
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> sanitize(
+bool may_have_nonempty_nulls(column_view const& input,
+                             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
+/**
+ * @copydoc cudf::purge_nonempty_nulls
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> purge_nonempty_nulls(
   column_view const& input,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

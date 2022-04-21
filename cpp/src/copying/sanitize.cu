@@ -26,10 +26,10 @@ using cudf::type_id;
 
 namespace {
 
-/// Check if sanitize checks can be skipped for a given type.
-bool cannot_need_sanitize(cudf::type_id const& type)
+/// Check if nonempty-null checks can be skipped for a given type.
+bool may_have_nonempty_nulls(cudf::type_id const& type)
 {
-  return type != type_id::STRING && type != type_id::LIST && type != type_id::STRUCT;
+  return type == type_id::STRING || type == type_id::LIST || type == type_id::STRUCT;
 }
 
 /// Check if the (STRING/LIST) column has any null rows with non-zero length.
@@ -56,20 +56,20 @@ bool has_dirty_rows(cudf::column_view const& input, rmm::cuda_stream_view stream
 bool has_dirty_children(cudf::column_view const& input, rmm::cuda_stream_view stream)
 {
   return std::any_of(input.child_begin(), input.child_end(), [stream](auto const& child) {
-    return cudf::detail::needs_sanitize(child, stream);
+    return cudf::detail::has_nonempty_nulls(child, stream);
   });
 }
 
 }  // namespace
 
 /**
- * @copydoc cudf::detail::needs_sanitize
+ * @copydoc cudf::detail::has_nonempty_nulls
  */
-bool needs_sanitize(cudf::column_view const& input, rmm::cuda_stream_view stream)
+bool has_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view stream)
 {
   auto const type = input.type().id();
 
-  if (cannot_need_sanitize(type)) { return false; }
+  if (not may_have_nonempty_nulls(type)) { return false; }
 
   // For types with variable-length rows, check if any rows are "dirty".
   // A dirty row is a null row with non-zero length.
@@ -77,7 +77,7 @@ bool needs_sanitize(cudf::column_view const& input, rmm::cuda_stream_view stream
     return true;
   }
 
-  // For complex types, check if child columns need sanitization.
+  // For complex types, check if child columns need purging.
   if ((type == type_id::STRUCT || type == type_id::LIST) && has_dirty_children(input, stream)) {
     return true;
   }
@@ -86,11 +86,11 @@ bool needs_sanitize(cudf::column_view const& input, rmm::cuda_stream_view stream
 }
 
 /**
- * @copydoc cudf::detail::sanitize
+ * @copydoc cudf::detail::purge_nonempty_nulls
  */
-std::unique_ptr<cudf::column> sanitize(column_view const& input,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> purge_nonempty_nulls(column_view const& input,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   // Implement via identity gather.
   auto const gather_begin = thrust::make_counting_iterator<cudf::size_type>(0);
@@ -104,17 +104,17 @@ std::unique_ptr<cudf::column> sanitize(column_view const& input,
 }  // namespace detail
 
 /**
- * @copydoc cudf::needs_sanitize
+ * @copydoc cudf::has_nonempty_nulls
  */
-bool needs_sanitize(column_view const& input) { return detail::needs_sanitize(input); }
+bool has_nonempty_nulls(column_view const& input) { return detail::has_nonempty_nulls(input); }
 
 /**
- * @copydoc cudf::sanitize
+ * @copydoc cudf::purge_nonempty_nulls
  */
-std::unique_ptr<cudf::column> sanitize(column_view const& input,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> purge_nonempty_nulls(column_view const& input,
+                                                   rmm::mr::device_memory_resource* mr)
 {
-  return detail::sanitize(input, rmm::cuda_stream_default, mr);
+  return detail::purge_nonempty_nulls(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

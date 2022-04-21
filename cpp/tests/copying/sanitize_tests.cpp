@@ -55,9 +55,9 @@ struct SanitizedGatherTest : public cudf::test::BaseFixture {
   /// except that the null rows are also empty.
   void test_sanitize(cudf::column_view const& unsanitized)
   {
-    auto const sanitized = cudf::sanitize(unsanitized);
+    auto const sanitized = cudf::purge_nonempty_nulls(unsanitized);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(unsanitized, *sanitized);
-    EXPECT_FALSE(cudf::needs_sanitize(*sanitized));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*sanitized));
   }
 };
 
@@ -70,11 +70,11 @@ TEST_F(SanitizedGatherTest, SingleLevelList)
                              {8, 9, 10}},
                             no_nulls()}
                        .release();
-  EXPECT_FALSE(cudf::needs_sanitize(*input));
+  EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(input->mutable_view().null_mask(), 2, 3, false);
-  EXPECT_TRUE(cudf::needs_sanitize(*input));
+  EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
   test_sanitize(*input);
 
@@ -93,7 +93,7 @@ TEST_F(SanitizedGatherTest, SingleLevelList)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_list_view.offsets(), offsets_col_t{0, 1, 1, 5, 8});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_list_view.child(),
                                    values_col_t{{5, 1, 2, 3, 4, 8, 9, 10}, null_at(3)});
-    EXPECT_FALSE(cudf::needs_sanitize(*results));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*results));
   }
   {
     // Test when gather selects rows preceded by unsanitized rows.
@@ -105,7 +105,7 @@ TEST_F(SanitizedGatherTest, SingleLevelList)
                                  },
                                  null_at(1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
-    EXPECT_FALSE(cudf::needs_sanitize(*results));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*results));
   }
   {
     // Test when gather selects rows followed by unsanitized rows.
@@ -117,7 +117,7 @@ TEST_F(SanitizedGatherTest, SingleLevelList)
                                  },
                                  null_at(1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
-    EXPECT_FALSE(cudf::needs_sanitize(*results));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*results));
   }
   {
     // Test when gather selects unsanitized row specifically.
@@ -130,7 +130,7 @@ TEST_F(SanitizedGatherTest, SingleLevelList)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.offsets(), offsets_col_t{0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_lists_view.child(), values_col_t{});
-    EXPECT_FALSE(cudf::needs_sanitize(*results));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*results));
   }
 }
 
@@ -146,11 +146,11 @@ TEST_F(SanitizedGatherTest, TwoLevelList)
        {{41}, {42, 43}}},
       no_nulls()}
       .release();
-  EXPECT_FALSE(cudf::needs_sanitize(*input));
+  EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(input->mutable_view().null_mask(), 3, 4, false);
-  EXPECT_TRUE(cudf::needs_sanitize(*input));
+  EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
   test_sanitize(*input);
 
@@ -180,7 +180,7 @@ TEST_F(SanitizedGatherTest, TwoLevelList)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(
       child_lists_view.child(),
       values_col_t{1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 11, 12, 13, 14, 15, 16, 17, 18, 19});
-    EXPECT_FALSE(cudf::needs_sanitize(*results));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*results));
   }
 }
 
@@ -197,11 +197,11 @@ TEST_F(SanitizedGatherTest, ThreeLevelList)
                              {{{41, 41, 41}}, {{42, 43}}}},
                             no_nulls()}
                        .release();
-  EXPECT_FALSE(cudf::needs_sanitize(*input));
+  EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(input->mutable_view().null_mask(), 3, 4, false);
-  EXPECT_TRUE(cudf::needs_sanitize(*input));
+  EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
   test_sanitize(*input);
 
@@ -230,7 +230,7 @@ TEST_F(SanitizedGatherTest, ThreeLevelList)
                                           {{13}, {14, 15}},
                                           {{16, 17, 18}},
                                           {{19, 19}, {}}});
-    EXPECT_FALSE(cudf::needs_sanitize(*results));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*results));
   }
 }
 
@@ -247,11 +247,11 @@ TEST_F(SanitizedGatherTest, ListOfStrings)
                              {"55", "66", "77", "88"}},
                             no_nulls()}
                        .release();
-  EXPECT_FALSE(cudf::needs_sanitize(*input));
+  EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
   cudf::detail::set_null_mask(input->mutable_view().null_mask(), 2, 3, false);
-  EXPECT_TRUE(cudf::needs_sanitize(*input));
+  EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
   test_sanitize(*input);
 
@@ -272,12 +272,12 @@ TEST_F(SanitizedGatherTest, ListOfStrings)
       results_list_view.child(),
       strings_column_wrapper{
         {"55555", "1", "22", "", "4444", "88888888", "999999999", "1010101010"}, null_at(3)});
-    EXPECT_FALSE(cudf::needs_sanitize(*results));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*results));
   }
   {
     // Gathering from a sliced column.
     auto const sliced = cudf::slice({input->view()}, {1, 5})[0];  // Lop off 1 row at each end.
-    EXPECT_TRUE(cudf::needs_sanitize(sliced));
+    EXPECT_TRUE(cudf::has_nonempty_nulls(sliced));
 
     auto const results           = gather(sliced, {1, 2, 0, 3});
     auto const results_list_view = lists_column_view(*results);
@@ -294,7 +294,7 @@ TEST_F(SanitizedGatherTest, ListOfStrings)
       results_list_view.child(),
       strings_column_wrapper{
         "88888888", "999999999", "1010101010", "55555", "11", "22", "33", "44"});
-    EXPECT_FALSE(cudf::needs_sanitize(*results));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*results));
   }
 }
 
@@ -307,11 +307,11 @@ TEST_F(SanitizedGatherTest, UnsanitizedListOfUnsanitizedStrings)
                                                                     // unsanitized.
       no_nulls()}
       .release();
-  EXPECT_FALSE(cudf::needs_sanitize(*strings));
+  EXPECT_FALSE(cudf::has_nonempty_nulls(*strings));
 
   // Set strings nullmask, post construction.
   set_null_mask(strings->mutable_view().null_mask(), 7, 8, false);
-  EXPECT_TRUE(cudf::needs_sanitize(*strings));
+  EXPECT_TRUE(cudf::has_nonempty_nulls(*strings));
 
   test_sanitize(*strings);
 
@@ -326,11 +326,11 @@ TEST_F(SanitizedGatherTest, UnsanitizedListOfUnsanitizedStrings)
                                        std::move(strings),
                                        0,
                                        detail::make_null_mask(no_nulls(), no_nulls() + 4));
-  EXPECT_TRUE(cudf::needs_sanitize(*lists));
+  EXPECT_TRUE(cudf::has_nonempty_nulls(*lists));
 
   // Set lists nullmask, post construction.
   cudf::detail::set_null_mask(lists->mutable_view().null_mask(), 2, 3, false);
-  EXPECT_TRUE(cudf::needs_sanitize(*lists));
+  EXPECT_TRUE(cudf::has_nonempty_nulls(*lists));
 
   test_sanitize(*lists);
 
@@ -360,7 +360,7 @@ TEST_F(SanitizedGatherTest, UnsanitizedListOfUnsanitizedStrings)
   auto const child_strings_view = strings_column_view(results_lists_view.child());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(child_strings_view.offsets(),
                                  offsets_col_t{0, 1, 2, 4, 5, 7, 7, 8, 12});
-  EXPECT_FALSE(cudf::needs_sanitize(*result));
+  EXPECT_FALSE(cudf::has_nonempty_nulls(*result));
 }
 
 // Struct<List<T>>.
@@ -373,12 +373,12 @@ TEST_F(SanitizedGatherTest, StructOfList)
                            {6, 7},  //<--- Unsanitized row.
                            {8, 9, 10}},
                           no_nulls()};
-      EXPECT_FALSE(cudf::needs_sanitize(child));
+      EXPECT_FALSE(cudf::has_nonempty_nulls(child));
       return structs_column_wrapper{{child}, null_at(2)};
     }()
       .release();
 
-  EXPECT_TRUE(cudf::needs_sanitize(*structs_input));
+  EXPECT_TRUE(cudf::has_nonempty_nulls(*structs_input));
 
   test_sanitize(*structs_input);
 
@@ -405,7 +405,7 @@ TEST_F(SanitizedGatherTest, StructOfList)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_child.offsets(), offsets_col_t{0, 1, 1, 5, 8});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_child.child(),
                                    values_col_t{{5, 1, 2, 3, 4, 8, 9, 10}, null_at(3)});
-    EXPECT_FALSE(cudf::needs_sanitize(*result));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*result));
   }
 }
 
