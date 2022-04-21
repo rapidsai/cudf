@@ -1211,7 +1211,6 @@ rmm::device_buffer reader::impl::decompress_page_data(
           break;
         default: CUDF_FAIL("Unexpected decompression dispatch"); break;
       }
-      // CUDF_CUDA_TRY(cudaDeviceSynchronize());
       CUDF_CUDA_TRY(cudaMemcpyAsync(inflate_out.host_ptr(start_pos),
                                     inflate_out.device_ptr(start_pos),
                                     sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
