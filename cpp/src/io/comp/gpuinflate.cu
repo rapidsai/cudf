@@ -124,8 +124,8 @@ struct inflate_state_s {
   uint8_t* outbase;  ///< start of output buffer
   uint8_t* outend;   ///< end of output buffer
   // Input state
-  uint8_t* cur;  ///< input buffer
-  uint8_t* end;  ///< end of input buffer
+  uint8_t const * cur;  ///< input buffer
+  uint8_t const * end;  ///< end of input buffer
 
   uint2 bitbuf;     ///< bit buffer (64-bit)
   uint32_t bitpos;  ///< position in bit buffer
@@ -180,9 +180,9 @@ inline __device__ void skipbits(inflate_state_s* s, uint32_t n)
 {
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
-    uint8_t* cur = s->cur + 8;
+    auto* cur = s->cur + 8;
     s->bitbuf.x  = s->bitbuf.y;
-    s->bitbuf.y  = (cur < s->end) ? *reinterpret_cast<uint32_t*>(cur) : 0;
+    s->bitbuf.y  = (cur < s->end) ? *reinterpret_cast<uint32_t const*>(cur) : 0;
     s->cur       = cur - 4;
     bitpos &= 0x1f;
   }
@@ -510,8 +510,8 @@ __device__ void decode_symbols(inflate_state_s* s)
 {
   uint32_t bitpos = s->bitpos;
   uint2 bitbuf    = s->bitbuf;
-  uint8_t* cur    = s->cur;
-  uint8_t* end    = s->end;
+  auto* cur    = s->cur;
+  auto* end    = s->end;
   int32_t batch   = 0;
   int32_t sym, batch_len;
 
@@ -871,13 +871,11 @@ __device__ int init_stored(inflate_state_s* s)
 /// Copy bytes from stored block to destination
 __device__ void copy_stored(inflate_state_s* s, int t)
 {
-  int len         = s->stored_blk_len;
-  uint8_t* cur    = s->cur + (s->bitpos >> 3);
-  uint8_t* out    = s->out;
-  uint8_t* outend = s->outend;
-  uint8_t* cur4;
-  int slow_bytes = min(len, (int)((16 - (size_t)out) & 0xf));
-  int fast_bytes, bitpos;
+  auto len         = s->stored_blk_len;
+  auto cur    = s->cur + (s->bitpos >> 3);
+  auto out    = s->out;
+  auto outend = s->outend;
+  auto const slow_bytes = min(len, (int)((16 - (size_t)out) & 0xf));
 
   // Slow copy until output is 16B aligned
   if (slow_bytes) {
@@ -890,11 +888,11 @@ __device__ void copy_stored(inflate_state_s* s, int t)
     out += slow_bytes;
     len -= slow_bytes;
   }
-  fast_bytes = len;
+  auto fast_bytes = len;
   if (out < outend) { fast_bytes = (int)min((size_t)fast_bytes, (outend - out)); }
   fast_bytes &= ~0xf;
-  bitpos = ((int)(3 & (size_t)cur)) << 3;
-  cur4   = cur - (bitpos >> 3);
+  auto bitpos = ((int)(3 & (size_t)cur)) << 3;
+  auto cur4   = cur - (bitpos >> 3);
   if (out < outend) {
     // Fast copy 16 bytes at a time
     for (int i = t * 16; i < fast_bytes; i += blockDim.x * 16) {
@@ -926,13 +924,13 @@ __device__ void copy_stored(inflate_state_s* s, int t)
   __syncthreads();
   if (t == 0) {
     // Reset bitstream to end of block
-    uint8_t* p        = cur + len;
+    auto p        = cur + len;
     auto prefix_bytes = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     s->cur      = p;
-    s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
+    s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
     p += 4;
-    s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
+    s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
     s->bitpos   = prefix_bytes * 8;
     s->out      = out;
   }
@@ -1035,7 +1033,7 @@ __global__ void __launch_bounds__(block_size)
   inflate_state_s* state = &state_g;
 
   if (!t) {
-    auto* p         = const_cast<uint8_t*>(static_cast<uint8_t const*>(inputs[z].srcDevice));
+    auto p         = static_cast<uint8_t const*>(inputs[z].srcDevice);
     size_t src_size = inputs[z].srcSize;
     uint32_t prefix_bytes;
     // Parse header if needed
@@ -1051,16 +1049,16 @@ __global__ void __launch_bounds__(block_size)
       }
     }
     // Initialize shared state
-    state->out     = const_cast<uint8_t*>(static_cast<uint8_t const*>(inputs[z].dstDevice));
+    state->out     = static_cast<uint8_t *>(inputs[z].dstDevice);
     state->outbase = state->out;
     state->outend  = state->out + inputs[z].dstSize;
     state->end     = p + src_size;
     prefix_bytes   = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     state->cur      = p;
-    state->bitbuf.x = (p < state->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
+    state->bitbuf.x = (p < state->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
     p += 4;
-    state->bitbuf.y = (p < state->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
+    state->bitbuf.y = (p < state->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
     state->bitpos   = prefix_bytes * 8;
   }
   __syncthreads();
