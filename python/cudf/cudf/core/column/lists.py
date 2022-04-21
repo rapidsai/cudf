@@ -455,6 +455,47 @@ class ListMethods(ColumnMethods):
         return res
 
     def index(self, search_key: Union[ScalarLike, ColumnLike]) -> ParentType:
+        """
+        Return integers representing the index of the search key for each row.
+        If ``search_key`` is a sequence, it must be the same length as the
+        Series and ``search_key[i]`` represents the search key for the
+        ``i``-th row of the Series.
+
+        If the search key is not contained in a row, return -1.
+        If either the row or the search key are null, return <NA>.
+
+        Parameters
+        ----------
+        search_key : scalar or sequence of scalars
+            Element or elements being searched for in each row of the list
+            column
+
+        Returns
+        -------
+        Series or Index
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.index(4)
+        0   -1
+        1    1
+        2    0
+        dtype: int32
+
+        >>> s = cudf.Series([["a", "b", "c"], ["x", "y", "z"]])
+        >>> s.list.index(["b", "z"])
+        0    1
+        1    2
+        dtype: int32
+
+        >>> s = cudf.Series([[4, 5, 6], None, [-3, -2, -1]])
+        >>> s.list.index([None, 3, -2])
+        0    <NA>
+        1    <NA>
+        2       1
+        dtype: int32
+        """
 
         try:
             if is_scalar(search_key):
