@@ -736,7 +736,11 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
         {
             "col_"
             + str(dtype): gen_rand_series(
-                dtype, int(nrows / 2), has_nulls=True, low=0, high=max_char_length
+                dtype,
+                int(nrows / 2),
+                has_nulls=True,
+                low=0,
+                high=max_char_length,
             )
             for dtype in supported_stat_types
         }
@@ -748,7 +752,11 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
         {
             "col_"
             + str(dtype): gen_rand_series(
-                dtype, int(nrows / 2), has_nulls=True, low=0, high=max_char_length
+                dtype,
+                int(nrows / 2),
+                has_nulls=True,
+                low=0,
+                high=max_char_length,
             )
             for dtype in supported_stat_types
         }
