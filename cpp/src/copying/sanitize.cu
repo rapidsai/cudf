@@ -33,7 +33,7 @@ bool may_have_nonempty_nulls(cudf::type_id const& type)
 }
 
 /// Check if the (STRING/LIST) column has any null rows with non-zero length.
-bool has_dirty_rows(cudf::column_view const& input, rmm::cuda_stream_view stream)
+bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_view stream)
 {
   if (not input.nullable()) { return false; }  // No nulls => no dirty rows.
 
@@ -53,7 +53,7 @@ bool has_dirty_rows(cudf::column_view const& input, rmm::cuda_stream_view stream
 }
 
 /// Check if any child columns of the `input` need sanitizing.
-bool has_dirty_children(cudf::column_view const& input, rmm::cuda_stream_view stream)
+bool children_have_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view stream)
 {
   return std::any_of(input.child_begin(), input.child_end(), [stream](auto const& child) {
     return cudf::detail::has_nonempty_nulls(child, stream);
@@ -73,12 +73,13 @@ bool has_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view st
 
   // For types with variable-length rows, check if any rows are "dirty".
   // A dirty row is a null row with non-zero length.
-  if ((type == type_id::STRING || type == type_id::LIST) && has_dirty_rows(input, stream)) {
+  if ((type == type_id::STRING || type == type_id::LIST) && has_nonempty_null_rows(input, stream)) {
     return true;
   }
 
   // For complex types, check if child columns need purging.
-  if ((type == type_id::STRUCT || type == type_id::LIST) && has_dirty_children(input, stream)) {
+  if ((type == type_id::STRUCT || type == type_id::LIST) &&
+      children_have_nonempty_nulls(input, stream)) {
     return true;
   }
 
