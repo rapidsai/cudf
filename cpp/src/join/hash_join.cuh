@@ -234,7 +234,7 @@ struct hash_join::hash_join_impl {
                              rmm::mr::device_memory_resource* mr) const;
 
  private:
-  cudf::detail::hash_join_impl_type _impl;
+  const std::unique_ptr<const cudf::detail::hash_join_impl_type> _impl;
 };
 
 }  // namespace cudf
