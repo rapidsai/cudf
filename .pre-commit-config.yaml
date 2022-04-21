@@ -56,6 +56,16 @@ repos:
         hooks:
               - id: pydocstyle
                 args: ["--config=python/.flake8"]
+                exclude: |
+                    (?x)^(
+                    ci|
+                    cpp|
+                    python/dask_cudf|
+                    python/cudf_kafka|
+                    python/custreamz|
+                    python/cudf/cudf/tests
+                    )
+
       - repo: local
         hooks:
               - id: clang-format
