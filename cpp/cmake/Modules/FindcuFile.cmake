@@ -81,7 +81,7 @@ find_package_handle_standard_args(
 )
 
 if(cuFile_INCLUDE_DIR AND NOT TARGET cuFile::cuFile_interface)
-  add_library(cuFile::cuFile_interface IMPORTED INTERFACE)
+  add_library(cuFile::cuFile_interface IMPORTED GLOBAL INTERFACE)
   target_include_directories(
     cuFile::cuFile_interface INTERFACE "$<BUILD_INTERFACE:${cuFile_INCLUDE_DIR}>"
   )
@@ -90,7 +90,7 @@ if(cuFile_INCLUDE_DIR AND NOT TARGET cuFile::cuFile_interface)
 endif()
 
 if(cuFile_FOUND AND NOT TARGET cuFile::cuFile)
-  add_library(cuFile::cuFile UNKNOWN IMPORTED)
+  add_library(cuFile::cuFile UNKNOWN GLOBAL IMPORTED)
   set_target_properties(
     cuFile::cuFile
     PROPERTIES IMPORTED_LOCATION "${cuFile_LIBRARY}"
@@ -100,7 +100,7 @@ if(cuFile_FOUND AND NOT TARGET cuFile::cuFile)
 endif()
 
 if(cuFile_FOUND AND NOT TARGET cuFile::cuFileRDMA)
-  add_library(cuFile::cuFileRDMA UNKNOWN IMPORTED)
+  add_library(cuFile::cuFileRDMA UNKNOWN GLOBAL IMPORTED)
   set_target_properties(
     cuFile::cuFileRDMA
     PROPERTIES IMPORTED_LOCATION "${cuFileRDMA_LIBRARY}"
