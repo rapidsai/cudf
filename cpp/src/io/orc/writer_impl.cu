@@ -1279,15 +1279,14 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
     offset += stripes_per_col;
   }
 
-  if (single_write_mode) {
-    std::vector<statistics_merge_group> file_stats_merge(num_file_blobs);
-    for (auto i = 0u; i < num_file_blobs; ++i) {
-      auto col_stats         = &file_stats_merge[i];
-      col_stats->col_dtype   = per_chunk_stats.col_types[i];
-      col_stats->stats_dtype = per_chunk_stats.stats_dtypes[i];
-      col_stats->start_chunk = static_cast<uint32_t>(i * num_stripes);
-      col_stats->num_chunks  = static_cast<uint32_t>(num_stripes);
-    }
+  std::vector<statistics_merge_group> file_stats_merge(num_file_blobs);
+  for (auto i = 0u; i < num_file_blobs; ++i) {
+    auto col_stats         = &file_stats_merge[i];
+    col_stats->col_dtype   = per_chunk_stats.col_types[i];
+    col_stats->stats_dtype = per_chunk_stats.stats_dtypes[i];
+    col_stats->start_chunk = static_cast<uint32_t>(i * num_stripes);
+    col_stats->num_chunks  = static_cast<uint32_t>(num_stripes);
+  }
 
   auto d_file_stats_merge = stats_merge.device_ptr(num_stripe_blobs);
   cudaMemcpyAsync(d_file_stats_merge,
