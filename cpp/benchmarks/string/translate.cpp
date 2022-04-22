@@ -16,18 +16,18 @@
 
 #include "string_bench_args.hpp"
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/translate.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <algorithm>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/translate.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+
+#include <algorithm>
 
 class StringTranslate : public cudf::benchmark {
 };

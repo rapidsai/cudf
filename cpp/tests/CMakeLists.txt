@@ -156,6 +156,7 @@ ConfigureTest(
   reductions/reduction_tests.cpp
   reductions/scan_tests.cpp
   reductions/segmented_reduction_tests.cpp
+  reductions/list_rank_test.cpp
   reductions/tdigest_tests.cu
 )
 

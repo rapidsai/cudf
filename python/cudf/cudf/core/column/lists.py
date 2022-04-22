@@ -113,9 +113,7 @@ class ListColumn(ColumnBase):
             return NotImplemented
         if isinstance(other.dtype, ListDtype):
             if op == "__add__":
-                return concatenate_rows(
-                    cudf.core.frame.Frame({0: self, 1: other})
-                )
+                return concatenate_rows([self, other])
             else:
                 raise NotImplementedError(
                     "Lists concatenation for this operation is not yet"
@@ -301,16 +299,31 @@ class ListColumn(ColumnBase):
         """
         Create a strings column from a list column
         """
-        # Convert the leaf child column to strings column
+        lc = self._transform_leaves(
+            lambda col, dtype: col.as_string_column(dtype), dtype
+        )
+
+        # Separator strings to match the Python format
+        separators = as_column([", ", "[", "]"])
+
+        # Call libcudf to format the list column
+        return format_list_column(lc, separators)
+
+    def _transform_leaves(self, func, *args, **kwargs):
+        # return a new list column with the same nested structure
+        # as ``self``, but with the leaf column transformed
+        # by applying ``func`` to it
+
         cc: List[ListColumn] = []
         c: ColumnBase = self
+
         while isinstance(c, ListColumn):
             cc.insert(0, c)
             c = c.children[1]
-        s = c.as_string_column(dtype)
+
+        lc = func(c, *args, **kwargs)
 
         # Rebuild the list column replacing just the leaf child
-        lc = s
         for c in cc:
             o = c.children[0]
             lc = cudf.core.column.ListColumn(  # type: ignore
@@ -321,12 +334,7 @@ class ListColumn(ColumnBase):
                 null_count=c.null_count,
                 children=(o, lc),
             )
-
-        # Separator strings to match the Python format
-        separators = as_column([", ", "[", "]"])
-
-        # Call libcudf to format the list column
-        return format_list_column(lc, separators)
+        return lc
 
 
 class ListMethods(ColumnMethods):
@@ -717,3 +725,31 @@ class ListMethods(ColumnMethods):
                     "of nesting"
                 )
         return self._return_or_inplace(result)
+
+    def astype(self, dtype):
+        """
+        Return a new list Series with the leaf values casted
+        to the specified data type.
+
+        Parameters
+        ----------
+        dtype: data type to cast leaves values to
+
+        Returns
+        -------
+        A new Series of lists
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2], [3, 4]])
+        >>> s.dtype
+        ListDtype(int64)
+        >>> s2 = s.list.astype("float64")
+        >>> s2.dtype
+        ListDtype(float64)
+        """
+        return self._return_or_inplace(
+            self._column._transform_leaves(
+                lambda col, dtype: col.astype(dtype), dtype
+            )
+        )
