@@ -497,11 +497,6 @@ class ListMethods(ColumnMethods):
         1    <NA>
         2       1
         dtype: int32
-
-        Notes
-        -----
-        ``index`` only supports list search operations on numeric types,
-        decimals, chrono types, and strings.
         """
 
         try:
