@@ -19,7 +19,9 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 
-#include "rmm/exec_policy.hpp"
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/scan.h>
 
 #include "ColumnViewJni.hpp"
 
