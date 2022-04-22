@@ -1,5 +1,4 @@
-Supported Data Types
-====================
+# Supported Data Types
 
 cuDF lets you store and operate on many different types of data on the
 GPU.  Each type of data is associated with a data type (or "dtype").
@@ -9,11 +8,13 @@ addition cuDF supports special data types for decimals and "nested
 types" (lists and structs).
 
 Unlike in Pandas, all data types in cuDF are nullable.
-See :doc:`Working With Missing Data </user_guide/Working-with-missing-data>`.
+See {doc}`Working With Missing Data </user_guide/Working-with-missing-data>`.
 
 
-.. rst-class:: special-table
+```{eval-rst}
 .. table::
+    .. class:: special-table
+
 
     +-----------------+----------------------------+--------------------------------------------------------------+----------------------------------------------+
     | Kind of Data    | Data Type                  | Scalar                                                       | String Aliases                               |
@@ -45,34 +46,33 @@ See :doc:`Working With Missing Data </user_guide/Working-with-missing-data>`.
     | Structs         |cudf.StructDtype(...)       | dict                                                         |(none)                                        |
     +-----------------+----------------------------+--------------------------------------------------------------+----------------------------------------------+
 
+```
 
-A note on strings
------------------
+## A note on strings
 
-The data type associated with string data in cuDF is ``"object"``.
+The data type associated with string data in cuDF is `"object"`.
 
-.. code:: python
-    >>> import cudf
-    >>> s = cudf.Series(["abc", "def", "ghi"])
-    >>> s.dtype
-    dtype("object")
+```python
+>>> import cudf 
+>>> s = cudf.Series(["abc", "def", "ghi"])
+>>> s.dtype dtype("object")
+```
 
 This is for compatibility with Pandas, but it can be misleading. In
-both NumPy and Pandas, ``"object"`` is the data type associated data
+both NumPy and Pandas, `"object"` is the data type associated data
 composed of arbitrary Python objects (not just strings).  However,
 cuDF does not support storing arbitrary Python objects.
 
-
-.. _np.int8:
-.. _np.int16:
-.. _np.int32:
-.. _np.int64:
-.. _np.uint8:
-.. _np.uint16:
-.. _np.uint32:
-.. _np.uint64:
-.. _np.float32:
-.. _np.float64:
-.. _np.bool: https://numpy.org/doc/stable/user/basics.types.html
-.. _np.datetime64: https://numpy.org/doc/stable/reference/arrays.datetime.html#basic-datetimes
-.. _np.timedelta64: https://numpy.org/doc/stable/reference/arrays.datetime.html#datetime-and-timedelta-arithmetic
+[np.bool]: https://numpy.org/doc/stable/user/basics.types.html
+[np.datetime64]: https://numpy.org/doc/stable/reference/arrays.datetime.html#basic-datetimes
+[np.float32]: https://numpy.org/doc/stable/user/basics.types.html
+[np.float64]: https://numpy.org/doc/stable/user/basics.types.html
+[np.int16]: https://numpy.org/doc/stable/user/basics.types.html
+[np.int32]: https://numpy.org/doc/stable/user/basics.types.html
+[np.int64]: https://numpy.org/doc/stable/user/basics.types.html
+[np.int8]: https://numpy.org/doc/stable/user/basics.types.html
+[np.timedelta64]: https://numpy.org/doc/stable/reference/arrays.datetime.html#datetime-and-timedelta-arithmetic
+[np.uint16]: https://numpy.org/doc/stable/user/basics.types.html
+[np.uint32]: https://numpy.org/doc/stable/user/basics.types.html
+[np.uint64]: https://numpy.org/doc/stable/user/basics.types.html
+[np.uint8]: https://numpy.org/doc/stable/user/basics.types.html

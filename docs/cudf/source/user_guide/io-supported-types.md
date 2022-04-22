@@ -1,10 +1,10 @@
-I/O Supported dtypes
-====================
+# I/O Supported dtypes
 
 The following table lists are compatible cudf types for each supported IO format.
 
-.. rst-class:: io-supported-types-table special-table
+```{eval-rst}
 .. table::
+    :class: io-supported-types-table special-table
     :widths: 15 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10
 
     +-----------------------+--------+--------+--------+--------+---------+--------+--------+--------+--------+-------------------+--------+--------+---------+---------+
@@ -64,7 +64,8 @@ The following table lists are compatible cudf types for each supported IO format
     +-----------------------+--------+--------+--------+--------+---------+--------+--------+--------+--------+---------+---------+--------+--------+---------+---------+
     | decimal128            | ✅     | ✅     | ✅     | ✅     | ❌      | ❌     | ✅     | ✅     | ❌     | ❌      | ❌      | ❌     | ❌     | ❌      | ❌      |
     +-----------------------+--------+--------+--------+--------+---------+--------+--------+--------+--------+---------+---------+--------+--------+---------+---------+
+```
 
 **Notes:**
 
-* [¹] - Not GPU-accelerated.
+- \[¹\] - Not GPU-accelerated.

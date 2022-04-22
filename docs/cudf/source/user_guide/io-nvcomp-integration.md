@@ -1,10 +1,9 @@
-nvCOMP Integration
-=============================
+# nvCOMP Integration
 
-Some types of compression/decompression can be performed using either the `nvCOMP library <https://github.com/NVIDIA/nvcomp>`_ or the internal implementation.
+Some types of compression/decompression can be performed using either the [nvCOMP library](https://github.com/NVIDIA/nvcomp) or the internal implementation.
 
 Which implementation is used by default depends on the data format and the compression type.
-Behavior can be influenced through environment variable ``LIBCUDF_NVCOMP_POLICY``.
+Behavior can be influenced through environment variable `LIBCUDF_NVCOMP_POLICY`.
 
 There are three valid values for the environment variable:
 
@@ -14,7 +13,7 @@ There are three valid values for the environment variable:
 
 If no value is set, behavior will be the same as the "STABLE" option.
 
-
+```{eval-rst}
 .. table:: Current policy for nvCOMP use for different types
     :widths: 20 15 15 15 15 15 15 15 15 15
 
@@ -25,3 +24,4 @@ If no value is set, behavior will be the same as the "STABLE" option.
     +=======================+========+========+========+========+=========+========+========+========+========+
     | snappy                | ❌     | ❌     | Stable | Stable | ❌      | ❌     | Stable | Stable | ❌     |
     +-----------------------+--------+--------+--------+--------+---------+--------+--------+--------+--------+
+```

@@ -50,7 +50,7 @@ extensions = [
     "myst_nb",
 ]
 
-jupyter_execute_notebooks = "force"
+jupyter_execute_notebooks = "off"
 execution_timeout = 300
 
 copybutton_prompt_text = ">>> "
