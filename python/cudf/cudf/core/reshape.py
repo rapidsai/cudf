@@ -830,7 +830,7 @@ def merge_sorted(
 
     return objs[0]._from_columns_like_self(
         cudf._lib.merge.merge_sorted(
-            list_of_columns=columns,
+            input_columns=columns,
             key_columns_indices=key_columns_indices,
             ascending=ascending,
             na_position=na_position,
