@@ -367,7 +367,12 @@ def test_apply_everything():
 
 
 @pytest.mark.parametrize(
-    "data", [cudf.Series([1, 2, 3]), cudf.Series([1, cudf.NA, 3])]
+    "data",
+    [
+        cudf.Series([1, 2, 3]),
+        cudf.Series([1, cudf.NA, 3]),
+        cudf.Series([1, 2, 3], name="test_name"),
+    ],
 )
 def test_series_apply_basic(data):
     def func(x):
