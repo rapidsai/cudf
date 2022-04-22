@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "rmm/cuda_stream_view.hpp"
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
@@ -87,6 +88,27 @@ bool has_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view st
 }
 
 /**
+ * @copydoc cudf::detail::may_have_nonempty_nulls
+ */
+bool may_have_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view stream)
+{
+  auto const type = input.type().id();
+
+  if (not may_have_nonempty_nulls(type)) { return false; }
+
+  if ((type == type_id::STRING || type == type_id::LIST) && input.has_nulls()) { return true; }
+
+  if ((type == type_id::STRUCT || type == type_id::LIST) &&
+      std::any_of(input.child_begin(), input.child_end(), [&](auto const& child) {
+        return may_have_nonempty_nulls(child, stream);
+      })) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * @copydoc cudf::detail::purge_nonempty_nulls
  */
 std::unique_ptr<cudf::column> purge_nonempty_nulls(column_view const& input,
@@ -101,8 +123,15 @@ std::unique_ptr<cudf::column> purge_nonempty_nulls(column_view const& input,
     table_view{{input}}, gather_begin, gather_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
   return std::move(gathered_table->release()[0]);
 }
-
 }  // namespace detail
+
+/**
+ * @copydoc cudf::may_have_nonempty_nulls
+ */
+bool may_have_nonempty_nulls(column_view const& input)
+{
+  return detail::may_have_nonempty_nulls(input);
+}
 
 /**
  * @copydoc cudf::has_nonempty_nulls
