@@ -21,8 +21,6 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/search.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -76,9 +74,12 @@ std::unique_ptr<column> search_bound(table_view const& t,
   auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
   auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  auto const& lhs     = find_lower_bound ? matched.second.front() : matched.second.back();
-  auto const& rhs     = find_lower_bound ? matched.second.back() : matched.second.front();
-  auto const comp     = cudf::experimental::row::lexicographic::table_comparator(
+
+  // todo: remove this when the new strong-typed comparator is in.
+  auto const& lhs = find_lower_bound ? matched.second.front() : matched.second.back();
+  auto const& rhs = find_lower_bound ? matched.second.back() : matched.second.front();
+
+  auto const comp = cudf::experimental::row::lexicographic::table_comparator(
     lhs, rhs, column_order, null_precedence, stream);
   auto const has_any_nulls = has_nested_nulls(t) or has_nested_nulls(values);
   auto const dcomp         = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
@@ -90,7 +91,6 @@ std::unique_ptr<column> search_bound(table_view const& t,
       thrust::upper_bound(std::forward<decltype(args)>(args)...);
     }
   };
-
   do_search(rmm::exec_policy(stream),
             count_it,
             count_it + t.num_rows(),
@@ -110,23 +110,26 @@ struct contains_scalar_dispatch {
 
     using Type       = device_storage_type_t<Element>;
     using ScalarType = cudf::scalar_type_t<Element>;
-    auto d_col       = column_device_view::create(col, stream);
-    auto s           = static_cast<const ScalarType*>(&value);
+    auto const d_col = column_device_view::create(col, stream);
+    auto const s     = static_cast<const ScalarType*>(&value);
+
+    auto const check_contain = [stream](auto const& begin, auto const& end, auto const& val) {
+      auto const found_it = thrust::find(rmm::exec_policy(stream), begin, end, val);
+      return found_it != end;
+    };
 
     if (col.has_nulls()) {
-      auto found_iter = thrust::find(rmm::exec_policy(stream),
-                                     d_col->pair_begin<Type, true>(),
-                                     d_col->pair_end<Type, true>(),
-                                     thrust::make_pair(s->value(stream), true));
+      auto const begin = d_col->pair_begin<Type, true>();
+      auto const end   = d_col->pair_end<Type, true>();
+      auto const val   = thrust::make_pair(s->value(stream), true);
 
-      return found_iter != d_col->pair_end<Type, true>();
+      return check_contain(begin, end, val);
     } else {
-      auto found_iter = thrust::find(rmm::exec_policy(stream),  //
-                                     d_col->begin<Type>(),
-                                     d_col->end<Type>(),
-                                     s->value(stream));
+      auto const begin = d_col->begin<Type>();
+      auto const end   = d_col->end<Type>();
+      auto const val   = s->value(stream);
 
-      return found_iter != d_col->end<Type>();
+      return check_contain(begin, end, val);
     }
   }
 };
