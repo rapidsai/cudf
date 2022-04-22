@@ -352,6 +352,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
             elif isinstance(value, (cupy.ndarray, np.ndarray)):
                 value_df = DataFrame(value)
+                if is_scalar(key[1]):
+                    for col in columns_df._column_names:
+                        self._frame[col].iloc[key[0]] = value
                 if value_df.shape[1] != columns_df.shape[1]:
                     if value_df.shape[1] == 1:
                         value_cols = (
@@ -490,6 +493,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
         elif isinstance(value, (cupy.ndarray, np.ndarray)):
             value_df = DataFrame(value)
+            if is_scalar(key[1]):
+                for col in columns_df._column_names:
+                    self._frame[col].iloc[key[0]] = value
             if value_df.shape[1] != columns_df.shape[1]:
                 if value_df.shape[1] == 1:
                     value_cols = value_df._data.columns * columns_df.shape[1]
