@@ -824,7 +824,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
           env->Throw((jthrowable)cuda_error);                                                      \
         }                                                                                          \
       }                                                                                            \
-    }                                                                                              \       
+    }                                                                                              \
     return ret_val;                                                                                \
   }
 
