@@ -706,7 +706,6 @@ def _get_partitioned(
     filename=None,
     fs=None,
     preserve_index=False,
-    max_file_size=None,
     **kwargs,
 ):
     fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
@@ -725,53 +724,16 @@ def _get_partitioned(
 
     full_paths = []
     metadata_file_paths = []
-    full_offsets = [0]
-
-    for idx, keys in enumerate(part_names.itertuples(index=False)):
-        current_offset = (part_offsets[idx], part_offsets[idx + 1])
-        num_chunks = 1
-        if max_file_size is not None:
-            start, end = current_offset
-            sliced_df = grouped_df[start:end]
-            current_file_size = get_estimated_file_size(sliced_df)
-            if current_file_size > max_file_size:
-                parts = int(current_file_size // max_file_size)
-                new_offsets = list(range(start, end, parts))
-                new_offsets.append(end)
-                num_chunks = len(new_offsets) - 1
-                full_offsets.extend(new_offsets)
-            else:
-                full_offsets.append(end)
-        else:
-            full_offsets.extend(current_offset)
-
+    for keys in part_names.itertuples(index=False):
         subdir = fs.sep.join(
             [f"{name}={val}" for name, val in zip(partition_cols, keys)]
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdirs(prefix, exist_ok=True)
-        if max_file_size is not None:
-            curr_file_num = 0
-            while num_chunks > 0:
-                full_path = fs.sep.join(
-                    [prefix, filename + "_" + str(curr_file_num) + ".parquet"]
-                )
-                full_paths.append(full_path)
-                metadata_file_paths.append(
-                    fs.sep.join(
-                        [
-                            subdir,
-                            filename + "_" + str(curr_file_num) + ".parquet",
-                        ]
-                    )
-                )
-                num_chunks -= 1
-                curr_file_num += 1
-        else:
-            filename = filename or _generate_filename()
-            full_path = fs.sep.join([prefix, filename])
-            full_paths.append(full_path)
-            metadata_file_paths.append(fs.sep.join([subdir, filename]))
+        filename = filename or _generate_filename()
+        full_path = fs.sep.join([prefix, filename])
+        full_paths.append(full_path)
+        metadata_file_paths.append(fs.sep.join([subdir, filename]))
 
     return full_paths, metadata_file_paths, grouped_df, part_offsets, filename
 
