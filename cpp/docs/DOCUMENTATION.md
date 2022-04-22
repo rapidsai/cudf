@@ -369,6 +369,20 @@ Although using 3 backtick marks `` ``` `` for example blocks will work too, they
 Do not use the `@example` tag in the comments for a declaration, or doxygen will interpret the entire source file as example source code.
 The source file is then published under a separate _Examples_ page in the output.
 
+### Deprecations
+
+Add a single [@deprecated](https://www.doxygen.nl/manual/commands.html#cmddeprecated) comment line
+to comment blocks for APIs that will be removed in future releases. Mention alternative /
+replacement APIs in the deprecation comment.
+
+```c++
+/**
+ * ...
+ *
+ * @deprecated This function is deprecated. Use another new function instead.
+ */
+```
+
 ## Namespaces
 
 Doxygen output includes a _Namespaces_ page that shows all the namespaces declared with comment blocks in the processed files.

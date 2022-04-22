@@ -37,7 +37,6 @@ from cudf.api.types import (
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethods, ParentType
-from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import can_convert_to_column
 
@@ -5521,9 +5520,15 @@ class StringColumn(column.ColumnBase):
         if isinstance(other, (StringColumn, str, cudf.Scalar)):
             if op == "__add__":
                 if isinstance(other, cudf.Scalar):
-                    other = utils.scalar_broadcast_to(
-                        other, size=len(self), dtype="object"
+                    other = cast(
+                        StringColumn,
+                        column.full(len(self), other, dtype="object"),
                     )
+
+                # Explicit types are necessary because mypy infers ColumnBase
+                # rather than StringColumn and sometimes forgets Scalar.
+                lhs: Union[cudf.Scalar, StringColumn]
+                rhs: Union[cudf.Scalar, StringColumn]
                 lhs, rhs = (other, self) if reflect else (self, other)
 
                 return cast(

@@ -759,3 +759,15 @@ def test_listcol_setitem_retain_dtype():
     # prior to this fix: https://github.com/rapidsai/cudf/pull/10151/
     df2 = df1.copy()
     assert df2["a"].dtype == df["a"].dtype
+
+
+def test_list_astype():
+    s = cudf.Series([[1, 2], [3, 4]])
+    s2 = s.list.astype("float64")
+    assert s2.dtype == cudf.ListDtype("float64")
+    assert_eq(s.list.leaves.astype("float64"), s2.list.leaves)
+
+    s = cudf.Series([[[1, 2], [3]], [[5, 6], None]])
+    s2 = s.list.astype("string")
+    assert s2.dtype == cudf.ListDtype(cudf.ListDtype("string"))
+    assert_eq(s.list.leaves.astype("string"), s2.list.leaves)
