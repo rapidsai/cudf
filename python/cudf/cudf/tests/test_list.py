@@ -320,6 +320,17 @@ def test_get_default():
     )
 
 
+def test_get_ind_sequence():
+    # test .list.get() when `index` is a sequence
+    sr = cudf.Series([[1, 2], [3, 4, 5], [6, 7, 8, 9]])
+    assert_eq(cudf.Series([1, 4, 8]), sr.list.get([0, 1, 2]))
+    assert_eq(cudf.Series([1, 4, 8]), sr.list.get(cudf.Series([0, 1, 2])))
+    assert_eq(cudf.Series([cudf.NA, 5, cudf.NA]), sr.list.get([2, 2, -5]))
+    assert_eq(cudf.Series([0, 5, 0]), sr.list.get([2, 2, -5], default=0))
+    sr_nested = cudf.Series([[[1, 2], [3, 4], [5, 6]], [[5, 6], [7, 8]]])
+    assert_eq(cudf.Series([[1, 2], [7, 8]]), sr_nested.list.get([0, 1]))
+
+
 @pytest.mark.parametrize(
     "data, scalar, expect",
     [
@@ -748,3 +759,15 @@ def test_listcol_setitem_retain_dtype():
     # prior to this fix: https://github.com/rapidsai/cudf/pull/10151/
     df2 = df1.copy()
     assert df2["a"].dtype == df["a"].dtype
+
+
+def test_list_astype():
+    s = cudf.Series([[1, 2], [3, 4]])
+    s2 = s.list.astype("float64")
+    assert s2.dtype == cudf.ListDtype("float64")
+    assert_eq(s.list.leaves.astype("float64"), s2.list.leaves)
+
+    s = cudf.Series([[[1, 2], [3]], [[5, 6], None]])
+    s2 = s.list.astype("string")
+    assert s2.dtype == cudf.ListDtype(cudf.ListDtype("string"))
+    assert_eq(s.list.leaves.astype("string"), s2.list.leaves)

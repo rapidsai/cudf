@@ -67,8 +67,8 @@ __device__ inline double stod(string_view const& d_str)
   // special strings: NaN, Inf
   if ((in_ptr < end) && *in_ptr > '9') {
     auto const inf_nan = string_view(in_ptr, static_cast<size_type>(thrust::distance(in_ptr, end)));
-    if (string::is_nan_str(inf_nan)) return std::numeric_limits<double>::quiet_NaN();
-    if (string::is_inf_str(inf_nan)) return sign * std::numeric_limits<double>::infinity();
+    if (is_nan_str(inf_nan)) return std::numeric_limits<double>::quiet_NaN();
+    if (is_inf_str(inf_nan)) return sign * std::numeric_limits<double>::infinity();
   }
 
   // Parse and store the mantissa as much as we can,
@@ -130,11 +130,11 @@ __device__ inline double stod(string_view const& d_str)
   else if (exp_ten < std::numeric_limits<double>::min_exponent10)
     return double{0};
 
+  exp_ten += 1 - num_digits;
   // exp10() is faster than pow(10.0,exp_ten)
-  double const base =
-    sign * static_cast<double>(digits) * exp10(static_cast<double>(1 - num_digits));
-  double const exponent = exp10(static_cast<double>(exp_ten));
-  return base * exponent;
+  double const exponent = exp10(static_cast<double>(std::abs(exp_ten)));
+  double const base     = sign * static_cast<double>(digits);
+  return exp_ten < 0 ? base / exponent : base * exponent;
 }
 
 /**
@@ -567,7 +567,7 @@ std::unique_ptr<column> is_float(
                     d_results,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;
-                      return string::is_float(d_column.element<string_view>(idx));
+                      return strings::is_float(d_column.element<string_view>(idx));
                     });
   results->set_null_count(strings.null_count());
   return results;

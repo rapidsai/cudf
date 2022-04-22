@@ -21,6 +21,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -42,7 +43,7 @@ struct make_pair_function {
   /**
    * @brief Hash the merge pair entry
    */
-  __device__ cuco::pair_type<hash_value_type, cudf::size_type> operator()(cudf::size_type idx)
+  __device__ cuco::pair_type<cudf::hash_value_type, cudf::size_type> operator()(cudf::size_type idx)
   {
     auto const result = _hasher(d_strings.element<cudf::string_view>(idx));
     return cuco::make_pair(result, idx);
@@ -105,9 +106,9 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   // Ensure capacity is at least (size/0.7) as documented here:
   // https://github.com/NVIDIA/cuCollections/blob/6ec8b6dcdeceea07ab4456d32461a05c18864411/include/cuco/static_map.cuh#L179-L182
   auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
-    static_cast<size_t>(input.size() * 2),        // capacity is 2x;
-    std::numeric_limits<hash_value_type>::max(),  // empty key;
-    -1,                                           // empty value is not used
+    static_cast<size_t>(input.size() * 2),              // capacity is 2x;
+    std::numeric_limits<cudf::hash_value_type>::max(),  // empty key;
+    -1,                                                 // empty value is not used
     hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 
@@ -117,8 +118,8 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
 
   merge_pairs_map->insert(iter,
                           iter + input.size(),
-                          cuco::detail::MurmurHash3_32<hash_value_type>{},
-                          thrust::equal_to<hash_value_type>{},
+                          cuco::detail::MurmurHash3_32<cudf::hash_value_type>{},
+                          thrust::equal_to<cudf::hash_value_type>{},
                           stream.value());
 
   return merge_pairs_map;

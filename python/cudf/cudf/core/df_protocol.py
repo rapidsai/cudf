@@ -1,7 +1,7 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-import collections
 import enum
+from collections import abc
 from typing import (
     Any,
     Dict,
@@ -569,13 +569,13 @@ class _CuDFDataFrame:
         ]
 
     def select_columns(self, indices: Sequence[int]) -> "_CuDFDataFrame":
-        if not isinstance(indices, collections.abc.Sequence):
+        if not isinstance(indices, abc.Sequence):
             raise ValueError("`indices` is not a sequence")
 
         return _CuDFDataFrame(self._df.iloc[:, indices])
 
     def select_columns_by_name(self, names: Sequence[str]) -> "_CuDFDataFrame":
-        if not isinstance(names, collections.Sequence):
+        if not isinstance(names, abc.Sequence):
             raise ValueError("`names` is not a sequence")
 
         return _CuDFDataFrame(
