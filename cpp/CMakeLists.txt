@@ -154,7 +154,7 @@ include(cmake/thirdparty/get_gtest.cmake)
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
-include(cmake/Modules/FindcuFile.cmake)
+include(cmake/thirdparty/get_cufile.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
 
@@ -162,18 +162,15 @@ include(cmake/thirdparty/get_kvikio.cmake)
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  foreach(METADATA_KIND IN LISTS METADATA_KINDS)
-    if(TARGET cufile::cuFile_interface)
-      rapids_export_find_package_file(
-        ${METADATA_KIND} "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
-      )
-      rapids_export_package(${METADATA_KIND} cuFile cudf-exports)
-    endif()
+  list(APPEND dependencies cuco KvikIO ZLIB nvcomp)
+  if(TARGET cufile::cuFile_interface)
+    list(APPEND dependencies cuFile)
+  endif()
 
-    rapids_export_package(${METADATA_KIND} cuco cudf-exports)
-    rapids_export_package(${METADATA_KIND} KvikIO cudf-exports)
-    rapids_export_package(${METADATA_KIND} ZLIB cudf-exports)
-    rapids_export_package(${METADATA_KIND} nvcomp cudf-exports)
+  foreach(METADATA_KIND IN LISTS METADATA_KINDS)
+    foreach(dep IN LISTS dependencies)
+      rapids_export_package(${METADATA_KIND} ${dep} cudf-exports)
+    endforeach()
   endforeach()
 endif()
 
@@ -592,17 +589,12 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} libcudacxx::libcudacxx cudf::Thrust rmm::rmm
-  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
+  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio $<TARGET_EXISTS:cuFile_interface>
 )
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
-endif()
-
-# Add cuFile interface if available
-if(TARGET cufile::cuFile_interface)
-  target_link_libraries(cudf PRIVATE cufile::cuFile_interface)
 endif()
 
 if(CUDA_STATIC_RUNTIME)
