@@ -110,7 +110,7 @@ class hostdevice_vector {
     CUDF_EXPECTS(element_index < size(), "Attempt to access out of bounds element.");
     T value;
     CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
-                                  reinterpret_cast<T*>(d_data.data()) + element_index,
+                                  reinterpret_cast<T const*>(d_data.data()) + element_index,
                                   sizeof(value),
                                   cudaMemcpyDefault,
                                   stream.value()));
