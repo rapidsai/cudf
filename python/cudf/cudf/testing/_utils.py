@@ -306,8 +306,8 @@ def gen_rand(dtype, size, **kwargs):
             np.random.randint(low=low, high=high, size=size), unit=time_unit
         )
     elif dtype.kind in ("O", "U"):
-        low = kwargs.get("low", 0)
-        high = kwargs.get("high", 10)
+        low = kwargs.get("low", 10)
+        high = kwargs.get("high", 11)
         return pd.util.testing.rands_array(
             np.random.randint(low=low, high=high, size=1)[0], size
         )
