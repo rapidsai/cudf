@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "rmm/cuda_stream_view.hpp"
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
@@ -28,7 +27,7 @@ using cudf::type_id;
 namespace {
 
 /// Check if nonempty-null checks can be skipped for a given type.
-bool may_have_nonempty_nulls(cudf::type_id const& type)
+bool can_have_nonempty_nulls(cudf::type_id const& type)
 {
   return type == type_id::STRING || type == type_id::LIST || type == type_id::STRUCT;
 }
@@ -70,7 +69,7 @@ bool has_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view st
 {
   auto const type = input.type().id();
 
-  if (not may_have_nonempty_nulls(type)) { return false; }
+  if (not can_have_nonempty_nulls(type)) { return false; }
 
   // For types with variable-length rows, check if any rows are "dirty".
   // A dirty row is a null row with non-zero length.
@@ -81,27 +80,6 @@ bool has_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view st
   // For complex types, check if child columns need purging.
   if ((type == type_id::STRUCT || type == type_id::LIST) &&
       children_have_nonempty_nulls(input, stream)) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * @copydoc cudf::detail::may_have_nonempty_nulls
- */
-bool may_have_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view stream)
-{
-  auto const type = input.type().id();
-
-  if (not may_have_nonempty_nulls(type)) { return false; }
-
-  if ((type == type_id::STRING || type == type_id::LIST) && input.has_nulls()) { return true; }
-
-  if ((type == type_id::STRUCT || type == type_id::LIST) &&
-      std::any_of(input.child_begin(), input.child_end(), [&](auto const& child) {
-        return may_have_nonempty_nulls(child, stream);
-      })) {
     return true;
   }
 
@@ -130,7 +108,18 @@ std::unique_ptr<cudf::column> purge_nonempty_nulls(column_view const& input,
  */
 bool may_have_nonempty_nulls(column_view const& input)
 {
-  return detail::may_have_nonempty_nulls(input);
+  auto const type = input.type().id();
+
+  if (not detail::can_have_nonempty_nulls(type)) { return false; }
+
+  if ((type == type_id::STRING || type == type_id::LIST) && input.has_nulls()) { return true; }
+
+  if ((type == type_id::STRUCT || type == type_id::LIST) &&
+      std::any_of(input.child_begin(), input.child_end(), may_have_nonempty_nulls)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

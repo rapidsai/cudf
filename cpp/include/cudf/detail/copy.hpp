@@ -309,14 +309,6 @@ bool has_nonempty_nulls(column_view const& input,
                         rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
- * @copydoc cudf::may_have_nonempty_nulls
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-bool may_have_nonempty_nulls(column_view const& input,
-                             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
-
-/**
  * @copydoc cudf::purge_nonempty_nulls
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
