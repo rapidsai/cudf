@@ -893,6 +893,14 @@ class ParquetDatasetWriter:
             Name of the compression to use. Use ``None`` for no compression.
         statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
             Level at which column statistics should be included in file.
+        max_file_size : int or str, default None
+            A file size in bytes, if the input is int.
+            Size can also be a str in form or "10 MB", "1 GB", etc.
+            If this parameter is used, it is mandatory to pass
+            `file_name_prefix`.
+        file_name_prefix : str
+            This is a prefix to file names generated only when
+            `max_file_size` is specified.
 
 
         Examples
