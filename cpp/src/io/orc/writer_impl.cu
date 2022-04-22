@@ -55,6 +55,7 @@
 #include <utility>
 
 #include <cuda/std/limits>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -1082,11 +1083,9 @@ hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   // figure out the buffer size needed for protobuf format
   gpu::orc_init_statistics_buffersize(
     stats_merge_groups.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
-  stats_merge_groups.device_to_host(stream, true);
+  auto max_blobs = stats_merge_groups.element(num_stat_blobs - 1, stream);
 
-  hostdevice_vector<uint8_t> blobs(stats_merge_groups[num_stat_blobs - 1].start_chunk +
-                                     stats_merge_groups[num_stat_blobs - 1].num_chunks,
-                                   stream);
+  hostdevice_vector<uint8_t> blobs(max_blobs.start_chunk + max_blobs.num_chunks, stream);
   gpu::orc_encode_statistics(blobs.device_ptr(),
                              stats_merge_groups.device_ptr(),
                              stat_chunks.data(),
@@ -1190,11 +1189,14 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
   detail::merge_group_statistics<detail::io_file_format::ORC>(
     stripe_stat_chunks, rowgroup_stat_chunks, stripe_merge.device_ptr(), num_stripe_blobs, stream);
 
-  // with chunked writes, the orc table can be deallocated between write calls.
+  // With chunked writes, the orc table can be deallocated between write calls.
   // This forces our hand to encode row groups and stripes only in this stage and further
-  // we have to persist any data from the table that we need, min/max strings.
-  // We write rowgroup data with each stripe and then save each stripe's stats
-  // until the end where we merge those all together to get the file-level stats.
+  // we have to persist any data from the table that we need later. The
+  // minimum and maximum string inside the `str_val` structure inside `statistics_val` in
+  // `statistic_chunk` that are copies of the largest and smallest strings in the row group,
+  // or stripe need to be persisted between write calls. We write rowgroup data with each
+  // stripe and then save each stripe's stats until the end where we merge those all together
+  // to get the file-level stats.
 
   // Skip rowgroup blobs when encoding, if chosen granularity is coarser than "ROW_GROUP".
   auto const is_granularity_rowgroup = stats_freq == ORC_STATISTICS_ROW_GROUP;
