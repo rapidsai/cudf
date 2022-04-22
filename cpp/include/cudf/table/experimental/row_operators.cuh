@@ -87,6 +87,7 @@ namespace lexicographic {
 template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
+  friend class table_comparator;
 
   /**
    * @brief Construct a function object for performing a lexicographic
@@ -294,6 +295,7 @@ struct preprocessed_table {
 
  private:
   friend class self_comparator;
+  friend class table_comparator;
 
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
@@ -424,6 +426,40 @@ class self_comparator {
 
  private:
   std::shared_ptr<preprocessed_table> d_t;
+};
+
+class table_comparator {
+ public:
+  table_comparator(table_view const& tlhs,
+                   table_view const& trhs,
+                   host_span<order const> column_order,
+                   host_span<null_order const> null_precedence,
+                   rmm::cuda_stream_view stream)
+    : d_tlhs(preprocessed_table::create(tlhs, column_order, null_precedence, stream)),
+      d_trhs(preprocessed_table::create(trhs, column_order, null_precedence, stream))
+  {
+  }
+
+  table_comparator(std::shared_ptr<preprocessed_table> tlhs,
+                   std::shared_ptr<preprocessed_table> trhs)
+    : d_tlhs{std::move(tlhs)}, d_trhs{std::move(trhs)}
+  {
+  }
+
+  template <typename Nullate>
+  device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  {
+    return device_row_comparator(nullate,
+                                 *d_tlhs,
+                                 *d_trhs,
+                                 d_tlhs->depths(),
+                                 d_tlhs->column_order(),
+                                 d_tlhs->null_precedence());
+  }
+
+ private:
+  std::shared_ptr<preprocessed_table> d_tlhs;
+  std::shared_ptr<preprocessed_table> d_trhs;
 };
 
 }  // namespace lexicographic
