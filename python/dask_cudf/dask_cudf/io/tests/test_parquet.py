@@ -561,3 +561,12 @@ def test_cudf_list_struct_write(tmpdir):
     ddf.to_parquet(temp_file)
     new_ddf = dask_cudf.read_parquet(temp_file)
     dd.assert_eq(df, new_ddf)
+
+
+def test_check_file_size(tmpdir):
+    # Test simple file-size check to help warn users
+    # of upstream change to `split_row_groups` default
+    fn = str(tmpdir.join("test.parquet"))
+    cudf.DataFrame({"a": np.arange(1000)}).to_parquet(fn)
+    with pytest.warns(match="large parquet file"):
+        dask_cudf.read_parquet(fn, check_file_size=1).compute()

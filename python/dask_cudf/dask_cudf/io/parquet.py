@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
+import warnings
 from contextlib import ExitStack
 from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
@@ -176,65 +177,99 @@ class CudfEngine(ArrowDatasetEngine):
         strings_to_cats = kwargs.get("strings_to_categorical", False)
         read_kwargs = kwargs.get("read", {})
         read_kwargs.update(open_file_options or {})
+        check_file_size = read_kwargs.pop("check_file_size", None)
 
-        # Assume multi-piece read
-        paths = []
-        rgs = []
-        last_partition_keys = None
-        dfs = []
+        # Wrap reading logic in a `try` block so that we can
+        # inform the user that the `read_parquet` partition
+        # size is too large for the available memory
+        try:
 
-        for i, piece in enumerate(pieces):
+            # Assume multi-piece read
+            paths = []
+            rgs = []
+            last_partition_keys = None
+            dfs = []
 
-            (path, row_group, partition_keys) = piece
-            row_group = None if row_group == [None] else row_group
+            for i, piece in enumerate(pieces):
 
-            if i > 0 and partition_keys != last_partition_keys:
-                dfs.append(
-                    cls._read_paths(
-                        paths,
-                        fs,
-                        columns=read_columns,
-                        row_groups=rgs if rgs else None,
-                        strings_to_categorical=strings_to_cats,
-                        partitions=partitions,
-                        partitioning=partitioning,
-                        partition_keys=last_partition_keys,
-                        **read_kwargs,
+                (path, row_group, partition_keys) = piece
+                row_group = None if row_group == [None] else row_group
+
+                # File-size check to help "protect" users from change
+                # to up-stream `split_row_groups` default. We only
+                # check the file size if this partition corresponds
+                # to a full file, and `check_file_size` is defined
+                if check_file_size and len(pieces) == 1 and row_group is None:
+                    file_size = fs.size(path)
+                    if file_size > check_file_size:
+                        warnings.warn(
+                            f"A large parquet file ({file_size}B) is being "
+                            f"used to create a DataFrame partition in "
+                            f"read_parquet. Did you mean to use the "
+                            f"split_row_groups argument?"
+                        )
+
+                if i > 0 and partition_keys != last_partition_keys:
+                    dfs.append(
+                        cls._read_paths(
+                            paths,
+                            fs,
+                            columns=read_columns,
+                            row_groups=rgs if rgs else None,
+                            strings_to_categorical=strings_to_cats,
+                            partitions=partitions,
+                            partitioning=partitioning,
+                            partition_keys=last_partition_keys,
+                            **read_kwargs,
+                        )
                     )
+                    paths = rgs = []
+                    last_partition_keys = None
+                paths.append(path)
+                rgs.append(
+                    [row_group]
+                    if not isinstance(row_group, list)
+                    and row_group is not None
+                    else row_group
                 )
-                paths = rgs = []
-                last_partition_keys = None
-            paths.append(path)
-            rgs.append(
-                [row_group]
-                if not isinstance(row_group, list) and row_group is not None
-                else row_group
+                last_partition_keys = partition_keys
+
+            dfs.append(
+                cls._read_paths(
+                    paths,
+                    fs,
+                    columns=read_columns,
+                    row_groups=rgs if rgs else None,
+                    strings_to_categorical=strings_to_cats,
+                    partitions=partitions,
+                    partitioning=partitioning,
+                    partition_keys=last_partition_keys,
+                    **read_kwargs,
+                )
             )
-            last_partition_keys = partition_keys
+            df = cudf.concat(dfs) if len(dfs) > 1 else dfs[0]
 
-        dfs.append(
-            cls._read_paths(
-                paths,
-                fs,
-                columns=read_columns,
-                row_groups=rgs if rgs else None,
-                strings_to_categorical=strings_to_cats,
-                partitions=partitions,
-                partitioning=partitioning,
-                partition_keys=last_partition_keys,
-                **read_kwargs,
+            # Re-set "object" dtypes align with pa schema
+            set_object_dtypes_from_pa_schema(df, schema)
+
+            if index and (index[0] in df.columns):
+                df = df.set_index(index[0])
+            elif index is False and df.index.names != (None,):
+                # If index=False, we shouldn't have a named index
+                df.reset_index(inplace=True)
+
+        except MemoryError as err:
+            raise MemoryError(
+                "Parquet data was larger than the available GPU memory!\n\n"
+                "Please try `split_row_groups=True` or set this option "
+                "to a smaller integer (if applicable).\n\n"
+                "If you are using dask-cuda workers, this may indicate "
+                "that the current `device_memory_limit` is too high. "
+                "If you are not using dask-cuda workers, this may indicate "
+                "that your workflow requires dask-cuda spilling.\n\n"
+                "Original Error: " + str(err)
             )
-        )
-        df = cudf.concat(dfs) if len(dfs) > 1 else dfs[0]
-
-        # Re-set "object" dtypes align with pa schema
-        set_object_dtypes_from_pa_schema(df, schema)
-
-        if index and (index[0] in df.columns):
-            df = df.set_index(index[0])
-        elif index is False and df.index.names != (None,):
-            # If index=False, we shouldn't have a named index
-            df.reset_index(inplace=True)
+            raise err
 
         return df
 
@@ -348,12 +383,7 @@ def set_object_dtypes_from_pa_schema(df, schema):
                 df._data[col_name] = col.astype(typ)
 
 
-def read_parquet(
-    path,
-    columns=None,
-    split_row_groups=None,
-    **kwargs,
-):
+def read_parquet(path, columns=None, **kwargs):
     """Read parquet files into a Dask DataFrame
 
     Calls ``dask.dataframe.read_parquet`` to cordinate the execution of
@@ -374,13 +404,24 @@ def read_parquet(
     if isinstance(columns, str):
         columns = [columns]
 
-    return dd.read_parquet(
-        path,
-        columns=columns,
-        split_row_groups=split_row_groups,
-        engine=CudfEngine,
-        **kwargs,
-    )
+    # Set "check_file_size" option to determine whether we
+    # should check the parquet-file size. This check is meant
+    # to "protect" users from `split_row_groups` default changes
+    check_file_size = kwargs.pop("check_file_size", 2_000_000_000)
+    if (
+        check_file_size
+        and ("split_row_groups" not in kwargs)
+        and ("chunksize" not in kwargs)
+    ):
+        # User is not specifying `split_row_groups` or `chunksize`,
+        # so we should warn them if/when a file is ~>2GB on disk.
+        # The will be able to set `split_row_groups` explicitly to
+        # silence/skip this check
+        if "read" not in kwargs:
+            kwargs["read"] = {}
+        kwargs["read"]["check_file_size"] = check_file_size
+
+    return dd.read_parquet(path, columns=columns, engine=CudfEngine, **kwargs)
 
 
 to_parquet = partial(dd.to_parquet, engine=CudfEngine)
