@@ -778,11 +778,9 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     jthrowable jt = cuda_exception(env, cuda_status);
     if (jt != NULL) {
       env->Throw(jt);
-      throw jni_exception("CUDA ERROR");
-    } else {
-      throw jni_exception(std::string("CUDA ERROR: code ") +
-                          std::to_string(static_cast<int>(cuda_status)));
     }
+    throw jni_exception(std::string("CUDA ERROR: code ") +
+                        std::to_string(static_cast<int>(cuda_status)));
   }
 }
 
