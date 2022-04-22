@@ -1170,10 +1170,10 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
   stripe_merge.host_to_device(stream);
   set_stat_desc_leaf_cols(orc_table.d_columns, stat_desc, stream);
 
-  // The rowgroup stat chunks are written out in each stripe and file-level chunks are written in
-  // the footer. To prevent persisting the rowgroup stat chunks across multiple write calls in a
-  // chunked write situation, these allocations are split up so stripe data can persist until the
-  // footer is written.
+  // The rowgroup stat chunks are written out in each stripe. The stripe and file-level chunks are
+  // written in the footer. To prevent persisting the rowgroup stat chunks across multiple write
+  // calls in a chunked write situation, these allocations are split up so stripe data can persist
+  // until the footer is written and rowgroup data can be freed after being written to the stripe.
   rmm::device_uvector<statistics_chunk> rowgroup_chunks(num_rowgroup_blobs, stream);
   rmm::device_uvector<statistics_chunk> stripe_chunks(num_stripe_blobs, stream);
   auto rowgroup_stat_chunks = rowgroup_chunks.data();
