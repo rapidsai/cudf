@@ -1,4 +1,5 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
+"""Define the Series class along with various data accessors."""
 
 from __future__ import annotations
 
@@ -77,6 +78,7 @@ from cudf.utils.utils import _cudf_nvtx_annotate
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
     """Append a scalar `value` to the end of `col` inplace.
+
     Cast to common type if possible
     """
     to_type = find_common_type([type(value), col.dtype])
@@ -87,9 +89,7 @@ def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
 
 
 class _SeriesIlocIndexer(_FrameIndexer):
-    """
-    For integer-location based selection.
-    """
+    """For integer-location based selection."""
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg):
@@ -148,9 +148,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
 
 class _SeriesLocIndexer(_FrameIndexer):
-    """
-    Label-based selection
-    """
+    """Label-based selection."""
 
     @_cudf_nvtx_annotate
     def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
@@ -301,7 +299,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @classmethod
     @_cudf_nvtx_annotate
     def from_categorical(cls, categorical, codes=None):
-        """Creates from a pandas.Categorical
+        """Create from a pandas.Categorical.
 
         Parameters
         ----------
@@ -343,6 +341,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def from_masked_array(cls, data, mask, null_count=None):
         """Create a Series with null-mask.
+
         This is equivalent to:
 
             Series(data).set_mask(mask, null_count=null_count)
@@ -557,7 +556,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
 
     @_cudf_nvtx_annotate
-    def serialize(self):
+    def serialize(self):  # noqa: D102
         header, frames = super().serialize()
 
         header["index"], index_frames = self._index.serialize()
@@ -570,7 +569,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def deserialize(cls, header, frames):
+    def deserialize(cls, header, frames):  # noqa: D102
         index_nframes = header["index_frame_count"]
         obj = super().deserialize(
             header, frames[header["index_frame_count"] :]
@@ -583,7 +582,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return obj
 
     def _get_columns_by_label(self, labels, downcast=False):
-        """Return the column specified by `labels`
+        """Return the column specified by `labels`.
 
         For cudf.Series, either the column, or an empty series is returned.
         Parameter `downcast` does not have effects.
@@ -606,7 +605,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         level=None,
         inplace=False,
         errors="raise",
-    ):
+    ):  # noqa: D102
         if axis == 1:
             raise ValueError("No axis named 1 for object type Series")
         # Ignore columns for Series
@@ -619,6 +618,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def append(self, to_append, ignore_index=False, verify_integrity=False):
         """Append values from another ``Series`` or array-like object.
+
         If ``ignore_index=True``, the index is reset.
 
         Parameters
@@ -694,7 +694,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def reindex(self, index=None, copy=True):
-        """Return a Series that conforms to a new index
+        """Return a Series that conforms to a new index.
 
         Parameters
         ----------
@@ -791,7 +791,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 """,
         )
     )
-    def reset_index(self, level=None, drop=False, name=None, inplace=False):
+    def reset_index(
+        self, level=None, drop=False, name=None, inplace=False
+    ):  # noqa: D102, E501
         if not drop and inplace:
             raise TypeError(
                 "Cannot reset_index inplace on a Series "
@@ -812,7 +814,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def to_frame(self, name=None):
-        """Convert Series into a DataFrame
+        """Convert Series into a DataFrame.
 
         Parameters
         ----------
@@ -843,7 +845,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         13   <NA>
         15      d
         """  # noqa: E501
-
         if name is not None:
             col = name
         elif self.name is None:
@@ -854,7 +855,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cudf.DataFrame({col: self._column}, index=self.index)
 
     @_cudf_nvtx_annotate
-    def memory_usage(self, index=True, deep=False):
+    def memory_usage(self, index=True, deep=False):  # noqa: D102
         return self._column.memory_usage + (
             self._index.memory_usage() if index else 0
         )
@@ -1186,31 +1187,31 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
     @_cudf_nvtx_annotate
-    def cat(self):
+    def cat(self):  # noqa: D102
         return CategoricalAccessor(parent=self)
 
     @copy_docstring(StringMethods)  # type: ignore
     @property
     @_cudf_nvtx_annotate
-    def str(self):
+    def str(self):  # noqa: D102
         return StringMethods(parent=self)
 
     @copy_docstring(ListMethods)  # type: ignore
     @property
     @_cudf_nvtx_annotate
-    def list(self):
+    def list(self):  # noqa: D102
         return ListMethods(parent=self)
 
     @copy_docstring(StructMethods)  # type: ignore
     @property
     @_cudf_nvtx_annotate
-    def struct(self):
+    def struct(self):  # noqa: D102
         return StructMethods(parent=self)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def dtype(self):
-        """dtype of the Series"""
+        """Get the dtype of the Series."""
         return self._column.dtype
 
     @classmethod
@@ -1287,26 +1288,25 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def valid_count(self):
-        """Number of non-null values"""
+        """Get the number of non-null values."""
         return self._column.valid_count
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def null_count(self):
-        """Number of null values"""
+        """Get the number of null values."""
         return self._column.null_count
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def nullable(self):
-        """A boolean indicating whether a null-mask is needed"""
+        """Return a boolean indicating whether a null-mask is needed."""
         return self._column.nullable
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def has_nulls(self):
-        """
-        Indicator whether Series contains null values.
+        """Determine whether Series contains null values.
 
         Returns
         -------
@@ -1489,7 +1489,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):
+    ):  # noqa: D102
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
 
@@ -1511,7 +1511,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
 
     @_cudf_nvtx_annotate
-    def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+    def all(
+        self, axis=0, bool_only=None, skipna=True, level=None, **kwargs
+    ):  # noqa: D102, E501
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
@@ -1519,7 +1521,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().all(axis, skipna, level, **kwargs)
 
     @_cudf_nvtx_annotate
-    def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+    def any(
+        self, axis=0, bool_only=None, skipna=True, level=None, **kwargs
+    ):  # noqa: D102, E501
         if bool_only not in (None, True):
             raise NotImplementedError(
                 "The bool_only parameter is not supported for Series."
@@ -1593,7 +1597,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def data(self):
-        """The gpu buffer for the data
+        """Get the gpu buffer for the data.
 
         Returns
         -------
@@ -1620,11 +1624,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def nullmask(self):
-        """The gpu buffer for the null-mask"""
+        """Get the gpu buffer for the null-mask."""
         return cudf.Series(self._column.nullmask)
 
     @_cudf_nvtx_annotate
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(
+        self, dtype, copy=False, errors="raise", **kwargs
+    ):  # noqa: D102, E501
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:
                 raise KeyError(
@@ -1636,7 +1642,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().astype(dtype, copy, errors, **kwargs)
 
     @_cudf_nvtx_annotate
-    def sort_index(self, axis=0, *args, **kwargs):
+    def sort_index(self, axis=0, *args, **kwargs):  # noqa: D102
         if axis not in (0, "index"):
             raise ValueError("Only axis=0 is valid for Series.")
         return super().sort_index(axis=axis, *args, **kwargs)
@@ -1698,7 +1704,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def nlargest(self, n=5, keep="first"):
-        """Returns a new Series of the *n* largest element.
+        """Return a new Series of the *n* largest element.
 
         Parameters
         ----------
@@ -1761,8 +1767,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def nsmallest(self, n=5, keep="first"):
-        """
-        Returns a new Series of the *n* smallest element.
+        """Return a new Series of the *n* smallest element.
 
         Parameters
         ----------
@@ -1843,7 +1848,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         order=None,
         ascending=True,
         na_position="last",
-    ):
+    ):  # noqa: D102
         obj = self.__class__._from_data(
             {
                 None: super().argsort(
@@ -1859,7 +1864,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return obj
 
     @_cudf_nvtx_annotate
-    def replace(self, to_replace=None, value=None, *args, **kwargs):
+    def replace(
+        self, to_replace=None, value=None, *args, **kwargs
+    ):  # noqa: D102, E501
         if is_dict_like(to_replace) and value is not None:
             raise ValueError(
                 "Series.replace cannot use dict-like to_replace and non-None "
@@ -1870,8 +1877,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def update(self, other):
-        """
-        Modify Series in place using values from passed Series.
+        """Modify Series in place using values from passed Series.
+
         Uses non-NA values from passed Series to make updates. Aligns
         on index.
 
@@ -1963,7 +1970,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2    3
         dtype: int64
         """
-
         if not isinstance(other, cudf.Series):
             other = cudf.Series(other)
 
@@ -2019,8 +2025,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     # UDF related
     @_cudf_nvtx_annotate
     def apply(self, func, convert_dtype=True, args=(), **kwargs):
-        """
-        Apply a scalar function to the values of a Series.
+        """Apply a scalar function to the values of a Series.
+
         Similar to ``pandas.Series.apply``.
 
         ``apply`` relies on Numba to JIT compile ``func``.
@@ -2056,7 +2062,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Examples
         --------
-
         Apply a basic function to a series
         >>> sr = cudf.Series([1,2,3])
         >>> def f(x):
@@ -2235,8 +2240,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     #
     @_cudf_nvtx_annotate
     def count(self, level=None, **kwargs):
-        """
-        Return number of non-NA/null observations in the Series
+        """Return number of non-NA/null observations in the Series.
 
         Returns
         -------
@@ -2254,7 +2258,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser.count()
         5
         """
-
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
 
@@ -2262,8 +2265,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def mode(self, dropna=True):
-        """
-        Return the mode(s) of the dataset.
+        """Return the mode or modes of the dataset.
 
         Always returns Series even if only one value is returned.
 
@@ -2330,7 +2332,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return Series(val_counts.index.sort_values(), name=self.name)
 
     @_cudf_nvtx_annotate
-    def round(self, decimals=0, how="half_even"):
+    def round(self, decimals=0, how="half_even"):  # noqa: D102
         if not is_integer(decimals):
             raise ValueError(
                 f"decimals must be an int, got {type(decimals).__name__}"
@@ -2340,8 +2342,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def cov(self, other, min_periods=None):
-        """
-        Compute covariance with Series, excluding missing values.
+        """Compute covariance with Series, excluding missing values.
 
         Parameters
         ----------
@@ -2366,7 +2367,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser1.cov(ser2)
         -0.015750000000000004
         """
-
         if min_periods is not None:
             raise NotImplementedError(
                 "min_periods parameter is not implemented yet"
@@ -2391,15 +2391,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def transpose(self):
         """Return the transpose, which is by definition self."""
-
         return self
 
     T = property(transpose, doc=transpose.__doc__)
 
     @_cudf_nvtx_annotate
     def corr(self, other, method="pearson", min_periods=None):
-        """Calculates the sample correlation between two Series,
-        excluding missing values.
+        """Calculate the sample correlation between two Series.
+
+        Excludes missing values.
 
         Parameters
         ----------
@@ -2424,7 +2424,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser1.corr(ser2, method="spearman")
         -0.5
         """
-
         if method not in {"pearson", "spearman"}:
             raise ValueError(f"Unknown method {method}")
 
@@ -2450,8 +2449,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def autocorr(self, lag=1):
-        """Compute the lag-N autocorrelation. This method computes the Pearson
-        correlation between the Series and its shifted self.
+        """Compute the lag-N autocorrelation.
+
+        This method computes the Pearson correlation between the Series and its
+        shifted self.
 
         Parameters
         ----------
@@ -2530,7 +2531,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         0    False
         dtype: bool
         """
-
         # Even though only list-like objects are supposed to be passed, only
         # scalars throw errors. Other types (like dicts) just transparently
         # return False (see the implementation of ColumnBase.isin).
@@ -2546,8 +2546,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def unique(self):
-        """
-        Returns unique values of this Series.
+        """Return unique values of this Series.
 
         Returns
         -------
@@ -2704,12 +2703,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
     ):
-        """
-        Return values at the given quantile.
+        """Return values at the given quantile.
 
         Parameters
         ----------
-
         q : float or array-like, default 0.5 (50% quantile)
             0 <= q <= 1, the quantile(s) to compute
         interpolation : {’linear’, ‘lower’, ‘higher’, ‘midpoint’, ‘nearest’}
@@ -2747,7 +2744,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         0.75    3.25
         dtype: float64
         """
-
         return_scalar = is_scalar(q)
         if return_scalar:
             np_array_q = np.asarray([float(q)])
@@ -2782,7 +2778,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         include=None,
         exclude=None,
         datetime_is_numeric=False,
-    ):
+    ):  # noqa: D102, D400
         """{docstring}"""
 
         def _prepare_percentiles(percentiles):
@@ -3051,7 +3047,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         squeeze=False,
         observed=False,
         dropna=True,
-    ):
+    ):  # noqa: D102
         import cudf.core.resample
 
         if axis not in (0, "index"):
@@ -3087,8 +3083,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def rename(self, index=None, copy=True):
-        """
-        Alter Series name
+        """Alter Series name.
 
         Change Series.name with a scalar value
 
@@ -3131,8 +3126,60 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         out_data = self._data.copy(deep=copy)
         return Series._from_data(out_data, self.index, name=index)
 
+    # TODO: Define add_prefix and add_suffix as raising NotImplementedError in
+    # Frame so that the docstring can be shared (unless we can actually share
+    # the implementation, which is even better).
     @_cudf_nvtx_annotate
     def add_prefix(self, prefix):
+        """Prefix labels with string `prefix`.
+
+        For Series, the row labels are prefixed. For DataFrame, the column
+        labels are prefixed.
+
+        Parameters
+        ----------
+        prefix : str
+            The string to add before each label.
+
+        Returns
+        -------
+        Series or DataFrame
+            New Series or DataFrame with updated labels.
+
+        See Also
+        --------
+        Series.add_suffix: Suffix row labels with string `suffix`.
+        DataFrame.add_suffix: Suffix column labels with string `suffix`.
+
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.add_prefix('item_')
+        item_0    1
+        item_1    2
+        item_2    3
+        item_3    4
+        dtype: int64
+        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
+        >>> df
+           A  B
+        0  1  3
+        1  2  4
+        2  3  5
+        3  4  6
+        >>> df.add_prefix('col_')
+             col_A  col_B
+        0       1       3
+        1       2       4
+        2       3       5
+        3       4       6
+        """
         return Series._from_data(
             data=self._data.copy(deep=True),
             index=prefix + self.index.astype(str),
@@ -3140,6 +3187,55 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def add_suffix(self, suffix):
+        """Suffix labels with string `suffix`.
+
+        For Series, the row labels are suffixed. For DataFrame, the column
+        labels are suffixed.
+
+        Parameters
+        ----------
+        suffix : str
+            The string to add after each label.
+
+        Returns
+        -------
+        Series or DataFrame
+            New Series or DataFrame with updated labels.
+
+        See Also
+        --------
+        Series.add_prefix: Prefix row labels with string `prefix`.
+        DataFrame.add_prefix: Prefix column labels with string `prefix`.
+
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.add_suffix('_item')
+        0_item    1
+        1_item    2
+        2_item    3
+        3_item    4
+        dtype: int64
+        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
+        >>> df
+           A  B
+        0  1  3
+        1  2  4
+        2  3  5
+        3  4  6
+        >>> df.add_suffix('_col')
+             A_col  B_col
+        0       1       3
+        1       2       4
+        2       3       5
+        3       4       6
+        """
         return Series._from_data(
             data=self._data.copy(deep=True),
             index=self.index.astype(str) + suffix,
@@ -3191,9 +3287,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def explode(self, ignore_index=False):
-        """
-        Transform each element of a list-like to a row, replicating index
-        values.
+        """Transform list Series elements to rows, replicating index values.
 
         Parameters
         ----------
@@ -3230,9 +3324,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def pct_change(
         self, periods=1, fill_method="ffill", limit=None, freq=None
     ):
-        """
-        Calculates the percent change between sequential elements
-        in the Series.
+        """Calculate the percent change between sequential elements.
 
         Parameters
         ----------
@@ -3267,7 +3359,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return change
 
 
-def make_binop_func(op):
+def _make_binop_func(op):
     # This function is used to wrap binary operations in Frame with an
     # appropriate API for Series as required for pandas compatibility. The
     # main effect is reordering and error-checking parameters in
@@ -3322,7 +3414,7 @@ for binop in (
     "gt",
     "ge",
 ):
-    setattr(Series, binop, make_binop_func(binop))
+    setattr(Series, binop, _make_binop_func(binop))
 
 
 class DatetimeProperties:
@@ -3381,8 +3473,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def year(self):
-        """
-        The year of the datetime.
+        """Get the year of the datetime.
 
         Examples
         --------
@@ -3406,8 +3497,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def month(self):
-        """
-        The month as January=1, December=12.
+        """Get the month as January=1, December=12.
 
         Examples
         --------
@@ -3431,8 +3521,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def day(self):
-        """
-        The day of the datetime.
+        """Get the day of the datetime.
 
         Examples
         --------
@@ -3456,8 +3545,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def hour(self):
-        """
-        The hours of the datetime.
+        """Get the hours of the datetime.
 
         Examples
         --------
@@ -3481,8 +3569,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def minute(self):
-        """
-        The minutes of the datetime.
+        """Get the minutes of the datetime.
 
         Examples
         --------
@@ -3506,8 +3593,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def second(self):
-        """
-        The seconds of the datetime.
+        """Get the seconds of the datetime.
 
         Examples
         --------
@@ -3531,8 +3617,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def weekday(self):
-        """
-        The day of the week with Monday=0, Sunday=6.
+        """Get the day of the week with Monday=0, Sunday=6.
 
         Examples
         --------
@@ -3568,8 +3653,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def dayofweek(self):
-        """
-        The day of the week with Monday=0, Sunday=6.
+        """Get the day of the week with Monday=0, Sunday=6.
 
         Examples
         --------
@@ -3605,9 +3689,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def dayofyear(self):
-        """
-        The day of the year, from 1-365 in non-leap years and
-        from 1-366 in leap years.
+        """Get the day of the year, from 1-365 (366 in leap years).
 
         Examples
         --------
@@ -3643,9 +3725,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def day_of_year(self):
-        """
-        The day of the year, from 1-365 in non-leap years and
-        from 1-366 in leap years.
+        """Get the day of the year, from 1-365 (366 in leap years).
 
         Examples
         --------
@@ -3773,9 +3853,7 @@ class DatetimeProperties:
 
     @_cudf_nvtx_annotate
     def isocalendar(self):
-        """
-        Returns a DataFrame with the year, week, and day
-        calculated according to the ISO 8601 standard.
+        """Return a DataFrame with the year, week, and day calculated according to the ISO 8601 standard.
 
         Returns
         -------
@@ -3812,22 +3890,19 @@ class DatetimeProperties:
         0    2009
         1    <NA>
         Name: year, dtype: object
-        """
+        """  # noqa: E501
         return cudf.core.tools.datetimes._to_iso_calendar(self)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def is_month_start(self):
-        """
-        Booleans indicating if dates are the first day of the month.
-        """
+        """Booleans indicating if dates are the first day of the month."""
         return (self.day == 1).fillna(False)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def days_in_month(self):
-        """
-        Get the total number of days in the month that the date falls on.
+        """Get the total number of days in the month that the date falls on.
 
         Returns
         -------
@@ -4219,8 +4294,7 @@ class DatetimeProperties:
 
     @_cudf_nvtx_annotate
     def strftime(self, date_format, *args, **kwargs):
-        """
-        Convert to Series using specified ``date_format``.
+        """Convert to Series using specified ``date_format``.
 
         Return a Series of formatted strings specified by ``date_format``,
         which supports the same string format as the python standard library.
@@ -4239,7 +4313,6 @@ class DatetimeProperties:
 
         Notes
         -----
-
         The following date format identifiers are not yet
         supported: ``%c``, ``%x``,``%X``
 
@@ -4270,7 +4343,6 @@ class DatetimeProperties:
         2    2000 / 30 / 09
         dtype: object
         """
-
         if not isinstance(date_format, str):
             raise TypeError(
                 f"'date_format' must be str, not {type(date_format)}"
@@ -4374,8 +4446,7 @@ class TimedeltaProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def days(self):
-        """
-        Number of days.
+        """Return the number of days.
 
         Returns
         -------
@@ -4406,8 +4477,7 @@ class TimedeltaProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def seconds(self):
-        """
-        Number of seconds (>= 0 and less than 1 day).
+        """Return the number of seconds, >= 0 and less than 1 day.
 
         Returns
         -------
@@ -4445,8 +4515,7 @@ class TimedeltaProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def microseconds(self):
-        """
-        Number of microseconds (>= 0 and less than 1 second).
+        """Return the number of microseconds, >= 0 and less than 1 second.
 
         Returns
         -------
@@ -4477,8 +4546,7 @@ class TimedeltaProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def nanoseconds(self):
-        """
-        Return the number of nanoseconds (n), where 0 <= n < 1 microsecond.
+        """Return the number of nanoseconds, >= 0 and less than 1 microsecond.
 
         Returns
         -------
@@ -4546,8 +4614,7 @@ class TimedeltaProperties:
 
 @_cudf_nvtx_annotate
 def _align_indices(series_list, how="outer", allow_non_unique=False):
-    """
-    Internal util to align the indices of a list of Series objects
+    """Align the indices of a list of Series objects.
 
     series_list : list of Series objects
     how : {"outer", "inner"}
@@ -4614,13 +4681,13 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
 
 @_cudf_nvtx_annotate
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    """Returns a boolean array where two arrays are equal within a tolerance.
+    r"""Return a boolean array where two arrays are equal within a tolerance.
 
     Two values in ``a`` and ``b`` are  considered equal when the following
     equation is satisfied.
 
     .. math::
-       |a - b| \\le \\mathrm{atol} + \\mathrm{rtol} |b|
+       |a - b| \le \mathrm{atol} + \mathrm{rtol} |b|
 
     Parameters
     ----------
@@ -4692,7 +4759,6 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     5    False
     dtype: bool
     """
-
     if not can_convert_to_column(a):
         raise TypeError(
             f"Parameter `a` is expected to be a "

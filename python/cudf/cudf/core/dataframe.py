@@ -6258,7 +6258,7 @@ def from_dataframe(df, allow_copy=False):
     return df_protocol.from_dataframe(df, allow_copy=allow_copy)
 
 
-def make_binop_func(op, postprocess=None):
+def _make_binop_func(op, postprocess=None):
     # This function is used to wrap binary operations in Frame with an
     # appropriate API for DataFrame as required for pandas compatibility. The
     # main effect is reordering and error-checking parameters in
@@ -6317,16 +6317,16 @@ for binop in [
     "rtruediv",
     "rdiv",
 ]:
-    setattr(DataFrame, binop, make_binop_func(binop))
+    setattr(DataFrame, binop, _make_binop_func(binop))
 
 
 def _make_replacement_func(value):
     # This function generates a postprocessing function suitable for use with
-    # make_binop_func that fills null columns with the desired fill value.
+    # _make_binop_func that fills null columns with the desired fill value.
 
     def func(left, right, output):
         # This function may be passed as the postprocess argument to
-        # make_binop_func. Columns that are only present in one of the inputs
+        # _make_binop_func. Columns that are only present in one of the inputs
         # will be null in the output. This function postprocesses the output to
         # replace those nulls with some desired output.
         if isinstance(right, Series):
@@ -6354,7 +6354,7 @@ def _make_replacement_func(value):
 # The ne comparator needs special postprocessing because elements that missing
 # in one operand should be treated as null and result in True in the output
 # rather than simply propagating nulls.
-DataFrame.ne = make_binop_func("ne", _make_replacement_func(True))
+DataFrame.ne = _make_binop_func("ne", _make_replacement_func(True))
 
 
 # All other comparison operators needs return False when one of the operands is
@@ -6367,7 +6367,9 @@ for binop in [
     "ge",
 ]:
     setattr(
-        DataFrame, binop, make_binop_func(binop, _make_replacement_func(False))
+        DataFrame,
+        binop,
+        _make_binop_func(binop, _make_replacement_func(False)),
     )
 
 
