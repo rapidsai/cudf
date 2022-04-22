@@ -16,6 +16,26 @@ from cudf.core.column import as_column, build_categorical_column
 from cudf.utils import ioutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
+BYTE_SIZES = {
+    "kB": 10**3,
+    "MB": 10**6,
+    "GB": 10**9,
+    "TB": 10**12,
+    "PB": 10**15,
+    "KiB": 2**10,
+    "MiB": 2**20,
+    "GiB": 2**30,
+    "TiB": 2**40,
+    "PiB": 2**50,
+    "B": 1,
+    "": 1,
+}
+BYTE_SIZES = {k.lower(): v for k, v in BYTE_SIZES.items()}
+BYTE_SIZES.update(
+    {k[0]: v for k, v in BYTE_SIZES.items() if k and "i" not in k}
+)
+BYTE_SIZES.update({k[:-1]: v for k, v in BYTE_SIZES.items() if k and "i" in k})
+
 
 @_cudf_nvtx_annotate
 def _write_parquet(
@@ -782,6 +802,66 @@ def _get_partitioned_new(
 ParquetWriter = libparquet.ParquetWriter
 
 
+def _parse_bytes(s):
+    """Parse byte string to numbers
+
+    >>> _parse_bytes('100')
+    100
+    >>> _parse_bytes('100 MB')
+    100000000
+    >>> _parse_bytes('100M')
+    100000000
+    >>> _parse_bytes('5kB')
+    5000
+    >>> _parse_bytes('5.4 kB')
+    5400
+    >>> _parse_bytes('1kiB')
+    1024
+    >>> _parse_bytes('1e6')
+    1000000
+    >>> _parse_bytes('1e6 kB')
+    1000000000
+    >>> _parse_bytes('MB')
+    1000000
+    >>> _parse_bytes(123)
+    123
+    >>> _parse_bytes('5 foos')
+    Traceback (most recent call last):
+        ...
+    ValueError: Could not interpret 'foos' as a byte unit
+    """
+    if isinstance(s, (int, float)):
+        return int(s)
+    s = s.replace(" ", "")
+    if not any(char.isdigit() for char in s):
+        s = "1" + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:]
+
+    try:
+        n = float(prefix)
+    except ValueError as e:
+        raise ValueError(
+            "Could not interpret '%s' as a number" % prefix
+        ) from e
+
+    try:
+        multiplier = BYTE_SIZES[suffix.lower()]
+    except KeyError as e:
+        raise ValueError(
+            "Could not interpret '%s' as a byte unit" % suffix
+        ) from e
+
+    result = n * multiplier
+    return int(result)
+
+
 class ParquetDatasetWriter:
     @_cudf_nvtx_annotate
     def __init__(
@@ -862,10 +942,14 @@ class ParquetDatasetWriter:
         self.path_cw_map: Dict[str, int] = {}
         self.filename = file_name_prefix
         self.max_file_size = max_file_size
-        if max_file_size is not None and file_name_prefix is None:
-            raise ValueError(
-                "file_name_prefix cannot be None if max_file_size is passed"
-            )
+        if max_file_size is not None:
+            if file_name_prefix is None:
+                raise ValueError(
+                    "file_name_prefix cannot be None if max_file_size is "
+                    "passed"
+                )
+            self.max_file_size = _parse_bytes(max_file_size)
+
         self._file_sizes: Dict[str, int] = {}
 
     @_cudf_nvtx_annotate
@@ -899,10 +983,13 @@ class ParquetDatasetWriter:
             if self.max_file_size is not None:
                 start, end = current_offset
                 sliced_df = grouped_df[start:end]
+
                 current_file_size = get_estimated_file_size(sliced_df)
                 if current_file_size > self.max_file_size:
                     parts = int(current_file_size // self.max_file_size)
-                    new_offsets = list(range(start, end, parts))[1:]
+                    new_offsets = list(
+                        range(start, end, int((end - start) / parts))
+                    )[1:]
                     new_offsets.append(end)
                     num_chunks = len(new_offsets)
                     full_offsets.extend(new_offsets)
