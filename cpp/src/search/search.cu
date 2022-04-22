@@ -18,7 +18,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -45,16 +44,6 @@
 
 namespace cudf {
 namespace {
-template <typename... Args>
-void search_bound(bool find_lower_bound, Args&&... args)
-{
-  if (find_lower_bound) {
-    thrust::lower_bound(args...);
-  } else {
-    thrust::upper_bound(args...);
-  }
-}
-
 std::unique_ptr<column> search_bound(table_view const& t,
                                      table_view const& values,
                                      bool find_lower_bound,
@@ -86,41 +75,30 @@ std::unique_ptr<column> search_bound(table_view const& t,
   // It will return any new dictionary columns created as well as updated table_views.
   auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
-  // Prepare to flatten the structs column
-  auto const has_any_nulls       = has_nested_nulls(t) or has_nested_nulls(values);
-  auto const flatten_nullability = has_any_nulls
-                                     ? structs::detail::column_nullability::FORCE
-                                     : structs::detail::column_nullability::MATCH_INCOMING;
-
-  // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
-  auto const t_flattened = structs::detail::flatten_nested_columns(
-    matched.second.front(), column_order, null_precedence, flatten_nullability);
-  auto const values_flattened =
-    structs::detail::flatten_nested_columns(matched.second.back(), {}, {}, flatten_nullability);
-
-  auto const t_d      = table_device_view::create(t_flattened, stream);
-  auto const values_d = table_device_view::create(values_flattened, stream);
-  auto const& lhs     = find_lower_bound ? *t_d : *values_d;
-  auto const& rhs     = find_lower_bound ? *values_d : *t_d;
-
-  auto const& column_order_flattened    = t_flattened.orders();
-  auto const& null_precedence_flattened = t_flattened.null_orders();
-  auto const column_order_dv = detail::make_device_uvector_async(column_order_flattened, stream);
-  auto const null_precedence_dv =
-    detail::make_device_uvector_async(null_precedence_flattened, stream);
-
   auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  auto const comp     = row_lexicographic_comparator(
-    nullate::DYNAMIC{has_any_nulls}, lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
+  auto const& lhs     = find_lower_bound ? matched.second.front() : matched.second.back();
+  auto const& rhs     = find_lower_bound ? matched.second.back() : matched.second.front();
+  auto const comp     = cudf::experimental::row::lexicographic::table_comparator(
+    lhs, rhs, column_order, null_precedence, stream);
+  auto const has_any_nulls = has_nested_nulls(t) or has_nested_nulls(values);
+  auto const dcomp         = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
 
-  search_bound(find_lower_bound,
-               rmm::exec_policy(stream),
-               count_it,
-               count_it + t.num_rows(),
-               count_it,
-               count_it + values.num_rows(),
-               out_it,
-               comp);
+  auto const do_search = [find_lower_bound](auto&&... args) {
+    if (find_lower_bound) {
+      thrust::lower_bound(std::forward<decltype(args)>(args)...);
+    } else {
+      thrust::upper_bound(std::forward<decltype(args)>(args)...);
+    }
+  };
+
+  do_search(rmm::exec_policy(stream),
+            count_it,
+            count_it + t.num_rows(),
+            count_it,
+            count_it + values.num_rows(),
+            out_it,
+            dcomp);
+
   return result;
 }
 
