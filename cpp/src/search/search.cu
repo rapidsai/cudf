@@ -39,6 +39,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
+#include <thrust/uninitialized_fill.h>
 
 namespace cudf {
 namespace {
@@ -104,7 +105,9 @@ std::unique_ptr<column> search_bound(table_view const& t,
 
 struct contains_scalar_dispatch {
   template <typename Element>
-  bool operator()(column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
+  std::enable_if_t<!is_nested<Element>(), bool> operator()(column_view const& col,
+                                                           scalar const& value,
+                                                           rmm::cuda_stream_view stream)
   {
     CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
@@ -132,83 +135,104 @@ struct contains_scalar_dispatch {
       return check_contain(begin, end, val);
     }
   }
-};
 
-template <>
-bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const&,
-                                                           scalar const&,
-                                                           rmm::cuda_stream_view)
-{
-  CUDF_FAIL("list_view type not supported yet");
-}
+  /**
+   * @brief Check if the (unique) row of the @p value column is contained in the @p col column.
+   *
+   * This utility function is only applied for nested types (struct + list). Caller is responsible
+   * to make sure the @p value column has EXACTLY ONE ROW.
+   */
+  static bool check_contain_for_nested_type(column_view const& col,
+                                            column_view const& value,
+                                            rmm::cuda_stream_view stream)
+  {
+    auto const col_tview     = table_view{{col}};
+    auto const val_tview     = table_view{{value}};
+    auto const has_any_nulls = has_nested_nulls(col_tview) || has_nested_nulls(val_tview);
 
-template <>
-bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& col,
-                                                             scalar const& value,
-                                                             rmm::cuda_stream_view stream)
-{
-  CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
+    auto const comp =
+      cudf::experimental::row::equality::table_comparator(col_tview, val_tview, stream);
+    auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
 
-  auto const scalar_tview = static_cast<struct_scalar const*>(&value)->view();
-  CUDF_EXPECTS(col.num_children() == scalar_tview.num_columns(),
-               "struct scalar and structs column must have the same number of children");
-  for (size_type i = 0; i < col.num_children(); ++i) {
-    CUDF_EXPECTS(col.child(i).type() == scalar_tview.column(i).type(),
-                 "scalar and column children types must match");
+    auto const col_cdv_ptr       = column_device_view::create(col, stream);
+    auto const col_validity_iter = cudf::detail::make_validity_iterator<true>(*col_cdv_ptr);
+    auto const begin             = thrust::make_counting_iterator(0);
+    auto const end               = begin + col.size();
+    auto const found_it          = thrust::find_if(
+      rmm::exec_policy(stream), begin, end, [dcomp, col_validity_iter] __device__(auto const idx) {
+        if (!col_validity_iter[idx]) { return false; }
+        return dcomp(idx, 0);  // compare col[idx] == val[0].
+      });
+
+    return found_it != end;
   }
 
-  // Convert the input scalar value into a structs column of one row.
-  auto const val_col = cudf::make_structs_column(
-    1, table{scalar_tview}.release(), 0, rmm::device_buffer{0, stream}, stream);
+  template <typename Element>
+  std::enable_if_t<is_nested<Element>(), bool> operator()(column_view const& col,
+                                                          scalar const& value,
+                                                          rmm::cuda_stream_view stream)
+  {
+    CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
-  auto const col_tview     = table_view{{col}};
-  auto const has_any_nulls = has_nested_nulls(col_tview) || has_nested_nulls(scalar_tview);
+    auto constexpr is_struct_type = std::is_same_v<Element, cudf::struct_view>;
+    if constexpr (is_struct_type) {
+      auto const scalar_tview = dynamic_cast<struct_scalar const*>(&value)->view();
+      CUDF_EXPECTS(col.num_children() == scalar_tview.num_columns(),
+                   "struct scalar and structs column must have the same number of children");
+      for (size_type i = 0; i < col.num_children(); ++i) {
+        CUDF_EXPECTS(col.child(i).type() == scalar_tview.column(i).type(),
+                     "scalar and column children types must match");
+      }
 
-  auto const comp = cudf::experimental::row::equality::table_comparator(
-    col_tview, table_view{{val_col->view()}}, stream);
-  auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
+      // Generate a column_view of one row having children given from the input scalar.
+      auto const val_col =
+        column_view(data_type{type_id::STRUCT},
+                    1,
+                    nullptr,
+                    nullptr,
+                    0,
+                    0,
+                    std::vector<column_view>{scalar_tview.begin(), scalar_tview.end()});
 
-#if 0
-  // Prepare to flatten the structs column and scalar.
-  auto const flatten_nullability = has_any_nulls
-                                     ? structs::detail::column_nullability::FORCE
-                                     : structs::detail::column_nullability::MATCH_INCOMING;
+      return check_contain_for_nested_type(col, val_col, stream);
+    } else {  // list type
+      auto const scalar_cview = dynamic_cast<list_scalar const*>(&value)->view();
+      CUDF_EXPECTS(lists_column_view{col}.child().type() == scalar_cview.type(),
+                   "scalar and column child types must match");
 
-  // Flatten the input structs column, only materialize the bitmask if there is null in the input.
-  auto const col_flattened =
-    structs::detail::flatten_nested_columns(col_tview, {}, {}, flatten_nullability);
-  auto const val_flattened =
-    structs::detail::flatten_nested_columns(scalar_tview, {}, {}, flatten_nullability);
+      // Generate a (lists) column_view of one row having the child given from the input scalar.
+      auto offsets = rmm::device_uvector<offset_type>(2, stream);
+      thrust::uninitialized_fill(
+        rmm::exec_policy(stream), offsets.begin(), offsets.begin() + 1, offset_type{0});
+      thrust::uninitialized_fill(rmm::exec_policy(stream),
+                                 offsets.begin() + 1,
+                                 offsets.begin() + 2,
+                                 offset_type{scalar_cview.size()});
+      auto const offsets_cview = column_view(data_type{type_id::INT32}, 2, offsets.data());
+      auto const val_col       = column_view(data_type{type_id::LIST},
+                                       1,
+                                       nullptr,
+                                       nullptr,
+                                       0,
+                                       0,
+                                       std::vector<column_view>{offsets_cview, scalar_cview});
 
-  // The struct scalar only contains the struct member columns.
-  // Thus, if there is any null in the input, we must exclude the first column in the flattened
-  // table of the input column from searching because that column is the materialized bitmask of
-  // the input structs column.
-  auto const col_flattened_content  = col_flattened.flattened_columns();
-  auto const col_flattened_children = table_view{
-    std::vector<column_view>{col_flattened_content.begin() + static_cast<size_type>(has_any_nulls),
-                             col_flattened_content.end()}};
+      return check_contain_for_nested_type(col, val_col, stream);
+    }
+  }
 
-  auto const d_col_children_ptr = table_device_view::create(col_flattened_children, stream);
-  auto const d_val_ptr          = table_device_view::create(val_flattened, stream);
-
-  auto const comp       = row_equality_comparator(
-    nullate::DYNAMIC{has_any_nulls}, *d_col_children_ptr, *d_val_ptr, null_equality::EQUAL);
-#endif
-  auto const d_col_ptr  = column_device_view::create(col, stream);
-  auto const start_iter = thrust::make_counting_iterator<size_type>(0);
-  auto const end_iter   = start_iter + col.size();
-  auto const found_iter = thrust::find_if(
-    rmm::exec_policy(stream),
-    start_iter,
-    end_iter,
-    [dcomp, d_col = *d_col_ptr, has_null_structs = col.has_nulls()] __device__(auto const idx) {
-      if (has_null_structs && d_col.is_null_nocheck(idx)) { return false; }
-      return dcomp(idx, 0);  // compare col[idx] == val[0].
-    });
-
-  return found_iter != end_iter;
-}
+  //  template <typename Element>
+  //  std::enable_if_t<std::is_same_v<Element, cudf::struct_view>(), bool> operator()(
+  //    column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
+  //  {
+  //  }
+  //
+  //  template <typename Element>
+  //  std::enable_if_t<std::is_same_v<Element, cudf::list_view>(), bool> operator()(
+  //    column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
+  //  {
+  //  }
+};
 
 template <>
 bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& col,
