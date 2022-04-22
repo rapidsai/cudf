@@ -1155,7 +1155,7 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
       grp.start_chunk =
         static_cast<uint32_t>(column.index() * segmentation.num_rowgroups() + stripe.first);
       grp.num_chunks = stripe.size;
-      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
+      for (auto rg_idx_it = stripe.cbegin(); rg_idx_it != stripe.cend(); ++rg_idx_it) {
         auto& rg_grp =
           rowgroup_stat_merge[column.index() * segmentation.num_rowgroups() + *rg_idx_it];
         rg_grp.col_dtype   = column.type();
@@ -1170,10 +1170,10 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
   stripe_merge.host_to_device(stream);
   set_stat_desc_leaf_cols(orc_table.d_columns, stat_desc, stream);
 
-  // rowgroup stat chunks are written out in each stripe stripe and file-level chunks are written in
-  // the footer. to prevent persisting the rowgroup stat chunks across multiple calls to write in a
+  // The rowgroup stat chunks are written out in each stripe and file-level chunks are written in
+  // the footer. To prevent persisting the rowgroup stat chunks across multiple write calls in a
   // chunked write situation, these allocations are split up so stripe data can persist until the
-  // footer write
+  // footer is written.
   rmm::device_uvector<statistics_chunk> rowgroup_chunks(num_rowgroup_blobs, stream);
   rmm::device_uvector<statistics_chunk> stripe_chunks(num_stripe_blobs, stream);
   auto rowgroup_stat_chunks = rowgroup_chunks.data();
