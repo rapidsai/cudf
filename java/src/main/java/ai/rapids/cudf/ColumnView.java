@@ -3475,7 +3475,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Generate list offsets from sizes of each list.
-   * NOTICE: This column should type in INT32. And no null and negative value is allowed.
+   * NOTICE: This API only works for INT32. Otherwise, the behavior is undefined. And no null and negative value is allowed.
    *
    * @return a column of list offsets whose size is N + 1
    */
