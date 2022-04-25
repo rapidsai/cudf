@@ -1124,7 +1124,7 @@ class Frame(BinaryOperand, Scannable):
                 for key, value in value.items()
             }
 
-        filled_data = ColumnAccessor(multiindex=self._data.multiindex)
+        filled_data = {}
         for col_name, col in self._data.items():
             if col_name in value and method is None:
                 replace_val = value[col_name]
@@ -1136,12 +1136,18 @@ class Frame(BinaryOperand, Scannable):
                 and not libcudf.scalar._is_null_host_scalar(replace_val)
             ) or method is not None
             if should_fill:
-                filled_data._data[col_name] = col.fillna(replace_val, method)
+                filled_data[col_name] = col.fillna(replace_val, method)
             else:
-                filled_data._data[col_name] = col.copy(deep=True)
+                filled_data[col_name] = col.copy(deep=True)
 
         return self._mimic_inplace(
-            self._from_data(data=filled_data),
+            self._from_data(
+                data=ColumnAccessor._create_unsafe(
+                    data=filled_data,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                )
+            ),
             inplace=inplace,
         )
 
