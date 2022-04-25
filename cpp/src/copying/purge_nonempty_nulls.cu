@@ -47,9 +47,9 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
     return d_input.is_null_nocheck(row_idx) && (offsets[row_idx] != offsets[row_idx + 1]);
   };
 
-  auto const row_begin = thrust::make_counting_iterator<cudf::size_type>(0);
+  auto const row_begin = thrust::counting_iterator<cudf::size_type>(0);
   auto const row_end   = row_begin + input.size();
-  return thrust::any_of(rmm::exec_policy(stream), row_begin, row_end, is_dirty_row);
+  return thrust::count_if(rmm::exec_policy(stream), row_begin, row_end, is_dirty_row) > 0;
 }
 
 /// Check if any child columns of the `input` have non-empty null rows.
