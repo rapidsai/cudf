@@ -15,14 +15,14 @@ filtering, concatenating, joining, groupby and window operations -
 among many others.
 
 The best way to see if we support a particular Pandas API is to search
-our [API docs](https://docs.rapids.ai/api/cudf/stable/).
+our [API docs](/api_docs/index).
 
 ## Data types
 
 cuDF supports many common data types supported by Pandas, including
 numeric, datetime, timestamp, string, and categorical data types.  In
 addition, we support special data types for decimal, list and "struct"
-values.  See the section on {doc}`Data Types <data-types>` for
+values.  See the section on [Data Types](data-types) for
 details.
 
 Note that we do not support custom data types like Pandas'
@@ -33,14 +33,28 @@ Note that we do not support custom data types like Pandas'
 Unlike Pandas, *all* data types in cuDF are nullable,
 meaning they can contain missing values (represented by `cudf.NA`).
 
-```python >>> s = cudf.Series([1, 2, cudf.NA]) >>> s >>> s 0       1 1       2 2    <NA> dtype: int64
-
+```{code} python
+>>> s = cudf.Series([1, 2, cudf.NA])
+>>> s
+>>> s
+0       1
+1       2
+2    <NA>
+dtype: int64
 ```
 
 Nulls are not coerced to `nan` in any situation;
 compare the behaviour of cuDF with Pandas below:
 
-```python >>> s = cudf.Series([1, 2, cudf.NA], dtype="category") >>> s 0       1 1       2 2    <NA> dtype: category Categories (2, int64): [1, 2]
+```{code} python
+>>> s = cudf.Series([1, 2, cudf.NA], dtype="category")
+>>> s
+0       1
+1       2
+2    <NA>
+dtype: category
+Categories (2, int64): [1, 2]
+
 >>> s = pd.Series([1, 2, pd.NA], dtype="category")
 >>> s
 0      1
@@ -50,8 +64,21 @@ dtype: category
 Categories (2, int64): [1, 2]
 ```
 
-See our {doc}`docs on missing data<Working-with-missing-data>`
-for details.
+See the docs on [missing data](Working-with-missing-data) for
+details.
+
+## Iteration
+
+Iterating over a cuDF `Series`, `DataFrame` or `Index` is not
+supported. This is because iterating over data that resides on the GPU
+will yield *extremely* poor performance, as GPUs are optimized for
+highly parallel operations rather than sequential operations.
+
+In the vast majority of cases, it is possible to avoid iteration and
+use an existing function or method to accomplish the same task. If you
+absolutely must iterate, copy the data from GPU to CPU by using
+`.to_arrow()` or `.to_pandas()`, then copy the result back to GPU
+using `.from_arrow()` or `.from_pandas()`.
 
 ## Result ordering
 
@@ -59,30 +86,30 @@ By default, `join` (or `merge`) and `groupby` operations in cuDF
 do *not* guarantee output ordering by default.
 Compare the results obtained from Pandas and cuDF below:
 
-```python
->>> import cupy as cp
->>> df = cudf.DataFrame({'a': cp.random.randint(0, 1000, 1000), 'b': range(1000)})
->>> df.groupby("a").mean().head()
-         b
-a
-742  694.5
-29   840.0
-459  525.5
-442  363.0
-666    7.0
->>> df.to_pandas().groupby("a").mean().head()
-         b
-a
-2   643.75
-6    48.00
-7   631.00
-9   906.00
-10  640.00
+```{code} python
+ >>> import cupy as cp
+ >>> df = cudf.DataFrame({'a': cp.random.randint(0, 1000, 1000), 'b': range(1000)})
+ >>> df.groupby("a").mean().head()
+          b
+ a
+ 742  694.5
+ 29   840.0
+ 459  525.5
+ 442  363.0
+ 666    7.0
+ >>> df.to_pandas().groupby("a").mean().head()
+          b
+ a
+ 2   643.75
+ 6    48.00
+ 7   631.00
+ 9   906.00
+ 10  640.00
 ```
 
 To match Pandas behavior, you must explicitly pass `sort=True`:
 
-```python
+```{code} python
 >>> df.to_pandas().groupby("a", sort=True).mean().head()
          b
 a
@@ -104,8 +131,13 @@ In Pandas and NumPy, the `"object"` data type is used for
 collections of arbitrary Python objects.  For example, in Pandas you
 can do the following:
 
-```python >>> import pandas as pd >>> s = pd.Series(["a", 1, [1, 2, 3]]) 0            a 1            1 2    [1, 2, 3] dtype: object
-
+```{code} python
+>>> import pandas as pd
+>>> s = pd.Series(["a", 1, [1, 2, 3]])
+0            a
+1            1
+2    [1, 2, 3]
+dtype: object
 ```
 
 For compatibilty with Pandas, cuDF reports the data type for strings
@@ -120,4 +152,4 @@ value of a `Series`, `DataFrame`, or in the case of a groupby,
 each group.  cuDF also supports `apply()`, but it relies on Numba to
 JIT compile the UDF and execute it on the GPU. This can be extremely
 fast, but imposes a few limitations on what operations are allowed in
-the UDF. See our {doc}`UDF docs <guide-to-udfs>` for details.
+the UDF. See the docs on [UDFs](guide-to-udfs) for details.
