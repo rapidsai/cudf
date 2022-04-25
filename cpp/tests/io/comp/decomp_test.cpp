@@ -15,6 +15,7 @@
  */
 
 #include <io/comp/gpuinflate.h>
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 
@@ -44,35 +45,27 @@ struct DecompressTest : public cudf::test::BaseFixture {
                   const uint8_t* compressed,
                   size_t compressed_size)
   {
-    rmm::device_buffer src{compressed, compressed_size, rmm::cuda_stream_default};
-    rmm::device_uvector<uint8_t> dst{decompressed->size(), rmm::cuda_stream_default};
+    auto stream = rmm::cuda_stream_default;
+    rmm::device_buffer src{compressed, compressed_size, stream};
+    rmm::device_uvector<uint8_t> dst{decompressed->size(), stream};
 
-    device_span<uint8_t const> inf_in{static_cast<const uint8_t*>(src.data()), src.size()};
-    device_span<uint8_t> inf_out{dst};
-    cudf::io::decompress_status inf_stat{};
+    hostdevice_vector<device_span<uint8_t const>> inf_in(1, stream);
+    inf_in[0] = {static_cast<const uint8_t*>(src.data()), src.size()};
+    inf_in.host_to_device(stream);
 
-    rmm::device_uvector<device_span<uint8_t const>> d_inf_in(1, rmm::cuda_stream_default);
-    rmm::device_uvector<device_span<uint8_t>> d_inf_out(1, rmm::cuda_stream_default);
-    rmm::device_uvector<cudf::io::decompress_status> d_inf_stat(1, rmm::cuda_stream_default);
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
-      d_inf_in.data(), &inf_in, sizeof(device_span<uint8_t const>), cudaMemcpyHostToDevice, 0));
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
-      d_inf_out.data(), &inf_out, sizeof(device_span<uint8_t>), cudaMemcpyHostToDevice, 0));
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_inf_stat.data(),
-                                          &inf_stat,
-                                          sizeof(cudf::io::decompress_status),
-                                          cudaMemcpyHostToDevice,
-                                          0));
+    hostdevice_vector<device_span<uint8_t>> inf_out(1, stream);
+    inf_out[0] = dst;
+    inf_out.host_to_device(stream);
 
-    static_cast<Decompressor*>(this)->dispatch(d_inf_in, d_inf_out, d_inf_stat);
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(&inf_stat,
-                                          d_inf_stat.data(),
-                                          sizeof(cudf::io::decompress_status),
-                                          cudaMemcpyDeviceToHost,
-                                          0));
-    ASSERT_CUDA_SUCCEEDED(
-      cudaMemcpyAsync(decompressed->data(), dst.data(), dst.size(), cudaMemcpyDeviceToHost, 0));
-    ASSERT_CUDA_SUCCEEDED(cudaStreamSynchronize(0));
+    hostdevice_vector<cudf::io::decompress_status> inf_stat(1, stream);
+    inf_stat[0] = {};
+    inf_stat.host_to_device(stream);
+
+    static_cast<Decompressor*>(this)->dispatch(inf_in, inf_out, inf_stat);
+    cudaMemcpyAsync(
+      decompressed->data(), dst.data(), dst.size(), cudaMemcpyDeviceToHost, stream.value());
+    inf_stat.device_to_host(stream, true);
+    ASSERT_EQ(inf_stat[0].status, 0);
   }
 };
 
