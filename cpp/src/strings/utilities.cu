@@ -46,14 +46,17 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
 
   auto strings_vector = rmm::device_uvector<string_view>(input.size(), stream, mr);
 
-  thrust::transform(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(input.size()),
-    strings_vector.begin(),
-    [d_strings = *d_strings] __device__(size_type idx) {
-      return d_strings.is_null(idx) ? string_view{nullptr, 0} : d_strings.element<string_view>(idx);
-    });
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(input.size()),
+                    strings_vector.begin(),
+                    [d_strings = *d_strings] __device__(size_type idx) {
+                      if (d_strings.is_null(idx)) return string_view{nullptr, 0};
+                      auto const d_str = d_strings.element<string_view>(idx);
+                      // special case when the entire column is filled with empty strings:
+                      // here the d_str may have a data() pointer == nullptr
+                      return d_str.empty() ? string_view{} : d_str;
+                    });
 
   return strings_vector;
 }

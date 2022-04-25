@@ -254,9 +254,9 @@ struct list_child_constructor {
         auto child_strings_column = lists_column.child();
         auto strings_offset       = lists_offsets_ptr[row_index] + intra_index;
 
-        return child_strings_column.is_null(strings_offset)
-                 ? string_view{nullptr, 0}
-                 : child_strings_column.template element<string_view>(strings_offset);
+        if (child_strings_column.is_null(strings_offset)) { return string_view{nullptr, 0}; }
+        auto const d_str = child_strings_column.template element<string_view>(strings_offset);
+        return d_str.empty() ? string_view{} : d_str;
       });
 
     // string_views should now have been populated with source and target references.
