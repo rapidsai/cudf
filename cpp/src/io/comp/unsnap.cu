@@ -87,10 +87,10 @@ inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
  */
 __device__ void snappy_prefetch_bytestream(unsnap_state_s* s, int t)
 {
-  const uint8_t* base  = s->base;
-  uint32_t end         = (uint32_t)(s->end - base);
-  uint32_t align_bytes = (uint32_t)(0x20 - (0x1f & reinterpret_cast<uintptr_t>(base)));
-  int32_t pos          = min(align_bytes, end);
+  const uint8_t* base = s->base;
+  auto end            = (uint32_t)(s->end - base);
+  auto align_bytes    = (uint32_t)(0x20 - (0x1f & reinterpret_cast<uintptr_t>(base)));
+  int32_t pos         = min(align_bytes, end);
   int32_t blen;
   // Start by prefetching up to the next a 32B-aligned location
   if (t < pos) { s->q.buf[t] = base[t]; }
@@ -278,7 +278,7 @@ inline __device__ uint32_t get_len5_mask(uint32_t v0, uint32_t v1)
 __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
 {
   uint32_t cur        = 0;
-  uint32_t end        = static_cast<uint32_t>(s->end - s->base);
+  auto end            = static_cast<uint32_t>(s->end - s->base);
   uint32_t bytes_left = s->uncompressed_size;
   uint32_t dst_pos    = 0;
   int32_t batch       = 0;
@@ -498,7 +498,7 @@ template <typename Storage>
 __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_storage)
 {
   const uint8_t* literal_base = s->base;
-  uint8_t* out                = static_cast<uint8_t*>(s->in.dstDevice);
+  auto* out                   = static_cast<uint8_t*>(s->in.dstDevice);
   int batch                   = 0;
 
   do {
@@ -610,7 +610,7 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
     __syncwarp();
     if (t == 0) { s->q.batch_len[batch] = 0; }
     batch = (batch + 1) & (batch_count - 1);
-  } while (1);
+  } while (true);
 }
 
 /**
@@ -639,7 +639,7 @@ __global__ void __launch_bounds__(block_size)
   if (t < batch_count) { s->q.batch_len[t] = 0; }
   __syncthreads();
   if (!t) {
-    const uint8_t* cur = static_cast<const uint8_t*>(s->in.srcDevice);
+    const auto* cur    = static_cast<const uint8_t*>(s->in.srcDevice);
     const uint8_t* end = cur + s->in.srcSize;
     s->error           = 0;
     if (log_cyclecount) { s->tstart = clock(); }

@@ -23,6 +23,8 @@
 
 #include <cudf/utilities/span.hpp>
 
+#include <optional>
+
 namespace cudf {
 namespace detail {
 static constexpr char trie_terminating_character = '\n';

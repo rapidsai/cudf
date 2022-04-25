@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ template <typename RangeType>
 constexpr bool is_supported_range_type()
 {
   return cudf::is_duration<RangeType>() ||
-         (std::is_integral<RangeType>::value && !cudf::is_boolean<RangeType>());
+         (std::is_integral_v<RangeType> && !cudf::is_boolean<RangeType>());
 }
 
 /// Checks if the specified type is a supported target type,
@@ -37,7 +37,7 @@ template <typename ColumnType>
 constexpr bool is_supported_order_by_column_type()
 {
   return cudf::is_timestamp<ColumnType>() ||
-         (std::is_integral<ColumnType>::value && !cudf::is_boolean<ColumnType>());
+         (std::is_integral_v<ColumnType> && !cudf::is_boolean<ColumnType>());
 }
 
 /// Range-comparable representation type for an orderby column type.
@@ -57,7 +57,7 @@ struct range_type_impl {
 template <typename ColumnType>
 struct range_type_impl<
   ColumnType,
-  std::enable_if_t<std::is_integral<ColumnType>::value && !cudf::is_boolean<ColumnType>(), void>> {
+  std::enable_if_t<std::is_integral_v<ColumnType> && !cudf::is_boolean<ColumnType>(), void>> {
   using type     = ColumnType;
   using rep_type = ColumnType;
 };
@@ -88,7 +88,7 @@ void assert_non_negative(T const& value)
 template <
   typename RangeT,
   typename RepT,
-  std::enable_if_t<std::is_integral<RangeT>::value && !cudf::is_boolean<RangeT>(), void>* = nullptr>
+  std::enable_if_t<std::is_integral_v<RangeT> && !cudf::is_boolean<RangeT>(), void>* = nullptr>
 RepT range_comparable_value_impl(scalar const& range_scalar, rmm::cuda_stream_view stream)
 {
   auto val = static_cast<numeric_scalar<RangeT> const&>(range_scalar).value(stream);

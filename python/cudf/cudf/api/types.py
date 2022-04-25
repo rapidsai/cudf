@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections import abc
 from functools import wraps
 from inspect import isclass
 from typing import List, Union
@@ -174,7 +174,7 @@ def is_list_like(obj):
     bool
         Return True if given object is list-like.
     """
-    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
+    return isinstance(obj, (abc.Sequence, np.ndarray)) and not isinstance(
         obj, (str, bytes)
     )
 
@@ -248,7 +248,7 @@ is_datetime64_ns_dtype = pd_types.is_datetime64_ns_dtype
 is_datetime64tz_dtype = pd_types.is_datetime64tz_dtype
 is_extension_type = pd_types.is_extension_type
 is_extension_array_dtype = pd_types.is_extension_array_dtype
-is_float_dtype = pd_types.is_float_dtype
+is_float_dtype = _wrap_pandas_is_dtype_api(pd_types.is_float_dtype)
 is_int64_dtype = pd_types.is_int64_dtype
 is_integer_dtype = _wrap_pandas_is_dtype_api(pd_types.is_integer_dtype)
 is_object_dtype = pd_types.is_object_dtype

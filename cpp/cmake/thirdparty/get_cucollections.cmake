@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -18,12 +18,17 @@ function(find_and_configure_cucollections)
   # Find or install cuCollections
   rapids_cpm_find(
     # cuCollections doesn't have a version yet
-    cuco 0.0
+    cuco 0.0.1
     GLOBAL_TARGETS cuco::cuco
+    BUILD_EXPORT_SET cudf-exports
     CPM_ARGS GITHUB_REPOSITORY NVIDIA/cuCollections
-    GIT_TAG 193de1aa74f5721717f991ca757dc610c852bb17
+    GIT_TAG fb58a38701f1c24ecfe07d8f1f208bbe80930da5
+    EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS}
     OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
+  if(NOT BUILD_SHARED_LIBS)
+    rapids_export_package(INSTALL cuco cudf-exports)
+  endif()
 
 endfunction()
 

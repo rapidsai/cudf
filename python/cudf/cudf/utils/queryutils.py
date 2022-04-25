@@ -1,7 +1,7 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import ast
-import datetime as dt
+import datetime
 from typing import Any, Dict
 
 import numpy as np
@@ -136,7 +136,7 @@ def query_compile(expr):
         key "args" is a sequence of name of the arguments.
     """
 
-    funcid = "queryexpr_{:x}".format(np.uintp(hash(expr)))
+    funcid = f"queryexpr_{np.uintp(hash(expr)):x}"
     # Load cache
     compiled = _cache.get(funcid)
     # Cache not found
@@ -147,7 +147,7 @@ def query_compile(expr):
         # compile
         devicefn = cuda.jit(device=True)(fn)
 
-        kernelid = "kernel_{}".format(funcid)
+        kernelid = f"kernel_{funcid}"
         kernel = _wrap_query_expr(kernelid, devicefn, args)
 
         compiled = info.copy()
@@ -173,10 +173,10 @@ def _wrap_query_expr(name, fn, args):
         if arg.startswith(ENVREF_PREFIX):
             return arg
         else:
-            return "{}[idx]".format(arg)
+            return f"{arg}[idx]"
 
     def _add_prefix(arg):
-        return "_args_{}".format(arg)
+        return f"_args_{arg}"
 
     glbls = {"queryfn": fn, "cuda": cuda}
     kernargs = map(_add_prefix, args)
@@ -232,7 +232,7 @@ def query_execute(df, expr, callenv):
         name = name[len(ENVREF_PREFIX) :]
         try:
             val = envdict[name]
-            if isinstance(val, dt.datetime):
+            if isinstance(val, datetime.datetime):
                 val = np.datetime64(val)
         except KeyError:
             msg = "{!r} not defined in the calling environment"

@@ -20,13 +20,20 @@
 function(ConfigureTest test_name)
   add_executable(${test_name} ${ARGN})
   set_target_properties(
-    ${test_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                            "$<BUILD_INTERFACE:${CUDA_KAFKA_BINARY_DIR}/gtests>"
+    ${test_name}
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_KAFKA_BINARY_DIR}/gtests>"
+               INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(
     ${test_name} PRIVATE GTest::gmock GTest::gmock_main GTest::gtest_main cudf_kafka
   )
   add_test(NAME ${test_name} COMMAND ${test_name})
+  install(
+    TARGETS ${test_name}
+    COMPONENT testing
+    DESTINATION bin/gtests/libcudf_kafka
+    EXCLUDE_FROM_ALL
+  )
 endfunction()
 
 # ##################################################################################################

@@ -1,6 +1,7 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import itertools
+from collections import abc
 from typing import Dict, Optional
 
 import numpy as np
@@ -239,7 +240,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         if ignore_index:
             if axis == 1:
-                result = cudf.DataFrame(
+                result = cudf.DataFrame._from_data(
                     data=obj._data.copy(deep=True),
                     index=obj.index.copy(deep=True),
                 )
@@ -249,13 +250,18 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 # after construction.
                 result.columns = pd.RangeIndex(len(obj._data.names))
             elif axis == 0:
-                if isinstance(obj, (pd.Series, cudf.Series)):
-                    result = cudf.Series(
+                if isinstance(obj, cudf.Series):
+                    result = cudf.Series._from_data(
                         data=obj._data.copy(deep=True),
                         index=cudf.RangeIndex(len(obj)),
                     )
+                elif isinstance(obj, pd.Series):
+                    result = cudf.Series(
+                        data=obj,
+                        index=cudf.RangeIndex(len(obj)),
+                    )
                 else:
-                    result = cudf.DataFrame(
+                    result = cudf.DataFrame._from_data(
                         data=obj._data.copy(deep=True),
                         index=cudf.RangeIndex(len(obj)),
                     )
@@ -330,8 +336,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 else:
                     df[name] = col
 
-        result_columns = objs[0].columns.append(
-            [obj.columns for obj in objs[1:]]
+        result_columns = (
+            objs[0]
+            ._data.to_pandas_index()
+            .append([obj._data.to_pandas_index() for obj in objs[1:]])
         )
 
         if ignore_index:
@@ -370,7 +378,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             return cudf.DataFrame()
         elif len(objs) == 1:
             obj = objs[0]
-            result = cudf.DataFrame(
+            result = cudf.DataFrame._from_data(
                 data=None if join == "inner" else obj._data.copy(deep=True),
                 index=cudf.RangeIndex(len(obj))
                 if ignore_index
@@ -478,17 +486,17 @@ def melt(
     1  b         B          3
     2  c         B          5
     """
-    assert col_level in (None,)
+    if col_level is not None:
+        raise NotImplementedError("col_level != None is not supported yet.")
 
     # Arg cleaning
-    import collections
 
     # id_vars
     if id_vars is not None:
-        if not isinstance(id_vars, collections.abc.Sequence):
+        if not isinstance(id_vars, abc.Sequence):
             id_vars = [id_vars]
         id_vars = list(id_vars)
-        missing = set(id_vars) - set(frame.columns)
+        missing = set(id_vars) - set(frame._column_names)
         if not len(missing) == 0:
             raise KeyError(
                 f"The following 'id_vars' are not present"
@@ -499,10 +507,10 @@ def melt(
 
     # value_vars
     if value_vars is not None:
-        if not isinstance(value_vars, collections.abc.Sequence):
+        if not isinstance(value_vars, abc.Sequence):
             value_vars = [value_vars]
         value_vars = list(value_vars)
-        missing = set(value_vars) - set(frame.columns)
+        missing = set(value_vars) - set(frame._column_names)
         if not len(missing) == 0:
             raise KeyError(
                 f"The following 'value_vars' are not present"
@@ -510,8 +518,7 @@ def melt(
             )
     else:
         # then all remaining columns in frame
-        value_vars = frame.columns.drop(id_vars)
-        value_vars = list(value_vars)
+        value_vars = list(set(frame._column_names) - set(id_vars))
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
@@ -685,7 +692,9 @@ def get_dummies(
         encode_fallback_dtypes = ["object", "category"]
 
         if columns is None or len(columns) == 0:
-            columns = df.select_dtypes(include=encode_fallback_dtypes).columns
+            columns = df.select_dtypes(
+                include=encode_fallback_dtypes
+            )._column_names
 
         _length_check_params(prefix, columns, "prefix")
         _length_check_params(prefix_sep, columns, "prefix_sep")
@@ -1056,7 +1065,9 @@ def unstack(df, level, fill_value=None):
                 )
         res = df.T.stack(dropna=False)
         # Result's index is a multiindex
-        res.index.names = tuple(df.columns.names) + df.index.names
+        res.index.names = (
+            tuple(df._data.to_pandas_index().names) + df.index.names
+        )
         return res
     else:
         columns = df.index._poplevels(level)

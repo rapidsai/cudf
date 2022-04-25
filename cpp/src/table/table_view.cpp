@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <cassert>
@@ -96,4 +98,25 @@ table_view scatter_columns(table_view const& source,
   return table_view{updated_columns};
 }
 
+namespace detail {
+
+template <typename TableView>
+bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
+{
+  return std::all_of(thrust::counting_iterator<size_type>(0),
+                     thrust::counting_iterator<size_type>(lhs.num_columns()),
+                     [lhs, rhs](auto const i) {
+                       return lhs.column(i).type() == rhs.column(i).type() and
+                              cudf::is_relationally_comparable(lhs.column(i).type());
+                     });
+}
+
+// Explicit template instantiation for a table of immutable views
+template bool is_relationally_comparable<table_view>(table_view const& lhs, table_view const& rhs);
+
+// Explicit template instantiation for a table of mutable views
+template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
+                                                             mutable_table_view const& rhs);
+
+}  // namespace detail
 }  // namespace cudf

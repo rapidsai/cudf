@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -371,7 +371,7 @@ std::unique_ptr<column> copy_range(
  * @param fill_value Fill value for indeterminable outputs.
  * @param mr         Device memory resource used to allocate the returned result's device memory
  *
- * @throw cudf::logic_error if @p input dtype is not fixed-with.
+ * @throw cudf::logic_error if @p input dtype is neither fixed-width nor string type
  * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
  */
 std::unique_ptr<column> shift(
@@ -553,8 +553,8 @@ struct packed_columns {
   struct metadata {
     metadata() = default;
     metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
-    uint8_t const* data() const { return data_.data(); }
-    size_t size() const { return data_.size(); }
+    [[nodiscard]] uint8_t const* data() const { return data_.data(); }
+    [[nodiscard]] size_t size() const { return data_.size(); }
 
    private:
     std::vector<uint8_t> data_;

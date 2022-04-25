@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/host_vector.h>
 
 #include <algorithm>
 
@@ -51,7 +53,7 @@ constexpr inline bool is_timestamp_sum()
 // Disable SUM of TIMESTAMP types
 template <typename T,
           typename BinaryOp,
-          typename std::enable_if_t<is_timestamp_sum<T, BinaryOp>()>* = nullptr>
+          std::enable_if_t<is_timestamp_sum<T, BinaryOp>()>* = nullptr>
 __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 {
   return {};
@@ -59,7 +61,7 @@ __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 
 template <typename T,
           typename BinaryOp,
-          typename std::enable_if_t<!is_timestamp_sum<T, BinaryOp>()>* = nullptr>
+          std::enable_if_t<!is_timestamp_sum<T, BinaryOp>()>* = nullptr>
 __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 {
   T old_value = *addr;
@@ -92,13 +94,13 @@ __global__ void gpu_atomicCAS_test(T* result, T* data, size_t size)
 }
 
 template <typename T>
-typename std::enable_if_t<!cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
+std::enable_if_t<!cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
 {
   return std::accumulate(xs.begin(), xs.end(), T{0});
 }
 
 template <typename T>
-typename std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
+std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(cudf::host_span<T const> xs)
 {
   auto ys = std::vector<typename T::rep>(xs.size());
   std::transform(
@@ -129,8 +131,13 @@ struct AtomicsTest : public cudf::test::BaseFixture {
 
     thrust::host_vector<T> result_init(9);  // +3 padding for int8 tests
     result_init[0] = cudf::test::make_type_param_scalar<T>(0);
-    result_init[1] = std::numeric_limits<T>::max();
-    result_init[2] = std::numeric_limits<T>::min();
+    if constexpr (cudf::is_chrono<T>()) {
+      result_init[1] = T::max();
+      result_init[2] = T::min();
+    } else {
+      result_init[1] = std::numeric_limits<T>::max();
+      result_init[2] = std::numeric_limits<T>::min();
+    }
     result_init[3] = result_init[0];
     result_init[4] = result_init[1];
     result_init[5] = result_init[2];
@@ -148,7 +155,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
 
     auto host_result = cudf::detail::make_host_vector_sync(dev_result);
 
-    CHECK_CUDA(rmm::cuda_stream_default.value());
+    CUDF_CHECK_CUDA(rmm::cuda_stream_default.value());
 
     if (!is_timestamp_sum<T, cudf::DeviceSum>()) {
       EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
@@ -295,7 +302,7 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
 
     auto host_result = cudf::detail::make_host_vector_sync(dev_result);
 
-    CHECK_CUDA(rmm::cuda_stream_default.value());
+    CUDF_CHECK_CUDA(rmm::cuda_stream_default.value());
 
     // print_exact(exact, "exact");
     // print_exact(host_result.data(), "result");

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <tests/strings/utilities.h>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -143,6 +145,16 @@ TEST_F(StringsReplaceRegexTest, MultiReplacement)
   results =
     cudf::strings::replace_re(cudf::strings_column_view(input), "aba", cudf::string_scalar(""), 0);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, input);
+}
+
+TEST_F(StringsReplaceRegexTest, WordBoundary)
+{
+  cudf::test::strings_column_wrapper input({"aba bcd\naba", "zéz", "A1B2-é3", "e é"});
+  auto results =
+    cudf::strings::replace_re(cudf::strings_column_view(input), "\\b", cudf::string_scalar("X"));
+  cudf::test::strings_column_wrapper expected(
+    {"XabaX XbcdX\nXabaX", "XzézX", "XA1B2X-Xé3X", "XeX XéX"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsReplaceRegexTest, Multiline)
@@ -269,13 +281,32 @@ TEST_F(StringsReplaceRegexTest, BackrefWithGreedyQuantifier)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexZeroIndexTest)
+{
+  cudf::test::strings_column_wrapper strings(
+    {"TEST123", "TEST1TEST2", "TEST2-TEST1122", "TEST1-TEST-T", "TES3"});
+  auto strings_view         = cudf::strings_column_view(strings);
+  std::string pattern       = "(TEST)(\\d+)";
+  std::string repl_template = "${0}: ${1}, ${2}; ";
+  auto results = cudf::strings::replace_with_backrefs(strings_view, pattern, repl_template);
+
+  cudf::test::strings_column_wrapper expected({
+    "TEST123: TEST, 123; ",
+    "TEST1: TEST, 1; TEST2: TEST, 2; ",
+    "TEST2: TEST, 2; -TEST1122: TEST, 1122; ",
+    "TEST1: TEST, 1; -TEST-T",
+    "TES3",
+  });
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexErrorTest)
 {
   cudf::test::strings_column_wrapper strings({"this string left intentionally blank"});
   auto view = cudf::strings_column_view(strings);
 
-  EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", "\\0"), cudf::logic_error);
-  EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", "\\123"), cudf::logic_error);
+  // group index(3) exceeds the group count(2)
+  EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w).(\\w)", "\\3"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "", "\\1"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::replace_with_backrefs(view, "(\\w)", ""), cudf::logic_error);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace {
@@ -257,7 +261,7 @@ __global__ void copy_block_partitions(InputIter input_iter,
     reinterpret_cast<size_type*>(block_output + OPTIMIZED_BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD);
   auto partition_offset_global = partition_offset_shared + num_partitions + 1;
 
-  typedef cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE> BlockScan;
+  using BlockScan = cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE>;
   __shared__ typename BlockScan::TempStorage temp_storage;
 
   // use ELEMENTS_PER_THREAD=2 to support upto 1024 partitions

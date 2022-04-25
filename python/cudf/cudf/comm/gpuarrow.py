@@ -1,6 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
-from collections import OrderedDict
-from collections.abc import Sequence
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+from collections import OrderedDict, abc
 
 import numpy as np
 import pandas as pd
@@ -32,7 +31,7 @@ class CudaRecordBatchStreamReader(_CudaRecordBatchStreamReader):
         self._open(source, schema)
 
 
-class GpuArrowReader(Sequence):
+class GpuArrowReader(abc.Sequence):
     def __init__(self, schema, dev_ary):
         self._table = CudaRecordBatchStreamReader(dev_ary, schema).read_all()
 
@@ -58,7 +57,7 @@ class GpuArrowReader(Sequence):
         return dc
 
 
-class GpuArrowNodeReader(object):
+class GpuArrowNodeReader:
     def __init__(self, table, index):
         self._table = table
         self._field = table.schema[index]

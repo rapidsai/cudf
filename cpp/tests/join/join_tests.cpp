@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1004,7 +1004,7 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin)
     std::size_t const size_gold = 0;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.inner_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{};
     column_wrapper<int32_t> col_gold_1{};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1043,7 +1043,7 @@ TEST_F(JoinTest, EmptyRightTableLeftJoin)
     std::size_t const size_gold = 5;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.left_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, NoneValue}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1082,7 +1082,7 @@ TEST_F(JoinTest, EmptyRightTableFullJoin)
     std::size_t const size_gold = 5;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.full_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, NoneValue}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1310,7 +1310,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     std::size_t const size_gold = 9;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.full_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{{NoneValue, NoneValue, NoneValue, NoneValue, 4, 0, 1, 2, 3}};
     column_wrapper<int32_t> col_gold_1{{0, 1, 2, 3, 4, NoneValue, NoneValue, NoneValue, NoneValue}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1330,7 +1330,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     std::size_t const size_gold = 5;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.left_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{NoneValue, NoneValue, NoneValue, NoneValue, 4}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1350,7 +1350,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
     std::size_t const size_gold = 3;
     EXPECT_EQ(output_size, size_gold);
 
-    auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, optional_size);
+    auto result = hash_join.inner_join(t0, optional_size);
     column_wrapper<int32_t> col_gold_0{{2, 4, 0}};
     column_wrapper<int32_t> col_gold_1{{1, 1, 4}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1390,7 +1390,7 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
   {
     auto output_size = hash_join.left_join_size(t0);
     EXPECT_EQ(5, output_size);
-    auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, output_size);
+    auto result = hash_join.left_join(t0, output_size);
     column_wrapper<int32_t> col_gold_0{{0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{0, NoneValue, 2, NoneValue, NoneValue}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1400,7 +1400,7 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
   {
     auto output_size = hash_join.inner_join_size(t0);
     EXPECT_EQ(2, output_size);
-    auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, output_size);
+    auto result = hash_join.inner_join(t0, output_size);
     column_wrapper<int32_t> col_gold_0{{0, 2}};
     column_wrapper<int32_t> col_gold_1{{0, 2}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1410,7 +1410,7 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
   {
     auto output_size = hash_join.full_join_size(t0);
     EXPECT_EQ(8, output_size);
-    auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, output_size);
+    auto result = hash_join.full_join(t0, output_size);
     column_wrapper<int32_t> col_gold_0{{NoneValue, NoneValue, NoneValue, 0, 1, 2, 3, 4}};
     column_wrapper<int32_t> col_gold_1{{1, 3, 4, 0, NoneValue, 2, NoneValue, NoneValue}};
     auto const [sorted_gold, sorted_result] = gather_maps_as_tables(col_gold_0, col_gold_1, result);
@@ -1423,7 +1423,7 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
   // self-join a table of zeroes to generate an output row count that would overflow int32_t
   std::size_t col_size = 65567;
   rmm::device_buffer zeroes(col_size * sizeof(int32_t), rmm::cuda_stream_default);
-  CUDA_TRY(cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), rmm::cuda_stream_default.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), rmm::cuda_stream_default.value()));
   cudf::column_view col_zeros(cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data());
   cudf::table_view tview{{col_zeros}};
   cudf::hash_join hash_join(tview, cudf::null_equality::UNEQUAL);

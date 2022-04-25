@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -40,7 +40,10 @@ class ColumnMethods:
 
     @overload
     def _return_or_inplace(
-        self, new_col, expand: bool = False, retain_index: bool = True,
+        self,
+        new_col,
+        expand: bool = False,
+        retain_index: bool = True,
     ) -> ParentType:
         ...
 
@@ -84,7 +87,7 @@ class ColumnMethods:
                     idx.names = None
                     return idx
                 else:
-                    return self._parent._constructor_expanddim(
+                    return self._parent._constructor_expanddim._from_data(
                         data=table._data, index=self._parent.index
                     )
             elif isinstance(self._parent, cudf.Series):

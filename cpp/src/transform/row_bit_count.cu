@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
+#include <thrust/fill.h>
 #include <thrust/optional.h>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -116,17 +117,17 @@ struct column_info {
  *
  */
 struct hierarchy_info {
-  hierarchy_info() : simple_per_row_size(0), complex_type_count(0), max_branch_depth(0) {}
+  hierarchy_info() {}
 
   // These two fields act as an optimization. If we find that the entire table
   // is just fixed-width types, we do not need to do the more expensive kernel call that
   // traverses the individual columns. So if complex_type_count is 0, we can just
   // return a column where every row contains the value simple_per_row_size
-  size_type simple_per_row_size;  // in bits
-  size_type complex_type_count;
+  size_type simple_per_row_size{0};  // in bits
+  size_type complex_type_count{0};
 
   // max depth of span branches present in the hierarchy.
-  size_type max_branch_depth;
+  size_type max_branch_depth{0};
 };
 
 /**
@@ -504,9 +505,9 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   // of memory of size (# input rows * sizeof(row_span) * max_branch_depth).
   auto const shmem_per_thread = sizeof(row_span) * h_info.max_branch_depth;
   int device_id;
-  CUDA_TRY(cudaGetDevice(&device_id));
+  CUDF_CUDA_TRY(cudaGetDevice(&device_id));
   int shmem_limit_per_block;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
   constexpr int max_block_size = 256;
   auto const block_size =

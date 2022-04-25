@@ -341,7 +341,9 @@ def test_pandas_concat_compatibility_axis1():
     got = gd.concat([d1, d2, d3, d4, d5], axis=1)
 
     assert_eq(
-        got, expect, check_index_type=True,
+        got,
+        expect,
+        check_index_type=True,
     )
 
 
@@ -574,7 +576,7 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     expected = pd.concat(other_pd, ignore_index=ignore_index)
     actual = gd.concat(other_gd, ignore_index=ignore_index)
     if expected.shape != df.shape:
-        for key, col in actual[actual.columns].iteritems():
+        for key, col in actual[actual.columns].items():
             if is_categorical_dtype(col.dtype):
                 if not is_categorical_dtype(expected[key].dtype):
                     # TODO: Pandas bug:
@@ -658,7 +660,9 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
     expected = pd.concat([pdf1, pdf2], axis=1)
 
     assert_eq(
-        expected, actual, check_index_type=True,
+        expected,
+        actual,
+        check_index_type=True,
     )
 
 
@@ -749,7 +753,14 @@ def test_concat_join_axis_1_dup_error(objs):
     # we do not support duplicate columns
     with pytest.raises(NotImplementedError):
         assert_eq(
-            pd.concat(objs, axis=1,), gd.concat(gpu_objs, axis=1,),
+            pd.concat(
+                objs,
+                axis=1,
+            ),
+            gd.concat(
+                gpu_objs,
+                axis=1,
+            ),
         )
 
 
@@ -781,7 +792,11 @@ def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
         objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis
     )
     actual = gd.concat(
-        gpu_objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
+        gpu_objs,
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
     )
     # TODO: Remove special handling below
     # after following bug from pandas is fixed:
@@ -969,7 +984,9 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
         axis=axis,
     )
     assert_eq(
-        expected, actual, check_index_type=False,
+        expected,
+        actual,
+        check_index_type=False,
     )
 
 
@@ -1028,10 +1045,18 @@ def test_concat_join_no_overlapping_columns_many_and_empty2(
     objs_gd = [gd.from_pandas(o) if o is not None else o for o in objs]
 
     expected = pd.concat(
-        objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
+        objs,
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
     )
     actual = gd.concat(
-        objs_gd, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
+        objs_gd,
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
     )
     assert_eq(expected, actual, check_index_type=False)
 
@@ -1184,7 +1209,7 @@ def test_concat_join_empty_dataframes(
     )
     if expected.shape != df.shape:
         if axis == 0:
-            for key, col in actual[actual.columns].iteritems():
+            for key, col in actual[actual.columns].items():
                 if is_categorical_dtype(col.dtype):
                     if not is_categorical_dtype(expected[key].dtype):
                         # TODO: Pandas bug:
@@ -1306,7 +1331,7 @@ def test_concat_join_empty_dataframes_axis_1(
     )
     if expected.shape != df.shape:
         if axis == 0:
-            for key, col in actual[actual.columns].iteritems():
+            for key, col in actual[actual.columns].items():
                 if is_categorical_dtype(col.dtype):
                     expected[key] = expected[key].fillna("-1")
                     actual[key] = col.astype("str").fillna("-1")

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
 #include <memory>
@@ -51,7 +54,7 @@ struct quantile_functor {
   rmm::mr::device_memory_resource* mr;
 
   template <typename T>
-  std::enable_if_t<not std::is_arithmetic<T>::value and not cudf::is_fixed_point<T>(),
+  std::enable_if_t<not std::is_arithmetic_v<T> and not cudf::is_fixed_point<T>(),
                    std::unique_ptr<column>>
   operator()(column_view const& input)
   {
@@ -59,8 +62,7 @@ struct quantile_functor {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value or cudf::is_fixed_point<T>(),
-                   std::unique_ptr<column>>
+  std::enable_if_t<std::is_arithmetic_v<T> or cudf::is_fixed_point<T>(), std::unique_ptr<column>>
   operator()(column_view const& input)
   {
     using StorageType   = cudf::device_storage_type_t<T>;

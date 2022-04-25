@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.hpp>
 
 #ifndef __CUDA_ARCH__
@@ -26,6 +27,7 @@
 // or jitify2 source file. The jitify cannot include thrust headers at this time.
 #ifndef CUDF_JIT_UDF
 #include <thrust/count.h>
+#include <thrust/execution_policy.h>
 #endif
 
 // This file should only include device code logic.
@@ -44,7 +46,7 @@ namespace detail {
  */
 __device__ inline size_type characters_in_string(const char* str, size_type bytes)
 {
-  if ((str == 0) || (bytes == 0)) return 0;
+  if ((str == nullptr) || (bytes == 0)) return 0;
   auto ptr = reinterpret_cast<uint8_t const*>(str);
 #ifndef CUDF_JIT_UDF
   return thrust::count_if(
@@ -97,7 +99,8 @@ CUDF_HOST_DEVICE inline string_view string_view::max()
 #if defined(__CUDA_ARCH__)
   psentinel = &cudf::strings::detail::max_string_sentinel[0];
 #else
-  CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, cudf::strings::detail::max_string_sentinel));
+  CUDF_CUDA_TRY(
+    cudaGetSymbolAddress((void**)&psentinel, cudf::strings::detail::max_string_sentinel));
 #endif
   return string_view(psentinel, 4);
 }
@@ -271,9 +274,9 @@ __device__ inline int string_view::compare(const string_view& in) const
 
 __device__ inline int string_view::compare(const char* data, size_type bytes) const
 {
-  size_type const len1      = size_bytes();
-  const unsigned char* ptr1 = reinterpret_cast<const unsigned char*>(this->data());
-  const unsigned char* ptr2 = reinterpret_cast<const unsigned char*>(data);
+  size_type const len1 = size_bytes();
+  const auto* ptr1     = reinterpret_cast<const unsigned char*>(this->data());
+  const auto* ptr2     = reinterpret_cast<const unsigned char*>(data);
   if ((ptr1 == ptr2) && (bytes == len1)) return 0;
   size_type idx = 0;
   for (; (idx < len1) && (idx < bytes); ++idx) {

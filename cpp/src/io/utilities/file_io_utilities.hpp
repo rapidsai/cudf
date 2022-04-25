@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,8 +45,8 @@ class file_wrapper {
   explicit file_wrapper(std::string const& filepath, int flags);
   explicit file_wrapper(std::string const& filepath, int flags, mode_t mode);
   ~file_wrapper();
-  auto size() const { return _size; }
-  auto desc() const { return fd; }
+  [[nodiscard]] auto size() const { return _size; }
+  [[nodiscard]] auto desc() const { return fd; }
 };
 
 /**
@@ -184,7 +184,7 @@ struct cufile_registered_file {
     register_handle();
   }
 
-  auto const& handle() const noexcept { return cf_handle; }
+  [[nodiscard]] auto const& handle() const noexcept { return cf_handle; }
 
   ~cufile_registered_file();
 
@@ -290,6 +290,21 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
  * cuFile library is not installed.
  */
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath);
+
+/**
+ * @brief Byte range to be read/written in a single operation.
+ */
+struct file_io_slice {
+  size_t offset;
+  size_t size;
+};
+
+/**
+ * @brief Split the total number of bytes to read/write into slices to enable parallel IO.
+ *
+ * If `max_slice_size` is below 1024, 1024 will be used instead to prevent potential misuse.
+ */
+std::vector<file_io_slice> make_file_io_slices(size_t size, size_t max_slice_size);
 
 }  // namespace detail
 }  // namespace io

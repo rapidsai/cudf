@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,14 @@
 #include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/detail/scatter_helper.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace lists {
@@ -248,39 +252,16 @@ struct list_child_constructor {
         auto lists_column    = actual_list_row.get_column();
         auto lists_offsets_ptr    = lists_column.offsets().template data<offset_type>();
         auto child_strings_column = lists_column.child();
-        auto string_offsets_ptr =
-          child_strings_column.child(cudf::strings_column_view::offsets_column_index)
-            .template data<offset_type>();
-        auto string_chars_ptr =
-          child_strings_column.child(cudf::strings_column_view::chars_column_index)
-            .template data<char>();
+        auto strings_offset       = lists_offsets_ptr[row_index] + intra_index;
 
-        auto strings_offset = lists_offsets_ptr[row_index] + intra_index;
-        auto char_offset    = string_offsets_ptr[strings_offset];
-        auto char_ptr       = string_chars_ptr + char_offset;
-        auto string_size =
-          string_offsets_ptr[strings_offset + 1] - string_offsets_ptr[strings_offset];
-        return string_view{char_ptr, string_size};
+        return child_strings_column.is_null(strings_offset)
+                 ? string_view{nullptr, 0}
+                 : child_strings_column.template element<string_view>(strings_offset);
       });
 
     // string_views should now have been populated with source and target references.
-
-    auto string_offsets = cudf::strings::detail::child_offsets_from_string_iterator(
-      string_views.begin(), string_views.size(), stream, mr);
-
-    auto string_chars = cudf::strings::detail::child_chars_from_string_vector(
-      string_views, string_offsets->view(), stream, mr);
-    auto child_null_mask =
-      source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
-        ? construct_child_nullmask(
-            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
-        : std::make_pair(rmm::device_buffer{}, 0);
-
-    return cudf::make_strings_column(num_child_rows,
-                                     std::move(string_offsets),
-                                     std::move(string_chars),
-                                     child_null_mask.second,  // Null count.
-                                     std::move(child_null_mask.first));
+    auto sv_span = cudf::device_span<string_view const>(string_views);
+    return cudf::make_strings_column(sv_span, string_view{nullptr, 0}, stream, mr);
   }
 
   /**

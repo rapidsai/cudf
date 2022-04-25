@@ -19,11 +19,11 @@
 #include "avro_common.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <map>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
 #include <string>
 #include <vector>
 
@@ -85,7 +85,7 @@ class schema_parser {
   bool parse(std::vector<schema_entry>& schema, const std::string& str);
 
  protected:
-  bool more_data() const { return (m_cur < m_end); }
+  [[nodiscard]] bool more_data() const { return (m_cur < m_end); }
   std::string get_str();
 
  protected:
@@ -103,7 +103,7 @@ class container {
   {
   }
 
-  auto bytecount() const { return m_cur - m_base; }
+  [[nodiscard]] auto bytecount() const { return m_cur - m_base; }
 
   template <typename T>
   T get_raw()

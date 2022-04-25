@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ CUDF_HOST_DEVICE inline Result get_array_value(T const* devarr, size_type locati
 #if defined(__CUDA_ARCH__)
   result = devarr[location];
 #else
-  CUDA_TRY(cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDeviceToHost));
+  CUDF_CUDA_TRY(cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDeviceToHost));
 #endif
   return static_cast<Result>(result);
 }
@@ -45,8 +45,8 @@ CUDF_HOST_DEVICE inline Result linear(T lhs, T rhs, double frac)
   // Underflow may occur when converting int64 to double
   // detail: https://github.com/rapidsai/cudf/issues/1417
 
-  double dlhs           = static_cast<double>(lhs);
-  double drhs           = static_cast<double>(rhs);
+  auto dlhs             = static_cast<double>(lhs);
+  auto drhs             = static_cast<double>(rhs);
   double one_minus_frac = 1.0 - frac;
   return static_cast<Result>(one_minus_frac * dlhs + frac * drhs);
 }
@@ -55,8 +55,8 @@ template <typename Result, typename T>
 CUDF_HOST_DEVICE inline Result midpoint(T lhs, T rhs)
 {
   // TODO: try std::midpoint (C++20) if available
-  double dlhs = static_cast<double>(lhs);
-  double drhs = static_cast<double>(rhs);
+  auto dlhs = static_cast<double>(lhs);
+  auto drhs = static_cast<double>(rhs);
   return static_cast<Result>(dlhs / 2 + drhs / 2);
 }
 
@@ -144,13 +144,13 @@ CUDF_HOST_DEVICE inline Result select_quantile(ValueAccessor get_value,
 
     case interpolation::NEAREST: return static_cast<Result>(get_value(idx.nearest));
 
-    default:
-#if defined(__CUDA_ARCH__)
-      cudf_assert(false && "Invalid interpolation operation for quantiles");
-      return Result();
-#else
+    default: {
+#ifndef __CUDA_ARCH__
       CUDF_FAIL("Invalid interpolation operation for quantiles.");
+#else
+      CUDF_UNREACHABLE("Invalid interpolation operation for quantiles");
 #endif
+    }
   }
 }
 
@@ -176,14 +176,14 @@ CUDF_HOST_DEVICE inline Result select_quantile_data(Iterator begin,
 
     case interpolation::MIDPOINT:
       return interpolate::midpoint<Result>(*(begin + idx.lower), *(begin + idx.higher));
-  }
-
-#if defined(__CUDA_ARCH__)
-  cudf_assert(false && "Invalid interpolation operation for quantiles");
-  return Result();
+    default: {
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("Invalid interpolation operation for quantiles.");
 #else
-  CUDF_FAIL("Invalid interpolation operation for quantiles.");
+      CUDF_UNREACHABLE("Invalid interpolation operation for quantiles");
 #endif
+    }
+  }
 }
 
 template <typename Iterator>
@@ -203,14 +203,14 @@ CUDF_HOST_DEVICE inline bool select_quantile_validity(Iterator begin,
 
     case interpolation::LINEAR:
     case interpolation::MIDPOINT: return *(begin + idx.lower) and *(begin + idx.higher);
-  }
-
-#if defined(__CUDA_ARCH__)
-  cudf_assert(false && "Invalid interpolation operation for quantiles");
-  return false;
+    default: {
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("Invalid interpolation operation for quantiles.");
 #else
-  CUDF_FAIL("Invalid interpolation operation for quantiles.");
+      CUDF_UNREACHABLE("Invalid interpolation operation for quantiles");
 #endif
+    }
+  }
 }
 
 }  // namespace detail

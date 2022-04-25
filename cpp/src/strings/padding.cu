@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -122,7 +126,7 @@ std::unique_ptr<column> pad(
         if (d_strings.is_null(idx)) return;
         string_view d_str = d_strings.element<string_view>(idx);
         char* ptr         = d_chars + d_offsets[idx];
-        int32_t pad       = static_cast<int32_t>(width - d_str.length());
+        auto pad          = static_cast<int32_t>(width - d_str.length());
         auto right_pad    = (width & 1) ? pad / 2 : (pad - pad / 2);  // odd width = right-justify
         auto left_pad =
           pad - right_pad;  // e.g. width=7 gives "++foxx+" while width=6 gives "+fox++"

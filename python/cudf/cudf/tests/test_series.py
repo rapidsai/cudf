@@ -1,5 +1,6 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import hashlib
 import operator
 import re
 from string import ascii_letters, digits
@@ -11,11 +12,13 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_120
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    gen_rand,
 )
 
 
@@ -339,14 +342,7 @@ def test_series_column_iter_error():
     ):
         gs.iteritems()
 
-    with pytest.raises(
-        TypeError,
-        match=re.escape(
-            f"{gs._column.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
-            f"if you wish to iterate over the values."
-        ),
-    ):
+    with pytest.raises(TypeError):
         iter(gs._column)
 
 
@@ -558,10 +554,12 @@ def test_categorical_value_counts(dropna, normalize, num_elements):
 @pytest.mark.parametrize("dropna", [True, False])
 @pytest.mark.parametrize("normalize", [True, False])
 def test_series_value_counts(dropna, normalize):
-    for size in [10 ** x for x in range(5)]:
+    for size in [10**x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
-        sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
+        sr = cudf.Series.from_masked_array(
+            arr, cudf.Series(mask)._column.as_mask()
+        )
         sr.name = "col"
 
         expect = (
@@ -863,8 +861,14 @@ def test_series_memory_usage():
             ),
         ),
         (
-            cudf.Series([1, 2, None, 10.2, None], dtype="float32",),
-            pd.Series([1, 2, None, 10.2, None], dtype=pd.Float32Dtype(),),
+            cudf.Series(
+                [1, 2, None, 10.2, None],
+                dtype="float32",
+            ),
+            pd.Series(
+                [1, 2, None, 10.2, None],
+                dtype=pd.Float32Dtype(),
+            ),
         ),
     ],
 )
@@ -1073,9 +1077,18 @@ def test_series_drop_index(ps, index, inplace):
         ("speed", 1),
         ("weight", 1),
         ("length", 1),
-        ("cow", None,),
-        ("lama", None,),
-        ("falcon", None,),
+        (
+            "cow",
+            None,
+        ),
+        (
+            "lama",
+            None,
+        ),
+        (
+            "falcon",
+            None,
+        ),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
@@ -1106,7 +1119,7 @@ def test_series_drop_edge_inputs():
         rfunc=gs.drop,
         lfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
         rfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
-        expected_error_message="Cannot specify both",
+        compare_error_message=False,
     )
 
     assert_exceptions_equal(
@@ -1154,7 +1167,8 @@ def test_series_drop_raises():
 
 
 @pytest.mark.parametrize(
-    "data", [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
+    "data",
+    [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize(
@@ -1271,27 +1285,8 @@ def test_series_sort_index(
         assert_eq(expected, got, check_index_type=True)
 
 
-@pytest.mark.parametrize(
-    "method,validation_data",
-    [
-        (
-            "md5",
-            [
-                "d41d8cd98f00b204e9800998ecf8427e",
-                "cfcd208495d565ef66e7dff9f98764da",
-                "3d3aaae21d57b101227f0384f644abe0",
-                "3e76c7023d771ad1c1520c27ab3d4874",
-                "f8d805e33ec3ade1a6ea251ac1c118e7",
-                "c30515f66a5aec7af7666abf33600c92",
-                "c61a4185135eda043f35e92c3505e180",
-                "52da74c75cb6575d25be29e66bd0adde",
-                "5152ac13bdd09110d9ee9c169a3d9237",
-                "f1d3ff8443297732862df21dc4e57262",
-            ],
-        )
-    ],
-)
-def test_series_hash_values(method, validation_data):
+@pytest.mark.parametrize("method", ["md5"])
+def test_series_hash_values(method):
     inputs = cudf.Series(
         [
             "",
@@ -1310,9 +1305,22 @@ def test_series_hash_values(method, validation_data):
             "\x00\x00\x00\x00",
         ]
     )
-    validation_results = cudf.Series(validation_data)
+
+    def hashlib_compute_digest(data):
+        hasher = getattr(hashlib, method)()
+        hasher.update(data.encode("utf-8"))
+        return hasher.hexdigest()
+
+    hashlib_validation = inputs.to_pandas().apply(hashlib_compute_digest)
+    validation_results = cudf.Series(hashlib_validation)
     hash_values = inputs.hash_values(method=method)
     assert_eq(hash_values, validation_results)
+
+
+def test_series_hash_values_invalid_method():
+    inputs = cudf.Series(["", "0"])
+    with pytest.raises(ValueError):
+        inputs.hash_values(method="invalid_method")
 
 
 def test_set_index_unequal_length():
@@ -1433,8 +1441,14 @@ def test_reset_index_dup_level_name_exceptions():
     assert_exceptions_equal(
         lfunc=ps.reset_index,
         rfunc=gs.reset_index,
-        lfunc_args_and_kwargs=([], {"level": [None]},),
-        rfunc_args_and_kwargs=([], {"level": [None]},),
+        lfunc_args_and_kwargs=(
+            [],
+            {"level": [None]},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"level": [None]},
+        ),
         expected_error_message="occurs multiple times, use a level number",
     )
 
@@ -1442,8 +1456,14 @@ def test_reset_index_dup_level_name_exceptions():
     assert_exceptions_equal(
         lfunc=ps.reset_index,
         rfunc=gs.reset_index,
-        lfunc_args_and_kwargs=([], {"drop": False, "inplace": True},),
-        rfunc_args_and_kwargs=([], {"drop": False, "inplace": True},),
+        lfunc_args_and_kwargs=(
+            [],
+            {"drop": False, "inplace": True},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"drop": False, "inplace": True},
+        ),
     )
 
     # Pandas raises the above exception should these two inputs crosses.
@@ -1517,3 +1537,277 @@ def test_series_transpose(data):
     assert_eq(pd_transposed, cudf_transposed)
     assert_eq(pd_property, cudf_property)
     assert_eq(cudf_transposed, csr)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [1, 3, 5, 7, 7],
+)
+def test_series_nunique(data):
+    cd_s = cudf.Series(data)
+    pd_s = cd_s.to_pandas()
+
+    actual = cd_s.nunique()
+    expected = pd_s.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [1, 3, 5, 7, 7],
+)
+def test_series_nunique_index(data):
+    cd_s = cudf.Series(data)
+    pd_s = cd_s.to_pandas()
+
+    actual = cd_s.index.nunique()
+    expected = pd_s.index.nunique()
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [0, 12, 14],
+        [0, 14, 12, 12, 3, 10, 12, 14],
+        np.random.randint(-100, 100, 200),
+        pd.Series([0.0, 1.0, None, 10.0]),
+        [None, None, None, None],
+        [np.nan, None, -1, 2, 3],
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        np.random.randint(-100, 100, 10),
+        [],
+        [np.nan, None, -1, 2, 3],
+        [1.0, 12.0, None, None, 120],
+        [0, 14, 12, 12, 3, 10, 12, 14, None],
+        [None, None, None],
+        ["0", "12", "14"],
+        ["0", "12", "14", "a"],
+    ],
+)
+def test_isin_numeric(data, values):
+    index = np.random.randint(0, 100, len(data))
+    psr = cudf.utils.utils._create_pandas_series(data=data, index=index)
+    gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
+
+    expected = psr.isin(values)
+    got = gsr.isin(values)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.xfail(raises=ValueError)
+def test_fill_new_category():
+    gs = cudf.Series(pd.Categorical(["a", "b", "c"]))
+    gs[0:1] = "d"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(
+            ["2018-01-01", "2019-04-03", None, "2019-12-30"],
+            dtype="datetime64[ns]",
+        ),
+        pd.Series(
+            [
+                "2018-01-01",
+                "2019-04-03",
+                None,
+                "2019-12-30",
+                "2018-01-01",
+                "2018-01-01",
+            ],
+            dtype="datetime64[ns]",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        [1514764800000000000, 1577664000000000000],
+        [
+            1514764800000000000,
+            1577664000000000000,
+            1577664000000000000,
+            1577664000000000000,
+            1514764800000000000,
+        ],
+        ["2019-04-03", "2019-12-30", "2012-01-01"],
+        [
+            "2012-01-01",
+            "2012-01-01",
+            "2012-01-01",
+            "2019-04-03",
+            "2019-12-30",
+            "2012-01-01",
+        ],
+    ],
+)
+def test_isin_datetime(data, values):
+    psr = cudf.utils.utils._create_pandas_series(data=data)
+    gsr = cudf.Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(["this", "is", None, "a", "test"]),
+        pd.Series(["test", "this", "test", "is", None, "test", "a", "test"]),
+        pd.Series(["0", "12", "14"]),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ["this", "is"],
+        [None, None, None],
+        ["12", "14", "19"],
+        pytest.param(
+            [12, 14, 19],
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_120,
+                reason="pandas's failure here seems like a bug(in < 1.2) "
+                "given the reverse succeeds",
+            ),
+        ),
+        ["is", "this", "is", "this", "is"],
+    ],
+)
+def test_isin_string(data, values):
+    psr = cudf.utils.utils._create_pandas_series(data=data)
+    gsr = cudf.Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(["a", "b", "c", "c", "c", "d", "e"], dtype="category"),
+        pd.Series(["a", "b", None, "c", "d", "e"], dtype="category"),
+        pd.Series([0, 3, 10, 12], dtype="category"),
+        pd.Series([0, 3, 10, 12, 0, 10, 3, 0, 0, 3, 3], dtype="category"),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ["a", "b", None, "f", "words"],
+        ["0", "12", None, "14"],
+        [0, 10, 12, None, 39, 40, 1000],
+        [0, 0, 0, 0, 3, 3, 3, None, 1, 2, 3],
+    ],
+)
+def test_isin_categorical(data, values):
+    psr = cudf.utils.utils._create_pandas_series(data=data)
+    gsr = cudf.Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
+@pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+@pytest.mark.parametrize("data_empty", [False, True])
+def test_diff(dtype, period, data_empty):
+    if data_empty:
+        data = None
+    else:
+        if dtype == np.int8:
+            # to keep data in range
+            data = gen_rand(dtype, 100000, low=-2, high=2)
+        else:
+            data = gen_rand(dtype, 100000)
+
+    gs = cudf.Series(data, dtype=dtype)
+    ps = pd.Series(data, dtype=dtype)
+
+    expected_outcome = ps.diff(period)
+    diffed_outcome = gs.diff(period).astype(expected_outcome.dtype)
+
+    if data_empty:
+        assert_eq(diffed_outcome, expected_outcome, check_index_type=False)
+    else:
+        assert_eq(diffed_outcome, expected_outcome)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a", "b", "c", "d", "e"],
+    ],
+)
+def test_diff_unsupported_dtypes(data):
+    gs = cudf.Series(data)
+    with pytest.raises(
+        TypeError,
+        match=r"unsupported operand type\(s\)",
+    ):
+        gs.diff()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.date_range("2020-01-01", "2020-01-06", freq="D"),
+        [True, True, True, False, True, True],
+        [1.0, 2.0, 3.5, 4.0, 5.0, -1.7],
+        [1, 2, 3, 3, 4, 5],
+        [np.nan, None, None, np.nan, np.nan, None],
+    ],
+)
+def test_diff_many_dtypes(data):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+    assert_eq(ps.diff(), gs.diff())
+    assert_eq(ps.diff(periods=2), gs.diff(periods=2))
+
+
+@pytest.mark.parametrize("num_rows", [1, 100])
+@pytest.mark.parametrize("num_bins", [1, 10])
+@pytest.mark.parametrize("right", [True, False])
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
+@pytest.mark.parametrize("series_bins", [True, False])
+def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
+    data = np.random.randint(0, 100, num_rows).astype(dtype)
+    bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
+    s = cudf.Series(data)
+    if series_bins:
+        s_bins = cudf.Series(bins)
+        indices = s.digitize(s_bins, right)
+    else:
+        indices = s.digitize(bins, right)
+    np.testing.assert_array_equal(
+        np.digitize(data, bins, right), indices.to_numpy()
+    )
+
+
+def test_series_digitize_invalid_bins():
+    s = cudf.Series(np.random.randint(0, 30, 80), dtype="int32")
+    bins = cudf.Series([2, None, None, 50, 90], dtype="int32")
+
+    with pytest.raises(
+        ValueError, match="`bins` cannot contain null entries."
+    ):
+        _ = s.digitize(bins)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
 #include <thrust/detail/copy.h>
+#include <thrust/remove.h>
 #include <thrust/transform.h>
 
 #include <type_traits>
@@ -197,7 +199,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
     auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
 
     // Checking if this is a column that the user wants --- user can filter columns
-    if (column_flags[col] & column_parse::enabled) {
+    if (column_flags[col] & column_parse::inferred) {
       // points to last character in the field
       auto const field_len = static_cast<size_t>(next_delimiter - field_start);
       if (serialized_trie_contains(opts.trie_na, {field_start, field_len})) {
@@ -375,8 +377,8 @@ struct decode_op {
    * @return bool Whether the parsed value is valid.
    */
   template <typename T,
-            typename std::enable_if_t<std::is_integral_v<T> and !std::is_same_v<T, bool> and
-                                      !cudf::is_fixed_point<T>()>* = nullptr>
+            std::enable_if_t<std::is_integral_v<T> and !std::is_same_v<T, bool> and
+                             !cudf::is_fixed_point<T>()>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void* out_buffer,
                                                       size_t row,
                                                       const data_type,
@@ -402,7 +404,7 @@ struct decode_op {
    *
    * @return bool Whether the parsed value is valid.
    */
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void* out_buffer,
                                                       size_t row,
                                                       const data_type output_type,
@@ -423,7 +425,7 @@ struct decode_op {
   /**
    * @brief Dispatch for boolean type types.
    */
-  template <typename T, typename std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void* out_buffer,
                                                       size_t row,
                                                       const data_type,
@@ -447,7 +449,7 @@ struct decode_op {
    * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
-  template <typename T, typename std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void* out_buffer,
                                                       size_t row,
                                                       const data_type,
@@ -466,8 +468,8 @@ struct decode_op {
    * @brief Dispatch for all other types.
    */
   template <typename T,
-            typename std::enable_if_t<!std::is_integral_v<T> and !std::is_floating_point_v<T> and
-                                      !cudf::is_fixed_point<T>()>* = nullptr>
+            std::enable_if_t<!std::is_integral_v<T> and !std::is_floating_point_v<T> and
+                             !cudf::is_fixed_point<T>()>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void* out_buffer,
                                                       size_t row,
                                                       const data_type,

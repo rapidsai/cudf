@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
 import warnings
@@ -20,8 +20,8 @@ def _make_empty_df(filepath_or_buffer, columns):
     orc_file = orc.ORCFile(filepath_or_buffer)
     schema = orc_file.schema
     col_names = schema.names if columns is None else columns
-    return cudf.DataFrame(
-        {
+    return cudf.DataFrame._from_data(
+        data={
             col_name: cudf.core.column.column_empty(
                 row_count=0,
                 dtype=schema.field(col_name).type.to_pandas_dtype(),
@@ -162,7 +162,9 @@ def read_orc_metadata(path):
 
 @ioutils.doc_read_orc_statistics()
 def read_orc_statistics(
-    filepaths_or_buffers, columns=None, **kwargs,
+    filepaths_or_buffers,
+    columns=None,
+    **kwargs,
 ):
     """{docstring}"""
 
@@ -285,13 +287,11 @@ def read_orc(
     skiprows=None,
     num_rows=None,
     use_index=True,
-    decimal_cols_as_float=None,
     timestamp_type=None,
     use_python_file_object=True,
     **kwargs,
 ):
     """{docstring}"""
-
     from cudf import DataFrame
 
     # Multiple sources are passed as a list. If a single source is passed,
@@ -316,7 +316,9 @@ def read_orc(
     for source in filepath_or_buffer:
         if ioutils.is_directory(source, **kwargs):
             fs = ioutils._ensure_filesystem(
-                passed_filesystem=None, path=source, **kwargs,
+                passed_filesystem=None,
+                path=source,
+                **kwargs,
             )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
@@ -356,7 +358,6 @@ def read_orc(
                 skiprows,
                 num_rows,
                 use_index,
-                decimal_cols_as_float,
                 timestamp_type,
             )
         )
@@ -395,7 +396,7 @@ def to_orc(
     df,
     fname,
     compression=None,
-    enable_statistics=True,
+    statistics="ROWGROUP",
     stripe_size_bytes=None,
     stripe_size_rows=None,
     row_index_stride=None,
@@ -431,7 +432,7 @@ def to_orc(
                 df,
                 file_obj,
                 compression,
-                enable_statistics,
+                statistics,
                 stripe_size_bytes,
                 stripe_size_rows,
                 row_index_stride,
@@ -441,7 +442,7 @@ def to_orc(
             df,
             path_or_buf,
             compression,
-            enable_statistics,
+            statistics,
             stripe_size_bytes,
             stripe_size_rows,
             row_index_stride,

@@ -1,9 +1,9 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-from __future__ import annotations, division, print_function
+from __future__ import annotations
 
 import pickle
-import warnings
+from functools import cached_property
 from typing import Any, Set
 
 import pandas as pd
@@ -18,7 +18,6 @@ from cudf._lib.stream_compaction import (
 from cudf._typing import DtypeObj
 from cudf.api.types import (
     is_bool_dtype,
-    is_dtype_equal,
     is_integer,
     is_integer_dtype,
     is_list_like,
@@ -32,7 +31,37 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import cached_property
+
+_index_astype_docstring = """\
+Create an Index with values cast to dtypes.
+
+The class of a new Index is determined by dtype. When conversion is
+impossible, a ValueError exception is raised.
+
+Parameters
+----------
+dtype : numpy dtype
+    Use a numpy.dtype to cast entire Index object to.
+copy : bool, default False
+    By default, astype always returns a newly allocated object.
+    If copy is set to False and internal requirements on dtype are
+    satisfied, the original data is used to create a new Index
+    or the original Index is returned.
+
+Returns
+-------
+Index
+    Index with values cast to specified dtype.
+
+Examples
+--------
+>>> import cudf
+>>> index = cudf.Index([1, 2, 3])
+>>> index
+Int64Index([1, 2, 3], dtype='int64')
+>>> index.astype('float64')
+Float64Index([1.0, 2.0, 3.0], dtype='float64')
+"""
 
 
 class BaseIndex(Serializable):
@@ -41,14 +70,6 @@ class BaseIndex(Serializable):
     dtype: DtypeObj
     _accessors: Set[Any] = set()
     _data: ColumnAccessor
-
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(*inputs)
-        else:
-            return NotImplemented
 
     @cached_property
     def _values(self) -> ColumnBase:
@@ -97,7 +118,7 @@ class BaseIndex(Serializable):
 
         See Also
         --------
-        cudf.core.multiindex.MultiIndex.get_level_values : Get values for
+        cudf.MultiIndex.get_level_values : Get values for
             a level of a MultiIndex.
 
         Notes
@@ -569,17 +590,6 @@ class BaseIndex(Serializable):
 
         return cudf.io.dlpack.to_dlpack(self)
 
-    @property
-    def gpu_values(self):
-        """
-        View the data as a numba device array object
-        """
-        warnings.warn(
-            "The gpu_values property is deprecated and will be removed.",
-            FutureWarning,
-        )
-        return self._values.data_array_view
-
     def append(self, other):
         """
         Append a collection of Index options together.
@@ -969,7 +979,9 @@ class BaseIndex(Serializable):
         self_df["order"] = self_df.index
         other_df["order"] = other_df.index
         res = self_df.merge(other_df, on=[0], how="outer")
-        res = res.sort_values(by=res.columns[1:], ignore_index=True)
+        res = res.sort_values(
+            by=res._data.to_pandas_index()[1:], ignore_index=True
+        )
         union_result = cudf.core.index._index_from_data({0: res._data[0]})
 
         if sort is None and len(other):
@@ -1213,50 +1225,9 @@ class BaseIndex(Serializable):
             self.name = name
             return None
         else:
-            out = self.copy(deep=False)
+            out = self.copy(deep=True)
             out.name = name
-            return out.copy(deep=True)
-
-    def astype(self, dtype, copy=False):
-        """
-        Create an Index with values cast to dtypes. The class of a new Index
-        is determined by dtype. When conversion is impossible, a ValueError
-        exception is raised.
-
-        Parameters
-        ----------
-        dtype : numpy dtype
-            Use a numpy.dtype to cast entire Index object to.
-        copy : bool, default False
-            By default, astype always returns a newly allocated object.
-            If copy is set to False and internal requirements on dtype are
-            satisfied, the original data is used to create a new Index
-            or the original Index is returned.
-
-        Returns
-        -------
-        Index
-            Index with values cast to specified dtype.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([1, 2, 3])
-        >>> index
-        Int64Index([1, 2, 3], dtype='int64')
-        >>> index.astype('float64')
-        Float64Index([1.0, 2.0, 3.0], dtype='float64')
-        """
-        if is_dtype_equal(dtype, self.dtype):
-            return self.copy(deep=copy)
-
-        return cudf.Index(
-            self.copy(deep=copy)._values.astype(dtype), name=self.name
-        )
-
-    # TODO: This method is deprecated and can be removed.
-    def to_array(self, fillna=None):
-        return self._values.to_array(fillna=fillna)
+            return out
 
     def to_series(self, index=None, name=None):
         """
@@ -1299,7 +1270,7 @@ class BaseIndex(Serializable):
         int
             Index of label.
         """
-        raise (NotImplementedError)
+        raise NotImplementedError
 
     def __array_function__(self, func, types, args, kwargs):
 
@@ -1363,29 +1334,17 @@ class BaseIndex(Serializable):
         array([ True, False, False])
         """
 
-        return self._values.isin(values).values
-
-    def memory_usage(self, deep=False):
-        """
-        Memory usage of the values.
-
-        Parameters
-        ----------
-            deep : bool
-                Introspect the data deeply,
-                interrogate `object` dtypes for system-level
-                memory consumption.
-
-        Returns
-        -------
-            bytes used
-        """
-        if deep:
-            warnings.warn(
-                "The deep parameter is ignored and is only included "
-                "for pandas compatibility."
+        # To match pandas behavior, even though only list-like objects are
+        # supposed to be passed, only scalars throw errors. Other types (like
+        # dicts) just transparently return False (see the implementation of
+        # ColumnBase.isin).
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a {type(values).__name__}"
             )
-        return self._values.memory_usage()
+
+        return self._values.isin(values).values
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):
@@ -1430,7 +1389,9 @@ class BaseIndex(Serializable):
         return cudf.MultiIndex
 
     def drop_duplicates(
-        self, keep="first", nulls_are_equal=True,
+        self,
+        keep="first",
+        nulls_are_equal=True,
     ):
         """
         Drop duplicate rows in index.
@@ -1444,7 +1405,8 @@ class BaseIndex(Serializable):
         """
 
         # This utilizes the fact that all `Index` is also a `Frame`.
-        result = self.__class__._from_columns(
+        # Except RangeIndex.
+        return self._from_columns_like_self(
             drop_duplicates(
                 list(self._columns),
                 keys=range(len(self._data)),
@@ -1453,8 +1415,6 @@ class BaseIndex(Serializable):
             ),
             self._column_names,
         )
-        result._copy_type_metadata(self, include_index=False)
-        return result
 
     def dropna(self, how="any"):
         """
@@ -1476,12 +1436,14 @@ class BaseIndex(Serializable):
             for col in self._columns
         ]
 
-        result = self.__class__._from_columns(
-            drop_nulls(data_columns, how=how, keys=range(len(data_columns)),),
+        return self._from_columns_like_self(
+            drop_nulls(
+                data_columns,
+                how=how,
+                keys=range(len(data_columns)),
+            ),
             self._column_names,
         )
-        result._copy_type_metadata(self, include_index=False)
-        return result
 
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         """Gather rows of index specified by indices in `gather_map`.
@@ -1501,13 +1463,10 @@ class BaseIndex(Serializable):
         ):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             gather(list(self._columns), gather_map, nullify=nullify),
             self._column_names,
         )
-
-        result._copy_type_metadata(self, include_index=False)
-        return result
 
     def take(self, indices, axis=0, allow_fill=True, fill_value=None):
         """Return a new index containing the rows specified by *indices*
@@ -1542,14 +1501,6 @@ class BaseIndex(Serializable):
                 "`allow_fill` and `fill_value` are unsupported."
             )
 
-        indices = cudf.core.column.as_column(indices)
-        if is_bool_dtype(indices):
-            warnings.warn(
-                "Calling take with a boolean array is deprecated and will be "
-                "removed in the future.",
-                FutureWarning,
-            )
-            return self._apply_boolean_mask(indices)
         return self._gather(indices)
 
     def _apply_boolean_mask(self, boolean_mask):
@@ -1561,12 +1512,41 @@ class BaseIndex(Serializable):
         if not is_bool_dtype(boolean_mask.dtype):
             raise ValueError("boolean_mask is not boolean type.")
 
-        result = self.__class__._from_columns(
+        return self._from_columns_like_self(
             apply_boolean_mask(list(self._columns), boolean_mask),
             column_names=self._column_names,
         )
-        result._copy_type_metadata(self)
-        return result
+
+    def repeat(self, repeats, axis=None):
+        """Repeat elements of a Index.
+
+        Returns a new Index where each element of the current Index is repeated
+        consecutively a given number of times.
+
+        Parameters
+        ----------
+        repeats : int, or array of ints
+            The number of repetitions for each element. This should
+            be a non-negative integer. Repeating 0 times will return
+            an empty object.
+
+        Returns
+        -------
+        Index
+            A newly created object of same type as caller with repeated
+            elements.
+
+        Examples
+        --------
+        >>> index = cudf.Index([10, 22, 33, 55])
+        >>> index
+        Int64Index([10, 22, 33, 55], dtype='int64')
+        >>> index.repeat(5)
+        Int64Index([10, 10, 10, 10, 10, 22, 22, 22, 22, 22, 33,
+                    33, 33, 33, 33, 55, 55, 55, 55, 55],
+                dtype='int64')
+        """
+        raise NotImplementedError
 
     def _split_columns_by_levels(self, levels):
         if isinstance(levels, int) and levels > 0:
@@ -1577,6 +1557,9 @@ class BaseIndex(Serializable):
             ["index" if self.name is None else self.name],
             [],
         )
+
+    def _split(self, splits):
+        raise NotImplementedError
 
 
 def _get_result_name(left_name, right_name):

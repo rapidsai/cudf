@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <nvcomp/snappy.h>
+
+#include <thrust/for_each.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace io {
@@ -1040,7 +1045,7 @@ __global__ void __launch_bounds__(block_size)
     uint32_t string_idx = (t < numvals) ? dict_data[s->cur_row + t] : 0;
     if (cid == CI_DICTIONARY) {
       // Encoding string contents
-      const char* ptr = 0;
+      const char* ptr = nullptr;
       uint32_t count  = 0;
       if (t < numvals) {
         auto string_val = string_column->element<string_view>(string_idx);

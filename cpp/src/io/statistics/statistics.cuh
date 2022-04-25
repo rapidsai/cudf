@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,14 @@
  */
 
 #pragma once
-#include <stdint.h>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cstdint>
 
 namespace cudf {
 namespace io {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/types.hpp>
 
 #include <thrust/optional.h>
+#include <thrust/scan.h>
 
 #include <functional>
 #include <numeric>
@@ -166,7 +167,7 @@ class expression_parser {
    *
    * @return cudf::data_type
    */
-  cudf::data_type output_type() const;
+  [[nodiscard]] cudf::data_type output_type() const;
 
   /**
    * @brief Visit a literal expression.
@@ -206,10 +207,10 @@ class expression_parser {
    */
   class intermediate_counter {
    public:
-    intermediate_counter() : used_values(), max_used(0) {}
+    intermediate_counter() : used_values() {}
     cudf::size_type take();
     void give(cudf::size_type value);
-    cudf::size_type get_max_used() const { return max_used; }
+    [[nodiscard]] cudf::size_type get_max_used() const { return max_used; }
 
    private:
     /**
@@ -221,10 +222,10 @@ class expression_parser {
      *
      * @return cudf::size_type Smallest value not already in the container.
      */
-    cudf::size_type find_first_missing() const;
+    [[nodiscard]] cudf::size_type find_first_missing() const;
 
     std::vector<cudf::size_type> used_values;
-    cudf::size_type max_used;
+    cudf::size_type max_used{0};
   };
 
   expression_device_view device_expression_data;  ///< The collection of data required to evaluate

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,9 +91,9 @@ struct data_type_to_DLDataType_impl {
   {
     uint8_t const bits{sizeof(T) * 8};
     uint16_t const lanes{1};
-    if (std::is_floating_point<T>::value) {
+    if (std::is_floating_point_v<T>) {
       return DLDataType{kDLFloat, bits, lanes};
-    } else if (std::is_signed<T>::value) {
+    } else if (std::is_signed_v<T>) {
       return DLDataType{kDLInt, bits, lanes};
     } else {
       return DLDataType{kDLUInt, bits, lanes};
@@ -144,7 +144,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   // Make sure the current device ID matches the Tensor's device ID
   if (tensor.device.device_type != kDLCPU) {
     int device_id = 0;
-    CUDA_TRY(cudaGetDevice(&device_id));
+    CUDF_CUDA_TRY(cudaGetDevice(&device_id));
     CUDF_EXPECTS(tensor.device.device_id == device_id, "DLTensor device ID must be current device");
   }
 
@@ -168,7 +168,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   data_type const dtype = DLDataType_to_data_type(tensor.dtype);
 
   size_t const byte_width = size_of(dtype);
-  size_t const num_rows   = static_cast<size_t>(tensor.shape[0]);
+  auto const num_rows     = static_cast<size_t>(tensor.shape[0]);
   size_t const bytes      = num_rows * byte_width;
 
   // For 2D tensors, if the strides pointer is not null, then strides[1] is the
@@ -184,11 +184,11 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   for (auto& col : columns) {
     col = make_numeric_column(dtype, num_rows, mask_state::UNALLOCATED, stream, mr);
 
-    CUDA_TRY(cudaMemcpyAsync(col->mutable_view().head<void>(),
-                             reinterpret_cast<void*>(tensor_data),
-                             bytes,
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(col->mutable_view().head<void>(),
+                                  reinterpret_cast<void*>(tensor_data),
+                                  bytes,
+                                  cudaMemcpyDefault,
+                                  stream.value()));
 
     tensor_data += col_stride;
   }
@@ -234,7 +234,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
     tensor.strides[1] = num_rows;
   }
 
-  CUDA_TRY(cudaGetDevice(&tensor.device.device_id));
+  CUDF_CUDA_TRY(cudaGetDevice(&tensor.device.device_id));
   tensor.device.device_type = kDLCUDA;
 
   // If there is only one column, then a 1D tensor can just copy the pointer
@@ -254,11 +254,11 @@ DLManagedTensor* to_dlpack(table_view const& input,
 
   auto tensor_data = reinterpret_cast<uintptr_t>(tensor.data);
   for (auto const& col : input) {
-    CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<void*>(tensor_data),
-                             get_column_data(col),
-                             stride_bytes,
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<void*>(tensor_data),
+                                  get_column_data(col),
+                                  stride_bytes,
+                                  cudaMemcpyDefault,
+                                  stream.value()));
     tensor_data += stride_bytes;
   }
 

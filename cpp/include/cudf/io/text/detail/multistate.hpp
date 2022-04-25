@@ -37,7 +37,7 @@ struct multistate {
      * @brief Creates a segment which represents (0, 0]
      */
 
-    constexpr multistate_segment() : _data(0) {}
+    constexpr multistate_segment() = default;
     /**
      * @brief Creates a segment which represents (head, tail]
      *
@@ -52,15 +52,15 @@ struct multistate {
     /**
      * @brief Get's the (head, ____] value from the segment.
      */
-    constexpr uint8_t get_head() const { return _data & 0b1111; }
+    [[nodiscard]] constexpr uint8_t get_head() const { return _data & 0b1111; }
 
     /**
      * @brief Get's the (____, tail] value from the segment.
      */
-    constexpr uint8_t get_tail() const { return _data >> 4; }
+    [[nodiscard]] constexpr uint8_t get_tail() const { return _data >> 4; }
 
    private:
-    uint8_t _data;
+    uint8_t _data{0};
   };
 
  public:
@@ -87,12 +87,12 @@ struct multistate {
   /**
    * @brief get's the number of segments this multistate represents
    */
-  constexpr uint8_t size() const { return _size; }
+  [[nodiscard]] constexpr uint8_t size() const { return _size; }
 
   /**
    * @brief get's the highest (____, tail] value this multistate represents
    */
-  constexpr uint8_t max_tail() const
+  [[nodiscard]] constexpr uint8_t max_tail() const
   {
     uint8_t maximum = 0;
 
@@ -106,12 +106,12 @@ struct multistate {
   /**
    * @brief get's the Nth (head, ____] value state this multistate represents
    */
-  constexpr uint8_t get_head(uint8_t idx) const { return _segments[idx].get_head(); }
+  [[nodiscard]] constexpr uint8_t get_head(uint8_t idx) const { return _segments[idx].get_head(); }
 
   /**
    * @brief get's the Nth (____, tail] value state this multistate represents
    */
-  constexpr uint8_t get_tail(uint8_t idx) const { return _segments[idx].get_tail(); }
+  [[nodiscard]] constexpr uint8_t get_tail(uint8_t idx) const { return _segments[idx].get_tail(); }
 
  private:
   uint8_t _size = 0;

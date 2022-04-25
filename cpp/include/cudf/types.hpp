@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,10 +83,11 @@ class mutable_table_view;
  * @file
  */
 
-using size_type    = int32_t;
-using bitmask_type = uint32_t;
-using valid_type   = uint8_t;
-using offset_type  = int32_t;
+using size_type         = int32_t;
+using bitmask_type      = uint32_t;
+using valid_type        = uint8_t;
+using offset_type       = int32_t;
+using thread_index_type = int64_t;
 
 /**
  * @brief Similar to `std::distance` but returns `cudf::size_type` and performs `static_cast`
@@ -268,12 +269,12 @@ class data_type {
   /**
    * @brief Returns the type identifier
    */
-  constexpr type_id id() const noexcept { return _id; }
+  [[nodiscard]] constexpr type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
    */
-  constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
+  [[nodiscard]] constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
 
  private:
   type_id _id{type_id::EMPTY};
@@ -325,22 +326,6 @@ inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lh
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
-
-/**
- *  @brief Identifies the hash function to be used
- */
-enum class hash_id {
-  HASH_IDENTITY = 0,    ///< Identity hash function that simply returns the key to be hashed
-  HASH_MURMUR3,         ///< Murmur3 hash function
-  HASH_MD5,             ///< MD5 hash function
-  HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
-  HASH_SPARK_MURMUR3    ///< Spark Murmur3 hash function
-};
-
-/**
- * @brief The default seed value for hash functions
- */
-static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /** @} */
 }  // namespace cudf

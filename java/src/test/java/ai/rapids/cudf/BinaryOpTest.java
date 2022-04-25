@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1359,6 +1359,46 @@ public class BinaryOpTest extends CudfTestBase {
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv1,
                    (b, l, r, i) -> b.append(l ^ r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short ^ int32");
+      }
+    }
+  }
+
+  @Test
+  public void testNullAnd() {
+    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(
+        true, true, true,
+        false, false, false,
+        null, null, null);
+         ColumnVector icv2 = ColumnVector.fromBoxedBooleans(
+             true, false, null,
+             true, false, null,
+             true, false, null)) {
+      try (ColumnVector answer = icv1.binaryOp(BinaryOp.NULL_LOGICAL_AND, icv2, DType.BOOL8);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(
+               true, false, null,
+               false, false, false,
+               null, false, null)) {
+        assertColumnsAreEqual(expected, answer, "boolean NULL AND boolean");
+      }
+    }
+  }
+
+  @Test
+  public void testNullOr() {
+    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(
+        true, true, true,
+        false, false, false,
+        null, null, null);
+         ColumnVector icv2 = ColumnVector.fromBoxedBooleans(
+             true, false, null,
+             true, false, null,
+             true, false, null)) {
+      try (ColumnVector answer = icv1.binaryOp(BinaryOp.NULL_LOGICAL_OR, icv2, DType.BOOL8);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(
+               true, true, true,
+               true, false, null,
+               true, null, null)) {
+        assertColumnsAreEqual(expected, answer, "boolean NULL OR boolean");
       }
     }
   }

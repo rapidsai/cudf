@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,10 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace lists {
@@ -53,8 +57,8 @@ namespace detail {
  * @endcode
  */
 struct list_gatherer {
-  typedef size_type argument_type;
-  typedef size_type result_type;
+  using argument_type = size_type;
+  using result_type   = size_type;
 
   size_t offset_count;
   size_type const* base_offsets;

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
@@ -17,7 +17,7 @@ except ImportError:
     import json
 
 import numpy as np
-from cython.operator import dereference
+from cython.operator cimport dereference
 
 from cudf.api.types import (
     is_categorical_dtype,

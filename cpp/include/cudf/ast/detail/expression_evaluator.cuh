@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,7 +76,7 @@ struct expression_result {
     subclass().template set_value<Element>(index, result);
   }
 
-  __device__ inline bool is_valid() const { return subclass().is_valid(); }
+  [[nodiscard]] __device__ inline bool is_valid() const { return subclass().is_valid(); }
 
   __device__ inline T value() const { return subclass().value(); }
 };
@@ -103,14 +103,14 @@ struct value_expression_result
     if constexpr (std::is_same_v<Element, T>) {
       _obj = result;
     } else {
-      cudf_assert(false && "Output type does not match container type.");
+      CUDF_UNREACHABLE("Output type does not match container type.");
     }
   }
 
   /**
    * @brief Returns true if the underlying data is valid and false otherwise.
    */
-  __device__ inline bool is_valid() const
+  [[nodiscard]] __device__ inline bool is_valid() const
   {
     if constexpr (has_nulls) { return _obj.has_value(); }
     return true;
@@ -174,23 +174,21 @@ struct mutable_column_expression_result
   /**
    * @brief Not implemented for this specialization.
    */
-  __device__ inline bool is_valid() const
+  [[nodiscard]] __device__ inline bool is_valid() const
   {
     // Not implemented since it would require modifying the API in the parent class to accept an
     // index.
-    cudf_assert(false && "This method is not implemented.");
-    // Unreachable return used to silence compiler warnings.
-    return {};
+    CUDF_UNREACHABLE("This method is not implemented.");
   }
 
   /**
    * @brief Not implemented for this specialization.
    */
-  __device__ inline mutable_column_device_view value() const
+  [[nodiscard]] __device__ inline mutable_column_device_view value() const
   {
     // Not implemented since it would require modifying the API in the parent class to accept an
     // index.
-    cudf_assert(false && "This method is not implemented.");
+    CUDF_UNREACHABLE("This method is not implemented.");
   }
 
   mutable_column_device_view& _obj;  ///< The column to which the data is written.
@@ -334,9 +332,7 @@ struct expression_evaluator {
     cudf::size_type left_row_index,
     thrust::optional<cudf::size_type> right_row_index = {}) const
   {
-    cudf_assert(false && "Unsupported type in resolve_input.");
-    // Unreachable return used to silence compiler warnings.
-    return {};
+    CUDF_UNREACHABLE("Unsupported type in resolve_input.");
   }
 
   /**
@@ -498,7 +494,7 @@ struct expression_evaluator {
                         op,
                         thread_intermediate_storage);
       } else {
-        cudf_assert(false && "Invalid operator arity.");
+        CUDF_UNREACHABLE("Invalid operator arity.");
       }
     }
   }
@@ -567,7 +563,7 @@ struct expression_evaluator {
       IntermediateDataType<has_nulls>* thread_intermediate_storage,
       possibly_null_value_t<Element, has_nulls> const& result) const
     {
-      cudf_assert(false && "Invalid type in resolve_output.");
+      CUDF_UNREACHABLE("Invalid type in resolve_output.");
     }
   };
 
@@ -630,7 +626,7 @@ struct expression_evaluator {
       detail::device_data_reference const& output,
       IntermediateDataType<has_nulls>* thread_intermediate_storage) const
     {
-      cudf_assert(false && "Invalid unary dispatch operator for the provided input.");
+      CUDF_UNREACHABLE("Invalid unary dispatch operator for the provided input.");
     }
   };
 
@@ -698,7 +694,7 @@ struct expression_evaluator {
       detail::device_data_reference const& output,
       IntermediateDataType<has_nulls>* thread_intermediate_storage) const
     {
-      cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
+      CUDF_UNREACHABLE("Invalid binary dispatch operator for the provided input.");
     }
   };
 

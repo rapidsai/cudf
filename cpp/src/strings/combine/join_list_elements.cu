@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -61,9 +63,9 @@ struct compute_size_and_concatenate_fn {
   // If d_chars != nullptr: only concatenate strings.
   char* d_chars{nullptr};
 
-  __device__ bool output_is_null(size_type const idx,
-                                 size_type const start_idx,
-                                 size_type const end_idx) const noexcept
+  [[nodiscard]] __device__ bool output_is_null(size_type const idx,
+                                               size_type const start_idx,
+                                               size_type const end_idx) const noexcept
   {
     if (func.is_null_list(lists_dv, idx)) { return true; }
     return empty_list_policy == output_if_empty_list::NULL_ELEMENT && start_idx == end_idx;
@@ -127,13 +129,16 @@ struct compute_size_and_concatenate_fn {
 struct scalar_separator_fn {
   string_scalar_device_view const d_separator;
 
-  __device__ bool is_null_list(column_device_view const& lists_dv,
-                               size_type const idx) const noexcept
+  [[nodiscard]] __device__ bool is_null_list(column_device_view const& lists_dv,
+                                             size_type const idx) const noexcept
   {
     return lists_dv.is_null(idx);
   }
 
-  __device__ string_view separator(size_type const) const noexcept { return d_separator.value(); }
+  [[nodiscard]] __device__ string_view separator(size_type const) const noexcept
+  {
+    return d_separator.value();
+  }
 };
 
 template <typename CompFn>
@@ -222,13 +227,13 @@ struct column_separators_fn {
   column_device_view const separators_dv;
   string_scalar_device_view const sep_narep_dv;
 
-  __device__ bool is_null_list(column_device_view const& lists_dv,
-                               size_type const idx) const noexcept
+  [[nodiscard]] __device__ bool is_null_list(column_device_view const& lists_dv,
+                                             size_type const idx) const noexcept
   {
     return lists_dv.is_null(idx) || (separators_dv.is_null(idx) && !sep_narep_dv.is_valid());
   }
 
-  __device__ string_view separator(size_type const idx) const noexcept
+  [[nodiscard]] __device__ string_view separator(size_type const idx) const noexcept
   {
     return separators_dv.is_valid(idx) ? separators_dv.element<string_view>(idx)
                                        : sep_narep_dv.value();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
+#include <thrust/execution_policy.h>
 #include <thrust/find.h>
+#include <thrust/generate.h>
+#include <thrust/iterator/reverse_iterator.h>
+#include <thrust/mismatch.h>
+#include <thrust/optional.h>
+#include <thrust/pair.h>
 
 using cudf::device_span;
 
@@ -216,7 +222,7 @@ struct ConvertFunctor {
    * It is handled here rather than within convertStrToValue() as that function
    * is used by other types (ex. timestamp) that aren't 'booleable'.
    */
-  template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* output_column,
@@ -240,7 +246,7 @@ struct ConvertFunctor {
    * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* out_buffer,
@@ -258,8 +264,7 @@ struct ConvertFunctor {
    * (including wrapper types) that is not covered by above.
    */
   template <typename T,
-            typename std::enable_if_t<!std::is_floating_point<T>::value and
-                                      !std::is_integral<T>::value>* = nullptr>
+            std::enable_if_t<!std::is_floating_point_v<T> and !std::is_integral_v<T>>* = nullptr>
   __host__ __device__ __forceinline__ bool operator()(char const* begin,
                                                       char const* end,
                                                       void* output_column,
@@ -684,7 +689,7 @@ void convert_json_to_columns(parse_options_view const& opts,
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
+  CUDF_CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
     &min_grid_size, &block_size, convert_data_to_columns_kernel));
 
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
@@ -698,7 +703,7 @@ void convert_json_to_columns(parse_options_view const& opts,
                                                                                valid_fields,
                                                                                num_valid_fields);
 
-  CUDA_TRY(cudaGetLastError());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 /**
@@ -716,7 +721,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
   auto d_column_infos = [&]() {
@@ -758,7 +763,7 @@ void collect_keys_info(parse_options_view const& options,
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, collect_keys_info_kernel));
 
   // Calculate actual block count to use based on records count
@@ -767,7 +772,7 @@ void collect_keys_info(parse_options_view const& options,
   collect_keys_info_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, keys_cnt, keys_info);
 
-  CUDA_TRY(cudaGetLastError());
+  CUDF_CHECK_CUDA(stream.value());
 }
 
 }  // namespace gpu

@@ -1,0 +1,8 @@
+# This file controls which features from the `ops-bot` repository below are enabled.
+# - https://github.com/rapidsai/ops-bot
+
+auto_merger: true
+branch_checker: true
+label_checker: true
+release_drafter: true
+external_contributors: false

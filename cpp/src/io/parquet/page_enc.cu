@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "parquet_gpu.hpp"
+
 #include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
@@ -25,11 +26,23 @@
 
 #include <cub/cub.cuh>
 
-#include <cub/cub.cuh>
 #include <cuda/std/chrono>
+
 #include <thrust/binary_search.h>
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
 #include <thrust/gather.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/reverse_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/merge.h>
+#include <thrust/scan.h>
+#include <thrust/scatter.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace io {
@@ -1068,7 +1081,7 @@ __global__ void __launch_bounds__(128, 8)
   }
   if (t == 0) {
     uint8_t* base                = s->page.page_data + s->page.max_hdr_size;
-    uint32_t actual_data_size    = static_cast<uint32_t>(s->cur - base);
+    auto actual_data_size        = static_cast<uint32_t>(s->cur - base);
     uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
     s->page.max_data_size        = actual_data_size;
     s->comp_in.srcDevice         = base;
@@ -1244,7 +1257,7 @@ class header_encoder {
     *header_end = current_header_ptr;
   }
 
-  inline __device__ uint8_t* get_ptr(void) { return current_header_ptr; }
+  inline __device__ uint8_t* get_ptr() { return current_header_ptr; }
 
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };

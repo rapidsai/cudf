@@ -26,7 +26,7 @@
 
 template <class T>
 struct managed_allocator {
-  typedef T value_type;
+  using value_type                    = T;
   rmm::mr::device_memory_resource* mr = new rmm::mr::managed_memory_resource;
 
   managed_allocator() = default;
@@ -62,7 +62,7 @@ bool operator!=(const managed_allocator<T>&, const managed_allocator<U>&)
 
 template <class T>
 struct default_allocator {
-  typedef T value_type;
+  using value_type                    = T;
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
 
   default_allocator() = default;

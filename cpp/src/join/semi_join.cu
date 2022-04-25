@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,10 +34,9 @@
 
 #include <thrust/copy.h>
 #include <thrust/distance.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/tuple.h>
-
-#include <cuco/static_map.cuh>
 
 namespace cudf {
 namespace detail {
@@ -51,7 +50,7 @@ struct make_pair_function {
   {
     // The value is irrelevant since we only ever use the hash map to check for
     // membership of a particular row index.
-    return cuco::make_pair<hash_value_type, size_type>(i, 0);
+    return cuco::make_pair(static_cast<hash_value_type>(i), 0);
   }
 };
 
@@ -91,13 +90,11 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto left_flattened_keys  = left_flattened_tables.flattened_columns();
 
   // Create hash table.
-  auto hash_table = cuco::
-    static_map<hash_value_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>{
-      compute_hash_table_size(right_num_rows),
-      std::numeric_limits<hash_value_type>::max(),
-      cudf::detail::JoinNoneValue,
-      hash_table_allocator_type{default_allocator<char>{}, stream},
-      stream.value()};
+  semi_map_type hash_table{compute_hash_table_size(right_num_rows),
+                           std::numeric_limits<hash_value_type>::max(),
+                           cudf::detail::JoinNoneValue,
+                           hash_table_allocator_type{default_allocator<char>{}, stream},
+                           stream.value()};
 
   // Create hash table containing all keys found in right table
   auto right_rows_d      = table_device_view::create(right_flattened_keys, stream);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
 #include <map>
@@ -147,16 +153,16 @@ struct format_compiler {
 
     // create program in device memory
     d_items.resize(items.size(), stream);
-    CUDA_TRY(cudaMemcpyAsync(d_items.data(),
-                             items.data(),
-                             items.size() * sizeof(items[0]),
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(d_items.data(),
+                                  items.data(),
+                                  items.size() * sizeof(items[0]),
+                                  cudaMemcpyHostToDevice,
+                                  stream.value()));
   }
 
   format_item const* compiled_format_items() { return d_items.data(); }
 
-  size_type items_count() const { return static_cast<size_type>(d_items.size()); }
+  [[nodiscard]] size_type items_count() const { return static_cast<size_type>(d_items.size()); }
 };
 
 template <typename T>

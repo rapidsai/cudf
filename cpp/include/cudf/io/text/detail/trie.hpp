@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,20 +89,6 @@ struct trie_device_view {
    */
   constexpr uint8_t get_match_length(uint16_t idx) { return _nodes[idx].match_length; }
 
-  /**
-   * @brief returns the longest matching state of any state in the multistate.
-   */
-  template <uint32_t N>
-  constexpr uint8_t get_match_length(multistate const& states)
-  {
-    int8_t val = 0;
-    for (uint8_t i = 0; i < states.size(); i++) {
-      auto match_length = get_match_length(states.get_tail(i));
-      if (match_length > val) { val = match_length; }
-    }
-    return val;
-  }
-
  private:
   constexpr void transition_enqueue_all(  //
     char c,
@@ -161,13 +147,13 @@ struct trie {
   /**
    * @brief Gets the number of nodes contained in this trie.
    */
-  cudf::size_type size() const { return _nodes.size(); }
+  [[nodiscard]] cudf::size_type size() const { return _nodes.size(); }
 
   /**
    * @brief A pessimistic count of duplicate tokens in the trie. Used to determine the maximum
    * possible stack size required to compute matches of this trie in parallel.
    */
-  cudf::size_type max_duplicate_tokens() const { return _max_duplicate_tokens; }
+  [[nodiscard]] cudf::size_type max_duplicate_tokens() const { return _max_duplicate_tokens; }
 
   /**
    * @brief Create a trie which represents the given pattern.
@@ -255,7 +241,7 @@ struct trie {
                 cudf::detail::make_device_uvector_sync(trie_nodes, stream, mr)};
   }
 
-  trie_device_view view() const { return trie_device_view{_nodes}; }
+  [[nodiscard]] trie_device_view view() const { return trie_device_view{_nodes}; }
 };
 
 }  // namespace detail

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,10 @@
 
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <thrust/merge.h>
+#include <thrust/pair.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace detail {
@@ -77,8 +81,8 @@ struct tagged_element_relational_comparator {
   {
   }
 
-  __device__ weak_ordering compare(index_type lhs_tagged_index,
-                                   index_type rhs_tagged_index) const noexcept
+  [[nodiscard]] __device__ weak_ordering compare(index_type lhs_tagged_index,
+                                                 index_type rhs_tagged_index) const noexcept
   {
     auto const [l_side, l_indx] = lhs_tagged_index;
     auto const [r_side, r_indx] = rhs_tagged_index;

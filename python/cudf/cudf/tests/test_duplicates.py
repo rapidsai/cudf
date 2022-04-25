@@ -1,6 +1,6 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import itertools as it
+import itertools
 import random
 
 import numpy as np
@@ -280,7 +280,7 @@ def test_drop_duplicates_empty(df):
 
 @pytest.mark.parametrize("num_columns", [3, 4, 5])
 def test_dataframe_drop_duplicates_numeric_method(num_columns):
-    comb = list(it.permutations(range(num_columns), num_columns))
+    comb = list(itertools.permutations(range(num_columns), num_columns))
     shuf = list(comb)
     random.Random(num_columns).shuffle(shuf)
 
@@ -615,5 +615,6 @@ def test_drop_duplicates_multi_index():
 
     for col in gdf.columns:
         assert_df(
-            gdf[col].drop_duplicates().to_pandas(), pdf[col].drop_duplicates(),
+            gdf[col].drop_duplicates().to_pandas(),
+            pdf[col].drop_duplicates(),
         )

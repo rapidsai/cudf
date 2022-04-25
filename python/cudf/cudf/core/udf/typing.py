@@ -1,3 +1,5 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import operator
 
 from numba import types
@@ -133,8 +135,8 @@ def typeof_masked(val, c):
 class MaskedConstructor(ConcreteTemplate):
     key = api.Masked
     units = ["ns", "ms", "us", "s"]
-    datetime_cases = set(types.NPDatetime(u) for u in units)
-    timedelta_cases = set(types.NPTimedelta(u) for u in units)
+    datetime_cases = {types.NPDatetime(u) for u in units}
+    timedelta_cases = {types.NPTimedelta(u) for u in units}
     cases = [
         nb_signature(MaskedType(t), t, types.boolean)
         for t in (
@@ -271,7 +273,11 @@ class MaskedScalarNullOp(AbstractTemplate):
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
             # In the case of op(Masked, NA), the result has the same
             # dtype as the original regardless of what it is
-            return nb_signature(args[0], args[0], na_type,)
+            return nb_signature(
+                args[0],
+                args[0],
+                na_type,
+            )
         elif isinstance(args[0], NAType) and isinstance(args[1], MaskedType):
             return nb_signature(args[1], na_type, args[1])
 
@@ -299,7 +305,11 @@ class MaskedScalarScalarOp(AbstractTemplate):
         return_type = self.context.resolve_function_type(
             self.key, to_resolve_types, kws
         ).return_type
-        return nb_signature(MaskedType(return_type), args[0], args[1],)
+        return nb_signature(
+            MaskedType(return_type),
+            args[0],
+            args[1],
+        )
 
 
 @cuda_decl_registry.register_global(operator.is_)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <fstream>
 #include <type_traits>
@@ -76,7 +78,8 @@ std::unique_ptr<cudf::table> create_fixed_table(cudf::size_type num_columns,
                  columns.begin(),
                  [](cudf::test::fixed_width_column_wrapper<T>& in) {
                    auto ret = in.release();
-                   ret->has_nulls();
+                   // pre-cache the null count
+                   [[maybe_unused]] auto const nulls = ret->has_nulls();
                    return ret;
                  });
   return std::make_unique<cudf::table>(std::move(columns));
@@ -216,16 +219,21 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
   auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
+// Typed test fixture for all types
+template <typename T>
+struct ParquetWriterSchemaTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
-using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;
-TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
-// TODO: debug truncation errors for `timestamp_ns` and overflow errors for `timestamp_s` , see
-// issue #9393.
-using SupportedTimestampTypes = cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us>;
+TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, cudf::test::ChronoTypes);
+using SupportedTimestampTypes =
+  cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
 TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
+TYPED_TEST_SUITE(ParquetWriterSchemaTest, cudf::test::AllTypes);
 
 // Base test fixture for chunked writer tests
 struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {
@@ -251,7 +259,7 @@ inline auto random_values(size_t size)
   using uniform_distribution =
     typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point<T1>::value,
+                                std::conditional_t<std::is_floating_point_v<T1>,
                                                    std::uniform_real_distribution<T1>,
                                                    std::uniform_int_distribution<T1>>>;
 
@@ -385,7 +393,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
     sequence, sequence + num_rows, validity);
   table_view expected({col});
 
-  auto filepath = temp_env->get_temp_filepath("OrcTimestampOverflow.orc");
+  auto filepath = temp_env->get_temp_filepath("ParquetTimestampOverflow.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected);
   cudf_io::write_parquet(out_opts);
@@ -1086,7 +1094,7 @@ class custom_test_data_sink : public cudf::io::data_sink {
     outfile_.write(static_cast<char const*>(data), size);
   }
 
-  bool supports_device_write() const override { return true; }
+  [[nodiscard]] bool supports_device_write() const override { return true; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
@@ -1099,11 +1107,11 @@ class custom_test_data_sink : public cudf::io::data_sink {
   {
     return std::async(std::launch::deferred, [=] {
       char* ptr = nullptr;
-      CUDA_TRY(cudaMallocHost(&ptr, size));
-      CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
       stream.synchronize();
       outfile_.write(ptr, size);
-      CUDA_TRY(cudaFreeHost(ptr));
+      CUDF_CUDA_TRY(cudaFreeHost(ptr));
     });
   }
 
@@ -1413,13 +1421,13 @@ TEST_F(ParquetChunkedWriterTest, Strings)
 {
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask1[] = {1, 1, 0, 1, 1, 1, 1};
+  bool mask1[] = {true, true, false, true, true, true, true};
   std::vector<const char*> h_strings1{"four", "score", "and", "seven", "years", "ago", "abcdefgh"};
   cudf::test::strings_column_wrapper strings1(h_strings1.begin(), h_strings1.end(), mask1);
   cols.push_back(strings1.release());
   cudf::table tbl1(std::move(cols));
 
-  bool mask2[] = {0, 1, 1, 1, 1, 1, 1};
+  bool mask2[] = {false, true, true, true, true, true, true};
   std::vector<const char*> h_strings2{"ooooo", "ppppppp", "fff", "j", "cccc", "bbb", "zzzzzzzzzzz"};
   cudf::test::strings_column_wrapper strings2(h_strings2.begin(), h_strings2.end(), mask2);
   cols.push_back(strings2.release());
@@ -2052,8 +2060,9 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
   int num_els = 31;
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true};
 
   T c1a[num_els];
   std::fill(c1a, c1a + num_els, static_cast<T>(5));
@@ -2099,8 +2108,9 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
   int num_els = 33;
   std::vector<std::unique_ptr<cudf::column>> cols;
 
-  bool mask[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  bool mask[] = {false, true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true,
+                 true,  true, true, true, true, true, true, true, true, true, true};
 
   T c1a[num_els];
   std::fill(c1a, c1a + num_els, static_cast<T>(5));
@@ -2149,7 +2159,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
 
   void host_write(void const* data, size_t size) override { mm_writer->host_write(data, size); }
 
-  bool supports_device_write() const override { return supports_device_writes; }
+  [[nodiscard]] bool supports_device_write() const override { return supports_device_writes; }
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
@@ -2162,11 +2172,11 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
   {
     return std::async(std::launch::deferred, [=] {
       char* ptr = nullptr;
-      CUDA_TRY(cudaMallocHost(&ptr, size));
-      CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
       stream.synchronize();
       mm_writer->host_write(ptr, size);
-      CUDA_TRY(cudaFreeHost(ptr));
+      CUDF_CUDA_TRY(cudaFreeHost(ptr));
     });
   }
 

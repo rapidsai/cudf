@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/execution_policy.h>
 #include <thrust/tabulate.h>
 
 #include <algorithm>
@@ -94,12 +95,12 @@ std::unique_ptr<column> hash(table_view const& input,
 {
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, stream, mr);
-    case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
     case (hash_id::HASH_SERIAL_MURMUR3):
       return serial_murmur_hash3_32<MurmurHash3_32>(input, seed, stream, mr);
     case (hash_id::HASH_SPARK_MURMUR3):
       return serial_murmur_hash3_32<SparkMurmurHash3_32>(input, seed, stream, mr);
-    default: return nullptr;
+    case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
+    default: CUDF_FAIL("Unsupported hash function.");
   }
 }
 

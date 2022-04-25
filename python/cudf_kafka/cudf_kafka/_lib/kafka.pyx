@@ -14,7 +14,12 @@ from cudf_kafka._lib.kafka cimport kafka_consumer
 # To avoid including <python.h> in libcudf_kafka
 # we introduce this wrapper in Cython
 cdef map[string, string] oauth_callback_wrapper(void *ctx):
-    return (<object>(ctx))()
+    resp = (<object>(ctx))()
+    cdef map[string, string] c_resp
+    c_resp[str.encode("token")] = str.encode(resp["token"])
+    c_resp[str.encode("token_expiration_in_epoch")] \
+        = str(resp["token_expiration_in_epoch"]).encode()
+    return c_resp
 
 
 cdef class KafkaDatasource(Datasource):

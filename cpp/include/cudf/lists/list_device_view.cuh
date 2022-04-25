@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,13 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
 
 namespace cudf {
 
@@ -69,7 +73,7 @@ class list_device_view {
    * The offset of this element as stored in the child column (i.e. 5)
    * may be fetched using this method.
    */
-  __device__ inline size_type element_offset(size_type idx) const
+  [[nodiscard]] __device__ inline size_type element_offset(size_type idx) const
   {
     cudf_assert(idx >= 0 && idx < size() && "idx out of bounds");
     return begin_offset + idx;
@@ -91,7 +95,7 @@ class list_device_view {
   /**
    * @brief Checks whether element is null at specified index in the list row.
    */
-  __device__ inline bool is_null(size_type idx) const
+  [[nodiscard]] __device__ inline bool is_null(size_type idx) const
   {
     cudf_assert(idx >= 0 && idx < size() && "Index out of bounds.");
     auto element_offset = begin_offset + idx;
@@ -101,17 +105,20 @@ class list_device_view {
   /**
    * @brief Checks whether this list row is null.
    */
-  __device__ inline bool is_null() const { return lists_column.is_null(_row_index); }
+  [[nodiscard]] __device__ inline bool is_null() const { return lists_column.is_null(_row_index); }
 
   /**
    * @brief Fetches the number of elements in this list row.
    */
-  __device__ inline size_type size() const { return _size; }
+  [[nodiscard]] __device__ inline size_type size() const { return _size; }
 
   /**
    * @brief Fetches the lists_column_device_view that contains this list.
    */
-  __device__ inline lists_column_device_view const& get_column() const { return lists_column; }
+  [[nodiscard]] __device__ inline lists_column_device_view const& get_column() const
+  {
+    return lists_column;
+  }
 
   template <typename T>
   struct pair_accessor;
@@ -141,7 +148,7 @@ class list_device_view {
    *   2. `p.second == false`
    */
   template <typename T>
-  __device__ inline const_pair_iterator<T> pair_begin() const
+  [[nodiscard]] __device__ inline const_pair_iterator<T> pair_begin() const
   {
     return const_pair_iterator<T>{thrust::counting_iterator<size_type>(0), pair_accessor<T>{*this}};
   }
@@ -151,7 +158,7 @@ class list_device_view {
    * list_device_view.
    */
   template <typename T>
-  __device__ inline const_pair_iterator<T> pair_end() const
+  [[nodiscard]] __device__ inline const_pair_iterator<T> pair_end() const
   {
     return const_pair_iterator<T>{thrust::counting_iterator<size_type>(size()),
                                   pair_accessor<T>{*this}};
@@ -173,7 +180,7 @@ class list_device_view {
    *   2. `p.second == false`
    */
   template <typename T>
-  __device__ inline const_pair_rep_iterator<T> pair_rep_begin() const
+  [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_begin() const
   {
     return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(0),
                                       pair_rep_accessor<T>{*this}};
@@ -184,7 +191,7 @@ class list_device_view {
    * list_device_view.
    */
   template <typename T>
-  __device__ inline const_pair_rep_iterator<T> pair_rep_end() const
+  [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_end() const
   {
     return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(size()),
                                       pair_rep_accessor<T>{*this}};
@@ -287,22 +294,34 @@ class list_device_view {
  *
  */
 struct list_size_functor {
-  column_device_view const d_column;
-  CUDF_HOST_DEVICE inline list_size_functor(column_device_view const& d_col) : d_column(d_col)
+  detail::lists_column_device_view const d_column;
+  CUDF_HOST_DEVICE inline list_size_functor(detail::lists_column_device_view const& d_col)
+    : d_column(d_col)
   {
-#if defined(__CUDA_ARCH__)
-    cudf_assert(d_col.type().id() == type_id::LIST && "Only list type column is supported");
-#else
-    CUDF_EXPECTS(d_col.type().id() == type_id::LIST, "Only list type column is supported");
-#endif
   }
   __device__ inline size_type operator()(size_type idx)
   {
     if (d_column.is_null(idx)) return size_type{0};
-    auto d_offsets =
-      d_column.child(lists_column_view::offsets_column_index).data<size_type>() + d_column.offset();
-    return d_offsets[idx + 1] - d_offsets[idx];
+    return d_column.offset_at(idx + 1) - d_column.offset_at(idx);
   }
 };
+
+/**
+ * @brief Makes an iterator that returns size of the list by row index
+ *
+ * Example:
+ * For a list_column_device_view with 3 rows, `l = {[1, 2, 3], [4, 5], [6, 7, 8, 9]}`,
+ * @code{.cpp}
+ * auto it = make_list_size_iterator(l);
+ * assert(it[0] == 3);
+ * assert(it[1] == 2);
+ * assert(it[2] == 4);
+ * @endcode
+ *
+ */
+CUDF_HOST_DEVICE auto inline make_list_size_iterator(detail::lists_column_device_view const& c)
+{
+  return detail::make_counting_transform_iterator(0, list_size_functor{c});
+}
 
 }  // namespace cudf

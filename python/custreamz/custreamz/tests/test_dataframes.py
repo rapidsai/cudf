@@ -1,10 +1,9 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 """
 Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.
 *** Borrowed from streamz.dataframe.tests | License at thirdparty/LICENSE ***
 """
-from __future__ import division, print_function
 
 import json
 import operator

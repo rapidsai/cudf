@@ -80,6 +80,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class dense_rank_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, class percent_rank_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, class collect_list_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class collect_set_aggregation const& agg);
@@ -129,6 +131,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class ewma_aggregation const& agg);
   virtual void visit(class rank_aggregation const& agg);
   virtual void visit(class dense_rank_aggregation const& agg);
+  virtual void visit(class percent_rank_aggregation const& agg);
   virtual void visit(class collect_list_aggregation const& agg);
   virtual void visit(class collect_set_aggregation const& agg);
   virtual void visit(class lead_lag_aggregation const& agg);
@@ -147,11 +150,14 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
  */
 class sum_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public reduce_aggregation,
+                              public scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   sum_aggregation() : aggregation(SUM) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<sum_aggregation>(*this);
   }
@@ -166,11 +172,14 @@ class sum_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying a product aggregation
  */
-class product_aggregation final : public groupby_aggregation {
+class product_aggregation final : public groupby_aggregation,
+                                  public reduce_aggregation,
+                                  public scan_aggregation,
+                                  public segmented_reduce_aggregation {
  public:
   product_aggregation() : aggregation(PRODUCT) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<product_aggregation>(*this);
   }
@@ -187,11 +196,14 @@ class product_aggregation final : public groupby_aggregation {
  */
 class min_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public reduce_aggregation,
+                              public scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   min_aggregation() : aggregation(MIN) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<min_aggregation>(*this);
   }
@@ -208,11 +220,14 @@ class min_aggregation final : public rolling_aggregation,
  */
 class max_aggregation final : public rolling_aggregation,
                               public groupby_aggregation,
-                              public groupby_scan_aggregation {
+                              public groupby_scan_aggregation,
+                              public reduce_aggregation,
+                              public scan_aggregation,
+                              public segmented_reduce_aggregation {
  public:
   max_aggregation() : aggregation(MAX) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<max_aggregation>(*this);
   }
@@ -233,7 +248,7 @@ class count_aggregation final : public rolling_aggregation,
  public:
   count_aggregation(aggregation::Kind kind) : aggregation(kind) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<count_aggregation>(*this);
   }
@@ -248,11 +263,11 @@ class count_aggregation final : public rolling_aggregation,
 /**
  * @brief Derived class for specifying an any aggregation
  */
-class any_aggregation final : public aggregation {
+class any_aggregation final : public reduce_aggregation, public segmented_reduce_aggregation {
  public:
   any_aggregation() : aggregation(ANY) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<any_aggregation>(*this);
   }
@@ -267,11 +282,11 @@ class any_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying an all aggregation
  */
-class all_aggregation final : public aggregation {
+class all_aggregation final : public reduce_aggregation, public segmented_reduce_aggregation {
  public:
   all_aggregation() : aggregation(ALL) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<all_aggregation>(*this);
   }
@@ -286,11 +301,11 @@ class all_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a sum_of_squares aggregation
  */
-class sum_of_squares_aggregation final : public groupby_aggregation {
+class sum_of_squares_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   sum_of_squares_aggregation() : aggregation(SUM_OF_SQUARES) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<sum_of_squares_aggregation>(*this);
   }
@@ -305,11 +320,13 @@ class sum_of_squares_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived class for specifying a mean aggregation
  */
-class mean_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class mean_aggregation final : public rolling_aggregation,
+                               public groupby_aggregation,
+                               public reduce_aggregation {
  public:
   mean_aggregation() : aggregation(MEAN) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<mean_aggregation>(*this);
   }
@@ -328,7 +345,7 @@ class m2_aggregation : public groupby_aggregation {
  public:
   m2_aggregation() : aggregation{M2} {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<m2_aggregation>(*this);
   }
@@ -343,18 +360,23 @@ class m2_aggregation : public groupby_aggregation {
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-class std_var_aggregation : public rolling_aggregation, public groupby_aggregation {
+class std_var_aggregation : public rolling_aggregation,
+                            public groupby_aggregation,
+                            public reduce_aggregation {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<std_var_aggregation const&>(_other);
     return _ddof == other._ddof;
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
  protected:
   std_var_aggregation(aggregation::Kind k, size_type ddof) : rolling_aggregation(k), _ddof{ddof}
@@ -362,7 +384,7 @@ class std_var_aggregation : public rolling_aggregation, public groupby_aggregati
     CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
                  "std_var_aggregation can accept only STD, VARIANCE");
   }
-  size_type hash_impl() const { return std::hash<size_type>{}(_ddof); }
+  [[nodiscard]] size_type hash_impl() const { return std::hash<size_type>{}(_ddof); }
 };
 
 /**
@@ -375,7 +397,7 @@ class var_aggregation final : public std_var_aggregation {
   {
   }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<var_aggregation>(*this);
   }
@@ -397,7 +419,7 @@ class std_aggregation final : public std_var_aggregation {
   {
   }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<std_aggregation>(*this);
   }
@@ -412,11 +434,11 @@ class std_aggregation final : public std_var_aggregation {
 /**
  * @brief Derived class for specifying a median aggregation
  */
-class median_aggregation final : public groupby_aggregation {
+class median_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   median_aggregation() : aggregation(MEDIAN) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<median_aggregation>(*this);
   }
@@ -431,7 +453,7 @@ class median_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived class for specifying a quantile aggregation
  */
-class quantile_aggregation final : public groupby_aggregation {
+class quantile_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   quantile_aggregation(std::vector<double> const& q, interpolation i)
     : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i}
@@ -440,7 +462,7 @@ class quantile_aggregation final : public groupby_aggregation {
   std::vector<double> _quantiles;  ///< Desired quantile(s)
   interpolation _interpolation;    ///< Desired interpolation
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
 
@@ -450,9 +472,12 @@ class quantile_aggregation final : public groupby_aggregation {
            std::equal(_quantiles.begin(), _quantiles.end(), other._quantiles.begin());
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<quantile_aggregation>(*this);
   }
@@ -481,7 +506,7 @@ class argmax_aggregation final : public rolling_aggregation, public groupby_aggr
  public:
   argmax_aggregation() : aggregation(ARGMAX) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<argmax_aggregation>(*this);
   }
@@ -500,7 +525,7 @@ class argmin_aggregation final : public rolling_aggregation, public groupby_aggr
  public:
   argmin_aggregation() : aggregation(ARGMIN) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<argmin_aggregation>(*this);
   }
@@ -515,7 +540,7 @@ class argmin_aggregation final : public rolling_aggregation, public groupby_aggr
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
-class nunique_aggregation final : public groupby_aggregation {
+class nunique_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   nunique_aggregation(null_policy null_handling)
     : aggregation{NUNIQUE}, _null_handling{null_handling}
@@ -524,16 +549,19 @@ class nunique_aggregation final : public groupby_aggregation {
 
   null_policy _null_handling;  ///< include or exclude nulls
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<nunique_aggregation const&>(_other);
     return _null_handling == other._null_handling;
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<nunique_aggregation>(*this);
   }
@@ -551,7 +579,7 @@ class nunique_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived class for specifying a nth element aggregation
  */
-class nth_element_aggregation final : public groupby_aggregation {
+class nth_element_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   nth_element_aggregation(size_type n, null_policy null_handling)
     : aggregation{NTH_ELEMENT}, _n{n}, _null_handling{null_handling}
@@ -561,16 +589,19 @@ class nth_element_aggregation final : public groupby_aggregation {
   size_type _n;                ///< nth index to return
   null_policy _null_handling;  ///< include or exclude nulls
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<nth_element_aggregation const&>(_other);
     return _n == other._n and _null_handling == other._null_handling;
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<nth_element_aggregation>(*this);
   }
@@ -595,7 +626,7 @@ class row_number_aggregation final : public rolling_aggregation {
  public:
   row_number_aggregation() : aggregation(ROW_NUMBER) {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<row_number_aggregation>(*this);
   }
@@ -644,11 +675,13 @@ class ewma_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a rank aggregation
  */
-class rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
+class rank_aggregation final : public rolling_aggregation,
+                               public groupby_scan_aggregation,
+                               public scan_aggregation {
  public:
   rank_aggregation() : aggregation{RANK} {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<rank_aggregation>(*this);
   }
@@ -663,13 +696,33 @@ class rank_aggregation final : public rolling_aggregation, public groupby_scan_a
 /**
  * @brief Derived class for specifying a dense rank aggregation
  */
-class dense_rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
+class dense_rank_aggregation final : public rolling_aggregation,
+                                     public groupby_scan_aggregation,
+                                     public scan_aggregation {
  public:
   dense_rank_aggregation() : aggregation{DENSE_RANK} {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<dense_rank_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+class percent_rank_aggregation final : public rolling_aggregation,
+                                       public groupby_scan_aggregation,
+                                       public scan_aggregation {
+ public:
+  percent_rank_aggregation() : aggregation{PERCENT_RANK} {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<percent_rank_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -682,7 +735,9 @@ class dense_rank_aggregation final : public rolling_aggregation, public groupby_
 /**
  * @brief Derived aggregation class for specifying COLLECT_LIST aggregation
  */
-class collect_list_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class collect_list_aggregation final : public rolling_aggregation,
+                                       public groupby_aggregation,
+                                       public reduce_aggregation {
  public:
   explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
     : aggregation{COLLECT_LIST}, _null_handling{null_handling}
@@ -691,16 +746,19 @@ class collect_list_aggregation final : public rolling_aggregation, public groupb
 
   null_policy _null_handling;  ///< include or exclude nulls
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<collect_list_aggregation const&>(_other);
     return (_null_handling == other._null_handling);
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<collect_list_aggregation>(*this);
   }
@@ -718,7 +776,9 @@ class collect_list_aggregation final : public rolling_aggregation, public groupb
 /**
  * @brief Derived aggregation class for specifying COLLECT_SET aggregation
  */
-class collect_set_aggregation final : public rolling_aggregation, public groupby_aggregation {
+class collect_set_aggregation final : public rolling_aggregation,
+                                      public groupby_aggregation,
+                                      public reduce_aggregation {
  public:
   explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
                                    null_equality nulls_equal = null_equality::EQUAL,
@@ -735,7 +795,7 @@ class collect_set_aggregation final : public rolling_aggregation, public groupby
   nan_equality _nans_equal;    ///< whether to consider NaNs as equal value (applicable only to
                                ///< floating point types)
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<collect_set_aggregation const&>(_other);
@@ -743,9 +803,12 @@ class collect_set_aggregation final : public rolling_aggregation, public groupby
             _nans_equal == other._nans_equal);
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<collect_set_aggregation>(*this);
   }
@@ -774,16 +837,19 @@ class lead_lag_aggregation final : public rolling_aggregation {
   {
   }
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<lead_lag_aggregation const&>(_other);
     return (row_offset == other.row_offset);
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<lead_lag_aggregation>(*this);
   }
@@ -797,7 +863,7 @@ class lead_lag_aggregation final : public rolling_aggregation {
   size_type row_offset;
 
  private:
-  size_t hash_impl() const { return std::hash<size_type>()(row_offset); }
+  [[nodiscard]] size_t hash_impl() const { return std::hash<size_type>()(row_offset); }
 };
 
 /**
@@ -819,7 +885,7 @@ class udf_aggregation final : public rolling_aggregation {
                  "udf_aggregation can accept only PTX, CUDA");
   }
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<udf_aggregation const&>(_other);
@@ -827,9 +893,12 @@ class udf_aggregation final : public rolling_aggregation {
             _function_name == other._function_name and _output_type == other._output_type);
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<udf_aggregation>(*this);
   }
@@ -846,7 +915,7 @@ class udf_aggregation final : public rolling_aggregation {
   data_type _output_type;
 
  protected:
-  size_t hash_impl() const
+  [[nodiscard]] size_t hash_impl() const
   {
     return std::hash<std::string>{}(_source) ^ std::hash<std::string>{}(_operator_name) ^
            std::hash<std::string>{}(_function_name) ^
@@ -857,11 +926,11 @@ class udf_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_LISTS aggregation
  */
-class merge_lists_aggregation final : public groupby_aggregation {
+class merge_lists_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   explicit merge_lists_aggregation() : aggregation{MERGE_LISTS} {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<merge_lists_aggregation>(*this);
   }
@@ -876,7 +945,7 @@ class merge_lists_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_SETS aggregation
  */
-class merge_sets_aggregation final : public groupby_aggregation {
+class merge_sets_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   explicit merge_sets_aggregation(null_equality nulls_equal, nan_equality nans_equal)
     : aggregation{MERGE_SETS}, _nulls_equal(nulls_equal), _nans_equal(nans_equal)
@@ -887,16 +956,19 @@ class merge_sets_aggregation final : public groupby_aggregation {
   nan_equality _nans_equal;    ///< whether to consider NaNs as equal value (applicable only to
                                ///< floating point types)
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<merge_sets_aggregation const&>(_other);
     return (_nulls_equal == other._nulls_equal && _nans_equal == other._nans_equal);
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<merge_sets_aggregation>(*this);
   }
@@ -921,7 +993,7 @@ class merge_m2_aggregation final : public groupby_aggregation {
  public:
   explicit merge_m2_aggregation() : aggregation{MERGE_M2} {}
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<merge_m2_aggregation>(*this);
   }
@@ -945,9 +1017,12 @@ class covariance_aggregation final : public groupby_aggregation {
   size_type _min_periods;
   size_type _ddof;
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<covariance_aggregation>(*this);
   }
@@ -977,16 +1052,19 @@ class correlation_aggregation final : public groupby_aggregation {
   correlation_type _type;
   size_type _min_periods;
 
-  bool is_equal(aggregation const& _other) const override
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<correlation_aggregation const&>(_other);
     return (_type == other._type);
   }
 
-  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<correlation_aggregation>(*this);
   }
@@ -1007,7 +1085,7 @@ class correlation_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying TDIGEST aggregation
  */
-class tdigest_aggregation final : public groupby_aggregation {
+class tdigest_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   explicit tdigest_aggregation(int max_centroids_)
     : aggregation{TDIGEST}, max_centroids{max_centroids_}
@@ -1016,7 +1094,7 @@ class tdigest_aggregation final : public groupby_aggregation {
 
   int const max_centroids;
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<tdigest_aggregation>(*this);
   }
@@ -1031,7 +1109,7 @@ class tdigest_aggregation final : public groupby_aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_TDIGEST aggregation
  */
-class merge_tdigest_aggregation final : public groupby_aggregation {
+class merge_tdigest_aggregation final : public groupby_aggregation, public reduce_aggregation {
  public:
   explicit merge_tdigest_aggregation(int max_centroids_)
     : aggregation{MERGE_TDIGEST}, max_centroids{max_centroids_}
@@ -1040,7 +1118,7 @@ class merge_tdigest_aggregation final : public groupby_aggregation {
 
   int const max_centroids;
 
-  std::unique_ptr<aggregation> clone() const override
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<merge_tdigest_aggregation>(*this);
   }
@@ -1143,10 +1221,9 @@ constexpr bool is_sum_product_agg(aggregation::Kind k)
 
 // Summing/Multiplying integers of any type, always use int64_t accumulator
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<
-  Source,
-  k,
-  std::enable_if_t<std::is_integral<Source>::value && is_sum_product_agg(k)>> {
+struct target_type_impl<Source,
+                        k,
+                        std::enable_if_t<std::is_integral_v<Source> && is_sum_product_agg(k)>> {
   using type = int64_t;
 };
 
@@ -1164,7 +1241,7 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
   k,
-  std::enable_if_t<std::is_floating_point<Source>::value && is_sum_product_agg(k)>> {
+  std::enable_if_t<std::is_floating_point_v<Source> && is_sum_product_agg(k)>> {
   using type = Source;
 };
 
@@ -1250,6 +1327,12 @@ struct target_type_impl<Source, aggregation::RANK> {
 template <typename Source>
 struct target_type_impl<Source, aggregation::DENSE_RANK> {
   using type = size_type;
+};
+
+// Always use double for PERCENT_RANK
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::PERCENT_RANK> {
+  using type = double;
 };
 
 // Always use list for COLLECT_LIST
@@ -1416,6 +1499,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::RANK>(std::forward<Ts>(args)...);
     case aggregation::DENSE_RANK:
       return f.template operator()<aggregation::DENSE_RANK>(std::forward<Ts>(args)...);
+    case aggregation::PERCENT_RANK:
+      return f.template operator()<aggregation::PERCENT_RANK>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_LIST:
       return f.template operator()<aggregation::COLLECT_LIST>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_SET:
@@ -1442,17 +1527,7 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
 #else
-      cudf_assert(false && "Unsupported aggregation.");
-
-      // The following code will never be reached, but the compiler generates a
-      // warning if there isn't a return value.
-
-      // Need to find out what the return type is in order to have a default
-      // return value and solve the compiler warning for lack of a default
-      // return
-      using return_type =
-        decltype(f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...));
-      return return_type();
+      CUDF_UNREACHABLE("Unsupported aggregation.");
 #endif
     }
   }
@@ -1523,7 +1598,7 @@ data_type target_type(data_type source_type, aggregation::Kind k);
 template <typename Source, aggregation::Kind k>
 constexpr inline bool is_valid_aggregation()
 {
-  return (not std::is_void<target_type_t<Source, k>>::value);
+  return (not std::is_void_v<target_type_t<Source, k>>);
 }
 
 /**

@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -23,7 +23,7 @@ def test_factorize_series_obj(ncats, nelem):
     assert isinstance(uvals, cp.ndarray)
     assert isinstance(labels, Index)
 
-    encoder = dict((labels[idx], idx) for idx in range(len(labels)))
+    encoder = {labels[idx]: idx for idx in range(len(labels))}
     handcoded = [encoder[v] for v in arr]
     np.testing.assert_array_equal(uvals.get(), handcoded)
 
@@ -42,7 +42,7 @@ def test_factorize_index_obj(ncats, nelem):
     assert isinstance(uvals, cp.ndarray)
     assert isinstance(labels, Index)
 
-    encoder = dict((labels[idx], idx) for idx in range(len(labels)))
+    encoder = {labels[idx]: idx for idx in range(len(labels))}
     handcoded = [encoder[v] for v in arr]
     np.testing.assert_array_equal(uvals.get(), handcoded)
 

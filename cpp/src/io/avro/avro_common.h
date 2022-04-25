@@ -17,8 +17,9 @@
 #pragma once
 
 #include <io/utilities/column_buffer.hpp>
-#include <stdint.h>
-#include <stdio.h>
+
+#include <cstdint>
+#include <cstdio>
 
 namespace cudf {
 namespace io {

@@ -16,11 +16,7 @@
 function(find_and_configure_libcudacxx)
   include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
 
-  rapids_cpm_libcudacxx(
-    BUILD_EXPORT_SET cudf-exports
-    INSTALL_EXPORT_SET cudf-exports PATCH_COMMAND patch --reject-file=- -p1 -N <
-                                    ${CUDF_SOURCE_DIR}/cmake/libcudacxx.patch || true
-  )
+  rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 
   set(LIBCUDACXX_INCLUDE_DIR
       "${libcudacxx_SOURCE_DIR}/include"

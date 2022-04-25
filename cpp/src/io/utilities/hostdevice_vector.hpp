@@ -54,7 +54,7 @@ class hostdevice_vector {
     : num_elements(initial_size), max_elements(max_size)
   {
     if (max_elements != 0) {
-      CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
+      CUDF_CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
       d_data.resize(sizeof(T) * max_elements, stream);
     }
   }
@@ -77,9 +77,9 @@ class hostdevice_vector {
     return false;
   }
 
-  size_t max_size() const noexcept { return max_elements; }
-  size_t size() const noexcept { return num_elements; }
-  size_t memory_size() const noexcept { return sizeof(T) * num_elements; }
+  [[nodiscard]] size_t max_size() const noexcept { return max_elements; }
+  [[nodiscard]] size_t size() const noexcept { return num_elements; }
+  [[nodiscard]] size_t memory_size() const noexcept { return sizeof(T) * num_elements; }
 
   T& operator[](size_t i) const { return h_data[i]; }
   T* host_ptr(size_t offset = 0) const { return h_data + offset; }
@@ -101,14 +101,14 @@ class hostdevice_vector {
 
   void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }
 
   void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream.value()));
     if (synchronize) { stream.synchronize(); }
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,6 +142,23 @@ void scan_result_functor::operator()<aggregation::DENSE_RANK>(aggregation const&
     values,
     agg,
     detail::dense_rank_scan(
+      order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
+}
+
+template <>
+void scan_result_functor::operator()<aggregation::PERCENT_RANK>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) return;
+  CUDF_EXPECTS(helper.is_presorted(),
+               "Percent rank aggregate in groupby scan requires the keys to be presorted");
+  auto const order_by = get_grouped_values();
+  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
+               "Unsupported list type in grouped percent_rank scan.");
+
+  cache.add_result(
+    values,
+    agg,
+    detail::percent_rank_scan(
       order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
 }
 }  // namespace detail

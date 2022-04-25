@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 
@@ -10,6 +10,11 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 
 cdef extern from "cudf/lists/contains.hpp" namespace "cudf::lists" nogil:
     cdef unique_ptr[column] contains(
+        lists_column_view lists,
+        scalar search_key,
+    ) except +
+
+    cdef unique_ptr[column] index_of(
         lists_column_view lists,
         scalar search_key,
     ) except +
