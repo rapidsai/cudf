@@ -641,7 +641,7 @@ class row_number_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying an ewma aggregation
  */
-class ewma_aggregation final : public rolling_aggregation {
+class ewma_aggregation final : public scan_aggregation {
  public:
   double const center_of_mass;
   cudf::ewm_history history;

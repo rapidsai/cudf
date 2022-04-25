@@ -661,8 +661,8 @@ std::unique_ptr<Base> make_ewma_aggregation(double const com, cudf::ewm_history 
 }
 template std::unique_ptr<aggregation> make_ewma_aggregation<aggregation>(double const com,
                                                                          cudf::ewm_history history);
-//template std::unique_ptr<scan_aggregation> make_ewma_aggregation<scan_aggregation>(double const com,
-//                                                                         cudf::ewm_history history);
+template std::unique_ptr<scan_aggregation> make_ewma_aggregation<scan_aggregation>(double const com,
+                                                                         cudf::ewm_history history);
 
 /// Factory to create a RANK aggregation
 template <typename Base>
