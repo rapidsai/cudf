@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/fst/device_dfa.cuh>
+#include <io/fst/lookup_tables.cuh>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -189,7 +189,7 @@ TEST_F(FstTest, GroundTruth)
   using SymbolOffsetT = uint32_t;
 
   // Helper class to set up transition table, symbol group lookup table, and translation table
-  using DfaFstT = cudf::io::fst::Dfa<char, (NUM_SYMBOL_GROUPS - 1), TT_NUM_STATES>;
+  using DfaFstT = cudf::io::fst::detail::Dfa<char, (NUM_SYMBOL_GROUPS - 1), TT_NUM_STATES>;
 
   // Prepare cuda stream for data transfers & kernels
   cudaStream_t stream = nullptr;
