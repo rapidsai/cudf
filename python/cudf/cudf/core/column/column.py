@@ -68,7 +68,6 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.mixins import BinaryOperand, Reducible
-from cudf.utils import utils
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     get_time_unit,
@@ -1774,9 +1773,7 @@ def as_column(
             if dtype is None:
                 dtype = cudf.dtype("float64")
 
-        data = as_column(
-            utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
-        )
+        data = as_column(full(length, arbitrary, dtype=dtype))
         if not nan_as_null and not is_decimal_dtype(data.dtype):
             if np.issubdtype(data.dtype, np.floating):
                 data = data.fillna(np.nan)

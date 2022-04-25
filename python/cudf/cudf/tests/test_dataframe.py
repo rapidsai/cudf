@@ -3662,9 +3662,7 @@ def test_all(data):
     # Pandas treats `None` in object type columns as True for some reason, so
     # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = cudf.utils.utils._create_pandas_series(data=data).replace(
-            [None], False
-        )
+        pdata = pd.Series(data=data).replace([None], False)
         gdata = cudf.Series.from_pandas(pdata)
     else:
         pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
@@ -3715,7 +3713,7 @@ def test_all(data):
 @pytest.mark.parametrize("axis", [0, 1])
 def test_any(data, axis):
     if np.array(data).ndim <= 1:
-        pdata = cudf.utils.utils._create_pandas_series(data=data)
+        pdata = pd.Series(data=data)
         gdata = cudf.Series.from_pandas(pdata)
 
         if axis == 1:
@@ -4185,7 +4183,7 @@ def test_create_dataframe_column():
     ],
 )
 def test_series_values_host_property(data):
-    pds = cudf.utils.utils._create_pandas_series(data=data)
+    pds = pd.Series(data=data)
     gds = cudf.Series(data)
 
     np.testing.assert_array_equal(pds.values, gds.values_host)
@@ -4208,7 +4206,7 @@ def test_series_values_host_property(data):
     ],
 )
 def test_series_values_property(data):
-    pds = cudf.utils.utils._create_pandas_series(data=data)
+    pds = pd.Series(data=data)
     gds = cudf.Series(data)
     gds_vals = gds.values
     assert isinstance(gds_vals, cupy.ndarray)
