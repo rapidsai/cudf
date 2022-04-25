@@ -1141,7 +1141,13 @@ class Frame(BinaryOperand, Scannable):
                 filled_data[col_name] = col.copy(deep=True)
 
         return self._mimic_inplace(
-            self._from_data(data=filled_data),
+            self._from_data(
+                data=ColumnAccessor._create_unsafe(
+                    data=filled_data,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                )
+            ),
             inplace=inplace,
         )
 
