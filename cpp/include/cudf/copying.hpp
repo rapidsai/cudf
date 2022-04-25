@@ -940,11 +940,10 @@ std::unique_ptr<table> sample(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief (Thoroughly) Checks whether a column or its descendants have null rows
- * that are not also empty.
+ * @brief Checks if a column or its descendants have non-empty null rows
  *
- * @note This function is potentially expensive. The offsets values of the specified column
- * and all its children/descendants will be examined for empty rows, for all its null rows.
+ * @note This function is exact. If it returns `true`, there exists one or more
+ * non-empty null elements.
  *
  * A LIST or STRING column might have non-empty rows that are marked as null.
  * A STRUCT OR LIST column might have child columns that have non-empty null rows.
@@ -959,15 +958,21 @@ std::unique_ptr<table> sample(
 bool has_nonempty_nulls(column_view const& input);
 
 /**
- * @brief Checks whether a column or its descendants might potentially have null rows
- * that are not also empty
+ * @brief Approximates if a column or its descendants *may* have non-empty null elements
  *
- * @note This function is a fast check, and is not thorough. It only checks whether
- * the columns have null rows, and not whether the null rows are empty.
+ * @note This function is approximate.
+ * - `true`: Non-empty null elements could exist
+ * - `false`: Non-empty null elements definitely do not exist
  *
- * A return value of `false` implies that the column and its descendants are guaranteed
- * not to have null rows that are not also empty.
- * If `true` is returned, it only implies the potential for null rows to be non-empty.
+ * False positives are possible, but false negatives are not.
+ *
+ * Compared to the exact `has_nonempty_nulls()` function, this function is typically
+ * more efficient.
+ *
+ * Complexity:
+ * - Best case: `O(count_descendants(input))`
+ * - Worst case: `O(count_descendants(input)) * m`, where `m` is the number of rows in the largest
+ * descendant
  *
  * @param input The column which is (and whose descendants are) to be checked for
  * non-empty null rows
@@ -977,7 +982,7 @@ bool has_nonempty_nulls(column_view const& input);
 bool may_have_nonempty_nulls(column_view const& input);
 
 /**
- * @brief Purges contents of all non-empty null rows in a column, and its descendants.
+ * @brief Copies `input`, purgin any non-empty null rows in the column or its descendants
  *
  * LIST and STRING columns might have null rows that are not also empty.
  * For example:

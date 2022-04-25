@@ -27,7 +27,7 @@ using cudf::type_id;
 namespace {
 
 /// Check if nonempty-null checks can be skipped for a given type.
-bool can_have_nonempty_nulls(cudf::type_id const& type)
+bool type_may_have_nonempty_nulls(cudf::type_id const& type)
 {
   return type == type_id::STRING || type == type_id::LIST || type == type_id::STRUCT;
 }
@@ -69,7 +69,7 @@ bool has_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view st
 {
   auto const type = input.type().id();
 
-  if (not can_have_nonempty_nulls(type)) { return false; }
+  if (not type_may_have_nonempty_nulls(type)) { return false; }
 
   // For types with variable-length rows, check if any rows are "dirty".
   // A dirty row is a null row with non-zero length.
@@ -110,7 +110,7 @@ bool may_have_nonempty_nulls(column_view const& input)
 {
   auto const type = input.type().id();
 
-  if (not detail::can_have_nonempty_nulls(type)) { return false; }
+  if (not detail::type_may_have_nonempty_nulls(type)) { return false; }
 
   if ((type == type_id::STRING || type == type_id::LIST) && input.has_nulls()) { return true; }
 
