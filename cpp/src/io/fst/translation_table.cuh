@@ -16,7 +16,12 @@
 
 #pragma once
 
-#include "in_reg_array.cuh"
+#include <algorithm>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
+
+#include "rmm/device_uvector.hpp"
 
 #include <cub/cub.cuh>
 
@@ -28,10 +33,10 @@ namespace fst {
 namespace detail {
 
 /**
- * @brief Lookup table mapping (old_state, symbol_group_id) transitions to a sequence of symbols to
- * output
+ * @brief Lookup table mapping (old_state, symbol_group_id) transitions to a sequence of symbols
+ * that the finite-state transducer is supposed to output for each transition
  *
- * @tparam OutSymbolT The symbol type being returned
+ * @tparam OutSymbolT The symbol type being output
  * @tparam OutSymbolOffsetT Type sufficiently large to index into the lookup table of output symbols
  * @tparam MAX_NUM_SYMBOLS The maximum number of symbols being output by a single state transition
  * @tparam MAX_NUM_STATES The maximum number of states that this lookup table shall support
@@ -42,57 +47,35 @@ template <typename OutSymbolT,
           int32_t MAX_NUM_SYMBOLS,
           int32_t MAX_NUM_STATES,
           int32_t MAX_TABLE_SIZE = (MAX_NUM_SYMBOLS * MAX_NUM_STATES)>
-struct TransducerLookupTable {
-  //------------------------------------------------------------------------------
-  // TYPEDEFS
-  //------------------------------------------------------------------------------
+class TransducerLookupTable {
+ private:
   struct _TempStorage {
     OutSymbolOffsetT out_offset[MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1];
     OutSymbolT out_symbols[MAX_TABLE_SIZE];
   };
 
-  struct TempStorage : cub::Uninitialized<_TempStorage> {
-  };
+ public:
+  using TempStorage = cub::Uninitialized<_TempStorage>;
 
   struct KernelParameter {
-    OutSymbolOffsetT* d_trans_offsets;
-    OutSymbolT* d_out_symbols;
+    OutSymbolOffsetT d_out_offsets[MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1];
+    OutSymbolT d_out_symbols[MAX_TABLE_SIZE];
   };
 
-  //------------------------------------------------------------------------------
-  // HELPER METHODS
-  //------------------------------------------------------------------------------
-  __host__ static cudaError_t CreateTransitionTable(
-    void* d_temp_storage,
-    size_t& temp_storage_bytes,
-    const std::vector<std::vector<std::vector<OutSymbolT>>>& trans_table,
-    KernelParameter& kernel_param,
-    cudaStream_t stream = 0)
+  /**
+   * @brief Initializes the translation table (both the host and device parts)
+   */
+  static void InitDeviceTranslationTable(
+    hostdevice_vector<KernelParameter>& translation_table_init,
+    std::vector<std::vector<std::vector<OutSymbolT>>> const& trans_table,
+    rmm::cuda_stream_view stream)
   {
-    enum { MEM_OFFSETS = 0, MEM_OUT_SYMBOLS, NUM_ALLOCATIONS };
-
-    size_t allocation_sizes[NUM_ALLOCATIONS] = {};
-    void* allocations[NUM_ALLOCATIONS]       = {};
-    allocation_sizes[MEM_OFFSETS] =
-      (MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1) * sizeof(OutSymbolOffsetT);
-    allocation_sizes[MEM_OUT_SYMBOLS] = MAX_TABLE_SIZE * sizeof(OutSymbolT);
-
-    // Alias the temporary allocations from the single storage blob (or compute the necessary size
-    // of the blob)
-    cudaError_t error =
-      cub::AliasTemporaries(d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
-    if (error) return error;
-
-    // Return if the caller is simply requesting the size of the storage allocation
-    if (d_temp_storage == nullptr) return cudaSuccess;
-
     std::vector<OutSymbolT> out_symbols;
     out_symbols.reserve(MAX_TABLE_SIZE);
     std::vector<OutSymbolOffsetT> out_symbol_offsets;
     out_symbol_offsets.reserve(MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1);
     out_symbol_offsets.push_back(0);
 
-    int st = 0;
     // Iterate over the states in the transition table
     for (auto const& state_trans : trans_table) {
       uint32_t num_added = 0;
@@ -103,7 +86,6 @@ struct TransducerLookupTable {
         out_symbol_offsets.push_back(out_symbols.size());
         num_added++;
       }
-      st++;
 
       // Copy the last offset for all symbols (to guarantee a proper lookup for omitted symbols of
       // this state)
@@ -115,30 +97,21 @@ struct TransducerLookupTable {
     }
 
     // Check whether runtime-provided table size exceeds the compile-time given max. table size
-    if (out_symbols.size() > MAX_TABLE_SIZE) { return cudaErrorInvalidValue; }
+    if (out_symbols.size() > MAX_TABLE_SIZE) { CUDF_FAIL("Unsupported translation table"); }
 
-    kernel_param.d_trans_offsets = static_cast<OutSymbolOffsetT*>(allocations[MEM_OFFSETS]);
-    kernel_param.d_out_symbols   = static_cast<OutSymbolT*>(allocations[MEM_OUT_SYMBOLS]);
+    // Prepare host-side data to be copied and passed to the device
+    std::copy(std::cbegin(out_symbol_offsets),
+              std::cend(out_symbol_offsets),
+              translation_table_init.host_ptr()->d_out_offsets);
+    std::copy(std::cbegin(out_symbols),
+              std::cend(out_symbols),
+              translation_table_init.host_ptr()->d_out_symbols);
 
-    // Copy out symbols
-    error = cudaMemcpyAsync(kernel_param.d_trans_offsets,
-                            out_symbol_offsets.data(),
-                            out_symbol_offsets.size() * sizeof(out_symbol_offsets[0]),
-                            cudaMemcpyHostToDevice,
-                            stream);
-    if (error) { return error; }
-
-    // Copy offsets into output symbols
-    return cudaMemcpyAsync(kernel_param.d_out_symbols,
-                           out_symbols.data(),
-                           out_symbols.size() * sizeof(out_symbols[0]),
-                           cudaMemcpyHostToDevice,
-                           stream);
+    // Copy data to device
+    translation_table_init.host_to_device(stream);
   }
 
-  //------------------------------------------------------------------------------
-  // MEMBER VARIABLES
-  //------------------------------------------------------------------------------
+ private:
   _TempStorage& temp_storage;
 
   __device__ __forceinline__ _TempStorage& PrivateStorage()
@@ -147,17 +120,19 @@ struct TransducerLookupTable {
     return private_storage;
   }
 
-  //------------------------------------------------------------------------------
-  // CONSTRUCTOR
-  //------------------------------------------------------------------------------
-  __host__ __device__ __forceinline__ TransducerLookupTable(const KernelParameter& kernel_param,
-                                                            TempStorage& temp_storage)
+ public:
+  /**
+   * @brief Synchronizes the thread block, if called from device, and, hence, requires all threads
+   * of the thread block to call the constructor
+   */
+  CUDF_HOST_DEVICE TransducerLookupTable(KernelParameter const& kernel_param,
+                                         TempStorage& temp_storage)
     : temp_storage(temp_storage.Alias())
   {
     constexpr uint32_t num_offsets = MAX_NUM_STATES * MAX_NUM_SYMBOLS + 1;
 #if CUB_PTX_ARCH > 0
     for (int i = threadIdx.x; i < num_offsets; i += blockDim.x) {
-      this->temp_storage.out_offset[i] = kernel_param.d_trans_offsets[i];
+      this->temp_storage.out_offset[i] = kernel_param.d_out_offsets[i];
     }
     // Make sure all threads in the block can read out_symbol_offsets[num_offsets - 1] from shared
     // memory
@@ -168,7 +143,7 @@ struct TransducerLookupTable {
     __syncthreads();
 #else
     for (int i = 0; i < num_offsets; i++) {
-      this->temp_storage.out_symbol_offsets[i] = kernel_param.d_trans_offsets[i];
+      this->temp_storage.out_symbol_offsets[i] = kernel_param.d_out_offsets[i];
     }
     for (int i = 0; i < this->temp_storage.out_symbol_offsets[i]; i++) {
       this->temp_storage.out_symbols[i] = kernel_param.d_out_symbols[i];
@@ -177,17 +152,17 @@ struct TransducerLookupTable {
   }
 
   template <typename StateIndexT, typename SymbolIndexT, typename RelativeOffsetT>
-  __host__ __device__ __forceinline__ OutSymbolT operator()(StateIndexT state_id,
-                                                            SymbolIndexT match_id,
-                                                            RelativeOffsetT relative_offset) const
+  constexpr CUDF_HOST_DEVICE OutSymbolT operator()(StateIndexT const state_id,
+                                                   SymbolIndexT const match_id,
+                                                   RelativeOffsetT const relative_offset) const
   {
     auto offset = temp_storage.out_offset[state_id * MAX_NUM_SYMBOLS + match_id] + relative_offset;
     return temp_storage.out_symbols[offset];
   }
 
   template <typename StateIndexT, typename SymbolIndexT>
-  __host__ __device__ __forceinline__ OutSymbolOffsetT operator()(StateIndexT state_id,
-                                                                  SymbolIndexT match_id) const
+  constexpr CUDF_HOST_DEVICE OutSymbolOffsetT operator()(StateIndexT const state_id,
+                                                         SymbolIndexT const match_id) const
   {
     return temp_storage.out_offset[state_id * MAX_NUM_SYMBOLS + match_id + 1] -
            temp_storage.out_offset[state_id * MAX_NUM_SYMBOLS + match_id];
