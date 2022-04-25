@@ -54,7 +54,7 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
                       if (d_strings.is_null(idx)) return string_view{nullptr, 0};
                       auto const d_str = d_strings.element<string_view>(idx);
                       // special case when the entire column is filled with empty strings:
-                      // here the d_str may have a data() pointer == nullptr
+                      // here the empty d_str may have a d_str.data() == nullptr
                       return d_str.empty() ? string_view{} : d_str;
                     });
 
