@@ -175,7 +175,7 @@ struct contains_scalar_dispatch {
     CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
     auto constexpr is_struct_type = std::is_same_v<Element, cudf::struct_view>;
-    if constexpr (is_struct_type) {
+    if constexpr (is_struct_type) {  // struct type ================================================
       auto const scalar_tview = dynamic_cast<struct_scalar const*>(&value)->view();
       CUDF_EXPECTS(col.num_children() == scalar_tview.num_columns(),
                    "struct scalar and structs column must have the same number of children");
@@ -195,7 +195,7 @@ struct contains_scalar_dispatch {
                     std::vector<column_view>{scalar_tview.begin(), scalar_tview.end()});
 
       return check_contain_for_nested_type(col, val_col, stream);
-    } else {  // list type
+    } else {  // list type =========================================================================
       auto const scalar_cview = dynamic_cast<list_scalar const*>(&value)->view();
       CUDF_EXPECTS(lists_column_view{col}.child().type() == scalar_cview.type(),
                    "scalar and column child types must match");
@@ -220,18 +220,6 @@ struct contains_scalar_dispatch {
       return check_contain_for_nested_type(col, val_col, stream);
     }
   }
-
-  //  template <typename Element>
-  //  std::enable_if_t<std::is_same_v<Element, cudf::struct_view>(), bool> operator()(
-  //    column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
-  //  {
-  //  }
-  //
-  //  template <typename Element>
-  //  std::enable_if_t<std::is_same_v<Element, cudf::list_view>(), bool> operator()(
-  //    column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
-  //  {
-  //  }
 };
 
 template <>
@@ -269,34 +257,33 @@ struct multi_contains_dispatch {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    std::unique_ptr<column> result = make_numeric_column(data_type{type_to_id<bool>()},
-                                                         haystack.size(),
-                                                         copy_bitmask(haystack),
-                                                         haystack.null_count(),
-                                                         stream,
-                                                         mr);
-
+    auto const n_rows = haystack.size();
+    auto result       = make_numeric_column(data_type{type_to_id<bool>()},
+                                      n_rows,
+                                      copy_bitmask(haystack),
+                                      haystack.null_count(),
+                                      stream,
+                                      mr);
     if (haystack.is_empty()) { return result; }
 
-    mutable_column_view result_view = result.get()->mutable_view();
+    auto const out_begin = result->mutable_view().template begin<bool>();
 
     if (needles.is_empty()) {
-      thrust::fill(
-        rmm::exec_policy(stream), result_view.begin<bool>(), result_view.end<bool>(), false);
+      thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_begin + n_rows, false);
       return result;
     }
 
-    auto hash_set        = cudf::detail::unordered_multiset<Element>::create(needles, stream);
-    auto device_hash_set = hash_set.to_device();
+    auto const hash_set        = cudf::detail::unordered_multiset<Element>::create(needles, stream);
+    auto const device_hash_set = hash_set.to_device();
 
-    auto d_haystack_ptr = column_device_view::create(haystack, stream);
-    auto d_haystack     = *d_haystack_ptr;
+    auto const d_haystack_ptr = column_device_view::create(haystack, stream);
+    auto const d_haystack     = *d_haystack_ptr;
 
     if (haystack.has_nulls()) {
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(haystack.size()),
-                        result_view.begin<bool>(),
+                        out_begin,
                         [device_hash_set, d_haystack] __device__(size_t index) {
                           return d_haystack.is_null_nocheck(index) ||
                                  device_hash_set.contains(d_haystack.element<Element>(index));
@@ -305,7 +292,7 @@ struct multi_contains_dispatch {
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(haystack.size()),
-                        result_view.begin<bool>(),
+                        out_begin,
                         [device_hash_set, d_haystack] __device__(size_t index) {
                           return device_hash_set.contains(d_haystack.element<Element>(index));
                         });
