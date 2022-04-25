@@ -20,40 +20,18 @@
 #include <rmm/exec_policy.hpp>
 
 namespace cudf::io::nvcomp {
-__global__ void convert_status_kernel(
-  device_span<nvcompStatus_t const> nvcomp_stats,
-  device_span<size_t const> actual_uncompressed_sizes,  // TODO optional
-  device_span<decompress_status> cudf_stats)
-{
-  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < cudf_stats.size()) {
-    cudf_stats[tid].status        = nvcomp_stats[tid] == nvcompStatus_t::nvcompSuccess ? 0 : 1;
-    cudf_stats[tid].bytes_written = actual_uncompressed_sizes[tid];
-  }
-}
-
-__host__ void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
-                             device_span<size_t const> actual_uncompressed_sizes,
-                             device_span<decompress_status> cudf_stats,
-                             rmm::cuda_stream_view stream)
-{
-  dim3 block(128);
-  dim3 grid(cudf::util::div_rounding_up_safe(nvcomp_stats.size(), static_cast<size_t>(block.x)));
-  convert_status_kernel<<<grid, block, 0, stream.value()>>>(
-    nvcomp_stats, actual_uncompressed_sizes, cudf_stats);
-}
 
 batched_inputs create_batched_inputs(device_span<device_decompress_input const> cudf_comp_in,
                                      rmm::cuda_stream_view stream)
 {
   size_t num_comp_pages = cudf_comp_in.size();
-  // Analogous to cudf_comp_in.srcDevice
+  // Analogous to cudf_comp_in.src.data()
   rmm::device_uvector<void const*> compressed_data_ptrs(num_comp_pages, stream);
-  // Analogous to cudf_comp_in.srcSize
+  // Analogous to cudf_comp_in.src size
   rmm::device_uvector<size_t> compressed_data_sizes(num_comp_pages, stream);
-  // Analogous to cudf_comp_in.dstDevice
+  // Analogous to cudf_comp_in.dst.data()
   rmm::device_uvector<void*> uncompressed_data_ptrs(num_comp_pages, stream);
-  // Analogous to cudf_comp_in.dstSize
+  // Analogous to cudf_comp_in.dst size
   rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
 
   // Prepare the vectors
@@ -76,4 +54,26 @@ batched_inputs create_batched_inputs(device_span<device_decompress_input const> 
           std::move(uncompressed_data_sizes)};
 }
 
+__global__ void convert_status_kernel(
+  device_span<nvcompStatus_t const> nvcomp_stats,
+  device_span<size_t const> actual_uncompressed_sizes,  // TODO optional
+  device_span<decompress_status> cudf_stats)
+{
+  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < cudf_stats.size()) {
+    cudf_stats[tid].status        = nvcomp_stats[tid] == nvcompStatus_t::nvcompSuccess ? 0 : 1;
+    cudf_stats[tid].bytes_written = actual_uncompressed_sizes[tid];
+  }
+}
+
+void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
+                    device_span<size_t const> actual_uncompressed_sizes,
+                    device_span<decompress_status> cudf_stats,
+                    rmm::cuda_stream_view stream)
+{
+  dim3 block(128);
+  dim3 grid(cudf::util::div_rounding_up_safe(nvcomp_stats.size(), static_cast<size_t>(block.x)));
+  convert_status_kernel<<<grid, block, 0, stream.value()>>>(
+    nvcomp_stats, actual_uncompressed_sizes, cudf_stats);
+}
 }  // namespace cudf::io::nvcomp

@@ -872,10 +872,10 @@ __device__ int init_stored(inflate_state_s* s)
 __device__ void copy_stored(inflate_state_s* s, int t)
 {
   auto len              = s->stored_blk_len;
-  auto cur              = s->cur + (s->bitpos >> 3);
+  auto cur              = s->cur + s->bitpos / 8;
   auto out              = s->out;
   auto outend           = s->outend;
-  auto const slow_bytes = min(len, (int)((16 - (size_t)out) & 0xf));
+  auto const slow_bytes = min(len, (int)((16 - reinterpret_cast<size_t>(out)) % 16));
 
   // Slow copy until output is 16B aligned
   if (slow_bytes) {
@@ -891,8 +891,8 @@ __device__ void copy_stored(inflate_state_s* s, int t)
   auto fast_bytes = len;
   if (out < outend) { fast_bytes = (int)min((size_t)fast_bytes, (outend - out)); }
   fast_bytes &= ~0xf;
-  auto bitpos = ((int)(3 & (size_t)cur)) << 3;
-  auto cur4   = cur - (bitpos >> 3);
+  auto bitpos = ((int)((size_t)cur % 4)) * 8;
+  auto cur4   = cur - (bitpos / 8);
   if (out < outend) {
     // Fast copy 16 bytes at a time
     for (int i = t * 16; i < fast_bytes; i += blockDim.x * 16) {
@@ -1157,7 +1157,7 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(device_decompre
   if (!t) {
     src        = inputs[z].src.data();
     dst        = inputs[z].dst.data();
-    len        = min((uint32_t)inputs[z].src.size(), (uint32_t)inputs[z].dst.size());
+    len        = static_cast<uint32_t>(min(inputs[z].src.size(), inputs[z].dst.size()));
     src_g      = src;
     dst_g      = dst;
     copy_len_g = len;

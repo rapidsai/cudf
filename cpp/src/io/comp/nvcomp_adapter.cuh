@@ -21,6 +21,8 @@
 #include <cudf/utilities/span.hpp>
 
 #include <nvcomp.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf::io::nvcomp {
 
@@ -34,8 +36,8 @@ struct batched_inputs {
 batched_inputs create_batched_inputs(device_span<device_decompress_input const> cudf_comp_in,
                                      rmm::cuda_stream_view stream);
 
-__host__ void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
-                             device_span<size_t const> actual_uncompressed_sizes,
-                             device_span<decompress_status> cudf_stats,
-                             rmm::cuda_stream_view stream);
+void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
+                    device_span<size_t const> actual_uncompressed_sizes,
+                    device_span<decompress_status> cudf_stats,
+                    rmm::cuda_stream_view stream);
 }  // namespace cudf::io::nvcomp
