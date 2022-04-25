@@ -155,12 +155,6 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, ansi_sql_percent_rank_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, collect_list_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -324,11 +318,6 @@ void aggregation_finalizer::visit(row_number_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(rank_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(ansi_sql_percent_rank_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -659,18 +648,6 @@ template std::unique_ptr<scan_aggregation> make_rank_aggregation<scan_aggregatio
   null_policy null_handling,
   null_order null_precedence,
   bool percentage);
-
-/// Factory to create a ANSI_SQL_PERCENT_RANK aggregation
-template <typename Base>
-std::unique_ptr<Base> make_ansi_sql_percent_rank_aggregation()
-{
-  return std::make_unique<detail::ansi_sql_percent_rank_aggregation>();
-}
-template std::unique_ptr<aggregation> make_ansi_sql_percent_rank_aggregation<aggregation>();
-template std::unique_ptr<groupby_scan_aggregation>
-make_ansi_sql_percent_rank_aggregation<groupby_scan_aggregation>();
-template std::unique_ptr<scan_aggregation>
-make_ansi_sql_percent_rank_aggregation<scan_aggregation>();
 
 /// Factory to create a COLLECT_LIST aggregation
 template <typename Base>

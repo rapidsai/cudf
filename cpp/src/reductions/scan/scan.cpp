@@ -40,13 +40,10 @@ std::unique_ptr<column> scan(column_view const& input,
       return inclusive_rank_scan(input, rmm::cuda_stream_default, mr);
     } else if (rank_agg._method == rank_method::DENSE) {
       return inclusive_dense_rank_scan(input, rmm::cuda_stream_default, mr);
+    } else if (rank_agg._method == rank_method::MIN_0_INDEXED) {
+      return inclusive_min_0_indexed_percent_rank_scan(input, rmm::cuda_stream_default, mr);
     }
     CUDF_FAIL("Unsupported rank aggregation method for inclusive scan");
-  }
-  if (agg->kind == aggregation::ANSI_SQL_PERCENT_RANK) {
-    CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
-                 "ANSI SQL Percent rank aggregation operator requires an inclusive scan");
-    return inclusive_ansi_sql_percent_rank_scan(input, rmm::cuda_stream_default, mr);
   }
 
   return inclusive == scan_type::EXCLUSIVE

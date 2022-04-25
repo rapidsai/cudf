@@ -51,11 +51,12 @@ class aggregation_finalizer;
  * @ingroup column_sort
  */
 enum class rank_method : int32_t {
-  FIRST,    ///< stable sort order ranking (no ties)
-  AVERAGE,  ///< mean of first in the group
-  MIN,      ///< min of first in the group
-  MAX,      ///< max of first in the group
-  DENSE     ///< rank always increases by 1 between groups
+  FIRST,         ///< stable sort order ranking (no ties)
+  AVERAGE,       ///< mean of first in the group
+  MIN,           ///< min of first in the group
+  MAX,           ///< max of first in the group
+  DENSE,         ///< rank always increases by 1 between groups
+  MIN_0_INDEXED  ///< min of first in the group, but rank starts from 0.
 };
 
 /**
@@ -72,41 +73,40 @@ class aggregation {
    * @brief Possible aggregation operations
    */
   enum Kind {
-    SUM,                    ///< sum reduction
-    PRODUCT,                ///< product reduction
-    MIN,                    ///< min reduction
-    MAX,                    ///< max reduction
-    COUNT_VALID,            ///< count number of valid elements
-    COUNT_ALL,              ///< count number of elements
-    ANY,                    ///< any reduction
-    ALL,                    ///< all reduction
-    SUM_OF_SQUARES,         ///< sum of squares reduction
-    MEAN,                   ///< arithmetic mean reduction
-    M2,                     ///< sum of squares of differences from the mean
-    VARIANCE,               ///< variance
-    STD,                    ///< standard deviation
-    MEDIAN,                 ///< median reduction
-    QUANTILE,               ///< compute specified quantile(s)
-    ARGMAX,                 ///< Index of max element
-    ARGMIN,                 ///< Index of min element
-    NUNIQUE,                ///< count number of unique elements
-    NTH_ELEMENT,            ///< get the nth element
-    ROW_NUMBER,             ///< get row-number of current index (relative to rolling window)
-    RANK,                   ///< get rank of current index
-    ANSI_SQL_PERCENT_RANK,  ///< get percent (i.e. fractional) rank of current index
-    COLLECT_LIST,           ///< collect values into a list
-    COLLECT_SET,            ///< collect values into a list without duplicate entries
-    LEAD,          ///< window function, accesses row at specified offset following current row
-    LAG,           ///< window function, accesses row at specified offset preceding current row
-    PTX,           ///< PTX  UDF based reduction
-    CUDA,          ///< CUDA UDF based reduction
-    MERGE_LISTS,   ///< merge multiple lists values into one list
-    MERGE_SETS,    ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2,      ///< merge partial values of M2 aggregation,
-    COVARIANCE,    ///< covariance between two sets of elements
-    CORRELATION,   ///< correlation between two sets of elements
-    TDIGEST,       ///< create a tdigest from a set of input values
-    MERGE_TDIGEST  ///< create a tdigest by merging multiple tdigests together
+    SUM,             ///< sum reduction
+    PRODUCT,         ///< product reduction
+    MIN,             ///< min reduction
+    MAX,             ///< max reduction
+    COUNT_VALID,     ///< count number of valid elements
+    COUNT_ALL,       ///< count number of elements
+    ANY,             ///< any reduction
+    ALL,             ///< all reduction
+    SUM_OF_SQUARES,  ///< sum of squares reduction
+    MEAN,            ///< arithmetic mean reduction
+    M2,              ///< sum of squares of differences from the mean
+    VARIANCE,        ///< variance
+    STD,             ///< standard deviation
+    MEDIAN,          ///< median reduction
+    QUANTILE,        ///< compute specified quantile(s)
+    ARGMAX,          ///< Index of max element
+    ARGMIN,          ///< Index of min element
+    NUNIQUE,         ///< count number of unique elements
+    NTH_ELEMENT,     ///< get the nth element
+    ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
+    RANK,            ///< get rank of current index
+    COLLECT_LIST,    ///< collect values into a list
+    COLLECT_SET,     ///< collect values into a list without duplicate entries
+    LEAD,            ///< window function, accesses row at specified offset following current row
+    LAG,             ///< window function, accesses row at specified offset preceding current row
+    PTX,             ///< PTX  UDF based reduction
+    CUDA,            ///< CUDA UDF based reduction
+    MERGE_LISTS,     ///< merge multiple lists values into one list
+    MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
+    MERGE_M2,        ///< merge partial values of M2 aggregation,
+    COVARIANCE,      ///< covariance between two sets of elements
+    CORRELATION,     ///< correlation between two sets of elements
+    TDIGEST,         ///< create a tdigest from a set of input values
+    MERGE_TDIGEST    ///< create a tdigest by merging multiple tdigests together
   };
 
   aggregation() = delete;
@@ -339,7 +339,9 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *
  * `RANK` returns a column of size_type or double "ranks" (see note 3 below for how the
  * data type is determined) for a given rank method and column order.
- * If nulls are excluded, the rank will be null for those rows.
+ * If nulls are excluded, the rank will be null for those rows, otherwise a non-nullable column is
+ * returned. Double precision column is returned only when percentage=True and when rank method is
+ * average.
  *
  * This aggregation only works with "scan" algorithms. The input column into the group or
  * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
@@ -387,6 +389,16 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * This corresponds to the following grouping and `driver` rows:
  *          { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
  *            <----------silverstone----------->|<-------------monza-------------->
+ *
+ * with percentage=True:
+ * min:         { 0.16,  0.33,  0.50,  0.50,  0.83,   0.16,  0.33,  0.33,  0.66,  0.83 }
+ * min 0-index: { 0.00,  0.25,  0.50,  0.50,  1.00,   0.00,  0.25,  0.25,  0.75,  1.00 }
+ * For row index `i`, the min 0-indexed percent rank of row `i` is defined as:
+ *   min_0_indexed_percent_rank = (min_rank - 1) / (group_row_count - 1)
+ * where,
+ *   1. min_rank is the `MIN` rank of the row within the group
+ *   2. group_row_count is the number of rows in the group
+ *
  * @endcode
  *
  * @param method The ranking method used for tie breaking (same values).
@@ -402,64 +414,6 @@ std::unique_ptr<Base> make_rank_aggregation(rank_method method,
                                             null_policy null_handling  = null_policy::EXCLUDE,
                                             null_order null_precedence = null_order::AFTER,
                                             bool percentage            = false);
-
-/**
- * @brief Factory to create a ANSI_SQL_PERCENT_RANK aggregation
- *
- * `ANSI_SQL_PERCENT_RANK` returns a non-nullable column of double precision "fractional" ranks.
- * For row index `i`, the ANSI SQL percent rank of row `i` is defined as:
- *   percent_rank = (rank - 1) / (group_row_count - 1)
- * where,
- *   1. rank is the `RANK` of the row within the group
- *   2. group_row_count is the number of rows in the group
- *
- * This aggregation only works with "scan" algorithms. The input to the grouped or
- * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
- * If rows are ordered by more than one column, the orderby input column should be a struct
- * column containing the ordering columns.
- *
- * Note:
- *  1. This method could work faster with the rows that are presorted by the group keys and order_by
- *     columns. Though groupby object does not require order_by column to be sorted, groupby rank
- *     scan aggregation does require the order_by column to be sorted if the keys are sorted.
- *  2. `ANSI_SQL_PERCENT_RANK` aggregations will return a fully valid column regardless of
- * null_handling policy specified in the scan.
- *  3. `ANSI_SQL_PERCENT_RANK` aggregations are not compatible with exclusive scans.
- *
- * @code{.pseudo}
- * Example: Consider a motor-racing statistics dataset, containing the following columns:
- *   1. venue:  (STRING) Location of the race event
- *   2. driver: (STRING) Name of the car driver (abbreviated to 3 characters)
- *   3. time:   (INT32)  Time taken to complete the circuit
- *
- * For the following presorted data:
- *
- *  [ //      venue,           driver,           time
- *    {   "silverstone",  "HAM" ("hamilton"),   15823},
- *    {   "silverstone",  "LEC" ("leclerc"),    15827},
- *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- Tied for 3rd place.
- *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- Tied for 3rd place.
- *    {   "silverstone",  "RIC" ("ricciardo"),  15905},
- *    {      "monza",     "RIC" ("ricciardo"),  12154},
- *    {      "monza",     "NOR" ("norris"),     12156},  // <-- Tied for 2nd place.
- *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- Tied for 2nd place.
- *    {      "monza",     "LEC" ("leclerc"),    12201},
- *    {      "monza",     "PER" ("perez"),      12203}
- *  ]
- *
- * A grouped ANSI SQL percent rank aggregation scan with:
- *   groupby column      : venue
- *   input orderby column: time
- * Produces the following ANSI SQL percent rank column:
- * { 0.00,  0.25,  0.50,  0.50,  1.00,   0.00,  0.25,  0.25,  0.75,  1.00 }
- *
- * This corresponds to the following grouping and `driver` rows:
- * { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
- *   <----------silverstone----------->|<-------------monza-------------->
- * @endcode
- */
-template <typename Base = aggregation>
-std::unique_ptr<Base> make_ansi_sql_percent_rank_aggregation();
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation

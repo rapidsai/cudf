@@ -29,11 +29,9 @@ namespace test {
 using namespace iterators;
 
 template <typename T>
-using input           = fixed_width_column_wrapper<T>;
-using rank_result_col = fixed_width_column_wrapper<size_type>;
-using percent_result_t =
-  cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::ANSI_SQL_PERCENT_RANK>;
-using percent_result_col = fixed_width_column_wrapper<percent_result_t>;
+using input              = fixed_width_column_wrapper<T>;
+using rank_result_col    = fixed_width_column_wrapper<size_type>;
+using percent_result_col = fixed_width_column_wrapper<double>;
 using null_iter_t        = decltype(nulls_at({}));
 
 auto constexpr X     = int32_t{0};  // Placeholder for NULL rows.
@@ -65,7 +63,8 @@ inline void test_rank_scans(column_view const& keys,
                    order,
                    keys,
                    expected_percent_rank,
-                   make_ansi_sql_percent_rank_aggregation<groupby_scan_aggregation>(),
+                   make_rank_aggregation<groupby_scan_aggregation>(
+                     rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true),
                    null_policy::INCLUDE,
                    sorted::YES);
 }
@@ -250,8 +249,8 @@ TYPED_TEST(typed_groupby_rank_scan_test, mixedStructs)
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE, {}, null_policy::INCLUDE));
   requests[0].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE));
-  requests[0].aggregations.push_back(
-    make_ansi_sql_percent_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
+    rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true));
 
   groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
   auto [result_keys, agg_results] = gb_obj.scan(requests);
@@ -297,15 +296,15 @@ TYPED_TEST(typed_groupby_rank_scan_test, nestedStructs)
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
   requests[0].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
-  requests[0].aggregations.push_back(
-    make_ansi_sql_percent_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
+    rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true));
   requests[1].values = *flat_struct;
   requests[1].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
   requests[1].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
-  requests[1].aggregations.push_back(
-    make_ansi_sql_percent_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
+    rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true));
 
   groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
   auto [result_keys, agg_results] = gb_obj.scan(requests);
@@ -354,15 +353,15 @@ TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE, {}, null_policy::INCLUDE));
   requests[0].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE));
-  requests[0].aggregations.push_back(
-    make_ansi_sql_percent_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
+    rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true));
   requests[1].values = *definitely_null_structs;
   requests[1].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE, {}, null_policy::INCLUDE));
   requests[1].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE));
-  requests[1].aggregations.push_back(
-    make_ansi_sql_percent_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
+    rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true));
 
   groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
   auto [result_keys, agg_results] = gb_obj.scan(requests);

@@ -266,7 +266,7 @@ std::unique_ptr<column> dense_rank_scan(column_view const& grouped_values,
     mr);
 }
 
-std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
+std::unique_ptr<column> group_rank_to_percentage(rank_method method,
                                                  column_view const& rank,
                                                  column_view const& count,
                                                  device_span<size_type const> group_labels,
@@ -278,7 +278,7 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
     data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
   ranks->set_null_mask(copy_bitmask(rank, stream, mr));
   auto mutable_ranks = ranks->mutable_view();
-  if (is_dense_rank) {
+  if (method == rank_method::DENSE) {
     thrust::tabulate(rmm::exec_policy(stream),
                      mutable_ranks.begin<double>(),
                      mutable_ranks.end<double>(),
@@ -293,6 +293,19 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
                        size_type const last_rank_index = offsets[labels[row_index]] + count - 1;
                        auto const last_rank            = s_rank[last_rank_index];
                        return r / last_rank;
+                     });
+  } else if (method == rank_method::MIN_0_INDEXED) {
+    thrust::tabulate(rmm::exec_policy(stream),
+                     mutable_ranks.begin<double>(),
+                     mutable_ranks.end<double>(),
+                     [is_double = rank.type().id() == type_id::FLOAT64,
+                      dcount    = count.begin<size_type>(),
+                      labels    = group_labels.begin(),
+                      d_rank    = rank.begin<double>(),
+                      s_rank = rank.begin<size_type>()] __device__(size_type row_index) -> double {
+                       double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
+                       auto const count = dcount[labels[row_index]];
+                       return (r - 1) / (count - 1);
                      });
   } else {
     thrust::tabulate(rmm::exec_policy(stream),
@@ -309,41 +322,6 @@ std::unique_ptr<column> group_rank_to_percentage(bool is_dense_rank,
                      });
   }
   return ranks;
-}
-
-std::unique_ptr<column> ansi_sql_percent_rank_scan(column_view const& rank_min,
-                                                   device_span<size_type const> group_labels,
-                                                   device_span<size_type const> group_offsets,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
-{
-  auto const group_size_iter = cudf::detail::make_counting_transform_iterator(
-    0,
-    [labels  = group_labels.begin(),
-     offsets = group_offsets.begin()] __device__(size_type row_index) {
-      auto const group_label = labels[row_index];
-      auto const group_start = offsets[group_label];
-      auto const group_end   = offsets[group_label + 1];
-      return group_end - group_start;
-    });
-
-  // Result type for ANSI_SQL_PERCENT_RANK is independent of input type.
-  using result_type =
-    cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::ANSI_SQL_PERCENT_RANK>;
-
-  auto percent_rank_result = cudf::make_fixed_width_column(
-    data_type{type_to_id<result_type>()}, rank_min.size(), mask_state::UNALLOCATED, stream, mr);
-
-  thrust::transform(rmm::exec_policy(stream),
-                    rank_min.begin<size_type>(),
-                    rank_min.end<size_type>(),
-                    group_size_iter,
-                    percent_rank_result->mutable_view().begin<result_type>(),
-                    [] __device__(auto const rank, auto const group_size) {
-                      return group_size == 1 ? 0.0 : ((rank - 1.0) / (group_size - 1));
-                    });
-
-  return percent_rank_result;
 }
 
 }  // namespace detail

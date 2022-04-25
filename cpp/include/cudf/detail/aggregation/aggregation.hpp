@@ -76,8 +76,6 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class rank_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
-    data_type col_type, class ansi_sql_percent_rank_aggregation const& agg);
-  virtual std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, class collect_list_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class collect_set_aggregation const& agg);
@@ -125,7 +123,6 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class nth_element_aggregation const& agg);
   virtual void visit(class row_number_aggregation const& agg);
   virtual void visit(class rank_aggregation const& agg);
-  virtual void visit(class ansi_sql_percent_rank_aggregation const& agg);
   virtual void visit(class collect_list_aggregation const& agg);
   virtual void visit(class collect_set_aggregation const& agg);
   virtual void visit(class lead_lag_aggregation const& agg);
@@ -651,6 +648,8 @@ class rank_aggregation final : public rolling_aggregation,
       _null_precedence{null_precedence},
       _percentage(percentage)
   {
+    if (_method == rank_method::MIN_0_INDEXED)
+      CUDF_EXPECTS(_percentage, "Only percentage rank is supported for min 0-indexed rank method.");
   }
   rank_method const _method;          ///< rank method
   order const _column_order;          ///< order of the column to rank
@@ -691,24 +690,6 @@ class rank_aggregation final : public rolling_aggregation,
            std::hash<int>{}(static_cast<int>(_null_handling)) ^
            std::hash<int>{}(static_cast<int>(_null_precedence)) ^ std::hash<bool>{}(_percentage);
   }
-};
-
-class ansi_sql_percent_rank_aggregation final : public rolling_aggregation,
-                                                public groupby_scan_aggregation,
-                                                public scan_aggregation {
- public:
-  ansi_sql_percent_rank_aggregation() : aggregation{ANSI_SQL_PERCENT_RANK} {}
-
-  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
-  {
-    return std::make_unique<ansi_sql_percent_rank_aggregation>(*this);
-  }
-  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type, simple_aggregations_collector& collector) const override
-  {
-    return collector.visit(col_type, *this);
-  }
-  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -1297,12 +1278,6 @@ struct target_type_impl<Source, aggregation::RANK> {
   using type = size_type;  // double for percentage=true.
 };
 
-// Always use double for ANSI_SQL_PERCENT_RANK
-template <typename SourceType>
-struct target_type_impl<SourceType, aggregation::ANSI_SQL_PERCENT_RANK> {
-  using type = double;
-};
-
 // Always use list for COLLECT_LIST
 template <typename Source>
 struct target_type_impl<Source, aggregation::COLLECT_LIST> {
@@ -1463,8 +1438,6 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::ROW_NUMBER>(std::forward<Ts>(args)...);
     case aggregation::RANK:
       return f.template operator()<aggregation::RANK>(std::forward<Ts>(args)...);
-    case aggregation::ANSI_SQL_PERCENT_RANK:
-      return f.template operator()<aggregation::ANSI_SQL_PERCENT_RANK>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_LIST:
       return f.template operator()<aggregation::COLLECT_LIST>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_SET:

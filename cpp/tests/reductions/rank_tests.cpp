@@ -36,15 +36,14 @@ namespace cudf::test {
 using namespace iterators;
 
 template <typename T>
-using input           = fixed_width_column_wrapper<T>;
-using rank_result_col = fixed_width_column_wrapper<size_type>;
-using percent_result_t =
-  cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::ANSI_SQL_PERCENT_RANK>;
-using percent_result_col = fixed_width_column_wrapper<percent_result_t>;
+using input              = fixed_width_column_wrapper<T>;
+using rank_result_col    = fixed_width_column_wrapper<size_type>;
+using percent_result_col = fixed_width_column_wrapper<double>;
 
 auto const rank         = cudf::make_rank_aggregation<scan_aggregation>(cudf::rank_method::MIN);
 auto const dense_rank   = cudf::make_rank_aggregation<scan_aggregation>(cudf::rank_method::DENSE);
-auto const percent_rank = cudf::make_ansi_sql_percent_rank_aggregation<scan_aggregation>();
+auto const percent_rank = cudf::make_rank_aggregation<scan_aggregation>(
+  cudf::rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true);
 
 auto constexpr INCLUSIVE_SCAN = cudf::scan_type::INCLUSIVE;
 auto constexpr INCLUDE_NULLS  = cudf::null_policy::INCLUDE;
@@ -56,6 +55,8 @@ struct TypedRankScanTest : BaseScanTest<T> {
                                        std::unique_ptr<scan_aggregation> const& agg)
   {
     auto col_out = cudf::scan(input, agg, INCLUSIVE_SCAN, INCLUDE_NULLS);
+    std::cout << "expect type: " << static_cast<int>(expect_vals.type().id()) << std::endl;
+    std::cout << "out type: " << static_cast<int>(col_out->type().id()) << std::endl;
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view());
   }
 };
@@ -321,9 +322,8 @@ TEST(RankScanTest, ExclusiveScan)
                             "Rank aggregation operator requires an inclusive scan");
   CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
                             "Rank aggregation operator requires an inclusive scan");
-  CUDF_EXPECT_THROW_MESSAGE(
-    cudf::scan(vals, percent_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
-    "ANSI SQL Percent rank aggregation operator requires an inclusive scan");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::scan(vals, percent_rank, scan_type::EXCLUSIVE, INCLUDE_NULLS),
+                            "Rank aggregation operator requires an inclusive scan");
 }
 
 }  // namespace cudf::test

@@ -149,6 +149,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
       case rank_method::DENSE: return detail::dense_rank_scan;
       case rank_method::MIN: return detail::min_rank_scan;
       case rank_method::MAX: return detail::max_rank_scan;
+      case rank_method::MIN_0_INDEXED: return detail::min_rank_scan;
       default: CUDF_FAIL("Unsupported rank method in groupby scan");
     }
   }();
@@ -169,7 +170,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                                              helper.num_groups(stream),
                                              stream,
                                              rmm::mr::get_current_device_resource());
-    result     = detail::group_rank_to_percentage(rank_agg._method == rank_method::DENSE,
+    result     = detail::group_rank_to_percentage(rank_agg._method,
                                               *result,
                                               *count,
                                               helper.group_labels(stream),
@@ -184,26 +185,6 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
     result->set_null_mask(cudf::detail::copy_bitmask(get_grouped_values(), stream, mr));
   }
   cache.add_result(values, agg, std::move(result));
-}
-
-template <>
-void scan_result_functor::operator()<aggregation::ANSI_SQL_PERCENT_RANK>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-
-  auto rank_min_agg = make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN);
-  operator()<aggregation::RANK>(*rank_min_agg);
-  column_view rank_min = cache.get_result(values, *rank_min_agg);
-
-  auto const order_by = get_grouped_values();
-  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
-               "Unsupported list type in grouped percent_rank scan.");
-
-  cache.add_result(
-    values,
-    agg,
-    detail::ansi_sql_percent_rank_scan(
-      rank_min, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
 }
 }  // namespace detail
 
