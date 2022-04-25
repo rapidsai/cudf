@@ -299,7 +299,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @classmethod
     @_cudf_nvtx_annotate
     def from_categorical(cls, categorical, codes=None):
-        """Create from a pandas.Categorical.
+        """Create a Series from a pandas.Categorical.
 
         Parameters
         ----------
@@ -1597,7 +1597,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def data(self):
-        """Get the gpu buffer for the data.
+        """Get the GPU buffer for the data.
 
         Returns
         -------
@@ -1624,7 +1624,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def nullmask(self):
-        """Get the gpu buffer for the null-mask."""
+        """Get the GPU buffer for the null-mask."""
         return cudf.Series(self._column.nullmask)
 
     @_cudf_nvtx_annotate
@@ -1704,7 +1704,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def nlargest(self, n=5, keep="first"):
-        """Return a new Series of the *n* largest element.
+        """Return a new Series of the *n* largest elements.
 
         Parameters
         ----------
@@ -1767,7 +1767,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def nsmallest(self, n=5, keep="first"):
-        """Return a new Series of the *n* smallest element.
+        """Return a new Series of the *n* smallest elements.
+
+        Always returns Series even if only one value is returned.
 
         Parameters
         ----------
@@ -2267,6 +2269,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def mode(self, dropna=True):
         """Return the mode or modes of the dataset.
 
+        The mode is the value that appears most often. There can be multiple
+        modes.
+
         Always returns Series even if only one value is returned.
 
         Parameters
@@ -2397,7 +2402,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def corr(self, other, method="pearson", min_periods=None):
-        """Calculate the sample correlation between two Series.
+        """Compute correlation with `other` Series, excluding missing values.
 
         Excludes missing values.
 
@@ -3085,7 +3090,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def rename(self, index=None, copy=True):
         """Alter Series name.
 
-        Change Series.name with a scalar value
+        Change Series.name with a scalar value.
 
         Parameters
         ----------
@@ -3896,7 +3901,7 @@ class DatetimeProperties:
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def is_month_start(self):
-        """Booleans indicating if dates are the first day of the month."""
+        """Indicate whether the data is the first day of the month."""
         return (self.day == 1).fillna(False)
 
     @property  # type: ignore
