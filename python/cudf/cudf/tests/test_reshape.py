@@ -269,7 +269,7 @@ def test_df_merge_sorted(nparts, keys, na_position, ascending):
     expect = df.sort_values(
         keys_1, na_position=na_position, ascending=ascending
     )
-    result = cudf.merge_sorted(
+    result = cudf.core.reshape._merge_sorted(
         dfs, keys=keys, na_position=na_position, ascending=ascending
     )
     if keys:
@@ -290,7 +290,9 @@ def test_df_merge_sorted_index(nparts, index, ascending):
     )
 
     expect = df.sort_index(ascending=ascending)
-    result = cudf.merge_sorted(dfs, by_index=True, ascending=ascending)
+    result = cudf.core.reshape._merge_sorted(
+        dfs, by_index=True, ascending=ascending
+    )
 
     assert_eq(expect.index, result.index)
 
@@ -317,7 +319,7 @@ def test_df_merge_sorted_ignore_index(keys, na_position, ascending):
     expect = df.sort_values(
         keys_1, na_position=na_position, ascending=ascending
     )
-    result = cudf.merge_sorted(
+    result = cudf.core.reshape._merge_sorted(
         dfs,
         keys=keys,
         na_position=na_position,
@@ -347,7 +349,7 @@ def test_series_merge_sorted(nparts, key, na_position, ascending):
     )
 
     expect = df.sort_values(na_position=na_position, ascending=ascending)
-    result = cudf.merge_sorted(
+    result = cudf.core.reshape._merge_sorted(
         dfs, na_position=na_position, ascending=ascending
     )
 
