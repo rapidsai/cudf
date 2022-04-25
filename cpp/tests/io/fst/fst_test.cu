@@ -224,10 +224,7 @@ TEST_F(FstTest, GroundTruth)
     d_input.data(), input.data(), input.size() * sizeof(SymbolT), cudaMemcpyHostToDevice, stream));
 
   // Run algorithm
-  DfaFstT parser;
-
-  // Initialize DFA
-  ASSERT_CUDA_SUCCEEDED(parser.Init(pda_sgs, pda_state_tt, pda_out_tt, stream));
+  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream};
 
   std::size_t temp_storage_bytes = 0;
 
