@@ -1373,7 +1373,7 @@ def test_replace_nulls(gsr, old, new, expected):
     )
 
 
-def test_fillna_columns_multiIndex():
+def test_fillna_columns_multiindex():
     columns = pd.MultiIndex.from_tuples([("a", "b"), ("d", "e")])
     pdf = pd.DataFrame(
         {"0": [1, 2, None, 3, None], "1": [None, None, None, None, 4]}
