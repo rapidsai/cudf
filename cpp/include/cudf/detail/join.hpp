@@ -146,7 +146,7 @@ struct hash_join {
    * i.e. if full join is specified as the join type then left join is called. Behavior
    * is undefined if the provided `output_size` is smaller than the actual output size.
    *
-   * @throw cudf::logic_error if hash table is null.
+   * @throw cudf::logic_error if build table is empty and `JoinKind == INNER_JOIN`.
    *
    * @tparam JoinKind The type of join to be performed.
    *
@@ -168,6 +168,7 @@ struct hash_join {
   /**
    * @copydoc cudf::detail::hash_join::probe_join_indices
    *
+   * @throw cudf::logic_error if probe table is empty.
    * @throw cudf::logic_error if the size of probe table exceeds `MAX_JOIN_SIZE`.
    * @throw cudf::logic_error if the number of columns in build table and probe table do not match.
    * @throw cudf::logic_error if the column data types in build table and probe table do not match.
