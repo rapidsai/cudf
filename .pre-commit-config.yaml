@@ -60,6 +60,10 @@ repos:
                     (?x)^(
                     ci|
                     cpp|
+                    conda|
+                    docs|
+                    java|
+                    notebooks|
                     python/dask_cudf|
                     python/cudf_kafka|
                     python/custreamz|
