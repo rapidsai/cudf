@@ -33,7 +33,7 @@ rmm::device_buffer mask_scan(column_view const& input_view,
                              rmm::mr::device_memory_resource* mr);
 
 std::unique_ptr<column> ewma(column_view const& input,
-                             std::unique_ptr<aggregation> const& agg,
+                             std::unique_ptr<cudf::scan_aggregation> const& agg,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr);
 

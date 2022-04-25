@@ -356,7 +356,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
 }
 
 template <typename T>
-std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
+std::unique_ptr<column> ewma(std::unique_ptr<cudf::scan_aggregation> const& agg,
                              column_view const& input,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
@@ -385,7 +385,7 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
 
 struct ewma_functor {
   template <typename T>
-  std::unique_ptr<column> operator()(std::unique_ptr<aggregation> const& agg,
+  std::unique_ptr<column> operator()(std::unique_ptr<cudf::scan_aggregation> const& agg,
                                      column_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -395,7 +395,7 @@ struct ewma_functor {
 };
 
 template <>
-std::unique_ptr<column> ewma_functor::operator()<float>(std::unique_ptr<aggregation> const& agg,
+std::unique_ptr<column> ewma_functor::operator()<float>(std::unique_ptr<cudf::scan_aggregation> const& agg,
                                                         column_view const& input,
                                                         rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
@@ -404,7 +404,7 @@ std::unique_ptr<column> ewma_functor::operator()<float>(std::unique_ptr<aggregat
 }
 
 template <>
-std::unique_ptr<column> ewma_functor::operator()<double>(std::unique_ptr<aggregation> const& agg,
+std::unique_ptr<column> ewma_functor::operator()<double>(std::unique_ptr<cudf::scan_aggregation> const& agg,
                                                          column_view const& input,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::mr::device_memory_resource* mr)
@@ -413,7 +413,7 @@ std::unique_ptr<column> ewma_functor::operator()<double>(std::unique_ptr<aggrega
 }
 
 std::unique_ptr<column> ewma(column_view const& input,
-                             std::unique_ptr<aggregation> const& agg,
+                             std::unique_ptr<cudf::scan_aggregation> const& agg,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
