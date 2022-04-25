@@ -165,8 +165,8 @@ rmm::device_buffer decompress_data(datasource& source,
     auto inflate_in  = hostdevice_vector<device_decompress_input>(meta.block_list.size(), stream);
     auto inflate_out = hostdevice_vector<decompress_status>(meta.block_list.size(), stream);
 
-    // Guess an initial maximum uncompressed block size. We estimate the compression factor is 2 and
-    // round up to the next multiple of 4096 bytes.
+    // Guess an initial maximum uncompressed block size. We estimate the compression factor is two
+    // and round up to the next multiple of 4096 bytes.
     uint32_t const initial_blk_len = meta.max_block_size * 2 + (meta.max_block_size * 2) % 4096;
     size_t const uncomp_size       = initial_blk_len * meta.block_list.size();
 
