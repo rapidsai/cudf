@@ -152,8 +152,6 @@ class StateVectorTransitionOp : public StateTransitionCallbackOp {
   __host__ __device__ __forceinline__ void ReadSymbol(CharIndexT const& character_index,
                                                       SymbolIndexT const read_symbol_id) const
   {
-    using TransitionVectorT = typename TransitionTableT::TransitionVectorT;
-
     for (int32_t i = 0; i < NUM_INSTANCES; ++i) {
       state_vector.Set(i, transition_table(state_vector.Get(i), read_symbol_id));
     }
@@ -185,7 +183,6 @@ struct StateTransitionOp {
   __host__ __device__ __forceinline__ void ReadSymbol(const CharIndexT& character_index,
                                                       const SymbolIndexT& read_symbol_id)
   {
-    using TransitionVectorT = typename TransitionTableT::TransitionVectorT;
     old_state_vector        = state_vector;
     state_vector.Set(0, transition_table(state_vector.Get(0), read_symbol_id));
     callback_op.ReadSymbol(character_index, old_state_vector, state_vector, read_symbol_id);
