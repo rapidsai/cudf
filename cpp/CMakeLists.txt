@@ -172,6 +172,10 @@ if(NOT BUILD_SHARED_LIBS)
       rapids_export_package(${METADATA_KIND} ${dep} cudf-exports)
     endforeach()
   endforeach()
+
+  if(TARGET conda_env)
+    install(TARGETS conda_env EXPORT cudf-exports)
+  endif()
 endif()
 
 # ##################################################################################################
