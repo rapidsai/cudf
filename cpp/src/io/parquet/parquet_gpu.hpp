@@ -584,13 +584,15 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @brief Launches kernel for packing column data into parquet pages
  *
  * @param[in,out] pages Device array of EncPages (unordered)
- * @param[out] comp_in Optionally initializes compressor input params
- * @param[out] comp_out Optionally initializes compressor output params
+ * @param[out] comp_in Compressor input buffers
+ * @param[out] comp_in Compressor output buffers
+ * @param[out] comp_stats Compressor statuses
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePages(device_span<EncPage> pages,
-                 device_span<device_decompress_input> comp_in,
-                 device_span<decompress_status> comp_out,
+                 device_span<device_span<uint8_t const>> comp_in,
+                 device_span<device_span<uint8_t>> comp_out,
+                 device_span<decompress_status> comp_stats,
                  rmm::cuda_stream_view stream);
 
 /**
@@ -605,13 +607,13 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in] comp_out Compressor status or nullptr if no compression
+ * @param[in] comp_stats Compressor status
  * @param[in] page_stats Optional page-level statistics to be included in page header
  * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<decompress_status const> comp_out,
+                       device_span<decompress_status const> comp_stats,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream);

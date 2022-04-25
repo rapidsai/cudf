@@ -1019,12 +1019,16 @@ __device__ int parse_gzip_header(const uint8_t* src, size_t src_size)
  *
  * @tparam block_size Thread block dimension for this call
  * @param inputs Source and destination buffer information per block
- * @param outputs Decompression status buffer per block
+ * @param outputs Destination buffer information per block
+ * @param statuses Decompression status buffer per block
  * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
  */
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  inflate_kernel(device_decompress_input* inputs, decompress_status* outputs, int parse_hdr)
+  inflate_kernel(device_span<device_span<uint8_t const> const> inputs,
+                 device_span<device_span<uint8_t> const> outputs,
+                 device_span<decompress_status> statuses,
+                 gzip_header_included parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
 
@@ -1033,11 +1037,11 @@ __global__ void __launch_bounds__(block_size)
   inflate_state_s* state = &state_g;
 
   if (!t) {
-    auto p        = inputs[z].src.data();
-    auto src_size = inputs[z].src.size();
+    auto p        = inputs[z].data();
+    auto src_size = inputs[z].size();
     // Parse header if needed
     state->err = 0;
-    if (parse_hdr) {
+    if (parse_hdr == gzip_header_included::YES) {
       int hdr_len = parse_gzip_header(p, src_size);
       src_size    = (src_size >= 8) ? src_size - 8 : 0;  // ignore footer
       if (hdr_len >= 0) {
@@ -1048,9 +1052,9 @@ __global__ void __launch_bounds__(block_size)
       }
     }
     // Initialize shared state
-    state->out              = static_cast<uint8_t*>(inputs[z].dst.data());
+    state->out              = outputs[z].data();
     state->outbase          = state->out;
-    state->outend           = state->out + inputs[z].dst.size();
+    state->outend           = state->out + outputs[z].size();
     state->end              = p + src_size;
     auto const prefix_bytes = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
@@ -1129,9 +1133,9 @@ __global__ void __launch_bounds__(block_size)
       // Output buffer too small
       state->err = 1;
     }
-    outputs[z].bytes_written = state->out - state->outbase;
-    outputs[z].status        = state->err;
-    outputs[z].reserved      = (int)(state->end - state->cur);  // Here mainly for debug purposes
+    statuses[z].bytes_written = state->out - state->outbase;
+    statuses[z].status        = state->err;
+    statuses[z].reserved      = (int)(state->end - state->cur);  // Here mainly for debug purposes
   }
 }
 
@@ -1142,7 +1146,9 @@ __global__ void __launch_bounds__(block_size)
  *
  * @param inputs Source and destination information per block
  */
-__global__ void __launch_bounds__(1024) copy_uncompressed_kernel(device_decompress_input* inputs)
+__global__ void __launch_bounds__(1024)
+  copy_uncompressed_kernel(device_span<device_span<uint8_t const> const> inputs,
+                           device_span<device_span<uint8_t> const> outputs)
 {
   __shared__ const uint8_t* volatile src_g;
   __shared__ uint8_t* volatile dst_g;
@@ -1155,9 +1161,9 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(device_decompre
   uint32_t len, src_align_bytes, src_align_bits, dst_align_bytes;
 
   if (!t) {
-    src        = inputs[z].src.data();
-    dst        = inputs[z].dst.data();
-    len        = static_cast<uint32_t>(min(inputs[z].src.size(), inputs[z].dst.size()));
+    src        = inputs[z].data();
+    dst        = outputs[z].data();
+    len        = static_cast<uint32_t>(min(inputs[z].size(), outputs[z].size()));
     src_g      = src;
     dst_g      = dst;
     copy_len_g = len;
@@ -1192,26 +1198,26 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(device_decompre
   if (t < len) { dst[t] = src[t]; }
 }
 
-cudaError_t __host__ gpuinflate(device_decompress_input* inputs,
-                                decompress_status* outputs,
-                                int count,
-                                int parse_hdr,
-                                rmm::cuda_stream_view stream)
+void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
+                device_span<device_span<uint8_t> const> outputs,
+                device_span<decompress_status> statuses,
+                gzip_header_included parse_hdr,
+                rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 128;  // Threads per block
-  if (count > 0) {
+  if (inputs.size() > 0) {
     inflate_kernel<block_size>
-      <<<count, block_size, 0, stream.value()>>>(inputs, outputs, parse_hdr);
+      <<<inputs.size(), block_size, 0, stream.value()>>>(inputs, outputs, statuses, parse_hdr);
   }
-  return cudaSuccess;
 }
 
-cudaError_t __host__ gpu_copy_uncompressed_blocks(device_decompress_input* inputs,
-                                                  int count,
-                                                  rmm::cuda_stream_view stream)
+void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> inputs,
+                                  device_span<device_span<uint8_t> const> outputs,
+                                  rmm::cuda_stream_view stream)
 {
-  if (count > 0) { copy_uncompressed_kernel<<<count, 1024, 0, stream.value()>>>(inputs); }
-  return cudaSuccess;
+  if (inputs.size() > 0) {
+    copy_uncompressed_kernel<<<inputs.size(), 1024, 0, stream.value()>>>(inputs, outputs);
+  }
 }
 
 }  // namespace io

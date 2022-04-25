@@ -21,32 +21,34 @@
 
 namespace cudf::io::nvcomp {
 
-batched_inputs create_batched_inputs(device_span<device_decompress_input const> cudf_comp_in,
-                                     rmm::cuda_stream_view stream)
+batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> const> inputs,
+                                        device_span<device_span<uint8_t> const> outputs,
+                                        rmm::cuda_stream_view stream)
 {
-  size_t num_comp_pages = cudf_comp_in.size();
-  // Analogous to cudf_comp_in.src.data()
+  size_t num_comp_pages = inputs.size();
   rmm::device_uvector<void const*> compressed_data_ptrs(num_comp_pages, stream);
-  // Analogous to cudf_comp_in.src size
   rmm::device_uvector<size_t> compressed_data_sizes(num_comp_pages, stream);
-  // Analogous to cudf_comp_in.dst.data()
   rmm::device_uvector<void*> uncompressed_data_ptrs(num_comp_pages, stream);
-  // Analogous to cudf_comp_in.dst size
   rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
 
-  // Prepare the vectors
-  auto comp_it = thrust::make_zip_iterator(compressed_data_ptrs.begin(),
-                                           compressed_data_sizes.begin(),
-                                           uncompressed_data_ptrs.begin(),
-                                           uncompressed_data_sizes.begin());
-  thrust::transform(rmm::exec_policy(stream),
-                    cudf_comp_in.begin(),
-                    cudf_comp_in.end(),
-                    comp_it,
-                    [] __device__(device_decompress_input in) {
-                      return thrust::make_tuple(
-                        in.src.data(), in.src.size(), in.dst.data(), in.dst.size());
-                    });
+  // Prepare the input vectors
+
+  auto ins_it =
+    thrust::make_zip_iterator(compressed_data_ptrs.begin(), compressed_data_sizes.begin());
+  thrust::transform(
+    rmm::exec_policy(stream), inputs.begin(), inputs.end(), ins_it, [] __device__(auto const& in) {
+      return thrust::make_tuple(in.data(), in.size());
+    });
+
+  // Prepare the output vectors
+  auto outs_it =
+    thrust::make_zip_iterator(uncompressed_data_ptrs.begin(), uncompressed_data_sizes.begin());
+  thrust::transform(
+    rmm::exec_policy(stream),
+    outputs.begin(),
+    outputs.end(),
+    outs_it,
+    [] __device__(auto const& out) { return thrust::make_tuple(out.data(), out.size()); });
 
   return {std::move(compressed_data_ptrs),
           std::move(compressed_data_sizes),

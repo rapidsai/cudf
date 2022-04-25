@@ -258,7 +258,9 @@ static __device__ uint32_t Match60(const uint8_t* src1,
  * @param[in] count Number of blocks to compress
  */
 __global__ void __launch_bounds__(128)
-  snap_kernel(device_decompress_input* inputs, decompress_status* outputs, int count)
+  snap_kernel(device_span<device_span<uint8_t const> const> inputs,
+              device_span<device_span<uint8_t> const> outputs,
+              device_span<decompress_status> statuses)
 {
   __shared__ __align__(16) snap_state_s state_g;
 
@@ -268,10 +270,10 @@ __global__ void __launch_bounds__(128)
   const uint8_t* src;
 
   if (!t) {
-    auto const src     = inputs[blockIdx.x].src.data();
-    auto src_len       = static_cast<uint32_t>(inputs[blockIdx.x].src.size());
-    auto dst           = inputs[blockIdx.x].dst.data();
-    auto const dst_len = static_cast<uint32_t>(inputs[blockIdx.x].dst.size());
+    auto const src     = inputs[blockIdx.x].data();
+    auto src_len       = static_cast<uint32_t>(inputs[blockIdx.x].size());
+    auto dst           = outputs[blockIdx.x].data();
+    auto const dst_len = static_cast<uint32_t>(outputs[blockIdx.x].size());
     auto const end     = dst + dst_len;
     s->src             = src;
     s->src_len         = src_len;
@@ -335,23 +337,22 @@ __global__ void __launch_bounds__(128)
   }
   __syncthreads();
   if (!t) {
-    outputs[blockIdx.x].bytes_written = s->dst - s->dst_base;
-    outputs[blockIdx.x].status        = (s->dst > s->end) ? 1 : 0;
-    outputs[blockIdx.x].reserved      = 0;
+    statuses[blockIdx.x].bytes_written = s->dst - s->dst_base;
+    statuses[blockIdx.x].status        = (s->dst > s->end) ? 1 : 0;
+    statuses[blockIdx.x].reserved      = 0;
   }
 }
 
-cudaError_t __host__ gpu_snap(device_decompress_input* inputs,
-                              decompress_status* outputs,
-                              int count,
-                              rmm::cuda_stream_view stream)
+void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
+              device_span<device_span<uint8_t> const> outputs,
+              device_span<decompress_status> statuses,
+              rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
-  dim3 dim_grid(count, 1);
-  if (count > 0) {
-    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, count);
+  dim3 dim_grid(inputs.size(), 1);
+  if (inputs.size() > 0) {
+    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, statuses);
   }
-  return cudaSuccess;
 }
 
 }  // namespace io

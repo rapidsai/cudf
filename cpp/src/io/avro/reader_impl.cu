@@ -162,8 +162,9 @@ rmm::device_buffer decompress_data(datasource& source,
                                    rmm::cuda_stream_view stream)
 {
   if (meta.codec == "deflate") {
-    auto inflate_in  = hostdevice_vector<device_decompress_input>(meta.block_list.size(), stream);
-    auto inflate_out = hostdevice_vector<decompress_status>(meta.block_list.size(), stream);
+    auto inflate_in = hostdevice_vector<device_span<uint8_t const>>(meta.block_list.size(), stream);
+    auto inflate_out   = hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
+    auto inflate_stats = hostdevice_vector<decompress_status>(meta.block_list.size(), stream);
 
     // Guess an initial maximum uncompressed block size. We estimate the compression factor is two
     // and round up to the next multiple of 4096 bytes.
@@ -176,39 +177,38 @@ rmm::device_buffer decompress_data(datasource& source,
     for (size_t i = 0, dst_pos = 0; i < meta.block_list.size(); i++) {
       auto const src_pos = meta.block_list[i].offset - base_offset;
 
-      inflate_in[i].src = {static_cast<uint8_t const*>(comp_block_data.data()) + src_pos,
-                           meta.block_list[i].size};
-      inflate_in[i].dst = {static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos,
-                           initial_blk_len};
+      inflate_in[i]  = {static_cast<uint8_t const*>(comp_block_data.data()) + src_pos,
+                       meta.block_list[i].size};
+      inflate_out[i] = {static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos, initial_blk_len};
 
       // Update blocks offsets & sizes to refer to uncompressed data
       meta.block_list[i].offset = dst_pos;
-      meta.block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dst.size());
+      meta.block_list[i].size   = static_cast<uint32_t>(inflate_out[i].size());
       dst_pos += meta.block_list[i].size;
     }
+    inflate_in.host_to_device(stream);
 
     for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
-      inflate_in.host_to_device(stream);
-      CUDF_CUDA_TRY(
-        cudaMemsetAsync(inflate_out.device_ptr(), 0, inflate_out.memory_size(), stream.value()));
-      CUDF_CUDA_TRY(gpuinflate(
-        inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), 0, stream));
-      inflate_out.device_to_host(stream, true);
+      inflate_out.host_to_device(stream);
+      CUDF_CUDA_TRY(cudaMemsetAsync(
+        inflate_stats.device_ptr(), 0, inflate_stats.memory_size(), stream.value()));
+      gpuinflate(inflate_in, inflate_out, inflate_stats, gzip_header_included::NO, stream);
+      inflate_stats.device_to_host(stream, true);
 
       // Check if larger output is required, as it's not known ahead of time
       if (loop_cnt == 0) {
         std::vector<size_t> actual_uncomp_sizes;
         actual_uncomp_sizes.reserve(inflate_out.size());
-        std::transform(inflate_in.begin(),
-                       inflate_in.end(),
-                       inflate_out.begin(),
+        std::transform(inflate_out.begin(),
+                       inflate_out.end(),
+                       inflate_stats.begin(),
                        std::back_inserter(actual_uncomp_sizes),
-                       [](auto const& inf_in, auto const& inf_out) {
+                       [](auto const& inf_out, auto const& inf_stats) {
                          // If error status is 1 (buffer too small), the `bytes_written` field
                          // actually contains the uncompressed data size
-                         return inf_out.status == 1
-                                  ? std::max(inf_in.dst.size(), inf_out.bytes_written)
-                                  : inf_in.dst.size();
+                         return inf_stats.status == 1
+                                  ? std::max(inf_out.size(), inf_stats.bytes_written)
+                                  : inf_out.size();
                        });
         auto const total_actual_uncomp_size =
           std::accumulate(actual_uncomp_sizes.cbegin(), actual_uncomp_sizes.cend(), 0ul);
@@ -219,7 +219,7 @@ rmm::device_buffer decompress_data(datasource& source,
               i > 0 ? (meta.block_list[i - 1].size + meta.block_list[i - 1].offset) : 0;
             meta.block_list[i].size = static_cast<uint32_t>(actual_uncomp_sizes[i]);
 
-            inflate_in[i].dst = {
+            inflate_out[i] = {
               static_cast<uint8_t*>(decomp_block_data.data()) + meta.block_list[i].offset,
               meta.block_list[i].size};
           }

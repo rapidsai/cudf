@@ -1136,15 +1136,19 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   // Dispatch batches of pages to decompress for each codec
   rmm::device_buffer decomp_pages(total_decomp_size, stream);
-  hostdevice_vector<device_decompress_input> inflate_in(0, num_comp_pages, stream);
-  hostdevice_vector<decompress_status> inflate_out(0, num_comp_pages, stream);
+  hostdevice_vector<device_span<uint8_t const>> inflate_in(0, num_comp_pages, stream);
+  hostdevice_vector<device_span<uint8_t>> inflate_out(0, num_comp_pages, stream);
+  hostdevice_vector<decompress_status> inflate_stats(0, num_comp_pages, stream);
 
   hostdevice_vector<bool> any_block_failure(1, stream);
   any_block_failure[0] = false;
   any_block_failure.host_to_device(stream);
 
-  device_span<device_decompress_input> inflate_in_view(inflate_in.device_ptr(), inflate_in.size());
-  device_span<decompress_status> inflate_out_view(inflate_out.device_ptr(), inflate_out.size());
+  device_span<device_span<uint8_t const>> inflate_in_view(inflate_in.device_ptr(),
+                                                          inflate_in.size());
+  device_span<device_span<uint8_t>> inflate_out_view(inflate_out.device_ptr(), inflate_in.size());
+  device_span<decompress_status> inflate_stats_view(inflate_stats.device_ptr(),
+                                                    inflate_stats.size());
 
   size_t decomp_offset = 0;
   int32_t argc         = 0;
@@ -1153,18 +1157,18 @@ rmm::device_buffer reader::impl::decompress_page_data(
       int32_t start_pos = argc;
 
       for_each_codec_page(codec.compression_type, [&](size_t page) {
-        auto dst_base        = static_cast<uint8_t*>(decomp_pages.data());
-        inflate_in[argc].src = {pages[page].page_data,
-                                static_cast<size_t>(pages[page].compressed_page_size)};
-        inflate_in[argc].dst = {dst_base + decomp_offset,
-                                static_cast<size_t>(pages[page].uncompressed_page_size)};
+        auto dst_base     = static_cast<uint8_t*>(decomp_pages.data());
+        inflate_in[argc]  = {pages[page].page_data,
+                            static_cast<size_t>(pages[page].compressed_page_size)};
+        inflate_out[argc] = {dst_base + decomp_offset,
+                             static_cast<size_t>(pages[page].uncompressed_page_size)};
 
-        inflate_out[argc].bytes_written = 0;
-        inflate_out[argc].status        = static_cast<uint32_t>(-1000);
-        inflate_out[argc].reserved      = 0;
+        inflate_stats[argc].bytes_written = 0;
+        inflate_stats[argc].status        = static_cast<uint32_t>(-1000);
+        inflate_stats[argc].reserved      = 0;
 
-        pages[page].page_data = static_cast<uint8_t*>(inflate_in[argc].dst.data());
-        decomp_offset += inflate_in[argc].dst.size();
+        pages[page].page_data = static_cast<uint8_t*>(inflate_out[argc].data());
+        decomp_offset += inflate_out[argc].size();
         argc++;
       });
 
@@ -1178,48 +1182,56 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                     sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
                                     cudaMemcpyHostToDevice,
                                     stream.value()));
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(inflate_stats.device_ptr(start_pos),
+                        inflate_stats.host_ptr(start_pos),
+                        sizeof(decltype(inflate_stats)::value_type) * (argc - start_pos),
+                        cudaMemcpyHostToDevice,
+                        stream.value()));
 
       switch (codec.compression_type) {
         case parquet::GZIP:
-          CUDF_CUDA_TRY(gpuinflate(inflate_in.device_ptr(start_pos),
-                                   inflate_out.device_ptr(start_pos),
-                                   argc - start_pos,
-                                   1,
-                                   stream))
+          gpuinflate(inflate_in_view.subspan(start_pos, argc - start_pos),
+                     inflate_out_view.subspan(start_pos, argc - start_pos),
+                     inflate_stats_view.subspan(start_pos, argc - start_pos),
+                     gzip_header_included::YES,
+                     stream);
           break;
         case parquet::SNAPPY:
           if (nvcomp_integration::is_stable_enabled()) {
             nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                        inflate_in_view.subspan(start_pos, argc - start_pos),
                                        inflate_out_view.subspan(start_pos, argc - start_pos),
+                                       inflate_stats_view.subspan(start_pos, argc - start_pos),
                                        codec.max_decompressed_size,
                                        stream);
           } else {
-            CUDF_CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(start_pos),
-                                     inflate_out.device_ptr(start_pos),
-                                     argc - start_pos,
-                                     stream));
+            gpu_unsnap(inflate_in_view.subspan(start_pos, argc - start_pos),
+                       inflate_out_view.subspan(start_pos, argc - start_pos),
+                       inflate_stats_view.subspan(start_pos, argc - start_pos),
+                       stream);
           }
           break;
         case parquet::BROTLI:
-          CUDF_CUDA_TRY(gpu_debrotli(inflate_in.device_ptr(start_pos),
-                                     inflate_out.device_ptr(start_pos),
-                                     debrotli_scratch.data(),
-                                     debrotli_scratch.size(),
-                                     argc - start_pos,
-                                     stream));
+          gpu_debrotli(inflate_in_view.subspan(start_pos, argc - start_pos),
+                       inflate_out_view.subspan(start_pos, argc - start_pos),
+                       inflate_stats_view.subspan(start_pos, argc - start_pos),
+                       debrotli_scratch.data(),
+                       debrotli_scratch.size(),
+                       stream);
           break;
         default: CUDF_FAIL("Unexpected decompression dispatch"); break;
       }
-      CUDF_CUDA_TRY(cudaMemcpyAsync(inflate_out.host_ptr(start_pos),
-                                    inflate_out.device_ptr(start_pos),
-                                    sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
-                                    cudaMemcpyDeviceToHost,
-                                    stream.value()));
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(inflate_stats.host_ptr(start_pos),
+                        inflate_stats.device_ptr(start_pos),
+                        sizeof(decltype(inflate_stats)::value_type) * (argc - start_pos),
+                        cudaMemcpyDeviceToHost,
+                        stream.value()));
     }
   }
 
-  decompress_check(inflate_out_view, any_block_failure.device_ptr(), stream);
+  decompress_check(inflate_stats_view, any_block_failure.device_ptr(), stream);
   any_block_failure.device_to_host(stream, true);  // synchronizes stream
   CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
 

@@ -327,9 +327,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   CUDF_EXPECTS(total_decomp_size > 0, "No decompressible data found");
 
   rmm::device_buffer decomp_data(total_decomp_size, stream);
-  rmm::device_uvector<device_decompress_input> inflate_in(
+  rmm::device_uvector<device_span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
-  rmm::device_uvector<decompress_status> inflate_out(num_compressed_blocks, stream);
+  rmm::device_uvector<device_span<uint8_t>> inflate_out(
+    num_compressed_blocks + num_uncompressed_blocks, stream);
+  rmm::device_uvector<decompress_status> inflate_stats(num_compressed_blocks, stream);
 
   // Parse again to populate the decompression input/output buffers
   size_t decomp_offset           = 0;
@@ -339,9 +341,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   for (size_t i = 0; i < compinfo.size(); ++i) {
     auto dst_base                 = static_cast<uint8_t*>(decomp_data.data());
     compinfo[i].uncompressed_data = dst_base + decomp_offset;
-    compinfo[i].decctl            = inflate_in.data() + start_pos;
-    compinfo[i].decstatus         = inflate_out.data() + start_pos;
-    compinfo[i].copyctl           = inflate_in.data() + start_pos_uncomp;
+    compinfo[i].dec_in_ctl        = inflate_in.data() + start_pos;
+    compinfo[i].dec_out_ctl       = inflate_out.data() + start_pos;
+    compinfo[i].decstatus         = inflate_stats.data() + start_pos;
+    compinfo[i].copy_in_ctl       = inflate_in.data() + start_pos_uncomp;
+    compinfo[i].copy_out_ctl      = inflate_out.data() + start_pos_uncomp;
 
     stream_info[i].dst_pos = decomp_offset;
     decomp_offset += compinfo[i].max_uncompressed_size;
@@ -359,33 +363,36 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
 
   // Dispatch batches of blocks to decompress
   if (num_compressed_blocks > 0) {
-    device_span<decompress_status> inflate_out_view(inflate_out.data(), num_compressed_blocks);
+    device_span<device_span<uint8_t const>> inflate_in_view{inflate_in.data(),
+                                                            num_compressed_blocks};
+    device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
     switch (decompressor->GetKind()) {
       case orc::ZLIB:
-        CUDF_CUDA_TRY(
-          gpuinflate(inflate_in.data(), inflate_out.data(), num_compressed_blocks, 0, stream));
+        gpuinflate(
+          inflate_in_view, inflate_out_view, inflate_stats, gzip_header_included::NO, stream);
         break;
       case orc::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
-          device_span<device_decompress_input> inflate_in_view{inflate_in.data(),
-                                                               num_compressed_blocks};
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      inflate_in_view,
                                      inflate_out_view,
+                                     inflate_stats,
                                      max_uncomp_block_size,
                                      stream);
         } else {
-          CUDF_CUDA_TRY(
-            gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
+          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_stats, stream);
         }
         break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
-    decompress_check(inflate_out_view, any_block_failure.device_ptr(), stream);
+    decompress_check(inflate_stats, any_block_failure.device_ptr(), stream);
   }
   if (num_uncompressed_blocks > 0) {
-    CUDF_CUDA_TRY(gpu_copy_uncompressed_blocks(
-      inflate_in.data() + num_compressed_blocks, num_uncompressed_blocks, stream));
+    device_span<device_span<uint8_t const>> copy_in_view{inflate_in.data() + num_compressed_blocks,
+                                                         num_uncompressed_blocks};
+    device_span<device_span<uint8_t>> copy_out_view{inflate_out.data() + num_compressed_blocks,
+                                                    num_uncompressed_blocks};
+    gpu_copy_uncompressed_blocks(copy_in_view, copy_out_view, stream);
   }
   gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
 

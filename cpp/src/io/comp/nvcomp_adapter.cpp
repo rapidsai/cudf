@@ -54,34 +54,33 @@ size_t get_temp_size(compression_type type, size_t num_chunks, size_t max_uncomp
 }
 
 void batched_decompress(compression_type type,
-                        device_span<device_decompress_input const> comp_in,
-                        device_span<decompress_status> comp_stat,
+                        device_span<device_span<uint8_t const> const> inputs,
+                        device_span<device_span<uint8_t> const> outputs,
+                        device_span<decompress_status> statuses,
                         size_t max_uncomp_chunk_size,
                         rmm::cuda_stream_view stream)
 {
-  auto const num_chunks = comp_in.size();
+  auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
-  auto const inputs = create_batched_inputs(comp_in, stream);
-  // Analogous to comp_stat.bytes_written
+  auto const nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
   rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_chunks, stream);
-  // Convertible to comp_stat.status
-  rmm::device_uvector<nvcompStatus_t> statuses(num_chunks, stream);
+  rmm::device_uvector<nvcompStatus_t> nvcomp_statuses(num_chunks, stream);
   // Temporary space required for decompression
   rmm::device_buffer scratch(get_temp_size(type, num_chunks, max_uncomp_chunk_size), stream);
   auto const nvcomp_status = batched_decompress_async(type,
-                                                      inputs.compressed_data_ptrs.data(),
-                                                      inputs.compressed_data_sizes.data(),
-                                                      inputs.uncompressed_data_sizes.data(),
+                                                      nvcomp_args.compressed_data_ptrs.data(),
+                                                      nvcomp_args.compressed_data_sizes.data(),
+                                                      nvcomp_args.uncompressed_data_sizes.data(),
                                                       actual_uncompressed_data_sizes.data(),
                                                       num_chunks,
                                                       scratch.data(),
                                                       scratch.size(),
-                                                      inputs.uncompressed_data_ptrs.data(),
-                                                      statuses.data(),
+                                                      nvcomp_args.uncompressed_data_ptrs.data(),
+                                                      nvcomp_statuses.data(),
                                                       stream.value());
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "unable to perform decompression");
 
-  convert_status(statuses, actual_uncompressed_data_sizes, comp_stat, stream);
+  convert_status(nvcomp_statuses, actual_uncompressed_data_sizes, statuses, stream);
 }
 }  // namespace cudf::io::nvcomp

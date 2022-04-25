@@ -26,16 +26,27 @@
 
 namespace cudf::io::nvcomp {
 
-struct batched_inputs {
+struct batched_args {
   rmm::device_uvector<void const*> compressed_data_ptrs;
   rmm::device_uvector<size_t> compressed_data_sizes;
   rmm::device_uvector<void*> uncompressed_data_ptrs;
   rmm::device_uvector<size_t> uncompressed_data_sizes;
 };
 
-batched_inputs create_batched_inputs(device_span<device_decompress_input const> cudf_comp_in,
-                                     rmm::cuda_stream_view stream);
+/**
+ * @brief Split lists of src/dst device spans into lists of pointers/sizes.
+ *
+ * @param[in] inputs List of input buffers
+ * @param[in] outputs List of output buffers
+ * @param[in] stream CUDA stream to use
+ */
+batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> const> inputs,
+                                        device_span<device_span<uint8_t> const> outputs,
+                                        rmm::cuda_stream_view stream);
 
+/**
+ * @brief Convert nvcomp statuses into cuIO comspression statuses.
+ */
 void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
                     device_span<size_t const> actual_uncompressed_sizes,
                     device_span<decompress_status> cudf_stats,

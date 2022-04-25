@@ -43,9 +43,11 @@ struct CompressedStreamInfo {
     : compressed_data(compressed_data_),
       uncompressed_data(nullptr),
       compressed_data_size(compressed_size_),
-      decctl(nullptr),
+      dec_in_ctl(nullptr),
+      dec_out_ctl(nullptr),
       decstatus(nullptr),
-      copyctl(nullptr),
+      copy_in_ctl(nullptr),
+      copy_out_ctl(nullptr),
       num_compressed_blocks(0),
       num_uncompressed_blocks(0),
       max_uncompressed_size(0),
@@ -54,14 +56,15 @@ struct CompressedStreamInfo {
   }
   const uint8_t* compressed_data;  // [in] base ptr to compressed stream data
   uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
-  size_t compressed_data_size;      // [in] compressed data size for this stream
-  device_decompress_input* decctl;  // [in] base ptr to decompression structure to be filled
-  decompress_status* decstatus;     // [in] results of decompression
-  device_decompress_input*
-    copyctl;  // [in] base ptr to copy structure to be filled for uncompressed blocks
+  size_t compressed_data_size;             // [in] compressed data size for this stream
+  device_span<uint8_t const>* dec_in_ctl;  // [in] base ptr to decompression structure to be filled
+  device_span<uint8_t>* dec_out_ctl;       // [in] base ptr to decompression structure to be filled
+  decompress_status* decstatus;            // [in] results of decompression
+  device_span<uint8_t const>* copy_in_ctl;  // [out] decompression structures for uncompressed blocks
+  device_span<uint8_t>*  copy_out_ctl;  // [out] decompression structures for uncompressed blocks
   uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed
                                    // blocks(out)
-  uint32_t num_uncompressed_blocks;      // [in,out] number of entries in copyctl(in), number of
+  uint32_t num_uncompressed_blocks;      // [in,out] number of entries in copy_in_ctl, number of
                                          // uncompressed blocks(out)
   uint64_t max_uncompressed_size;        // [out] maximum uncompressed data size of stream
   uint32_t max_uncompressed_block_size;  // [out] maximum uncompressed size of any block in stream
@@ -345,8 +348,9 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @param[in] max_comp_blk_size Max size of any block after compression
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
- * @param[out] comp_in Per-block compression input parameters
- * @param[out] comp_out Per-block compression status
+ * @param[out] comp_in Per-block compression input buffers
+ * @param[out] comp_out Per-block compression output buffers
+ * @param[out] comp_stat Per-block compression status
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void CompressOrcDataStreams(uint8_t* compressed_data,
@@ -356,8 +360,9 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t max_comp_blk_size,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<device_decompress_input> comp_in,
-                            device_span<decompress_status> comp_out,
+                            device_span<device_span<uint8_t const>> comp_in,
+                            device_span<device_span<uint8_t>> comp_out,
+                            device_span<decompress_status> comp_stat,
                             rmm::cuda_stream_view stream);
 
 /**
