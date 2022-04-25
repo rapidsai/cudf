@@ -52,7 +52,7 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
   return thrust::any_of(rmm::exec_policy(stream), row_begin, row_end, is_dirty_row);
 }
 
-/// Check if any child columns of the `input` need sanitizing.
+/// Check if any child columns of the `input` have non-empty null rows.
 bool children_have_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view stream)
 {
   return std::any_of(input.child_begin(), input.child_end(), [stream](auto const& child) {
