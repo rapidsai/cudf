@@ -1912,8 +1912,8 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
  * @param count Number of blocks to decompress
  */
 extern "C" __global__ void __launch_bounds__(block_size, 2)
-  gpu_debrotli_kernel(gpu_inflate_input_s* inputs,
-                      gpu_inflate_status_s* outputs,
+  gpu_debrotli_kernel(device_decompress_input* inputs,
+                      decompress_status* outputs,
                       uint8_t* scratch,
                       uint32_t scratch_size,
                       uint32_t count)
@@ -1927,18 +1927,19 @@ extern "C" __global__ void __launch_bounds__(block_size, 2)
   if (z >= count) { return; }
   // Thread0: initializes shared state and decode stream header
   if (!t) {
-    auto const* src = static_cast<uint8_t const*>(inputs[z].srcDevice);
-    size_t src_size = inputs[z].srcSize;
+    auto const src        = inputs[z].src.data();
+    size_t const src_size = inputs[z].src.size();
     if (src && src_size >= 8) {
-      s->error = 0;
-      s->out = s->outbase = static_cast<uint8_t*>(inputs[z].dstDevice);
-      s->bytes_left       = inputs[z].dstSize;
-      s->mtf_upper_bound  = 63;
-      s->dist_rb[0]       = 16;
-      s->dist_rb[1]       = 15;
-      s->dist_rb[2]       = 11;
-      s->dist_rb[3]       = 4;
-      s->dist_rb_idx      = 0;
+      s->error           = 0;
+      s->out             = inputs[z].dst.data();
+      s->outbase         = inputs[z].dst.data();
+      s->bytes_left      = inputs[z].dst.size();
+      s->mtf_upper_bound = 63;
+      s->dist_rb[0]      = 16;
+      s->dist_rb[1]      = 15;
+      s->dist_rb[2]      = 11;
+      s->dist_rb[3]      = 4;
+      s->dist_rb_idx     = 0;
       s->p1 = s->p2 = 0;
       initbits(s, src, src_size);
       DecodeStreamHeader(s);
@@ -2075,8 +2076,8 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
 #include <stdio.h>
 #endif
 
-cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s* inputs,
-                                  gpu_inflate_status_s* outputs,
+cudaError_t __host__ gpu_debrotli(device_decompress_input* inputs,
+                                  decompress_status* outputs,
                                   void* scratch,
                                   size_t scratch_size,
                                   int count,

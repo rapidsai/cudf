@@ -81,8 +81,11 @@ struct page_enc_state_s {
   EncPage page;
   EncColumnChunk ck;
   parquet_column_device_view col;
-  gpu_inflate_input_s comp_in;
-  gpu_inflate_status_s comp_stat;
+  uint8_t const* comp_src_ptr;
+  size_t comp_src_size;
+  uint8_t* comp_dst_ptr;
+  size_t comp_dst_size;
+  decompress_status comp_stat;
   uint16_t vals[rle_buffer_size];
 };
 
@@ -749,8 +752,8 @@ static __device__ std::pair<duration_ns, duration_D> convert_nanoseconds(timesta
 template <int block_size>
 __global__ void __launch_bounds__(128, 8)
   gpuEncodePages(device_span<gpu::EncPage> pages,
-                 device_span<gpu_inflate_input_s> comp_in,
-                 device_span<gpu_inflate_status_s> comp_stat)
+                 device_span<device_decompress_input> comp_in,
+                 device_span<decompress_status> comp_stat)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
   using block_scan = cub::BlockScan<uint32_t, block_size>;
@@ -760,6 +763,7 @@ __global__ void __launch_bounds__(128, 8)
   uint32_t t                = threadIdx.x;
 
   if (t == 0) {
+    state_g = page_enc_state_s{};
     s->page = pages[blockIdx.x];
     s->ck   = *s->page.chunk;
     s->col  = *s->ck.col_desc;
@@ -1084,10 +1088,10 @@ __global__ void __launch_bounds__(128, 8)
     auto actual_data_size        = static_cast<uint32_t>(s->cur - base);
     uint32_t compressed_bfr_size = GetMaxCompressedBfrSize(actual_data_size);
     s->page.max_data_size        = actual_data_size;
-    s->comp_in.srcDevice         = base;
-    s->comp_in.srcSize           = actual_data_size;
-    s->comp_in.dstDevice         = s->page.compressed_data + s->page.max_hdr_size;
-    s->comp_in.dstSize           = compressed_bfr_size;
+    s->comp_src_ptr              = base;
+    s->comp_src_size             = actual_data_size;
+    s->comp_dst_ptr              = s->page.compressed_data + s->page.max_hdr_size;
+    s->comp_dst_size             = compressed_bfr_size;
     s->comp_stat.bytes_written   = 0;
     s->comp_stat.status          = ~0;
     s->comp_stat.reserved        = 0;
@@ -1095,7 +1099,9 @@ __global__ void __launch_bounds__(128, 8)
   __syncthreads();
   if (t == 0) {
     pages[blockIdx.x] = s->page;
-    if (not comp_in.empty()) comp_in[blockIdx.x] = s->comp_in;
+    if (not comp_in.empty())
+      comp_in[blockIdx.x] = {{s->comp_src_ptr, s->comp_src_size},
+                             {s->comp_dst_ptr, s->comp_dst_size}};
     if (not comp_stat.empty()) {
       comp_stat[blockIdx.x]       = s->comp_stat;
       pages[blockIdx.x].comp_stat = &comp_stat[blockIdx.x];
@@ -1316,7 +1322,7 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
-                       device_span<gpu_inflate_status_s const> comp_stat,
+                       device_span<decompress_status const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats)
 {
@@ -1953,8 +1959,8 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
 }
 
 void EncodePages(device_span<gpu::EncPage> pages,
-                 device_span<gpu_inflate_input_s> comp_in,
-                 device_span<gpu_inflate_status_s> comp_stat,
+                 device_span<device_decompress_input> comp_in,
+                 device_span<decompress_status> comp_stat,
                  rmm::cuda_stream_view stream)
 {
   auto num_pages = pages.size();
@@ -1969,7 +1975,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
 }
 
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<gpu_inflate_status_s const> comp_stat,
+                       device_span<decompress_status const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream)

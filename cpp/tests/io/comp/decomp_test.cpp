@@ -34,9 +34,9 @@ template <typename Decompressor>
 struct DecompressTest : public cudf::test::BaseFixture {
   void SetUp() override
   {
-    ASSERT_CUDA_SUCCEEDED(cudaMallocHost((void**)&inf_args, sizeof(cudf::io::gpu_inflate_input_s)));
     ASSERT_CUDA_SUCCEEDED(
-      cudaMallocHost((void**)&inf_stat, sizeof(cudf::io::gpu_inflate_status_s)));
+      cudaMallocHost((void**)&inf_args, sizeof(cudf::io::device_decompress_input)));
+    ASSERT_CUDA_SUCCEEDED(cudaMallocHost((void**)&inf_stat, sizeof(cudf::io::decompress_status)));
   }
 
   void TearDown() override
@@ -56,46 +56,38 @@ struct DecompressTest : public cudf::test::BaseFixture {
                   size_t compressed_size)
   {
     rmm::device_buffer src{compressed, compressed_size, rmm::cuda_stream_default};
-    rmm::device_buffer dst{decompressed->size(), rmm::cuda_stream_default};
+    rmm::device_uvector<uint8_t> dst{decompressed->size(), rmm::cuda_stream_default};
 
-    inf_args->srcDevice = static_cast<const uint8_t*>(src.data());
-    inf_args->dstDevice = static_cast<uint8_t*>(dst.data());
-    inf_args->srcSize   = src.size();
-    inf_args->dstSize   = dst.size();
-    rmm::device_uvector<cudf::io::gpu_inflate_input_s> d_inf_args(1, rmm::cuda_stream_default);
-    rmm::device_uvector<cudf::io::gpu_inflate_status_s> d_inf_stat(1, rmm::cuda_stream_default);
+    inf_args->src = {static_cast<const uint8_t*>(src.data()), src.size()};
+    inf_args->dst = dst;
+    rmm::device_uvector<cudf::io::device_decompress_input> d_inf_args(1, rmm::cuda_stream_default);
+    rmm::device_uvector<cudf::io::decompress_status> d_inf_stat(1, rmm::cuda_stream_default);
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_inf_args.data(),
                                           inf_args,
-                                          sizeof(cudf::io::gpu_inflate_input_s),
+                                          sizeof(cudf::io::device_decompress_input),
                                           cudaMemcpyHostToDevice,
-                                          0));
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_inf_stat.data(),
-                                          inf_stat,
-                                          sizeof(cudf::io::gpu_inflate_status_s),
-                                          cudaMemcpyHostToDevice,
-                                          0));
-    ASSERT_CUDA_SUCCEEDED(
-      static_cast<Decompressor*>(this)->dispatch(d_inf_args.data(), d_inf_stat.data()));
-    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(inf_stat,
-                                          d_inf_stat.data(),
-                                          sizeof(cudf::io::gpu_inflate_status_s),
-                                          cudaMemcpyDeviceToHost,
                                           0));
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
-      decompressed->data(), inf_args->dstDevice, inf_args->dstSize, cudaMemcpyDeviceToHost, 0));
+      d_inf_stat.data(), inf_stat, sizeof(cudf::io::decompress_status), cudaMemcpyHostToDevice, 0));
+    ASSERT_CUDA_SUCCEEDED(
+      static_cast<Decompressor*>(this)->dispatch(d_inf_args.data(), d_inf_stat.data()));
+    ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
+      inf_stat, d_inf_stat.data(), sizeof(cudf::io::decompress_status), cudaMemcpyDeviceToHost, 0));
+    ASSERT_CUDA_SUCCEEDED(
+      cudaMemcpyAsync(decompressed->data(), dst.data(), dst.size(), cudaMemcpyDeviceToHost, 0));
     ASSERT_CUDA_SUCCEEDED(cudaStreamSynchronize(0));
   }
 
-  cudf::io::gpu_inflate_input_s* inf_args  = nullptr;
-  cudf::io::gpu_inflate_status_s* inf_stat = nullptr;
+  cudf::io::device_decompress_input* inf_args = nullptr;
+  cudf::io::device_decompress_input* inf_stat = nullptr;
 };
 
 /**
  * @brief Derived fixture for GZIP decompression
  */
 struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
-  cudaError_t dispatch(cudf::io::gpu_inflate_input_s* d_inf_args,
-                       cudf::io::gpu_inflate_status_s* d_inf_stat)
+  cudaError_t dispatch(cudf::io::device_decompress_input* d_inf_args,
+                       cudf::io::decompress_status* d_inf_stat)
   {
     return cudf::io::gpuinflate(d_inf_args, d_inf_stat, 1, 1, rmm::cuda_stream_default);
   }
@@ -105,8 +97,8 @@ struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
  * @brief Derived fixture for Snappy decompression
  */
 struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
-  cudaError_t dispatch(cudf::io::gpu_inflate_input_s* d_inf_args,
-                       cudf::io::gpu_inflate_status_s* d_inf_stat)
+  cudaError_t dispatch(cudf::io::device_decompress_input* d_inf_args,
+                       cudf::io::decompress_status* d_inf_stat)
   {
     return cudf::io::gpu_unsnap(d_inf_args, d_inf_stat, 1, rmm::cuda_stream_default);
   }
@@ -116,8 +108,8 @@ struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
  * @brief Derived fixture for Brotli decompression
  */
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
-  cudaError_t dispatch(cudf::io::gpu_inflate_input_s* d_inf_args,
-                       cudf::io::gpu_inflate_status_s* d_inf_stat)
+  cudaError_t dispatch(cudf::io::device_decompress_input* d_inf_args,
+                       cudf::io::decompress_status* d_inf_stat)
   {
     rmm::device_buffer d_scratch{cudf::io::get_gpu_debrotli_scratch_size(1),
                                  rmm::cuda_stream_default};

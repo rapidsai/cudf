@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,9 +55,9 @@ struct CompressedStreamInfo {
   const uint8_t* compressed_data;  // [in] base ptr to compressed stream data
   uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
   size_t compressed_data_size;      // [in] compressed data size for this stream
-  gpu_inflate_input_s* decctl;      // [in] base ptr to decompression structure to be filled
-  gpu_inflate_status_s* decstatus;  // [in] results of decompression
-  gpu_inflate_input_s*
+  device_decompress_input* decctl;  // [in] base ptr to decompression structure to be filled
+  decompress_status* decstatus;     // [in] results of decompression
+  device_decompress_input*
     copyctl;  // [in] base ptr to copy structure to be filled for uncompressed blocks
   uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed
                                    // blocks(out)
@@ -356,8 +356,8 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t max_comp_blk_size,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<gpu_inflate_input_s> comp_in,
-                            device_span<gpu_inflate_status_s> comp_out,
+                            device_span<device_decompress_input> comp_in,
+                            device_span<decompress_status> comp_out,
                             rmm::cuda_stream_view stream);
 
 /**

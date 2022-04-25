@@ -162,31 +162,27 @@ rmm::device_buffer decompress_data(datasource& source,
                                    rmm::cuda_stream_view stream)
 {
   if (meta.codec == "deflate") {
-    size_t uncompressed_data_size = 0;
-
-    auto inflate_in  = hostdevice_vector<gpu_inflate_input_s>(meta.block_list.size(), stream);
-    auto inflate_out = hostdevice_vector<gpu_inflate_status_s>(meta.block_list.size(), stream);
+    auto inflate_in  = hostdevice_vector<device_decompress_input>(meta.block_list.size(), stream);
+    auto inflate_out = hostdevice_vector<decompress_status>(meta.block_list.size(), stream);
 
     // Guess an initial maximum uncompressed block size
-    uint32_t initial_blk_len = (meta.max_block_size * 2 + 0xfff) & ~0xfff;
-    uncompressed_data_size   = initial_blk_len * meta.block_list.size();
-    for (size_t i = 0; i < inflate_in.size(); ++i) {
-      inflate_in[i].dstSize = initial_blk_len;
-    }
+    uint32_t const initial_blk_len = (meta.max_block_size * 2 + 0xfff) & ~0xfff;
+    size_t const uncomp_size       = initial_blk_len * meta.block_list.size();
 
-    rmm::device_buffer decomp_block_data(uncompressed_data_size, stream);
+    rmm::device_buffer decomp_block_data(uncomp_size, stream);
 
     auto const base_offset = meta.block_list[0].offset;
     for (size_t i = 0, dst_pos = 0; i < meta.block_list.size(); i++) {
       auto const src_pos = meta.block_list[i].offset - base_offset;
 
-      inflate_in[i].srcDevice = static_cast<uint8_t const*>(comp_block_data.data()) + src_pos;
-      inflate_in[i].srcSize   = meta.block_list[i].size;
-      inflate_in[i].dstDevice = static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos;
+      inflate_in[i].src = {static_cast<uint8_t const*>(comp_block_data.data()) + src_pos,
+                           meta.block_list[i].size};
+      inflate_in[i].dst = {static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos,
+                           initial_blk_len};
 
       // Update blocks offsets & sizes to refer to uncompressed data
       meta.block_list[i].offset = dst_pos;
-      meta.block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dstSize);
+      meta.block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dst.size());
       dst_pos += meta.block_list[i].size;
     }
 
@@ -200,24 +196,31 @@ rmm::device_buffer decompress_data(datasource& source,
 
       // Check if larger output is required, as it's not known ahead of time
       if (loop_cnt == 0) {
-        size_t actual_uncompressed_size = 0;
-        for (size_t i = 0; i < meta.block_list.size(); i++) {
-          // If error status is 1 (buffer too small), the `bytes_written` field
-          // is actually contains the uncompressed data size
-          if (inflate_out[i].status == 1 && inflate_out[i].bytes_written > inflate_in[i].dstSize) {
-            inflate_in[i].dstSize = inflate_out[i].bytes_written;
-          }
-          actual_uncompressed_size += inflate_in[i].dstSize;
-        }
-        if (actual_uncompressed_size > uncompressed_data_size) {
-          decomp_block_data.resize(actual_uncompressed_size, stream);
-          for (size_t i = 0, dst_pos = 0; i < meta.block_list.size(); i++) {
-            auto dst_base           = static_cast<uint8_t*>(decomp_block_data.data());
-            inflate_in[i].dstDevice = dst_base + dst_pos;
+        std::vector<size_t> actual_uncomp_sizes;
+        actual_uncomp_sizes.reserve(inflate_out.size());
+        std::transform(inflate_in.begin(),
+                       inflate_in.end(),
+                       inflate_out.begin(),
+                       std::back_inserter(actual_uncomp_sizes),
+                       [](auto& inf_in, auto& inf_out) {
+                         // If error status is 1 (buffer too small), the `bytes_written` field
+                         // actually contains the uncompressed data size
+                         return inf_out.status == 1
+                                  ? std::max(inf_in.dst.size(), inf_out.bytes_written)
+                                  : inf_in.dst.size();
+                       });
+        auto const total_actual_uncomp_size =
+          std::accumulate(actual_uncomp_sizes.cbegin(), actual_uncomp_sizes.cend(), 0ul);
+        if (total_actual_uncomp_size > uncomp_size) {
+          decomp_block_data.resize(total_actual_uncomp_size, stream);
+          for (size_t i = 0; i < meta.block_list.size(); ++i) {
+            meta.block_list[i].offset =
+              i > 0 ? (meta.block_list[i - 1].size + meta.block_list[i - 1].offset) : 0;
+            meta.block_list[i].size = static_cast<uint32_t>(actual_uncomp_sizes[i]);
 
-            meta.block_list[i].offset = dst_pos;
-            meta.block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dstSize);
-            dst_pos += meta.block_list[i].size;
+            inflate_in[i].dst = {
+              static_cast<uint8_t*>(decomp_block_data.data()) + meta.block_list[i].offset,
+              meta.block_list[i].size};
           }
         } else {
           break;

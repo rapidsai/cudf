@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,8 +124,8 @@ struct inflate_state_s {
   uint8_t* outbase;  ///< start of output buffer
   uint8_t* outend;   ///< end of output buffer
   // Input state
-  uint8_t* cur;  ///< input buffer
-  uint8_t* end;  ///< end of input buffer
+  uint8_t const* cur;  ///< input buffer
+  uint8_t const* end;  ///< end of input buffer
 
   uint2 bitbuf;     ///< bit buffer (64-bit)
   uint32_t bitpos;  ///< position in bit buffer
@@ -180,10 +180,10 @@ inline __device__ void skipbits(inflate_state_s* s, uint32_t n)
 {
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
-    uint8_t* cur = s->cur + 8;
-    s->bitbuf.x  = s->bitbuf.y;
-    s->bitbuf.y  = (cur < s->end) ? *reinterpret_cast<uint32_t*>(cur) : 0;
-    s->cur       = cur - 4;
+    auto cur    = s->cur + 8;
+    s->bitbuf.x = s->bitbuf.y;
+    s->bitbuf.y = (cur < s->end) ? *reinterpret_cast<uint32_t const*>(cur) : 0;
+    s->cur      = cur - 4;
     bitpos &= 0x1f;
   }
   s->bitpos = bitpos;
@@ -510,8 +510,8 @@ __device__ void decode_symbols(inflate_state_s* s)
 {
   uint32_t bitpos = s->bitpos;
   uint2 bitbuf    = s->bitbuf;
-  uint8_t* cur    = s->cur;
-  uint8_t* end    = s->end;
+  auto cur        = s->cur;
+  auto end        = s->end;
   int32_t batch   = 0;
   int32_t sym, batch_len;
 
@@ -871,13 +871,11 @@ __device__ int init_stored(inflate_state_s* s)
 /// Copy bytes from stored block to destination
 __device__ void copy_stored(inflate_state_s* s, int t)
 {
-  int len         = s->stored_blk_len;
-  uint8_t* cur    = s->cur + (s->bitpos >> 3);
-  uint8_t* out    = s->out;
-  uint8_t* outend = s->outend;
-  uint8_t* cur4;
-  int slow_bytes = min(len, (int)((16 - (size_t)out) & 0xf));
-  int fast_bytes, bitpos;
+  auto len              = s->stored_blk_len;
+  auto cur              = s->cur + (s->bitpos >> 3);
+  auto out              = s->out;
+  auto outend           = s->outend;
+  auto const slow_bytes = min(len, (int)((16 - (size_t)out) & 0xf));
 
   // Slow copy until output is 16B aligned
   if (slow_bytes) {
@@ -890,11 +888,11 @@ __device__ void copy_stored(inflate_state_s* s, int t)
     out += slow_bytes;
     len -= slow_bytes;
   }
-  fast_bytes = len;
+  auto fast_bytes = len;
   if (out < outend) { fast_bytes = (int)min((size_t)fast_bytes, (outend - out)); }
   fast_bytes &= ~0xf;
-  bitpos = ((int)(3 & (size_t)cur)) << 3;
-  cur4   = cur - (bitpos >> 3);
+  auto bitpos = ((int)(3 & (size_t)cur)) << 3;
+  auto cur4   = cur - (bitpos >> 3);
   if (out < outend) {
     // Fast copy 16 bytes at a time
     for (int i = t * 16; i < fast_bytes; i += blockDim.x * 16) {
@@ -926,13 +924,13 @@ __device__ void copy_stored(inflate_state_s* s, int t)
   __syncthreads();
   if (t == 0) {
     // Reset bitstream to end of block
-    uint8_t* p        = cur + len;
+    auto p            = cur + len;
     auto prefix_bytes = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     s->cur      = p;
-    s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
+    s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
     p += 4;
-    s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
+    s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
     s->bitpos   = prefix_bytes * 8;
     s->out      = out;
   }
@@ -1026,7 +1024,7 @@ __device__ int parse_gzip_header(const uint8_t* src, size_t src_size)
  */
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  inflate_kernel(gpu_inflate_input_s* inputs, gpu_inflate_status_s* outputs, int parse_hdr)
+  inflate_kernel(device_decompress_input* inputs, decompress_status* outputs, int parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
 
@@ -1035,9 +1033,8 @@ __global__ void __launch_bounds__(block_size)
   inflate_state_s* state = &state_g;
 
   if (!t) {
-    auto* p         = const_cast<uint8_t*>(static_cast<uint8_t const*>(inputs[z].srcDevice));
-    size_t src_size = inputs[z].srcSize;
-    uint32_t prefix_bytes;
+    auto p        = inputs[z].src.data();
+    auto src_size = inputs[z].src.size();
     // Parse header if needed
     state->err = 0;
     if (parse_hdr) {
@@ -1051,16 +1048,16 @@ __global__ void __launch_bounds__(block_size)
       }
     }
     // Initialize shared state
-    state->out     = const_cast<uint8_t*>(static_cast<uint8_t const*>(inputs[z].dstDevice));
-    state->outbase = state->out;
-    state->outend  = state->out + inputs[z].dstSize;
-    state->end     = p + src_size;
-    prefix_bytes   = (uint32_t)(((size_t)p) & 3);
+    state->out              = static_cast<uint8_t*>(inputs[z].dst.data());
+    state->outbase          = state->out;
+    state->outend           = state->out + inputs[z].dst.size();
+    state->end              = p + src_size;
+    auto const prefix_bytes = (uint32_t)(((size_t)p) & 3);
     p -= prefix_bytes;
     state->cur      = p;
-    state->bitbuf.x = (p < state->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
+    state->bitbuf.x = (p < state->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
     p += 4;
-    state->bitbuf.y = (p < state->end) ? *reinterpret_cast<uint32_t*>(p) : 0;
+    state->bitbuf.y = (p < state->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
     state->bitpos   = prefix_bytes * 8;
   }
   __syncthreads();
@@ -1145,7 +1142,7 @@ __global__ void __launch_bounds__(block_size)
  *
  * @param inputs Source and destination information per block
  */
-__global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_input_s* inputs)
+__global__ void __launch_bounds__(1024) copy_uncompressed_kernel(device_decompress_input* inputs)
 {
   __shared__ const uint8_t* volatile src_g;
   __shared__ uint8_t* volatile dst_g;
@@ -1158,9 +1155,9 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
   uint32_t len, src_align_bytes, src_align_bits, dst_align_bytes;
 
   if (!t) {
-    src        = static_cast<const uint8_t*>(inputs[z].srcDevice);
-    dst        = static_cast<uint8_t*>(inputs[z].dstDevice);
-    len        = min((uint32_t)inputs[z].srcSize, (uint32_t)inputs[z].dstSize);
+    src        = inputs[z].src.data();
+    dst        = inputs[z].dst.data();
+    len        = min((uint32_t)inputs[z].src.size(), (uint32_t)inputs[z].dst.size());
     src_g      = src;
     dst_g      = dst;
     copy_len_g = len;
@@ -1195,8 +1192,8 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
   if (t < len) { dst[t] = src[t]; }
 }
 
-cudaError_t __host__ gpuinflate(gpu_inflate_input_s* inputs,
-                                gpu_inflate_status_s* outputs,
+cudaError_t __host__ gpuinflate(device_decompress_input* inputs,
+                                decompress_status* outputs,
                                 int count,
                                 int parse_hdr,
                                 rmm::cuda_stream_view stream)
@@ -1209,7 +1206,7 @@ cudaError_t __host__ gpuinflate(gpu_inflate_input_s* inputs,
   return cudaSuccess;
 }
 
-cudaError_t __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s* inputs,
+cudaError_t __host__ gpu_copy_uncompressed_blocks(device_decompress_input* inputs,
                                                   int count,
                                                   rmm::cuda_stream_view stream)
 {
