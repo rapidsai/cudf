@@ -30,8 +30,6 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
-#include <utility>
-#include <vector>
 
 // Forward declaration
 template <typename T>
