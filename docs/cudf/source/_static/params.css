@@ -54,6 +54,7 @@ table.io-supported-types-table thead{
     border: 1px solid #dee2e6;
 }
 
+/* Needed to resolve https://github.com/executablebooks/jupyter-book/issues/1611 */ 
 .output.text_html {
     overflow: auto;
 }
