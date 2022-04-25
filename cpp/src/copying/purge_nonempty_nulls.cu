@@ -52,14 +52,6 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
   return thrust::count_if(rmm::exec_policy(stream), row_begin, row_end, is_dirty_row) > 0;
 }
 
-/// Check if any child columns of the `input` have non-empty null rows.
-bool children_have_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view stream)
-{
-  return std::any_of(input.child_begin(), input.child_end(), [stream](auto const& child) {
-    return cudf::detail::has_nonempty_nulls(child, stream);
-  });
-}
-
 }  // namespace
 
 /**
@@ -79,7 +71,9 @@ bool has_nonempty_nulls(cudf::column_view const& input, rmm::cuda_stream_view st
 
   // For complex types, check if child columns need purging.
   if ((type == type_id::STRUCT || type == type_id::LIST) &&
-      children_have_nonempty_nulls(input, stream)) {
+      std::any_of(input.child_begin(), input.child_end(), [stream](auto const& child) {
+        return cudf::detail::has_nonempty_nulls(child, stream);
+      })) {
     return true;
   }
 
