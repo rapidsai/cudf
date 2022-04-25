@@ -911,8 +911,8 @@ class CategoricalColumn(column.ColumnBase):
                 )
             return other
 
-        ary = cudf.utils.utils.scalar_broadcast_to(
-            self._encode(other), size=len(self), dtype=self.codes.dtype
+        ary = column.full(
+            len(self), self._encode(other), dtype=self.codes.dtype
         )
         return column.build_categorical_column(
             categories=self.dtype.categories._values,
@@ -1629,9 +1629,9 @@ def _create_empty_categorical_column(
     return column.build_categorical_column(
         categories=column.as_column(dtype.categories),
         codes=column.as_column(
-            cudf.utils.utils.scalar_broadcast_to(
-                _DEFAULT_CATEGORICAL_VALUE,
+            column.full(
                 categorical_column.size,
+                _DEFAULT_CATEGORICAL_VALUE,
                 categorical_column.codes.dtype,
             )
         ),

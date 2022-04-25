@@ -540,7 +540,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
 
-    def apply(self, function):
+    def apply(self, function, *args):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -619,8 +619,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         chunks = [
             grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
         ]
-        chunk_results = [function(chk) for chk in chunks]
-
+        chunk_results = [function(chk, *args) for chk in chunks]
         if not len(chunk_results):
             return self.obj.head(0)
 
@@ -628,8 +627,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
         elif isinstance(chunk_results[0], cudf.Series):
-            result = cudf.concat(chunk_results, axis=1).T
-            result.index.names = self.grouping.names
+            if isinstance(self.obj, cudf.DataFrame):
+                result = cudf.concat(chunk_results, axis=1).T
+                result.index.names = self.grouping.names
+            else:
+                result = cudf.concat(chunk_results)
         else:
             result = cudf.concat(chunk_results)
 
@@ -1601,8 +1603,8 @@ class SeriesGroupBy(GroupBy):
 
         return result
 
-    def apply(self, func):
-        result = super().apply(func)
+    def apply(self, func, *args):
+        result = super().apply(func, *args)
 
         # apply Series name to result
         result.name = self.obj.name
