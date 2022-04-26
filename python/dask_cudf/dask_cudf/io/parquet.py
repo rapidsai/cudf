@@ -208,7 +208,8 @@ class CudfEngine(ArrowDatasetEngine):
                             f"read_parquet. This may cause out of memory "
                             f"exceptions in operations downstream. See the "
                             f"notes on split_row_groups in the read_parquet "
-                            f"documentation."
+                            f"documentation. Setting split_row_groups "
+                            f"explicitly will silence this warning."
                         )
 
                 if i > 0 and partition_keys != last_partition_keys:
@@ -428,8 +429,8 @@ def read_parquet(path, columns=None, **kwargs):
     ):
         # User is not specifying `split_row_groups` or `chunksize`,
         # so we should warn them if/when a file is ~>0.5GB on disk.
-        # The will be able to set `split_row_groups` explicitly to
-        # silence/skip this check
+        # They can set `split_row_groups` explicitly to silence/skip
+        # this check
         if "read" not in kwargs:
             kwargs["read"] = {}
         kwargs["read"]["check_file_size"] = check_file_size
