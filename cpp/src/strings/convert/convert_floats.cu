@@ -124,16 +124,27 @@ __device__ inline double stod(string_view const& d_str)
   exp_ten *= exp_sign;
   exp_ten += exp_off;
   exp_ten += num_digits - 1;
-  if (exp_ten > std::numeric_limits<double>::max_exponent10)
+  if (exp_ten > std::numeric_limits<double>::max_exponent10) {
     return sign > 0 ? std::numeric_limits<double>::infinity()
                     : -std::numeric_limits<double>::infinity();
-  else if (exp_ten < std::numeric_limits<double>::min_exponent10)
-    return double{0};
+  }
+
+  double base = sign * static_cast<double>(digits);
 
   exp_ten += 1 - num_digits;
-  // exp10() is faster than pow(10.0,exp_ten)
+  // If 10^exp_ten would result in a subnormal value, the base and
+  // exponent should be adjusted so that 10^exp_ten is a normal value
+  auto const subnormal_shift = std::numeric_limits<double>::min_exponent10 - exp_ten;
+  if (subnormal_shift > 0) {
+    // Handle subnormal values. Ensure that both base and exponent are
+    // normal values before computing their product.
+    base = base / exp10(static_cast<double>(num_digits - 1 + subnormal_shift));
+    exp_ten += num_digits - 1;  // adjust exponent
+    auto const exponent = exp10(static_cast<double>(exp_ten + subnormal_shift));
+    return base * exponent;
+  }
+
   double const exponent = exp10(static_cast<double>(std::abs(exp_ten)));
-  double const base     = sign * static_cast<double>(digits);
   return exp_ten < 0 ? base / exponent : base * exponent;
 }
 
