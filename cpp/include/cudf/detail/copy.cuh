@@ -20,7 +20,7 @@
 namespace cudf::detail {
 
 /**
- * @copydoc cudf::purge_nonempty_nulls(lists_column_view const&, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::purge_nonempty_nulls(structs_column_view const&, rmm::mr::device_memory_resource*)
  *
  * @tparam ColumnViewT View type (lists_column_view, strings_column_view, or strings_column_view)
  * @param stream CUDA stream used for device memory operations and kernel launches
