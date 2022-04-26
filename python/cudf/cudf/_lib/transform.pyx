@@ -169,11 +169,15 @@ def compute_column(list columns, tuple column_names, expr: str):
 
     Parameters
     ----------
-    df : cudf.DataFrame
-        The DataFrame that we are applying functions to.
+    columns : list
+        The set of columns forming the table to evaluate the expression on.
+    column_names : str
+        The names associated with each column. These names are necessary to map
+        column names in the expression to indices in the provided list of
+        columns, which are what will be used by libcudf to evaluate the
+        expression on the table.
     expr : str
-        The expression to evaluate. Must be a single expression (not a
-        statement, i.e. no assignment).
+        The expression to evaluate.
     """
     visitor = parse_expression(expr, column_names)
 

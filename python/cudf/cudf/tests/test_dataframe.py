@@ -9337,3 +9337,12 @@ def test_dataframe_eval(df_eval, expr, dtype):
         pdf_eval.eval(expr, inplace=True)
         df_eval.eval(expr, inplace=True)
         assert_eq(pdf_eval, df_eval)
+
+
+def test_dataframe_eval_errors(df_eval):
+    expr = """
+    e = a + b
+    a == b
+    """
+    with pytest.raises(ValueError):
+        df_eval.eval(expr)

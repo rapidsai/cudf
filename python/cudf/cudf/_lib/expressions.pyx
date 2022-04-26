@@ -90,7 +90,7 @@ cdef class Literal(Expression):
     def __cinit__(self, value):
         # TODO: Would love to find a better solution than unions for literals.
         cdef int intval
-        cdef float floatval
+        cdef double doubleval
 
         if isinstance(value, int):
             self.c_scalar_type = scalar_type_t.INT
@@ -103,9 +103,9 @@ cdef class Literal(Expression):
             )
         elif isinstance(value, float):
             self.c_scalar_type = scalar_type_t.DOUBLE
-            floatval = value
+            doubleval = value
             self.c_scalar.double_ptr = make_unique[numeric_scalar[double]](
-                floatval, True
+                doubleval, True
             )
             self.c_obj = <expression_ptr> make_unique[libcudf_exp.literal](
                 <numeric_scalar[double] &>dereference(self.c_scalar.double_ptr)

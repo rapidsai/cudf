@@ -6241,12 +6241,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_cudf_nvtx_annotate
-    def eval(self, expr: "str", inplace: "bool" = False, **kwargs):
+    def eval(self, expr: str, inplace: bool = False, **kwargs):
         """Evaluate a string describing operations on DataFrame columns.
 
-        Operates on columns only, not specific rows or elements.  This allows
-        `eval` to run arbitrary code, which can make you vulnerable to code
-        injection if you pass user input to this function.
+        Operates on columns only, not specific rows or elements.
 
         Parameters
         ----------
@@ -6257,14 +6255,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             operation inplace and mutate the existing DataFrame. Otherwise,
             a new DataFrame is returned.
         **kwargs
-            See the documentation for :func:`eval` for complete details
-            on the keyword arguments accepted by
-            :meth:`~pandas.DataFrame.query`.
+            Not supported.
 
         Returns
         -------
-        ndarray, scalar, pandas object, or None
-            The result of the evaluation or None if ``inplace=True``.
+        DataFrame, Series, or None
+            Series if a single column is returned (the typical use case),
+            DataFrame if multiple assignment statements are included in
+            ``expr``, or None if ``inplace=True``.
 
         Notes
         -----
@@ -6283,7 +6281,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         --------
         >>> df = cudf.DataFrame({'A': range(1, 6), 'B': range(10, 0, -2)})
         >>> df
-        A   B
+           A   B
         0  1  10
         1  2   8
         2  3   6
@@ -6299,6 +6297,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Assignment is allowed though by default the original DataFrame is not
         modified.
+
         >>> df.eval('C = A + B')
            A   B   C
         0  1  10  11
@@ -6340,12 +6339,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3  4   4   8  0
         4  5   2   7  3
         """
+        if kwargs:
+            raise ValueError(
+                "Keyword arguments other than `inplace` are not supported"
+            )
+
         # Have to use a regex match to avoid capturing "=="
         includes_assignment = re.search("[^=]=[^=]", expr) is not None
 
         # Check if there were multiple statements. Filter out empty lines.
         exprs = tuple(filter(None, expr.strip().split("\n")))
-        if len(exprs) > 1 and not all("=" in e for e in exprs):
+        if len(exprs) > 1 and not all(
+            re.search("[^=]=[^=]", e) is not None for e in exprs
+        ):
             raise ValueError(
                 "Multi-line expressions are only valid if all expressions "
                 "contain an assignment."
