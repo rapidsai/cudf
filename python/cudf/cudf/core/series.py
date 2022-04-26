@@ -1065,9 +1065,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
             output = repr(
-                preprocess.astype("O")
-                .fillna(cudf._NA_REP)
-                .to_pandas()
+                preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
             )
         elif isinstance(
             preprocess._column, cudf.core.column.CategoricalColumn
