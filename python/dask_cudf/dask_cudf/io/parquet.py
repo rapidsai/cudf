@@ -384,16 +384,31 @@ def set_object_dtypes_from_pa_schema(df, schema):
 def read_parquet(path, columns=None, **kwargs):
     """Read parquet files into a Dask DataFrame
 
-    Calls ``dask.dataframe.read_parquet`` to cordinate the execution of
-    ``cudf.read_parquet``, and ultimately read multiple partitions into
-    a single Dask dataframe. The Dask version must supply an
-    ``ArrowDatasetEngine`` class to support full functionality.
-    See ``cudf.read_parquet`` and Dask documentation for further details.
+    Calls ``dask.dataframe.read_parquet`` with ``engine=CudfEngine``
+    to cordinate the execution of ``cudf.read_parquet``, and to
+    ultimately create a ``dask_cudf.DataFrame`` collection.
+
+    See the ``dask.dataframe.read_parquet`` documentation for
+    all available options.
 
     Examples
     --------
-    >>> import dask_cudf
-    >>> df = dask_cudf.read_parquet("/path/to/dataset/")  # doctest: +SKIP
+    >>> from dask_cudf import read_parquet
+    >>> df = read_parquet("/path/to/dataset/")  # doctest: +SKIP
+
+    When dealing with one or more large parquet files having an
+    in-memory footprint >15% device memory, the ``split_row_groups``
+    argument should be used to map Parquet **row-groups** to DataFrame
+    partitions (instead of **files** to partitions). For example, the
+    following code will map each row-group to a distinct partition:
+
+    >>> df = read_parquet(..., split_row_groups=True)  # doctest: +SKIP
+
+    To map **multiple** row-groups to each partition, an integer can be
+    passed to ``split_row_groups`` to specify the **maximum** number of
+    row-groups allowed in each output partition:
+
+    >>> df = read_parquet(..., split_row_groups=10)  # doctest: +SKIP
 
     See Also
     --------
