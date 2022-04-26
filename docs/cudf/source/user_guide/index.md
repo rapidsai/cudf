@@ -7,7 +7,7 @@
 pandas-comparison.rst
 data-types.rst
 io.rst
-Working-with-missing-data.md
+missing-data.md
 groupby.rst
 guide-to-udfs.md
 cupy-interop.md

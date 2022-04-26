@@ -8,7 +8,7 @@ addition cuDF supports special data types for decimals and "nested
 types" (lists and structs).
 
 Unlike in Pandas, all data types in cuDF are nullable.
-See {doc}`Working With Missing Data </user_guide/Working-with-missing-data>`.
+See {doc}`Working With Missing Data </user_guide/missing-data>`.
 
 
 ```{eval-rst}
