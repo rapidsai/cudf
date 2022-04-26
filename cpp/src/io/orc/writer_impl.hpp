@@ -444,7 +444,7 @@ class writer::impl {
   std::map<std::string, std::string> kv_meta;
   // to track if the output has been written to sink
   bool closed = false;
-
+  // statistics data saved between calls to write before a close writes out the statistics
   persisted_statistics persisted_stripe_statistics;
 
   std::vector<uint8_t> buffer_;
