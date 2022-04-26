@@ -48,16 +48,12 @@ def is_numeric_dtype(obj):
         if issubclass(obj, _BaseDtype):
             return False
     else:
-        if isinstance(obj, cudf.Decimal128Dtype) or isinstance(
-            getattr(obj, "dtype", None), cudf.Decimal128Dtype
-        ):
-            return True
-        if isinstance(obj, cudf.Decimal64Dtype) or isinstance(
-            getattr(obj, "dtype", None), cudf.Decimal64Dtype
-        ):
-            return True
-        if isinstance(obj, cudf.Decimal32Dtype) or isinstance(
-            getattr(obj, "dtype", None), cudf.Decimal32Dtype
+        if isinstance(
+            obj,
+            (cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype),
+        ) or isinstance(
+            getattr(obj, "dtype", None),
+            (cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype),
         ):
             return True
         if isinstance(obj, _BaseDtype) or isinstance(
@@ -129,12 +125,14 @@ def is_scalar(val):
     bool
         Return True if given object is scalar.
     """
-    return (
-        isinstance(val, cudf._lib.scalar.DeviceScalar)
-        or isinstance(val, cudf.Scalar)
-        or isinstance(val, cudf.core.tools.datetimes.DateOffset)
-        or pd_types.is_scalar(val)
-    )
+    return isinstance(
+        val,
+        (
+            cudf.Scalar,
+            cudf._lib.scalar.DeviceScalar,
+            cudf.core.tools.datetimes.DateOffset,
+        ),
+    ) or pd_types.is_scalar(val)
 
 
 def _is_scalar_or_zero_d_array(val):

@@ -681,8 +681,13 @@ def is_interval_dtype(obj):
     # TODO: Should there be any branch in this function that calls
     # pd.api.types.is_interval_dtype?
     return (
-        isinstance(obj, cudf.core.dtypes.IntervalDtype)
-        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
+        isinstance(
+            obj,
+            (
+                cudf.core.dtypes.IntervalDtype,
+                pd.core.dtypes.dtypes.IntervalDtype,
+            ),
+        )
         or obj is cudf.core.dtypes.IntervalDtype
         or (
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
