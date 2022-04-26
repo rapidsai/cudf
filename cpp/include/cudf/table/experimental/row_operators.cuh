@@ -900,7 +900,7 @@ class row_hasher {
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
-  template <template <typename> class hash_function = default_hash, typename Nullate>
+  template <template <typename> class hash_function = detail::default_hash, typename Nullate>
   device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
                                                           uint32_t seed   = DEFAULT_HASH_SEED) const
   {
