@@ -401,10 +401,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     if is_scalar(key[1]):
                         for col in columns_df._column_names:
                             self._frame[col].loc[key[0]] = value
-                    # Otherwise, there are two situations. The row axis key
-                    # is 0d or the key is a 2d indexer. In either of the
-                    # situation, the ith element in value corresponds to
-                    # the ith column in the indexed object.
+                    # Otherwise, there are two situations. The key on row axis can be
+                    # a scalar or 1d. In either of the situation, the ith element in
+                    # value corresponds to the ith row in the indexed object. If the key
+                    # is 1d, a broadcast will happen.
                     else:
                         for i, col in enumerate(columns_df._column_names):
                             self._frame[col].loc[key[0]] = value[i]
