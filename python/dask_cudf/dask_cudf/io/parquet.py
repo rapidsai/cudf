@@ -207,7 +207,7 @@ class CudfEngine(ArrowDatasetEngine):
                             f"used to create a DataFrame partition in "
                             f"read_parquet. This may cause out of memory "
                             f"exceptions in operations downstream. See the "
-                            f"split_row_groups argument in the read_parquet "
+                            f"notes on split_row_groups in the read_parquet "
                             f"documentation."
                         )
 
@@ -263,7 +263,7 @@ class CudfEngine(ArrowDatasetEngine):
         except MemoryError as err:
             raise MemoryError(
                 "Parquet data was larger than the available GPU memory!\n\n"
-                "See the split_row_groups argument in the read_parquet "
+                "See the notes on split_row_groups in the read_parquet "
                 "documentation.\n\n"
                 "Original Error: " + str(err)
             )
