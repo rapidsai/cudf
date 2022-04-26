@@ -205,8 +205,10 @@ class CudfEngine(ArrowDatasetEngine):
                         warnings.warn(
                             f"A large parquet file ({file_size}B) is being "
                             f"used to create a DataFrame partition in "
-                            f"read_parquet. Did you mean to use the "
-                            f"split_row_groups argument?"
+                            f"read_parquet. This may cause out of memory "
+                            f"exceptions in operations downstream. See the "
+                            f"split_row_groups argument in the read_parquet "
+                            f"documentation."
                         )
 
                 if i > 0 and partition_keys != last_partition_keys:
@@ -261,12 +263,8 @@ class CudfEngine(ArrowDatasetEngine):
         except MemoryError as err:
             raise MemoryError(
                 "Parquet data was larger than the available GPU memory!\n\n"
-                "Please try `split_row_groups=True` or set this option "
-                "to a smaller integer (if applicable).\n\n"
-                "If you are using dask-cuda workers, this may indicate "
-                "that the current `device_memory_limit` is too high. "
-                "If you are not using dask-cuda workers, this may indicate "
-                "that your workflow requires dask-cuda spilling.\n\n"
+                "See the split_row_groups argument in the read_parquet "
+                "documentation.\n\n"
                 "Original Error: " + str(err)
             )
             raise err
@@ -407,14 +405,14 @@ def read_parquet(path, columns=None, **kwargs):
     # Set "check_file_size" option to determine whether we
     # should check the parquet-file size. This check is meant
     # to "protect" users from `split_row_groups` default changes
-    check_file_size = kwargs.pop("check_file_size", 2_000_000_000)
+    check_file_size = kwargs.pop("check_file_size", 500_000_000)
     if (
         check_file_size
         and ("split_row_groups" not in kwargs)
         and ("chunksize" not in kwargs)
     ):
         # User is not specifying `split_row_groups` or `chunksize`,
-        # so we should warn them if/when a file is ~>2GB on disk.
+        # so we should warn them if/when a file is ~>0.5GB on disk.
         # The will be able to set `split_row_groups` explicitly to
         # silence/skip this check
         if "read" not in kwargs:
