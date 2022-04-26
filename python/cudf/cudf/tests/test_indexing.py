@@ -981,7 +981,13 @@ def test_series_setitem_iloc(key, value, nulls):
 @pytest.mark.parametrize(
     "key, value",
     [
-        (0, 0.5),
+        pytest.param(
+            0,
+            0.5,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/9913"
+            ),
+        ),
         ([0, 1], 0.5),
         ([0, 1], [0.5, 2.5]),
         (slice(0, 2), [0.5, 0.25]),
