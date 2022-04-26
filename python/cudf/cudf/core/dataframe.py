@@ -395,9 +395,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                             self._frame[col].loc[key[0]] = value[:, i]
                 else:
                     # handle cases where value is 1d object:
-                    # If the value is a range object or if the column axis
-                    # key is 0d, the indexed object is a series; therefore
-                    # the 1d array is assigned to the series along the column.
+                    # If the key on column axis is a scalar, we indexed a single column; 
+                    # The 1d value should assign along the columns.
                     if is_scalar(key[1]):
                         for col in columns_df._column_names:
                             self._frame[col].loc[key[0]] = value
