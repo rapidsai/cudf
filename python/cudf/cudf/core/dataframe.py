@@ -390,8 +390,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     )
 
             else:
-                value = np.array(value)
-                if np.ndim(value) == 2:
+                value = cupy.asarray(value)
+                if cupy.ndim(value) == 2:
                     indexed_shape = self._frame.loc[key].shape
                     if value.shape != indexed_shape:
                         raise ValueError(
@@ -528,8 +528,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             # TODO: consolidate code path with identical counterpart
             # in `_DataFrameLocIndexer._setitem_tuple_arg`
-            value = np.array(value)
-            if np.ndim(value) == 2:
+            value = cupy.asarray(value)
+            if cupy.ndim(value) == 2:
                 indexed_shape = self._frame.iloc[key].shape
                 if value.shape != indexed_shape:
                     raise ValueError(
