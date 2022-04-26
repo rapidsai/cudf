@@ -1064,11 +1064,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
-            output = (
+            output = repr(
                 preprocess.astype("O")
                 .fillna(cudf._NA_REP)
                 .to_pandas()
-                .__repr__()
             )
         elif isinstance(
             preprocess._column, cudf.core.column.CategoricalColumn
@@ -1111,7 +1110,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 na_rep=cudf._NA_REP,
             )
         else:
-            output = preprocess.to_pandas().__repr__()
+            output = repr(preprocess.to_pandas())
 
         lines = output.split("\n")
 
