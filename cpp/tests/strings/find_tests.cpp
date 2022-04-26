@@ -85,20 +85,19 @@ TEST_F(StringsFindTest, Contains)
 TEST_F(StringsFindTest, ContainsLongStrings)
 {
   cudf::test::strings_column_wrapper strings(
-    {"Héllo, there world and goodbye!!!",
-     "quick brown fox jumped over the lazy brown dog",
-     "the fat cats jump in place without moving",
-     "following code snippet demonstrates how to use search for values in the ordered range",
+    {"Héllo, there world and goodbye",
+     "quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving",
+     "the following code snippet demonstrates how to use search for values in an ordered range",
      "it returns the last position where value could be inserted without violating the ordering",
-     "algorithms execution is parallelized as determined by the exec",
+     "algorithms execution is parallelized as determined by the executive",
      ""});
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::contains(strings_view, cudf::string_scalar("e"));
-  cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 1, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 1, 1, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
   results = cudf::strings::contains(strings_view, cudf::string_scalar(" the "));
-  cudf::test::fixed_width_column_wrapper<bool> expected2({0, 1, 0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> expected2({0, 1, 0, 1, 1, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected2);
 }
 
