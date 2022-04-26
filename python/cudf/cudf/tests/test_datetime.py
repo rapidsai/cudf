@@ -1551,19 +1551,14 @@ def test_date_range_end_freq_periods(end, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
+        if "nanoseconds" in freq:
+            pytest.xfail("https://github.com/pandas-dev/pandas/issues/46877")
         _gfreq = cudf.DateOffset(**freq)
         _pfreq = pd.DateOffset(**freq)
 
     expect = pd.date_range(end=end, periods=periods, freq=_pfreq, name="a")
     got = cudf.date_range(end=end, periods=periods, freq=_gfreq, name="a")
-    print(end, periods, freq)
-    if (
-        periods == 100
-        and isinstance(freq, dict)
-        and freq.get("nanoseconds") == 3
-    ):
-        # import pdb;pdb.set_trace()
-        print("YES")
+
     np.testing.assert_allclose(
         expect.to_numpy().astype("int64"),
         got.to_pandas().to_numpy().astype("int64"),
