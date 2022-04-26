@@ -237,7 +237,7 @@ class ListDtype(_BaseDtype):
 
     def __repr__(self):
         if isinstance(self.element_type, (ListDtype, StructDtype)):
-            return f"{type(self).__name__}({self.element_type.__repr__()})"
+            return f"{type(self).__name__}({repr(self.element_type)})"
         else:
             return f"{type(self).__name__}({self.element_type})"
 
