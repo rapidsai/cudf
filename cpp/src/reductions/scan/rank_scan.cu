@@ -102,7 +102,7 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
     mr);
 }
 
-std::unique_ptr<column> inclusive_min_0_indexed_percent_rank_scan(
+std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
   column_view const& order_by, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   auto const rank_column =

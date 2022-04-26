@@ -175,6 +175,7 @@ std::unique_ptr<column> dense_rank_scan(column_view const& grouped_values,
  * @brief Convert groupwise rank to groupwise percentage rank
  *
  * @param method rank method
+ * @param percentage enum to denote the type of conversion ranks to percentage in range (0,1]
  * @param rank Groupwise rank column
  * @param count Groupwise count column
  * @param group_labels ID of group that the corresponding value belongs to
@@ -184,7 +185,8 @@ std::unique_ptr<column> dense_rank_scan(column_view const& grouped_values,
  * @return Column of type double of rank values
 
  */
-std::unique_ptr<column> group_rank_to_percentage(rank_method method,
+std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
+                                                 rank_percentage const percentage,
                                                  column_view const& rank,
                                                  column_view const& count,
                                                  device_span<size_type const> group_labels,

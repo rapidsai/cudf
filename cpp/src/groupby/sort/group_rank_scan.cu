@@ -266,7 +266,8 @@ std::unique_ptr<column> dense_rank_scan(column_view const& grouped_values,
     mr);
 }
 
-std::unique_ptr<column> group_rank_to_percentage(rank_method method,
+std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
+                                                 rank_percentage const percentage,
                                                  column_view const& rank,
                                                  column_view const& count,
                                                  device_span<size_type const> group_labels,
@@ -282,7 +283,8 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method method,
     thrust::tabulate(rmm::exec_policy(stream),
                      mutable_ranks.begin<double>(),
                      mutable_ranks.end<double>(),
-                     [is_double = rank.type().id() == type_id::FLOAT64,
+                     [percentage,
+                      is_double = rank.type().id() == type_id::FLOAT64,
                       dcount    = count.begin<size_type>(),
                       labels    = group_labels.begin(),
                       offsets   = group_offsets.begin(),
@@ -292,34 +294,25 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method method,
                        auto const count = dcount[labels[row_index]];
                        size_type const last_rank_index = offsets[labels[row_index]] + count - 1;
                        auto const last_rank            = s_rank[last_rank_index];
-                       return r / last_rank;
-                     });
-  } else if (method == rank_method::MIN_0_INDEXED) {
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<double>(),
-                     mutable_ranks.end<double>(),
-                     [is_double = rank.type().id() == type_id::FLOAT64,
-                      dcount    = count.begin<size_type>(),
-                      labels    = group_labels.begin(),
-                      d_rank    = rank.begin<double>(),
-                      s_rank = rank.begin<size_type>()] __device__(size_type row_index) -> double {
-                       double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
-                       auto const count = dcount[labels[row_index]];
-                       return (r - 1) / (count - 1);
+                       return percentage == rank_percentage::ZERO_NORMALIZED
+                                ? r / last_rank
+                                : (r - 1) / (last_rank - 1);
                      });
   } else {
-    thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_ranks.begin<double>(),
-                     mutable_ranks.end<double>(),
-                     [is_double = rank.type().id() == type_id::FLOAT64,
-                      dcount    = count.begin<size_type>(),
-                      labels    = group_labels.begin(),
-                      d_rank    = rank.begin<double>(),
-                      s_rank = rank.begin<size_type>()] __device__(size_type row_index) -> double {
-                       double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
-                       auto const count = dcount[labels[row_index]];
-                       return r / count;
-                     });
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      mutable_ranks.begin<double>(),
+      mutable_ranks.end<double>(),
+      [percentage,
+       is_double = rank.type().id() == type_id::FLOAT64,
+       dcount    = count.begin<size_type>(),
+       labels    = group_labels.begin(),
+       d_rank    = rank.begin<double>(),
+       s_rank    = rank.begin<size_type>()] __device__(size_type row_index) -> double {
+        double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
+        auto const count = dcount[labels[row_index]];
+        return percentage == rank_percentage::ZERO_NORMALIZED ? r / count : (r - 1) / (count - 1);
+      });
   }
   return ranks;
 }

@@ -43,7 +43,7 @@ using percent_result_col = fixed_width_column_wrapper<double>;
 auto const rank         = cudf::make_rank_aggregation<scan_aggregation>(cudf::rank_method::MIN);
 auto const dense_rank   = cudf::make_rank_aggregation<scan_aggregation>(cudf::rank_method::DENSE);
 auto const percent_rank = cudf::make_rank_aggregation<scan_aggregation>(
-  cudf::rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true);
+  cudf::rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED);
 
 auto constexpr INCLUSIVE_SCAN = cudf::scan_type::INCLUSIVE;
 auto constexpr INCLUDE_NULLS  = cudf::null_policy::INCLUDE;

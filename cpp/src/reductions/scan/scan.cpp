@@ -37,11 +37,13 @@ std::unique_ptr<column> scan(column_view const& input,
                  "Rank aggregation operator requires an inclusive scan");
     auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(*agg);
     if (rank_agg._method == rank_method::MIN) {
-      return inclusive_rank_scan(input, rmm::cuda_stream_default, mr);
+      if (rank_agg._percentage == rank_percentage::NONE) {
+        return inclusive_rank_scan(input, rmm::cuda_stream_default, mr);
+      } else if (rank_agg._percentage == rank_percentage::ONE_NORMALIZED) {
+        return inclusive_one_normalized_percent_rank_scan(input, rmm::cuda_stream_default, mr);
+      }
     } else if (rank_agg._method == rank_method::DENSE) {
       return inclusive_dense_rank_scan(input, rmm::cuda_stream_default, mr);
-    } else if (rank_agg._method == rank_method::MIN_0_INDEXED) {
-      return inclusive_min_0_indexed_percent_rank_scan(input, rmm::cuda_stream_default, mr);
     }
     CUDF_FAIL("Unsupported rank aggregation method for inclusive scan");
   }

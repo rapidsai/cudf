@@ -640,7 +640,7 @@ class rank_aggregation final : public rolling_aggregation,
                    order column_order,
                    null_policy null_handling,
                    null_order null_precedence,
-                   bool percentage)
+                   rank_percentage percentage)
     : aggregation{RANK},
       _method{method},
       _column_order{column_order},
@@ -648,14 +648,12 @@ class rank_aggregation final : public rolling_aggregation,
       _null_precedence{null_precedence},
       _percentage(percentage)
   {
-    if (_method == rank_method::MIN_0_INDEXED)
-      CUDF_EXPECTS(_percentage, "Only percentage rank is supported for min 0-indexed rank method.");
   }
   rank_method const _method;          ///< rank method
   order const _column_order;          ///< order of the column to rank
   null_policy const _null_handling;   ///< include or exclude nulls in ranks
   null_order const _null_precedence;  ///< order of nulls in ranks
-  bool const _percentage;             ///< whether to return percentage ranks
+  rank_percentage const _percentage;  ///< whether to return percentage ranks
 
   [[nodiscard]] bool is_equal(aggregation const& _other) const override
   {
@@ -688,7 +686,8 @@ class rank_aggregation final : public rolling_aggregation,
     return std::hash<int>{}(static_cast<int>(_method)) ^
            std::hash<int>{}(static_cast<int>(_column_order)) ^
            std::hash<int>{}(static_cast<int>(_null_handling)) ^
-           std::hash<int>{}(static_cast<int>(_null_precedence)) ^ std::hash<bool>{}(_percentage);
+           std::hash<int>{}(static_cast<int>(_null_precedence)) ^
+           std::hash<int>{}(static_cast<int>(_percentage));
   }
 };
 

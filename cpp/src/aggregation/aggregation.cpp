@@ -626,28 +626,29 @@ std::unique_ptr<Base> make_rank_aggregation(rank_method method,
                                             order column_order,
                                             null_policy null_handling,
                                             null_order null_precedence,
-                                            bool percentage)
+                                            rank_percentage percentage)
 {
   return std::make_unique<detail::rank_aggregation>(
     method, column_order, null_handling, null_precedence, percentage);
 }
-template std::unique_ptr<aggregation> make_rank_aggregation<aggregation>(rank_method method,
-                                                                         order column_order,
-                                                                         null_policy null_handling,
-                                                                         null_order null_precedence,
-                                                                         bool percentage);
+template std::unique_ptr<aggregation> make_rank_aggregation<aggregation>(
+  rank_method method,
+  order column_order,
+  null_policy null_handling,
+  null_order null_precedence,
+  rank_percentage percentage);
 template std::unique_ptr<groupby_scan_aggregation> make_rank_aggregation<groupby_scan_aggregation>(
   rank_method method,
   order column_order,
   null_policy null_handling,
   null_order null_precedence,
-  bool percentage);
+  rank_percentage percentage);
 template std::unique_ptr<scan_aggregation> make_rank_aggregation<scan_aggregation>(
   rank_method method,
   order column_order,
   null_policy null_handling,
   null_order null_precedence,
-  bool percentage);
+  rank_percentage percentage);
 
 /// Factory to create a COLLECT_LIST aggregation
 template <typename Base>

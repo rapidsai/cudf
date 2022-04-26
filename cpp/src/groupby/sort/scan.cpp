@@ -149,7 +149,6 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
       case rank_method::DENSE: return detail::dense_rank_scan;
       case rank_method::MIN: return detail::min_rank_scan;
       case rank_method::MAX: return detail::max_rank_scan;
-      case rank_method::MIN_0_INDEXED: return detail::min_rank_scan;
       default: CUDF_FAIL("Unsupported rank method in groupby scan");
     }
   }();
@@ -159,7 +158,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                           helper.group_offsets(stream),
                           stream,
                           rmm::mr::get_current_device_resource());
-  if (rank_agg._percentage) {
+  if (rank_agg._percentage != rank_percentage::NONE) {
     auto count = get_grouped_values().nullable() and rank_agg._null_handling == null_policy::EXCLUDE
                    ? detail::group_count_valid(get_grouped_values(),
                                                helper.group_labels(stream),
@@ -171,6 +170,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                                              stream,
                                              rmm::mr::get_current_device_resource());
     result     = detail::group_rank_to_percentage(rank_agg._method,
+                                              rank_agg._percentage,
                                               *result,
                                               *count,
                                               helper.group_labels(stream),

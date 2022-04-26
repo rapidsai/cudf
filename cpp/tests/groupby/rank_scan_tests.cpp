@@ -59,14 +59,15 @@ inline void test_rank_scans(column_view const& keys,
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE),
     null_policy::INCLUDE,
     sorted::YES);
-  test_single_scan(keys,
-                   order,
-                   keys,
-                   expected_percent_rank,
-                   make_rank_aggregation<groupby_scan_aggregation>(
-                     rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true),
-                   null_policy::INCLUDE,
-                   sorted::YES);
+  test_single_scan(
+    keys,
+    order,
+    keys,
+    expected_percent_rank,
+    make_rank_aggregation<groupby_scan_aggregation>(
+      rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED),
+    null_policy::INCLUDE,
+    sorted::YES);
 }
 
 struct groupby_rank_scan_test : public BaseFixture {
@@ -250,7 +251,7 @@ TYPED_TEST(typed_groupby_rank_scan_test, mixedStructs)
   requests[0].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE));
   requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
-    rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true));
+    rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED));
 
   groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
   auto [result_keys, agg_results] = gb_obj.scan(requests);
@@ -297,14 +298,14 @@ TYPED_TEST(typed_groupby_rank_scan_test, nestedStructs)
   requests[0].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
   requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
-    rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true));
+    rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED));
   requests[1].values = *flat_struct;
   requests[1].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
   requests[1].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
   requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
-    rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true));
+    rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED));
 
   groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
   auto [result_keys, agg_results] = gb_obj.scan(requests);
@@ -354,14 +355,14 @@ TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
   requests[0].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE));
   requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
-    rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true));
+    rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED));
   requests[1].values = *definitely_null_structs;
   requests[1].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE, {}, null_policy::INCLUDE));
   requests[1].aggregations.push_back(
     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN, {}, null_policy::INCLUDE));
   requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(
-    rank_method::MIN_0_INDEXED, {}, null_policy::INCLUDE, {}, true));
+    rank_method::MIN, {}, null_policy::INCLUDE, {}, rank_percentage::ONE_NORMALIZED));
 
   groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
   auto [result_keys, agg_results] = gb_obj.scan(requests);

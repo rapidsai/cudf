@@ -122,7 +122,8 @@ struct empty_column_constructor {
 
     if constexpr (k == aggregation::Kind::RANK) {
       auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
-      if (rank_agg._method == cudf::rank_method::AVERAGE or rank_agg._percentage)
+      if (rank_agg._method == cudf::rank_method::AVERAGE or
+          rank_agg._percentage != rank_percentage::NONE)
         return make_empty_column(type_to_id<double>());
       return make_empty_column(target_type(values.type(), k));
     }
