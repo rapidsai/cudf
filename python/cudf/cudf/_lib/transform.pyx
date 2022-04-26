@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 from numba.np import numpy_support
@@ -25,9 +25,9 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
+    columns_from_unique_ptr,
     data_from_table_view,
-    data_from_unique_ptr,
-    table_view_from_table,
+    table_view_from_columns,
 )
 
 
@@ -123,21 +123,15 @@ def transform(Column input, op):
     return Column.from_unique_ptr(move(c_output))
 
 
-def table_encode(input):
-    cdef table_view c_input = table_view_from_table(
-        input, ignore_index=True)
+def table_encode(list source_columns):
+    cdef table_view c_input = table_view_from_columns(source_columns)
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result
 
     with nogil:
         c_result = move(libcudf_transform.encode(c_input))
 
-    return (
-        *data_from_unique_ptr(
-            move(c_result.first),
-            column_names=input._column_names,
-        ),
-        Column.from_unique_ptr(move(c_result.second))
-    )
+    return columns_from_unique_ptr(
+        move(c_result.first)), Column.from_unique_ptr(move(c_result.second))
 
 
 def one_hot_encode(Column input_column, Column categories):

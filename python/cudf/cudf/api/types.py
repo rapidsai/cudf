@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections import abc
 from functools import wraps
 from inspect import isclass
 from typing import List, Union
@@ -174,7 +174,7 @@ def is_list_like(obj):
     bool
         Return True if given object is list-like.
     """
-    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
+    return isinstance(obj, (abc.Sequence, np.ndarray)) and not isinstance(
         obj, (str, bytes)
     )
 

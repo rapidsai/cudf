@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -31,7 +31,7 @@ from cudf._lib.cpp.types cimport (
     order_info,
     sorted,
 )
-from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def quantile(
@@ -74,14 +74,13 @@ def quantile(
     return Column.from_unique_ptr(move(c_result))
 
 
-def quantiles(source_table,
+def quantiles(list source_columns,
               vector[double] q,
               object interp,
               object is_input_sorted,
               list column_order,
               list null_precedence):
-    cdef table_view c_input = table_view_from_table(
-        source_table, ignore_index=True)
+    cdef table_view c_input = table_view_from_columns(source_columns)
     cdef vector[double] c_q = q
     cdef interpolation c_interp = <interpolation>(
         <underlying_type_t_interpolation> interp
@@ -119,7 +118,4 @@ def quantiles(source_table,
             )
         )
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names
-    )
+    return columns_from_unique_ptr(move(c_result))

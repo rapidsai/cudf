@@ -1,7 +1,6 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
-import datetime as dt
 import operator
 import re
 
@@ -220,8 +219,8 @@ def test_sort_datetime():
 
 def test_issue_165():
     df_pandas = pd.DataFrame()
-    start_date = dt.datetime.strptime("2000-10-21", "%Y-%m-%d")
-    data = [(start_date + dt.timedelta(days=x)) for x in range(6)]
+    start_date = datetime.datetime.strptime("2000-10-21", "%Y-%m-%d")
+    data = [(start_date + datetime.timedelta(days=x)) for x in range(6)]
     df_pandas["dates"] = data
     df_pandas["num"] = [1, 2, 3, 4, 5, 6]
     df_cudf = DataFrame.from_pandas(df_pandas)
