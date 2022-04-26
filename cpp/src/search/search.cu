@@ -273,29 +273,31 @@ struct multi_contains_dispatch {
       return result;
     }
 
-    auto const hash_set        = cudf::detail::unordered_multiset<Element>::create(needles, stream);
+    auto hash_set              = cudf::detail::unordered_multiset<Element>::create(needles, stream);
     auto const device_hash_set = hash_set.to_device();
 
     auto const d_haystack_ptr = column_device_view::create(haystack, stream);
     auto const d_haystack     = *d_haystack_ptr;
 
     if (haystack.has_nulls()) {
-      thrust::transform(rmm::exec_policy(stream),
-                        thrust::make_counting_iterator<size_type>(0),
-                        thrust::make_counting_iterator<size_type>(haystack.size()),
-                        out_begin,
-                        [device_hash_set, d_haystack] __device__(size_t index) {
-                          return d_haystack.is_null_nocheck(index) ||
-                                 device_hash_set.contains(d_haystack.element<Element>(index));
-                        });
+      thrust::transform(
+        rmm::exec_policy(stream),
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(haystack.size()),
+        out_begin,
+        [device_hash_set, d_haystack] __device__(size_t index) {
+          return d_haystack.is_null_nocheck(index) ||
+                 device_hash_set.contains(d_haystack.template element<Element>(index));
+        });
     } else {
-      thrust::transform(rmm::exec_policy(stream),
-                        thrust::make_counting_iterator<size_type>(0),
-                        thrust::make_counting_iterator<size_type>(haystack.size()),
-                        out_begin,
-                        [device_hash_set, d_haystack] __device__(size_t index) {
-                          return device_hash_set.contains(d_haystack.element<Element>(index));
-                        });
+      thrust::transform(
+        rmm::exec_policy(stream),
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(haystack.size()),
+        out_begin,
+        [device_hash_set, d_haystack] __device__(size_t index) {
+          return device_hash_set.contains(d_haystack.template element<Element>(index));
+        });
     }
 
     return result;
