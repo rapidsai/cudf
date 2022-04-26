@@ -256,6 +256,7 @@ struct list_child_constructor {
 
         if (child_strings_column.is_null(strings_offset)) { return string_view{nullptr, 0}; }
         auto const d_str = child_strings_column.template element<string_view>(strings_offset);
+        // ensure a string from an all-empty column is not mapped to the null placeholder
         return d_str.empty() ? string_view{} : d_str;
       });
 
