@@ -201,12 +201,12 @@ python_cudf_function_map = {
     'log': ASTOperator.LOG,
     'sqrt': ASTOperator.SQRT,
     'abs': ASTOperator.ABS,
+    'ceil': ASTOperator.CEIL,
+    'floor': ASTOperator.FLOOR,
 
     # TODO: Operators supported by libcudf with no Python function analog.
     # ast.rint: ASTOperator.RINT,
     # ast.cbrt: ASTOperator.CBRT,
-    # ast.ceil: ASTOperator.CEIL,
-    # ast.floor: ASTOperator.FLOOR,
 }
 
 

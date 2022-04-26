@@ -9303,6 +9303,8 @@ def df_eval():
         ("a & b | c", int),
         ("sin(a)", float),
         ("exp(sin(abs(a)))", float),
+        ("floor(sin(a))", float),
+        ("ceil(sin(a))", float),
         ("(a + b) - (c * d)", int),
         ("~a", int),
         ("(a > b) and (c > d)", int),
@@ -9320,6 +9322,7 @@ def df_eval():
             """,
             float,
         ),
+        ("a_b_are_equal = (a == b)", int),
     ],
 )
 def test_dataframe_eval(df_eval, expr, dtype):
@@ -9339,10 +9342,16 @@ def test_dataframe_eval(df_eval, expr, dtype):
         assert_eq(pdf_eval, df_eval)
 
 
-def test_dataframe_eval_errors(df_eval):
-    expr = """
-    e = a + b
-    a == b
-    """
+@pytest.mark.parametrize(
+    "expr",
+    [
+        """
+        e = a + b
+        a == b
+        """,
+        "a_b_are_equal = (a == b) = c",
+    ],
+)
+def test_dataframe_eval_errors(df_eval, expr):
     with pytest.raises(ValueError):
         df_eval.eval(expr)

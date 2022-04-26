@@ -6348,9 +6348,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         includes_assignment = re.search("[^=]=[^=]", expr) is not None
 
         # Check if there were multiple statements. Filter out empty lines.
-        exprs = tuple(filter(None, expr.strip().split("\n")))
-        if len(exprs) > 1 and not all(
-            re.search("[^=]=[^=]", e) is not None for e in exprs
+        statements = tuple(filter(None, expr.strip().split("\n")))
+        if len(statements) > 1 and not all(
+            re.search("[^=]=[^=]", e) is not None for e in statements
         ):
             raise ValueError(
                 "Multi-line expressions are only valid if all expressions "
@@ -6365,14 +6365,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return Series._from_data(
                 {
                     None: libcudf.transform.compute_column(
-                        [*self._columns], self._column_names, exprs[0]
+                        [*self._columns], self._column_names, statements[0]
                     )
                 }
             )
 
-        targets, exprs = zip(
-            *((s.strip() for s in e.split("=")) for e in exprs)
-        )
+        targets = []
+        exprs = []
+        for st in statements:
+            try:
+                t, e = re.split("[^=]=[^=]", st)
+            except ValueError as err:
+                if "too many values" in str(err):
+                    raise ValueError(
+                        f"Statement {st} contains too many assignments ('=')"
+                    )
+                raise
+            targets.append(t.strip())
+            exprs.append(e.strip())
 
         cols = (
             libcudf.transform.compute_column(
