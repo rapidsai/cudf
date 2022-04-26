@@ -7647,7 +7647,7 @@ def test_dataframe_init_from_series_list_with_index(
 )
 def test_dataframe_init_from_series_list_with_index_error(data, index):
     gd_data = [cudf.from_pandas(obj) for obj in data]
-    # import pdb; pdb.set_trace()
+
     assert_exceptions_equal(
         pd.DataFrame,
         cudf.DataFrame,

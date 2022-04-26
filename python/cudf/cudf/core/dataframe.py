@@ -715,11 +715,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         f"Length of values ({data_length}) does "
                         f"not match length of index ({index_length})"
                     )
-                    # raise ValueError(
-                    #     f"Shape of passed values is "
-                    #     f"{(data_length, len(data[0]))}, "
-                    #     f"indices imply {(index_length, len(data[0]))}"
-                    # )
 
             final_index = as_index(index)
 
