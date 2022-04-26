@@ -4,8 +4,8 @@ import numpy as np
 from numba.np import numpy_support
 
 import cudf
-from cudf._lib.expressions import parse_expression
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
+from cudf.core._internals.expressions import parse_expression
 from cudf.core.buffer import Buffer
 from cudf.utils import cudautils
 
