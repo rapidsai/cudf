@@ -300,8 +300,6 @@ TEST_F(Distinct, StructOfStruct)
 
   auto sliced_result        = cudf::distinct(sliced_input, {1});
   auto sorted_sliced_result = cudf::sort_by_key(*sliced_result, sliced_result->select({0}));
-  cudf::test::print(sorted_sliced_result->get_column(1));
-  cudf::test::print(sliced_expect->get_column(1));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sliced_expect->get_column(1), sorted_sliced_result->get_column(1));
 }
 
