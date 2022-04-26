@@ -2206,7 +2206,7 @@ class IndexedFrame(Frame):
         Optional[cudf.BaseIndex],
     ]:
         raise NotImplementedError(
-            "Binary operations are not supported for {self.__class__}"
+            f"Binary operations are not supported for {self.__class__}"
         )
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):

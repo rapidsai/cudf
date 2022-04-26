@@ -726,7 +726,7 @@ def test_dataframe_take(ntake):
 
 
 @pytest.mark.parametrize("ntake", [1, 2, 8, 9])
-def test_dataframe_take_with_multiIndex(ntake):
+def test_dataframe_take_with_multiindex(ntake):
     np.random.seed(0)
     df = cudf.DataFrame(
         index=cudf.MultiIndex(

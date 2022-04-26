@@ -173,10 +173,10 @@ cdef class DeviceScalar:
         if self.value is cudf.NA:
             return (
                 f"{self.__class__.__name__}"
-                f"({self.value}, {self.dtype.__repr__()})"
+                f"({self.value}, {repr(self.dtype)})"
             )
         else:
-            return f"{self.__class__.__name__}({self.value.__repr__()})"
+            return f"{self.__class__.__name__}({repr(self.value)})"
 
     @staticmethod
     cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr, dtype=None):

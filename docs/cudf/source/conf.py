@@ -46,9 +46,12 @@ extensions = [
     "numpydoc",
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
-    "nbsphinx",
     "PandasCompat",
+    "myst_nb",
 ]
+
+jupyter_execute_notebooks = "force"
+execution_timeout = 300
 
 copybutton_prompt_text = ">>> "
 autosummary_generate = True
