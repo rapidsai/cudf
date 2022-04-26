@@ -39,7 +39,7 @@ class IntervalColumn(StructColumn):
         return self._closed
 
     @classmethod
-    def from_arrow(self, data):
+    def from_arrow(cls, data):
         new_col = super().from_arrow(data.storage)
         size = len(data)
         dtype = IntervalDtype.from_arrow(data.type)
