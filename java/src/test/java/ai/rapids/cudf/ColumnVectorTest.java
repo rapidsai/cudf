@@ -6284,4 +6284,19 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, actual);
     }
   }
+
+  @Test
+  void testGenerateListOffsets() {
+    try (ColumnVector index = ColumnVector.fromInts(1, 3, 3, 0, 2, 0, 0, 5, 10, 25);
+         ColumnVector actual = index.generateListOffsets();
+         ColumnVector expected = ColumnVector.fromInts(0, 1, 4, 7, 7, 9, 9, 9, 14, 24, 49)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    try (ColumnVector index = ColumnVector.fromInts(0, 0, 1, 0, 0);
+         ColumnVector actual = index.generateListOffsets();
+         ColumnVector expected = ColumnVector.fromInts(0, 0, 0, 1, 1, 1)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
 }
