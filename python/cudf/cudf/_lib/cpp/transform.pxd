@@ -7,9 +7,9 @@ from libcpp.string cimport string
 
 from rmm._lib.device_buffer cimport device_buffer
 
-from cudf._lib.cpp.ast cimport expression
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.expressions cimport expression
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type

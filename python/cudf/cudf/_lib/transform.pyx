@@ -4,7 +4,7 @@ import numpy as np
 from numba.np import numpy_support
 
 import cudf
-from cudf._lib.ast import parse_expression
+from cudf._lib.expressions import parse_expression
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from cudf.core.buffer import Buffer
 from cudf.utils import cudautils
@@ -19,14 +19,14 @@ from libcpp.utility cimport move
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 cimport cudf._lib.cpp.transform as libcudf_transform
-from cudf._lib.ast cimport Expression
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.ast cimport expression
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.expressions cimport expression
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
+from cudf._lib.expressions cimport Expression
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,

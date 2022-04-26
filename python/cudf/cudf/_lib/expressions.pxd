@@ -3,7 +3,12 @@
 from libc.stdint cimport int32_t, int64_t
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.ast cimport column_reference, expression, literal, operation
+from cudf._lib.cpp.expressions cimport (
+    column_reference,
+    expression,
+    literal,
+    operation,
+)
 from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
 
 ctypedef enum scalar_type_t:
