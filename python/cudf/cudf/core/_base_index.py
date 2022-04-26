@@ -118,7 +118,7 @@ class BaseIndex(Serializable):
 
         See Also
         --------
-        cudf.core.multiindex.MultiIndex.get_level_values : Get values for
+        cudf.MultiIndex.get_level_values : Get values for
             a level of a MultiIndex.
 
         Notes

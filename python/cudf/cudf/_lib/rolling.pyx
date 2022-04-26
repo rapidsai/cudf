@@ -1,6 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
-from __future__ import print_function
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import pandas as pd
 

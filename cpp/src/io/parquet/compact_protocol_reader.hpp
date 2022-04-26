@@ -18,6 +18,8 @@
 
 #include "parquet.hpp"
 
+#include <thrust/optional.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <string>
@@ -137,6 +139,7 @@ class CompactProtocolReader {
   friend class ParquetFieldBool;
   friend class ParquetFieldInt8;
   friend class ParquetFieldInt32;
+  friend class ParquetFieldOptionalInt32;
   friend class ParquetFieldInt64;
   template <typename T>
   friend class ParquetFieldStructListFunctor;
@@ -206,6 +209,27 @@ class ParquetFieldInt32 {
 
  public:
   ParquetFieldInt32(int f, int32_t& v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    val = cpr->get_i32();
+    return (field_type != ST_FLD_I32);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to set value to optional 32 bit integer read from CompactProtocolReader
+ *
+ * @return True if field type is not int32
+ */
+class ParquetFieldOptionalInt32 {
+  int field_val;
+  thrust::optional<int32_t>& val;
+
+ public:
+  ParquetFieldOptionalInt32(int f, thrust::optional<int32_t>& v) : field_val(f), val(v) {}
 
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
