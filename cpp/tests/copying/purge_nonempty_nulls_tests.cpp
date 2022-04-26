@@ -53,10 +53,11 @@ struct SanitizedGatherTest : public cudf::test::BaseFixture {
 
   /// Verify that the result of `sanitize()` is equivalent to the unsanitized input,
   /// except that the null rows are also empty.
-  void test_sanitize(cudf::column_view const& unsanitized)
+  template <typename ColumnViewT>
+  void test_sanitize(ColumnViewT const& unsanitized)
   {
     auto const sanitized = cudf::purge_nonempty_nulls(unsanitized);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(unsanitized, *sanitized);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(unsanitized.parent(), *sanitized);
     EXPECT_FALSE(cudf::has_nonempty_nulls(*sanitized));
   }
 };
@@ -78,7 +79,7 @@ TEST_F(SanitizedGatherTest, SingleLevelList)
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
-  test_sanitize(*input);
+  test_sanitize(lists_column_view{*input});
 
   {
     // Selecting all rows from input, in different order.
@@ -160,7 +161,7 @@ TEST_F(SanitizedGatherTest, TwoLevelList)
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
-  test_sanitize(*input);
+  test_sanitize(lists_column_view{*input});
 
   {
     // Verify that gather() output is sanitized.
@@ -214,7 +215,7 @@ TEST_F(SanitizedGatherTest, ThreeLevelList)
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
-  test_sanitize(*input);
+  test_sanitize(lists_column_view{*input});
 
   {
     auto const results            = gather(input->view(), {100, 3, 0, 1});
@@ -267,7 +268,7 @@ TEST_F(SanitizedGatherTest, ListOfStrings)
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
 
-  test_sanitize(*input);
+  test_sanitize(lists_column_view{*input});
 
   {
     // Selecting all rows from input, in different order.
@@ -332,7 +333,7 @@ TEST_F(SanitizedGatherTest, UnsanitizedListOfUnsanitizedStrings)
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*strings));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*strings));
 
-  test_sanitize(*strings);
+  test_sanitize(strings_column_view{*strings});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     strings_column_view(*strings).offsets(), offsets_col_t{0, 1, 3, 4, 6, 7, 9, 10, 14, 15, 19}
@@ -353,7 +354,7 @@ TEST_F(SanitizedGatherTest, UnsanitizedListOfUnsanitizedStrings)
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*lists));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*lists));
 
-  test_sanitize(*lists);
+  test_sanitize(lists_column_view{*lists});
 
   // At this point,
   // 1. {"66", "7"} will be unsanitized.
@@ -403,7 +404,7 @@ TEST_F(SanitizedGatherTest, StructOfList)
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*structs_input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*structs_input));
 
-  test_sanitize(*structs_input);
+  test_sanitize(structs_column_view{*structs_input});
 
   // At this point, even though the structs column has a null at index 2,
   // the child column has a non-empty list row at index 2: {6, 7}.

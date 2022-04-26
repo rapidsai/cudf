@@ -17,7 +17,10 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
@@ -982,9 +985,9 @@ bool has_nonempty_nulls(column_view const& input);
 bool may_have_nonempty_nulls(column_view const& input);
 
 /**
- * @brief Copies `input`, purgin any non-empty null rows in the column or its descendants
+ * @brief Copies `input`, purging any non-empty null rows in the column or its descendants
  *
- * LIST and STRING columns might have null rows that are not also empty.
+ * LIST columns have null rows that are not also empty.
  * For example:
  * @code{.pseudo}
  *
@@ -1014,7 +1017,15 @@ bool may_have_nonempty_nulls(column_view const& input);
  * the contents of null rows purged
  */
 std::unique_ptr<column> purge_nonempty_nulls(
-  column_view const& input,
+  lists_column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<column> purge_nonempty_nulls(
+  structs_column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<column> purge_nonempty_nulls(
+  strings_column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */

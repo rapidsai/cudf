@@ -311,8 +311,11 @@ bool has_nonempty_nulls(column_view const& input,
 /**
  * @copydoc cudf::purge_nonempty_nulls
  *
+ * @tparam ColumnViewT Type of column view (E.g. lists_column_view, structs_column_view, or
+ * strings_column_view)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
+template <typename ColumnViewT>
 std::unique_ptr<column> purge_nonempty_nulls(
   column_view const& input,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,

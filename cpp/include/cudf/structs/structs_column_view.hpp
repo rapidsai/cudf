@@ -41,6 +41,11 @@ class structs_column_view : public column_view {
 
   explicit structs_column_view(column_view const& rhs);
 
+  /**
+   * @brief Returns the parent column.
+   */
+  [[nodiscard]] column_view parent() const;
+
   using column_view::child_begin;
   using column_view::child_end;
   using column_view::has_nulls;
