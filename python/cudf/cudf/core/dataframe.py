@@ -6031,9 +6031,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if (cols.get_indexer(other._data.to_pandas_index()) >= 0).all():
                 other = other.reindex(columns=cols)
 
-        return super(DataFrame, self)._append(
-            other, ignore_index, verify_integrity, sort
-        )
+        return super()._append(other, ignore_index, verify_integrity, sort)
 
     @_cudf_nvtx_annotate
     @copy_docstring(reshape.pivot)
