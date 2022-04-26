@@ -719,7 +719,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             final_index = as_index(index)
 
-        series_lengths = list(map(lambda x: len(x), data))
+        series_lengths = list(map(len, data))
         data = numeric_normalize_types(*data)
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
             # Calculating the final dataframe columns by
