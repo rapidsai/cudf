@@ -597,7 +597,9 @@ cdef class GroupbyScanAggregation:
                 (libcudf_types.null_order.BEFORE
                     if (na_option == "top") == ascending else
                     libcudf_types.null_order.AFTER),
-                pct
+                (libcudf_aggregation.rank_percentage.ZERO_NORMALIZED
+                    if pct else
+                    libcudf_aggregation.rank_percentage.NONE)
             ))
         return agg
 

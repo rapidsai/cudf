@@ -80,6 +80,11 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         MAX "cudf::rank_method::MAX"
         DENSE "cudf::rank_method::DENSE"
 
+    ctypedef enum rank_percentage:
+        NONE "cudf::rank_percentage::NONE"
+        ZERO_NORMALIZED "cudf::rank_percentage::ZERO_NORMALIZED"
+        ONE_NORMALIZED "cudf::rank_percentage::ONE_NORMALIZED"
+
     cdef unique_ptr[T] make_sum_aggregation[T]() except +
 
     cdef unique_ptr[T] make_product_aggregation[T]() except +
@@ -145,4 +150,4 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         order column_order,
         null_policy null_handling,
         null_order null_precedence,
-        bool percentage) except +
+        rank_percentage percentage) except +

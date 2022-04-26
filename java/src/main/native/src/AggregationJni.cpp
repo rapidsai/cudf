@@ -89,7 +89,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
                                              cudf::null_policy::INCLUDE);
         case 30: // ANSI SQL PERCENT_RANK
           return cudf::make_rank_aggregation(cudf::rank_method::MIN, {}, cudf::null_policy::INCLUDE,
-                                             {}, true);
+                                             {}, cudf::rank_percentage::ONE_NORMALIZED);
         default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
       }
     }();
