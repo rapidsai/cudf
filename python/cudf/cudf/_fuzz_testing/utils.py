@@ -312,13 +312,8 @@ def _preprocess_to_orc_tuple(df, arrow_table_schema):
         return tuple(values_list)
 
     has_nulls_or_nullable_dtype = any(
-        [
-            True
-            if df[col].dtype in pandas_dtypes_to_np_dtypes
-            or df[col].isnull().any()
-            else False
-            for col in df.columns
-        ]
+        df[col].dtype in pandas_dtypes_to_np_dtypes or df[col].isnull().any()
+        for col in df.columns
     )
     pdf = df.copy(deep=True)
     for field in arrow_table_schema:

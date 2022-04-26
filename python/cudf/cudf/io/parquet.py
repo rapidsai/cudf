@@ -56,7 +56,7 @@ def _write_parquet(
         "row_group_size_rows": row_group_size_rows,
         "partitions_info": partitions_info,
     }
-    if all([ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs]):
+    if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
             fsspec_objs = [stack.enter_context(file) for file in paths_or_bufs]
             file_objs = [
