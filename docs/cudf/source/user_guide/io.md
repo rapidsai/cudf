@@ -7,6 +7,8 @@ This page contains Input / Output related APIs in cuDF.
 The following table lists are compatible cudf types for each supported
 IO format.
 
+<div class="special-table-wrapper" style="overflow:auto">
+
 ```{eval-rst}
 .. table::
     :class: io-supported-types-table special-table
@@ -70,6 +72,9 @@ IO format.
     | decimal128            | ✅     | ✅     | ✅     | ✅     | ❌      | ❌     | ✅     | ✅     | ❌     | ❌      | ❌      | ❌     | ❌     | ❌      | ❌      |
     +-----------------------+--------+--------+--------+--------+---------+--------+--------+--------+--------+---------+---------+--------+--------+---------+---------+
 ```
+
+</div>
+
 
 **Notes:**
 
