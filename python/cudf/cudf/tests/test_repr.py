@@ -134,7 +134,7 @@ def test_integer_dataframe(x):
 @settings(deadline=None)
 def test_integer_series(x):
     sr = cudf.Series(x)
-    ps = cudf.utils.utils._create_pandas_series(data=x)
+    ps = pd.Series(data=x)
 
     assert sr.__repr__() == ps.__repr__()
 
@@ -151,7 +151,7 @@ def test_float_dataframe(x):
 @settings(deadline=None)
 def test_float_series(x):
     sr = cudf.Series(x, nan_as_null=False)
-    ps = cudf.utils.utils._create_pandas_series(data=x)
+    ps = pd.Series(data=x)
     assert sr.__repr__() == ps.__repr__()
 
 
@@ -1132,7 +1132,7 @@ def test_timedelta_index_repr(index, expected_repr):
     ],
 )
 @pytest.mark.parametrize("max_seq_items", [None, 1, 2, 5, 10, 100])
-def test_multiIndex_repr(pmi, max_seq_items):
+def test_multiindex_repr(pmi, max_seq_items):
     pd.set_option("display.max_seq_items", max_seq_items)
     gmi = cudf.from_pandas(pmi)
 
@@ -1377,7 +1377,7 @@ def test_multiIndex_repr(pmi, max_seq_items):
         ),
     ],
 )
-def test_multiIndex_null_repr(gdi, expected_repr):
+def test_multiindex_null_repr(gdi, expected_repr):
     actual_repr = gdi.__repr__()
 
     assert actual_repr.split() == expected_repr.split()

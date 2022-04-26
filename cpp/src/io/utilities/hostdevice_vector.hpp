@@ -93,6 +93,31 @@ class hostdevice_vector {
     return reinterpret_cast<T const*>(d_data.data()) + offset;
   }
 
+  /**
+   * @brief Returns the specified element from device memory
+   *
+   * @note This function incurs a device to host memcpy and should be used sparingly.
+   * @note This function synchronizes `stream`.
+   *
+   * @throws rmm::out_of_range exception if `element_index >= size()`
+   *
+   * @param element_index Index of the desired element
+   * @param stream The stream on which to perform the copy
+   * @return The value of the specified element
+   */
+  [[nodiscard]] T element(std::size_t element_index, rmm::cuda_stream_view stream) const
+  {
+    CUDF_EXPECTS(element_index < size(), "Attempt to access out of bounds element.");
+    T value;
+    CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
+                                  reinterpret_cast<T const*>(d_data.data()) + element_index,
+                                  sizeof(value),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
+    stream.synchronize();
+    return value;
+  }
+
   operator cudf::device_span<T>() { return {device_ptr(), max_elements}; }
   operator cudf::device_span<T const>() const { return {device_ptr(), max_elements}; }
 
