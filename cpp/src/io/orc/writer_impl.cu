@@ -1962,28 +1962,23 @@ struct string_length_functor {
   statistics_merge_group* stripe_stat_merge;
 };
 
-struct string_copy_functor {
-  __device__ inline void operator()(int const i) const
-  {
-    auto const min = i % 2 == 0;
-    auto const idx = i / 2;
-    if (stripe_stat_merge[idx].stats_dtype == dtype_string) {
-      auto& str_val =
-        min ? stripe_stat_chunks[idx].min_value.str_val : stripe_stat_chunks[idx].max_value.str_val;
+__global__ void copy_string_data(char* string_pool,
+                                 size_type* offsets,
+                                 statistics_chunk const* chunks,
+                                 statistics_merge_group const* groups)
+{
+  auto const idx = blockIdx.x / 2;
+  if (groups[idx].stats_dtype == dtype_string) {
+    auto const min = blockIdx.x % 2 == 0;
+    auto& str_val  = min ? chunks[idx].min_value.str_val : chunks[idx].max_value.str_val;
+    auto dst       = &string_pool[offsets[blockIdx.x]];
+    auto src       = str_val.ptr;
 
-      auto dst = &string_pool[offsets[i]];
-      cooperative_groups::memcpy_async(
-        cooperative_groups::this_thread_block(), dst, str_val.ptr, str_val.length);
-      str_val.ptr = dst;
+    for (int i = threadIdx.x; i < str_val.length; i += blockDim.x) {
+      dst[i] = src[i];
     }
   }
-
-  char* string_pool;
-  size_type* offsets;
-  rmm::cuda_stream_view stream;
-  statistics_chunk* stripe_stat_chunks;
-  statistics_merge_group* stripe_stat_merge;
-};
+}
 
 void writer::impl::persisted_statistics::persist(int num_table_rows,
                                                  bool single_write_mode,
@@ -2013,14 +2008,11 @@ void writer::impl::persisted_statistics::persist(int num_table_rows,
       // approach for now, but it is possible something fancier with breaking up each thread into
       // copying x bytes instead of a single string is the better method since we are dealing in
       // min/max strings they almost certainly will not be uniform length.
-      thrust::for_each(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator(0),
-                       thrust::make_counting_iterator(num_chunks * 2),
-                       string_copy_functor{string_pool.data(),
-                                           offsets.data(),
-                                           stream,
-                                           intermediate_stats.stripe_stat_chunks.data(),
-                                           intermediate_stats.stripe_stat_merge.device_ptr()});
+      copy_string_data<<<num_chunks * 2, 256, 0, stream.value()>>>(
+        string_pool.data(),
+        offsets.data(),
+        intermediate_stats.stripe_stat_chunks.data(),
+        intermediate_stats.stripe_stat_merge.device_ptr());
       string_pools.emplace_back(std::move(string_pool));
     }
   }
