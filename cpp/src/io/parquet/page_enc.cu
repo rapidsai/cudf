@@ -1663,9 +1663,7 @@ dremel_data get_dremel_data(column_view h_col,
     }
   }
 
-  std::unique_ptr<rmm::device_buffer> device_view_owners;
-  column_device_view* d_nesting_levels;
-  std::tie(device_view_owners, d_nesting_levels) =
+  auto [device_view_owners, d_nesting_levels] =
     contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
 
   thrust::exclusive_scan(
@@ -1735,10 +1733,7 @@ dremel_data get_dremel_data(column_view h_col,
     auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
 
     // Get empties at this level
-    rmm::device_uvector<size_type> empties(0, stream);
-    rmm::device_uvector<size_type> empties_idx(0, stream);
-    size_t empties_size;
-    std::tie(empties, empties_idx, empties_size) =
+    auto [empties, empties_idx, empties_size] =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
 
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
@@ -1819,10 +1814,7 @@ dremel_data get_dremel_data(column_view h_col,
     auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
 
     // Get empties at this level
-    rmm::device_uvector<size_type> empties(0, stream);
-    rmm::device_uvector<size_type> empties_idx(0, stream);
-    size_t empties_size;
-    std::tie(empties, empties_idx, empties_size) =
+    auto [empties, empties_idx, empties_size] =
       get_empties(nesting_levels[level], column_offsets[level], column_ends[level]);
 
     auto offset_transformer = [new_child_offsets = new_offsets.data(),

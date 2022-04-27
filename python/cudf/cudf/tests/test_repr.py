@@ -41,7 +41,7 @@ def test_null_series(nrows, dtype):
         ps = sr.to_pandas()
 
     pd.options.display.max_rows = int(nrows)
-    psrepr = ps.__repr__()
+    psrepr = repr(ps)
     psrepr = psrepr.replace("NaN", "<NA>")
     psrepr = psrepr.replace("NaT", "<NA>")
     psrepr = psrepr.replace("None", "<NA>")
@@ -49,7 +49,7 @@ def test_null_series(nrows, dtype):
         psrepr = psrepr.replace("UInt", "uint")
     elif "Int" in psrepr:
         psrepr = psrepr.replace("Int", "int")
-    assert psrepr.split() == sr.__repr__().split()
+    assert psrepr.split() == repr(sr).split()
     pd.reset_option("display.max_rows")
 
 
@@ -72,11 +72,13 @@ def test_null_dataframe(ncols):
         gdf[dtype] = sr
     pdf = gdf.to_pandas()
     pd.options.display.max_columns = int(ncols)
-    pdfrepr = pdf.__repr__()
-    pdfrepr = pdfrepr.replace("NaN", "<NA>")
-    pdfrepr = pdfrepr.replace("NaT", "<NA>")
-    pdfrepr = pdfrepr.replace("None", "<NA>")
-    assert pdfrepr.split() == gdf.__repr__().split()
+    pdf_repr = (
+        repr(pdf)
+        .replace("NaN", "<NA>")
+        .replace("NaT", "<NA>")
+        .replace("None", "<NA>")
+    )
+    assert pdf_repr.split() == repr(gdf).split()
     pd.reset_option("display.max_columns")
 
 
@@ -87,7 +89,7 @@ def test_full_series(nrows, dtype):
     ps = pd.Series(np.random.randint(0, 100, size)).astype(dtype)
     sr = cudf.from_pandas(ps)
     pd.options.display.max_rows = nrows
-    assert ps.__repr__() == sr.__repr__()
+    assert repr(ps) == repr(sr)
     pd.reset_option("display.max_rows")
 
 
@@ -121,8 +123,8 @@ def test_integer_dataframe(x):
     gdf = cudf.DataFrame({"x": x})
     pdf = gdf.to_pandas()
     pd.options.display.max_columns = 1
-    assert gdf.__repr__() == pdf.__repr__()
-    assert gdf.T.__repr__() == pdf.T.__repr__()
+    assert repr(gdf) == repr(pdf)
+    assert repr(gdf.T) == repr(pdf.T)
     pd.reset_option("display.max_columns")
 
 
@@ -136,7 +138,7 @@ def test_integer_series(x):
     sr = cudf.Series(x)
     ps = pd.Series(data=x)
 
-    assert sr.__repr__() == ps.__repr__()
+    assert repr(sr) == repr(ps)
 
 
 @given(st.lists(st.floats()))
@@ -144,7 +146,7 @@ def test_integer_series(x):
 def test_float_dataframe(x):
     gdf = cudf.DataFrame({"x": cudf.Series(x, nan_as_null=False)})
     pdf = gdf.to_pandas()
-    assert gdf.__repr__() == pdf.__repr__()
+    assert repr(gdf) == repr(pdf)
 
 
 @given(st.lists(st.floats()))
@@ -152,7 +154,7 @@ def test_float_dataframe(x):
 def test_float_series(x):
     sr = cudf.Series(x, nan_as_null=False)
     ps = pd.Series(data=x)
-    assert sr.__repr__() == ps.__repr__()
+    assert repr(sr) == repr(ps)
 
 
 @pytest.fixture
@@ -176,12 +178,12 @@ def mixed_gdf(mixed_pdf):
 
 
 def test_mixed_dataframe(mixed_pdf, mixed_gdf):
-    assert mixed_gdf.__repr__() == mixed_pdf.__repr__()
+    assert repr(mixed_gdf) == repr(mixed_pdf)
 
 
 def test_mixed_series(mixed_pdf, mixed_gdf):
     for col in mixed_gdf.columns:
-        assert mixed_gdf[col].__repr__() == mixed_pdf[col].__repr__()
+        assert repr(mixed_gdf[col]) == repr(mixed_pdf[col])
 
 
 def test_MI():
@@ -204,11 +206,9 @@ def test_MI():
     pd.options.display.max_columns = 0
     gdf = gdf.set_index(cudf.MultiIndex(levels=levels, codes=codes))
     pdf = gdf.to_pandas()
-    gdfT = gdf.T
-    pdfT = pdf.T
-    assert gdf.__repr__() == pdf.__repr__()
-    assert gdf.index.__repr__() == pdf.index.__repr__()
-    assert gdfT.__repr__() == pdfT.__repr__()
+    assert repr(gdf) == repr(pdf)
+    assert repr(gdf.index) == repr(pdf.index)
+    assert repr(gdf.T) == repr(pdf.T)
     pd.reset_option("display.max_rows")
     pd.reset_option("display.max_columns")
 
@@ -224,9 +224,9 @@ def test_groupby_MI(nrows, ncols):
     pdg = pdf.groupby(["a", "b"], sort=True).count()
     pd.options.display.max_rows = nrows
     pd.options.display.max_columns = ncols
-    assert gdg.__repr__() == pdg.__repr__()
-    assert gdg.index.__repr__() == pdg.index.__repr__()
-    assert gdg.T.__repr__() == pdg.T.__repr__()
+    assert repr(gdg) == repr(pdg)
+    assert repr(gdg.index) == repr(pdg.index)
+    assert repr(gdg.T) == repr(pdg.T)
     pd.reset_option("display.max_rows")
     pd.reset_option("display.max_columns")
 
@@ -241,7 +241,7 @@ def test_generic_index(length, dtype):
     )
     gsr = cudf.Series.from_pandas(psr)
 
-    assert psr.index.__repr__() == gsr.index.__repr__()
+    assert repr(psr.index) == repr(gsr.index)
 
 
 @pytest.mark.parametrize(
@@ -290,8 +290,8 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
     sliced_gdf = gdf[slice]
     sliced_pdf = pdf[slice]
 
-    expected_repr = sliced_pdf.__repr__().replace("None", "<NA>")
-    actual_repr = sliced_gdf.__repr__()
+    expected_repr = repr(sliced_pdf).replace("None", "<NA>")
+    actual_repr = repr(sliced_gdf)
 
     assert expected_repr == actual_repr
     pd.reset_option("display.max_rows")
@@ -392,7 +392,7 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
 )
 def test_generic_index_null(index, expected_repr):
 
-    actual_repr = index.__repr__()
+    actual_repr = repr(index)
 
     assert expected_repr == actual_repr
 
@@ -475,19 +475,19 @@ def test_dataframe_null_index_repr(df, pandas_special_case):
     gdf = cudf.from_pandas(pdf)
 
     expected_repr = (
-        pdf.__repr__()
+        repr(pdf)
         .replace("NaN", "<NA>")
         .replace("NaT", "<NA>")
         .replace("None", "<NA>")
     )
-    actual_repr = gdf.__repr__()
+    actual_repr = repr(gdf)
 
     if pandas_special_case:
         # Pandas inconsistently print StringIndex null values
         # as `None` at some places and `NaN` at few other places
         # Whereas cudf is consistent with strings `null` values
         # to be printed as `None` everywhere.
-        actual_repr = gdf.__repr__().replace("None", "<NA>")
+        actual_repr = repr(gdf).replace("None", "<NA>")
 
     assert expected_repr.split() == actual_repr.split()
 
@@ -554,19 +554,19 @@ def test_series_null_index_repr(sr, pandas_special_case):
     gsr = cudf.from_pandas(psr)
 
     expected_repr = (
-        psr.__repr__()
+        repr(psr)
         .replace("NaN", "<NA>")
         .replace("NaT", "<NA>")
         .replace("None", "<NA>")
     )
-    actual_repr = gsr.__repr__()
+    actual_repr = repr(gsr)
 
     if pandas_special_case:
         # Pandas inconsistently print StringIndex null values
         # as `None` at some places and `NaN` at few other places
         # Whereas cudf is consistent with strings `null` values
         # to be printed as `None` everywhere.
-        actual_repr = gsr.__repr__().replace("None", "<NA>")
+        actual_repr = repr(gsr).replace("None", "<NA>")
     assert expected_repr.split() == actual_repr.split()
 
 
@@ -607,9 +607,9 @@ def test_timedelta_series_s_us_repr(data, dtype):
     psr = sr.to_pandas()
 
     expected = (
-        psr.__repr__().replace("timedelta64[ns]", dtype).replace("NaT", "<NA>")
+        repr(psr).replace("timedelta64[ns]", dtype).replace("NaT", "<NA>")
     )
-    actual = sr.__repr__()
+    actual = repr(sr)
 
     assert expected.split() == actual.split()
 
@@ -886,7 +886,7 @@ def test_timedelta_series_s_us_repr(data, dtype):
 )
 def test_timedelta_series_ns_ms_repr(ser, expected_repr):
     expected = expected_repr
-    actual = ser.__repr__()
+    actual = repr(ser)
 
     assert expected.split() == actual.split()
 
@@ -1042,7 +1042,7 @@ def test_timedelta_series_ns_ms_repr(ser, expected_repr):
     ],
 )
 def test_timedelta_dataframe_repr(df, expected_repr):
-    actual_repr = df.__repr__()
+    actual_repr = repr(df)
 
     assert actual_repr.split() == expected_repr.split()
 
@@ -1105,7 +1105,7 @@ def test_timedelta_dataframe_repr(df, expected_repr):
 def test_timedelta_index_repr(index, expected_repr):
     if not PANDAS_GE_110:
         pytest.xfail(reason="pandas >= 1.1 requried")
-    actual_repr = index.__repr__()
+    actual_repr = repr(index)
 
     assert actual_repr.split() == expected_repr.split()
 
@@ -1136,7 +1136,7 @@ def test_multiindex_repr(pmi, max_seq_items):
     pd.set_option("display.max_seq_items", max_seq_items)
     gmi = cudf.from_pandas(pmi)
 
-    assert gmi.__repr__() == pmi.__repr__()
+    assert repr(gmi) == repr(pmi)
     pd.reset_option("display.max_seq_items")
 
 
@@ -1378,7 +1378,7 @@ def test_multiindex_repr(pmi, max_seq_items):
     ],
 )
 def test_multiindex_null_repr(gdi, expected_repr):
-    actual_repr = gdi.__repr__()
+    actual_repr = repr(gdi)
 
     assert actual_repr.split() == expected_repr.split()
 
@@ -1401,7 +1401,7 @@ def test_categorical_series_with_nan_repr():
     """
     )
 
-    assert series.__repr__().split() == expected_repr.split()
+    assert repr(series).split() == expected_repr.split()
 
     sliced_expected_repr = textwrap.dedent(
         """
@@ -1414,7 +1414,7 @@ def test_categorical_series_with_nan_repr():
         """
     )
 
-    assert series[2:].__repr__().split() == sliced_expected_repr.split()
+    assert repr(series[2:]).split() == sliced_expected_repr.split()
 
 
 def test_categorical_dataframe_with_nan_repr():
@@ -1434,7 +1434,7 @@ def test_categorical_dataframe_with_nan_repr():
     """
     )
 
-    assert df.__repr__().split() == expected_repr.split()
+    assert repr(df).split() == expected_repr.split()
 
 
 def test_categorical_index_with_nan_repr():
@@ -1449,21 +1449,21 @@ def test_categorical_index_with_nan_repr():
         "categories=[1.0, 2.0, 10.0, NaN], ordered=False, dtype='category')"
     )
 
-    assert cat_index.__repr__() == expected_repr
+    assert repr(cat_index) == expected_repr
 
     sliced_expected_repr = (
         "CategoricalIndex([NaN, 10.0, NaN, <NA>], "
         "categories=[1.0, 2.0, 10.0, NaN], ordered=False, dtype='category')"
     )
 
-    assert cat_index[2:].__repr__() == sliced_expected_repr
+    assert repr(cat_index[2:]) == sliced_expected_repr
 
 
 def test_empty_series_name():
     ps = pd.Series([], name="abc", dtype="int")
     gs = cudf.from_pandas(ps)
 
-    assert ps.__repr__() == gs.__repr__()
+    assert repr(ps) == repr(gs)
 
 
 def test_repr_struct_after_concat():
@@ -1493,4 +1493,4 @@ def test_repr_struct_after_concat():
     )
     pdf = df.to_pandas()
 
-    assert df.__repr__() == pdf.__repr__()
+    assert repr(df) == repr(pdf)

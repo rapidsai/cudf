@@ -702,13 +702,11 @@ class strings_column_wrapper : public detail::column_wrapper {
   template <typename StringsIterator>
   strings_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
-    std::vector<char> chars;
-    std::vector<cudf::size_type> offsets;
-    auto all_valid           = thrust::make_constant_iterator(true);
-    std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, all_valid);
-    auto d_chars             = cudf::detail::make_device_uvector_sync(chars);
-    auto d_offsets           = cudf::detail::make_device_uvector_sync(offsets);
-    wrapped                  = cudf::make_strings_column(d_chars, d_offsets);
+    auto all_valid        = thrust::make_constant_iterator(true);
+    auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
+    auto d_chars          = cudf::detail::make_device_uvector_sync(chars);
+    auto d_offsets        = cudf::detail::make_device_uvector_sync(offsets);
+    wrapped               = cudf::make_strings_column(d_chars, d_offsets);
   }
 
   /**
@@ -744,14 +742,12 @@ class strings_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     size_type num_strings = std::distance(begin, end);
-    std::vector<char> chars;
-    std::vector<size_type> offsets;
-    std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, v);
-    auto null_mask           = detail::make_null_mask_vector(v, v + num_strings);
-    auto d_chars             = cudf::detail::make_device_uvector_sync(chars);
-    auto d_offsets           = cudf::detail::make_device_uvector_sync(offsets);
-    auto d_bitmask           = cudf::detail::make_device_uvector_sync(null_mask);
-    wrapped                  = cudf::make_strings_column(d_chars, d_offsets, d_bitmask);
+    auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, v);
+    auto null_mask        = detail::make_null_mask_vector(v, v + num_strings);
+    auto d_chars          = cudf::detail::make_device_uvector_sync(chars);
+    auto d_offsets        = cudf::detail::make_device_uvector_sync(offsets);
+    auto d_bitmask        = cudf::detail::make_device_uvector_sync(null_mask);
+    wrapped               = cudf::make_strings_column(d_chars, d_offsets, d_bitmask);
   }
 
   /**
@@ -1479,9 +1475,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     int32_t const expected_depth   = hierarchy_and_depth.second;
 
     // preprocess columns so that every column_view in 'cols' is an equivalent hierarchy
-    std::vector<std::unique_ptr<column>> stubs;
-    std::vector<column_view> cols;
-    std::tie(cols, stubs) = preprocess_columns(elements, expected_hierarchy, expected_depth);
+    auto [cols, stubs] = preprocess_columns(elements, expected_hierarchy, expected_depth);
 
     // generate offsets
     size_type count = 0;

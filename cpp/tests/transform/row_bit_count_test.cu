@@ -123,9 +123,7 @@ TYPED_TEST(RowBitCountTyped, Lists)
 {
   using T = TypeParam;
 
-  std::unique_ptr<column> col;
-  std::unique_ptr<column> expected_sizes;
-  std::tie(col, expected_sizes) = build_list_column<T>();
+  auto [col, expected_sizes] = build_list_column<T>();
 
   table_view t({*col});
   auto result = cudf::row_bit_count(t);
@@ -326,9 +324,7 @@ TEST_F(RowBitCount, StructsNoNulls)
 
 TEST_F(RowBitCount, StructsNulls)
 {
-  std::unique_ptr<column> struct_col;
-  std::unique_ptr<column> expected_sizes;
-  std::tie(struct_col, expected_sizes) = build_struct_column();
+  auto [struct_col, expected_sizes] = build_struct_column();
   table_view t({*struct_col});
   auto result = cudf::row_bit_count(t);
 
@@ -440,9 +436,7 @@ TEST_F(RowBitCount, NestedTypes)
 {
   // List<Struct<List<int>, float, List<int>, int16>
   {
-    std::unique_ptr<column> col_no_nulls;
-    std::unique_ptr<column> expected_sizes;
-    std::tie(col_no_nulls, expected_sizes) =
+    auto [col_no_nulls, expected_sizes] =
       build_nested_and_expected_column({1, 1, 1, 1, 1, 1, 1, 1});
     table_view no_nulls_t({*col_no_nulls});
     auto no_nulls_result = cudf::row_bit_count(no_nulls_t);
@@ -600,19 +594,13 @@ struct sum_functor {
 TEST_F(RowBitCount, Table)
 {
   // complex nested column
-  std::unique_ptr<column> col0;
-  std::unique_ptr<column> col0_sizes;
-  std::tie(col0, col0_sizes) = build_nested_and_expected_column({1, 1, 1, 1, 1, 1, 1, 1});
+  auto [col0, col0_sizes] = build_nested_and_expected_column({1, 1, 1, 1, 1, 1, 1, 1});
 
   // struct column
-  std::unique_ptr<column> col1;
-  std::unique_ptr<column> col1_sizes;
-  std::tie(col1, col1_sizes) = build_struct_column();
+  auto [col1, col1_sizes] = build_struct_column();
 
   // list column
-  std::unique_ptr<column> col2;
-  std::unique_ptr<column> col2_sizes;
-  std::tie(col2, col2_sizes) = build_list_column<int16_t>();
+  auto [col2, col2_sizes] = build_list_column<int16_t>();
 
   table_view t({*col0, *col1, *col2});
   auto result = cudf::row_bit_count(t);
