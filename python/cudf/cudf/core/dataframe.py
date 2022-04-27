@@ -350,28 +350,6 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 for col in columns_df._column_names:
                     self._frame[col].loc[key[0]] = value
 
-            elif isinstance(value, (cupy.ndarray, np.ndarray)):
-                value_df = DataFrame(value)
-                if is_scalar(key[1]):
-                    for col in columns_df._column_names:
-                        self._frame[col].iloc[key[0]] = value
-                if value_df.shape[1] != columns_df.shape[1]:
-                    if value_df.shape[1] == 1:
-                        value_cols = (
-                            value_df._data.columns * columns_df.shape[1]
-                        )
-                    else:
-                        raise ValueError(
-                            error_msg.format(
-                                value1=value_df.shape,
-                                value2=columns_df.shape,
-                            )
-                        )
-                else:
-                    value_cols = value_df._data.columns
-                for i, col in enumerate(columns_df._column_names):
-                    self._frame[col].loc[key[0]] = value_cols[i]
-
             elif isinstance(value, cudf.DataFrame):
                 if value.shape != self._frame.loc[key[0]].shape:
                     raise ValueError(
@@ -390,30 +368,42 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     )
 
             else:
-                value = np.array(value)
-                if np.ndim(value) == 2:
-                    indexed_shape = self._frame.loc[key].shape
-                    if value.shape != indexed_shape:
-                        raise ValueError(
-                            error_msg.format(
-                                value1=value.shape,
-                                value2=indexed_shape,
+                value = cupy.asarray(value)
+                if cupy.ndim(value) == 2:
+                    # If the inner dimension is 1, it's broadcastable to
+                    # all columns of the dataframe.
+                    indexed_shape = columns_df.loc[key[0]].shape
+                    if value.shape[1] == 1:
+                        if value.shape[0] != indexed_shape[0]:
+                            raise ValueError(
+                                error_msg.format(
+                                    value1=value.shape,
+                                    value2=indexed_shape,
+                                )
                             )
-                        )
-                    for i, col in enumerate(columns_df._column_names):
-                        self._frame[col].loc[key[0]] = value[:, i]
+                        for i, col in enumerate(columns_df._column_names):
+                            self._frame[col].loc[key[0]] = value[:, 0]
+                    else:
+                        if value.shape != indexed_shape:
+                            raise ValueError(
+                                error_msg.format(
+                                    value1=value.shape,
+                                    value2=indexed_shape,
+                                )
+                            )
+                        for i, col in enumerate(columns_df._column_names):
+                            self._frame[col].loc[key[0]] = value[:, i]
                 else:
                     # handle cases where value is 1d object:
-                    # If the value is a range object or if the column axis
-                    # key is 0d, the indexed object is a series; therefore
-                    # the 1d array is assigned to the series along the column.
+                    # If the key on column axis is a scalar, we indexed a single column; 
+                    # The 1d value should assign along the columns.
                     if is_scalar(key[1]):
                         for col in columns_df._column_names:
                             self._frame[col].loc[key[0]] = value
-                    # Otherwise, there are two situations. The row axis key
-                    # is 0d or the key is a 2d indexer. In either of the
-                    # situation, the ith element in value corresponds to
-                    # the ith column in the indexed object.
+                    # Otherwise, there are two situations. The key on row axis can be
+                    # a scalar or 1d. In either of the situation, the ith element in
+                    # value corresponds to the ith row in the indexed object. If the key
+                    # is 1d, a broadcast will happen.
                     else:
                         for i, col in enumerate(columns_df._column_names):
                             self._frame[col].loc[key[0]] = value[i]
@@ -491,26 +481,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             for col in columns_df._column_names:
                 self._frame[col].iloc[key[0]] = value
 
-        elif isinstance(value, (cupy.ndarray, np.ndarray)):
-            value_df = DataFrame(value)
-            if is_scalar(key[1]):
-                for col in columns_df._column_names:
-                    self._frame[col].iloc[key[0]] = value
-            if value_df.shape[1] != columns_df.shape[1]:
-                if value_df.shape[1] == 1:
-                    value_cols = value_df._data.columns * columns_df.shape[1]
-                else:
-                    raise ValueError(
-                        error_msg.format(
-                            value1=value_df.shape,
-                            value2=columns_df.shape,
-                        )
-                    )
-            else:
-                value_cols = value_df._data.columns
-            for i, col in enumerate(columns_df._column_names):
-                self._frame[col].iloc[key[0]] = value_cols[i]
-
         elif isinstance(value, cudf.DataFrame):
             if value.shape != self._frame.iloc[key[0]].shape:
                 raise ValueError(
@@ -528,18 +498,29 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         else:
             # TODO: consolidate code path with identical counterpart
             # in `_DataFrameLocIndexer._setitem_tuple_arg`
-            value = np.array(value)
-            if np.ndim(value) == 2:
-                indexed_shape = self._frame.iloc[key].shape
-                if value.shape != indexed_shape:
-                    raise ValueError(
-                        error_msg.format(
-                            value1=value.shape,
-                            value2=indexed_shape,
+            value = cupy.asarray(value)
+            if cupy.ndim(value) == 2:
+                indexed_shape = columns_df.iloc[key[0]].shape
+                if value.shape[1] == 1:
+                    if value.shape[0] != indexed_shape[0]:
+                        raise ValueError(
+                            error_msg.format(
+                                value1=value.shape,
+                                value2=indexed_shape,
+                            )
                         )
-                    )
-                for i, col in enumerate(columns_df._column_names):
-                    self._frame._data[col][key[0]] = value[:, i]
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame[col].iloc[key[0]] = value[:, 0]
+                else:
+                    if value.shape != indexed_shape:
+                        raise ValueError(
+                            error_msg.format(
+                                value1=value.shape,
+                                value2=indexed_shape,
+                            )
+                        )
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame._data[col][key[0]] = value[:, i]
             else:
                 if is_scalar(key[1]):
                     for col in columns_df._column_names:
