@@ -646,7 +646,7 @@ def test_concat_two_empty_series(ignore_index, axis):
         ),
     ],
 )
-def test_concat_dataframe_with_multiIndex(df1, df2):
+def test_concat_dataframe_with_multiindex(df1, df2):
     gdf1 = df1
     gdf1 = gdf1.set_index(["k1", "k2"])
 

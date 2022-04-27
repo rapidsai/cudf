@@ -40,6 +40,7 @@ from cudf.core.column import (
     as_column,
     build_categorical_column,
     deserialize_columns,
+    full,
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
@@ -1140,7 +1141,13 @@ class Frame(BinaryOperand, Scannable):
                 filled_data[col_name] = col.copy(deep=True)
 
         return self._mimic_inplace(
-            self._from_data(data=filled_data),
+            self._from_data(
+                data=ColumnAccessor._create_unsafe(
+                    data=filled_data,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                )
+            ),
             inplace=inplace,
         )
 
@@ -3368,7 +3375,7 @@ class Frame(BinaryOperand, Scannable):
         >>> df.to_string()
         '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
         """
-        return self.__repr__()
+        return repr(self)
 
     def __str__(self):
         return self.to_string()
@@ -3681,9 +3688,9 @@ def _get_replacement_values_for_columns(
             values_columns = {
                 col: [value]
                 if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
-                else cudf.utils.utils.scalar_broadcast_to(
+                else full(
+                    len(to_replace),
                     value,
-                    (len(to_replace),),
                     cudf.dtype(type(value)),
                 )
                 for col in columns_dtype_map

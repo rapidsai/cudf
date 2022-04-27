@@ -72,9 +72,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
 {
   CUDF_FUNC_RANGE();
   // Assemble contiguous array of device views
-  std::unique_ptr<rmm::device_buffer> device_view_owners;
-  column_device_view* device_views_ptr;
-  std::tie(device_view_owners, device_views_ptr) =
+  auto [device_view_owners, device_views_ptr] =
     contiguous_copy_column_device_views<column_device_view>(views, stream);
 
   // Compute the partition offsets and size of offset column

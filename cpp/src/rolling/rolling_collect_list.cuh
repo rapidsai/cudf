@@ -207,9 +207,7 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
                                             stream,
                                             mr);
 
-  rmm::device_buffer null_mask;
-  size_type null_count;
-  std::tie(null_mask, null_count) = valid_if(
+  auto [null_mask, null_count] = valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(input.size()),
     [preceding_begin, following_begin, min_periods] __device__(auto i) {

@@ -1729,11 +1729,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           continue;
         }
 
-        int32_t type_width;
-        int32_t clock_rate;
-        int8_t converted_type;
-
-        std::tie(type_width, clock_rate, converted_type) =
+        auto [type_width, clock_rate, converted_type] =
           conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
                           _timestamp_type.id(),
                           schema.type,
