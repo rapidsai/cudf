@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,11 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
+#include <rmm/exec_policy.hpp>
+#include <thrust/scan.h>
 
 #include "ColumnViewJni.hpp"
 
@@ -51,4 +54,22 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
   return deep_copy;
 }
 
+std::unique_ptr<cudf::column> generate_list_offsets(cudf::column_view const &list_length,
+                                                    rmm::cuda_stream_view stream) {
+  CUDF_EXPECTS(list_length.type().id() == cudf::type_id::INT32,
+               "Input column does not have type INT32.");
+
+  auto const begin_iter = list_length.template begin<cudf::size_type>();
+  auto const end_iter = list_length.template end<cudf::size_type>();
+
+  auto offsets_column = make_numeric_column(data_type{type_id::INT32}, list_length.size() + 1,
+                                            mask_state::UNALLOCATED, stream);
+  auto offsets_view = offsets_column->mutable_view();
+  auto d_offsets = offsets_view.template begin<int32_t>();
+
+  thrust::inclusive_scan(rmm::exec_policy(stream), begin_iter, end_iter, d_offsets + 1);
+  CUDF_CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream));
+
+  return offsets_column;
+}
 } // namespace cudf::jni

@@ -12,25 +12,21 @@
 # the License.
 # =============================================================================
 
-# This function finds KvikIO
-function(find_and_configure_kvikio VERSION)
+# This function finds nvcomp and sets any additional necessary environment variables.
+function(find_and_configure_cufile)
 
-  rapids_cpm_find(
-    KvikIO ${VERSION}
-    GLOBAL_TARGETS kvikio::kvikio
-    CPM_ARGS
-    GIT_REPOSITORY https://github.com/rapidsai/kvikio.git
-    GIT_TAG branch-${VERSION}
-    GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
-    OPTIONS "KvikIO_BUILD_EXAMPLES OFF"
-  )
+  list(APPEND CMAKE_MODULE_PATH ${CUDF_SOURCE_DIR}/cmake/Modules)
+  rapids_find_package(cuFile QUIET)
 
-  if(KvikIO_BINARY_DIR)
-    include("${rapids-cmake-dir}/export/find_package_root.cmake")
-    rapids_export_find_package_root(BUILD KvikIO "${KvikIO_BINARY_DIR}" cudf-exports)
+  if(cuFile_FOUND AND NOT BUILD_SHARED_LIBS)
+    include("${rapids-cmake-dir}/export/find_package_file.cmake")
+    rapids_export_find_package_file(
+      BUILD "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
+    )
+    rapids_export_find_package_file(
+      INSTALL "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
+    )
   endif()
-
 endfunction()
 
-set(KVIKIO_MIN_VERSION_cudf "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")
-find_and_configure_kvikio(${KVIKIO_MIN_VERSION_cudf})
+find_and_configure_cufile()
