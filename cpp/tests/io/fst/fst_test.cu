@@ -217,8 +217,10 @@ TEST_F(FstTest, GroundTruth)
     input += input;
 
   // Prepare input & output buffers
+  constexpr std::size_t single_item = 1;
   rmm::device_uvector<SymbolT> d_input(input.size(), stream_view);
   hostdevice_vector<SymbolT> output_gpu(input.size(), stream_view);
+  hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
   hostdevice_vector<SymbolOffsetT> out_indexes_gpu(input.size(), stream_view);
   ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
     d_input.data(), input.data(), input.size() * sizeof(SymbolT), cudaMemcpyHostToDevice, stream));
@@ -228,32 +230,19 @@ TEST_F(FstTest, GroundTruth)
 
   std::size_t temp_storage_bytes = 0;
 
-  // Query temporary storage requirements
-  ASSERT_CUDA_SUCCEEDED(parser.Transduce(nullptr,
-                                         temp_storage_bytes,
-                                         d_input.data(),
-                                         static_cast<SymbolOffsetT>(d_input.size()),
-                                         output_gpu.device_ptr(),
-                                         out_indexes_gpu.device_ptr(),
-                                         cub::DiscardOutputIterator<int32_t>{},
-                                         start_state,
-                                         stream));
-
   // Allocate device-side temporary storage & run algorithm
-  rmm::device_buffer temp_storage{temp_storage_bytes, stream_view};
-  ASSERT_CUDA_SUCCEEDED(parser.Transduce(temp_storage.data(),
-                                         temp_storage_bytes,
-                                         d_input.data(),
-                                         static_cast<SymbolOffsetT>(d_input.size()),
-                                         output_gpu.device_ptr(),
-                                         out_indexes_gpu.device_ptr(),
-                                         cub::DiscardOutputIterator<int32_t>{},
-                                         start_state,
-                                         stream));
+  parser.Transduce(d_input.data(),
+                   static_cast<SymbolOffsetT>(d_input.size()),
+                   output_gpu.device_ptr(),
+                   out_indexes_gpu.device_ptr(),
+                   output_gpu_size.device_ptr(),
+                   start_state,
+                   stream);
 
   // Async copy results from device to host
   output_gpu.device_to_host(stream_view);
   out_indexes_gpu.device_to_host(stream_view);
+  output_gpu_size.device_to_host(stream_view);
 
   // Prepare CPU-side results for verification
   std::string output_cpu{};
@@ -275,13 +264,13 @@ TEST_F(FstTest, GroundTruth)
   cudaStreamSynchronize(stream);
 
   // Verify results
-  ASSERT_EQ(output_gpu.size(), output_cpu.size());
+  ASSERT_EQ(output_gpu_size[0], output_cpu.size());
   ASSERT_EQ(out_indexes_gpu.size(), out_index_cpu.size());
-  for (std::size_t i = 0; i < output_gpu.size(); i++) {
-    ASSERT_EQ(output_gpu.host_ptr()[i], output_cpu[i]) << "Mismatch at index #" << i;
+  for (std::size_t i = 0; i < output_cpu.size(); i++) {
+    ASSERT_EQ(output_gpu[i], output_cpu[i]) << "Mismatch at index #" << i;
   }
   for (std::size_t i = 0; i < out_indexes_gpu.size(); i++) {
-    ASSERT_EQ(out_indexes_gpu.host_ptr()[i], out_index_cpu[i]) << "Mismatch at index #" << i;
+    ASSERT_EQ(out_indexes_gpu[i], out_index_cpu[i]) << "Mismatch at index #" << i;
   }
 }
 
