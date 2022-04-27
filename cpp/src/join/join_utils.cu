@@ -14,8 +14,12 @@
  * limitations under the License.
  */
 
-#include <join/join_common_utils.cuh>
+#include "join/join_common_utils.cuh"
 
+#include <cudf/detail/iterator.cuh>
+#include <cudf/table/table_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>

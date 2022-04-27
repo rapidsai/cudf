@@ -18,6 +18,7 @@
 #include <cudf/detail/join.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/join.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
@@ -45,8 +46,7 @@ using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
 
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 
-using hash_join_impl_type = typename cudf::detail::hash_join<default_hash<hash_value_type>>;
-using multimap_type       = hash_join_impl_type::map_type;
+using multimap_type = cudf::hash_join::impl_type::map_type;
 
 // Multimap type used for mixed joins. TODO: This is a temporary alias used
 // until the mixed joins are converted to using CGs properly. Right now it's
@@ -65,6 +65,5 @@ using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 using row_equality = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
-
 }  // namespace detail
 }  // namespace cudf
