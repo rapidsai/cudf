@@ -113,10 +113,7 @@ struct quantile_functor {
         ordered_indices,
         [input = *d_input] __device__(size_type idx) { return input.is_valid_nocheck(idx); });
 
-      rmm::device_buffer mask;
-      size_type null_count;
-
-      std::tie(mask, null_count) = valid_if(
+      auto [mask, null_count] = valid_if(
         q_device.begin(),
         q_device.end(),
         [sorted_validity, interp = interp, size = size] __device__(double q) {

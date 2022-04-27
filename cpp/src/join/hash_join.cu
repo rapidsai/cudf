@@ -144,8 +144,8 @@ probe_join_hash_table(cudf::table_device_view build_table,
 
   // If output size is zero, return immediately
   if (join_size == 0) {
-    return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
@@ -181,7 +181,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
     hash_table.pair_retrieve(
       iter, iter + probe_table_num_rows, out1_zip_begin, out2_zip_begin, equality, stream.value());
   }
-  return std::make_pair(std::move(left_indices), std::move(right_indices));
+  return std::pair(std::move(left_indices), std::move(right_indices));
 }
 
 /**
@@ -476,8 +476,8 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                "Mismatch in number of columns to be joined on");
 
   if (is_trivial_join(flattened_probe_table, _build, JoinKind)) {
-    return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
   CUDF_EXPECTS(std::equal(std::cbegin(_build),

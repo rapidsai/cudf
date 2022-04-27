@@ -108,20 +108,20 @@ constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
     case orc::DATA:
       skip_count += 1;
       skip_count |= (skip_count & 0xff) << 8;
-      return std::make_pair(gpu::CI_DATA, skip_count);
+      return std::pair(gpu::CI_DATA, skip_count);
     case orc::LENGTH:
     case orc::SECONDARY:
       skip_count += 1;
       skip_count |= (skip_count & 0xff) << 16;
-      return std::make_pair(gpu::CI_DATA2, skip_count);
-    case orc::DICTIONARY_DATA: return std::make_pair(gpu::CI_DICTIONARY, skip_count);
+      return std::pair(gpu::CI_DATA2, skip_count);
+    case orc::DICTIONARY_DATA: return std::pair(gpu::CI_DICTIONARY, skip_count);
     case orc::PRESENT:
       skip_count += (non_child ? 1 : 0);
-      return std::make_pair(gpu::CI_PRESENT, skip_count);
-    case orc::ROW_INDEX: return std::make_pair(gpu::CI_INDEX, skip_count);
+      return std::pair(gpu::CI_PRESENT, skip_count);
+    case orc::ROW_INDEX: return std::pair(gpu::CI_INDEX, skip_count);
     default:
       // Skip this stream as it's not strictly required
-      return std::make_pair(gpu::CI_NUM_STREAMS, 0);
+      return std::pair(gpu::CI_NUM_STREAMS, 0);
   }
 }
 
@@ -1120,9 +1120,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             if (_metadata.per_file_metadata[stripe_source_mapping.source_idx]
                   .source->is_device_read_preferred(len)) {
               read_tasks.push_back(
-                std::make_pair(_metadata.per_file_metadata[stripe_source_mapping.source_idx]
-                                 .source->device_read_async(offset, len, d_dst, stream),
-                               len));
+                std::pair(_metadata.per_file_metadata[stripe_source_mapping.source_idx]
+                            .source->device_read_async(offset, len, d_dst, stream),
+                          len));
 
             } else {
               const auto buffer =

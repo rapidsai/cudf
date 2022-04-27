@@ -31,7 +31,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
 {
   std::unique_ptr<table> empty_probe = empty_like(probe);
   std::unique_ptr<table> empty_build = empty_like(build);
-  return std::make_pair(std::move(empty_probe), std::move(empty_build));
+  return std::pair(std::move(empty_probe), std::move(empty_build));
 }
 
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
@@ -71,7 +71,7 @@ inner_join(table_view const& left_input,
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left, compare_nulls, stream);
     auto [right_result, left_result] = hj_obj.inner_join(right, std::nullopt, stream, mr);
-    return std::make_pair(std::move(left_result), std::move(right_result));
+    return std::pair(std::move(left_result), std::move(right_result));
   } else {
     cudf::hash_join hj_obj(right, compare_nulls, stream);
     return hj_obj.inner_join(left, std::nullopt, stream, mr);

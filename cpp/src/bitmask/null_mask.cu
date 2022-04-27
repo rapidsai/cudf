@@ -445,7 +445,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
   CUDF_FUNC_RANGE();
   rmm::device_buffer null_mask{0, stream, mr};
   if (view.num_rows() == 0 or view.num_columns() == 0) {
-    return std::make_pair(std::move(null_mask), 0);
+    return std::pair(std::move(null_mask), 0);
   }
 
   std::vector<bitmask_type const*> masks;
@@ -467,7 +467,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
       mr);
   }
 
-  return std::make_pair(std::move(null_mask), 0);
+  return std::pair(std::move(null_mask), 0);
 }
 
 // Returns the bitwise OR of the null masks of all columns in the table view
@@ -478,7 +478,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
   CUDF_FUNC_RANGE();
   rmm::device_buffer null_mask{0, stream, mr};
   if (view.num_rows() == 0 or view.num_columns() == 0) {
-    return std::make_pair(std::move(null_mask), 0);
+    return std::pair(std::move(null_mask), 0);
   }
 
   std::vector<bitmask_type const*> masks;
@@ -500,7 +500,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
       mr);
   }
 
-  return std::make_pair(std::move(null_mask), 0);
+  return std::pair(std::move(null_mask), 0);
 }
 
 }  // namespace detail
