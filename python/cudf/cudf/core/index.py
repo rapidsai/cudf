@@ -1116,7 +1116,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # related issue : https://github.com/pandas-dev/pandas/issues/35389
         if isinstance(preprocess, CategoricalIndex):
             if preprocess.categories.dtype.kind == "f":
-                output = (
+                output = repr(
                     preprocess.astype("str")
                     .to_pandas()
                     .astype(
@@ -1127,18 +1127,17 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                             ordered=preprocess.dtype.ordered,
                         )
                     )
-                    .__repr__()
                 )
                 break_idx = output.find("ordered=")
                 output = (
                     output[:break_idx].replace("'", "") + output[break_idx:]
                 )
             else:
-                output = preprocess.to_pandas().__repr__()
+                output = repr(preprocess.to_pandas())
 
             output = output.replace("nan", cudf._NA_REP)
         elif preprocess._values.nullable:
-            output = self._clean_nulls_from_index().to_pandas().__repr__()
+            output = repr(self._clean_nulls_from_index().to_pandas())
 
             if not isinstance(self, StringIndex):
                 # We should remove all the single quotes
@@ -1150,7 +1149,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 # of StringIndex and it is valid to have them.
                 output = output.replace("'", "")
         else:
-            output = preprocess.to_pandas().__repr__()
+            output = repr(preprocess.to_pandas())
 
         # Fix and correct the class name of the output
         # string by finding first occurrence of "(" in the output

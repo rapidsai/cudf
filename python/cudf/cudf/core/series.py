@@ -1064,11 +1064,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
-            output = (
-                preprocess.astype("O")
-                .fillna(cudf._NA_REP)
-                .to_pandas()
-                .__repr__()
+            output = repr(
+                preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
             )
         elif isinstance(
             preprocess._column, cudf.core.column.CategoricalColumn
@@ -1111,7 +1108,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 na_rep=cudf._NA_REP,
             )
         else:
-            output = preprocess.to_pandas().__repr__()
+            output = repr(preprocess.to_pandas())
 
         lines = output.split("\n")
 
@@ -2110,7 +2107,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         if convert_dtype is not True:
             raise ValueError("Series.apply only supports convert_dtype=True")
-        return self._apply(func, _get_scalar_kernel, *args, **kwargs)
+
+        result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
+        result.name = self.name
+        return result
 
     @_cudf_nvtx_annotate
     def applymap(self, udf, out_dtype=None):

@@ -237,7 +237,7 @@ class ListDtype(_BaseDtype):
 
     def __repr__(self):
         if isinstance(self.element_type, (ListDtype, StructDtype)):
-            return f"{type(self).__name__}({self.element_type.__repr__()})"
+            return f"{type(self).__name__}({repr(self.element_type)})"
         else:
             return f"{type(self).__name__}({self.element_type})"
 
@@ -681,8 +681,13 @@ def is_interval_dtype(obj):
     # TODO: Should there be any branch in this function that calls
     # pd.api.types.is_interval_dtype?
     return (
-        isinstance(obj, cudf.core.dtypes.IntervalDtype)
-        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
+        isinstance(
+            obj,
+            (
+                cudf.core.dtypes.IntervalDtype,
+                pd.core.dtypes.dtypes.IntervalDtype,
+            ),
+        )
         or obj is cudf.core.dtypes.IntervalDtype
         or (
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
