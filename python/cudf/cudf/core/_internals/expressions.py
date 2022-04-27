@@ -118,7 +118,7 @@ class libcudfASTVisitor(ast.NodeVisitor):
         if not isinstance(node, ast.Num):
             raise ValueError(
                 f"Unsupported literal {repr(node.value)} of type "
-                "{type(node.value)}"
+                "{type(node.value).__name__}"
             )
         self.stack.append(Literal(node.value))
 

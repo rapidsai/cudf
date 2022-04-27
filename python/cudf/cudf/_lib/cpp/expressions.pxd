@@ -85,4 +85,4 @@ cdef extern from "cudf/ast/expressions.hpp" namespace "cudf::ast" nogil:
 
     cdef cppclass operation(expression):
         operation(ast_operator, const expression &)
-        operation(ast_operator, const expression&, const expression&)
+        operation(ast_operator, const expression &, const expression&)

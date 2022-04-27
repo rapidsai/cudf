@@ -46,5 +46,5 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[column] compute_column(
         const table_view table,
-        const expression &expr
+        const expression& expr
     ) except +

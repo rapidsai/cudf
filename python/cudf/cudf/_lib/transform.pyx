@@ -171,7 +171,7 @@ def compute_column(list columns, tuple column_names, expr: str):
     ----------
     columns : list
         The set of columns forming the table to evaluate the expression on.
-    column_names : str
+    column_names : tuple[str]
         The names associated with each column. These names are necessary to map
         column names in the expression to indices in the provided list of
         columns, which are what will be used by libcudf to evaluate the

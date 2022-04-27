@@ -6261,7 +6261,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame, Series, or None
             Series if a single column is returned (the typical use case),
-            DataFrame if multiple assignment statements are included in
+            DataFrame if any assignment statements are included in
             ``expr``, or None if ``inplace=True``.
 
         Notes
@@ -6276,6 +6276,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             * Operators generally will not cast automatically. Users are
               responsible for casting columns to suitable types before
               evaluating a function.
+            * Multiple assignments to the same name (i.e. a sequence of
+              assignment statements where later statements are conditioned upon
+              the output of earlier statements) is not supported.
 
         Examples
         --------
@@ -6349,8 +6352,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Check if there were multiple statements. Filter out empty lines.
         statements = tuple(filter(None, expr.strip().split("\n")))
-        if len(statements) > 1 and not all(
-            re.search("[^=]=[^=]", e) is not None for e in statements
+        if len(statements) > 1 and any(
+            re.search("[^=]=[^=]", st) is None for st in statements
         ):
             raise ValueError(
                 "Multi-line expressions are only valid if all expressions "
