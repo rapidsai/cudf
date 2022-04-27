@@ -54,6 +54,9 @@
 #include <numeric>
 #include <utility>
 
+#include <cooperative_groups.h>
+#include <cooperative_groups/memcpy_async.h>
+
 #include <cuda/std/limits>
 
 namespace cudf {
@@ -1248,25 +1251,25 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
   // we know the size of each array. The number of stripes per column in a chunk array can
   // be calculated by dividing the number of chunks by the number of columns.
   // That many chunks need to be copied at a time to the proper destination.
-  size_t offset = 0;
+  size_t num_entries_seen = 0;
   for (size_t i = 0; i < per_chunk_stats.stripe_stat_chunks.size(); ++i) {
     auto const stripes_per_col = per_chunk_stats.stripe_stat_chunks[i].size() / num_columns;
 
     auto const chunk_bytes = stripes_per_col * sizeof(statistics_chunk);
     auto const merge_bytes = stripes_per_col * sizeof(statistics_merge_group);
     for (size_t col = 0; col < num_columns; ++col) {
-      cudaMemcpyAsync(stat_chunks.data() + (num_stripes * col) + offset,
+      cudaMemcpyAsync(stat_chunks.data() + (num_stripes * col) + num_entries_seen,
                       per_chunk_stats.stripe_stat_chunks[i].data() + col * stripes_per_col,
                       chunk_bytes,
                       cudaMemcpyDeviceToDevice,
                       stream);
-      cudaMemcpyAsync(stats_merge.device_ptr() + (num_stripes * col) + offset,
+      cudaMemcpyAsync(stats_merge.device_ptr() + (num_stripes * col) + num_entries_seen,
                       per_chunk_stats.stripe_stat_merge[i].device_ptr() + col * stripes_per_col,
                       merge_bytes,
                       cudaMemcpyDeviceToDevice,
                       stream);
     }
-    offset += stripes_per_col;
+    num_entries_seen += stripes_per_col;
   }
 
   std::vector<statistics_merge_group> file_stats_merge(num_file_blobs);
@@ -1969,7 +1972,7 @@ struct string_copy_functor {
         min ? stripe_stat_chunks[idx].min_value.str_val : stripe_stat_chunks[idx].max_value.str_val;
 
       auto dst = &string_pool[offsets[i]];
-      memcpy(dst, str_val.ptr, str_val.length /*, cudaMemcpyDeviceToDevice, stream*/);
+      cooperative_groups::memcpy_async(cooperative_groups::this_thread_block(), dst, str_val.ptr, str_val.length);
       str_val.ptr = dst;
     }
   }
