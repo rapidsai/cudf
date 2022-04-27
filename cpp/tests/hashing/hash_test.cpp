@@ -216,7 +216,7 @@ TEST_F(HashTest, ListOfStruct)
   auto col2 = cudf::test::strings_column_wrapper{
     {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
     {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}};
-  auto struc = cudf::test::structs_column_wrapper{
+  auto struct_col = cudf::test::structs_column_wrapper{
     {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
@@ -226,7 +226,7 @@ TEST_F(HashTest, ListOfStruct)
   auto nullmask_buf =
     cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
   auto list_column = cudf::make_lists_column(
-    17, offsets.release(), struc.release(), cudf::UNKNOWN_NULL_COUNT, std::move(nullmask_buf));
+    17, offsets.release(), struct_col.release(), cudf::UNKNOWN_NULL_COUNT, std::move(nullmask_buf));
 
   auto expect = cudf::test::fixed_width_column_wrapper<uint32_t>{83451479,
                                                                  83451479,
