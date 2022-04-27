@@ -1972,7 +1972,8 @@ struct string_copy_functor {
         min ? stripe_stat_chunks[idx].min_value.str_val : stripe_stat_chunks[idx].max_value.str_val;
 
       auto dst = &string_pool[offsets[i]];
-      cooperative_groups::memcpy_async(cooperative_groups::this_thread_block(), dst, str_val.ptr, str_val.length);
+      cooperative_groups::memcpy_async(
+        cooperative_groups::this_thread_block(), dst, str_val.ptr, str_val.length);
       str_val.ptr = dst;
     }
   }
