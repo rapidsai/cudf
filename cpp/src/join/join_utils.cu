@@ -61,7 +61,7 @@ get_trivial_left_join_indices(table_view const& left,
     std::make_unique<rmm::device_uvector<size_type>>(left.num_rows(), stream, mr);
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), right_indices->begin(), right_indices->end(), JoinNoneValue);
-  return std::make_pair(std::move(left_indices), std::move(right_indices));
+  return std::pair(std::move(left_indices), std::move(right_indices));
 }
 
 VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b, rmm::cuda_stream_view stream)
@@ -151,7 +151,7 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
                              left_invalid_indices->end(),
                              JoinNoneValue);
 
-  return std::make_pair(std::move(left_invalid_indices), std::move(right_indices_complement));
+  return std::pair(std::move(left_invalid_indices), std::move(right_indices_complement));
 }
 
 }  // namespace detail

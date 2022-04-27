@@ -876,7 +876,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<size_type>> dict_data;
   std::vector<rmm::device_uvector<uint16_t>> dict_index;
 
-  if (h_chunks.size() == 0) { return std::make_pair(std::move(dict_data), std::move(dict_index)); }
+  if (h_chunks.size() == 0) { return std::pair(std::move(dict_data), std::move(dict_index)); }
 
   // Allocate slots for each chunk
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
@@ -912,7 +912,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
       // We don't use dictionary if the indices are > 16 bits because that's the maximum bitpacking
       // bitsize we efficiently support
-      if (nbits > 16) { return std::make_pair(false, 0); }
+      if (nbits > 16) { return std::pair(false, 0); }
 
       // Only these bit sizes are allowed for RLE encoding because it's compute optimized
       constexpr auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
@@ -925,7 +925,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
       bool use_dict = (ck.plain_data_size > dict_enc_size);
       if (not use_dict) { rle_bits = 0; }
-      return std::make_pair(use_dict, rle_bits);
+      return std::pair(use_dict, rle_bits);
     }();
   }
 
@@ -946,7 +946,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
   gpu::get_dictionary_indices(frags, stream);
 
-  return std::make_pair(std::move(dict_data), std::move(dict_index));
+  return std::pair(std::move(dict_data), std::move(dict_index));
 }
 
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,

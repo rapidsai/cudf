@@ -83,8 +83,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
                  "Unsupported groupby key type does not support equality comparison");
     auto [grouped_keys, results] =
       detail::hash::groupby(flattened_keys, requests, _include_null_keys, stream, mr);
-    return std::make_pair(unflatten_nested_columns(std::move(grouped_keys), _keys),
-                          std::move(results));
+    return std::pair(unflatten_nested_columns(std::move(grouped_keys), _keys), std::move(results));
   } else {
     return sort_aggregate(requests, stream, mr);
   }
@@ -193,7 +192,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   verify_valid_requests(requests);
 
-  if (_keys.num_rows() == 0) { return std::make_pair(empty_like(_keys), empty_results(requests)); }
+  if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
 
   return dispatch_aggregation(requests, rmm::cuda_stream_default, mr);
 }
@@ -211,7 +210,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
 
   verify_valid_requests(requests);
 
-  if (_keys.num_rows() == 0) { return std::make_pair(empty_like(_keys), empty_results(requests)); }
+  if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
 
   return sort_scan(requests, rmm::cuda_stream_default, mr);
 }
@@ -250,7 +249,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
   CUDF_EXPECTS(static_cast<cudf::size_type>(replace_policies.size()) == values.num_columns(),
                "Size mismatch between num_columns and replace_policies.");
 
-  if (values.is_empty()) { return std::make_pair(empty_like(_keys), empty_like(values)); }
+  if (values.is_empty()) { return std::pair(empty_like(_keys), empty_like(values)); }
   auto const stream = rmm::cuda_stream_default;
 
   auto const& group_labels = helper().group_labels(stream);
@@ -269,8 +268,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
                       : std::move(grouped_values);
     });
 
-  return std::make_pair(std::move(helper().sorted_keys(stream, mr)),
-                        std::make_unique<table>(std::move(results)));
+  return std::pair(std::move(helper().sorted_keys(stream, mr)),
+                   std::make_unique<table>(std::move(results)));
 }
 
 // Get the sort helper object
@@ -310,8 +309,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
         grouped_values->view(), group_offsets, offsets[i], fill_values[i].get(), stream, mr);
     });
 
-  return std::make_pair(helper().sorted_keys(stream, mr),
-                        std::make_unique<cudf::table>(std::move(results)));
+  return std::pair(helper().sorted_keys(stream, mr),
+                   std::make_unique<cudf::table>(std::move(results)));
 }
 
 }  // namespace groupby
