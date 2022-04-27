@@ -169,9 +169,9 @@ namespace {
 /**
  * @brief Threshold to decide on using string or warp parallel functions.
  *
- * If the average byte length of a string column exceed this value then
+ * If the average byte length of a string in a column exceeds this value then
  * the warp-parallel `contains_warp_fn` function is used.
- * Otherwise, the string parallel function in `contains_fn` is used.
+ * Otherwise, the string-parallel function in `contains_fn` is used.
  *
  * This is only used for the scalar version of `contains()` right now.
  */
