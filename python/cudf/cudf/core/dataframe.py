@@ -395,15 +395,17 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                             self._frame[col].loc[key[0]] = value[:, i]
                 else:
                     # handle cases where value is 1d object:
-                    # If the key on column axis is a scalar, we indexed a single column; 
-                    # The 1d value should assign along the columns.
+                    # If the key on column axis is a scalar, we indexed
+                    # a single column; The 1d value should assign along
+                    # the columns.
                     if is_scalar(key[1]):
                         for col in columns_df._column_names:
                             self._frame[col].loc[key[0]] = value
-                    # Otherwise, there are two situations. The key on row axis can be
-                    # a scalar or 1d. In either of the situation, the ith element in
-                    # value corresponds to the ith row in the indexed object. If the key
-                    # is 1d, a broadcast will happen.
+                    # Otherwise, there are two situations. The key on row axis
+                    # can be a scalar or 1d. In either of the situation, the
+                    # ith element in value corresponds to the ith row in
+                    # the indexed object.
+                    # If the key is 1d, a broadcast will happen.
                     else:
                         for i, col in enumerate(columns_df._column_names):
                             self._frame[col].loc[key[0]] = value[i]
