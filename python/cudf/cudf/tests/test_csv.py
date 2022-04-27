@@ -473,8 +473,15 @@ def test_csv_reader_usecols_int_char(tmpdir, pd_mixed_dataframe):
     assert_eq(df_out, out, check_names=False)
 
 
-def test_csv_reader_mangle_dupe_cols(tmpdir):
-    buffer = "abc,ABC,abc,abcd,abc\n1,2,3,4,5\n"
+@pytest.mark.parametrize(
+    "buffer",
+    [
+        "abc,ABC,abc,abcd,abc\n1,2,3,4,5\n",
+        "A,A,A.1,A,A.2,A,A.4,A,A\n1,2,3.1,4,a.2,a,a.4,a,a"
+        "A,A,A.1,,Unnamed: 4,A,A.4,A,A\n1,2,3.1,4,a.2,a,a.4,a,a",
+    ],
+)
+def test_csv_reader_mangle_dupe_cols(tmpdir, buffer):
 
     # Default: mangle_dupe_cols=True
     pd_df = pd.read_csv(StringIO(buffer))
