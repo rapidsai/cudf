@@ -17,8 +17,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 #include <io/fst/device_dfa.cuh>
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cub/cub.cuh>
 
@@ -485,26 +485,41 @@ class Dfa {
             typename TransducedIndexOutItT,
             typename TransducedCountOutItT,
             typename OffsetT>
-  cudaError_t Transduce(void* d_temp_storage,
-                        size_t& temp_storage_bytes,
-                        SymbolT const* d_chars,
-                        OffsetT num_chars,
-                        TransducedOutItT d_out_it,
-                        TransducedIndexOutItT d_out_idx_it,
-                        TransducedCountOutItT d_num_transduced_out_it,
-                        const uint32_t seed_state = 0,
-                        cudaStream_t stream       = 0)
+  void Transduce(SymbolT const* d_chars,
+                 OffsetT num_chars,
+                 TransducedOutItT d_out_it,
+                 TransducedIndexOutItT d_out_idx_it,
+                 TransducedCountOutItT d_num_transduced_out_it,
+                 const uint32_t seed_state,
+                 rmm::cuda_stream_view stream)
   {
-    return DeviceTransduce(d_temp_storage,
-                           temp_storage_bytes,
-                           this->get_device_view(),
-                           d_chars,
-                           num_chars,
-                           d_out_it,
-                           d_out_idx_it,
-                           d_num_transduced_out_it,
-                           seed_state,
-                           stream);
+    std::size_t temp_storage_bytes = 0;
+    rmm::device_buffer temp_storage{};
+    DeviceTransduce(nullptr,
+                    temp_storage_bytes,
+                    this->get_device_view(),
+                    d_chars,
+                    num_chars,
+                    d_out_it,
+                    d_out_idx_it,
+                    d_num_transduced_out_it,
+                    seed_state,
+                    stream);
+
+    if (temp_storage.size() < temp_storage_bytes) {
+      temp_storage.resize(temp_storage_bytes, stream);
+    }
+
+    DeviceTransduce(temp_storage.data(),
+                    temp_storage_bytes,
+                    this->get_device_view(),
+                    d_chars,
+                    num_chars,
+                    d_out_it,
+                    d_out_idx_it,
+                    d_num_transduced_out_it,
+                    seed_state,
+                    stream);
   }
 
  private:
