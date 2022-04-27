@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 repos:
       - repo: https://github.com/PyCQA/isort
         rev: 5.6.4
