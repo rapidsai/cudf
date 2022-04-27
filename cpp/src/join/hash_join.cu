@@ -41,6 +41,7 @@
 
 namespace cudf {
 namespace detail {
+namespace {
 /**
  * @brief Calculates the exact size of the join output produced when
  * joining two tables together.
@@ -213,8 +214,6 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
   // If output size is zero, return immediately
   if (join_size == 0) { return join_size; }
 
-  rmm::device_scalar<size_type> write_index(0, stream);
-
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
@@ -277,6 +276,7 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
   }
   return join_size + left_join_complement_size;
 }
+}  // namespace
 
 template <typename Hasher>
 hash_join<Hasher>::hash_join(cudf::table_view const& build,
@@ -496,7 +496,7 @@ hash_join::~hash_join() = default;
 hash_join::hash_join(cudf::table_view const& build,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
-  : _impl_wrapper{std::make_unique<const impl_type>(build, compare_nulls, stream)}
+  : _impl{std::make_unique<const impl_type>(build, compare_nulls, stream)}
 {
 }
 
@@ -507,7 +507,7 @@ hash_join::inner_join(cudf::table_view const& probe,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr) const
 {
-  return _impl_wrapper->inner_join(probe, output_size, stream, mr);
+  return _impl->inner_join(probe, output_size, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -517,7 +517,7 @@ hash_join::left_join(cudf::table_view const& probe,
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr) const
 {
-  return _impl_wrapper->left_join(probe, output_size, stream, mr);
+  return _impl->left_join(probe, output_size, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -527,26 +527,26 @@ hash_join::full_join(cudf::table_view const& probe,
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr) const
 {
-  return _impl_wrapper->full_join(probe, output_size, stream, mr);
+  return _impl->full_join(probe, output_size, stream, mr);
 }
 
 std::size_t hash_join::inner_join_size(cudf::table_view const& probe,
                                        rmm::cuda_stream_view stream) const
 {
-  return _impl_wrapper->inner_join_size(probe, stream);
+  return _impl->inner_join_size(probe, stream);
 }
 
 std::size_t hash_join::left_join_size(cudf::table_view const& probe,
                                       rmm::cuda_stream_view stream) const
 {
-  return _impl_wrapper->left_join_size(probe, stream);
+  return _impl->left_join_size(probe, stream);
 }
 
 std::size_t hash_join::full_join_size(cudf::table_view const& probe,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr) const
 {
-  return _impl_wrapper->full_join_size(probe, stream, mr);
+  return _impl->full_join_size(probe, stream, mr);
 }
 
 }  // namespace cudf
