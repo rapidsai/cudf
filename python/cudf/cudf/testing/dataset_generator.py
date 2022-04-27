@@ -504,7 +504,11 @@ def rand_dataframe(
                         generator=lambda cardinality=cardinality: [
                             mimesis.random.random.schoice(
                                 string.printable,
-                                meta.get("max_string_length", 1000),
+                                np.random.randint(
+                                    low=0,
+                                    high=meta.get("max_string_length", 1000),
+                                    size=1,
+                                )[0],
                             )
                             for _ in range(cardinality)
                         ],

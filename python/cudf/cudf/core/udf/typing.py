@@ -63,7 +63,7 @@ class MaskedType(types.Type):
         Needed so that numba caches type instances with different
         `value_type` separately.
         """
-        return self.__repr__().__hash__()
+        return hash(repr(self))
 
     def unify(self, context, other):
         """
