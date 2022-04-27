@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import itertools
-from collections.abc import MutableMapping
+from collections import abc
 from functools import cached_property, reduce
 from typing import (
     TYPE_CHECKING,
@@ -78,7 +78,7 @@ def _to_flat_dict(d):
     return {k: v for k, v in _to_flat_dict_inner(d)}
 
 
-class ColumnAccessor(MutableMapping):
+class ColumnAccessor(abc.MutableMapping):
     """
     Parameters
     ----------
@@ -99,7 +99,7 @@ class ColumnAccessor(MutableMapping):
 
     def __init__(
         self,
-        data: Union[MutableMapping, ColumnAccessor] = None,
+        data: Union[abc.MutableMapping, ColumnAccessor] = None,
         multiindex: bool = False,
         level_names=None,
     ):
@@ -149,7 +149,7 @@ class ColumnAccessor(MutableMapping):
         return obj
 
     def __iter__(self):
-        return self._data.__iter__()
+        return iter(self._data)
 
     def __getitem__(self, key: Any) -> ColumnBase:
         return self._data[key]
@@ -158,7 +158,7 @@ class ColumnAccessor(MutableMapping):
         self.set_by_label(key, value)
 
     def __delitem__(self, key: Any):
-        self._data.__delitem__(key)
+        del self._data[key]
         self._clear_cache()
 
     def __len__(self) -> int:
@@ -213,7 +213,7 @@ class ColumnAccessor(MutableMapping):
         return tuple(self.values())
 
     @cached_property
-    def _grouped_data(self) -> MutableMapping:
+    def _grouped_data(self) -> abc.MutableMapping:
         """
         If self.multiindex is True,
         return the underlying mapping as a nested mapping.

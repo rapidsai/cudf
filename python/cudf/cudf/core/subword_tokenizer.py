@@ -1,9 +1,9 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
+import warnings
 from typing import Union
-from warnings import warn
 
 import cupy as cp
 
@@ -186,7 +186,7 @@ class SubwordTokenizer:
                 "When truncation is not True, the behaviour currently differs "
                 "from HuggingFace as cudf always returns overflowing tokens"
             )
-            warn(warning_msg)
+            warnings.warn(warning_msg)
 
         if padding != "max_length":
             error_msg = (

@@ -54,6 +54,10 @@ dependencies:
   - hypothesis
   - sphinx-markdown-tables
   - sphinx-copybutton
+  - sphinx-autobuild
+  - myst-nb
+  - scipy
+  - dask-cuda
   - mimesis<4.1
   - packaging
   - protobuf

@@ -16,6 +16,7 @@ from cudf.core._compat import PANDAS_GE_120
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
+    _create_pandas_series,
     assert_eq,
     assert_exceptions_equal,
     gen_rand,
@@ -381,7 +382,7 @@ def test_series_tolist(data):
     [[], [None, None], ["a"], ["a", "b", "c"] * 500, [1.0, 2.0, 0.3] * 57],
 )
 def test_series_size(data):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
+    psr = _create_pandas_series(data)
     gsr = cudf.Series(data)
 
     assert_eq(psr.size, gsr.size)
@@ -1594,7 +1595,7 @@ def test_series_nunique_index(data):
 )
 def test_isin_numeric(data, values):
     index = np.random.randint(0, 100, len(data))
-    psr = cudf.utils.utils._create_pandas_series(data=data, index=index)
+    psr = _create_pandas_series(data, index=index)
     gsr = cudf.Series.from_pandas(psr, nan_as_null=False)
 
     expected = psr.isin(values)
@@ -1654,7 +1655,7 @@ def test_fill_new_category():
     ],
 )
 def test_isin_datetime(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
+    psr = _create_pandas_series(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -1690,7 +1691,7 @@ def test_isin_datetime(data, values):
     ],
 )
 def test_isin_string(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
+    psr = _create_pandas_series(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -1719,7 +1720,7 @@ def test_isin_string(data, values):
     ],
 )
 def test_isin_categorical(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
+    psr = _create_pandas_series(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -1782,3 +1783,32 @@ def test_diff_many_dtypes(data):
     gs = cudf.from_pandas(ps)
     assert_eq(ps.diff(), gs.diff())
     assert_eq(ps.diff(periods=2), gs.diff(periods=2))
+
+
+@pytest.mark.parametrize("num_rows", [1, 100])
+@pytest.mark.parametrize("num_bins", [1, 10])
+@pytest.mark.parametrize("right", [True, False])
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
+@pytest.mark.parametrize("series_bins", [True, False])
+def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
+    data = np.random.randint(0, 100, num_rows).astype(dtype)
+    bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
+    s = cudf.Series(data)
+    if series_bins:
+        s_bins = cudf.Series(bins)
+        indices = s.digitize(s_bins, right)
+    else:
+        indices = s.digitize(bins, right)
+    np.testing.assert_array_equal(
+        np.digitize(data, bins, right), indices.to_numpy()
+    )
+
+
+def test_series_digitize_invalid_bins():
+    s = cudf.Series(np.random.randint(0, 30, 80), dtype="int32")
+    bins = cudf.Series([2, None, None, 50, 90], dtype="int32")
+
+    with pytest.raises(
+        ValueError, match="`bins` cannot contain null entries."
+    ):
+        _ = s.digitize(bins)

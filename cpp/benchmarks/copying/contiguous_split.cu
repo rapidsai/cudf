@@ -17,6 +17,7 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
