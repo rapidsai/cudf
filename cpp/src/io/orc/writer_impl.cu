@@ -55,6 +55,7 @@
 #include <utility>
 
 #include <cuda/std/limits>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -1215,18 +1216,7 @@ writer::impl::intermediate_statistics writer::impl::gather_statistic_blobs(
     return rowgroup_blobs;
   }();
 
-  hostdevice_vector<uint8_t> stripe_data =
-    allocate_and_encode_blobs(stripe_merge, stripe_chunks, num_stripe_blobs, stream);
-
-  std::vector<ColStatsBlob> stripe_blobs(num_stripe_blobs);
-  for (size_t i = 0; i < num_stripe_blobs; i++) {
-    auto const stat_begin = stripe_data.host_ptr(stripe_stat_merge[i].start_chunk);
-    auto const stat_end   = stat_begin + stripe_stat_merge[i].num_chunks;
-    stripe_blobs[i].assign(stat_begin, stat_end);
-  }
-
   return {std::move(rowgroup_blobs),
-          std::move(stripe_blobs),
           std::move(stripe_chunks),
           std::move(stripe_merge),
           std::move(col_stats_dtypes),
@@ -1317,10 +1307,9 @@ writer::impl::encoded_footer_statistics writer::impl::finish_statistic_blobs(
     auto const stat_begin = blobs.host_ptr(file_stat_merge[i].start_chunk);
     auto const stat_end   = stat_begin + file_stat_merge[i].num_chunks;
     file_blobs[i].assign(stat_begin, stat_end);
->>>>>>> first pass at chunked writing stastistics
   }
 
-  return {std::move(file_blobs)};
+  return {std::move(stripe_blobs), std::move(file_blobs)};
 }
 
 void writer::impl::write_index_stream(int32_t stripe_id,
@@ -2174,9 +2163,10 @@ void writer::impl::write(table_view const& table)
 
     auto intermediate_stats = gather_statistic_blobs(stats_freq_, orc_table, segmentation);
 
-    if (intermediate_stats.stripe_stat_chunks.size() > 0)
+    if (intermediate_stats.stripe_stat_chunks.size() > 0) {
       persisted_stripe_statistics.persist(
         orc_table.num_rows(), single_write_mode, intermediate_stats, stream);
+    }
 
     // Write stripes
     std::vector<std::future<void>> write_tasks;
@@ -2235,7 +2225,6 @@ void writer::impl::write(table_view const& table)
       }
       out_sink_->host_write(buffer_.data(), buffer_.size());
     }
-
     for (auto const& task : write_tasks) {
       task.wait();
     }

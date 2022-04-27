@@ -294,21 +294,18 @@ class writer::impl {
     explicit intermediate_statistics(rmm::cuda_stream_view stream)
       : stripe_stat_chunks(0, stream){};
     intermediate_statistics(std::vector<ColStatsBlob> rb,
-                            std::vector<ColStatsBlob> sb,
                             rmm::device_uvector<statistics_chunk> sc,
                             hostdevice_vector<statistics_merge_group> smg,
                             std::vector<statistics_dtype> sdt,
                             std::vector<data_type> sct)
       : rowgroup_blobs(std::move(rb)),
-        stripe_blobs(std::move(sb)),
         stripe_stat_chunks(std::move(sc)),
         stripe_stat_merge(std::move(smg)),
         stats_dtypes(std::move(sdt)),
         col_types(std::move(sct)){};
 
-    // blobs for the rowgroups and stripes. Not persisted
+    // blobs for the rowgroups. Not persisted
     std::vector<ColStatsBlob> rowgroup_blobs;
-    std::vector<ColStatsBlob> stripe_blobs;
 
     rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
     hostdevice_vector<statistics_merge_group> stripe_stat_merge;
@@ -349,6 +346,7 @@ class writer::impl {
    *
    */
   struct encoded_footer_statistics {
+    std::vector<ColStatsBlob> stripe_level;
     std::vector<ColStatsBlob> file_level;
   };
 
@@ -454,8 +452,6 @@ class writer::impl {
   // to track if the output has been written to sink
   bool closed = false;
   // statistics data saved between calls to write before a close writes out the statistics
-  persisted_statistics persisted_stripe_statistics;
-
   persisted_statistics persisted_stripe_statistics;
 
   std::vector<uint8_t> buffer_;
