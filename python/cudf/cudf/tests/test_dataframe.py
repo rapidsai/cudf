@@ -8698,43 +8698,6 @@ def test_frame_series_where():
 
 
 @pytest.mark.parametrize(
-    "array,is_error",
-    [
-        (cupy.arange(20, 40).reshape(-1, 2), False),
-        (cupy.arange(20, 50).reshape(-1, 3), True),
-        (np.arange(20, 40).reshape(-1, 2), False),
-        (np.arange(20, 30).reshape(-1, 1), False),
-        (cupy.arange(20, 30).reshape(-1, 1), False),
-    ],
-)
-def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
-    gdf = cudf.DataFrame({"a": range(10), "b": range(10)})
-    pdf = gdf.to_pandas()
-    if not is_error:
-        gdf.loc[:, ["a", "b"]] = array
-        pdf.loc[:, ["a", "b"]] = cupy.asnumpy(array)
-
-        assert_eq(gdf, pdf)
-    else:
-        assert_exceptions_equal(
-            lfunc=pdf.loc.__setitem__,
-            rfunc=gdf.loc.__setitem__,
-            lfunc_args_and_kwargs=(
-                [(slice(None, None, None), ["a", "b"]), cupy.asnumpy(array)],
-                {},
-            ),
-            rfunc_args_and_kwargs=(
-                [(slice(None, None, None), ["a", "b"]), array],
-                {},
-            ),
-            compare_error_message=False,
-            expected_error_message="shape mismatch: value array of shape "
-            "(10, 3) could not be broadcast to indexing "
-            "result of shape (10, 2)",
-        )
-
-
-@pytest.mark.parametrize(
     "data",
     [{"a": [1, 2, 3], "b": [1, 1, 0]}],
 )
