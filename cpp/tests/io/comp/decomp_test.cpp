@@ -50,7 +50,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
     rmm::device_uvector<uint8_t> dst{decompressed->size(), stream};
 
     hostdevice_vector<device_span<uint8_t const>> inf_in(1, stream);
-    inf_in[0] = {static_cast<const uint8_t*>(src.data()), src.size()};
+    inf_in[0] = {static_cast<uint8_t const*>(src.data()), src.size()};
     inf_in.host_to_device(stream);
 
     hostdevice_vector<device_span<uint8_t>> inf_out(1, stream);

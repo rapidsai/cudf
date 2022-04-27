@@ -343,7 +343,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     compinfo[i].uncompressed_data = dst_base + decomp_offset;
     compinfo[i].dec_in_ctl        = inflate_in.data() + start_pos;
     compinfo[i].dec_out_ctl       = inflate_out.data() + start_pos;
-    compinfo[i].decstatus         = inflate_stats.data() + start_pos;
+    compinfo[i].decstatus         = {inflate_stats.data(), start_pos};
     compinfo[i].copy_in_ctl       = inflate_in.data() + start_pos_uncomp;
     compinfo[i].copy_out_ctl      = inflate_out.data() + start_pos_uncomp;
 

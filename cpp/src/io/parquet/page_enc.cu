@@ -1095,7 +1095,6 @@ __global__ void __launch_bounds__(128, 8)
       pages[blockIdx.x].comp_stat = &comp_stats[blockIdx.x];
     }
   }
-  __syncthreads();
 }
 
 // blockDim(128, 1, 1)

@@ -69,7 +69,7 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
  * @brief Interface for decompressing Snappy-compressed data
  *
  * Multiple, independent chunks of compressed data can be decompressed by using
- * separate input/tput/status pairs for each chunk.
+ * separate input/output/status for each chunk.
  *
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers

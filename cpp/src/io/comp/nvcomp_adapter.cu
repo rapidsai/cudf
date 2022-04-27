@@ -32,7 +32,6 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
   rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
 
   // Prepare the input vectors
-
   auto ins_it =
     thrust::make_zip_iterator(compressed_data_ptrs.begin(), compressed_data_sizes.begin());
   thrust::transform(

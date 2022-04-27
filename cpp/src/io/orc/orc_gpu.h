@@ -45,7 +45,6 @@ struct CompressedStreamInfo {
       compressed_data_size(compressed_size_),
       dec_in_ctl(nullptr),
       dec_out_ctl(nullptr),
-      decstatus(nullptr),
       copy_in_ctl(nullptr),
       copy_out_ctl(nullptr),
       num_compressed_blocks(0),
@@ -56,15 +55,15 @@ struct CompressedStreamInfo {
   }
   const uint8_t* compressed_data;  // [in] base ptr to compressed stream data
   uint8_t* uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
-  size_t compressed_data_size;              // [in] compressed data size for this stream
-  device_span<uint8_t const>* dec_in_ctl;   // [in] input buffer to decompress
-  device_span<uint8_t>* dec_out_ctl;        // [in] output buffer to decompress into
-  decompress_status* decstatus;             // [in] results of decompression
-  device_span<uint8_t const>* copy_in_ctl;  // [out] input buffer to copy
-  device_span<uint8_t>* copy_out_ctl;       // [out] output buffer to copy to
+  size_t compressed_data_size;               // [in] compressed data size for this stream
+  device_span<uint8_t const>* dec_in_ctl;    // [in] input buffer to decompress
+  device_span<uint8_t>* dec_out_ctl;         // [in] output buffer to decompress into
+  device_span<decompress_status> decstatus;  // [in] results of decompression
+  device_span<uint8_t const>* copy_in_ctl;   // [out] input buffer to copy
+  device_span<uint8_t>* copy_out_ctl;        // [out] output buffer to copy to
   uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed
                                    // blocks(out)
-  uint32_t num_uncompressed_blocks;      // [in,out] number of entries in copy_in_ctl, number of
+  uint32_t num_uncompressed_blocks;      // [in,out] number of entries in dec_in_ctl(in), number of
                                          // uncompressed blocks(out)
   uint64_t max_uncompressed_size;        // [out] maximum uncompressed data size of stream
   uint32_t max_uncompressed_block_size;  // [out] maximum uncompressed size of any block in stream

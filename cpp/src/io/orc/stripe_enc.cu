@@ -1310,18 +1310,18 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t max_comp_blk_size,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            device_span<device_span<uint8_t const>> inputs,
-                            device_span<device_span<uint8_t>> outputs,
-                            device_span<decompress_status> statuses,
+                            device_span<device_span<uint8_t const>> comp_in,
+                            device_span<device_span<uint8_t>> comp_out,
+                            device_span<decompress_status> comp_stat,
                             rmm::cuda_stream_view stream)
 {
   dim3 dim_block_init(256, 1);
   dim3 dim_grid(strm_desc.size().first, strm_desc.size().second);
   gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(strm_desc,
                                                                             enc_streams,
-                                                                            inputs,
-                                                                            outputs,
-                                                                            statuses,
+                                                                            comp_in,
+                                                                            comp_out,
+                                                                            comp_stat,
                                                                             compressed_data,
                                                                             comp_blk_size,
                                                                             max_comp_blk_size);
@@ -1345,13 +1345,13 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                                                  uncompressed_data_sizes.begin());
         thrust::transform(
           rmm::exec_policy(stream),
-          inputs.begin(),
-          inputs.end(),
+          comp_in.begin(),
+          comp_in.end(),
           comp_it,
           [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
         thrust::transform(rmm::exec_policy(stream),
-                          outputs.begin(),
-                          outputs.end(),
+                          comp_out.begin(),
+                          comp_out.end(),
                           compressed_data_ptrs.begin(),
                           [] __device__(auto const& out) { return out.data(); });
         nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
@@ -1370,7 +1370,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
         thrust::transform(rmm::exec_policy(stream),
                           compressed_bytes_written.begin(),
                           compressed_bytes_written.end(),
-                          statuses.begin(),
+                          comp_stat.begin(),
                           [] __device__(size_t size) {
                             decompress_status status{};
                             status.bytes_written = size;
@@ -1380,18 +1380,18 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
         // If we reach this then there was an error in compressing so set an error status for each
         // block
         thrust::for_each(rmm::exec_policy(stream),
-                         statuses.begin(),
-                         statuses.end(),
+                         comp_stat.begin(),
+                         comp_stat.end(),
                          [] __device__(decompress_status & stat) { stat.status = 1; });
       };
 
     } else {
-      gpu_snap(inputs, outputs, statuses, stream);
+      gpu_snap(comp_in, comp_out, comp_stat, stream);
     }
   }
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
-    strm_desc, inputs, outputs, statuses, compressed_data, comp_blk_size, max_comp_blk_size);
+    strm_desc, comp_in, comp_out, comp_stat, compressed_data, comp_blk_size, max_comp_blk_size);
 }
 
 }  // namespace gpu

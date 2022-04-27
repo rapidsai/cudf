@@ -1904,13 +1904,12 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
  *
  * blockDim = {block_size,1,1}
  *
- * @param[in] inputs Source buffer information per block
- * @param[in] outputs Destination buffer information per block
+ * @param[in] inputs Source buffer per block
+ * @param[out] outputs Destination buffer per block
  * @param[out] statuses Decompressor status per block
  * @param scratch Intermediate device memory heap space (will be dynamically shared between blocks)
  * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between
- *blocks)
- * @param count Number of blocks to decompress
+ * blocks)
  */
 __global__ void __launch_bounds__(block_size, 2)
   gpu_debrotli_kernel(device_span<device_span<uint8_t const> const> inputs,
@@ -1922,19 +1921,19 @@ __global__ void __launch_bounds__(block_size, 2)
   __shared__ __align__(16) debrotli_state_s state_g;
 
   int t                     = threadIdx.x;
-  int z                     = blockIdx.x;
+  auto const block_id       = blockIdx.x;
   debrotli_state_s* const s = &state_g;
 
-  if (z >= inputs.size()) { return; }
+  if (block_id >= inputs.size()) { return; }
   // Thread0: initializes shared state and decode stream header
   if (!t) {
-    auto const src        = inputs[z].data();
-    size_t const src_size = inputs[z].size();
+    auto const src      = inputs[block_id].data();
+    auto const src_size = inputs[block_id].size();
     if (src && src_size >= 8) {
       s->error           = 0;
-      s->out             = outputs[z].data();
-      s->outbase         = outputs[z].data();
-      s->bytes_left      = outputs[z].size();
+      s->out             = outputs[block_id].data();
+      s->outbase         = s->out;
+      s->bytes_left      = outputs[block_id].size();
       s->mtf_upper_bound = 63;
       s->dist_rb[0]      = 16;
       s->dist_rb[1]      = 15;
@@ -2017,9 +2016,10 @@ __global__ void __launch_bounds__(block_size, 2)
   __syncthreads();
   // Output decompression status
   if (!t) {
-    statuses[z].bytes_written = s->out - s->outbase;
-    statuses[z].status        = s->error;
-    statuses[z].reserved      = s->fb_size;  // Return ext heap used by last block (statistics)
+    statuses[block_id].bytes_written = s->out - s->outbase;
+    statuses[block_id].status        = s->error;
+    // Return ext heap used by last block (statistics)
+    statuses[block_id].reserved = s->fb_size;
   }
 }
 

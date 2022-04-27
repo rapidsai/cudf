@@ -21,6 +21,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <nvcomp.h>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
@@ -45,7 +46,7 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
                                         rmm::cuda_stream_view stream);
 
 /**
- * @brief Convert nvcomp statuses into cuIO comspression statuses.
+ * @brief Convert nvcomp statuses into cuIO compression statuses.
  */
 void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
                     device_span<size_t const> actual_uncompressed_sizes,

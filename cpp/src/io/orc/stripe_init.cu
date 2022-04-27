@@ -375,11 +375,11 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
   if (strm_len > 0) {
     int32_t compressed_offset = (t < num_rowgroups) ? s->compressed_offset[t][ci_id] : 0;
     if (compressed_offset > 0) {
-      const uint8_t* start         = s->strm_info[ci_id].compressed_data;
-      const uint8_t* cur           = start;
-      const uint8_t* end           = cur + s->strm_info[ci_id].compressed_data_size;
-      decompress_status* decstatus = s->strm_info[ci_id].decstatus;
-      uint32_t uncomp_offset       = 0;
+      const uint8_t* start   = s->strm_info[ci_id].compressed_data;
+      const uint8_t* cur     = start;
+      const uint8_t* end     = cur + s->strm_info[ci_id].compressed_data_size;
+      auto decstatus         = s->strm_info[ci_id].decstatus.data();
+      uint32_t uncomp_offset = 0;
       for (;;) {
         uint32_t block_len, is_uncompressed;
 
