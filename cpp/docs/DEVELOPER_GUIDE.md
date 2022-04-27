@@ -572,7 +572,7 @@ The preferred style for how inputs are passed in and outputs are returned is the
 
 Sometimes it is necessary for functions to have multiple outputs. There are a few ways this can be
 done in C++ (including creating a `struct` for the output). One convenient way to do this is
-using `std::tie`  and `std::make_pair`. Note that objects passed to `std::make_pair` will invoke
+using `std::tie`  and `std::pair`. Note that objects passed to `std::pair` will invoke
 either the copy constructor or the move constructor of the object, and it may be preferable to move
 non-trivially copyable objects (and required for types with deleted copy constructors, like
 `std::unique_ptr`).
@@ -585,7 +585,7 @@ std::pair<table, table> return_two_tables(void){
   // Do stuff with out0, out1
 
   // Return a std::pair of the two outputs
-  return std::make_pair(std::move(out0), std::move(out1));
+  return std::pair(std::move(out0), std::move(out1));
 }
 
 cudf::table out0;

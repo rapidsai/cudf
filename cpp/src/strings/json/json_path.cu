@@ -670,8 +670,8 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
   return is_empty
-           ? std::make_pair(thrust::nullopt, 0)
-           : std::make_pair(
+           ? std::pair(thrust::nullopt, 0)
+           : std::pair(
                thrust::make_optional(cudf::detail::make_device_uvector_sync(h_operators, stream)),
                max_stack_depth);
 }

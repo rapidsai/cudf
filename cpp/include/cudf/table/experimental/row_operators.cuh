@@ -165,14 +165,13 @@ class device_row_comparator {
         bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
 
         if (lhs_is_null or rhs_is_null) {  // at least one is null
-          return cuda::std::make_pair(null_compare(lhs_is_null, rhs_is_null, _null_precedence),
-                                      _depth);
+          return cuda::std::pair(null_compare(lhs_is_null, rhs_is_null, _null_precedence), _depth);
         }
       }
 
-      return cuda::std::make_pair(relational_compare(_lhs.element<Element>(lhs_element_index),
-                                                     _rhs.element<Element>(rhs_element_index)),
-                                  std::numeric_limits<int>::max());
+      return cuda::std::pair(relational_compare(_lhs.element<Element>(lhs_element_index),
+                                                _rhs.element<Element>(rhs_element_index)),
+                             std::numeric_limits<int>::max());
     }
 
     template <typename Element,
@@ -197,11 +196,11 @@ class device_row_comparator {
 
         if (lhs_is_null or rhs_is_null) {  // at least one is null
           weak_ordering state = null_compare(lhs_is_null, rhs_is_null, _null_precedence);
-          return cuda::std::make_pair(state, depth);
+          return cuda::std::pair(state, depth);
         }
 
         if (lcol.num_child_columns() == 0) {
-          return cuda::std::make_pair(weak_ordering::EQUIVALENT, depth);
+          return cuda::std::pair(weak_ordering::EQUIVALENT, depth);
         }
 
         // Non-empty structs have been modified to only have 1 child when using this.
