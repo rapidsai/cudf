@@ -51,11 +51,14 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
                     thrust::make_counting_iterator<size_type>(input.size()),
                     strings_vector.begin(),
                     [d_strings = *d_strings] __device__(size_type idx) {
-                      if (d_strings.is_null(idx)) { return string_view{nullptr, 0}; }
+                      // placeholder for factory function that takes a span of string_views
+                      auto const null_string_view = string_view{nullptr, 0};
+                      if (d_strings.is_null(idx)) { return null_string_view; }
                       auto const d_str = d_strings.element<string_view>(idx);
                       // special case when the entire column is filled with empty strings:
                       // here the empty d_str may have a d_str.data() == nullptr
-                      return d_str.empty() ? string_view{} : d_str;
+                      auto const empty_string_view = string_view{};
+                      return d_str.empty() ? empty_string_view : d_str;
                     });
 
   return strings_vector;
