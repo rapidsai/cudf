@@ -139,11 +139,11 @@ std::size_t reprog_device::working_memory_size(int32_t num_threads) const
 }
 
 std::pair<std::size_t, int32_t> reprog_device::compute_strided_working_memory(
-  int32_t rows, int32_t min_rows, std::size_t max_size) const
+  int32_t rows, int32_t min_rows, std::size_t requested_max_size) const
 {
   auto thread_count = rows;
   auto buffer_size  = working_memory_size(thread_count);
-  while ((buffer_size > max_size) && (thread_count > min_rows)) {
+  while ((buffer_size > requested_max_size) && (thread_count > min_rows)) {
     thread_count = thread_count / 2;
     buffer_size  = working_memory_size(thread_count);
   }
