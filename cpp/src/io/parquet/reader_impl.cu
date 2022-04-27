@@ -1172,9 +1172,22 @@ rmm::device_buffer reader::impl::decompress_page_data(
         argc++;
       });
 
-      inflate_in.host_to_device(start_pos, argc - start_pos, stream);
-      inflate_out.host_to_device(start_pos, argc - start_pos, stream);
-      inflate_stats.host_to_device(start_pos, argc - start_pos, stream);
+      CUDF_CUDA_TRY(cudaMemcpyAsync(inflate_in.device_ptr(start_pos),
+                                    inflate_in.host_ptr(start_pos),
+                                    sizeof(decltype(inflate_in)::value_type) * (argc - start_pos),
+                                    cudaMemcpyHostToDevice,
+                                    stream.value()));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(inflate_out.device_ptr(start_pos),
+                                    inflate_out.host_ptr(start_pos),
+                                    sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
+                                    cudaMemcpyHostToDevice,
+                                    stream.value()));
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(inflate_stats.device_ptr(start_pos),
+                        inflate_stats.host_ptr(start_pos),
+                        sizeof(decltype(inflate_stats)::value_type) * (argc - start_pos),
+                        cudaMemcpyHostToDevice,
+                        stream.value()));
 
       switch (codec.compression_type) {
         case parquet::GZIP:
@@ -1209,7 +1222,12 @@ rmm::device_buffer reader::impl::decompress_page_data(
           break;
         default: CUDF_FAIL("Unexpected decompression dispatch"); break;
       }
-      inflate_stats.device_to_host(start_pos, argc - start_pos, stream);
+      CUDF_CUDA_TRY(
+        cudaMemcpyAsync(inflate_stats.host_ptr(start_pos),
+                        inflate_stats.device_ptr(start_pos),
+                        sizeof(decltype(inflate_stats)::value_type) * (argc - start_pos),
+                        cudaMemcpyDeviceToHost,
+                        stream.value()));
     }
   }
 
