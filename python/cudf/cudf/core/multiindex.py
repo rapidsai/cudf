@@ -470,7 +470,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         else:
             preprocess = preprocess.to_pandas(nullable=True)
 
-        output = preprocess.__repr__()
+        output = repr(preprocess)
         output_prefix = self.__class__.__name__ + "("
         output = output.lstrip(output_prefix)
         lines = output.split("\n")

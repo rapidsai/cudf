@@ -258,10 +258,7 @@ struct interleave_columns_impl<T, std::enable_if_t<cudf::is_fixed_width<T>()>> {
                          func_value,
                          func_validity);
 
-    rmm::device_buffer mask;
-    size_type null_count;
-
-    std::tie(mask, null_count) = valid_if(index_begin, index_end, func_validity, stream, mr);
+    auto [mask, null_count] = valid_if(index_begin, index_end, func_validity, stream, mr);
 
     output->set_null_mask(std::move(mask), null_count);
 
