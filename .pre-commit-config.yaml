@@ -56,6 +56,19 @@ repos:
         hooks:
               - id: pydocstyle
                 args: ["--config=python/.flake8"]
+                exclude: |
+                    (?x)^(
+                    ci|
+                    cpp|
+                    conda|
+                    docs|
+                    java|
+                    notebooks|
+                    python/dask_cudf|
+                    python/cudf_kafka|
+                    python/custreamz|
+                    python/cudf/cudf/tests
+                    )
       - repo: https://github.com/pre-commit/mirrors-clang-format
         rev: v11.1.0
         hooks:
