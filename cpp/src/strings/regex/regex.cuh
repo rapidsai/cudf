@@ -126,18 +126,26 @@ class reprog_device {
 
   /**
    * @brief Returns the size needed for working memory for the given thread count.
+   *
+   * @param num_threads Number of threads to be executed in parallel
+   * @return Size of working memory in bytes
    */
   [[nodiscard]] std::size_t working_memory_size(int32_t num_threads) const;
 
   /**
    * @brief Compute working memory for the given thread count with a maximum size.
    *
-   * Returns the size of the working memory and the number of threads it will support.
+   * The `min_rows` overrules the `max_size`. That is, the `max_size` may be
+   * exceeded to keep the number of rows greater than `min_rows`.
+   * Also, if `rows < min_rows` the `min_rows` is not enforced.
+   *
+   * @param rows Number of rows to execute in parallel
+   * @param min_rows The least number of rows to meet `max_size`
+   * @param max_size Requested maximum bytes for working memory
+   * @return The size of the working memory and the number of parallel rows it will support
    */
   [[nodiscard]] std::pair<std::size_t, int32_t> compute_strided_working_memory(
-    int32_t rows,
-    int32_t min_threads  = MINIMUM_THREADS,
-    std::size_t max_size = MAX_WORKING_MEM) const;
+    int32_t rows, int32_t min_rows = MINIMUM_THREADS, std::size_t max_size = MAX_WORKING_MEM) const;
 
   /**
    * @brief Set the device working memory buffer to use for the regex execution.

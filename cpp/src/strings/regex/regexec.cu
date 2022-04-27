@@ -147,6 +147,11 @@ std::pair<std::size_t, int32_t> reprog_device::compute_strided_working_memory(
     thread_count = thread_count / 2;
     buffer_size  = working_memory_size(thread_count);
   }
+  // clamp to min_rows but only if rows is greater than min_rows
+  if (rows > min_rows && thread_count < min_rows) {
+    thread_count = min_rows;
+    buffer_size  = working_memory_size(thread_count);
+  }
   return std::make_pair(buffer_size, thread_count);
 }
 
