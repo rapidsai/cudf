@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <join/join_common_utils.hpp>
+#include "join_common_utils.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
