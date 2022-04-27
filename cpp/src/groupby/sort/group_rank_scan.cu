@@ -275,15 +275,21 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(percentage != rank_percentage::NONE, "Percentage cannot be NONE");
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<double>()}, group_labels.size(), mask_state::UNALLOCATED, stream, mr);
   ranks->set_null_mask(copy_bitmask(rank, stream, mr));
   auto mutable_ranks = ranks->mutable_view();
+
+  auto one_normalized = [] __device__(auto const rank, auto const group_size) {
+    return group_size == 1 ? 0.0 : ((rank - 1.0) / (group_size - 1));
+  };
   if (method == rank_method::DENSE) {
     thrust::tabulate(rmm::exec_policy(stream),
                      mutable_ranks.begin<double>(),
                      mutable_ranks.end<double>(),
                      [percentage,
+                      one_normalized,
                       is_double = rank.type().id() == type_id::FLOAT64,
                       dcount    = count.begin<size_type>(),
                       labels    = group_labels.begin(),
@@ -296,23 +302,25 @@ std::unique_ptr<column> group_rank_to_percentage(rank_method const method,
                        auto const last_rank            = s_rank[last_rank_index];
                        return percentage == rank_percentage::ZERO_NORMALIZED
                                 ? r / last_rank
-                                : (r - 1) / (last_rank - 1);
+                                : one_normalized(r, last_rank);
                      });
   } else {
-    thrust::tabulate(
-      rmm::exec_policy(stream),
-      mutable_ranks.begin<double>(),
-      mutable_ranks.end<double>(),
-      [percentage,
-       is_double = rank.type().id() == type_id::FLOAT64,
-       dcount    = count.begin<size_type>(),
-       labels    = group_labels.begin(),
-       d_rank    = rank.begin<double>(),
-       s_rank    = rank.begin<size_type>()] __device__(size_type row_index) -> double {
-        double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
-        auto const count = dcount[labels[row_index]];
-        return percentage == rank_percentage::ZERO_NORMALIZED ? r / count : (r - 1) / (count - 1);
-      });
+    thrust::tabulate(rmm::exec_policy(stream),
+                     mutable_ranks.begin<double>(),
+                     mutable_ranks.end<double>(),
+                     [percentage,
+                      one_normalized,
+                      is_double = rank.type().id() == type_id::FLOAT64,
+                      dcount    = count.begin<size_type>(),
+                      labels    = group_labels.begin(),
+                      d_rank    = rank.begin<double>(),
+                      s_rank = rank.begin<size_type>()] __device__(size_type row_index) -> double {
+                       double const r   = is_double ? d_rank[row_index] : s_rank[row_index];
+                       auto const count = dcount[labels[row_index]];
+                       return percentage == rank_percentage::ZERO_NORMALIZED
+                                ? r / count
+                                : one_normalized(r, count);
+                     });
   }
   return ranks;
 }
