@@ -1125,10 +1125,15 @@ rmm::device_buffer reader::impl::decompress_page_data(
   // Dispatch batches of pages to decompress for each codec
   rmm::device_buffer decomp_pages(total_decomp_size, stream);
 
-  rmm::device_uvector<decompress_status> inflate_stats(num_comp_pages, stream);
+  std::vector<device_span<uint8_t const>> comp_in;
+  comp_in.reserve(num_comp_pages);
+  std::vector<device_span<uint8_t>> comp_out;
+  comp_out.reserve(num_comp_pages);
+
+  rmm::device_uvector<decompress_status> comp_stats(num_comp_pages, stream);
   thrust::fill(rmm::exec_policy(stream),
-               inflate_stats.begin(),
-               inflate_stats.end(),
+               comp_stats.begin(),
+               comp_stats.end(),
                decompress_status{0, static_cast<uint32_t>(-1000), 0});
 
   size_t decomp_offset = 0;
@@ -1136,54 +1141,56 @@ rmm::device_buffer reader::impl::decompress_page_data(
   for (const auto& codec : codecs) {
     if (codec.num_pages == 0) { continue; }
 
-    std::vector<device_span<uint8_t const>> inflate_in;
-    std::vector<device_span<uint8_t>> inflate_out;
     for_each_codec_page(codec.compression_type, [&](size_t page) {
       auto dst_base = static_cast<uint8_t*>(decomp_pages.data());
-      inflate_in.emplace_back(pages[page].page_data,
-                              static_cast<size_t>(pages[page].compressed_page_size));
-      inflate_out.emplace_back(dst_base + decomp_offset,
-                               static_cast<size_t>(pages[page].uncompressed_page_size));
+      comp_in.emplace_back(pages[page].page_data,
+                           static_cast<size_t>(pages[page].compressed_page_size));
+      comp_out.emplace_back(dst_base + decomp_offset,
+                            static_cast<size_t>(pages[page].uncompressed_page_size));
 
-      pages[page].page_data = static_cast<uint8_t*>(inflate_out.back().data());
-      decomp_offset += inflate_out.back().size();
+      pages[page].page_data = static_cast<uint8_t*>(comp_out.back().data());
+      decomp_offset += comp_out.back().size();
     });
 
-    auto const d_inflate_in  = cudf::detail::make_device_uvector_async(inflate_in, stream);
-    auto const d_inflate_out = cudf::detail::make_device_uvector_async(inflate_out, stream);
-    device_span<decompress_status> inflate_stats_view(inflate_stats.data() + start_pos,
-                                                      inflate_in.size());
+    host_span<device_span<uint8_t const> const> comp_in_view{comp_in.data() + start_pos,
+                                                             codec.num_pages};
+    auto const d_comp_in = cudf::detail::make_device_uvector_async(comp_in_view, stream);
+    host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
+                                                        codec.num_pages);
+    auto const d_comp_out = cudf::detail::make_device_uvector_async(comp_out_view, stream);
+    device_span<decompress_status> d_comp_stats_view(comp_stats.data() + start_pos,
+                                                     codec.num_pages);
+
     switch (codec.compression_type) {
       case parquet::GZIP:
-        gpuinflate(
-          d_inflate_in, d_inflate_out, inflate_stats_view, gzip_header_included::YES, stream);
+        gpuinflate(d_comp_in, d_comp_out, d_comp_stats_view, gzip_header_included::YES, stream);
         break;
       case parquet::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
-                                     d_inflate_in,
-                                     d_inflate_out,
-                                     inflate_stats_view,
+                                     d_comp_in,
+                                     d_comp_out,
+                                     d_comp_stats_view,
                                      codec.max_decompressed_size,
                                      stream);
         } else {
-          gpu_unsnap(d_inflate_in, d_inflate_out, inflate_stats_view, stream);
+          gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, stream);
         }
         break;
       case parquet::BROTLI:
-        gpu_debrotli(d_inflate_in,
-                     d_inflate_out,
-                     inflate_stats_view,
+        gpu_debrotli(d_comp_in,
+                     d_comp_out,
+                     d_comp_stats_view,
                      debrotli_scratch.data(),
                      debrotli_scratch.size(),
                      stream);
         break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
-    start_pos += inflate_in.size();
+    start_pos += codec.num_pages;
   }
 
-  decompress_check(inflate_stats, stream);
+  decompress_check(comp_stats, stream);
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
