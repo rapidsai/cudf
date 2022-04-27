@@ -136,59 +136,49 @@ class ewma_adjust_denominator_nonull_functor : public ewma_functor_base<T> {
   __device__ pair_type<T> operator()(pair_type<T> pairs) { return {beta, 1.0}; }
 };
 
-template <typename T>
-class ewma_noadjust_nonull_functor : public ewma_functor_base<T> {
+
+template <typename T, bool nulls, typename tupletype>
+class ewma_noadjust_functor : public ewma_functor_base<T> {
  private:
   T beta;
 
  public:
-  ewma_noadjust_nonull_functor(T beta) : beta{beta} {}
-
-  __device__ pair_type<T> operator()(thrust::tuple<T, size_type> data)
+  ewma_noadjust_functor(T beta) : beta{beta} {}
+  
+  __device__ pair_type<T> operator()(tupletype data) 
   {
-    T const beta          = this->beta;
-    T const input         = thrust::get<0>(data);
-    size_type const index = thrust::get<1>(data);
-    if (index == 0) {
-      return {beta, input};
-    } else {
-      return {beta, (1.0 - beta) * input};
-    }
-  }
-};
-
-template <typename T>
-class ewma_noadjust_null_functor : public ewma_functor_base<T> {
- private:
-  T beta;
-
- public:
-  ewma_noadjust_null_functor(T beta) : beta{beta} {}
-
-  __device__ pair_type<T> operator()(thrust::tuple<T, size_type, bool, size_type> data)
-  {
-    T input           = thrust::get<0>(data);
+    
+    T const beta = this->beta;
     size_type index   = thrust::get<1>(data);
-    bool is_valid     = thrust::get<2>(data);
-    size_type nullcnt = thrust::get<3>(data);
+    T const input     = thrust::get<0>(data);
 
-    T beta = this->beta;
-
-    if (index == 0) {
-      return {beta, input};
-    } else {
-      if (is_valid and nullcnt == 0) {
-        // preceeding value is valid, return normal pair
-        return {beta, (1.0 - beta) * input};
-      } else if (is_valid and nullcnt != 0) {
-        // one or more preceeding values is null, adjust by how many
-        T factor = (1.0 - beta) + pow(beta, nullcnt + 1);
-        return {(beta * (pow(beta, nullcnt)) / factor), ((1.0 - beta) * input) / factor};
+    if constexpr (!nulls) {
+      if (index == 0) {
+        return {beta, input};
       } else {
-        // value is not valid
-        return this->IDENTITY;
+        return {beta, (1.0 - beta) * input};
       }
     }
+    else {
+      bool is_valid     = thrust::get<2>(data);
+      size_type nullcnt = thrust::get<3>(data);
+
+      if (index == 0) {
+        return {beta, input};
+      } else {
+        if (is_valid and nullcnt == 0) {
+          // preceeding value is valid, return normal pair
+          return {beta, (1.0 - beta) * input};
+        } else if (is_valid and nullcnt != 0) {
+          // one or more preceeding values is null, adjust by how many
+          T factor = (1.0 - beta) + pow(beta, nullcnt + 1);
+          return {(beta * (pow(beta, nullcnt)) / factor), ((1.0 - beta) * input) / factor};
+        } else {
+          // value is not valid
+          return this->IDENTITY;
+        }
+      }
+    }  
   }
 };
 
@@ -314,7 +304,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
-                                     ewma_noadjust_nonull_functor{beta},
+                                     ewma_noadjust_functor<T, false, thrust::tuple<T, size_type>>{beta},
                                      recurrence_functor<T>{});
 
   } else {
@@ -342,7 +332,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
-                                     ewma_noadjust_null_functor{beta},
+                                     ewma_noadjust_functor<T, true, thrust::tuple<T, size_type, bool, size_type>>{beta},
                                      recurrence_functor<T>());
   }
 
