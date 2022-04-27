@@ -16,5 +16,7 @@ ignore =
 # pydocstyle is invoked from pre-commit. Therefore this exclusion list must
 # also be maintained in the pre-commit config file.
 match-dir = ^(?!(ci|cpp|conda|docs|java|notebooks|dask_cudf|cudf_kafka|custreamz|tests)).*$
+# Allow missing docstrings for docutils
+ignore-decorators = .*(docutils|doc_apply|copy_docstring).*
 select = 
     D30
