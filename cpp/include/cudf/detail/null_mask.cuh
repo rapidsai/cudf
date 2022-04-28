@@ -133,7 +133,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
                           stream,
                           mr);
 
-  return std::make_pair(std::move(dest_mask), null_count);
+  return std::pair(std::move(dest_mask), null_count);
 }
 
 /**

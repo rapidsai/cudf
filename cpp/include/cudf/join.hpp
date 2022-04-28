@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -29,6 +30,16 @@
 #include <vector>
 
 namespace cudf {
+
+// forward declaration
+namespace detail {
+template <typename T>
+class MurmurHash3_32;
+
+template <typename T>
+class hash_join;
+}  // namespace detail
+
 /**
  * @addtogroup column_join
  * @{
@@ -503,6 +514,9 @@ std::unique_ptr<cudf::table> cross_join(
  */
 class hash_join {
  public:
+  using impl_type =
+    typename cudf::detail::hash_join<cudf::detail::MurmurHash3_32<cudf::hash_value_type>>;
+
   hash_join() = delete;
   ~hash_join();
   hash_join(hash_join const&) = delete;
@@ -634,8 +648,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
-  struct hash_join_impl;
-  const std::unique_ptr<const hash_join_impl> impl;
+  const std::unique_ptr<const impl_type> _impl;
 };
 
 /**
