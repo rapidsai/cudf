@@ -203,7 +203,7 @@ TEST_F(Distinct, ListOfStruct)
   // 12.  [{0,'a'}, {2,'c'}]  !=
   // 13.  [{0,Null}]          ==
   // 14.  [{0,Null}]          !=
-  // 15.  [{Null, 'b'}]         ==
+  // 15.  [{Null, 'b'}]       ==
   // 16.  [{Null, 'b'}]
 
   auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{
