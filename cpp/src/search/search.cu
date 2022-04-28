@@ -204,13 +204,8 @@ struct contains_scalar_dispatch {
                    "scalar and column child types must match");
 
       // Generate a (lists) column_view of one row having the child given from the input scalar.
-      auto offsets = rmm::device_uvector<offset_type>(2, stream);
-      thrust::uninitialized_fill(
-        rmm::exec_policy(stream), offsets.begin(), offsets.begin() + 1, offset_type{0});
-      thrust::uninitialized_fill(rmm::exec_policy(stream),
-                                 offsets.begin() + 1,
-                                 offsets.begin() + 2,
-                                 offset_type{scalar_cview.size()});
+      auto const offsets = cudf::detail::make_device_uvector_async<offset_type>(
+        std::vector<offset_type>{0, scalar_cview.size()}, stream);
       auto const offsets_cview = column_view(data_type{type_id::INT32}, 2, offsets.data());
       auto const val_col       = column_view(data_type{type_id::LIST},
                                        1,
