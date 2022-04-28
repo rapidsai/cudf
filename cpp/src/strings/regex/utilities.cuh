@@ -32,6 +32,8 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
+constexpr auto regex_launch_kernel_block_size = 256;
+
 template <typename ForEachFunction>
 __global__ void for_each_kernel(ForEachFunction fn, reprog_device const d_prog, size_type size)
 {
@@ -59,7 +61,7 @@ void launch_for_each_kernel(ForEachFunction fn,
   d_prog.set_working_memory(d_buffer.data(), thread_count);
 
   auto const shmem_size = d_prog.compute_shared_memory_size();
-  cudf::detail::grid_1d grid{thread_count, 256};
+  cudf::detail::grid_1d grid{thread_count, regex_launch_kernel_block_size};
   for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
     fn, d_prog, size);
 }
@@ -95,7 +97,7 @@ void launch_transform_kernel(TransformFunction fn,
   d_prog.set_working_memory(d_buffer.data(), thread_count);
 
   auto const shmem_size = d_prog.compute_shared_memory_size();
-  cudf::detail::grid_1d grid{thread_count, 256};
+  cudf::detail::grid_1d grid{thread_count, regex_launch_kernel_block_size};
   transform_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
     fn, d_prog, d_output, size);
 }
