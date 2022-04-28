@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#include <type_traits>
-
 /**
  * @file
  * @brief Class definition for cudf::struct_view.
@@ -31,11 +29,5 @@ namespace cudf {
  */
 class struct_view {
 };
-
-template <typename Type>
-auto constexpr is_struct_type()
-{
-  return std::is_same_v<Type, struct_view>;
-}
 
 }  // namespace cudf
