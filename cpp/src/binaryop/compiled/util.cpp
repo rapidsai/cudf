@@ -26,6 +26,19 @@
 namespace cudf::binops::compiled {
 
 namespace {
+
+struct common_data_type_functor {
+  template <typename TypeLhs, typename TypeRhs>
+  std::optional<data_type> operator()()
+  {
+    if constexpr (cudf::has_common_type_v<TypeLhs, TypeRhs>) {
+      using TypeCommon = std::common_type_t<TypeLhs, TypeRhs>;
+      return data_type{type_to_id<TypeCommon>()};
+    }
+    return std::nullopt;
+  }
+};
+
 /**
  * @brief Functor that returns optional common type of 2 or 3 given types.
  *
@@ -183,7 +196,16 @@ struct is_supported_operation_functor {
 
 std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type rhs)
 {
-  return double_type_dispatcher(lhs, rhs, common_type_functor{}, out);
+  // We want std::common_type_t<TypeOut, TypeLhs, TypeRhs>. We can avoid a
+  // triple type dispatch by using the definition of std::common_type to
+  // compute this with two double-dispatches. Specifically,
+  // std::common_type_t<A, B, C> is the same as
+  // std::common_type_t<std::common_type_t<A, B>, C>.
+  auto common_type = double_type_dispatcher(out, lhs, common_data_type_functor{});
+  if (common_type.has_value()) {
+    common_type = double_type_dispatcher(common_type.value(), rhs, common_data_type_functor{});
+  }
+  return common_type;
 }
 
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
