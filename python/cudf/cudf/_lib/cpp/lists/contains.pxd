@@ -18,3 +18,8 @@ cdef extern from "cudf/lists/contains.hpp" namespace "cudf::lists" nogil:
         lists_column_view lists,
         scalar search_key,
     ) except +
+
+    cdef unique_ptr[column] index_of(
+        lists_column_view lists,
+        column_view search_keys,
+    ) except +

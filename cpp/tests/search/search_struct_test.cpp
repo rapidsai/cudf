@@ -57,7 +57,7 @@ auto search_bounds(cudf::column_view const& t_col_view,
   auto const values       = cudf::table_view{std::vector<cudf::column_view>{values_col->view()}};
   auto result_lower_bound = cudf::lower_bound(t, values, column_orders, null_precedence);
   auto result_upper_bound = cudf::upper_bound(t, values, column_orders, null_precedence);
-  return std::make_pair(std::move(result_lower_bound), std::move(result_upper_bound));
+  return std::pair(std::move(result_lower_bound), std::move(result_upper_bound));
 }
 
 auto search_bounds(std::unique_ptr<cudf::column> const& t_col,
