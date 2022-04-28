@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "stream_compaction/stream_compaction_common.cuh"
+#include "stream_compaction/stream_compaction_common.hpp"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -239,23 +242,13 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
                                  : false;
 }
 
-}  // namespace
-
-namespace detail {
-bool contains(column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
-{
-  if (col.is_empty()) { return false; }
-  if (not value.is_valid(stream)) { return col.has_nulls(); }
-
-  return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream);
-}
-
 struct multi_contains_dispatch {
   template <typename Element>
-  std::unique_ptr<column> operator()(column_view const& haystack,
-                                     column_view const& needles,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  std::enable_if_t<!is_nested<Element>(), std::unique_ptr<column>> operator()(
+    column_view const& haystack,
+    column_view const& needles,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     auto const n_rows = haystack.size();
     auto result       = make_numeric_column(data_type{type_to_id<bool>()},
@@ -267,56 +260,108 @@ struct multi_contains_dispatch {
     if (haystack.is_empty()) { return result; }
 
     auto const out_begin = result->mutable_view().template begin<bool>();
-
     if (needles.is_empty()) {
       thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_begin + n_rows, false);
       return result;
     }
 
-    auto hash_set              = cudf::detail::unordered_multiset<Element>::create(needles, stream);
-    auto const device_hash_set = hash_set.to_device();
+    auto hash_set          = cudf::detail::unordered_multiset<Element>::create(needles, stream);
+    auto const hash_set_dv = hash_set.to_device();
 
-    auto const d_haystack_ptr = column_device_view::create(haystack, stream);
-    auto const d_haystack     = *d_haystack_ptr;
+    auto const haystack_cdv_ptr = column_device_view::create(haystack, stream);
+    auto const haystack_cdv     = *haystack_cdv_ptr;
+    auto const begin            = thrust::make_counting_iterator<size_type>(0);
+    auto const end              = thrust::make_counting_iterator<size_type>(haystack.size());
 
     if (haystack.has_nulls()) {
-      thrust::transform(
-        rmm::exec_policy(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(haystack.size()),
-        out_begin,
-        [device_hash_set, d_haystack] __device__(size_t index) {
-          return d_haystack.is_null_nocheck(index) ||
-                 device_hash_set.contains(d_haystack.template element<Element>(index));
-        });
+      thrust::transform(rmm::exec_policy(stream),
+                        begin,
+                        end,
+                        out_begin,
+                        [hash_set_dv, haystack_cdv] __device__(size_t idx) {
+                          return haystack_cdv.is_null_nocheck(idx) ||
+                                 hash_set_dv.contains(haystack_cdv.template element<Element>(idx));
+                        });
     } else {
       thrust::transform(
         rmm::exec_policy(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(haystack.size()),
+        begin,
+        end,
         out_begin,
-        [device_hash_set, d_haystack] __device__(size_t index) {
-          return device_hash_set.contains(d_haystack.template element<Element>(index));
+        [hash_set_dv, haystack_cdv] __device__(size_t index) {
+          return hash_set_dv.contains(haystack_cdv.template element<Element>(index));
         });
     }
 
     return result;
   }
+
+  /**
+   * @brief Check if each row of the @p values column is contained in the corresponding @p input
+   * column.
+   *
+   * This utility function is only applied for nested types (struct + list). Caller is responsible
+   * to make sure the @p values and @p input have the same number of rows.
+   */
+  static std::unique_ptr<column> check_contain_for_nested_type(column_view const& input,
+                                                               column_view const& values,
+                                                               rmm::cuda_stream_view stream,
+                                                               rmm::mr::device_memory_resource* mr)
+  {
+    auto const n_rows = input.size();
+    auto result       = make_numeric_column(
+      data_type{type_to_id<bool>()}, n_rows, copy_bitmask(values), values.null_count(), stream, mr);
+    if (values.is_empty()) { return result; }
+
+    auto const out_begin = result->mutable_view().template begin<bool>();
+    if (input.is_empty()) {
+      thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_begin + n_rows, false);
+      return result;
+    }
+
+    auto const input_tview   = table_view{{input}};
+    auto const val_tview     = table_view{{values}};
+    auto const has_any_nulls = has_nested_nulls(input_tview) || has_nested_nulls(val_tview);
+
+    auto const preprocessed_input =
+      cudf::experimental::row::hash::preprocessed_table::create(input_tview, stream);
+    auto input_map =
+      detail::hash_map_type{compute_hash_table_size(n_rows),
+                            detail::COMPACTION_EMPTY_KEY_SENTINEL,
+                            detail::COMPACTION_EMPTY_VALUE_SENTINEL,
+                            detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                            stream.value()};
+
+    auto const row_hash = cudf::experimental::row::hash::row_hasher(preprocessed_input);
+    auto const hash_input =
+      detail::experimental::compaction_hash(row_hash.device_hasher(has_any_nulls));
+
+    auto const comp = experimental::row::equality::table_comparator(input_tview, val_tview, stream);
+    auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
+
+    // todo: make pair(i, i) type of left_index_type
+    auto const pair_it = cudf::detail::make_counting_transform_iterator(
+      0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
+    input_map.insert(pair_it, pair_it + n_rows, hash_input, dcomp, stream.value());
+
+    // todo: make count_it of type right_index_type
+    auto const count_it = thrust::make_counting_iterator<size_type>(0);
+    input_map.contains(count_it, count_it + n_rows, out_begin, hash_input);
+
+    return result;
+  }
+
+  template <typename Element>
+  std::enable_if_t<is_nested<Element>(), std::unique_ptr<column>> operator()(
+    [[maybe_unused]] column_view const& haystack,
+    [[maybe_unused]] column_view const& needles,
+    [[maybe_unused]] rmm::cuda_stream_view stream,
+    [[maybe_unused]] rmm::mr::device_memory_resource* mr)
+  {
+    //
+    return nullptr;
+  }
 };
-
-template <>
-std::unique_ptr<column> multi_contains_dispatch::operator()<list_view>(
-  column_view const&, column_view const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
-{
-  CUDF_FAIL("list_view type not supported");
-}
-
-template <>
-std::unique_ptr<column> multi_contains_dispatch::operator()<struct_view>(
-  column_view const&, column_view const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
-{
-  CUDF_FAIL("struct_view type not supported");
-}
 
 template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
@@ -342,6 +387,17 @@ std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
                                needles_indices,
                                stream,
                                mr);
+}
+
+}  // namespace
+
+namespace detail {
+bool contains(column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
+{
+  if (col.is_empty()) { return false; }
+  if (not value.is_valid(stream)) { return col.has_nulls(); }
+
+  return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream);
 }
 
 std::unique_ptr<column> contains(column_view const& haystack,
