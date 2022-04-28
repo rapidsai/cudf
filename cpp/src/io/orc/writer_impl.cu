@@ -1964,7 +1964,7 @@ struct string_length_functor {
 
 __global__ void copy_string_data(char* string_pool,
                                  size_type* offsets,
-                                 statistics_chunk const* chunks,
+                                 statistics_chunk* chunks,
                                  statistics_merge_group const* groups)
 {
   auto const idx = blockIdx.x / 2;
@@ -1977,6 +1977,7 @@ __global__ void copy_string_data(char* string_pool,
     for (int i = threadIdx.x; i < str_val.length; i += blockDim.x) {
       dst[i] = src[i];
     }
+    if (threadIdx.x == 0) { str_val.ptr = dst; }
   }
 }
 
