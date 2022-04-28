@@ -269,7 +269,7 @@ struct dispatch_index_of {
     auto const out_iter = thrust::make_zip_iterator(
       out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
-    if constexpr (cudf::is_nested<Type>()) {
+    if constexpr (cudf::is_nested<Type>()) {  // nested types (list + struct) ======================
       auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
       auto const child_tview       = table_view{{child}};
       auto const keys_tview        = get_search_keys_table_view(search_keys);
@@ -280,7 +280,7 @@ struct dispatch_index_of {
 
       index_of_fn<Type>::search_all_lists(
         lists_cdv, search_key_is_scalar, key_validity_iter, eq_comp, find_option, out_iter, stream);
-    } else {  // other types that are not struct
+    } else {  // other types that are not nested ===================================================
       auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
         *keys_dv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
 
