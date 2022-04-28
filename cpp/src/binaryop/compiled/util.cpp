@@ -38,10 +38,10 @@ struct common_type_functor {
     {
       // If common_type exists
       if constexpr (cudf::has_common_type_v<TypeOut, TypeLhs, TypeRhs>) {
-        using TypeCommon = typename std::common_type<TypeOut, TypeLhs, TypeRhs>::type;
+        using TypeCommon = std::common_type_t<TypeOut, TypeLhs, TypeRhs>;
         return data_type{type_to_id<TypeCommon>()};
       } else if constexpr (cudf::has_common_type_v<TypeLhs, TypeRhs>) {
-        using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
+        using TypeCommon = std::common_type_t<TypeLhs, TypeRhs>;
         // Eg. d=t-t
         return data_type{type_to_id<TypeCommon>()};
       }
@@ -66,7 +66,7 @@ struct common_type_functor {
  */
 template <typename BinaryOperator>
 struct is_binary_operation_supported {
-  // For types where Out type is fixed. (eg. comparison types)
+  // For types where Out type is fixed. (e.g. comparison types)
   template <typename TypeLhs, typename TypeRhs>
   inline constexpr bool operator()()
   {
@@ -97,11 +97,9 @@ struct is_binary_operation_supported {
           return std::is_constructible_v<TypeOut, ReturnType> or
                  (is_fixed_point<ReturnType>() and is_fixed_point<TypeOut>());
         }
-      } else {
-        if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
-          using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
-          return std::is_constructible_v<TypeOut, ReturnType>;
-        }
+      } else if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
+        using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
+        return std::is_constructible_v<TypeOut, ReturnType>;
       }
     }
     return false;
