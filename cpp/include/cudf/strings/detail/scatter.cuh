@@ -67,8 +67,13 @@ std::unique_ptr<column> scatter(
   // create vector of string_view's to scatter into
   rmm::device_uvector<string_view> target_vector = create_string_vector_from_column(target, stream);
 
+  // this ensures empty strings are not mapped to nulls in the make_strings_column function
+  auto const size = thrust::distance(begin, end);
+  auto itr        = thrust::make_transform_iterator(
+    begin, [] __device__(string_view const sv) { return sv.empty() ? string_view{} : sv; });
+
   // do the scatter
-  thrust::scatter(rmm::exec_policy(stream), begin, end, scatter_map, target_vector.begin());
+  thrust::scatter(rmm::exec_policy(stream), itr, itr + size, scatter_map, target_vector.begin());
 
   // build the output column
   auto sv_span = cudf::device_span<string_view const>(target_vector);
