@@ -266,7 +266,7 @@ struct multi_contains_dispatch {
     auto const haystack_cdv_ptr = column_device_view::create(haystack, stream);
     auto const haystack_cdv     = *haystack_cdv_ptr;
     auto const begin            = thrust::make_counting_iterator<size_type>(0);
-    auto const end              = thrust::make_counting_iterator<size_type>(haystack.size());
+    auto const end              = begin + haystack.size();
 
     if (haystack.has_nulls()) {
       thrust::transform(rmm::exec_policy(stream),
@@ -297,14 +297,20 @@ struct multi_contains_dispatch {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
-    auto const n_rows = input.size();
-    auto result       = make_numeric_column(
-      data_type{type_to_id<bool>()}, n_rows, copy_bitmask(values), values.null_count(), stream, mr);
+    auto const input_size  = input.size();
+    auto const values_size = values.size();
+    auto result            = make_numeric_column(data_type{type_to_id<bool>()},
+                                      values_size,
+                                      copy_bitmask(values),
+                                      values.null_count(),
+                                      stream,
+                                      mr);
     if (values.is_empty()) { return result; }
 
     auto const out_begin = result->mutable_view().template begin<bool>();
     if (input.is_empty()) {
-      thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_begin + n_rows, false);
+      thrust::uninitialized_fill(
+        rmm::exec_policy(stream), out_begin, out_begin + values_size, false);
       return result;
     }
 
@@ -315,7 +321,7 @@ struct multi_contains_dispatch {
     auto const preprocessed_input =
       cudf::experimental::row::hash::preprocessed_table::create(input_tview, stream);
     auto input_map =
-      detail::hash_map_type{compute_hash_table_size(n_rows),
+      detail::hash_map_type{compute_hash_table_size(input_size),
                             detail::COMPACTION_EMPTY_KEY_SENTINEL,
                             detail::COMPACTION_EMPTY_VALUE_SENTINEL,
                             detail::hash_table_allocator_type{default_allocator<char>{}, stream},
@@ -331,11 +337,11 @@ struct multi_contains_dispatch {
     // todo: make pair(i, i) type of left_index_type
     auto const pair_it = cudf::detail::make_counting_transform_iterator(
       0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
-    input_map.insert(pair_it, pair_it + n_rows, hash_input, dcomp, stream.value());
+    input_map.insert(pair_it, pair_it + input_size, hash_input, dcomp, stream.value());
 
     // todo: make count_it of type right_index_type
     auto const count_it = thrust::make_counting_iterator<size_type>(0);
-    input_map.contains(count_it, count_it + n_rows, out_begin, hash_input);
+    input_map.contains(count_it, count_it + values_size, out_begin, hash_input);
 
     return result;
   }
