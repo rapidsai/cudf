@@ -44,7 +44,7 @@ namespace cudf {
 namespace lists {
 
 namespace {
-auto constexpr NOT_FOUND_IDX = size_type{-1};
+auto constexpr __device__ not_found_sentinel = size_type{-1};
 
 template <typename Type>
 auto constexpr is_supported_non_nested_type()
@@ -82,7 +82,7 @@ auto __device__ element_idx_end([[maybe_unused]] size_type size)
 template <bool find_first, typename Iterator>
 size_type __device__ distance(Iterator begin, Iterator end, Iterator found_iter)
 {
-  if (found_iter == end) { return NOT_FOUND_IDX; }
+  if (found_iter == end) { return not_found_sentinel; }
   return find_first ? found_iter - begin : end - found_iter - 1;
 }
 
@@ -126,11 +126,11 @@ struct index_of_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>()>>
     thrust::tabulate(rmm::exec_policy(stream),
                      out_iter,
                      out_iter + lists.size(),
-                     [lists, keys_iter, find_option, NOT_FOUND_IDX = NOT_FOUND_IDX] __device__(
+                     [lists, keys_iter, find_option] __device__(
                        auto const list_idx) -> thrust::pair<size_type, bool> {
                        auto const list    = list_device_view{lists, list_idx};
                        auto const key_opt = keys_iter[list_idx];
-                       if (list.is_null() || !key_opt) { return {NOT_FOUND_IDX, false}; }
+                       if (list.is_null() || !key_opt) { return {not_found_sentinel, false}; }
 
                        auto const key = key_opt.value();
                        return {find_option == duplicate_find_option::FIND_FIRST
@@ -174,15 +174,10 @@ struct index_of_fn<Type, std::enable_if_t<is_nested<Type>()>> {
       rmm::exec_policy(stream),
       out_iter,
       out_iter + lists.size(),
-      [lists,
-       search_key_is_scalar,
-       key_validity_iter,
-       eq_comp,
-       find_option,
-       NOT_FOUND_IDX =
-         NOT_FOUND_IDX] __device__(auto const list_idx) -> thrust::pair<size_type, bool> {
+      [lists, search_key_is_scalar, key_validity_iter, eq_comp, find_option] __device__(
+        auto const list_idx) -> thrust::pair<size_type, bool> {
         auto const list = list_device_view{lists, list_idx};
-        if (list.is_null() || !key_validity_iter[list_idx]) { return {NOT_FOUND_IDX, false}; }
+        if (list.is_null() || !key_validity_iter[list_idx]) { return {not_found_sentinel, false}; }
 
         return {find_option == duplicate_find_option::FIND_FIRST
                   ? search_list<true>(list, eq_comp, search_key_is_scalar)
@@ -311,7 +306,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
 {
   CUDF_EXPECTS(key_positions->type().id() == type_id::INT32,
                "Expected input column of type INT32.");
-  // If position == NOT_FOUND_IDX, the list did not contain the search key.
+  // If position == not_found_sentinel, the list did not contain the search key.
   auto const num_rows        = key_positions->size();
   auto const positions_begin = key_positions->view().template begin<size_type>();
   auto result =
@@ -320,7 +315,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                     positions_begin,
                     positions_begin + num_rows,
                     result->mutable_view().template begin<bool>(),
-                    [] __device__(auto const i) { return i != NOT_FOUND_IDX; });
+                    [] __device__(auto const i) { return i != not_found_sentinel; });
 
   auto const null_count                    = key_positions->null_count();
   [[maybe_unused]] auto [_, null_mask, __] = key_positions->release();
