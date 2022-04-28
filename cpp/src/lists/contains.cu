@@ -56,7 +56,7 @@ auto constexpr is_supported_non_nested_type()
 template <typename Type>
 auto constexpr is_supported_type()
 {
-  return is_supported_non_nested_type<Type>() || cudf::is_struct_type<Type>();
+  return is_supported_non_nested_type<Type>() || cudf::is_nested<Type>();
 }
 
 template <bool find_first>
@@ -145,7 +145,7 @@ struct index_of_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>()>>
  * @brief The specialization of `index_of_fn` for struct type.
  */
 template <typename Type>
-struct index_of_fn<Type, std::enable_if_t<is_struct_type<Type>()>> {
+struct index_of_fn<Type, std::enable_if_t<is_nested<Type>()>> {
   template <bool find_first, typename EqComparator>
   static __device__ size_type search_list(list_device_view const& list,
                                           EqComparator const& eq_comp,
@@ -274,7 +274,7 @@ struct dispatch_index_of {
     auto const out_iter = thrust::make_zip_iterator(
       out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
-    if constexpr (std::is_same_v<Type, cudf::struct_view>) {
+    if constexpr (cudf::is_nested<Type>()) {
       auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
       auto const child_tview       = table_view{{child}};
       auto const keys_tview        = get_search_keys_table_view(search_keys);
