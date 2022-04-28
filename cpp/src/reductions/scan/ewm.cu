@@ -57,74 +57,62 @@ class ewma_functor_base {
 };
 
 
-template <typename T, bool nulls>
-class ewma_adjust_numerator_functor : public ewma_functor_base<T> {
+template <typename T, bool nulls, bool is_numerator>
+class ewma_adjust_functor : public ewma_functor_base<T> {
  private:
   T beta;
 
  public:
-  ewma_adjust_numerator_functor(T beta) : beta{beta} {}
+  ewma_adjust_functor(T beta) : beta{beta} {}
 
   using tupletype = std::conditional_t<nulls, thrust::tuple<bool, int, T>, T>;
   
   __device__ pair_type<T> operator()(tupletype data) 
   { 
-    if constexpr (nulls) {
-      bool const valid = thrust::get<0>(data);
-      int const exp    = thrust::get<1>(data);
-      T const input    = thrust::get<2>(data);
-      T const beta     = this->beta;
-      if (valid and (exp != 0)) {
-        // The value is non-null, but nulls preceeded it
-        // must adjust the second element of the pair
-
-        return {beta * (pow(beta, exp)), input};
-      } else if (!valid) {
-        // the value is null, carry the previous value forward
-        // "identity operator" is used
-        return this->IDENTITY;
+    if constexpr (is_numerator) {
+      if constexpr (nulls) {
+        bool const valid = thrust::get<0>(data);
+        int const exp    = thrust::get<1>(data);
+        T const input    = thrust::get<2>(data);
+        T const beta     = this->beta;
+        if (valid and (exp != 0)) {
+          // The value is non-null, but nulls preceeded it
+          // must adjust the second element of the pair
+  
+          return {beta * (pow(beta, exp)), input};
+        } else if (!valid) {
+          // the value is null, carry the previous value forward
+          // "identity operator" is used
+          return this->IDENTITY;
+        } else {
+          return {beta, input};
+        }
       } else {
-        return {beta, input};
+        return {this->beta, data};
       }
     } else {
-      return {this->beta, data};
-    }
-  }
-};
+      if constexpr (nulls) {
 
-template <typename T, bool nulls>
-class ewma_adjust_denominator_functor : public ewma_functor_base<T> {
- private:
-  T beta;
-
- public:
-  ewma_adjust_denominator_functor(T beta) : beta{beta} {}
-
-  using tupletype = std::conditional_t<nulls, thrust::tuple<bool, int, T>, pair_type<T>>;
-  
-  __device__ pair_type<T> operator()(tupletype data) 
-  { 
-    if constexpr (nulls) {
-
-      bool const valid = thrust::get<0>(data);
-      int const exp    = thrust::get<1>(data);
-      T const input    = thrust::get<2>(data);
-      T const beta     = this->beta;
-  
-      if (valid and (exp != 0)) {
-        // The value is non-null, but nulls preceeded it
-        // must adjust the second element of the pair
-  
-        return {beta * (pow(beta, exp)), 1.0};
-      } else if (!valid) {
-        // the value is null, carry the previous value forward
-        // "identity operator" is used
-        return this->IDENTITY;
+        bool const valid = thrust::get<0>(data);
+        int const exp    = thrust::get<1>(data);
+        T const input    = thrust::get<2>(data);
+        T const beta     = this->beta;
+    
+        if (valid and (exp != 0)) {
+          // The value is non-null, but nulls preceeded it
+          // must adjust the second element of the pair
+    
+          return {beta * (pow(beta, exp)), 1.0};
+        } else if (!valid) {
+          // the value is null, carry the previous value forward
+          // "identity operator" is used
+          return this->IDENTITY;
+        } else {
+          return {beta, 1.0};
+        }
       } else {
         return {beta, 1.0};
       }
-    } else {
-      return {beta, 1.0};
     }
   }
 };
@@ -227,7 +215,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
-                                     ewma_adjust_numerator_functor<T, true>{beta},
+                                     ewma_adjust_functor<T, true, true>{beta},
                                      recurrence_functor<T>{});
 
   } else {
@@ -235,7 +223,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      input.begin<T>(),
                                      input.end<T>(),
                                      pairs.begin(),
-                                     ewma_adjust_numerator_functor<T, false>{beta},
+                                     ewma_adjust_functor<T, false, true>{beta},
                                      recurrence_functor<T>{});
   }
 
@@ -257,14 +245,15 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      data,
                                      data + input.size(),
                                      pairs.begin(),
-                                     ewma_adjust_denominator_functor<T, true>{beta},
+                                     ewma_adjust_functor<T, true, false>{beta},
                                      recurrence_functor<T>{});
   } else {
+    auto itr = thrust::make_counting_iterator<size_type>(0);
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+                                     itr,
+                                     itr + input.size(),
                                      pairs.begin(),
-                                     pairs.end(),
-                                     pairs.begin(),
-                                     ewma_adjust_denominator_functor<T, false>{beta},
+                                     ewma_adjust_functor<T, false, false>{beta},
                                      recurrence_functor<T>{});
   }
 
