@@ -24,6 +24,7 @@
 #include "compact_protocol_reader.hpp"
 
 #include <io/comp/gpuinflate.h>
+#include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
@@ -38,10 +39,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <nvcomp/snappy.h>
-
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
@@ -1050,96 +1050,13 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& 
   pages.device_to_host(stream, true);
 }
 
-__global__ void decompress_check_kernel(device_span<gpu_inflate_status_s const> stats,
-                                        bool* any_block_failure)
+void decompress_check(device_span<decompress_status const> stats, rmm::cuda_stream_view stream)
 {
-  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < stats.size()) {
-    if (stats[tid].status != 0) {
-      *any_block_failure = true;  // Doesn't need to be atomic
-    }
-  }
-}
-
-void decompress_check(device_span<gpu_inflate_status_s> stats,
-                      bool* any_block_failure,
-                      rmm::cuda_stream_view stream)
-{
-  if (stats.empty()) { return; }  // early exit for empty stats
-
-  dim3 block(128);
-  dim3 grid(cudf::util::div_rounding_up_safe(stats.size(), static_cast<size_t>(block.x)));
-  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
-}
-
-__global__ void convert_nvcomp_status(device_span<nvcompStatus_t const> nvcomp_stats,
-                                      device_span<gpu_inflate_status_s> stats)
-{
-  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < stats.size()) {
-    stats[tid].status = nvcomp_stats[tid] == nvcompStatus_t::nvcompSuccess ? 0 : 1;
-  }
-}
-
-void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
-                       device_span<gpu_inflate_status_s> comp_stat,
-                       size_t max_uncomp_page_size,
-                       rmm::cuda_stream_view stream)
-{
-  size_t num_comp_pages = comp_in.size();
-  size_t temp_size;
-
-  nvcompStatus_t nvcomp_status =
-    nvcompBatchedSnappyDecompressGetTempSize(num_comp_pages, max_uncomp_page_size, &temp_size);
-  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
-               "Unable to get scratch size for snappy decompression");
-
-  // Not needed now but nvcomp API makes no promises about future
-  rmm::device_buffer scratch(temp_size, stream);
-  // Analogous to comp_in.srcDevice
-  rmm::device_uvector<void const*> compressed_data_ptrs(num_comp_pages, stream);
-  // Analogous to comp_in.srcSize
-  rmm::device_uvector<size_t> compressed_data_sizes(num_comp_pages, stream);
-  // Analogous to comp_in.dstDevice
-  rmm::device_uvector<void*> uncompressed_data_ptrs(num_comp_pages, stream);
-  // Analogous to comp_in.dstSize
-  rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
-
-  // Analogous to comp_stat.bytes_written
-  rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_comp_pages, stream);
-  // Convertible to comp_stat.status
-  rmm::device_uvector<nvcompStatus_t> statuses(num_comp_pages, stream);
-  device_span<nvcompStatus_t const> statuses_span(statuses.data(), statuses.size());
-
-  // Prepare the vectors
-  auto comp_it = thrust::make_zip_iterator(compressed_data_ptrs.begin(),
-                                           compressed_data_sizes.begin(),
-                                           uncompressed_data_ptrs.begin(),
-                                           uncompressed_data_sizes.data());
-  thrust::transform(rmm::exec_policy(stream),
-                    comp_in.begin(),
-                    comp_in.end(),
-                    comp_it,
-                    [] __device__(gpu_inflate_input_s in) {
-                      return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice, in.dstSize);
-                    });
-
-  nvcomp_status = nvcompBatchedSnappyDecompressAsync(compressed_data_ptrs.data(),
-                                                     compressed_data_sizes.data(),
-                                                     uncompressed_data_sizes.data(),
-                                                     actual_uncompressed_data_sizes.data(),
-                                                     num_comp_pages,
-                                                     scratch.data(),
-                                                     scratch.size(),
-                                                     uncompressed_data_ptrs.data(),
-                                                     statuses.data(),
-                                                     stream.value());
-  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
-               "unable to perform snappy decompression");
-
-  dim3 block(128);
-  dim3 grid(cudf::util::div_rounding_up_safe(num_comp_pages, static_cast<size_t>(block.x)));
-  convert_nvcomp_status<<<grid, block, 0, stream.value()>>>(statuses_span, comp_stat);
+  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
+                              stats.begin(),
+                              stats.end(),
+                              [] __device__(auto const& stat) { return stat.status == 0; }),
+               "Error during decompression");
 }
 
 /**
@@ -1175,9 +1092,9 @@ rmm::device_buffer reader::impl::decompress_page_data(
     int32_t max_decompressed_size;
   };
 
-  std::array<codec_stats, 3> codecs{codec_stats{parquet::GZIP, 0, 0},
-                                    codec_stats{parquet::SNAPPY, 0, 0},
-                                    codec_stats{parquet::BROTLI, 0, 0}};
+  std::array codecs{codec_stats{parquet::GZIP, 0, 0},
+                    codec_stats{parquet::SNAPPY, 0, 0},
+                    codec_stats{parquet::BROTLI, 0, 0}};
 
   auto is_codec_supported = [&codecs](int8_t codec) {
     if (codec == parquet::UNCOMPRESSED) return true;
@@ -1207,91 +1124,73 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   // Dispatch batches of pages to decompress for each codec
   rmm::device_buffer decomp_pages(total_decomp_size, stream);
-  hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_comp_pages, stream);
-  hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_comp_pages, stream);
 
-  hostdevice_vector<bool> any_block_failure(1, stream);
-  any_block_failure[0] = false;
-  any_block_failure.host_to_device(stream);
+  std::vector<device_span<uint8_t const>> comp_in;
+  comp_in.reserve(num_comp_pages);
+  std::vector<device_span<uint8_t>> comp_out;
+  comp_out.reserve(num_comp_pages);
 
-  device_span<gpu_inflate_input_s> inflate_in_view(inflate_in.device_ptr(), inflate_in.size());
-  device_span<gpu_inflate_status_s> inflate_out_view(inflate_out.device_ptr(), inflate_out.size());
+  rmm::device_uvector<decompress_status> comp_stats(num_comp_pages, stream);
+  thrust::fill(rmm::exec_policy(stream),
+               comp_stats.begin(),
+               comp_stats.end(),
+               decompress_status{0, static_cast<uint32_t>(-1000), 0});
 
   size_t decomp_offset = 0;
-  int32_t argc         = 0;
+  int32_t start_pos    = 0;
   for (const auto& codec : codecs) {
-    if (codec.num_pages > 0) {
-      int32_t start_pos = argc;
+    if (codec.num_pages == 0) { continue; }
 
-      for_each_codec_page(codec.compression_type, [&](size_t page) {
-        auto dst_base              = static_cast<uint8_t*>(decomp_pages.data());
-        inflate_in[argc].srcDevice = pages[page].page_data;
-        inflate_in[argc].srcSize   = pages[page].compressed_page_size;
-        inflate_in[argc].dstDevice = dst_base + decomp_offset;
-        inflate_in[argc].dstSize   = pages[page].uncompressed_page_size;
+    for_each_codec_page(codec.compression_type, [&](size_t page) {
+      auto dst_base = static_cast<uint8_t*>(decomp_pages.data());
+      comp_in.emplace_back(pages[page].page_data,
+                           static_cast<size_t>(pages[page].compressed_page_size));
+      comp_out.emplace_back(dst_base + decomp_offset,
+                            static_cast<size_t>(pages[page].uncompressed_page_size));
 
-        inflate_out[argc].bytes_written = 0;
-        inflate_out[argc].status        = static_cast<uint32_t>(-1000);
-        inflate_out[argc].reserved      = 0;
+      pages[page].page_data = static_cast<uint8_t*>(comp_out.back().data());
+      decomp_offset += comp_out.back().size();
+    });
 
-        pages[page].page_data = static_cast<uint8_t*>(inflate_in[argc].dstDevice);
-        decomp_offset += inflate_in[argc].dstSize;
-        argc++;
-      });
+    host_span<device_span<uint8_t const> const> comp_in_view{comp_in.data() + start_pos,
+                                                             codec.num_pages};
+    auto const d_comp_in = cudf::detail::make_device_uvector_async(comp_in_view, stream);
+    host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
+                                                        codec.num_pages);
+    auto const d_comp_out = cudf::detail::make_device_uvector_async(comp_out_view, stream);
+    device_span<decompress_status> d_comp_stats_view(comp_stats.data() + start_pos,
+                                                     codec.num_pages);
 
-      CUDF_CUDA_TRY(cudaMemcpyAsync(inflate_in.device_ptr(start_pos),
-                                    inflate_in.host_ptr(start_pos),
-                                    sizeof(decltype(inflate_in)::value_type) * (argc - start_pos),
-                                    cudaMemcpyHostToDevice,
-                                    stream.value()));
-      CUDF_CUDA_TRY(cudaMemcpyAsync(inflate_out.device_ptr(start_pos),
-                                    inflate_out.host_ptr(start_pos),
-                                    sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
-                                    cudaMemcpyHostToDevice,
-                                    stream.value()));
-
-      switch (codec.compression_type) {
-        case parquet::GZIP:
-          CUDF_CUDA_TRY(gpuinflate(inflate_in.device_ptr(start_pos),
-                                   inflate_out.device_ptr(start_pos),
-                                   argc - start_pos,
-                                   1,
-                                   stream))
-          break;
-        case parquet::SNAPPY:
-          if (nvcomp_integration::is_stable_enabled()) {
-            snappy_decompress(inflate_in_view.subspan(start_pos, argc - start_pos),
-                              inflate_out_view.subspan(start_pos, argc - start_pos),
-                              codec.max_decompressed_size,
-                              stream);
-          } else {
-            CUDF_CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(start_pos),
-                                     inflate_out.device_ptr(start_pos),
-                                     argc - start_pos,
-                                     stream));
-          }
-          break;
-        case parquet::BROTLI:
-          CUDF_CUDA_TRY(gpu_debrotli(inflate_in.device_ptr(start_pos),
-                                     inflate_out.device_ptr(start_pos),
-                                     debrotli_scratch.data(),
-                                     debrotli_scratch.size(),
-                                     argc - start_pos,
-                                     stream));
-          break;
-        default: CUDF_FAIL("Unexpected decompression dispatch"); break;
-      }
-      CUDF_CUDA_TRY(cudaMemcpyAsync(inflate_out.host_ptr(start_pos),
-                                    inflate_out.device_ptr(start_pos),
-                                    sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
-                                    cudaMemcpyDeviceToHost,
-                                    stream.value()));
+    switch (codec.compression_type) {
+      case parquet::GZIP:
+        gpuinflate(d_comp_in, d_comp_out, d_comp_stats_view, gzip_header_included::YES, stream);
+        break;
+      case parquet::SNAPPY:
+        if (nvcomp_integration::is_stable_enabled()) {
+          nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
+                                     d_comp_in,
+                                     d_comp_out,
+                                     d_comp_stats_view,
+                                     codec.max_decompressed_size,
+                                     stream);
+        } else {
+          gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, stream);
+        }
+        break;
+      case parquet::BROTLI:
+        gpu_debrotli(d_comp_in,
+                     d_comp_out,
+                     d_comp_stats_view,
+                     debrotli_scratch.data(),
+                     debrotli_scratch.size(),
+                     stream);
+        break;
+      default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
+    start_pos += codec.num_pages;
   }
 
-  decompress_check(inflate_out_view, any_block_failure.device_ptr(), stream);
-  any_block_failure.device_to_host(stream, true);  // synchronizes stream
-  CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
+  decompress_check(comp_stats, stream);
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer

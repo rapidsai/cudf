@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,14 +64,15 @@ struct unsnap_queue_s {
  * @brief snappy decompression state
  */
 struct unsnap_state_s {
-  const uint8_t* base;         ///< base ptr of compressed stream
-  const uint8_t* end;          ///< end of compressed stream
-  uint32_t uncompressed_size;  ///< uncompressed stream size
-  uint32_t bytes_left;         ///< bytes to uncompressed remaining
-  int32_t error;               ///< current error status
-  uint32_t tstart;             ///< start time for perf logging
-  volatile unsnap_queue_s q;   ///< queue for cross-warp communication
-  gpu_inflate_input_s in;      ///< input parameters for current block
+  const uint8_t* base;             ///< base ptr of compressed stream
+  const uint8_t* end;              ///< end of compressed stream
+  uint32_t uncompressed_size;      ///< uncompressed stream size
+  uint32_t bytes_left;             ///< remaining bytes to decompress
+  int32_t error;                   ///< current error status
+  uint32_t tstart;                 ///< start time for perf logging
+  volatile unsnap_queue_s q;       ///< queue for cross-warp communication
+  device_span<uint8_t const> src;  ///< input for current block
+  device_span<uint8_t> dst;        ///< output for current block
 };
 
 inline __device__ volatile uint8_t& byte_access(unsnap_state_s* s, uint32_t pos)
@@ -497,9 +498,9 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
 template <typename Storage>
 __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_storage)
 {
-  const uint8_t* literal_base = s->base;
-  auto* out                   = static_cast<uint8_t*>(s->in.dstDevice);
-  int batch                   = 0;
+  auto const literal_base = s->base;
+  auto out                = s->dst.data();
+  int batch               = 0;
 
   do {
     volatile unsnap_batch_s* b = &s->q.batch[batch * batch_size];
@@ -624,7 +625,9 @@ __device__ void snappy_process_symbols(unsnap_state_s* s, int t, Storage& temp_s
  */
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  unsnap_kernel(gpu_inflate_input_s* inputs, gpu_inflate_status_s* outputs)
+  unsnap_kernel(device_span<device_span<uint8_t const> const> inputs,
+                device_span<device_span<uint8_t> const> outputs,
+                device_span<decompress_status> statuses)
 {
   __shared__ __align__(16) unsnap_state_s state_g;
   __shared__ cub::WarpReduce<uint32_t>::TempStorage temp_storage;
@@ -632,16 +635,14 @@ __global__ void __launch_bounds__(block_size)
   unsnap_state_s* s = &state_g;
   int strm_id       = blockIdx.x;
 
-  if (t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t*>(&s->in)[t] = reinterpret_cast<const uint32_t*>(&inputs[strm_id])[t];
-    __threadfence_block();
-  }
   if (t < batch_count) { s->q.batch_len[t] = 0; }
   __syncthreads();
   if (!t) {
-    const auto* cur    = static_cast<const uint8_t*>(s->in.srcDevice);
-    const uint8_t* end = cur + s->in.srcSize;
-    s->error           = 0;
+    s->src         = inputs[strm_id];
+    s->dst         = outputs[strm_id];
+    auto cur       = s->src.begin();
+    auto const end = s->src.end();
+    s->error       = 0;
     if (log_cyclecount) { s->tstart = clock(); }
     if (cur < end) {
       // Read uncompressed size (varint), limited to 32-bit
@@ -672,7 +673,7 @@ __global__ void __launch_bounds__(block_size)
       s->bytes_left        = uncompressed_size;
       s->base              = cur;
       s->end               = end;
-      if ((cur >= end && uncompressed_size != 0) || (uncompressed_size > s->in.dstSize)) {
+      if ((cur >= end && uncompressed_size != 0) || (uncompressed_size > s->dst.size())) {
         s->error = -1;
       }
     } else {
@@ -697,28 +698,25 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
   }
   if (!t) {
-    outputs[strm_id].bytes_written = s->uncompressed_size - s->bytes_left;
-    outputs[strm_id].status        = s->error;
+    statuses[strm_id].bytes_written = s->uncompressed_size - s->bytes_left;
+    statuses[strm_id].status        = s->error;
     if (log_cyclecount) {
-      outputs[strm_id].reserved = clock() - s->tstart;
+      statuses[strm_id].reserved = clock() - s->tstart;
     } else {
-      outputs[strm_id].reserved = 0;
+      statuses[strm_id].reserved = 0;
     }
   }
 }
 
-cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s* inputs,
-                                gpu_inflate_status_s* outputs,
-                                int count,
-                                rmm::cuda_stream_view stream)
+void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
+                device_span<device_span<uint8_t> const> outputs,
+                device_span<decompress_status> statuses,
+                rmm::cuda_stream_view stream)
 {
-  uint32_t count32 = (count > 0) ? count : 0;
-  dim3 dim_block(128, 1);     // 4 warps per stream, 1 stream per block
-  dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
+  dim3 dim_block(128, 1);           // 4 warps per stream, 1 stream per block
+  dim3 dim_grid(inputs.size(), 1);  // TODO: Check max grid dimensions vs max expected count
 
-  unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs);
-
-  return cudaSuccess;
+  unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, statuses);
 }
 
 }  // namespace io

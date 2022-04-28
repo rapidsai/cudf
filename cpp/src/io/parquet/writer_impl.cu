@@ -984,8 +984,9 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
   stream.synchronize();
 }
 
-void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
-                     device_span<gpu_inflate_status_s> comp_stat,
+void snappy_compress(device_span<device_span<uint8_t const> const> comp_in,
+                     device_span<device_span<uint8_t> const> comp_out,
+                     device_span<decompress_status> comp_stats,
                      size_t max_page_uncomp_data_size,
                      rmm::cuda_stream_view stream)
 {
@@ -1012,16 +1013,20 @@ void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
     // the space allocated unless one uses the API nvcompBatchedSnappyCompressGetOutputSize()
 
     // Prepare the vectors
-    auto comp_it = thrust::make_zip_iterator(uncompressed_data_ptrs.begin(),
-                                             uncompressed_data_sizes.begin(),
-                                             compressed_data_ptrs.begin());
+    auto comp_it =
+      thrust::make_zip_iterator(uncompressed_data_ptrs.begin(), uncompressed_data_sizes.begin());
+    thrust::transform(
+      rmm::exec_policy(stream),
+      comp_in.begin(),
+      comp_in.end(),
+      comp_it,
+      [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
+
     thrust::transform(rmm::exec_policy(stream),
-                      comp_in.begin(),
-                      comp_in.end(),
-                      comp_it,
-                      [] __device__(gpu_inflate_input_s in) {
-                        return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice);
-                      });
+                      comp_out.begin(),
+                      comp_out.end(),
+                      compressed_data_ptrs.begin(),
+                      [] __device__(auto const& out) { return out.data(); });
     nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
                                                      uncompressed_data_sizes.data(),
                                                      max_page_uncomp_data_size,
@@ -1041,9 +1046,9 @@ void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
     thrust::transform(rmm::exec_policy(stream),
                       compressed_bytes_written.begin(),
                       compressed_bytes_written.end(),
-                      comp_stat.begin(),
+                      comp_stats.begin(),
                       [] __device__(size_t size) {
-                        gpu_inflate_status_s status{};
+                        decompress_status status{};
                         status.bytes_written = size;
                         return status;
                       });
@@ -1051,9 +1056,9 @@ void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
   } catch (...) {
     // If we reach this then there was an error in compressing so set an error status for each page
     thrust::for_each(rmm::exec_policy(stream),
-                     comp_stat.begin(),
-                     comp_stat.end(),
-                     [] __device__(gpu_inflate_status_s & stat) { stat.status = 1; });
+                     comp_stats.begin(),
+                     comp_stats.end(),
+                     [] __device__(decompress_status & stat) { stat.status = 1; });
   };
 }
 
@@ -1077,19 +1082,17 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   uint32_t max_comp_pages =
     (compression_ != parquet::Compression::UNCOMPRESSED) ? pages_in_batch : 0;
 
-  rmm::device_uvector<gpu_inflate_input_s> compression_input(max_comp_pages, stream);
-  rmm::device_uvector<gpu_inflate_status_s> compression_status(max_comp_pages, stream);
+  rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
+  rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
+  rmm::device_uvector<decompress_status> comp_stats(max_comp_pages, stream);
 
-  device_span<gpu_inflate_input_s> comp_in{compression_input.data(), compression_input.size()};
-  device_span<gpu_inflate_status_s> comp_stat{compression_status.data(), compression_status.size()};
-
-  gpu::EncodePages(batch_pages, comp_in, comp_stat, stream);
+  gpu::EncodePages(batch_pages, comp_in, comp_out, comp_stats, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
       if (nvcomp_integration::is_stable_enabled()) {
-        snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
+        snappy_compress(comp_in, comp_out, comp_stats, max_page_uncomp_data_size, stream);
       } else {
-        CUDF_CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
+        gpu_snap(comp_in, comp_out, comp_stats, stream);
       }
       break;
     default: break;
@@ -1098,7 +1101,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   // chunk-level
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
   DecideCompression(d_chunks_in_batch.flat_view(), stream);
-  EncodePageHeaders(batch_pages, comp_stat, batch_pages_stats, chunk_stats, stream);
+  EncodePageHeaders(batch_pages, comp_stats, batch_pages_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
