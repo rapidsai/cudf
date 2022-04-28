@@ -76,7 +76,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
-  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+  return std::pair(std::move(offsets_column), std::move(chars_column));
 }
 
 template <typename OptionalScalarIterator, typename ReplaceScalarIterator>

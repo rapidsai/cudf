@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,8 +47,7 @@ auto merge_sets(vcol_views const& keys_cols, vcol_views const& values_cols)
 
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({*keys}));
   auto result = gb_obj.aggregate(requests);
-  return std::make_pair(std::move(result.first->release()[0]),
-                        std::move(result.second[0].results[0]));
+  return std::pair(std::move(result.first->release()[0]), std::move(result.second[0].results[0]));
 }
 
 }  // namespace

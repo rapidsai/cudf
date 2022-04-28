@@ -275,7 +275,7 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, Validity
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
     offsets.push_back(offsets.back() + tmp.length());
   }
-  return std::make_pair(std::move(chars), std::move(offsets));
+  return std::pair(std::move(chars), std::move(offsets));
 };
 }  // namespace detail
 
@@ -1464,13 +1464,13 @@ class lists_column_wrapper : public detail::column_wrapper {
       0, [&v](auto i) { return v.empty() ? true : v[i]; });
 
     // compute the expected hierarchy and depth
-    auto const hierarchy_and_depth = std::accumulate(
-      elements.begin(),
-      elements.end(),
-      std::pair<column_view, int32_t>{{}, -1},
-      [](auto acc, lists_column_wrapper const& lcw) {
-        return lcw.depth > acc.second ? std::make_pair(lcw.get_view(), lcw.depth) : acc;
-      });
+    auto const hierarchy_and_depth =
+      std::accumulate(elements.begin(),
+                      elements.end(),
+                      std::pair<column_view, int32_t>{{}, -1},
+                      [](auto acc, lists_column_wrapper const& lcw) {
+                        return lcw.depth > acc.second ? std::pair(lcw.get_view(), lcw.depth) : acc;
+                      });
     column_view expected_hierarchy = hierarchy_and_depth.first;
     int32_t const expected_depth   = hierarchy_and_depth.second;
 
