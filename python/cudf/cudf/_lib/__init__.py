@@ -2,13 +2,13 @@
 import numpy as np
 
 from . import (
-    ast,
     avro,
     binaryop,
     concat,
     copying,
     csv,
     datetime,
+    expressions,
     filling,
     gpuarrow,
     groupby,
