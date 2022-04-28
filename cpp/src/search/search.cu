@@ -107,15 +107,15 @@ std::unique_ptr<column> search_bound(table_view const& t,
 }
 
 struct contains_scalar_dispatch {
-  template <typename Element>
-  std::enable_if_t<!is_nested<Element>(), bool> operator()(column_view const& col,
-                                                           scalar const& value,
-                                                           rmm::cuda_stream_view stream)
+  template <typename Type>
+  std::enable_if_t<!is_nested<Type>(), bool> operator()(column_view const& col,
+                                                        scalar const& value,
+                                                        rmm::cuda_stream_view stream)
   {
     CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
-    using Type       = device_storage_type_t<Element>;
-    using ScalarType = cudf::scalar_type_t<Element>;
+    using DType      = device_storage_type_t<Type>;
+    using ScalarType = cudf::scalar_type_t<Type>;
     auto const d_col = column_device_view::create(col, stream);
     auto const s     = static_cast<const ScalarType*>(&value);
 
@@ -125,14 +125,14 @@ struct contains_scalar_dispatch {
     };
 
     if (col.has_nulls()) {
-      auto const begin = d_col->pair_begin<Type, true>();
-      auto const end   = d_col->pair_end<Type, true>();
+      auto const begin = d_col->pair_begin<DType, true>();
+      auto const end   = d_col->pair_end<DType, true>();
       auto const val   = thrust::make_pair(s->value(stream), true);
 
       return check_contain(begin, end, val);
     } else {
-      auto const begin = d_col->begin<Type>();
-      auto const end   = d_col->end<Type>();
+      auto const begin = d_col->begin<DType>();
+      auto const end   = d_col->end<DType>();
       auto const val   = s->value(stream);
 
       return check_contain(begin, end, val);
@@ -170,14 +170,14 @@ struct contains_scalar_dispatch {
     return found_it != end;
   }
 
-  template <typename Element>
-  std::enable_if_t<is_nested<Element>(), bool> operator()(column_view const& col,
-                                                          scalar const& value,
-                                                          rmm::cuda_stream_view stream)
+  template <typename Type>
+  std::enable_if_t<is_nested<Type>(), bool> operator()(column_view const& col,
+                                                       scalar const& value,
+                                                       rmm::cuda_stream_view stream)
   {
     CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
-    auto constexpr is_struct_type = std::is_same_v<Element, cudf::struct_view>;
+    auto constexpr is_struct_type = std::is_same_v<Type, cudf::struct_view>;
     if constexpr (is_struct_type) {  // struct type ================================================
       auto const scalar_tview = dynamic_cast<struct_scalar const*>(&value)->view();
       CUDF_EXPECTS(col.num_children() == scalar_tview.num_columns(),
@@ -243,8 +243,8 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 }
 
 struct multi_contains_dispatch {
-  template <typename Element>
-  std::enable_if_t<!is_nested<Element>(), std::unique_ptr<column>> operator()(
+  template <typename Type>
+  std::enable_if_t<!is_nested<Type>(), std::unique_ptr<column>> operator()(
     column_view const& haystack,
     column_view const& needles,
     rmm::cuda_stream_view stream,
@@ -265,7 +265,7 @@ struct multi_contains_dispatch {
       return result;
     }
 
-    auto hash_set          = cudf::detail::unordered_multiset<Element>::create(needles, stream);
+    auto hash_set          = cudf::detail::unordered_multiset<Type>::create(needles, stream);
     auto const hash_set_dv = hash_set.to_device();
 
     auto const haystack_cdv_ptr = column_device_view::create(haystack, stream);
@@ -280,33 +280,27 @@ struct multi_contains_dispatch {
                         out_begin,
                         [hash_set_dv, haystack_cdv] __device__(size_t idx) {
                           return haystack_cdv.is_null_nocheck(idx) ||
-                                 hash_set_dv.contains(haystack_cdv.template element<Element>(idx));
+                                 hash_set_dv.contains(haystack_cdv.template element<Type>(idx));
                         });
     } else {
-      thrust::transform(
-        rmm::exec_policy(stream),
-        begin,
-        end,
-        out_begin,
-        [hash_set_dv, haystack_cdv] __device__(size_t index) {
-          return hash_set_dv.contains(haystack_cdv.template element<Element>(index));
-        });
+      thrust::transform(rmm::exec_policy(stream),
+                        begin,
+                        end,
+                        out_begin,
+                        [hash_set_dv, haystack_cdv] __device__(size_t index) {
+                          return hash_set_dv.contains(haystack_cdv.template element<Type>(index));
+                        });
     }
 
     return result;
   }
 
-  /**
-   * @brief Check if each row of the @p values column is contained in the corresponding @p input
-   * column.
-   *
-   * This utility function is only applied for nested types (struct + list). Caller is responsible
-   * to make sure the @p values and @p input have the same number of rows.
-   */
-  static std::unique_ptr<column> check_contain_for_nested_type(column_view const& input,
-                                                               column_view const& values,
-                                                               rmm::cuda_stream_view stream,
-                                                               rmm::mr::device_memory_resource* mr)
+  template <typename Type>
+  std::enable_if_t<is_nested<Type>(), std::unique_ptr<column>> operator()(
+    column_view const& values /* => haystack */,
+    column_view const& input /* => needles */,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     auto const n_rows = input.size();
     auto result       = make_numeric_column(
@@ -349,17 +343,6 @@ struct multi_contains_dispatch {
     input_map.contains(count_it, count_it + n_rows, out_begin, hash_input);
 
     return result;
-  }
-
-  template <typename Element>
-  std::enable_if_t<is_nested<Element>(), std::unique_ptr<column>> operator()(
-    [[maybe_unused]] column_view const& haystack,
-    [[maybe_unused]] column_view const& needles,
-    [[maybe_unused]] rmm::cuda_stream_view stream,
-    [[maybe_unused]] rmm::mr::device_memory_resource* mr)
-  {
-    //
-    return nullptr;
   }
 };
 
