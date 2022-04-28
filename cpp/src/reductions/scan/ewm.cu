@@ -56,7 +56,6 @@ class ewma_functor_base {
   pair_type<T> IDENTITY = {1.0, 0.0};
 };
 
-
 template <typename T, bool nulls, bool is_numerator>
 class ewma_adjust_functor : public ewma_functor_base<T> {
  private:
@@ -66,9 +65,9 @@ class ewma_adjust_functor : public ewma_functor_base<T> {
   ewma_adjust_functor(T beta) : beta{beta} {}
 
   using tupletype = std::conditional_t<nulls, thrust::tuple<bool, int, T>, T>;
-  
-  __device__ pair_type<T> operator()(tupletype data) 
-  { 
+
+  __device__ pair_type<T> operator()(tupletype data)
+  {
     if constexpr (is_numerator) {
       if constexpr (nulls) {
         bool const valid = thrust::get<0>(data);
@@ -78,7 +77,7 @@ class ewma_adjust_functor : public ewma_functor_base<T> {
         if (valid and (exp != 0)) {
           // The value is non-null, but nulls preceeded it
           // must adjust the second element of the pair
-  
+
           return {beta * (pow(beta, exp)), input};
         } else if (!valid) {
           // the value is null, carry the previous value forward
@@ -92,16 +91,15 @@ class ewma_adjust_functor : public ewma_functor_base<T> {
       }
     } else {
       if constexpr (nulls) {
-
         bool const valid = thrust::get<0>(data);
         int const exp    = thrust::get<1>(data);
         T const input    = thrust::get<2>(data);
         T const beta     = this->beta;
-    
+
         if (valid and (exp != 0)) {
           // The value is non-null, but nulls preceeded it
           // must adjust the second element of the pair
-    
+
           return {beta * (pow(beta, exp)), 1.0};
         } else if (!valid) {
           // the value is null, carry the previous value forward
@@ -117,7 +115,6 @@ class ewma_adjust_functor : public ewma_functor_base<T> {
   }
 };
 
-
 template <typename T, bool nulls>
 class ewma_noadjust_functor : public ewma_functor_base<T> {
  private:
@@ -126,14 +123,14 @@ class ewma_noadjust_functor : public ewma_functor_base<T> {
  public:
   ewma_noadjust_functor(T beta) : beta{beta} {}
 
-  using tupletype = std::conditional_t<nulls, thrust::tuple<T, size_type, bool, size_type>, thrust::tuple<T, size_type>>;
-  
-  __device__ pair_type<T> operator()(tupletype data) 
+  using tupletype = std::
+    conditional_t<nulls, thrust::tuple<T, size_type, bool, size_type>, thrust::tuple<T, size_type>>;
+
+  __device__ pair_type<T> operator()(tupletype data)
   {
-    
-    T const beta = this->beta;
-    size_type index   = thrust::get<1>(data);
-    T const input     = thrust::get<0>(data);
+    T const beta    = this->beta;
+    size_type index = thrust::get<1>(data);
+    T const input   = thrust::get<0>(data);
 
     if constexpr (!nulls) {
       if (index == 0) {
@@ -141,8 +138,7 @@ class ewma_noadjust_functor : public ewma_functor_base<T> {
       } else {
         return {beta, (1.0 - beta) * input};
       }
-    }
-    else {
+    } else {
       bool is_valid     = thrust::get<2>(data);
       size_type nullcnt = thrust::get<3>(data);
 
@@ -161,7 +157,7 @@ class ewma_noadjust_functor : public ewma_functor_base<T> {
           return this->IDENTITY;
         }
       }
-    }  
+    }
   }
 };
 
@@ -369,19 +365,21 @@ struct ewma_functor {
 };
 
 template <>
-std::unique_ptr<column> ewma_functor::operator()<float>(std::unique_ptr<cudf::scan_aggregation> const& agg,
-                                                        column_view const& input,
-                                                        rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> ewma_functor::operator()<float>(
+  std::unique_ptr<cudf::scan_aggregation> const& agg,
+  column_view const& input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   return ewma<float>(agg, input, stream, mr);
 }
 
 template <>
-std::unique_ptr<column> ewma_functor::operator()<double>(std::unique_ptr<cudf::scan_aggregation> const& agg,
-                                                         column_view const& input,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> ewma_functor::operator()<double>(
+  std::unique_ptr<cudf::scan_aggregation> const& agg,
+  column_view const& input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   return ewma<double>(agg, input, stream, mr);
 }
