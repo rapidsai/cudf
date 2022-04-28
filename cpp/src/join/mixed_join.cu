@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
+#include "mixed_join_kernels.cuh"
+
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -23,12 +27,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
-#include <join/hash_join.cuh>
-#include <join/join_common_utils.cuh>
-#include <join/join_common_utils.hpp>
-#include <join/mixed_join_kernels.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/scan.h>

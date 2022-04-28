@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <join/join_common_utils.cuh>
+#include "join_common_utils.cuh"
 
 #include <rmm/exec_policy.hpp>
 

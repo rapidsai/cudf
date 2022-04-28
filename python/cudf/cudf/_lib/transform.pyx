@@ -5,9 +5,11 @@ from numba.np import numpy_support
 
 import cudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
+from cudf.core._internals.expressions import parse_expression
 from cudf.core.buffer import Buffer
 from cudf.utils import cudautils
 
+from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
@@ -20,14 +22,18 @@ cimport cudf._lib.cpp.transform as libcudf_transform
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.expressions cimport expression
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
+from cudf._lib.expressions cimport Expression
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
     columns_from_unique_ptr,
     data_from_table_view,
+    data_from_unique_ptr,
     table_view_from_columns,
+    table_view_from_table,
 )
 
 
@@ -156,3 +162,34 @@ def one_hot_encode(Column input_column, Column categories):
     )
 
     return encodings
+
+
+def compute_column(list columns, tuple column_names, expr: str):
+    """Compute a new column by evaluating an expression on a set of columns.
+
+    Parameters
+    ----------
+    columns : list
+        The set of columns forming the table to evaluate the expression on.
+    column_names : tuple[str]
+        The names associated with each column. These names are necessary to map
+        column names in the expression to indices in the provided list of
+        columns, which are what will be used by libcudf to evaluate the
+        expression on the table.
+    expr : str
+        The expression to evaluate.
+    """
+    visitor = parse_expression(expr, column_names)
+
+    # At the end, all the stack contains is the expression to evaluate.
+    cdef Expression cudf_expr = visitor.expression
+    cdef table_view tbl = table_view_from_columns(columns)
+    cdef unique_ptr[column] col
+    with nogil:
+        col = move(
+            libcudf_transform.compute_column(
+                tbl,
+                <expression &> dereference(cudf_expr.c_obj.get())
+            )
+        )
+    return Column.from_unique_ptr(move(col))

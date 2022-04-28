@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "join/hash_join.cuh"
-#include "join/join_common_utils.hpp"
+#include "join_common_utils.hpp"
 
 #include <cudf/detail/gather.cuh>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -26,6 +25,26 @@
 
 namespace cudf {
 namespace detail {
+namespace {
+std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table(
+  table_view const& probe, table_view const& build)
+{
+  std::unique_ptr<table> empty_probe = empty_like(probe);
+  std::unique_ptr<table> empty_build = empty_like(build);
+  return std::pair(std::move(empty_probe), std::move(empty_build));
+}
+
+std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
+                                                std::unique_ptr<cudf::table>&& right)
+{
+  auto joined_cols = left->release();
+  auto right_cols  = right->release();
+  joined_cols.insert(joined_cols.end(),
+                     std::make_move_iterator(right_cols.begin()),
+                     std::make_move_iterator(right_cols.end()));
+  return std::make_unique<cudf::table>(std::move(joined_cols));
+}
+}  // namespace
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -222,68 +241,7 @@ std::unique_ptr<table> full_join(table_view const& left_input,
                                                        mr);
   return combine_table_pair(std::move(left_result), std::move(right_result));
 }
-
 }  // namespace detail
-
-hash_join::~hash_join() = default;
-
-hash_join::hash_join(cudf::table_view const& build,
-                     null_equality compare_nulls,
-                     rmm::cuda_stream_view stream)
-  : impl{std::make_unique<const hash_join::hash_join_impl>(build, compare_nulls, stream)}
-{
-}
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-hash_join::inner_join(cudf::table_view const& probe,
-                      std::optional<std::size_t> output_size,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr) const
-{
-  return impl->inner_join(probe, output_size, stream, mr);
-}
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-hash_join::left_join(cudf::table_view const& probe,
-                     std::optional<std::size_t> output_size,
-                     rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr) const
-{
-  return impl->left_join(probe, output_size, stream, mr);
-}
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-hash_join::full_join(cudf::table_view const& probe,
-                     std::optional<std::size_t> output_size,
-                     rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr) const
-{
-  return impl->full_join(probe, output_size, stream, mr);
-}
-
-std::size_t hash_join::inner_join_size(cudf::table_view const& probe,
-                                       rmm::cuda_stream_view stream) const
-{
-  return impl->inner_join_size(probe, stream);
-}
-
-std::size_t hash_join::left_join_size(cudf::table_view const& probe,
-                                      rmm::cuda_stream_view stream) const
-{
-  return impl->left_join_size(probe, stream);
-}
-
-std::size_t hash_join::full_join_size(cudf::table_view const& probe,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr) const
-{
-  return impl->full_join_size(probe, stream, mr);
-}
-
-// external APIs
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -353,5 +311,4 @@ std::unique_ptr<table> full_join(table_view const& left,
   return detail::full_join(
     left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
 }
-
 }  // namespace cudf
