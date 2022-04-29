@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 [flake8]
 exclude = __init__.py
@@ -9,14 +9,14 @@ ignore =
     E203
 
 [pydocstyle]
-match = ^(.*abc\.py|.*api/types\.py|.*single_column_frame\.py|.*indexed_frame\.py)$
-# Due to https://github.com/PyCQA/pydocstyle/issues/363, we must exclude rather than include using match-dir.
-match-dir = ^(?!ci|cpp|python/dask_cudf|python/cudf_kafka|python/custreamz).*$
-# In addition to numpy style, we additionally ignore:
-add-ignore =
-    # magic methods
-    D105,
-    # no docstring in __init__
-    D107,
-    # newlines before docstrings
-    D204
+# Due to https://github.com/PyCQA/pydocstyle/issues/363, we must exclude rather
+# than include using match-dir. Note that as discussed in
+# https://stackoverflow.com/questions/65478393/how-to-filter-directories-using-the-match-dir-flag-for-pydocstyle,
+# unlike the match option above this match-dir will have no effect when
+# pydocstyle is invoked from pre-commit. Therefore this exclusion list must
+# also be maintained in the pre-commit config file.
+match-dir = ^(?!(ci|cpp|conda|docs|java|notebooks|dask_cudf|cudf_kafka|custreamz|tests)).*$
+# Allow missing docstrings for docutils
+ignore-decorators = .*(docutils|doc_apply|copy_docstring).*
+select = 
+    D30
