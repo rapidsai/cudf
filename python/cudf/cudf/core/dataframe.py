@@ -111,6 +111,14 @@ _cupy_nan_methods_map = {
 }
 
 
+def shape_mismatch_error(x, y):
+    raise ValueError(
+        f"shape mismatch: value array of shape {x} "
+        f"could not be broadcast to indexing result of "
+        f"shape {y}"
+    )
+
+
 class _DataFrameIndexer(_FrameIndexer):
     def __getitem__(self, arg):
         if (
@@ -342,11 +350,6 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 )
             self._frame._data.insert(key[1], new_col)
         else:
-            shape_mismatch_error_msg = (
-                "shape mismatch: value array of shape {value1} "
-                "could not be broadcast to indexing result of "
-                "shape {value2}"
-            )
             if is_scalar(value):
                 for col in columns_df._column_names:
                     self._frame[col].loc[key[0]] = value
@@ -354,9 +357,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             elif isinstance(value, cudf.DataFrame):
                 if value.shape != self._frame.loc[key[0]].shape:
                     raise ValueError(
-                        shape_mismatch_error_msg.format(
-                            value1=value.shape,
-                            value2=self._frame.loc[key[0]].shape,
+                        shape_mismatch_error(
+                            value.shape,
+                            self._frame.loc[key[0]].shape,
                         )
                     )
                 value_column_names = set(value._column_names)
@@ -377,9 +380,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     if value.shape[1] == 1:
                         if value.shape[0] != indexed_shape[0]:
                             raise ValueError(
-                                shape_mismatch_error_msg.format(
-                                    value1=value.shape,
-                                    value2=indexed_shape,
+                                shape_mismatch_error(
+                                    value.shape, indexed_shape
                                 )
                             )
                         for i, col in enumerate(columns_df._column_names):
@@ -387,9 +389,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     else:
                         if value.shape != indexed_shape:
                             raise ValueError(
-                                shape_mismatch_error_msg.format(
-                                    value1=value.shape,
-                                    value2=indexed_shape,
+                                shape_mismatch_error(
+                                    value.shape, indexed_shape
                                 )
                             )
                         for i, col in enumerate(columns_df._column_names):
@@ -475,11 +476,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             self._frame._data.select_by_index(key[1]), self._frame._index
         )
 
-        shape_mismatch_error_msg = (
-            "shape mismatch: value array of shape {value1} "
-            "could not be broadcast to indexing result of "
-            "shape {value2}"
-        )
         if is_scalar(value):
             for col in columns_df._column_names:
                 self._frame[col].iloc[key[0]] = value
@@ -487,9 +483,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         elif isinstance(value, cudf.DataFrame):
             if value.shape != self._frame.iloc[key[0]].shape:
                 raise ValueError(
-                    shape_mismatch_error_msg.format(
-                        value1=value.shape,
-                        value2=self._frame.loc[key[0]].shape,
+                    shape_mismatch_error(
+                        value.shape,
+                        self._frame.loc[key[0]].shape,
                     )
                 )
             value_column_names = set(value._column_names)
@@ -507,20 +503,14 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 if value.shape[1] == 1:
                     if value.shape[0] != indexed_shape[0]:
                         raise ValueError(
-                            shape_mismatch_error_msg.format(
-                                value1=value.shape,
-                                value2=indexed_shape,
-                            )
+                            shape_mismatch_error(value.shape, indexed_shape)
                         )
                     for i, col in enumerate(columns_df._column_names):
                         self._frame[col].iloc[key[0]] = value[:, 0]
                 else:
                     if value.shape != indexed_shape:
                         raise ValueError(
-                            shape_mismatch_error_msg.format(
-                                value1=value.shape,
-                                value2=indexed_shape,
-                            )
+                            shape_mismatch_error(value.shape, indexed_shape)
                         )
                     for i, col in enumerate(columns_df._column_names):
                         self._frame._data[col][key[0]] = value[:, i]
