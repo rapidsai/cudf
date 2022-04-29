@@ -81,7 +81,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 
   auto [null_mask, null_count] = [&] {
     if (!build_null_mask)
-      return std::make_pair(cudf::detail::copy_bitmask(input, stream, mr), input.null_count());
+      return std::pair(cudf::detail::copy_bitmask(input, stream, mr), input.null_count());
 
     // The output row will be null only if all lists on the input row are null.
     auto const lists_dv_ptr = column_device_view::create(lists_column_view(input).child(), stream);

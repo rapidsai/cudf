@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+import warnings
 from functools import cached_property
 from typing import Any, Set
 
@@ -707,7 +708,18 @@ class BaseIndex(Serializable):
         if is_mixed_with_object_dtype(self, other):
             difference = self.copy()
         else:
-            difference = self.join(other, how="leftanti")
+            other = other.copy(deep=False)
+            other.names = self.names
+            difference = cudf.core.index._index_from_data(
+                cudf.DataFrame._from_data(self._data)
+                ._merge(
+                    cudf.DataFrame._from_data(other._data),
+                    how="leftanti",
+                    on=self.name,
+                )
+                ._data
+            )
+
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
@@ -989,7 +1001,17 @@ class BaseIndex(Serializable):
         return union_result
 
     def _intersection(self, other, sort=None):
-        intersection_result = self.unique().join(other.unique(), how="inner")
+        other_unique = other.unique()
+        other_unique.names = self.names
+        intersection_result = cudf.core.index._index_from_data(
+            cudf.DataFrame._from_data(self.unique()._data)
+            ._merge(
+                cudf.DataFrame._from_data(other_unique._data),
+                how="inner",
+                on=self.name,
+            )
+            ._data
+        )
 
         if sort is None and len(other):
             return intersection_result.sort_values()
@@ -1141,6 +1163,9 @@ class BaseIndex(Serializable):
                     (1, 2)],
                    names=['a', 'b'])
         """
+        warnings.warn(
+            "Index.join is deprecated and will be removed", FutureWarning
+        )
 
         if isinstance(self, cudf.MultiIndex) and isinstance(
             other, cudf.MultiIndex
