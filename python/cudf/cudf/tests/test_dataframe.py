@@ -3662,9 +3662,7 @@ def test_all(data):
     # Pandas treats `None` in object type columns as True for some reason, so
     # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = cudf.utils.utils._create_pandas_series(data=data).replace(
-            [None], False
-        )
+        pdata = pd.Series(data=data).replace([None], False)
         gdata = cudf.Series.from_pandas(pdata)
     else:
         pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
@@ -3715,7 +3713,7 @@ def test_all(data):
 @pytest.mark.parametrize("axis", [0, 1])
 def test_any(data, axis):
     if np.array(data).ndim <= 1:
-        pdata = cudf.utils.utils._create_pandas_series(data=data)
+        pdata = pd.Series(data=data)
         gdata = cudf.Series.from_pandas(pdata)
 
         if axis == 1:
@@ -4185,7 +4183,7 @@ def test_create_dataframe_column():
     ],
 )
 def test_series_values_host_property(data):
-    pds = cudf.utils.utils._create_pandas_series(data=data)
+    pds = pd.Series(data=data)
     gds = cudf.Series(data)
 
     np.testing.assert_array_equal(pds.values, gds.values_host)
@@ -4208,7 +4206,7 @@ def test_series_values_host_property(data):
     ],
 )
 def test_series_values_property(data):
-    pds = cudf.utils.utils._create_pandas_series(data=data)
+    pds = pd.Series(data=data)
     gds = cudf.Series(data)
     gds_vals = gds.values
     assert isinstance(gds_vals, cupy.ndarray)
@@ -9268,3 +9266,90 @@ def test_empty_numeric_only(data):
     expected = pdf.prod(numeric_only=True)
     actual = gdf.prod(numeric_only=True)
     assert_eq(expected, actual)
+
+
+@pytest.fixture
+def df_eval():
+    N = 10
+    int_max = 10
+    rng = cupy.random.default_rng(0)
+    return cudf.DataFrame(
+        {
+            "a": rng.integers(N, size=int_max),
+            "b": rng.integers(N, size=int_max),
+            "c": rng.integers(N, size=int_max),
+            "d": rng.integers(N, size=int_max),
+        }
+    )
+
+
+# Note that for now expressions do not automatically handle casting, so inputs
+# need to be casted appropriately
+@pytest.mark.parametrize(
+    "expr, dtype",
+    [
+        ("a", int),
+        ("+a", int),
+        ("a + b", int),
+        ("a == b", int),
+        ("a / b", float),
+        ("a * b", int),
+        ("a > b", int),
+        ("a > b > c", int),
+        ("a > b < c", int),
+        ("a & b", int),
+        ("a & b | c", int),
+        ("sin(a)", float),
+        ("exp(sin(abs(a)))", float),
+        ("sqrt(floor(a))", float),
+        ("ceil(arctanh(a))", float),
+        ("(a + b) - (c * d)", int),
+        ("~a", int),
+        ("(a > b) and (c > d)", int),
+        ("(a > b) or (c > d)", int),
+        ("not (a > b)", int),
+        ("a + 1", int),
+        ("a + 1.0", float),
+        ("-a + 1", int),
+        ("+a + 1", int),
+        ("e = a + 1", int),
+        (
+            """
+            e = log(cos(a)) + 1.0
+            f = abs(c) - exp(d)
+            """,
+            float,
+        ),
+        ("a_b_are_equal = (a == b)", int),
+    ],
+)
+def test_dataframe_eval(df_eval, expr, dtype):
+    df_eval = df_eval.astype(dtype)
+    expect = df_eval.to_pandas().eval(expr)
+    got = df_eval.eval(expr)
+    # In the specific case where the evaluated expression is a unary function
+    # of a single column with no nesting, pandas will retain the name. This
+    # level of compatibility is out of scope for now.
+    assert_eq(expect, got, check_names=False)
+
+    # Test inplace
+    if re.search("[^=]=[^=]", expr) is not None:
+        pdf_eval = df_eval.to_pandas()
+        pdf_eval.eval(expr, inplace=True)
+        df_eval.eval(expr, inplace=True)
+        assert_eq(pdf_eval, df_eval)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        """
+        e = a + b
+        a == b
+        """,
+        "a_b_are_equal = (a == b) = c",
+    ],
+)
+def test_dataframe_eval_errors(df_eval, expr):
+    with pytest.raises(ValueError):
+        df_eval.eval(expr)

@@ -652,8 +652,8 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns)
   std::vector<std::pair<PairT0, PairT1>> facts{};
   std::vector<cudf::table_view> tables{};
   for (int i = 0; i < num_tables; ++i) {
-    facts.emplace_back(std::make_pair(PairT0(sequence0, sequence0 + inputRows),
-                                      PairT1(sequence1, sequence1 + inputRows)));
+    facts.emplace_back(std::pair(PairT0(sequence0, sequence0 + inputRows),
+                                 PairT1(sequence1, sequence1 + inputRows)));
     tables.push_back(cudf::table_view{{facts.back().first, facts.back().second}});
   }
   std::vector<cudf::size_type> key_cols{0};

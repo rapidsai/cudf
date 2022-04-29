@@ -57,7 +57,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   auto indices_column = cudf::detail::lower_bound(
     sorted_unique_keys->view(), input_table, column_order, null_precedence, stream, mr);
 
-  return std::make_pair(std::move(sorted_unique_keys), std::move(indices_column));
+  return std::pair(std::move(sorted_unique_keys), std::move(indices_column));
 }
 
 }  // namespace detail

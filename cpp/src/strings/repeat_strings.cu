@@ -283,7 +283,7 @@ auto make_strings_children(Func fn,
     for_each_fn(fn);
   }
 
-  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+  return std::pair(std::move(offsets_column), std::move(chars_column));
 }
 
 }  // namespace
@@ -345,7 +345,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
 
   auto const strings_count = input.size();
   if (strings_count == 0) {
-    return std::make_pair(make_empty_column(type_to_id<size_type>()), int64_t{0});
+    return std::pair(make_empty_column(type_to_id<size_type>()), int64_t{0});
   }
 
   auto output_sizes = make_numeric_column(
@@ -374,7 +374,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
                              int64_t{0},
                              thrust::plus{});
 
-  return std::make_pair(std::move(output_sizes), total_bytes);
+  return std::pair(std::move(output_sizes), total_bytes);
 }
 
 }  // namespace detail

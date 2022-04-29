@@ -352,7 +352,7 @@ def test_scalar_invalid_implicit_conversion(cls, dtype):
     [cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype],
 )
 def test_device_scalar_direct_construction(value, decimal_type):
-    value = cudf.utils.utils.to_cudf_compatible_scalar(value)
+    value = cudf.utils.dtypes.to_cudf_compatible_scalar(value)
 
     dtype = (
         value.dtype
@@ -376,7 +376,7 @@ def test_device_scalar_direct_construction(value, decimal_type):
 
 @pytest.mark.parametrize("value", SCALAR_VALUES + DECIMAL_VALUES)
 def test_construct_from_scalar(value):
-    value = cudf.utils.utils.to_cudf_compatible_scalar(value)
+    value = cudf.utils.dtypes.to_cudf_compatible_scalar(value)
     x = cudf.Scalar(
         value, value.dtype if not isinstance(value, Decimal) else None
     )

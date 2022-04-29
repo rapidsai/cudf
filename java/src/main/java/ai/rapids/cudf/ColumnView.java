@@ -3474,6 +3474,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Generate list offsets from sizes of each list.
+   * NOTICE: This API only works for INT32. Otherwise, the behavior is undefined. And no null and negative value is allowed.
+   *
+   * @return a column of list offsets whose size is N + 1
+   */
+  public final ColumnVector generateListOffsets() {
+    return new ColumnVector(generateListOffsets(getNativeView()));
+  }
+
+  /**
    * Get a single item from the column at the specified index as a Scalar.
    *
    * Be careful. This is expensive and may involve running a kernel to copy the data out.
@@ -4161,6 +4171,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native long getDeviceMemorySize(long viewHandle) throws CudfException;
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
+
+  static native long generateListOffsets(long handle) throws CudfException;
 
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when
