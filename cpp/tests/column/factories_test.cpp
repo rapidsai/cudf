@@ -645,7 +645,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNonNested)
                                           0,
                                           cudf::create_null_mask(2, cudf::mask_state::UNALLOCATED));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, *expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *expected);
 }
 
 TYPED_TEST(ListsStructsLeafTest, FromNested)

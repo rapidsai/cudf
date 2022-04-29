@@ -238,6 +238,7 @@ add_library(
   src/copying/gather.cu
   src/copying/get_element.cu
   src/copying/pack.cpp
+  src/copying/purge_nonempty_nulls.cu
   src/copying/reverse.cu
   src/copying/sample.cu
   src/copying/scatter.cu
