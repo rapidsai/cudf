@@ -29,7 +29,7 @@ namespace {
 
 struct common_type_functor {
   template <typename TypeLhs, typename TypeRhs>
-  std::optional<data_type> operator()()
+  std::optional<data_type> operator()() const
   {
     if constexpr (cudf::has_common_type_v<TypeLhs, TypeRhs>) {
       using TypeCommon = std::common_type_t<TypeLhs, TypeRhs>;
@@ -46,7 +46,7 @@ struct common_type_functor {
 
 struct has_mutable_element_accessor_functor {
   template <typename T>
-  bool operator()()
+  bool operator()() const
   {
     return mutable_column_device_view::has_element_accessor<T>();
   }
@@ -60,7 +60,7 @@ bool has_mutable_element_accessor(data_type t)
 template <typename InputType>
 struct is_constructible_functor {
   template <typename TargetType>
-  bool operator()()
+  bool operator()() const
   {
     return std::is_constructible_v<TargetType, InputType>;
   }
@@ -81,7 +81,7 @@ template <typename BinaryOperator>
 struct is_binary_operation_supported {
   // For types where Out type is fixed. (e.g. comparison types)
   template <typename TypeLhs, typename TypeRhs>
-  inline constexpr bool operator()()
+  inline constexpr bool operator()() const
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>()) {
@@ -97,7 +97,7 @@ struct is_binary_operation_supported {
   }
 
   template <typename TypeLhs, typename TypeRhs>
-  inline constexpr bool operator()(data_type out_type)
+  inline constexpr bool operator()(data_type out_type) const
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
                   column_device_view::has_element_accessor<TypeRhs>()) {
@@ -123,12 +123,12 @@ struct is_supported_operation_functor {
   template <typename TypeLhs, typename TypeRhs>
   struct nested_support_functor {
     template <typename BinaryOperator>
-    inline constexpr bool call(data_type out_type)
+    inline constexpr bool call(data_type out_type) const
     {
       return is_binary_operation_supported<BinaryOperator>{}.template operator()<TypeLhs, TypeRhs>(
         out_type);
     }
-    inline constexpr bool operator()(binary_operator op, data_type out_type)
+    inline constexpr bool operator()(binary_operator op, data_type out_type) const
     {
       switch (op) {
         // clang-format off
