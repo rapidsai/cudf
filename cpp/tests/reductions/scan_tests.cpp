@@ -84,6 +84,7 @@ struct ScanTest : public BaseScanTest<T> {
         case aggregation::PRODUCT: return std::is_invocable_v<cudf::DeviceProduct, T, T>;
         case aggregation::MIN: return std::is_invocable_v<cudf::DeviceMin, T, T>;
         case aggregation::MAX: return std::is_invocable_v<cudf::DeviceMax, T, T>;
+        case aggregation::RANK: return std::is_invocable_v<cudf::DeviceMax, T, T>;  // comparable
         default: return false;
       }
       return false;

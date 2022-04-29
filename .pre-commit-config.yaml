@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 repos:
       - repo: https://github.com/PyCQA/isort
         rev: 5.6.4
@@ -56,6 +58,15 @@ repos:
         hooks:
               - id: pydocstyle
                 args: ["--config=python/.flake8"]
+                exclude: |
+                    (?x)^(
+                    ci|
+                    cpp|
+                    conda|
+                    docs|
+                    java|
+                    notebooks
+                    )
       - repo: https://github.com/pre-commit/mirrors-clang-format
         rev: v11.1.0
         hooks:
@@ -73,7 +84,7 @@ repos:
                 # Note that pre-commit autoupdate does not update the versions
                 # of dependencies, so we'll have to update this manually.
                 additional_dependencies:
-                  - cmake-format==0.6.11
+                  - cmakelang==0.6.13
               - id: cmake-lint
                 name: cmake-lint
                 entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
@@ -82,7 +93,7 @@ repos:
                 # Note that pre-commit autoupdate does not update the versions
                 # of dependencies, so we'll have to update this manually.
                 additional_dependencies:
-                  - cmake-format==0.6.11
+                  - cmakelang==0.6.13
               - id: copyright-check
                 name: copyright-check
                 # This hook's use of Git tools appears to conflict with

@@ -25,6 +25,11 @@ function(find_and_configure_nvcomp VERSION_MIN VERSION_MAX)
     OPTIONS "BUILD_STATIC ON" "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
 
+  if(nvcomp_BINARY_DIR)
+    include("${rapids-cmake-dir}/export/find_package_root.cmake")
+    rapids_export_find_package_root(BUILD nvcomp "${nvcomp_BINARY_DIR}" cudf-exports)
+  endif()
+
   if(NOT TARGET nvcomp::nvcomp)
     add_library(nvcomp::nvcomp ALIAS nvcomp)
   endif()

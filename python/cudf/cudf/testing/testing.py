@@ -215,7 +215,7 @@ def assert_column_equal(
                 msg1 = f"{left.ordered}"
                 msg2 = f"{right.ordered}"
                 raise_assert_detail(
-                    "{obj} category", "Orders are different", msg1, msg2
+                    f"{obj} category", "Orders are different", msg1, msg2
                 )
 
     if (
