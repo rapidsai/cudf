@@ -23,7 +23,6 @@
 
 namespace cudf {
 namespace strings {
-namespace string {
 /**
  * @addtogroup strings_classes
  * @{
@@ -150,6 +149,5 @@ inline __device__ bool is_float(string_view const& d_str)
 }
 
 /** @} */  // end of group
-}  // namespace string
 }  // namespace strings
 }  // namespace cudf
