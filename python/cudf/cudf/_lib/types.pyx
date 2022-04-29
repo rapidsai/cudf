@@ -93,6 +93,7 @@ SUPPORTED_NUMPY_TO_LIBCUDF_TYPES = {
 }
 
 LIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
+    TypeId.EMPTY: np.dtype("int8"),
     TypeId.INT8: np.dtype("int8"),
     TypeId.INT16: np.dtype("int16"),
     TypeId.INT32: np.dtype("int32"),
