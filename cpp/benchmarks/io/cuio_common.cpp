@@ -145,6 +145,8 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
 // Executes the command and returns stderr output
 std::string exec_cmd(std::string_view cmd)
 {
+  // Prevent the output from the command from mixing with the original process' output
+  fflush(nullptr);
   // Switch stderr and stdout to only capture stderr
   auto const redirected_cmd = std::string{"( "}.append(cmd).append(" 3>&2 2>&1 1>&3) 2>/dev/null");
   std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(redirected_cmd.c_str(), "r"), pclose);
