@@ -48,68 +48,6 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
 }
 
 /**
- * @brief Performs bitwise AND of the bitmasks of columns of `build`. Returns
- * a helper struct of row bitmasks and count of valid rows.
- *
- * @param build Table of columns used to build join hash.
- * @param nulls_equal Flag to denote nulls are equal or not.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return A helper struct of row bitmask and count of valid rows.
- */
-cudf::detail::row_info get_valid_row_info(cudf::table_view const& build,
-                                          null_equality const nulls_equal,
-                                          rmm::cuda_stream_view stream)
-{
-  auto num_valid_rows            = build.num_rows();
-  auto [row_bitmask, null_count] = cudf::detail::bitmask_and(build, stream);
-  if (nulls_equal == cudf::null_equality::UNEQUAL and nullable(build)) {
-    num_valid_rows -= null_count;
-  }
-  return {std::move(row_bitmask), num_valid_rows};
-}
-
-/**
- * @brief Fills the hash table based on the given table `build`.
- *
- * @tparam MultimapType Type of the hash table
- *
- * @param build Table of columns used to build join hash.
- * @param hash_table Build hash table.
- * @param nulls_equal Flag to denote nulls are equal or not.
- * @param row_bitmask Bitmasks to denote whether a row is valid or not.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- *
- */
-template <typename MultimapType>
-void fill_join_hash_table(cudf::table_view const& build,
-                          MultimapType& hash_table,
-                          null_equality const nulls_equal,
-                          rmm::device_buffer const& row_bitmask,
-                          rmm::cuda_stream_view stream)
-{
-  auto build_table_ptr            = cudf::table_device_view::create(build, stream);
-  auto const build_table_num_rows = build.num_rows();
-
-  CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build_table_num_rows, "Build side table has no rows");
-
-  row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
-  make_pair_function pair_func{hash_build, hash_table.get_empty_key_sentinel()};
-
-  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
-
-  if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
-    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
-  } else {
-    thrust::counting_iterator<size_type> stencil(0);
-    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
-
-    // insert valid rows
-    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
-  }
-}
-
-/**
  * @brief Probes the `hash_table` built from `build_table` for tuples in `probe_table`,
  * and returns the output indices of `build_table` and `probe_table` as a combined table.
  * Behavior is undefined if the provided `output_size` is smaller than the actual output size.
@@ -302,9 +240,9 @@ hash_join::hash_join_impl::~hash_join_impl() = default;
 hash_join::hash_join_impl::hash_join_impl(cudf::table_view const& build,
                                           null_equality compare_nulls,
                                           rmm::cuda_stream_view stream)
-  : _valid_row_info{cudf::detail::get_valid_row_info(build, compare_nulls, stream)},
+  : _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
-    _hash_table{compute_hash_table_size(_valid_row_info.num_valid_rows),
+    _hash_table{compute_hash_table_size(build.num_rows()),
                 std::numeric_limits<hash_value_type>::max(),
                 cudf::detail::JoinNoneValue,
                 stream.value(),
@@ -320,11 +258,9 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const& build,
     build, {}, {}, structs::detail::column_nullability::FORCE);
   _build = _flattened_build_table;
 
-  // skip filling if empty
-  if (_valid_row_info.num_valid_rows == 0) { return; }
+  if (_is_empty) { return; }
 
-  cudf::detail::fill_join_hash_table(
-    _build, _hash_table, _nulls_equal, _valid_row_info.composite_bitmask, stream);
+  cudf::detail::build_join_hash_table(_build, _hash_table, _nulls_equal, stream);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -366,7 +302,7 @@ std::size_t hash_join::hash_join_impl::inner_join_size(cudf::table_view const& p
   CUDF_FUNC_RANGE();
 
   // Return directly if build table is empty
-  if (_valid_row_info.num_valid_rows == 0) { return 0; }
+  if (_is_empty) { return 0; }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
@@ -390,7 +326,7 @@ std::size_t hash_join::hash_join_impl::left_join_size(cudf::table_view const& pr
   CUDF_FUNC_RANGE();
 
   // Trivial left join case - exit early
-  if (_valid_row_info.num_valid_rows == 0) { return probe.num_rows(); }
+  if (_is_empty) { return probe.num_rows(); }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
@@ -415,7 +351,7 @@ std::size_t hash_join::hash_join_impl::full_join_size(cudf::table_view const& pr
   CUDF_FUNC_RANGE();
 
   // Trivial left join case - exit early
-  if (_valid_row_info.num_valid_rows == 0) { return probe.num_rows(); }
+  if (_is_empty) { return probe.num_rows(); }
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
@@ -477,11 +413,11 @@ hash_join::hash_join_impl::probe_join_indices(cudf::table_view const& probe_tabl
                                               rmm::mr::device_memory_resource* mr) const
 {
   // Trivial left join case - exit early
-  if (_valid_row_info.num_valid_rows == 0 and JoinKind != cudf::detail::join_kind::INNER_JOIN) {
+  if (_is_empty and JoinKind != cudf::detail::join_kind::INNER_JOIN) {
     return get_trivial_left_join_indices(probe_table, stream, mr);
   }
 
-  CUDF_EXPECTS(_valid_row_info.num_valid_rows > 0, "Hash table of hash join is null.");
+  CUDF_EXPECTS(!_is_empty, "Hash table of hash join is null.");
 
   auto build_table_ptr = cudf::table_device_view::create(_build, stream);
   auto probe_table_ptr = cudf::table_device_view::create(probe_table, stream);

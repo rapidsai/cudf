@@ -41,11 +41,6 @@
 namespace cudf {
 namespace detail {
 
-struct row_info {
-  rmm::device_buffer composite_bitmask;
-  cudf::size_type num_valid_rows;
-};
-
 /**
  * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
  *
@@ -169,10 +164,9 @@ void build_join_hash_table(cudf::table_view const& build,
                            rmm::cuda_stream_view stream)
 {
   auto build_table_ptr = cudf::table_device_view::create(build, stream);
-  auto const build_table_num_rows{build_table_ptr->num_rows()};
 
   CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build_table_num_rows, "Build side table has no rows");
+  CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
 
   row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
@@ -180,6 +174,7 @@ void build_join_hash_table(cudf::table_view const& build,
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
+  size_type const build_table_num_rows{build_table_ptr->num_rows()};
   if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
     hash_table.insert(iter, iter + build_table_num_rows, stream.value());
   } else {
@@ -203,7 +198,7 @@ struct hash_join::hash_join_impl {
   hash_join_impl& operator=(hash_join_impl&&) = delete;
 
  private:
-  cudf::detail::row_info const _valid_row_info;
+  bool const _is_empty;
   cudf::null_equality const _nulls_equal;
   cudf::table_view _build;
   std::vector<std::unique_ptr<cudf::column>> _created_null_columns;

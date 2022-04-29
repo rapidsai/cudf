@@ -125,7 +125,6 @@ static void BM_join(state_type& state, Join JoinFunc)
   [[maybe_unused]] std::vector<cudf::size_type> columns_to_join = {0};
 
   // Benchmark the inner join operation
-  auto mem_stats_logger = cudf::memory_stats_logger();
   if constexpr (std::is_same_v<state_type, benchmark::State> and (not is_conditional)) {
     for (auto _ : state) {
       cuda_event_timer raii(state, true, rmm::cuda_stream_default);
@@ -133,19 +132,17 @@ static void BM_join(state_type& state, Join JoinFunc)
       auto result = JoinFunc(
         probe_table, build_table, columns_to_join, columns_to_join, cudf::null_equality::UNEQUAL);
     }
-    state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
   }
   if constexpr (std::is_same_v<state_type, nvbench::state> and (not is_conditional)) {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       rmm::cuda_stream_view stream_view{launch.get_stream()};
-      auto result = JoinFunc(build_table,
-                             probe_table,
+      auto result = JoinFunc(probe_table,
+                             build_table,
                              columns_to_join,
                              columns_to_join,
                              cudf::null_equality::UNEQUAL,
                              stream_view);
     });
-    state.add_element_count(mem_stats_logger.peak_memory_usage(), "Peak Memory");
   }
 
   // Benchmark conditional join
