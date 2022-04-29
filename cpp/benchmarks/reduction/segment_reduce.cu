@@ -82,7 +82,7 @@ std::pair<std::unique_ptr<column>, thrust::device_vector<size_type>> make_test_d
 
   thrust::device_vector<size_type> d_offsets(offset_it, offset_it + num_segments + 1);
 
-  return std::make_pair(std::move((input->release())[0]), d_offsets);
+  return std::pair(std::move((input->release())[0]), d_offsets);
 }
 
 template <typename InputType, typename OutputType, aggregation::Kind kind>

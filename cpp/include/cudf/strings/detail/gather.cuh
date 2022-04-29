@@ -303,14 +303,17 @@ std::unique_ptr<cudf::column> gather(
     data_type{type_id::INT32}, output_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto const d_out_offsets = out_offsets_column->mutable_view().template data<int32_t>();
   auto const d_in_offsets  = (strings_count > 0) ? strings.offsets_begin() : nullptr;
-  thrust::transform(rmm::exec_policy(stream),
-                    begin,
-                    end,
-                    d_out_offsets,
-                    [d_in_offsets, strings_count] __device__(size_type in_idx) {
-                      if (NullifyOutOfBounds && (in_idx < 0 || in_idx >= strings_count)) return 0;
-                      return d_in_offsets[in_idx + 1] - d_in_offsets[in_idx];
-                    });
+  auto const d_strings     = column_device_view::create(strings.parent(), stream);
+  thrust::transform(
+    rmm::exec_policy(stream),
+    begin,
+    end,
+    d_out_offsets,
+    [d_strings = *d_strings, d_in_offsets, strings_count] __device__(size_type in_idx) {
+      if (NullifyOutOfBounds && (in_idx < 0 || in_idx >= strings_count)) return 0;
+      if (not d_strings.is_valid(in_idx)) return 0;
+      return d_in_offsets[in_idx + 1] - d_in_offsets[in_idx];
+    });
 
   // check total size is not too large
   size_t const total_bytes = thrust::transform_reduce(
@@ -329,7 +332,6 @@ std::unique_ptr<cudf::column> gather(
 
   // build chars column
   cudf::device_span<int32_t const> const d_out_offsets_span(d_out_offsets, output_count + 1);
-  auto const d_strings  = column_device_view::create(strings.parent(), stream);
   auto out_chars_column = gather_chars(d_strings->begin<string_view>(),
                                        begin,
                                        end,

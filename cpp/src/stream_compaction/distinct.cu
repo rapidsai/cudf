@@ -27,7 +27,7 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -57,9 +57,10 @@ std::unique_ptr<table> distinct(table_view const& input,
   }
 
   auto keys_view = input.select(keys);
-  auto table_ptr = cudf::table_device_view::create(keys_view, stream);
-  auto has_null  = nullate::DYNAMIC{cudf::has_nulls(keys_view)};
-  auto const num_rows{table_ptr->num_rows()};
+  auto preprocessed_keys =
+    cudf::experimental::row::hash::preprocessed_table::create(keys_view, stream);
+  auto has_null = nullate::DYNAMIC{cudf::has_nulls(keys_view)};
+  auto const num_rows{keys_view.num_rows()};
 
   hash_map_type key_map{compute_hash_table_size(num_rows),
                         COMPACTION_EMPTY_KEY_SENTINEL,
@@ -67,13 +68,16 @@ std::unique_ptr<table> distinct(table_view const& input,
                         detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
 
-  compaction_hash hash_key{has_null, *table_ptr};
-  row_equality_comparator row_equal(has_null, *table_ptr, *table_ptr, nulls_equal);
+  auto row_hash = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
+  experimental::compaction_hash hash_key(row_hash.device_hasher(has_null));
+
+  cudf::experimental::row::equality::self_comparator row_equal(preprocessed_keys);
+  auto key_equal = row_equal.device_comparator(has_null, nulls_equal);
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
   // insert distinct indices into the map.
-  key_map.insert(iter, iter + num_rows, hash_key, row_equal, stream.value());
+  key_map.insert(iter, iter + num_rows, hash_key, key_equal, stream.value());
 
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
   rmm::device_uvector<bool> index_exists_in_map(num_rows, stream, mr);

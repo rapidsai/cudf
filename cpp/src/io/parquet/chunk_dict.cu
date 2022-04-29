@@ -60,7 +60,10 @@ struct equality_functor {
 template <typename T>
 struct hash_functor {
   column_device_view const& col;
-  __device__ auto operator()(size_type idx) { return MurmurHash3_32<T>{}(col.element<T>(idx)); }
+  __device__ auto operator()(size_type idx) const
+  {
+    return cudf::detail::MurmurHash3_32<T>{}(col.element<T>(idx));
+  }
 };
 
 struct map_insert_fn {
@@ -72,7 +75,7 @@ struct map_insert_fn {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       auto hash_fn     = hash_functor<T>{col};
       auto equality_fn = equality_functor<T>{col};
-      return map.insert(std::make_pair(i, i), hash_fn, equality_fn);
+      return map.insert(std::pair(i, i), hash_fn, equality_fn);
     } else {
       CUDF_UNREACHABLE("Unsupported type to insert in map");
     }

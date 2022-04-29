@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 """
 Test related to MultiIndex
@@ -688,7 +688,7 @@ def test_multiindex_copy_sem(data, levels, codes, names):
     # Test same behavior when used on DataFrame
     gdf.index = gmi_copy
     pdf.index = pmi_copy
-    assert gdf.__repr__() == pdf.__repr__()
+    assert repr(gdf) == repr(pdf)
 
 
 @pytest.mark.parametrize(
@@ -1131,7 +1131,7 @@ def test_multiindex_values_host():
         ),
     ],
 )
-def test_multiIndex_fillna(gdi, fill_value, expected):
+def test_multiindex_fillna(gdi, fill_value, expected):
     assert_eq(expected, gdi.fillna(fill_value))
 
 
@@ -1173,7 +1173,7 @@ def test_multiIndex_fillna(gdi, fill_value, expected):
         ),
     ],
 )
-def test_multiIndex_empty(pdi):
+def test_multiindex_empty(pdi):
     gdi = cudf.from_pandas(pdi)
 
     assert_eq(pdi.empty, gdi.empty)
@@ -1217,7 +1217,7 @@ def test_multiIndex_empty(pdi):
         ),
     ],
 )
-def test_multiIndex_size(pdi):
+def test_multiindex_size(pdi):
     gdi = cudf.from_pandas(pdi)
 
     assert_eq(pdi.size, gdi.size)
@@ -1375,7 +1375,7 @@ def test_multiindex_sort_values(pmidx, ascending, return_indexer):
     ],
 )
 @pytest.mark.parametrize("ascending", [True, False])
-def test_multiIndex_argsort(pdi, ascending):
+def test_multiindex_argsort(pdi, ascending):
     gdi = cudf.from_pandas(pdi)
 
     if not ascending:
@@ -1562,7 +1562,7 @@ def test_multiindex_indexing(key):
     assert_eq(gi[key], pi[key], exact=False)
 
 
-def test_multiIndex_duplicate_names():
+def test_multiindex_duplicate_names():
     gi = cudf.MultiIndex(
         levels=[["a", "b"], ["b", "a"]],
         codes=[[0, 0], [0, 1]],
@@ -1699,7 +1699,7 @@ def test_intersection_mulitIndex(idx1, idx2, sort):
         None,
     ],
 )
-def test_pickle_roundtrip_multiIndex(names):
+def test_pickle_roundtrip_multiindex(names):
     df = cudf.DataFrame(
         {
             "one": [1, 2, 3],
@@ -1745,7 +1745,7 @@ def test_pickle_roundtrip_multiIndex(names):
         "is_interval",
     ],
 )
-def test_multiIndex_type_methods(pidx, func):
+def test_multiindex_type_methods(pidx, func):
     gidx = cudf.from_pandas(pidx)
 
     expected = getattr(pidx, func)()

@@ -9,7 +9,11 @@ from pandas import DataFrame, MultiIndex, Series, date_range
 
 import cudf
 from cudf import concat
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import (
+    _create_pandas_series,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 # TODO: PANDAS 1.0 support
 # Revisit drop_duplicates() tests to update parameters like ignore_index.
@@ -59,7 +63,7 @@ def test_duplicated_with_misspelled_column_name(subset):
     ],
 )
 def test_drop_duplicates_series(data, keep):
-    pds = cudf.utils.utils._create_pandas_series(data)
+    pds = _create_pandas_series(data)
     gds = cudf.from_pandas(pds)
 
     assert_df(pds.drop_duplicates(keep=keep), gds.drop_duplicates(keep=keep))
