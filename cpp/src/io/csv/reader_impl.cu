@@ -718,14 +718,15 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     std::unordered_map<string, int> col_names_counts;
     if (!reader_opts.is_enabled_mangle_dupe_cols()) {
       for (auto& col_name : column_names) {
-        if (col_names_counts[col_name] > 0) {
+        if (++col_names_counts[col_name] > 1) {
           // All duplicate columns will be ignored; First appearance is parsed
           const auto idx    = &col_name - column_names.data();
           column_flags[idx] = column_parse::disabled;
-          ++col_names_counts[col_name];
         }
       }
     } else {
+      // For constant/linear search.
+      std::unordered_multiset<std::string> header(column_names.begin(), column_names.end());
       for (auto const col_idx : col_loop_order) {
         auto col       = column_names[col_idx];
         auto cur_count = col_names_counts[col];
@@ -735,13 +736,14 @@ table_with_metadata read_csv(cudf::io::datasource* source,
           while (cur_count > 0) {
             col_names_counts[old_col] = cur_count + 1;
             col                       = old_col + "." + std::to_string(cur_count);
-            // Linear search.
-            if (std::find(column_names.begin(), column_names.end(), col) != column_names.end()) {
+            if (header.find(col) != header.end()) {
               cur_count++;
             } else {
               cur_count = col_names_counts[col];
             }
           }
+          if (auto pos = header.find(old_col); pos != header.end()) { header.erase(pos); }
+          header.insert(col);
           column_names[col_idx] = col;
         }
         col_names_counts[col] = cur_count + 1;
