@@ -54,13 +54,13 @@ struct replace_regex_fn {
       return;
     }
 
-    auto const d_str = d_strings.element<string_view>(idx);
+    auto const d_str  = d_strings.element<string_view>(idx);
     auto const nchars = d_str.length();
-    auto nbytes      = d_str.size_bytes();                  // number of bytes in input string
-    auto mxn = maxrepl < 0 ? nchars + 1 : maxrepl;  // max possible replaces for this string
-    auto in_ptr        = d_str.data();                      // input pointer (i)
-    auto out_ptr       = d_chars ? d_chars + d_offsets[idx]  // output pointer (o)
-                                 : nullptr;
+    auto nbytes       = d_str.size_bytes();             // number of bytes in input string
+    auto mxn     = maxrepl < 0 ? nchars + 1 : maxrepl;  // max possible replaces for this string
+    auto in_ptr  = d_str.data();                        // input pointer (i)
+    auto out_ptr = d_chars ? d_chars + d_offsets[idx]   // output pointer (o)
+                           : nullptr;
     size_type last_pos = 0;
     int32_t begin      = 0;   // these are for calling prog.find
     int32_t end        = -1;  // matches final word-boundary if at the end of the string
@@ -68,12 +68,10 @@ struct replace_regex_fn {
     // copy input to output replacing strings as we go
     while (mxn-- > 0 && begin <= nchars) {  // maximum number of replaces
 
-      //printf("\x1B[32m%d\x1B[0m: >(%d,%d)\n", idx, begin, end);
       if (prog.is_empty() || prog.find<stack_size>(idx, d_str, begin, end) <= 0) {
         break;  // no more matches
       }
 
-      //printf("\x1B[32m%d\x1B[0m: <(%d,%d)\n", idx, begin, end);
       auto const start_pos = d_str.byte_offset(begin);        // get offset for these
       auto const end_pos   = d_str.byte_offset(end);          // character position values
       nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // and compute new size
