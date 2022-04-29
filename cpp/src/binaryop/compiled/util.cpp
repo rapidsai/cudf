@@ -27,7 +27,7 @@ namespace cudf::binops::compiled {
 
 namespace {
 
-struct common_data_type_functor {
+struct common_type_functor {
   template <typename TypeLhs, typename TypeRhs>
   std::optional<data_type> operator()()
   {
@@ -201,14 +201,14 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
   // std::common_type to compute this with double type dispatches.
   // Specifically, std::common_type_t<TypeOut, TypeLhs, TypeRhs> is the same as
   // std::common_type_t<std::common_type_t<TypeOut, TypeLhs>, TypeRhs>.
-  auto common_type = double_type_dispatcher(out, lhs, common_data_type_functor{});
+  auto common_type = double_type_dispatcher(out, lhs, common_type_functor{});
   if (common_type.has_value()) {
-    common_type = double_type_dispatcher(common_type.value(), rhs, common_data_type_functor{});
+    common_type = double_type_dispatcher(common_type.value(), rhs, common_type_functor{});
   }
   // If no common type of (out, lhs, rhs) exists, fall back to the common type
   // of (lhs, rhs).
   if (!common_type.has_value()) {
-    common_type = double_type_dispatcher(lhs, rhs, common_data_type_functor{});
+    common_type = double_type_dispatcher(lhs, rhs, common_type_functor{});
   }
   return common_type;
 }
