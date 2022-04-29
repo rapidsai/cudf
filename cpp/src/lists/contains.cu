@@ -143,7 +143,7 @@ struct index_of_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>()>>
 };
 
 /**
- * @brief The specialization of `index_of_fn` for struct type.
+ * @brief The specialization of `index_of_fn` for nested type.
  */
 template <typename Type>
 struct index_of_fn<Type, std::enable_if_t<is_nested<Type>()>> {
