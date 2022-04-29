@@ -143,6 +143,7 @@ get_trivial_left_join_indices(
  * @param build Table of columns used to build join hash.
  * @param hash_table Build hash table.
  * @param nulls_equal Flag to denote nulls are equal or not.
+ * @param bitmask Bitmask to denote whether a row is valid.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  */
@@ -150,6 +151,7 @@ template <typename MultimapType>
 void build_join_hash_table(cudf::table_view const& build,
                            MultimapType& hash_table,
                            null_equality const nulls_equal,
+                           [[maybe_unused]] bitmask_type const* bitmask,
                            rmm::cuda_stream_view stream)
 {
   auto build_table_ptr = cudf::table_device_view::create(build, stream);
@@ -168,8 +170,7 @@ void build_join_hash_table(cudf::table_view const& build,
     hash_table.insert(iter, iter + build_table_num_rows, stream.value());
   } else {
     thrust::counting_iterator<size_type> stencil(0);
-    auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
-    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+    row_is_valid pred{bitmask};
 
     // insert valid rows
     hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
