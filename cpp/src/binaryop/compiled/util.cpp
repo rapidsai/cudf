@@ -35,6 +35,11 @@ struct common_data_type_functor {
       using TypeCommon = std::common_type_t<TypeLhs, TypeRhs>;
       return data_type{type_to_id<TypeCommon>()};
     }
+
+    // A compiler bug may cause a compilation error when using empty
+    // initializer list to construct an std::optional object containing no
+    // `data_type` value. Therefore, we explicitly return `std::nullopt`
+    // instead.
     return std::nullopt;
   }
 };
