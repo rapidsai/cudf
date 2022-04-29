@@ -39,38 +39,33 @@ struct common_data_type_functor {
   }
 };
 
-/**
- * @brief Functor that returns optional common type of 2 or 3 given types.
- *
- */
-struct common_type_functor {
-  template <typename TypeLhs, typename TypeRhs>
-  struct nested_common_type_functor {
-    template <typename TypeOut>
-    std::optional<data_type> operator()()
-    {
-      // If common_type exists
-      if constexpr (cudf::has_common_type_v<TypeOut, TypeLhs, TypeRhs>) {
-        using TypeCommon = std::common_type_t<TypeOut, TypeLhs, TypeRhs>;
-        return data_type{type_to_id<TypeCommon>()};
-      } else if constexpr (cudf::has_common_type_v<TypeLhs, TypeRhs>) {
-        using TypeCommon = std::common_type_t<TypeLhs, TypeRhs>;
-        // Eg. d=t-t
-        return data_type{type_to_id<TypeCommon>()};
-      }
-
-      // A compiler bug may cause a compilation error when using empty initializer list to construct
-      // an std::optional object containing no `data_type` value. Therefore, we should explicitly
-      // return `std::nullopt` instead.
-      return std::nullopt;
-    }
-  };
-  template <typename TypeLhs, typename TypeRhs>
-  std::optional<data_type> operator()(data_type out)
+struct has_mutable_element_accessor_functor {
+  template <typename T>
+  bool operator()()
   {
-    return type_dispatcher(out, nested_common_type_functor<TypeLhs, TypeRhs>{});
+    return mutable_column_device_view::has_element_accessor<T>();
   }
 };
+
+bool has_mutable_element_accessor(data_type t)
+{
+  return type_dispatcher(t, has_mutable_element_accessor_functor{});
+}
+
+template <typename InputType>
+struct is_constructible_functor {
+  template <typename TargetType>
+  bool operator()()
+  {
+    return std::is_constructible_v<TargetType, InputType>;
+  }
+};
+
+template <typename InputType>
+bool is_constructible(data_type target_type)
+{
+  return type_dispatcher(target_type, is_constructible_functor<InputType>{});
+}
 
 /**
  * @brief Functor that return true if BinaryOperator supports given input and output types.
@@ -96,23 +91,23 @@ struct is_binary_operation_supported {
     }
   }
 
-  template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-  inline constexpr bool operator()()
+  template <typename TypeLhs, typename TypeRhs>
+  inline constexpr bool operator()(data_type out_type)
   {
     if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
-                  column_device_view::has_element_accessor<TypeRhs>() and
-                  (mutable_column_device_view::has_element_accessor<TypeOut>() or
-                   is_fixed_point<TypeOut>())) {
-      if constexpr (has_common_type_v<TypeLhs, TypeRhs>) {
-        using common_t = std::common_type_t<TypeLhs, TypeRhs>;
-        if constexpr (std::is_invocable_v<BinaryOperator, common_t, common_t>) {
-          using ReturnType = std::invoke_result_t<BinaryOperator, common_t, common_t>;
-          return std::is_constructible_v<TypeOut, ReturnType> or
-                 (is_fixed_point<ReturnType>() and is_fixed_point<TypeOut>());
+                  column_device_view::has_element_accessor<TypeRhs>()) {
+      if (has_mutable_element_accessor(out_type) or is_fixed_point(out_type)) {
+        if constexpr (has_common_type_v<TypeLhs, TypeRhs>) {
+          using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+          if constexpr (std::is_invocable_v<BinaryOperator, common_t, common_t>) {
+            using ReturnType = std::invoke_result_t<BinaryOperator, common_t, common_t>;
+            return is_constructible<ReturnType>(out_type) or
+                   (is_fixed_point<ReturnType>() and is_fixed_point(out_type));
+          }
+        } else if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
+          using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
+          return is_constructible<ReturnType>(out_type);
         }
-      } else if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
-        using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
-        return std::is_constructible_v<TypeOut, ReturnType>;
       }
     }
     return false;
@@ -122,37 +117,36 @@ struct is_binary_operation_supported {
 struct is_supported_operation_functor {
   template <typename TypeLhs, typename TypeRhs>
   struct nested_support_functor {
-    template <typename BinaryOperator, typename TypeOut>
-    inline constexpr bool call()
+    template <typename BinaryOperator>
+    inline constexpr bool call(data_type out_type)
     {
-      return is_binary_operation_supported<BinaryOperator>{}
-        .template operator()<TypeOut, TypeLhs, TypeRhs>();
+      return is_binary_operation_supported<BinaryOperator>{}.template operator()<TypeLhs, TypeRhs>(
+        out_type);
     }
-    template <typename TypeOut>
-    inline constexpr bool operator()(binary_operator op)
+    inline constexpr bool operator()(binary_operator op, data_type out_type)
     {
       switch (op) {
         // clang-format off
-        case binary_operator::ADD:                  return call<ops::Add, TypeOut>();
-        case binary_operator::SUB:                  return call<ops::Sub, TypeOut>();
-        case binary_operator::MUL:                  return call<ops::Mul, TypeOut>();
-        case binary_operator::DIV:                  return call<ops::Div, TypeOut>();
-        case binary_operator::TRUE_DIV:             return call<ops::TrueDiv, TypeOut>();
-        case binary_operator::FLOOR_DIV:            return call<ops::FloorDiv, TypeOut>();
-        case binary_operator::MOD:                  return call<ops::Mod, TypeOut>();
-        case binary_operator::PYMOD:                return call<ops::PyMod, TypeOut>();
-        case binary_operator::POW:                  return call<ops::Pow, TypeOut>();
-        case binary_operator::BITWISE_AND:          return call<ops::BitwiseAnd, TypeOut>();
-        case binary_operator::BITWISE_OR:           return call<ops::BitwiseOr, TypeOut>();
-        case binary_operator::BITWISE_XOR:          return call<ops::BitwiseXor, TypeOut>();
-        case binary_operator::SHIFT_LEFT:           return call<ops::ShiftLeft, TypeOut>();
-        case binary_operator::SHIFT_RIGHT:          return call<ops::ShiftRight, TypeOut>();
-        case binary_operator::SHIFT_RIGHT_UNSIGNED: return call<ops::ShiftRightUnsigned, TypeOut>();
-        case binary_operator::LOG_BASE:             return call<ops::LogBase, TypeOut>();
-        case binary_operator::ATAN2:                return call<ops::ATan2, TypeOut>();
-        case binary_operator::PMOD:                 return call<ops::PMod, TypeOut>();
-        case binary_operator::NULL_MAX:             return call<ops::NullMax, TypeOut>();
-        case binary_operator::NULL_MIN:             return call<ops::NullMin, TypeOut>();
+        case binary_operator::ADD:                  return call<ops::Add>(out_type);
+        case binary_operator::SUB:                  return call<ops::Sub>(out_type);
+        case binary_operator::MUL:                  return call<ops::Mul>(out_type);
+        case binary_operator::DIV:                  return call<ops::Div>(out_type);
+        case binary_operator::TRUE_DIV:             return call<ops::TrueDiv>(out_type);
+        case binary_operator::FLOOR_DIV:            return call<ops::FloorDiv>(out_type);
+        case binary_operator::MOD:                  return call<ops::Mod>(out_type);
+        case binary_operator::PYMOD:                return call<ops::PyMod>(out_type);
+        case binary_operator::POW:                  return call<ops::Pow>(out_type);
+        case binary_operator::BITWISE_AND:          return call<ops::BitwiseAnd>(out_type);
+        case binary_operator::BITWISE_OR:           return call<ops::BitwiseOr>(out_type);
+        case binary_operator::BITWISE_XOR:          return call<ops::BitwiseXor>(out_type);
+        case binary_operator::SHIFT_LEFT:           return call<ops::ShiftLeft>(out_type);
+        case binary_operator::SHIFT_RIGHT:          return call<ops::ShiftRight>(out_type);
+        case binary_operator::SHIFT_RIGHT_UNSIGNED: return call<ops::ShiftRightUnsigned>(out_type);
+        case binary_operator::LOG_BASE:             return call<ops::LogBase>(out_type);
+        case binary_operator::ATAN2:                return call<ops::ATan2>(out_type);
+        case binary_operator::PMOD:                 return call<ops::PMod>(out_type);
+        case binary_operator::NULL_MAX:             return call<ops::NullMax>(out_type);
+        case binary_operator::NULL_MIN:             return call<ops::NullMin>(out_type);
         /*
         case binary_operator::GENERIC_BINARY:       // defined in jit only.
         */
@@ -186,7 +180,7 @@ struct is_supported_operation_functor {
         return bool_op<ops::NullLogicalAnd, TypeLhs, TypeRhs>(out);
       case binary_operator::NULL_LOGICAL_OR:
         return bool_op<ops::NullLogicalOr, TypeLhs, TypeRhs>(out);
-      default: return type_dispatcher(out, nested_support_functor<TypeLhs, TypeRhs>{}, op);
+      default: return nested_support_functor<TypeLhs, TypeRhs>{}(op, out);
     }
     return false;
   }
