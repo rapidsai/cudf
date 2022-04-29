@@ -104,8 +104,8 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                                          stream,
                                          mr);
 
-    return std::make_pair(std::move(uniq_tbl),
-                          cudf::detail::make_std_vector_sync(partition_offsets, stream));
+    return std::pair(std::move(uniq_tbl),
+                     cudf::detail::make_std_vector_sync(partition_offsets, stream));
   } else {  //( num_partitions > nrows )
     rmm::device_uvector<cudf::size_type> d_row_indices(nrows, stream);
 
@@ -140,8 +140,8 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                            nedges_iter_begin + num_partitions,
                            partition_offsets.begin());
 
-    return std::make_pair(std::move(uniq_tbl),
-                          cudf::detail::make_std_vector_sync(partition_offsets, stream));
+    return std::pair(std::move(uniq_tbl),
+                     cudf::detail::make_std_vector_sync(partition_offsets, stream));
   }
 }
 }  // namespace
@@ -230,7 +230,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
 
   auto uniq_tbl = cudf::detail::gather(
     input, iter_begin, iter_begin + nrows, cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
-  auto ret_pair = std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
+  auto ret_pair = std::pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
 
   // this has the effect of rotating the set of partition sizes
   // right by start_partition positions:

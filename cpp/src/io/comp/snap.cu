@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -258,7 +258,9 @@ static __device__ uint32_t Match60(const uint8_t* src1,
  * @param[in] count Number of blocks to compress
  */
 __global__ void __launch_bounds__(128)
-  snap_kernel(gpu_inflate_input_s* inputs, gpu_inflate_status_s* outputs, int count)
+  snap_kernel(device_span<device_span<uint8_t const> const> inputs,
+              device_span<device_span<uint8_t> const> outputs,
+              device_span<decompress_status> statuses)
 {
   __shared__ __align__(16) snap_state_s state_g;
 
@@ -268,15 +270,15 @@ __global__ void __launch_bounds__(128)
   const uint8_t* src;
 
   if (!t) {
-    const auto* src = static_cast<const uint8_t*>(inputs[blockIdx.x].srcDevice);
-    auto src_len    = static_cast<uint32_t>(inputs[blockIdx.x].srcSize);
-    auto* dst       = static_cast<uint8_t*>(inputs[blockIdx.x].dstDevice);
-    auto dst_len    = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);
-    uint8_t* end    = dst + dst_len;
-    s->src          = src;
-    s->src_len      = src_len;
-    s->dst_base     = dst;
-    s->end          = end;
+    auto const src     = inputs[blockIdx.x].data();
+    auto src_len       = static_cast<uint32_t>(inputs[blockIdx.x].size());
+    auto dst           = outputs[blockIdx.x].data();
+    auto const dst_len = static_cast<uint32_t>(outputs[blockIdx.x].size());
+    auto const end     = dst + dst_len;
+    s->src             = src;
+    s->src_len         = src_len;
+    s->dst_base        = dst;
+    s->end             = end;
     while (src_len > 0x7f) {
       if (dst < end) { dst[0] = src_len | 0x80; }
       dst++;
@@ -335,23 +337,22 @@ __global__ void __launch_bounds__(128)
   }
   __syncthreads();
   if (!t) {
-    outputs[blockIdx.x].bytes_written = s->dst - s->dst_base;
-    outputs[blockIdx.x].status        = (s->dst > s->end) ? 1 : 0;
-    outputs[blockIdx.x].reserved      = 0;
+    statuses[blockIdx.x].bytes_written = s->dst - s->dst_base;
+    statuses[blockIdx.x].status        = (s->dst > s->end) ? 1 : 0;
+    statuses[blockIdx.x].reserved      = 0;
   }
 }
 
-cudaError_t __host__ gpu_snap(gpu_inflate_input_s* inputs,
-                              gpu_inflate_status_s* outputs,
-                              int count,
-                              rmm::cuda_stream_view stream)
+void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
+              device_span<device_span<uint8_t> const> outputs,
+              device_span<decompress_status> statuses,
+              rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
-  dim3 dim_grid(count, 1);
-  if (count > 0) {
-    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, count);
+  dim3 dim_grid(inputs.size(), 1);
+  if (inputs.size() > 0) {
+    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, statuses);
   }
-  return cudaSuccess;
 }
 
 }  // namespace io

@@ -688,7 +688,7 @@ def test_multiindex_copy_sem(data, levels, codes, names):
     # Test same behavior when used on DataFrame
     gdf.index = gmi_copy
     pdf.index = pmi_copy
-    assert gdf.__repr__() == pdf.__repr__()
+    assert repr(gdf) == repr(pdf)
 
 
 @pytest.mark.parametrize(
