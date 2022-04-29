@@ -342,7 +342,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 )
             self._frame._data.insert(key[1], new_col)
         else:
-            error_msg = (
+            shape_mismatch_error_msg = (
                 "shape mismatch: value array of shape {value1} "
                 "could not be broadcast to indexing result of "
                 "shape {value2}"
@@ -354,7 +354,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             elif isinstance(value, cudf.DataFrame):
                 if value.shape != self._frame.loc[key[0]].shape:
                     raise ValueError(
-                        error_msg.format(
+                        shape_mismatch_error_msg.format(
                             value1=value.shape,
                             value2=self._frame.loc[key[0]].shape,
                         )
@@ -377,7 +377,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     if value.shape[1] == 1:
                         if value.shape[0] != indexed_shape[0]:
                             raise ValueError(
-                                error_msg.format(
+                                shape_mismatch_error_msg.format(
                                     value1=value.shape,
                                     value2=indexed_shape,
                                 )
@@ -387,7 +387,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     else:
                         if value.shape != indexed_shape:
                             raise ValueError(
-                                error_msg.format(
+                                shape_mismatch_error_msg.format(
                                     value1=value.shape,
                                     value2=indexed_shape,
                                 )
@@ -475,7 +475,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             self._frame._data.select_by_index(key[1]), self._frame._index
         )
 
-        error_msg = (
+        shape_mismatch_error_msg = (
             "shape mismatch: value array of shape {value1} "
             "could not be broadcast to indexing result of "
             "shape {value2}"
@@ -487,7 +487,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         elif isinstance(value, cudf.DataFrame):
             if value.shape != self._frame.iloc[key[0]].shape:
                 raise ValueError(
-                    error_msg.format(
+                    shape_mismatch_error_msg.format(
                         value1=value.shape,
                         value2=self._frame.loc[key[0]].shape,
                     )
@@ -507,7 +507,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 if value.shape[1] == 1:
                     if value.shape[0] != indexed_shape[0]:
                         raise ValueError(
-                            error_msg.format(
+                            shape_mismatch_error_msg.format(
                                 value1=value.shape,
                                 value2=indexed_shape,
                             )
@@ -517,7 +517,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 else:
                     if value.shape != indexed_shape:
                         raise ValueError(
-                            error_msg.format(
+                            shape_mismatch_error_msg.format(
                                 value1=value.shape,
                                 value2=indexed_shape,
                             )
