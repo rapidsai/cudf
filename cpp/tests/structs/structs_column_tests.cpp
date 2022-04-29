@@ -625,18 +625,19 @@ TYPED_TEST(TypedStructColumnWrapperTest, CopyColumnFromView)
 
 TEST_F(StructColumnWrapperTest, TestStructsColumnWithEmptyChild)
 {
-  // Structs should not superimpose their null mask onto any EMPTY children,
+  // structs_column_views should not superimpose their null mask onto any EMPTY children,
   // because EMPTY columns cannot have a null mask. This test ensures that
   // we can construct a structs column with a parent null mask and an EMPTY
-  // child.
+  // child and then view it.
   auto empty_col =
     std::make_unique<cudf::column>(cudf::data_type(cudf::type_id::EMPTY), 3, rmm::device_buffer{});
   int num_rows{empty_col->size()};
   vector_of_columns cols;
   cols.push_back(std::move(empty_col));
-  auto mask_vec = std::vector<bool>{true, false, false};
-  auto mask     = cudf::test::detail::make_null_mask(mask_vec.begin(), mask_vec.end());
-  EXPECT_NO_THROW(cudf::make_structs_column(num_rows, std::move(cols), 2, std::move(mask)));
+  auto mask_vec    = std::vector<bool>{true, false false};
+  auto mask        = cudf::test::detail::make_null_mask(mask_vec.begin(), mask_vec.end());
+  auto structs_col = cudf::make_structs_column(num_rows, std::move(cols), 2, std::move(mask));
+  EXPECT_NO_THROW(structs_col->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
