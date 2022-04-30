@@ -762,7 +762,7 @@ def test_multiindex_copy_deep(data, deep):
         lptrs = [child.base_data.ptr for child in lchildren]
         rptrs = [child.base_data.ptr for child in rchildren]
 
-        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
     elif isinstance(data, cudf.MultiIndex):
         mi1 = data
@@ -772,19 +772,19 @@ def test_multiindex_copy_deep(data, deep):
         lptrs = [lv._data._data[None].base_data.ptr for lv in mi1._levels]
         rptrs = [lv._data._data[None].base_data.ptr for lv in mi2._levels]
 
-        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._codes identity
         lptrs = [c.base_data.ptr for _, c in mi1._codes._data.items()]
         rptrs = [c.base_data.ptr for _, c in mi2._codes._data.items()]
 
-        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._data identity
         lptrs = [d.base_data.ptr for _, d in mi1._data.items()]
         rptrs = [d.base_data.ptr for _, d in mi2._data.items()]
 
-        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
 
 @pytest.mark.parametrize(
