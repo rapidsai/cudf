@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,13 @@
  */
 
 #include <benchmark/benchmark.h>
+
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/strings/strings_column_view.hpp>
 #include <nvtext/subword_tokenize.hpp>
 
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -29,7 +30,7 @@
 
 static std::string create_hash_vocab_file()
 {
-  std::string dir_template("/tmp");
+  std::string dir_template{std::filesystem::temp_directory_path().string()};
   if (const char* env_p = std::getenv("WORKSPACE")) dir_template = env_p;
   std::string hash_file = dir_template + "/hash_vocab.txt";
   // create a fake hashed vocab text file for this test

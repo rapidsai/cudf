@@ -21,10 +21,8 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf/ast/expressions.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/join.hpp>
@@ -116,7 +114,7 @@ static void BM_join(state_type& state, Join JoinFunc)
   auto build_payload_column = cudf::sequence(build_table_size, *init);
   auto probe_payload_column = cudf::sequence(probe_table_size, *init);
 
-  CHECK_CUDA(0);
+  CUDF_CHECK_CUDA(0);
 
   cudf::table_view build_table({build_key_column->view(), *build_payload_column});
   cudf::table_view probe_table({probe_key_column->view(), *probe_payload_column});

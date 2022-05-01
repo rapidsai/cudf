@@ -67,7 +67,7 @@ struct scan_dispatcher {
     thrust::exclusive_scan(
       rmm::exec_policy(stream), begin, begin + input.size(), output.data<T>(), identity, Op{});
 
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
     return output_column;
   }
 

@@ -215,7 +215,7 @@ def assert_column_equal(
                 msg1 = f"{left.ordered}"
                 msg2 = f"{right.ordered}"
                 raise_assert_detail(
-                    "{obj} category", "Orders are different", msg1, msg2
+                    f"{obj} category", "Orders are different", msg1, msg2
                 )
 
     if (
@@ -247,8 +247,12 @@ def assert_column_equal(
             if columns_equal and not check_exact and is_numeric_dtype(left):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
-                    left[left.isnull().unary_operator("not")].values,
-                    right[right.isnull().unary_operator("not")].values,
+                    left.apply_boolean_mask(
+                        left.isnull().unary_operator("not")
+                    ).values,
+                    right.apply_boolean_mask(
+                        right.isnull().unary_operator("not")
+                    ).values,
                 )
                 if columns_equal and (
                     left.dtype.kind == right.dtype.kind == "f"

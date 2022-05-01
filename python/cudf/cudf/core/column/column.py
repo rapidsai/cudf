@@ -44,7 +44,6 @@ from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    _is_scalar_or_zero_d_array,
     infer_dtype,
     is_bool_dtype,
     is_categorical_dtype,
@@ -69,7 +68,6 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.mixins import BinaryOperand, Reducible
-from cudf.utils import utils
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     get_time_unit,
@@ -78,7 +76,7 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import NotIterable, _array_ufunc, mask_dtype
+from cudf.utils.utils import _array_ufunc, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 # TODO: This workaround allows type hints for `slice`, since `slice` is a
@@ -86,7 +84,7 @@ T = TypeVar("T", bound="ColumnBase")
 Slice = TypeVar("Slice", bound=slice)
 
 
-class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
+class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     _VALID_REDUCTIONS = {
         "any",
         "all",
@@ -230,13 +228,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
           4
         ]
         """
-        return libcudf.interop.to_arrow(
-            cudf.core.frame.Frame(
-                cudf.core.column_accessor.ColumnAccessor({"None": self})
-            ),
-            [["None"]],
-            keep_index=False,
-        )["None"].chunk(0)
+        return libcudf.interop.to_arrow([self], [["None"]],)[
+            "None"
+        ].chunk(0)
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -281,12 +275,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
                 }
             )
 
-            codes = libcudf.interop.from_arrow(
-                indices_table, indices_table.column_names
-            )[0]["None"]
-            categories = libcudf.interop.from_arrow(
-                dictionaries_table, dictionaries_table.column_names
-            )[0]["None"]
+            codes = libcudf.interop.from_arrow(indices_table)[0]
+            categories = libcudf.interop.from_arrow(dictionaries_table)[0]
 
             return build_categorical_column(
                 categories=categories,
@@ -302,7 +292,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
 
-        result = libcudf.interop.from_arrow(data, data.column_names)[0]["None"]
+        result = libcudf.interop.from_arrow(data)[0]
 
         return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
 
@@ -479,22 +469,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
                 dtype=cudf.dtype(np.int32),
             )
             return self.take(gather_map)
-
-    def __getitem__(self, arg) -> Union[ScalarLike, ColumnBase]:
-        if _is_scalar_or_zero_d_array(arg):
-            return self.element_indexing(int(arg))
-        elif isinstance(arg, slice):
-            start, stop, stride = arg.indices(len(self))
-            return self.slice(start, stop, stride)
-        else:
-            arg = as_column(arg)
-            if len(arg) == 0:
-                arg = as_column([], dtype="int32")
-            if is_integer_dtype(arg.dtype):
-                return self.take(arg)
-            if is_bool_dtype(arg.dtype):
-                return self.apply_boolean_mask(arg)
-            raise NotImplementedError(type(arg))
 
     def __setitem__(self, key: Any, value: Any):
         """
@@ -1026,13 +1000,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible, NotIterable):
             "Implicit conversion to a host PyArrow Array via __arrow_array__ "
             "is not allowed, To explicitly construct a PyArrow Array, "
             "consider using .to_arrow()"
-        )
-
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed. To explicitly construct a host array, consider using "
-            ".to_numpy()"
         )
 
     @property
@@ -1806,9 +1773,7 @@ def as_column(
             if dtype is None:
                 dtype = cudf.dtype("float64")
 
-        data = as_column(
-            utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
-        )
+        data = as_column(full(length, arbitrary, dtype=dtype))
         if not nan_as_null and not is_decimal_dtype(data.dtype):
             if np.issubdtype(data.dtype, np.floating):
                 data = data.fillna(np.nan)

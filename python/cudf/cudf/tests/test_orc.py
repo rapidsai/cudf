@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.orc
-import pyorc as po
+import pyorc
 import pytest
 
 import cudf
@@ -307,7 +307,7 @@ def test_orc_read_skiprows(tmpdir):
         {"a": [1, 0, 1, 0, None, 1, 1, 1, 0, None, 0, 0, 1, 1, 1, 1]},
         dtype=pd.BooleanDtype(),
     )
-    writer = po.Writer(buff, po.Struct(a=po.Boolean()))
+    writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
     tuples = list(
         map(
             lambda x: (None,) if x[0] is pd.NA else x,
@@ -931,29 +931,35 @@ def generate_list_struct_buff(size=100_000):
     buff = BytesIO()
 
     schema = {
-        "lvl3_list": po.Array(po.Array(po.Array(po.BigInt()))),
-        "lvl1_list": po.Array(po.BigInt()),
-        "lvl1_struct": po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
-        "lvl2_struct": po.Struct(
+        "lvl3_list": pyorc.Array(pyorc.Array(pyorc.Array(pyorc.BigInt()))),
+        "lvl1_list": pyorc.Array(pyorc.BigInt()),
+        "lvl1_struct": pyorc.Struct(
+            **{"a": pyorc.BigInt(), "b": pyorc.BigInt()}
+        ),
+        "lvl2_struct": pyorc.Struct(
             **{
-                "a": po.BigInt(),
-                "lvl1_struct": po.Struct(
-                    **{"c": po.BigInt(), "d": po.BigInt()}
+                "a": pyorc.BigInt(),
+                "lvl1_struct": pyorc.Struct(
+                    **{"c": pyorc.BigInt(), "d": pyorc.BigInt()}
                 ),
             }
         ),
-        "list_nests_struct": po.Array(
-            po.Array(po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}))
+        "list_nests_struct": pyorc.Array(
+            pyorc.Array(
+                pyorc.Struct(**{"a": pyorc.BigInt(), "b": pyorc.BigInt()})
+            )
         ),
-        "struct_nests_list": po.Struct(
+        "struct_nests_list": pyorc.Struct(
             **{
-                "struct": po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
-                "list": po.Array(po.BigInt()),
+                "struct": pyorc.Struct(
+                    **{"a": pyorc.BigInt(), "b": pyorc.BigInt()}
+                ),
+                "list": pyorc.Array(pyorc.BigInt()),
             }
         ),
     }
 
-    schema = po.Struct(**schema)
+    schema = pyorc.Struct(**schema)
 
     lvl3_list = [
         rd.choice(
@@ -1019,7 +1025,7 @@ def generate_list_struct_buff(size=100_000):
         }
     )
 
-    writer = po.Writer(buff, schema, stripe_size=1024)
+    writer = pyorc.Writer(buff, schema, stripe_size=1024)
     tuples = list(
         map(
             lambda x: (None,) if x[0] is pd.NA else x,
@@ -1101,15 +1107,17 @@ def gen_map_buff(size=10000):
     buff = BytesIO()
 
     schema = {
-        "lvl1_map": po.Map(key=po.String(), value=po.BigInt()),
-        "lvl2_map": po.Map(key=po.String(), value=po.Array(po.BigInt())),
-        "lvl2_struct_map": po.Map(
-            key=po.String(),
-            value=po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
+        "lvl1_map": pyorc.Map(key=pyorc.String(), value=pyorc.BigInt()),
+        "lvl2_map": pyorc.Map(
+            key=pyorc.String(), value=pyorc.Array(pyorc.BigInt())
+        ),
+        "lvl2_struct_map": pyorc.Map(
+            key=pyorc.String(),
+            value=pyorc.Struct(**{"a": pyorc.BigInt(), "b": pyorc.BigInt()}),
         ),
     }
 
-    schema = po.Struct(**schema)
+    schema = pyorc.Struct(**schema)
 
     lvl1_map = [
         rd.choice(
@@ -1186,8 +1194,8 @@ def gen_map_buff(size=10000):
             "lvl2_struct_map": lvl2_struct_map,
         }
     )
-    writer = po.Writer(
-        buff, schema, stripe_size=1024, compression=po.CompressionKind.NONE
+    writer = pyorc.Writer(
+        buff, schema, stripe_size=1024, compression=pyorc.CompressionKind.NONE
     )
     tuples = list(
         map(
@@ -1479,8 +1487,9 @@ def test_statistics_sum_overflow():
     minint64 = np.iinfo(np.int64).min
 
     buff = BytesIO()
-    with po.Writer(
-        buff, po.Struct(a=po.BigInt(), b=po.BigInt(), c=po.BigInt())
+    with pyorc.Writer(
+        buff,
+        pyorc.Struct(a=pyorc.BigInt(), b=pyorc.BigInt(), c=pyorc.BigInt()),
     ) as writer:
         writer.write((maxint64, minint64, minint64))
         writer.write((1, -1, 1))
@@ -1497,20 +1506,20 @@ def test_statistics_sum_overflow():
 
 def test_empty_statistics():
     buff = BytesIO()
-    orc_schema = po.Struct(
-        a=po.BigInt(),
-        b=po.Double(),
-        c=po.String(),
-        d=po.Decimal(11, 2),
-        e=po.Date(),
-        f=po.Timestamp(),
-        g=po.Boolean(),
-        h=po.Binary(),
-        i=po.BigInt(),
+    orc_schema = pyorc.Struct(
+        a=pyorc.BigInt(),
+        b=pyorc.Double(),
+        c=pyorc.String(),
+        d=pyorc.Decimal(11, 2),
+        e=pyorc.Date(),
+        f=pyorc.Timestamp(),
+        g=pyorc.Boolean(),
+        h=pyorc.Binary(),
+        i=pyorc.BigInt(),
         # One column with non null value, else cudf/pyorc readers crash
     )
     data = tuple([None] * (len(orc_schema.fields) - 1) + [1])
-    with po.Writer(buff, orc_schema) as writer:
+    with pyorc.Writer(buff, orc_schema) as writer:
         writer.write(data)
 
     got = cudf.io.orc.read_orc_statistics([buff])

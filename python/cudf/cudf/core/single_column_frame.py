@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
 
 import cupy
@@ -10,8 +11,12 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf._typing import Dtype
-from cudf.api.types import _is_scalar_or_zero_d_array
+from cudf._typing import Dtype, ScalarLike
+from cudf.api.types import (
+    _is_scalar_or_zero_d_array,
+    is_bool_dtype,
+    is_integer_dtype,
+)
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
 from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
@@ -47,9 +52,9 @@ class SingleColumnFrame(Frame, NotIterable):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
 
-        if numeric_only not in (None, True):
+        if numeric_only:
             raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
+                f"Series.{op} does not implement numeric_only"
             )
         try:
             return getattr(self._column, op)(**kwargs)
@@ -76,8 +81,8 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def ndim(self):
-        """Get the dimensionality (always 1 for single-columned frames)."""
+    def ndim(self):  # noqa: D401
+        """Number of dimensions of the underlying data, by definition 1."""
         return 1
 
     @property  # type: ignore
@@ -269,7 +274,7 @@ class SingleColumnFrame(Frame, NotIterable):
             Value to indicate missing category.
 
         Returns
-        --------
+        -------
         (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
             - *labels* contains the encoded values
             - *cats* contains the categories in order that the N-th
@@ -333,6 +338,17 @@ class SingleColumnFrame(Frame, NotIterable):
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):
+            if not hasattr(other, "__cuda_array_interface__"):
+                # TODO: When this deprecated behavior is removed, also change
+                # the above conditional to stop checking for pd.Series and
+                # pd.Index since we only need to support SingleColumnFrame.
+                warnings.warn(
+                    f"Binary operations between host objects such as "
+                    f"{type(other)} and {type(self)} are deprecated and will "
+                    "be removed in a future release. Please convert it to a "
+                    "cudf object before performing the operation.",
+                    FutureWarning,
+                )
             # Non-scalar right operands are valid iff they convert to columns.
             try:
                 other = as_column(other)
@@ -359,3 +375,23 @@ class SingleColumnFrame(Frame, NotIterable):
         if self._column.null_count == len(self):
             return 0
         return self._column.distinct_count(dropna=dropna)
+
+    def _get_elements_from_column(self, arg) -> Union[ScalarLike, ColumnBase]:
+        # A generic method for getting elements from a column that supports a
+        # wide range of different inputs. This method should only used where
+        # _absolutely_ necessary, since in almost all cases a more specific
+        # method can be used e.g. element_indexing or slice.
+        if _is_scalar_or_zero_d_array(arg):
+            return self._column.element_indexing(int(arg))
+        elif isinstance(arg, slice):
+            start, stop, stride = arg.indices(len(self))
+            return self._column.slice(start, stop, stride)
+        else:
+            arg = as_column(arg)
+            if len(arg) == 0:
+                arg = as_column([], dtype="int32")
+            if is_integer_dtype(arg.dtype):
+                return self._column.take(arg)
+            if is_bool_dtype(arg.dtype):
+                return self._column.apply_boolean_mask(arg)
+            raise NotImplementedError(f"Unknown indexer {type(arg)}")

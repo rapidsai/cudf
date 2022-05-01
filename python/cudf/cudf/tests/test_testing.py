@@ -170,8 +170,8 @@ def test_assert_column_equal_dtype_edge_cases(other):
         assert_column_equal(base, other, check_dtype=False)
 
     # the exceptions are the empty and all null cases
-    assert_column_equal(base[:0], other[:0], check_dtype=False)
-    assert_column_equal(other[:0], base[:0], check_dtype=False)
+    assert_column_equal(base.slice(0, 0), other.slice(0, 0), check_dtype=False)
+    assert_column_equal(other.slice(0, 0), base.slice(0, 0), check_dtype=False)
 
     base = full(len(base), fill_value=cudf.NA, dtype=base.dtype)
     other = full(len(other), fill_value=cudf.NA, dtype=other.dtype)
@@ -411,8 +411,8 @@ def test_assert_column_memory_basic(arrow_arrays):
 
 def test_assert_column_memory_slice(arrow_arrays):
     col = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
-    left = col[0:1]
-    right = col[1:2]
+    left = col.slice(0, 1)
+    right = col.slice(1, 2)
 
     with pytest.raises(AssertionError):
         assert_column_memory_eq(left, right)

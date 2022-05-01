@@ -30,7 +30,6 @@ from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    _is_scalar_or_zero_d_array,
     is_categorical_dtype,
     is_dtype_equal,
     is_interval_dtype,
@@ -77,10 +76,10 @@ def _lexsorted_equal_range(
         sort_inds = None
         sort_vals = idx
     lower_bound = search_sorted(
-        sort_vals, key_as_table, side="left"
+        [*sort_vals._data.columns], [*key_as_table._columns], side="left"
     ).element_indexing(0)
     upper_bound = search_sorted(
-        sort_vals, key_as_table, side="right"
+        [*sort_vals._data.columns], [*key_as_table._columns], side="right"
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds
@@ -342,9 +341,8 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __getitem__(self, index):
-        len_self = len(self)
         if isinstance(index, slice):
-            sl_start, sl_stop, sl_step = index.indices(len_self)
+            sl_start, sl_stop, sl_step = index.indices(len(self))
 
             lo = self._start + sl_start * self._step
             hi = self._start + sl_stop * self._step
@@ -352,19 +350,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
             return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
 
         elif isinstance(index, Number):
+            len_self = len(self)
             if index < 0:
-                index = len_self + index
+                index += len_self
             if not (0 <= index < len_self):
-                raise IndexError("out-of-bound")
-            index = min(index, len_self)
-            index = self._start + index * self._step
-            return index
-        else:
-            if _is_scalar_or_zero_d_array(index):
-                index = np.min_scalar_type(index).type(index)
-            index = column.as_column(index)
-
-        return as_index(self._values[index], name=self.name)
+                raise IndexError("Index out of bounds")
+            return self._start + index * self._step
+        return self._as_int64()[index]
 
     @_cudf_nvtx_annotate
     def equals(self, other):
@@ -1124,7 +1116,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # related issue : https://github.com/pandas-dev/pandas/issues/35389
         if isinstance(preprocess, CategoricalIndex):
             if preprocess.categories.dtype.kind == "f":
-                output = (
+                output = repr(
                     preprocess.astype("str")
                     .to_pandas()
                     .astype(
@@ -1135,18 +1127,17 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                             ordered=preprocess.dtype.ordered,
                         )
                     )
-                    .__repr__()
                 )
                 break_idx = output.find("ordered=")
                 output = (
                     output[:break_idx].replace("'", "") + output[break_idx:]
                 )
             else:
-                output = preprocess.to_pandas().__repr__()
+                output = repr(preprocess.to_pandas())
 
             output = output.replace("nan", cudf._NA_REP)
         elif preprocess._values.nullable:
-            output = self._clean_nulls_from_index().to_pandas().__repr__()
+            output = repr(self._clean_nulls_from_index().to_pandas())
 
             if not isinstance(self, StringIndex):
                 # We should remove all the single quotes
@@ -1158,7 +1149,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 # of StringIndex and it is valid to have them.
                 output = output.replace("'", "")
         else:
-            output = preprocess.to_pandas().__repr__()
+            output = repr(preprocess.to_pandas())
 
         # Fix and correct the class name of the output
         # string by finding first occurrence of "(" in the output
@@ -1183,11 +1174,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     @_cudf_nvtx_annotate
     def __getitem__(self, index):
-        if type(self) == IntervalIndex:
-            raise NotImplementedError(
-                "Getting a scalar from an IntervalIndex is not yet supported"
-            )
-        res = self._values[index]
+        res = self._get_elements_from_column(index)
         if not isinstance(index, int):
             res = as_index(res)
             res.name = self.name
@@ -2457,8 +2444,8 @@ def interval_range(
                 init=start.device_value,
                 step=freq_step.device_value,
             )
-            left_col = bin_edges[:-1]
-            right_col = bin_edges[1:]
+            left_col = bin_edges.slice(0, len(bin_edges) - 1)
+            right_col = bin_edges.slice(1, len(bin_edges))
     elif freq and periods:
         if end:
             start = end - (freq * periods)
@@ -2613,6 +2600,11 @@ class IntervalIndex(GenericIndex):
         )
 
         return IntervalIndex(interval_col, name=name)
+
+    def __getitem__(self, index):
+        raise NotImplementedError(
+            "Getting a scalar from an IntervalIndex is not yet supported"
+        )
 
     def is_interval(self):
         return True
