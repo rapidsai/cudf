@@ -1581,7 +1581,7 @@ def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe(
     assert_eq(expected, actual)
 
 
-def test_dataframe_loc_inplace_update_with_invalid_RHS_columns():
+def test_dataframe_loc_inplace_update_with_invalid_RHS_df_columns():
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     pdf = gdf.to_pandas()
 
@@ -1598,18 +1598,26 @@ def test_dataframe_loc_inplace_update_with_invalid_RHS_columns():
 def test_dataframe_loc_iloc_inplace_update_shape_mismatch():
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     with pytest.raises(ValueError, match="shape mismatch:"):
+        gdf.loc[[0, 2], ["x", "y"]] = [[10, 30, 50], [20, 40, 60]]
+        gdf.iloc[[0, 2]] = [[10, 30, 50], [20, 40, 60]]
+
+
+def test_dataframe_loc_iloc_inplace_update_shape_mismatch_2d():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    with pytest.raises(ValueError, match="shape mismatch:"):
+        gdf.loc[([0], ["x", "y"])] = [[10], [20]]
+        gdf.iloc[([0], ["x", "y"])] = [[10], [20]]
+
+
+def test_dataframe_loc_iloc_inplace_update_shape_mismatch_RHS_df():
+    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    with pytest.raises(ValueError, match="shape mismatch:"):
         gdf.loc[([0, 2], ["x", "y"])] = cudf.DataFrame(
             {"x": [10, 20]}, index=cudf.Index([0, 2])
         )
         gdf.iloc[([0, 2], ["x", "y"])] = cudf.DataFrame(
             {"x": [10, 20]}, index=cudf.Index([0, 2])
         )
-
-        gdf.loc[([0], ["x", "y"])] = [[10], [20]]
-        gdf.iloc[([0], ["x", "y"])] = [[10], [20]]
-
-        gdf.loc[[0, 2], ["x", "y"]] = [[10, 30, 50], [20, 40, 60]]
-        gdf.iloc[[0, 2]] = [[10, 30, 50], [20, 40, 60]]
 
 
 @pytest.mark.parametrize(
