@@ -74,32 +74,23 @@ class ewma_adjust_functor : public ewma_functor_base<T> {
       int const exp    = thrust::get<1>(data);
       T const input    = thrust::get<2>(data);
       T const beta     = this->beta;
-      if constexpr (is_numerator) {
-        if (valid and (exp != 0)) {
-          // The value is non-null, but nulls preceeded it
-          // must adjust the second element of the pair
 
-          return {beta * (pow(beta, exp)), input};
-        } else if (!valid) {
-          // the value is null, carry the previous value forward
-          // "identity operator" is used
-          return this->IDENTITY;
+      if (!valid) { return this->IDENTITY; }
+
+      T const second = [=]() {
+        if constexpr (is_numerator) {
+          return input;
         } else {
-          return {beta, input};
+          return 1;
         }
+      }();
+      if (valid and (exp != 0)) {
+        // The value is non-null, but nulls preceeded it
+        // must adjust the second element of the pair
+
+        return {beta * (pow(beta, exp)), second};
       } else {
-        if (valid and (exp != 0)) {
-          // The value is non-null, but nulls preceeded it
-          // must adjust the second element of the pair
-
-          return {beta * (pow(beta, exp)), 1.0};
-        } else if (!valid) {
-          // the value is null, carry the previous value forward
-          // "identity operator" is used
-          return this->IDENTITY;
-        } else {
-          return {this->beta, 1.0};
-        }
+        return {beta, second};
       }
     } else {
       if constexpr (is_numerator) {
