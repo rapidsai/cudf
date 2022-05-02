@@ -540,14 +540,13 @@ class OrcDecompressor {
     return (block_len < (m_blockSize >> m_log2MaxRatio)) ? block_len << m_log2MaxRatio
                                                          : m_blockSize;
   }
-  [[nodiscard]] CompressionKind GetKind() const { return m_kind; }
+  [[nodiscard]] compression_type compression() const { return _compression; }
   [[nodiscard]] uint32_t GetBlockSize() const { return m_blockSize; }
 
  protected:
-  CompressionKind const m_kind;
+  compression_type _compression;
   uint32_t m_log2MaxRatio = 24;  // log2 of maximum compression ratio
-  uint32_t const m_blockSize;
-  std::unique_ptr<HostDecompressor> m_decompressor;
+  uint32_t m_blockSize;
   std::vector<uint8_t> m_buf;
 };
 

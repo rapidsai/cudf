@@ -357,27 +357,25 @@ size_t ProtobufWriter::write(const Metadata& s)
 }
 
 OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
-  : m_kind(kind), m_blockSize(blockSize)
+  : m_blockSize(blockSize)
 {
-  if (kind != NONE) {
-    auto stream_type = compression_type::AUTO;  // Will be treated as invalid
-    switch (kind) {
-      case NONE: break;
-      case ZLIB:
-        stream_type    = compression_type::ZLIB;
-        m_log2MaxRatio = 11;  // < 2048:1
-        break;
-      case SNAPPY:
-        stream_type    = compression_type::SNAPPY;
-        m_log2MaxRatio = 5;  // < 32:1
-        break;
-      case LZO: stream_type = compression_type::LZO; break;
-      case LZ4: stream_type = compression_type::LZ4; break;
-      case ZSTD: stream_type = compression_type::ZSTD; break;
-    }
-    m_decompressor = HostDecompressor::Create(stream_type);
-  } else {
-    m_log2MaxRatio = 0;
+  switch (kind) {
+    case NONE:
+      _compression   = compression_type::NONE;
+      m_log2MaxRatio = 0;
+      break;
+    case ZLIB:
+      _compression   = compression_type::ZLIB;
+      m_log2MaxRatio = 11;  // < 2048:1
+      break;
+    case SNAPPY:
+      _compression   = compression_type::SNAPPY;
+      m_log2MaxRatio = 5;  // < 32:1
+      break;
+    case LZO: _compression = compression_type::LZO; break;
+    case LZ4: _compression = compression_type::LZ4; break;
+    case ZSTD: _compression = compression_type::ZSTD; break;
+    default: CUDF_FAIL("Invalid compression type");
   }
 }
 
@@ -393,7 +391,7 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
 const uint8_t* OrcDecompressor::Decompress(const uint8_t* srcBytes, size_t srcLen, size_t* dstLen)
 {
   // If uncompressed, just pass-through the input
-  if (m_kind == NONE) {
+  if (_compression == compression_type::NONE) {
     *dstLen = srcLen;
     return srcBytes;
   }
@@ -437,7 +435,7 @@ const uint8_t* OrcDecompressor::Decompress(const uint8_t* srcBytes, size_t srcLe
     } else {
       // Compressed block
       dst_length +=
-        m_decompressor->decompress({srcBytes + i, block_len}, {dst + dst_length, m_blockSize});
+        decompress(_compression, {srcBytes + i, block_len}, {dst + dst_length, m_blockSize});
     }
     i += block_len;
   }

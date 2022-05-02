@@ -28,8 +28,11 @@ using cudf::host_span;
 namespace cudf {
 namespace io {
 
-std::vector<char> get_uncompressed_data(host_span<char const> data, compression_type compression);
+std::vector<char> get_uncompressed_data(compression_type compression, host_span<char const> data);
 
+size_t decompress(compression_type compression,
+                  host_span<uint8_t const> src,
+                  host_span<uint8_t> dst);
 class HostDecompressor {
  public:
   virtual size_t decompress(host_span<uint8_t const> src, host_span<uint8_t> dst) = 0;

@@ -423,8 +423,8 @@ std::vector<char> io_uncompress_single_h2d(const void* src,
  *
  * @return Vector containing the output uncompressed data
  */
-std::vector<char> get_uncompressed_data(host_span<char const> const data,
-                                        compression_type compression)
+std::vector<char> get_uncompressed_data(compression_type compression,
+                                        host_span<char const> const data)
 {
   return io_uncompress_single_h2d(data.data(), data.size(), compression);
 }
@@ -543,6 +543,20 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
     return (bytes_left) ? 0 : uncompressed_size;
   }
 };
+size_t decompress(compression_type compression,
+                  host_span<uint8_t const> src,
+                  host_span<uint8_t> dst)
+{
+  auto const decomp = [compression]() -> std::unique_ptr<HostDecompressor> {
+    switch (compression) {
+      case compression_type::GZIP: return std::make_unique<HostDecompressor_ZLIB>(true);
+      case compression_type::ZLIB: return std::make_unique<HostDecompressor_ZLIB>(false);
+      case compression_type::SNAPPY: return std::make_unique<HostDecompressor_SNAPPY>();
+      default: CUDF_FAIL("Unsupported compression type");
+    }
+  }();
+  return decomp->decompress(src, dst);
+}
 
 /**
  * @brief CPU decompression class

@@ -422,7 +422,7 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
     std::vector<char> h_uncomp_data_owner;
 
     if (reader_opts.get_compression() != compression_type::NONE) {
-      h_uncomp_data_owner = get_uncompressed_data(h_data, reader_opts.get_compression());
+      h_uncomp_data_owner = get_uncompressed_data(reader_opts.get_compression(), h_data);
       h_data              = h_uncomp_data_owner;
     }
     // None of the parameters for row selection is used, we are parsing the entire file

@@ -366,12 +366,12 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     device_span<device_span<uint8_t const>> inflate_in_view{inflate_in.data(),
                                                             num_compressed_blocks};
     device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
-    switch (decompressor->GetKind()) {
-      case orc::ZLIB:
+    switch (decompressor->compression()) {
+      case compression_type::ZLIB:
         gpuinflate(
           inflate_in_view, inflate_out_view, inflate_stats, gzip_header_included::NO, stream);
         break;
-      case orc::SNAPPY:
+      case compression_type::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
           nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
                                      inflate_in_view,
