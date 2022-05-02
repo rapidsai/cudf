@@ -37,7 +37,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -421,7 +421,7 @@ void sparse_to_dense_results(table_view const& keys,
  * @brief Construct hash map that uses row comparator and row hasher on
  * `d_keys` table and stores indices
  */
-auto create_hash_map(table_device_view const& d_keys,
+auto create_hash_map(table_view const& keys,
                      bool keys_have_nulls,
                      null_policy include_null_keys,
                      rmm::cuda_stream_view stream)
@@ -429,28 +429,30 @@ auto create_hash_map(table_device_view const& d_keys,
   size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
   size_type constexpr unused_value{std::numeric_limits<size_type>::max()};
 
-  using map_type =
-    concurrent_unordered_map<size_type,
-                             size_type,
-                             row_hasher<cudf::detail::default_hash, nullate::DYNAMIC>,
-                             row_equality_comparator<nullate::DYNAMIC>>;
+  using map_type = concurrent_unordered_map<
+    cudf::size_type,
+    cudf::size_type,
+    cudf::experimental::row::hash::device_row_hasher<cudf::detail::default_hash,
+                                                     cudf::nullate::DYNAMIC>,
+    cudf::experimental::row::equality::device_row_comparator<cudf::nullate::DYNAMIC>>;
 
   using allocator_type = typename map_type::allocator_type;
 
   auto const null_keys_are_equal =
     include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
+  auto has_null = nullate::DYNAMIC{keys_have_nulls};
 
-  row_hasher<cudf::detail::default_hash, nullate::DYNAMIC> hasher{nullate::DYNAMIC{keys_have_nulls},
-                                                                  d_keys};
-  row_equality_comparator rows_equal{
-    nullate::DYNAMIC{keys_have_nulls}, d_keys, d_keys, null_keys_are_equal};
+  auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
+  cudf::experimental::row::equality::self_comparator row_equal(preprocessed_keys);
+  auto key_equal = row_equal.device_comparator(has_null, null_keys_are_equal);
+  auto row_hash  = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
 
-  return map_type::create(compute_hash_table_size(d_keys.num_rows()),
+  return map_type::create(compute_hash_table_size(keys.num_rows()),
                           stream,
                           unused_key,
                           unused_value,
-                          hasher,
-                          rows_equal,
+                          row_hash.device_hasher(has_null),
+                          key_equal,
                           allocator_type());
 }
 
@@ -509,8 +511,8 @@ void compute_single_pass_aggs(table_view const& keys,
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto const d_aggs   = cudf::detail::make_device_uvector_async(agg_kinds, stream);
-
-  bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
+  auto const skip_key_rows_with_nulls =
+    keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
   auto row_bitmask =
     skip_key_rows_with_nulls ? cudf::detail::bitmask_and(keys, stream).first : rmm::device_buffer{};
@@ -594,8 +596,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto d_keys_ptr = table_device_view::create(keys, stream);
-  auto map        = create_hash_map(*d_keys_ptr, keys_have_nulls, include_null_keys, stream);
+  auto map = create_hash_map(keys, keys_have_nulls, include_null_keys, stream);
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash map
@@ -670,7 +671,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   cudf::detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys =
-    groupby(keys, requests, &cache, has_nulls(keys), include_null_keys, stream, mr);
+    groupby(keys, requests, &cache, cudf::has_nulls(keys), include_null_keys, stream, mr);
 
   return std::pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
 }
