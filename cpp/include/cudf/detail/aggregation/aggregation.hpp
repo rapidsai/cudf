@@ -664,12 +664,14 @@ class ewma_aggregation final : public scan_aggregation {
   }
 
 
+
   bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<ewma_aggregation const&>(_other);
     return this->center_of_mass == other.center_of_mass and this->history == other.history;
   }
+
 
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
