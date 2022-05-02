@@ -292,7 +292,9 @@ int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t 
  *
  * @return Vector containing the uncompressed output
  */
-std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int stream_type)
+std::vector<char> io_uncompress_single_h2d(const void* src,
+                                           size_t src_size,
+                                           compression_type compression)
 {
   const uint8_t* raw       = static_cast<const uint8_t*>(src);
   const uint8_t* comp_data = nullptr;
@@ -302,19 +304,19 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
   CUDF_EXPECTS(src != nullptr, "Decompression: Source cannot be nullptr");
   CUDF_EXPECTS(src_size != 0, "Decompression: Source size cannot be 0");
 
-  switch (stream_type) {
-    case IO_UNCOMP_STREAM_TYPE_INFER:
-    case IO_UNCOMP_STREAM_TYPE_GZIP: {
+  switch (compression) {
+    case compression_type::AUTO:
+    case compression_type::GZIP: {
       gz_archive_s gz;
       if (ParseGZArchive(&gz, raw, src_size)) {
-        stream_type = IO_UNCOMP_STREAM_TYPE_GZIP;
+        compression = compression_type::GZIP;
         comp_data   = gz.comp_data;
         comp_len    = gz.comp_len;
         uncomp_len  = gz.isize;
       }
-      if (stream_type != IO_UNCOMP_STREAM_TYPE_INFER) break;  // Fall through for INFER
+      if (compression != compression_type::AUTO) break;  // Fall through for INFER
     }
-    case IO_UNCOMP_STREAM_TYPE_ZIP: {
+    case compression_type::ZIP: {
       zip_archive_s za;
       if (OpenZipArchive(&za, raw, src_size)) {
         size_t cdfh_ofs = 0;
@@ -337,7 +339,7 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
                 size_t file_end   = file_start + lfh->comp_size;
                 if (file_end <= src_size) {
                   // Pick the first valid file of non-zero size (only 1 file expected in archive)
-                  stream_type = IO_UNCOMP_STREAM_TYPE_ZIP;
+                  compression = compression_type::ZIP;
                   comp_data   = raw + file_start;
                   comp_len    = lfh->comp_size;
                   uncomp_len  = lfh->uncomp_size;
@@ -350,20 +352,20 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
         }
       }
     }
-      if (stream_type != IO_UNCOMP_STREAM_TYPE_INFER) break;  // Fall through for INFER
-    case IO_UNCOMP_STREAM_TYPE_BZIP2:
+      if (compression != compression_type::AUTO) break;  // Fall through for INFER
+    case compression_type::BZIP2:
       if (src_size > 4) {
         const bz2_file_header_s* fhdr = reinterpret_cast<const bz2_file_header_s*>(raw);
         // Check for BZIP2 file signature "BZh1" to "BZh9"
         if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' &&
             fhdr->blksz >= '1' && fhdr->blksz <= '9') {
-          stream_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
+          compression = compression_type::BZIP2;
           comp_data   = raw;
           comp_len    = src_size;
           uncomp_len  = 0;
         }
       }
-      if (stream_type != IO_UNCOMP_STREAM_TYPE_INFER) break;  // Fall through for INFER
+      if (compression != compression_type::AUTO) break;  // Fall through for INFER
     default:
       // Unsupported format
       break;
@@ -377,14 +379,14 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
                                        // ~4:1 compression for initial size
   }
 
-  if (stream_type == IO_UNCOMP_STREAM_TYPE_GZIP || stream_type == IO_UNCOMP_STREAM_TYPE_ZIP) {
+  if (compression == compression_type::GZIP || compression == compression_type::ZIP) {
     // INFLATE
     std::vector<char> dst(uncomp_len);
     CUDF_EXPECTS(cpu_inflate_vector(dst, comp_data, comp_len) == 0,
                  "Decompression: error in stream");
     return dst;
   }
-  if (stream_type == IO_UNCOMP_STREAM_TYPE_BZIP2) {
+  if (compression == compression_type::BZIP2) {
     size_t src_ofs = 0;
     size_t dst_ofs = 0;
     int bz_err     = 0;
@@ -424,17 +426,7 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
 std::vector<char> get_uncompressed_data(host_span<char const> const data,
                                         compression_type compression)
 {
-  auto const comp_type = [compression]() {
-    switch (compression) {
-      case compression_type::GZIP: return IO_UNCOMP_STREAM_TYPE_GZIP;
-      case compression_type::ZIP: return IO_UNCOMP_STREAM_TYPE_ZIP;
-      case compression_type::BZIP2: return IO_UNCOMP_STREAM_TYPE_BZIP2;
-      case compression_type::XZ: return IO_UNCOMP_STREAM_TYPE_XZ;
-      default: return IO_UNCOMP_STREAM_TYPE_INFER;
-    }
-  }();
-
-  return io_uncompress_single_h2d(data.data(), data.size(), comp_type);
+  return io_uncompress_single_h2d(data.data(), data.size(), compression);
 }
 
 /**
@@ -555,18 +547,18 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
 /**
  * @brief CPU decompression class
  *
- * @param[in] stream_type compression method (IO_UNCOMP_STREAM_TYPE_XXX)
+ * @param[in] type compression type
  *
  * @returns corresponding HostDecompressor class, nullptr if failure
  */
-std::unique_ptr<HostDecompressor> HostDecompressor::Create(int stream_type)
+std::unique_ptr<HostDecompressor> HostDecompressor::Create(compression_type compression)
 {
-  switch (stream_type) {
-    case IO_UNCOMP_STREAM_TYPE_GZIP: return std::make_unique<HostDecompressor_ZLIB>(true);
-    case IO_UNCOMP_STREAM_TYPE_INFLATE: return std::make_unique<HostDecompressor_ZLIB>(false);
-    case IO_UNCOMP_STREAM_TYPE_SNAPPY: return std::make_unique<HostDecompressor_SNAPPY>();
+  switch (compression) {
+    case compression_type::GZIP: return std::make_unique<HostDecompressor_ZLIB>(true);
+    case compression_type::ZLIB: return std::make_unique<HostDecompressor_ZLIB>(false);
+    case compression_type::SNAPPY: return std::make_unique<HostDecompressor_SNAPPY>();
+    default: CUDF_FAIL("Unsupported compression type");
   }
-  CUDF_FAIL("Unsupported compression type");
 }
 
 }  // namespace io

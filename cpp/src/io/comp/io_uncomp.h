@@ -27,21 +27,6 @@ using cudf::host_span;
 
 namespace cudf {
 namespace io {
-enum {
-  IO_UNCOMP_STREAM_TYPE_INFER   = 0,
-  IO_UNCOMP_STREAM_TYPE_GZIP    = 1,
-  IO_UNCOMP_STREAM_TYPE_ZIP     = 2,
-  IO_UNCOMP_STREAM_TYPE_BZIP2   = 3,
-  IO_UNCOMP_STREAM_TYPE_XZ      = 4,
-  IO_UNCOMP_STREAM_TYPE_INFLATE = 5,
-  IO_UNCOMP_STREAM_TYPE_SNAPPY  = 6,
-  IO_UNCOMP_STREAM_TYPE_BROTLI  = 7,
-  IO_UNCOMP_STREAM_TYPE_LZ4     = 8,
-  IO_UNCOMP_STREAM_TYPE_LZO     = 9,
-  IO_UNCOMP_STREAM_TYPE_ZSTD    = 10,
-};
-
-std::vector<char> io_uncompress_single_h2d(void const* src, size_t src_size, int stream_type);
 
 std::vector<char> get_uncompressed_data(host_span<char const> data, compression_type compression);
 
@@ -51,7 +36,7 @@ class HostDecompressor {
   virtual ~HostDecompressor() {}
 
  public:
-  static std::unique_ptr<HostDecompressor> Create(int stream_type);
+  static std::unique_ptr<HostDecompressor> Create(compression_type compression);
 };
 
 /**

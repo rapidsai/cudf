@@ -360,20 +360,20 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
   : m_kind(kind), m_blockSize(blockSize)
 {
   if (kind != NONE) {
-    int stream_type = IO_UNCOMP_STREAM_TYPE_INFER;  // Will be treated as invalid
+    auto stream_type = compression_type::AUTO;  // Will be treated as invalid
     switch (kind) {
       case NONE: break;
       case ZLIB:
-        stream_type    = IO_UNCOMP_STREAM_TYPE_INFLATE;
+        stream_type    = compression_type::ZLIB;
         m_log2MaxRatio = 11;  // < 2048:1
         break;
       case SNAPPY:
-        stream_type    = IO_UNCOMP_STREAM_TYPE_SNAPPY;
+        stream_type    = compression_type::SNAPPY;
         m_log2MaxRatio = 5;  // < 32:1
         break;
-      case LZO: stream_type = IO_UNCOMP_STREAM_TYPE_LZO; break;
-      case LZ4: stream_type = IO_UNCOMP_STREAM_TYPE_LZ4; break;
-      case ZSTD: stream_type = IO_UNCOMP_STREAM_TYPE_ZSTD; break;
+      case LZO: stream_type = compression_type::LZO; break;
+      case LZ4: stream_type = compression_type::LZ4; break;
+      case ZSTD: stream_type = compression_type::ZSTD; break;
     }
     m_decompressor = HostDecompressor::Create(stream_type);
   } else {
