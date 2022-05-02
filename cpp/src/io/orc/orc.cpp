@@ -356,8 +356,7 @@ size_t ProtobufWriter::write(const Metadata& s)
   return w.value();
 }
 
-OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
-  : m_blockSize(blockSize)
+OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize) : m_blockSize(blockSize)
 {
   switch (kind) {
     case NONE:
