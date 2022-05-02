@@ -42,10 +42,11 @@ TEST_F(ListRankScanTest, BasicList)
 
   auto const expected_dense_vals =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 2, 3, 4, 5, 6, 7, 7, 8, 9, 9};
-  this->test_ungrouped_rank_scan(col,
-                                 expected_dense_vals,
-                                 cudf::make_dense_rank_aggregation<cudf::scan_aggregation>(),
-                                 cudf::null_policy::INCLUDE);
+  this->test_ungrouped_rank_scan(
+    col,
+    expected_dense_vals,
+    cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+    cudf::null_policy::INCLUDE);
 }
 
 TEST_F(ListRankScanTest, DeepList)
@@ -73,20 +74,22 @@ TEST_F(ListRankScanTest, DeepList)
   {  // Non-sliced
     auto const expected_dense_vals = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
       1, 1, 2, 3, 4, 5, 5, 5, 6, 6, 7, 7, 8, 9, 10, 11};
-    this->test_ungrouped_rank_scan(col,
-                                   expected_dense_vals,
-                                   cudf::make_dense_rank_aggregation<cudf::scan_aggregation>(),
-                                   cudf::null_policy::INCLUDE);
+    this->test_ungrouped_rank_scan(
+      col,
+      expected_dense_vals,
+      cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+      cudf::null_policy::INCLUDE);
   }
 
   {  // sliced
     auto sliced_col = cudf::slice(col, {3, 12})[0];
     auto const expected_dense_vals =
       cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 2, 3, 3, 3, 4, 4, 5, 5};
-    this->test_ungrouped_rank_scan(sliced_col,
-                                   expected_dense_vals,
-                                   cudf::make_dense_rank_aggregation<cudf::scan_aggregation>(),
-                                   cudf::null_policy::INCLUDE);
+    this->test_ungrouped_rank_scan(
+      sliced_col,
+      expected_dense_vals,
+      cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+      cudf::null_policy::INCLUDE);
   }
 }
 
@@ -117,7 +120,7 @@ TEST_F(ListRankScanTest, ListOfStruct)
   auto col2 = cudf::test::strings_column_wrapper{
     {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
     {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}};
-  auto struc = cudf::test::structs_column_wrapper{
+  auto struct_col = cudf::test::structs_column_wrapper{
     {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
@@ -132,16 +135,17 @@ TEST_F(ListRankScanTest, ListOfStruct)
                                        static_cast<cudf::bitmask_type*>(nullmask_buf.data()),
                                        cudf::UNKNOWN_NULL_COUNT,
                                        0,
-                                       {offsets, struc});
+                                       {offsets, struct_col});
 
   {  // Non-sliced
     auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
       1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10};
 
-    this->test_ungrouped_rank_scan(list_column,
-                                   expect,
-                                   cudf::make_dense_rank_aggregation<cudf::scan_aggregation>(),
-                                   cudf::null_policy::INCLUDE);
+    this->test_ungrouped_rank_scan(
+      list_column,
+      expect,
+      cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+      cudf::null_policy::INCLUDE);
   }
 
   {  // Sliced
@@ -149,10 +153,11 @@ TEST_F(ListRankScanTest, ListOfStruct)
     auto expect =
       cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 2, 3, 3, 3, 4, 5, 6, 7, 7, 8, 8};
 
-    this->test_ungrouped_rank_scan(sliced_col,
-                                   expect,
-                                   cudf::make_dense_rank_aggregation<cudf::scan_aggregation>(),
-                                   cudf::null_policy::INCLUDE);
+    this->test_ungrouped_rank_scan(
+      sliced_col,
+      expect,
+      cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+      cudf::null_policy::INCLUDE);
   }
 }
 
@@ -192,10 +197,11 @@ TEST_F(ListRankScanTest, ListOfEmptyStruct)
   auto expect =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6};
 
-  this->test_ungrouped_rank_scan(*list_column,
-                                 expect,
-                                 cudf::make_dense_rank_aggregation<cudf::scan_aggregation>(),
-                                 cudf::null_policy::INCLUDE);
+  this->test_ungrouped_rank_scan(
+    *list_column,
+    expect,
+    cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+    cudf::null_policy::INCLUDE);
 }
 
 TEST_F(ListRankScanTest, EmptyDeepList)
@@ -221,8 +227,9 @@ TEST_F(ListRankScanTest, EmptyDeepList)
 
   auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 2, 2};
 
-  this->test_ungrouped_rank_scan(*list_column,
-                                 expect,
-                                 cudf::make_dense_rank_aggregation<cudf::scan_aggregation>(),
-                                 cudf::null_policy::INCLUDE);
+  this->test_ungrouped_rank_scan(
+    *list_column,
+    expect,
+    cudf::make_rank_aggregation<cudf::scan_aggregation>(cudf::rank_method::DENSE),
+    cudf::null_policy::INCLUDE);
 }

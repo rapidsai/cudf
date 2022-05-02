@@ -3356,7 +3356,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def to_string(self):
-        """
+        r"""
         Convert to string
 
         cuDF uses Pandas internals for efficient string formatting.
@@ -3373,7 +3373,7 @@ class Frame(BinaryOperand, Scannable):
         >>> df['key'] = [0, 1, 2]
         >>> df['val'] = [float(i + 10) for i in range(3)]
         >>> df.to_string()
-        '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
+        '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
         """
         return repr(self)
 

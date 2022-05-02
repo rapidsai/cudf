@@ -238,6 +238,7 @@ add_library(
   src/copying/gather.cu
   src/copying/get_element.cu
   src/copying/pack.cpp
+  src/copying/purge_nonempty_nulls.cu
   src/copying/reverse.cu
   src/copying/sample.cu
   src/copying/scatter.cu
@@ -302,6 +303,8 @@ add_library(
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
+  src/io/comp/nvcomp_adapter.cpp
+  src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu

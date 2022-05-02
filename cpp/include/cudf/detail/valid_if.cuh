@@ -110,7 +110,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 
     null_count = size - valid_count.value(stream);
   }
-  return std::make_pair(std::move(null_mask), null_count);
+  return std::pair(std::move(null_mask), null_count);
 }
 
 /**

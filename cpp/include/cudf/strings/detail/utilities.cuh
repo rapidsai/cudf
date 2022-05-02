@@ -156,7 +156,7 @@ auto make_strings_children(
     for_each_fn(size_and_exec_fn);
   }
 
-  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+  return std::pair(std::move(offsets_column), std::move(chars_column));
 }
 
 /**
