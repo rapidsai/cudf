@@ -78,6 +78,13 @@ def test_serialize_struct_dtype(fields):
     assert recreated == dtype
 
 
+def test_serialize_struct():
+    sr = cudf.Series([{"a": 42}])
+    header, frames = sr.serialize()
+    got = sr.deserialize(header, frames)
+    assert_eq(sr, got)
+
+
 @pytest.mark.parametrize(
     "series, expected",
     [
