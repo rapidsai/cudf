@@ -52,22 +52,71 @@ class recurrence_functor {
 
 template <typename T>
 class ewma_functor_base {
+
  public:
+  T beta;
+  ewma_functor_base(T beta) : beta{beta} {}
+
   pair_type<T> IDENTITY = {1.0, 0.0};
 };
 
 template <typename T, bool nulls, bool is_numerator>
 class ewma_adjust_functor : public ewma_functor_base<T> {
- private:
-  T beta;
+
+  using ewma_functor_base<T>::ewma_functor_base;
 
  public:
-  ewma_adjust_functor(T beta) : beta{beta} {}
 
   using tupletype = std::conditional_t<nulls, thrust::tuple<bool, int, T>, T>;
 
   __device__ pair_type<T> operator()(tupletype data)
   {
+
+    if constexpr (nulls) {
+      bool const valid = thrust::get<0>(data);
+      int const exp    = thrust::get<1>(data);
+      T const input    = thrust::get<2>(data);
+      T const beta     = this->beta;
+      if constexpr (is_numerator) {
+        if (valid and (exp != 0)) {
+          // The value is non-null, but nulls preceeded it
+          // must adjust the second element of the pair
+
+          return {beta * (pow(beta, exp)), input};
+        } else if (!valid) {
+          // the value is null, carry the previous value forward
+          // "identity operator" is used
+          return this->IDENTITY;
+        } else {
+          return {beta, input};
+        }
+      } else {
+        if (valid and (exp != 0)) {
+          // The value is non-null, but nulls preceeded it
+          // must adjust the second element of the pair
+
+          return {beta * (pow(beta, exp)), 1.0};
+        } else if (!valid) {
+          // the value is null, carry the previous value forward
+          // "identity operator" is used
+          return this->IDENTITY;
+        } else {
+          return {this->beta, 1.0};
+        }
+      }
+    } else {
+      if constexpr (is_numerator) {
+        return {this->beta, data};
+      } else {
+        return {this->beta, 1.0};
+      }
+
+    }
+
+
+
+
+    /*
     if constexpr (is_numerator) {
       if constexpr (nulls) {
         bool const valid = thrust::get<0>(data);
@@ -106,22 +155,21 @@ class ewma_adjust_functor : public ewma_functor_base<T> {
           // "identity operator" is used
           return this->IDENTITY;
         } else {
-          return {beta, 1.0};
+          return {this->beta, 1.0};
         }
       } else {
-        return {beta, 1.0};
+        return {this->beta, 1.0};
       }
     }
+  */
   }
 };
 
 template <typename T, bool nulls>
 class ewma_noadjust_functor : public ewma_functor_base<T> {
- private:
-  T beta;
+ using ewma_functor_base<T>::ewma_functor_base;
 
  public:
-  ewma_noadjust_functor(T beta) : beta{beta} {}
 
   using tupletype = std::
     conditional_t<nulls, thrust::tuple<T, size_type, bool, size_type>, thrust::tuple<T, size_type>>;
