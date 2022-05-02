@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
@@ -68,9 +69,10 @@ struct hash_join {
   hash_join& operator=(hash_join&&) = delete;
 
  private:
-  bool const _is_empty;                    ///< true if `_hash_table` is empty
-  cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
-  cudf::table_view _build;                 ///< input table to build the hash map
+  bool const _is_empty;                         ///< true if `_hash_table` is empty
+  rmm::device_buffer const _composite_bitmask;  ///< Bitmask to denote whether a row is valid
+  cudf::null_equality const _nulls_equal;       ///< whether to consider nulls as equal
+  cudf::table_view _build;                      ///< input table to build the hash map
   cudf::structs::detail::flattened_table
     _flattened_build_table;  ///< flattened data structures for `_build`
   map_type _hash_table;      ///< hash table built on `_build`

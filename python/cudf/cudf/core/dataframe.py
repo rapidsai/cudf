@@ -160,7 +160,7 @@ class _DataFrameIndexer(_FrameIndexer):
                 ):
                     return True
             dtypes = df.dtypes.values.tolist()
-            all_numeric = all([is_numeric_dtype(t) for t in dtypes])
+            all_numeric = all(is_numeric_dtype(t) for t in dtypes)
             if all_numeric:
                 return True
         if ncols == 1:
@@ -720,7 +720,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             final_index = as_index(index)
 
-        series_lengths = list(map(lambda x: len(x), data))
+        series_lengths = list(map(len, data))
         data = numeric_normalize_types(*data)
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
             # Calculating the final dataframe columns by
@@ -2999,11 +2999,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         elif isinstance(aggs, dict):
             cols = aggs.keys()
-            if any([callable(val) for val in aggs.values()]):
+            if any(callable(val) for val in aggs.values()):
                 raise NotImplementedError(
                     "callable parameter is not implemented yet"
                 )
-            elif all([isinstance(val, str) for val in aggs.values()]):
+            elif all(isinstance(val, str) for val in aggs.values()):
                 result = cudf.Series(index=cols)
                 for key, value in aggs.items():
                     col = df_normalized[key]
@@ -3013,7 +3013,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             f"'Series' object"
                         )
                     result[key] = getattr(col, value)()
-            elif all([isinstance(val, abc.Iterable) for val in aggs.values()]):
+            elif all(isinstance(val, abc.Iterable) for val in aggs.values()):
                 idxs = set()
                 for val in aggs.values():
                     if isinstance(val, str):
@@ -6032,9 +6032,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if (cols.get_indexer(other._data.to_pandas_index()) >= 0).all():
                 other = other.reindex(columns=cols)
 
-        return super(DataFrame, self)._append(
-            other, ignore_index, verify_integrity, sort
-        )
+        return super()._append(other, ignore_index, verify_integrity, sort)
 
     @_cudf_nvtx_annotate
     @copy_docstring(reshape.pivot)
