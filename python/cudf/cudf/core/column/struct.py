@@ -24,8 +24,6 @@ class StructColumn(ColumnBase):
 
     """
 
-    dtype: StructDtype
-
     @property
     def base_size(self):
         if not self.base_children:
@@ -36,7 +34,7 @@ class StructColumn(ColumnBase):
     @classmethod
     def from_arrow(cls, data):
         size = len(data)
-        dtype = cudf.core.dtypes.StructDtype.from_arrow(data.type)
+        dtype = StructDtype.from_arrow(data.type)
 
         mask = data.buffers()[0]
         if mask is not None:
@@ -121,7 +119,7 @@ class StructColumn(ColumnBase):
         Return a StructColumn with the same field values as this StructColumn,
         but with the field names equal to `names`.
         """
-        dtype = cudf.core.dtypes.StructDtype(
+        dtype = StructDtype(
             {name: col.dtype for name, col in zip(names, self.children)}
         )
         return StructColumn(
@@ -174,7 +172,7 @@ class StructColumn(ColumnBase):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> StructColumn:
-        header["dtype"] = cls.dtype.__class__.deserialize(*header["dtype"])
+        header["dtype"] = StructDtype.deserialize(*header["dtype"])
         sub_frame_offset = header["sub-frame-offset"]
         children = []
         for h, b in zip(header["sub-headers"], frames[sub_frame_offset:]):
