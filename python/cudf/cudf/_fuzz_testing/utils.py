@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import random
 from collections import OrderedDict
@@ -312,13 +312,9 @@ def _preprocess_to_orc_tuple(df, arrow_table_schema):
         return tuple(values_list)
 
     has_nulls_or_nullable_dtype = any(
-        [
-            True
-            if df[col].dtype in pandas_dtypes_to_np_dtypes
-            or df[col].isnull().any()
-            else False
-            for col in df.columns
-        ]
+        (col := df[colname]).dtype in pandas_dtypes_to_np_dtypes
+        or col.isnull().any()
+        for colname in df.columns
     )
     pdf = df.copy(deep=True)
     for field in arrow_table_schema:
