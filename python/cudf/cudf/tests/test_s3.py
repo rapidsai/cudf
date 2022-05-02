@@ -22,6 +22,8 @@ moto = pytest.importorskip("moto", minversion="1.3.14")
 boto3 = pytest.importorskip("boto3")
 requests = pytest.importorskip("requests")
 s3fs = pytest.importorskip("s3fs")
+flask = pytest.importorskip("flask")
+flask_cors = pytest.importorskip("flask_cors")
 
 
 @contextmanager
@@ -49,6 +51,7 @@ def s3_base(worker_id):
         # system aws credentials, https://github.com/spulec/moto/issues/1793
         os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
         os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
+        os.environ.setdefault("S3FS_LOGGING_LEVEL", "DEBUG")
 
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost
@@ -457,3 +460,42 @@ def test_write_orc(s3_base, s3so, pdf):
             got = pa.orc.ORCFile(f).read().to_pandas()
 
     assert_eq(pdf, got)
+
+
+def test_write_chunked_parquet(s3_base, s3so):
+    df1 = cudf.DataFrame({"b": [10, 11, 12], "a": [1, 2, 3]})
+    df2 = cudf.DataFrame({"b": [20, 30, 50], "a": [3, 2, 1]})
+    dirname = "chunked_writer_directory"
+    bname = "parquet"
+    from cudf.io.parquet import ParquetDatasetWriter
+
+    with s3_context(
+        s3_base=s3_base, bucket=bname, files={dirname: BytesIO()}
+    ) as s3fs:
+        cw = ParquetDatasetWriter(
+            f"s3://{bname}/{dirname}",
+            partition_cols=["a"],
+            storage_options=s3so,
+        )
+        cw.write_table(df1)
+        cw.write_table(df2)
+        cw.close()
+
+        # TODO: Replace following workaround with:
+        # expect = cudf.read_parquet(f"s3://{bname}/{dirname}/",
+        # storage_options=s3so)
+        # after the following bug is fixed:
+        # https://issues.apache.org/jira/browse/ARROW-16438
+
+        dfs = []
+        for folder in {"a=1", "a=2", "a=3"}:
+            assert s3fs.exists(f"s3://{bname}/{dirname}/{folder}")
+            for file in s3fs.ls(f"s3://{bname}/{dirname}/{folder}"):
+                df = cudf.read_parquet("s3://" + file, storage_options=s3so)
+                dfs.append(df)
+
+        actual = cudf.concat(dfs).astype("int64")
+        assert_eq(
+            actual.sort_values(["b"]).reset_index(drop=True),
+            cudf.concat([df1, df2]).sort_values(["b"]).reset_index(drop=True),
+        )

@@ -1,5 +1,7 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
+import shutil
+import tempfile
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
@@ -7,6 +9,7 @@ from typing import Dict, List, Tuple
 from uuid import uuid4
 
 import numpy as np
+import s3fs
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -206,12 +209,25 @@ def _process_dataset(
         filters = pq._filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
-    dataset = ds.dataset(
-        paths,
-        filesystem=fs,
-        format="parquet",
-        partitioning="hive",
-    )
+    if (
+        isinstance(fs, s3fs.S3FileSystem)
+        and len(paths) == 1
+        and fs.isdir(paths[0])
+    ):
+        # TODO: Remove this workaround after following bug is fixed:
+        # https://issues.apache.org/jira/browse/ARROW-16438
+        dataset = ds.dataset(
+            "s3://" + paths[0],
+            format="parquet",
+            partitioning="hive",
+        )
+    else:
+        dataset = ds.dataset(
+            paths,
+            filesystem=fs,
+            format="parquet",
+            partitioning="hive",
+        )
     file_list = dataset.files
     if len(file_list) == 0:
         raise FileNotFoundError(f"{paths} could not be resolved to any files")
@@ -724,6 +740,7 @@ class ParquetDatasetWriter:
         index=None,
         compression=None,
         statistics="ROWGROUP",
+        **kwargs,
     ) -> None:
         """
         Write a parquet file or dataset incrementally
@@ -776,7 +793,12 @@ class ParquetDatasetWriter:
                     <filename>.parquet
 
         """
-        self.path = path
+        if isinstance(path, str) and path.startswith("s3://"):
+            self.fs_meta = {"is_s3": True, "actual_path": path}
+            self.path = tempfile.TemporaryDirectory().name
+        else:
+            self.fs_meta = {}
+            self.path = path
         self.common_args = {
             "index": index,
             "compression": compression,
@@ -792,6 +814,7 @@ class ParquetDatasetWriter:
         # in self._chunked_writers for reverse lookup
         self.path_cw_map: Dict[str, int] = {}
         self.filename = None
+        self.kwargs = kwargs
 
     @_cudf_nvtx_annotate
     def write_table(self, df):
@@ -837,18 +860,19 @@ class ParquetDatasetWriter:
             ]
             cw.write_table(grouped_df, this_cw_part_info)
 
-        # Create new cw for unhandled paths encountered in this write_table
-        new_paths, part_info, meta_paths = zip(*new_cw_paths)
-        self._chunked_writers.append(
-            (
-                ParquetWriter(new_paths, **self.common_args),
-                new_paths,
-                meta_paths,
+        if new_cw_paths:
+            # Create new cw for unhandled paths encountered in this write_table
+            new_paths, part_info, meta_paths = zip(*new_cw_paths)
+            self._chunked_writers.append(
+                (
+                    ParquetWriter(new_paths, **self.common_args),
+                    new_paths,
+                    meta_paths,
+                )
             )
-        )
-        new_cw_idx = len(self._chunked_writers) - 1
-        self.path_cw_map.update({k: new_cw_idx for k in new_paths})
-        self._chunked_writers[-1][0].write_table(grouped_df, part_info)
+            new_cw_idx = len(self._chunked_writers) - 1
+            self.path_cw_map.update({k: new_cw_idx for k in new_paths})
+            self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
     @_cudf_nvtx_annotate
     def close(self, return_metadata=False):
@@ -861,6 +885,15 @@ class ParquetDatasetWriter:
             cw.close(metadata_file_path=meta_path if return_metadata else None)
             for cw, _, meta_path in self._chunked_writers
         ]
+
+        if self.fs_meta.get("is_s3", False):
+            local_path = self.path
+            s3_path = self.fs_meta["actual_path"]
+            s3_file, _ = ioutils._get_filesystem_and_paths(
+                s3_path, **self.kwargs
+            )
+            s3_file.put(local_path, s3_path, recursive=True)
+            shutil.rmtree(self.path)
 
         if return_metadata:
             return (
