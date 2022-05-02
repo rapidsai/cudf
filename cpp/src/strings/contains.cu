@@ -55,7 +55,7 @@ struct contains_fn {
   }
 };
 
-std::unique_ptr<column> contains_util(strings_column_view const& input,
+std::unique_ptr<column> contains_impl(strings_column_view const& input,
                                       std::string const& pattern,
                                       regex_flags const flags,
                                       bool const beginning_only,
@@ -90,7 +90,7 @@ std::unique_ptr<column> contains_re(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  return contains_util(input, pattern, flags, false, stream, mr);
+  return contains_impl(input, pattern, flags, false, stream, mr);
 }
 
 std::unique_ptr<column> matches_re(
@@ -100,7 +100,7 @@ std::unique_ptr<column> matches_re(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  return contains_util(input, pattern, flags, true, stream, mr);
+  return contains_impl(input, pattern, flags, true, stream, mr);
 }
 
 std::unique_ptr<column> count_re(
