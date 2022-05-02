@@ -82,6 +82,26 @@ TEST_F(StringsFindTest, Contains)
   }
 }
 
+TEST_F(StringsFindTest, ContainsLongStrings)
+{
+  cudf::test::strings_column_wrapper strings(
+    {"Héllo, there world and goodbye",
+     "quick brown fox jumped over the lazy brown dog; the fat cats jump in place without moving",
+     "the following code snippet demonstrates how to use search for values in an ordered range",
+     "it returns the last position where value could be inserted without violating the ordering",
+     "algorithms execution is parallelized as determined by an execution policy. t",
+     "he this is a continuation of previous row to make sure string boundaries are honored",
+     ""});
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::contains(strings_view, cudf::string_scalar("e"));
+  cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 1, 1, 1, 1, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  results = cudf::strings::contains(strings_view, cudf::string_scalar(" the "));
+  cudf::test::fixed_width_column_wrapper<bool> expected2({0, 1, 0, 1, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected2);
+}
+
 TEST_F(StringsFindTest, StartsWith)
 {
   cudf::test::strings_column_wrapper strings({"Héllo", "thesé", "", "lease", "tést strings", ""},
