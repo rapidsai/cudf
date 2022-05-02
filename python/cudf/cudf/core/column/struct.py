@@ -1,6 +1,9 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import pickle
+from typing import Tuple, cast
+
 import pandas as pd
 import pyarrow as pa
 
@@ -152,6 +155,36 @@ class StructColumn(ColumnBase):
             )
 
         return self
+
+    def serialize(self) -> Tuple[dict, list]:
+        header, frames = super().serialize()
+        header["dtype"] = self.dtype.serialize()
+        header["size"] = self.size
+
+        header["sub-frame-offset"] = len(frames)
+        sub_headers = []
+        for item in self.children:
+            sheader, sframes = item.serialize()
+            sub_headers.append(sheader)
+            frames.extend(sframes)
+
+        header["sub-headers"] = sub_headers
+        header["frame_count"] = len(frames)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list) -> StructColumn:
+        header["dtype"] = cudf.StructDtype.deserialize(*header["dtype"])
+        sub_frame_offset = header["sub-frame-offset"]
+        children = []
+        for h, b in zip(header["sub-headers"], frames[sub_frame_offset:]):
+            column_type = pickle.loads(h["type-serialized"])
+            children.append(column_type.deserialize(h, [b]))
+        header["children"] = tuple(children)
+        return cast(
+            StructColumn,
+            super().deserialize(header, frames[:sub_frame_offset]),
+        )
 
 
 class StructMethods(ColumnMethods):
