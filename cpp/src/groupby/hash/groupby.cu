@@ -65,6 +65,13 @@ namespace detail {
 namespace hash {
 namespace {
 
+using map_type = concurrent_unordered_map<
+  cudf::size_type,
+  cudf::size_type,
+  cudf::experimental::row::hash::device_row_hasher<cudf::detail::default_hash,
+                                                   cudf::nullate::DYNAMIC>,
+  cudf::experimental::row::equality::device_row_comparator<cudf::nullate::DYNAMIC>>;
+
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
@@ -179,14 +186,13 @@ class groupby_simple_aggregations_collector final
   }
 };
 
-template <typename Map>
 class hash_compound_agg_finalizer final : public cudf::detail::aggregation_finalizer {
   column_view col;
   data_type result_type;
   cudf::detail::result_cache* sparse_results;
   cudf::detail::result_cache* dense_results;
   device_span<size_type const> gather_map;
-  Map const& map;
+  map_type const& map;
   bitmask_type const* __restrict__ row_bitmask;
   rmm::cuda_stream_view stream;
   rmm::mr::device_memory_resource* mr;
@@ -198,7 +204,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               cudf::detail::result_cache* sparse_results,
                               cudf::detail::result_cache* dense_results,
                               device_span<size_type const> gather_map,
-                              Map const& map,
+                              map_type const& map,
                               bitmask_type const* row_bitmask,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
@@ -327,7 +333,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       col.size(),
-      ::cudf::detail::var_hash_functor<Map>{
+      ::cudf::detail::var_hash_functor<map_type>{
         map, row_bitmask, *var_result_view, *values_view, *sum_view, *count_view, agg._ddof});
     sparse_results->add_result(col, agg, std::move(var_result));
     dense_results->add_result(col, agg, to_dense_agg_result(agg));
@@ -385,14 +391,12 @@ flatten_single_pass_aggs(host_span<aggregation_request const> requests)
  *
  * @see groupby_null_templated()
  */
-template <typename Map>
 void sparse_to_dense_results(table_view const& keys,
                              host_span<aggregation_request const> requests,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
                              device_span<size_type const> gather_map,
-                             // size_type map_size,
-                             Map const& map,
+                             map_type const& map,
                              bool keys_have_nulls,
                              null_policy include_null_keys,
                              rmm::cuda_stream_view stream,
@@ -409,7 +413,7 @@ void sparse_to_dense_results(table_view const& keys,
 
     // Given an aggregation, this will get the result from sparse_results and
     // convert and return dense, compacted result
-    auto finalizer = hash_compound_agg_finalizer<Map>(
+    auto finalizer = hash_compound_agg_finalizer(
       col, sparse_results, dense_results, gather_map, map, row_bitmask_ptr, stream, mr);
     for (auto&& agg : agg_v) {
       agg->finalize(finalizer);
@@ -429,18 +433,11 @@ auto create_hash_map(table_view const& keys,
   size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
   size_type constexpr unused_value{std::numeric_limits<size_type>::max()};
 
-  using map_type = concurrent_unordered_map<
-    cudf::size_type,
-    cudf::size_type,
-    cudf::experimental::row::hash::device_row_hasher<cudf::detail::default_hash,
-                                                     cudf::nullate::DYNAMIC>,
-    cudf::experimental::row::equality::device_row_comparator<cudf::nullate::DYNAMIC>>;
-
   using allocator_type = typename map_type::allocator_type;
 
   auto const null_keys_are_equal =
     include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
-  auto has_null = nullate::DYNAMIC{keys_have_nulls};
+  auto const has_null = nullate::DYNAMIC{keys_have_nulls};
 
   auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
   cudf::experimental::row::equality::self_comparator row_equal(preprocessed_keys);
@@ -493,11 +490,10 @@ auto create_sparse_results_table(table_view const& flattened_values,
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
  */
-template <typename Map>
 void compute_single_pass_aggs(table_view const& keys,
                               host_span<aggregation_request const> requests,
                               cudf::detail::result_cache* sparse_results,
-                              Map& map,
+                              map_type& map,
                               bool keys_have_nulls,
                               null_policy include_null_keys,
                               rmm::cuda_stream_view stream)
@@ -520,13 +516,13 @@ void compute_single_pass_aggs(table_view const& keys,
     rmm::exec_policy(stream),
     thrust::make_counting_iterator(0),
     keys.num_rows(),
-    hash::compute_single_pass_aggs_fn<Map>{map,
-                                           keys.num_rows(),
-                                           *d_values,
-                                           *d_sparse_table,
-                                           d_aggs.data(),
-                                           static_cast<bitmask_type*>(row_bitmask.data()),
-                                           skip_key_rows_with_nulls});
+    hash::compute_single_pass_aggs_fn<map_type>{map,
+                                                keys.num_rows(),
+                                                *d_values,
+                                                *d_sparse_table,
+                                                d_aggs.data(),
+                                                static_cast<bitmask_type*>(row_bitmask.data()),
+                                                skip_key_rows_with_nulls});
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();
   for (size_t i = 0; i < aggs.size(); i++) {
@@ -540,8 +536,7 @@ void compute_single_pass_aggs(table_view const& keys,
  * @brief Computes and returns a device vector containing all populated keys in
  * `map`.
  */
-template <typename Map>
-rmm::device_uvector<size_type> extract_populated_keys(Map map,
+rmm::device_uvector<size_type> extract_populated_keys(map_type const& map,
                                                       size_type num_keys,
                                                       rmm::cuda_stream_view stream)
 {
