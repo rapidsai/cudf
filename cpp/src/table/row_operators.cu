@@ -31,43 +31,38 @@ namespace experimental {
 namespace {
 
 /**
- * @brief Applies the offsets of struct column onto its children
+ * @brief Removes the offsets of struct column's children
  *
- * @param c The column whose children are to be sliced
- * @return Children of `c` with offsets applied
+ * @param c The column whose children are to be un-sliced
+ * @return Children of `c` with offsets removed
  */
-std::vector<column_view> slice_children(column_view const& c)
+std::vector<column_view> unslice_children(column_view const& c)
 {
   if (c.type().id() == type_id::STRUCT) {
-    std::vector<column_view> sliced_children;
-    sliced_children.reserve(c.num_children());
-    auto struct_col = structs_column_view(c);
-    for (size_type i = 0; i < struct_col.num_children(); ++i) {
-      auto sliced = struct_col.get_sliced_child(i);
-      // We cannot directly use the output of `structs_column_view::get_sliced_child` because we
-      // must first traverse its children recursively to push offsets all the way down to the leaf
-      // children.
-      sliced_children.emplace_back(sliced.type(),
-                                   sliced.size(),
-                                   sliced.head<uint8_t>(),
-                                   sliced.null_mask(),
-                                   sliced.null_count(),
-                                   sliced.offset(),
-                                   slice_children(sliced));
-    }
-    return sliced_children;
+    auto child_it = thrust::make_transform_iterator(c.child_begin(), [](auto const& child) {
+      return column_view(
+        child.type(),
+        child.offset() + child.size(),  // This is hacky, we don't know the actual unsliced size but
+                                        // it is at least offset + size
+        child.head(),
+        child.null_mask(),
+        child.null_count(),
+        0,
+        unslice_children(child));
+    });
+    return {child_it, child_it + c.num_children()};
   }
   return {c.child_begin(), c.child_end()};
 };
 
 /**
- * @brief Applies the offsets of struct columns in a table onto their children.
+ * @brief Removes the child column offsets of struct columns in a table.
  *
  * Given a table, this replaces any struct columns with similar struct columns that have their
- * offsets applied to their children. Structs that are children of list columns are not affected.
+ * offsets removed from their children. Structs that are children of list columns are not affected.
  *
  */
-table_view pushdown_struct_offsets(table_view table)
+table_view remove_struct_child_offsets(table_view table)
 {
   std::vector<column_view> cols;
   cols.reserve(table.num_columns());
@@ -78,7 +73,7 @@ table_view pushdown_struct_offsets(table_view table)
                        c.null_mask(),
                        c.null_count(),
                        c.offset(),
-                       slice_children(c));
+                       unslice_children(c));
   });
   return table_view(cols);
 }
@@ -159,8 +154,7 @@ auto decompose_structs(table_view table,
                        host_span<order const> column_order         = {},
                        host_span<null_order const> null_precedence = {})
 {
-  auto sliced         = pushdown_struct_offsets(table);
-  auto linked_columns = detail::table_to_linked_columns(sliced);
+  auto linked_columns = detail::table_to_linked_columns(table);
 
   std::vector<column_view> verticalized_columns;
   std::vector<order> new_column_order;
@@ -225,6 +219,15 @@ auto decompose_structs(table_view table,
               UNKNOWN_NULL_COUNT,
               parent->offset(),
               {*parent->children[lists_column_view::offsets_column_index], temp_col});
+          } else if (parent->type().id() == type_id::STRUCT) {
+            // Replace offset with parent's offset
+            temp_col = column_view(temp_col.type(),
+                                   parent->size(),
+                                   temp_col.head(),
+                                   temp_col.null_mask(),
+                                   UNKNOWN_NULL_COUNT,
+                                   parent->offset(),
+                                   {temp_col.child_begin(), temp_col.child_end()});
           }
         }
         verticalized_columns.push_back(temp_col);
@@ -334,7 +337,8 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
   check_eq_compatibility(t);
 
   auto null_pushed_table              = structs::detail::superimpose_parent_nulls(t, stream);
-  auto [verticalized_lhs, _, __, ___] = decompose_structs(std::get<0>(null_pushed_table));
+  auto struct_offset_removed_table    = remove_struct_child_offsets(std::get<0>(null_pushed_table));
+  auto [verticalized_lhs, _, __, ___] = decompose_structs(struct_offset_removed_table);
 
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_lhs, stream));
   return std::shared_ptr<preprocessed_table>(

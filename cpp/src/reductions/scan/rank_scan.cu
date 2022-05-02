@@ -102,16 +102,15 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
     mr);
 }
 
-std::unique_ptr<column> inclusive_percent_rank_scan(column_view const& order_by,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> inclusive_one_normalized_percent_rank_scan(
+  column_view const& order_by, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   auto const rank_column =
     inclusive_rank_scan(order_by, stream, rmm::mr::get_current_device_resource());
   auto const rank_view = rank_column->view();
 
-  // Result type for PERCENT_RANK is independent of input type.
-  using result_type = cudf::detail::target_type_t<int32_t, cudf::aggregation::Kind::PERCENT_RANK>;
+  // Result type for min 0-index percent rank is independent of input type.
+  using result_type        = double;
   auto percent_rank_result = cudf::make_fixed_width_column(
     data_type{type_to_id<result_type>()}, rank_view.size(), mask_state::UNALLOCATED, stream, mr);
 

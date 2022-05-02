@@ -6,7 +6,7 @@ import functools
 import inspect
 import pickle
 import warnings
-from collections import abc as abc
+from collections import abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
 
@@ -70,8 +70,9 @@ from cudf.utils.dtypes import (
     find_common_type,
     is_mixed_with_object_dtype,
     min_scalar_type,
+    to_cudf_compatible_scalar,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate, to_cudf_compatible_scalar
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
@@ -1063,11 +1064,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
-            output = (
-                preprocess.astype("O")
-                .fillna(cudf._NA_REP)
-                .to_pandas()
-                .__repr__()
+            output = repr(
+                preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
             )
         elif isinstance(
             preprocess._column, cudf.core.column.CategoricalColumn
@@ -1110,7 +1108,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 na_rep=cudf._NA_REP,
             )
         else:
-            output = preprocess.to_pandas().__repr__()
+            output = repr(preprocess.to_pandas())
 
         lines = output.split("\n")
 
@@ -2109,7 +2107,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         if convert_dtype is not True:
             raise ValueError("Series.apply only supports convert_dtype=True")
-        return self._apply(func, _get_scalar_kernel, *args, **kwargs)
+
+        result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
+        result.name = self.name
+        return result
 
     @_cudf_nvtx_annotate
     def applymap(self, udf, out_dtype=None):
@@ -4613,13 +4614,13 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
 
 @_cudf_nvtx_annotate
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    """Returns a boolean array where two arrays are equal within a tolerance.
+    r"""Returns a boolean array where two arrays are equal within a tolerance.
 
     Two values in ``a`` and ``b`` are  considered equal when the following
     equation is satisfied.
 
     .. math::
-       |a - b| \\le \\mathrm{atol} + \\mathrm{rtol} |b|
+       |a - b| \le \mathrm{atol} + \mathrm{rtol} |b|
 
     Parameters
     ----------

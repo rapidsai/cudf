@@ -1086,7 +1086,7 @@ struct dispatch_from_timestamps_fn {
                        thrust::make_counting_iterator<cudf::size_type>(0),
                        d_timestamps.size(),
                        pfn);
-    return std::make_pair(std::move(offsets_column), std::move(chars_column));
+    return std::pair(std::move(offsets_column), std::move(chars_column));
   }
 
   template <typename T, typename... Args>

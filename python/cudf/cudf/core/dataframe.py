@@ -7,10 +7,10 @@ import inspect
 import itertools
 import numbers
 import pickle
+import re
 import sys
 import warnings
-from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections import abc, defaultdict
 from typing import (
     Any,
     Callable,
@@ -80,7 +80,7 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.core.udf.row_function import _get_row_kernel
-from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
+from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
@@ -160,7 +160,7 @@ class _DataFrameIndexer(_FrameIndexer):
                 ):
                     return True
             dtypes = df.dtypes.values.tolist()
-            all_numeric = all([is_numeric_dtype(t) for t in dtypes])
+            all_numeric = all(is_numeric_dtype(t) for t in dtypes)
             if all_numeric:
                 return True
         if ncols == 1:
@@ -720,7 +720,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             final_index = as_index(index)
 
-        series_lengths = list(map(lambda x: len(x), data))
+        series_lengths = list(map(len, data))
         data = numeric_normalize_types(*data)
         if series_lengths.count(series_lengths[0]) == len(series_lengths):
             # Calculating the final dataframe columns by
@@ -1105,7 +1105,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif can_convert_to_column(arg):
             mask = arg
             if is_list_like(mask):
-                mask = cudf.utils.utils._create_pandas_series(data=mask)
+                mask = pd.Series(mask)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(mask)
             else:
@@ -1174,9 +1174,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             allow_non_unique=True,
                         )
                     if is_scalar(value):
-                        self._data[arg] = utils.scalar_broadcast_to(
-                            value, len(self)
-                        )
+                        self._data[arg] = column.full(len(self), value)
                     else:
                         value = as_column(value)
                         self._data[arg] = value
@@ -1857,7 +1855,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Optional[BaseIndex],
     ]:
         # Check built-in types first for speed.
-        if isinstance(other, (list, dict, Sequence, Mapping)):
+        if isinstance(other, (list, dict, abc.Sequence, abc.Mapping)):
             warnings.warn(
                 "Binary operations between host objects such as "
                 f"{type(other)} and cudf.DataFrame are deprecated and will be "
@@ -1878,7 +1876,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if _is_scalar_or_zero_d_array(other):
             rhs = {name: other for name in self._data}
-        elif isinstance(other, (list, Sequence)):
+        elif isinstance(other, (list, abc.Sequence)):
             rhs = {name: o for (name, o) in zip(self._data, other)}
         elif isinstance(other, Series):
             rhs = dict(zip(other.index.values_host, other.values_host))
@@ -1907,7 +1905,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # the fill value.
             left_default = fill_value
 
-        if not isinstance(rhs, (dict, Mapping)):
+        if not isinstance(rhs, (dict, abc.Mapping)):
             return NotImplemented, None
 
         operands = {
@@ -2573,8 +2571,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 f"{num_cols * (num_cols > 0)}"
             )
 
+        # TODO: This check is currently necessary because
+        # _is_scalar_or_zero_d_array below will treat a length 1 pd.Categorical
+        # as a scalar and attempt to use column.full, which can't handle it.
+        # Maybe _is_scalar_or_zero_d_array should be changed, or maybe we just
+        # shouldn't support pd.Categorical at all, but those changes will at
+        # least require a deprecation cycle because we currently support
+        # inserting a pd.Categorical.
+        if isinstance(value, pd.Categorical):
+            value = cudf.core.column.categorical.pandas_categorical_as_column(
+                value
+            )
+
         if _is_scalar_or_zero_d_array(value):
-            value = utils.scalar_broadcast_to(value, len(self))
+            value = column.full(
+                len(self),
+                value,
+                "str" if libcudf.scalar._is_null_host_scalar(value) else None,
+            )
 
         if len(self) == 0:
             if isinstance(value, (pd.Series, Series)):
@@ -2961,7 +2975,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if axis == 0 or axis is not None:
             raise NotImplementedError("axis not implemented yet")
 
-        if isinstance(aggs, Iterable) and not isinstance(aggs, (str, dict)):
+        if isinstance(aggs, abc.Iterable) and not isinstance(
+            aggs, (str, dict)
+        ):
             result = DataFrame()
             # TODO : Allow simultaneous pass for multi-aggregation as
             # a future optimization
@@ -2983,11 +2999,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         elif isinstance(aggs, dict):
             cols = aggs.keys()
-            if any([callable(val) for val in aggs.values()]):
+            if any(callable(val) for val in aggs.values()):
                 raise NotImplementedError(
                     "callable parameter is not implemented yet"
                 )
-            elif all([isinstance(val, str) for val in aggs.values()]):
+            elif all(isinstance(val, str) for val in aggs.values()):
                 result = cudf.Series(index=cols)
                 for key, value in aggs.items():
                     col = df_normalized[key]
@@ -2997,13 +3013,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             f"'Series' object"
                         )
                     result[key] = getattr(col, value)()
-            elif all([isinstance(val, Iterable) for val in aggs.values()]):
+            elif all(isinstance(val, abc.Iterable) for val in aggs.values()):
                 idxs = set()
                 for val in aggs.values():
-                    if isinstance(val, Iterable):
-                        idxs.update(val)
-                    elif isinstance(val, str):
+                    if isinstance(val, str):
                         idxs.add(val)
+                    elif isinstance(val, abc.Iterable):
+                        idxs.update(val)
                 idxs = sorted(list(idxs))
                 for agg in idxs:
                     if agg is callable:
@@ -3017,7 +3033,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         len(idxs), dtype=col.dtype, masked=True
                     )
                     ans = cudf.Series(data=col_empty, index=idxs)
-                    if isinstance(aggs.get(key), Iterable):
+                    if isinstance(aggs.get(key), abc.Iterable):
                         # TODO : Allow simultaneous pass for multi-aggregation
                         # as a future optimization
                         for agg in aggs.get(key):
@@ -3193,17 +3209,42 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Difference from pandas:
         Not supporting *copy* because default and only behavior is copy=True
         """
-        # Never transpose a MultiIndex - remove the existing columns and
-        # replace with a RangeIndex. Afterward, reassign.
-        columns = self.index.copy(deep=False)
+
         index = self._data.to_pandas_index()
+        columns = self.index.copy(deep=False)
         if self._num_columns == 0 or self._num_rows == 0:
             return DataFrame(index=index, columns=columns)
+
+        # No column from index is transposed with libcudf.
+        source_columns = [*self._columns]
+        source_dtype = source_columns[0].dtype
+        if is_categorical_dtype(source_dtype):
+            if any(not is_categorical_dtype(c.dtype) for c in source_columns):
+                raise ValueError("Columns must all have the same dtype")
+            cats = list(c.categories for c in source_columns)
+            cats = cudf.core.column.concat_columns(cats).unique()
+            source_columns = [
+                col._set_categories(cats, is_unique=True).codes
+                for col in source_columns
+            ]
+
+        if any(c.dtype != source_columns[0].dtype for c in source_columns):
+            raise ValueError("Columns must all have the same dtype")
+
+        result_columns = libcudf.transpose.transpose(source_columns)
+
+        if is_categorical_dtype(source_dtype):
+            result_columns = [
+                codes._with_type_metadata(
+                    cudf.core.dtypes.CategoricalDtype(categories=cats)
+                )
+                for codes in result_columns
+            ]
+
         # Set the old column names as the new index
         result = self.__class__._from_data(
-            # Cython renames the columns to the range [0...ncols]
-            libcudf.transpose.transpose(self),
-            as_index(index),
+            {i: col for i, col in enumerate(result_columns)},
+            index=as_index(index),
         )
         # Set the old index as the new column names
         result.columns = columns
@@ -3932,19 +3973,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         partitioned: list of DataFrame
         """
-        idx = (
-            0
-            if (self._index is None or keep_index is False)
-            else self._index._num_columns
-        )
-        key_indices = [self._data.names.index(k) + idx for k in columns]
 
-        output_data, output_index, offsets = libcudf.hash.hash_partition(
-            self, key_indices, nparts, keep_index
+        key_indices = [self._column_names.index(k) for k in columns]
+        output_columns, offsets = libcudf.hash.hash_partition(
+            [*self._columns], key_indices, nparts
         )
-        outdf = self.__class__._from_data(output_data, output_index)
-        outdf._copy_type_metadata(self, include_index=keep_index)
-
+        outdf = self._from_columns_like_self(
+            [*(self._index._columns if keep_index else ()), *output_columns],
+            self._column_names,
+            self._index_names if keep_index else None,
+        )
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
@@ -5596,14 +5634,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @ioutils.doc_to_parquet()
     def to_parquet(self, path, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import parquet as pq
+        from cudf.io import parquet
 
-        return pq.to_parquet(self, path, *args, **kwargs)
+        return parquet.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import feather as feather
+        from cudf.io import feather
 
         feather.to_feather(self, path, *args, **kwargs)
 
@@ -5623,7 +5661,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         **kwargs,
     ):
         """{docstring}"""
-        from cudf.io import csv as csv
+        from cudf.io import csv
 
         return csv.to_csv(
             self,
@@ -5643,7 +5681,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @ioutils.doc_to_orc()
     def to_orc(self, fname, compression=None, *args, **kwargs):
         """{docstring}"""
-        from cudf.io import orc as orc
+        from cudf.io import orc
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
@@ -5677,22 +5715,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         assert level in (None, -1)
         repeated_index = self.index.repeat(self.shape[1])
-        name_index = cudf.DataFrame._from_data({0: self._column_names}).tile(
-            self.shape[0]
+        name_index = libcudf.reshape.tile(
+            [as_column(self._column_names)], self.shape[0]
         )
-        new_index = list(repeated_index._columns) + [name_index._columns[0]]
+        new_index_columns = [*repeated_index._columns, *name_index]
         if isinstance(self._index, MultiIndex):
             index_names = self._index.names + [None]
         else:
-            index_names = [None] * len(new_index)
+            index_names = [None] * len(new_index_columns)
         new_index = MultiIndex.from_frame(
-            DataFrame(dict(zip(range(0, len(new_index)), new_index))),
+            DataFrame._from_data(
+                dict(zip(range(0, len(new_index_columns)), new_index_columns))
+            ),
             names=index_names,
         )
 
         # Collect datatypes and cast columns as that type
         common_type = np.result_type(*self.dtypes)
-        homogenized = DataFrame(
+        homogenized = DataFrame._from_data(
             {
                 c: (
                     self._data[c].astype(common_type)
@@ -5703,9 +5743,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             }
         )
 
-        data_col = libcudf.reshape.interleave_columns(homogenized)
+        result = Series._from_data(
+            {
+                None: libcudf.reshape.interleave_columns(
+                    [*homogenized._columns]
+                )
+            },
+            index=new_index,
+        )
 
-        result = Series(data=data_col, index=new_index)
         if dropna:
             return result.dropna()
         else:
@@ -5986,9 +6032,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if (cols.get_indexer(other._data.to_pandas_index()) >= 0).all():
                 other = other.reindex(columns=cols)
 
-        return super(DataFrame, self)._append(
-            other, ignore_index, verify_integrity, sort
-        )
+        return super()._append(other, ignore_index, verify_integrity, sort)
 
     @_cudf_nvtx_annotate
     @copy_docstring(reshape.pivot)
@@ -6157,7 +6201,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: Iterable[str],
+        column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
@@ -6165,6 +6209,207 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         result._set_column_names_like(self)
         return result
+
+    @_cudf_nvtx_annotate
+    def interleave_columns(self):
+        """
+        Interleave Series columns of a table into a single column.
+
+        Converts the column major table `cols` into a row major column.
+
+        Parameters
+        ----------
+        cols : input Table containing columns to interleave.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({0: ['A1', 'A2', 'A3'], 1: ['B1', 'B2', 'B3']})
+        >>> df
+            0   1
+        0  A1  B1
+        1  A2  B2
+        2  A3  B3
+        >>> df.interleave_columns()
+        0    A1
+        1    B1
+        2    A2
+        3    B2
+        4    A3
+        5    B3
+        dtype: object
+
+        Returns
+        -------
+        The interleaved columns as a single column
+        """
+        if ("category" == self.dtypes).any():
+            raise ValueError(
+                "interleave_columns does not support 'category' dtype."
+            )
+
+        return self._constructor_sliced._from_data(
+            {None: libcudf.reshape.interleave_columns([*self._columns])}
+        )
+
+    @_cudf_nvtx_annotate
+    def eval(self, expr: str, inplace: bool = False, **kwargs):
+        """Evaluate a string describing operations on DataFrame columns.
+
+        Operates on columns only, not specific rows or elements.
+
+        Parameters
+        ----------
+        expr : str
+            The expression string to evaluate.
+        inplace : bool, default False
+            If the expression contains an assignment, whether to perform the
+            operation inplace and mutate the existing DataFrame. Otherwise,
+            a new DataFrame is returned.
+        **kwargs
+            Not supported.
+
+        Returns
+        -------
+        DataFrame, Series, or None
+            Series if a single column is returned (the typical use case),
+            DataFrame if any assignment statements are included in
+            ``expr``, or None if ``inplace=True``.
+
+        Notes
+        -----
+        Difference from pandas:
+            * Additional kwargs are not supported.
+            * Bitwise and logical operators are not dtype-dependent.
+              Specifically, `&` must be used for bitwise operators on integers,
+              not `and`, which is specifically for the logical and between
+              booleans.
+            * Only numerical types are currently supported.
+            * Operators generally will not cast automatically. Users are
+              responsible for casting columns to suitable types before
+              evaluating a function.
+            * Multiple assignments to the same name (i.e. a sequence of
+              assignment statements where later statements are conditioned upon
+              the output of earlier statements) is not supported.
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame({'A': range(1, 6), 'B': range(10, 0, -2)})
+        >>> df
+           A   B
+        0  1  10
+        1  2   8
+        2  3   6
+        3  4   4
+        4  5   2
+        >>> df.eval('A + B')
+        0    11
+        1    10
+        2     9
+        3     8
+        4     7
+        dtype: int64
+
+        Assignment is allowed though by default the original DataFrame is not
+        modified.
+
+        >>> df.eval('C = A + B')
+           A   B   C
+        0  1  10  11
+        1  2   8  10
+        2  3   6   9
+        3  4   4   8
+        4  5   2   7
+        >>> df
+           A   B
+        0  1  10
+        1  2   8
+        2  3   6
+        3  4   4
+        4  5   2
+
+        Use ``inplace=True`` to modify the original DataFrame.
+
+        >>> df.eval('C = A + B', inplace=True)
+        >>> df
+           A   B   C
+        0  1  10  11
+        1  2   8  10
+        2  3   6   9
+        3  4   4   8
+        4  5   2   7
+
+        Multiple columns can be assigned to using multi-line expressions:
+
+        >>> df.eval(
+        ...     '''
+        ... C = A + B
+        ... D = A - B
+        ... '''
+        ... )
+           A   B   C  D
+        0  1  10  11 -9
+        1  2   8  10 -6
+        2  3   6   9 -3
+        3  4   4   8  0
+        4  5   2   7  3
+        """
+        if kwargs:
+            raise ValueError(
+                "Keyword arguments other than `inplace` are not supported"
+            )
+
+        # Have to use a regex match to avoid capturing "=="
+        includes_assignment = re.search("[^=]=[^=]", expr) is not None
+
+        # Check if there were multiple statements. Filter out empty lines.
+        statements = tuple(filter(None, expr.strip().split("\n")))
+        if len(statements) > 1 and any(
+            re.search("[^=]=[^=]", st) is None for st in statements
+        ):
+            raise ValueError(
+                "Multi-line expressions are only valid if all expressions "
+                "contain an assignment."
+            )
+
+        if not includes_assignment:
+            if inplace:
+                raise ValueError(
+                    "Cannot operate inplace if there is no assignment"
+                )
+            return Series._from_data(
+                {
+                    None: libcudf.transform.compute_column(
+                        [*self._columns], self._column_names, statements[0]
+                    )
+                }
+            )
+
+        targets = []
+        exprs = []
+        for st in statements:
+            try:
+                t, e = re.split("[^=]=[^=]", st)
+            except ValueError as err:
+                if "too many values" in str(err):
+                    raise ValueError(
+                        f"Statement {st} contains too many assignments ('=')"
+                    )
+                raise
+            targets.append(t.strip())
+            exprs.append(e.strip())
+
+        cols = (
+            libcudf.transform.compute_column(
+                [*self._columns], self._column_names, e
+            )
+            for e in exprs
+        )
+        ret = self if inplace else self.copy(deep=False)
+        for name, col in zip(targets, cols):
+            ret._data[name] = col
+        if not inplace:
+            return ret
 
 
 def from_dataframe(df, allow_copy=False):

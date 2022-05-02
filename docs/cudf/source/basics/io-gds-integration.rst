@@ -10,10 +10,11 @@ GDS is also included in CUDA Toolkit 11.4 and higher.
 Use of GPUDirect Storage in cuDF is enabled by default, but can be disabled through the environment variable ``LIBCUDF_CUFILE_POLICY``.
 This variable also controls the GDS compatibility mode.
 
-There are three valid values for the environment variable:
+There are four valid values for the environment variable:
 
 - "GDS": Enable GDS use; GDS compatibility mode is *off*.
 - "ALWAYS": Enable GDS use; GDS compatibility mode is *on*.
+- "KVIKIO": Enable GDS through `KvikIO <https://github.com/rapidsai/kvikio>`_.
 - "OFF": Completely disable GDS use.
 
 If no value is set, behavior will be the same as the "GDS" option.
@@ -21,7 +22,9 @@ If no value is set, behavior will be the same as the "GDS" option.
 This environment variable also affects how cuDF treats GDS errors.
 When ``LIBCUDF_CUFILE_POLICY`` is set to "GDS" and a GDS API call fails for any reason, cuDF falls back to the internal implementation with bounce buffers.
 When ``LIBCUDF_CUFILE_POLICY`` is set to "ALWAYS" and a GDS API call fails for any reason (unlikely, given that the compatibility mode is on),
-cuDF throws an exception to propagate the error to te user.
+cuDF throws an exception to propagate the error to the user.
+When ``LIBCUDF_CUFILE_POLICY`` is set to "KVIKIO" and a KvikIO API call fails for any reason (unlikely, given that KvikIO implements its own compatibility mode) cuDF throws an exception to propagate the error to the user.
+For more information about error handling, compatibility mode, and tuning parameters in KvikIO see: https://github.com/rapidsai/kvikio
 
 Operations that support the use of GPUDirect Storage:
 

@@ -278,8 +278,8 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
                                         rmm::cuda_stream_view stream) const
 {
   if (num_strings == 0)
-    return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
-                          std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
+    return std::pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
+                     std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
 
   // copy offsets to working memory
   size_t const num_offsets = num_strings + 1;
@@ -294,8 +294,8 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
                     });
   uint32_t const bytes_count = d_strings_offsets->element(num_strings, stream);
   if (bytes_count == 0)  // if no bytes, nothing to do
-    return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
-                          std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
+    return std::pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
+                     std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
 
   cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(bytes_count), THREADS_PER_BLOCK, 1};
   size_t const threads_on_device  = grid.num_threads_per_block * grid.num_blocks;

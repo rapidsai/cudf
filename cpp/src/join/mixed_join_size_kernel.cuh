@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include <join/hash_join.cuh>
-#include <join/join_common_utils.cuh>
-#include <join/join_common_utils.hpp>
-#include <join/mixed_join_common_utils.cuh>
+#include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
+#include "mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -99,32 +98,5 @@ __launch_bounds__(block_size) __global__ void compute_mixed_join_output_size(
   if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
 }
 
-template __global__ void compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>(
-  table_device_view left_table,
-  table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
-  row_equality const equality_probe,
-  join_kind const join_type,
-  cudf::detail::mixed_multimap_type::device_view hash_table_view,
-  ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
-  std::size_t* output_size,
-  cudf::device_span<cudf::size_type> matches_per_row);
-
-template __global__ void compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>(
-  table_device_view left_table,
-  table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
-  row_equality const equality_probe,
-  join_kind const join_type,
-  cudf::detail::mixed_multimap_type::device_view hash_table_view,
-  ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
-  std::size_t* output_size,
-  cudf::device_span<cudf::size_type> matches_per_row);
-
 }  // namespace detail
-
 }  // namespace cudf

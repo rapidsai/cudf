@@ -3,7 +3,7 @@
 import itertools
 import re
 import warnings
-from collections.abc import Mapping, Sequence
+from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
 
@@ -133,7 +133,7 @@ def assert_eq(left, right, **kwargs):
         # Use the overloaded __eq__ of the operands
         if left == right:
             return True
-        elif any([np.issubdtype(type(x), np.floating) for x in (left, right)]):
+        elif any(np.issubdtype(type(x), np.floating) for x in (left, right)):
             np.testing.assert_almost_equal(left, right)
         else:
             np.testing.assert_equal(left, right)
@@ -238,9 +238,9 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
     else:
         if len(func_args_and_kwargs) == 1:
             func_args, func_kwargs = [], {}
-            if isinstance(func_args_and_kwargs[0], Sequence):
+            if isinstance(func_args_and_kwargs[0], abc.Sequence):
                 func_args = func_args_and_kwargs[0]
-            elif isinstance(func_args_and_kwargs[0], Mapping):
+            elif isinstance(func_args_and_kwargs[0], abc.Mapping):
                 func_kwargs = func_args_and_kwargs[0]
             else:
                 raise ValueError(
@@ -248,12 +248,12 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
                     "either a Sequence or a Mapping"
                 )
         elif len(func_args_and_kwargs) == 2:
-            if not isinstance(func_args_and_kwargs[0], Sequence):
+            if not isinstance(func_args_and_kwargs[0], abc.Sequence):
                 raise ValueError(
                     "Positional argument at 1st position of "
                     "func_args_and_kwargs should be a sequence."
                 )
-            if not isinstance(func_args_and_kwargs[1], Mapping):
+            if not isinstance(func_args_and_kwargs[1], abc.Mapping):
                 raise ValueError(
                     "Key-word argument at 2nd position of "
                     "func_args_and_kwargs should be a dictionary mapping."
@@ -361,6 +361,13 @@ def assert_column_memory_ne(
     except AssertionError:
         return
     raise AssertionError("lhs and rhs holds the same memory.")
+
+
+def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
+    # Wrapper around pd.Series using a float64 default dtype for empty data.
+    if dtype is None and (data is None or len(data) == 0):
+        dtype = "float64"
+    return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
 
 
 parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
