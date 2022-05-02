@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/assert.cuh>
@@ -144,8 +143,7 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  *
  * @param[in] lhs first element
  * @param[in] rhs second element
- * @param[in] nan_result ignored, allows for configurable `nan` handling in the
- * corresponding float enabled functions
+ * @param nan_result ignored for non-floating point operation
  * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
@@ -163,6 +161,7 @@ __device__ weak_ordering relational_compare(Element lhs,
  *
  * @param lhs first element
  * @param rhs second element
+ * @param nan_result specifies what value should be returned if either element is `nan`
  * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
@@ -180,6 +179,7 @@ __device__ bool equality_compare(Element lhs,
  *
  * @param lhs first element
  * @param rhs second element
+ * @param nan_result ignored for non-floating point operation
  * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
@@ -208,6 +208,7 @@ class element_equality_comparator {
    * @param lhs The column containing the first element
    * @param rhs The column containing the second element (may be the same as lhs)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+   * @param nan_result specifies what value should be returned if either element is `nan`
    */
   __host__ __device__
   element_equality_comparator(Nullate has_nulls,
@@ -321,24 +322,19 @@ class element_relational_comparator {
    * @param rhs The column containing the second element (may be the same as lhs)
    * @param has_nulls Indicates if either input column contains nulls.
    * @param null_precedence Indicates how null values are ordered with other values
-   * @param nan_result Default set to EQUIVALENT, which will produce results consitent with `nan ==
-   * nan` and `nan > non_nan`. If not equivalent, it specifies what value should be returned if
-   * either element is nan.
    */
-  __host__ __device__
-  element_relational_comparator(Nullate has_nulls,
-                                column_device_view lhs,
-                                column_device_view rhs,
-                                null_order null_precedence,
-                                weak_ordering nan_result = weak_ordering::EQUIVALENT)
-    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, null_precedence{null_precedence}, nan_result{nan_result}
+  __host__ __device__ element_relational_comparator(Nullate has_nulls,
+                                                    column_device_view lhs,
+                                                    column_device_view rhs,
+                                                    null_order null_precedence)
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, null_precedence{null_precedence}
   {
   }
 
   __host__ __device__ element_relational_comparator(Nullate has_nulls,
                                                     column_device_view lhs,
                                                     column_device_view rhs)
-    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nan_result{weak_ordering::EQUIVALENT}
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}
   {
   }
 
@@ -363,12 +359,9 @@ class element_relational_comparator {
         return null_compare(lhs_is_null, rhs_is_null, null_precedence);
       }
     }
-    return nan_result == weak_ordering::EQUIVALENT
-             ? relational_compare(lhs.element<Element>(lhs_element_index),
-                                  rhs.element<Element>(rhs_element_index))
-             : relational_compare(lhs.element<Element>(lhs_element_index),
-                                  rhs.element<Element>(rhs_element_index),
-                                  nan_result);
+
+    return relational_compare(lhs.element<Element>(lhs_element_index),
+                              rhs.element<Element>(rhs_element_index));
   }
 
   template <typename Element,
@@ -383,18 +376,15 @@ class element_relational_comparator {
   column_device_view rhs;
   Nullate nulls;
   null_order null_precedence{};
-  weak_ordering nan_result;
 };
 
 /**
- * @brief Computes whether one row is lexicographically less, greater, or equivalent than another
- * row.
+ * @brief Computes whether one row is lexicographically *less* than another row.
  *
  * Lexicographic ordering is determined by:
  * - Two rows are compared element by element.
  * - The first mismatching element defines which row is lexicographically less
  * or greater than the other.
- * - If the rows are compared without mismatched elements, the rows are equivalent
  *
  * Lexicographic ordering is exactly equivalent to doing an alphabetical sort of
  * two words, for example, `aac` would be *less* than (or precede) `abb`. The
@@ -402,11 +392,9 @@ class element_relational_comparator {
  * `aac < abb`.
  *
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
- * @tparam NanConfig default configuration nans are equal, if set to true triggers specialized IEEE
- * 754 compliant nan handling
  */
-template <typename Nullate, bool NanConfig = false>
-class row_generic_comparator {
+template <typename Nullate>
+class row_lexicographic_comparator {
  public:
   /**
    * @brief Construct a function object for performing a lexicographic
@@ -427,11 +415,11 @@ class row_generic_comparator {
    * it is nullptr, then null precedence would be `null_order::BEFORE` for all
    * columns.
    */
-  row_generic_comparator(Nullate has_nulls,
-                         table_device_view lhs,
-                         table_device_view rhs,
-                         order const* column_order         = nullptr,
-                         null_order const* null_precedence = nullptr)
+  row_lexicographic_comparator(Nullate has_nulls,
+                               table_device_view lhs,
+                               table_device_view rhs,
+                               order const* column_order         = nullptr,
+                               null_order const* null_precedence = nullptr)
     : _lhs{lhs},
       _rhs{rhs},
       _nulls{has_nulls},
@@ -439,99 +427,6 @@ class row_generic_comparator {
       _null_precedence{null_precedence}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
-  }
-
-  /**
-   * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
-   * lexicographically less, greater, or equal to the row at `rhs_index` in the `rhs` table.
-   *
-   * @param lhs_index The index of row in the `lhs` table to examine
-   * @param rhs_index The index of the row in the `rhs` table to examine
-   * @return `true` if row from the `lhs` table compares less than row in the
-   * `rhs` table
-   */
-  __device__ weak_ordering operator()(size_type lhs_index, size_type rhs_index) const noexcept
-  {
-    for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
-
-      null_order null_precedence =
-        _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
-
-      auto comparator =
-        NanConfig
-          ? element_relational_comparator{_nulls,
-                                          _lhs.column(i),
-                                          _rhs.column(i),
-                                          null_precedence,
-                                          ascending ? weak_ordering::GREATER : weak_ordering::LESS}
-          : element_relational_comparator{
-              _nulls, _lhs.column(i), _rhs.column(i), null_precedence, weak_ordering::EQUIVALENT};
-      weak_ordering state =
-        cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
-
-      if (state == weak_ordering::EQUIVALENT) { continue; }
-
-      return ascending
-               ? state
-               : (state == weak_ordering::GREATER ? weak_ordering::LESS : weak_ordering::GREATER);
-    }
-    return weak_ordering::EQUIVALENT;
-  }
-
- private:
-  table_device_view _lhs;
-  table_device_view _rhs;
-  Nullate _nulls{};
-  null_order const* _null_precedence{};
-  order const* _column_order{};
-};  // class row_generic_comparator
-
-/**
- * @brief Computes whether one row is lexicographically *less* than another row.
- *
- * Lexicographic ordering is determined by:
- * - Two rows are compared element by element.
- * - The first mismatching element defines which row is lexicographically less
- * or greater than the other.
- *
- * Lexicographic ordering is exactly equivalent to doing an alphabetical sort of
- * two words, for example, `aac` would be *less* than (or precede) `abb`. The
- * second letter in both words is the first non-equal letter, and `a < b`, thus
- * `aac < abb`.
- *
- * @tparam Nullate A cudf::nullate type describing how to check for nulls.
- * @tparam NanConfig default configuration nans are equal, if set to true triggers specialized IEEE
- * 754 compliant nan handling
- */
-template <typename Nullate, bool NanConfig = false>
-class row_lexicographic_comparator {
- public:
-  /**
-   * @brief Construct a function object for performing a lexicographic
-   * comparison between the rows of two tables.
-   *
-   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
-   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
-   *
-   * @param lhs The first table
-   * @param rhs The second table (may be the same table as `lhs`)
-   * @param has_nulls Indicates if either input table contains columns with nulls.
-   * @param column_order Optional, device array the same length as a row that
-   * indicates the desired ascending/descending order of each column in a row.
-   * If `nullptr`, it is assumed all columns are sorted in ascending order.
-   * @param null_precedence Optional, device array the same length as a row
-   * and indicates how null values compare to all other for every column. If
-   * it is nullptr, then null precedence would be `null_order::BEFORE` for all
-   * columns.
-   */
-  row_lexicographic_comparator(Nullate has_nulls,
-                               table_device_view lhs,
-                               table_device_view rhs,
-                               order const* column_order         = nullptr,
-                               null_order const* null_precedence = nullptr)
-    : comparator{has_nulls, lhs, rhs, column_order, null_precedence}
-  {
   }
 
   /**
@@ -545,79 +440,32 @@ class row_lexicographic_comparator {
    */
   __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
   {
-    return comparator(lhs_index, rhs_index) == weak_ordering::LESS;
+    for (size_type i = 0; i < _lhs.num_columns(); ++i) {
+      bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
+
+      null_order null_precedence =
+        _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
+
+      auto comparator =
+        element_relational_comparator{_nulls, _lhs.column(i), _rhs.column(i), null_precedence};
+
+      weak_ordering state =
+        cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
+
+      if (state == weak_ordering::EQUIVALENT) { continue; }
+
+      return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
+    }
+    return false;
   }
 
  private:
-  row_generic_comparator<Nullate, NanConfig> comparator;
+  table_device_view _lhs;
+  table_device_view _rhs;
+  Nullate _nulls{};
+  null_order const* _null_precedence{};
+  order const* _column_order{};
 };  // class row_lexicographic_comparator
-
-/**
- * @brief Computes whether one row is lexicographically *less than or equal to* another row.
- *
- * Lexicographic ordering is determined by:
- * - Two rows are compared element by element.
- * - The first mismatching element defines which row is lexicographically less
- * or greater than the other.
- * - If the rows are compared without mismatched elements, the rows are equivalent
- *
- * Lexicographic ordering is exactly equivalent to doing an alphabetical sort of
- * two words, for example, `aac` would be *less* than (or precede) `abb`. The
- * second letter in both words is the first non-equal letter, and `a < b`, thus
- * `aac < abb`.
- *
- * @tparam Nullate A cudf::nullate type describing how to check for nulls.
- * @tparam NanConfig default configuration nans are equal, if set to true triggers specialized IEEE
- * 754 compliant nan handling
- */
-template <typename Nullate, bool NanConfig = false>
-class row_lexicographic_or_equal_comparator {
- public:
-  /**
-   * @brief Construct a function object for performing a lexicographic
-   * comparison between the rows of two tables.
-   *
-   * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
-   * @throws cudf::logic_error if column types of `lhs` and `rhs` are not comparable.
-   *
-   * @param lhs The first table
-   * @param rhs The second table (may be the same table as `lhs`)
-   * @param has_nulls Indicates if either input table contains columns with nulls.
-   * @param column_order Optional, device array the same length as a row that
-   * indicates the desired ascending/descending order of each column in a row.
-   * If `nullptr`, it is assumed all columns are sorted in ascending order.
-   * @param null_precedence Optional, device array the same length as a row
-   * and indicates how null values compare to all other for every column. If
-   * it is nullptr, then null precedence would be `null_order::BEFORE` for all
-   * columns.
-   */
-  row_lexicographic_or_equal_comparator(Nullate has_nulls,
-                                        table_device_view lhs,
-                                        table_device_view rhs,
-                                        order const* column_order         = nullptr,
-                                        null_order const* null_precedence = nullptr)
-    : comparator{has_nulls, lhs, rhs, column_order, null_precedence}
-  {
-  }
-
-  /**
-   * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
-   * lexicographically less than or equal to the row at `rhs_index` in the `rhs` table.
-   *
-   * @param lhs_index The index of row in the `lhs` table to examine
-   * @param rhs_index The index of the row in the `rhs` table to examine
-   * @return `true` if row from the `lhs` table compares less than or equal to the row in the `rhs`
-   * table
-   */
-  __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
-  {
-    weak_ordering result = comparator(lhs_index, rhs_index);
-    return result == weak_ordering::LESS || result == weak_ordering::EQUIVALENT;
-  }
-
- private:
-  row_generic_comparator<Nullate, NanConfig> comparator;
-};  // class row_lexicographic_or_equal_comparator
 
 /**
  * @brief Computes the hash value of an element in the given column.

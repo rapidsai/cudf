@@ -38,17 +38,8 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_no_nulls)
   auto strings1 = strings_column_wrapper{"0a", "1c", "2d", "3b", "5c", "6", "7d", "9g", "0h"};
   auto strings2 = strings_column_wrapper{"0b", "0c", "2d", "3a", "4c", "6", "8e", "9f", "0h"};
 
-  std::vector<std::unique_ptr<column>> lhs_columns;
-  lhs_columns.push_back(col1.release());
-  lhs_columns.push_back(strings1.release());
-  auto lhs_col = cudf::make_structs_column(9, std::move(lhs_columns), 0, rmm::device_buffer{});
-  std::vector<std::unique_ptr<column>> rhs_columns;
-  rhs_columns.push_back(col2.release());
-  rhs_columns.push_back(strings2.release());
-  auto rhs_col = cudf::make_structs_column(9, std::move(rhs_columns), 0, rmm::device_buffer{});
-
-  auto lhs     = lhs_col->view();
-  auto rhs     = rhs_col->view();
+  auto lhs     = structs_column_wrapper{col1, strings1};
+  auto rhs     = structs_column_wrapper{col2, strings2};
   data_type dt = cudf::data_type(type_id::BOOL8);
 
   auto res_eq   = binary_operation(lhs, rhs, binary_operator::EQUAL, dt);
@@ -67,7 +58,6 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_no_nulls)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_eq, expected_eq);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_neq, expected_neq);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lt, expected_lt);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lteq, expected_lteq);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gt, expected_gt);
@@ -94,24 +84,12 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_with_nulls)
                             "2d", "3a", "4c", "6",  "8e", "9f", "0h", "1f", "2g", "3h"},
                            {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1}};
 
-  std::vector<std::unique_ptr<column>> lhs_columns;
-  lhs_columns.push_back(col1.release());
-  lhs_columns.push_back(strings1.release());
-  auto lhs_col = cudf::make_structs_column(21, std::move(lhs_columns), 0, rmm::device_buffer{});
-  auto const lhs_nulls = thrust::host_vector<bool>(
-    std::vector<bool>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0});
-  lhs_col->set_null_mask(cudf::test::detail::make_null_mask(lhs_nulls.begin(), lhs_nulls.end()));
-
-  std::vector<std::unique_ptr<column>> rhs_columns;
-  rhs_columns.push_back(col2.release());
-  rhs_columns.push_back(strings2.release());
-  auto rhs_col = cudf::make_structs_column(21, std::move(rhs_columns), 0, rmm::device_buffer{});
-  auto const rhs_nulls = thrust::host_vector<bool>(
-    std::vector<bool>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0});
-  rhs_col->set_null_mask(cudf::test::detail::make_null_mask(rhs_nulls.begin(), rhs_nulls.end()));
-
-  auto lhs     = lhs_col->view();
-  auto rhs     = rhs_col->view();
+  auto lhs = structs_column_wrapper{
+    {col1, strings1},
+    std::vector<bool>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}};
+  auto rhs = structs_column_wrapper{
+    {col2, strings2},
+    std::vector<bool>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}};
   data_type dt = cudf::data_type(cudf::type_id::BOOL8);
 
   auto res_eq   = binary_operation(lhs, rhs, binary_operator::EQUAL, dt);
@@ -142,7 +120,6 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_with_nulls)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_eq, expected_eq);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_neq, expected_neq);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lt, expected_lt);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lteq, expected_lteq);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gt, expected_gt);
@@ -205,13 +182,10 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_nested_structs)
                                    {1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0}};
 
   auto struct_col1 = structs_column_wrapper{col3, s1};
-  auto nested_col1 = structs_column_wrapper{col1, struct_col1}.release();
   auto struct_col2 = structs_column_wrapper{col4, s2};
-  auto nested_col2 = structs_column_wrapper{col2, struct_col2}.release();
-
-  auto lhs     = nested_col1->view();
-  auto rhs     = nested_col2->view();
-  data_type dt = cudf::data_type(cudf::type_id::BOOL8);
+  auto lhs         = structs_column_wrapper{col1, struct_col1};
+  auto rhs         = structs_column_wrapper{col2, struct_col2};
+  data_type dt     = cudf::data_type(cudf::type_id::BOOL8);
 
   auto res_eq   = binary_operation(lhs, rhs, binary_operator::EQUAL, dt);
   auto res_neq  = binary_operation(lhs, rhs, binary_operator::NOT_EQUAL, dt);
@@ -235,7 +209,6 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_nested_structs)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_eq, expected_eq);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_neq, expected_neq);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lt, expected_lt);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lteq, expected_lteq);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gt, expected_gt);
@@ -255,8 +228,7 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_scalars)
     {"6S", "5G", "4a", "5G", "", "5Z", "5e", "9a", "5G", "5", "5Gs", "5G", "", "5G2", "5G"},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}};
   auto struct_col1 = structs_column_wrapper{col2, s1};
-  auto nested_col1 = structs_column_wrapper{col1, struct_col1}.release();
-  auto col_val     = nested_col1->view();
+  auto col_val     = structs_column_wrapper{col1, struct_col1};
 
   cudf::test::fixed_width_column_wrapper<T> col3{68};
   cudf::test::fixed_width_column_wrapper<T> col4{{18}, {0}};
@@ -284,7 +256,6 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_scalars)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_eq, expected_eq);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_neq, expected_neq);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lt, expected_lt);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_lteq, expected_lteq);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_gt, expected_gt);

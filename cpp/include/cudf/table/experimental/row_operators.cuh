@@ -67,16 +67,17 @@ struct dispatch_void_if_nested {
 };
 
 namespace row {
-
 namespace lexicographic {
 
 /**
- * @brief Computes whether one row is lexicographically *less* than another row.
+ * @brief Computes the lexicographic comparison between 2 rows.
  *
  * Lexicographic ordering is determined by:
  * - Two rows are compared element by element.
  * - The first mismatching element defines which row is lexicographically less
  * or greater than the other.
+ * - If the rows are compared without mismatched elements, the rows are equivalent
+ *
  *
  * Lexicographic ordering is exactly equivalent to doing an alphabetical sort of
  * two words, for example, `aac` would be *less* than (or precede) `abb`. The
@@ -84,12 +85,11 @@ namespace lexicographic {
  * `aac < abb`.
  *
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ * @tparam NanConfig default configuration nans are equal, if set to true triggers specialized IEEE
+ * 754 compliant nan handling
  */
 template <typename Nullate, bool NanConfig = false>
 class device_row_comparator {
-  // private:
-  // friend class device_row_comparator;
-  // friend class template <Nullate> device_row_comparator;
  public:
   /**
    * @brief Construct a function object for performing a lexicographic
@@ -121,7 +121,6 @@ class device_row_comparator {
       _column_order{column_order},
       _null_precedence{null_precedence}
   {
-    // CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
 
   /**
@@ -141,6 +140,7 @@ class device_row_comparator {
      * @param null_precedence Indicates how null values are ordered with other values
      * @param depth The depth of the column if part of a nested column @see
      * preprocessed_table::depths
+     * @param nan_result Specifies what value should be returned if either element is `nan`
      */
     __device__ element_comparator(Nullate has_nulls,
                                   column_device_view lhs,
@@ -180,13 +180,11 @@ class device_row_comparator {
         }
       }
 
-      weak_ordering res = NanConfig
-                            // weak_ordering res = (_nan_result != weak_ordering::EQUIVALENT)
-                            ? relational_compare(_lhs.element<Element>(lhs_element_index),
-                                                 _rhs.element<Element>(rhs_element_index),
-                                                 _nan_result)
-                            : relational_compare(_lhs.element<Element>(lhs_element_index),
-                                                 _rhs.element<Element>(rhs_element_index));
+      weak_ordering res = NanConfig ? relational_compare(_lhs.element<Element>(lhs_element_index),
+                                                         _rhs.element<Element>(rhs_element_index),
+                                                         _nan_result)
+                                    : relational_compare(_lhs.element<Element>(lhs_element_index),
+                                                         _rhs.element<Element>(rhs_element_index));
       return cuda::std::make_pair(res, std::numeric_limits<int>::max());
     }
 
@@ -301,25 +299,16 @@ class device_row_comparator {
 };  // class device_row_comparator
 
 /**
- * @brief Computes whether one row is lexicographically *less* than another row.
- *
- * Lexicographic ordering is determined by:
- * - Two rows are compared element by element.
- * - The first mismatching element defines which row is lexicographically less
- * or greater than the other.
- *
- * Lexicographic ordering is exactly equivalent to doing an alphabetical sort of
- * two words, for example, `aac` would be *less* than (or precede) `abb`. The
- * second letter in both words is the first non-equal letter, and `a < b`, thus
- * `aac < abb`.
+ * @brief Wraps and interprets the result of device_row_comparator, true if the result is
+ * weak_ordering::LESS meaning one row is lexicographically *less* than another row.
  *
  * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ * @tparam NanConfig default configuration nans are equal, if set to true triggers specialized IEEE
+ * 754 compliant nan handling
  */
 template <typename Nullate, bool NanConfig = false>
 class device_less_comparator {
   friend class self_comparator;
-
- public:
   /**
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
@@ -358,8 +347,7 @@ class device_less_comparator {
    */
   __device__ bool operator()(size_type const lhs_index, size_type const rhs_index) const noexcept
   {
-    auto const result = comparator(lhs_index, rhs_index);
-    return result == weak_ordering::LESS;
+    return comparator(lhs_index, rhs_index) == weak_ordering::LESS;
   }
 
  private:
@@ -808,7 +796,6 @@ class self_comparator {
 };
 
 }  // namespace equality
-
 }  // namespace row
 }  // namespace experimental
 }  // namespace cudf
