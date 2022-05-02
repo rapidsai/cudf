@@ -656,11 +656,13 @@ class ewma_aggregation final : public scan_aggregation {
     return std::make_unique<ewma_aggregation>(*this);
   }
 
+
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
     return collector.visit(col_type, *this);
   }
+
 
   bool is_equal(aggregation const& _other) const override
   {
