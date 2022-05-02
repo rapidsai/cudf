@@ -443,21 +443,18 @@ std::vector<char> get_uncompressed_data(host_span<char const> const data,
 class HostDecompressor_ZLIB : public HostDecompressor {
  public:
   HostDecompressor_ZLIB(bool gz_hdr_) : gz_hdr(gz_hdr_) {}
-  size_t Decompress(uint8_t* dstBytes,
-                    size_t dstLen,
-                    const uint8_t* srcBytes,
-                    size_t srcLen) override
+  size_t decompress(host_span<uint8_t const> src, host_span<uint8_t> dst) override
   {
     if (gz_hdr) {
       gz_archive_s gz;
-      if (!ParseGZArchive(&gz, srcBytes, srcLen)) { return 0; }
-      srcBytes = gz.comp_data;
-      srcLen   = gz.comp_len;
+      if (!ParseGZArchive(&gz, src.data(), src.size())) { return 0; }
+      src = {gz.comp_data, gz.comp_len};
     }
-    if (0 == cpu_inflate(dstBytes, &dstLen, srcBytes, srcLen)) {
-      return dstLen;
+    size_t uncomp_size = dst.size();
+    if (0 == cpu_inflate(dst.data(), &uncomp_size, src.data(), src.size())) {
+      return uncomp_size;
     } else {
-      return 0;
+      return 0;  // Throw?
     }
   }
 
@@ -471,16 +468,12 @@ class HostDecompressor_ZLIB : public HostDecompressor {
 class HostDecompressor_SNAPPY : public HostDecompressor {
  public:
   HostDecompressor_SNAPPY() {}
-  size_t Decompress(uint8_t* dstBytes,
-                    size_t dstLen,
-                    const uint8_t* srcBytes,
-                    size_t srcLen) override
+  size_t decompress(host_span<uint8_t const> src, host_span<uint8_t> dst) override
   {
+    if (dst.empty() || src.size() < 1) { return 0; }
     uint32_t uncompressed_size, bytes_left, dst_pos;
-    const uint8_t* cur = srcBytes;
-    const uint8_t* end = srcBytes + srcLen;
-
-    if (!dstBytes || srcLen < 1) { return 0; }
+    auto cur       = src.begin();
+    auto const end = src.end();
     // Read uncompressed length (varint)
     {
       uint32_t l        = 0, c;
@@ -493,7 +486,7 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
         uncompressed_size |= lo7 << l;
         l += 7;
       } while (c > 0x7f && cur < end);
-      if (!uncompressed_size || uncompressed_size > dstLen || cur >= end) {
+      if (!uncompressed_size || uncompressed_size > dst.size() || cur >= end) {
         // Destination buffer too small or zero size
         return 0;
       }
@@ -528,7 +521,7 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
         if (offset - 1u >= dst_pos || blen > bytes_left) break;
         bytes_left -= blen;
         do {
-          dstBytes[dst_pos] = dstBytes[dst_pos - offset];
+          dst[dst_pos] = dst[dst_pos - offset];
           dst_pos++;
         } while (--blen);
       } else {
@@ -549,7 +542,7 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
         }
         blen++;
         if (cur + blen > end || blen > bytes_left) break;
-        memcpy(dstBytes + dst_pos, cur, blen);
+        memcpy(dst.data() + dst_pos, cur, blen);
         cur += blen;
         dst_pos += blen;
         bytes_left -= blen;

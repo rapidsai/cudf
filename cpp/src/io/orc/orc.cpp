@@ -437,7 +437,7 @@ const uint8_t* OrcDecompressor::Decompress(const uint8_t* srcBytes, size_t srcLe
     } else {
       // Compressed block
       dst_length +=
-        m_decompressor->Decompress(dst + dst_length, m_blockSize, srcBytes + i, block_len);
+        m_decompressor->decompress({srcBytes + i, block_len}, {dst + dst_length, m_blockSize});
     }
     i += block_len;
   }

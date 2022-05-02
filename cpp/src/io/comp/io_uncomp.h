@@ -47,10 +47,7 @@ std::vector<char> get_uncompressed_data(host_span<char const> data, compression_
 
 class HostDecompressor {
  public:
-  virtual size_t Decompress(uint8_t* dstBytes,
-                            size_t dstLen,
-                            uint8_t const* srcBytes,
-                            size_t srcLen) = 0;
+  virtual size_t decompress(host_span<uint8_t const> src, host_span<uint8_t> dst) = 0;
   virtual ~HostDecompressor() {}
 
  public:
