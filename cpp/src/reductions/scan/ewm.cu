@@ -121,9 +121,9 @@ class ewma_noadjust_functor : public ewma_functor_base<T> {
 
   __device__ pair_type<T> operator()(tupletype const data)
   {
-    T const beta    = this->beta;
-    size_type index = thrust::get<1>(data);
-    T const input   = thrust::get<0>(data);
+    T const beta          = this->beta;
+    size_type const index = thrust::get<1>(data);
+    T const input         = thrust::get<0>(data);
 
     if constexpr (!nulls) {
       if (index == 0) {
@@ -132,8 +132,8 @@ class ewma_noadjust_functor : public ewma_functor_base<T> {
         return {beta, (1.0 - beta) * input};
       }
     } else {
-      bool is_valid     = thrust::get<2>(data);
-      size_type nullcnt = thrust::get<3>(data);
+      bool const is_valid     = thrust::get<2>(data);
+      size_type const nullcnt = thrust::get<3>(data);
 
       if (index == 0) {
         return {beta, input};
@@ -143,7 +143,7 @@ class ewma_noadjust_functor : public ewma_functor_base<T> {
           return {beta, (1.0 - beta) * input};
         } else if (is_valid and nullcnt != 0) {
           // one or more preceeding values is null, adjust by how many
-          T factor = (1.0 - beta) + pow(beta, nullcnt + 1);
+          T const factor = (1.0 - beta) + pow(beta, nullcnt + 1);
           return {(beta * (pow(beta, nullcnt)) / factor), ((1.0 - beta) * input) / factor};
         } else {
           // value is not valid
