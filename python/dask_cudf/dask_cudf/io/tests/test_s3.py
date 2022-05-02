@@ -1,3 +1,5 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import os
 import shlex
 import subprocess
@@ -42,6 +44,7 @@ def s3_base(worker_id):
         # system aws credentials, https://github.com/spulec/moto/issues/1793
         os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
         os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
+        os.environ.setdefault("S3FS_LOGGING_LEVEL", "DEBUG")
 
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost

@@ -46,7 +46,7 @@ requirements:
     - cupy >=9.5.0,<11.0.0a0
     - numba >=0.54
     - numpy
-    - s3fs
+    - s3fs >=2022.3.0
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }} *cuda
     - libcudf {{ version }}
     - fastavro >=0.22.0
