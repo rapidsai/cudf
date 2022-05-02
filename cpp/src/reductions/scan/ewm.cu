@@ -37,8 +37,9 @@ using pair_type = thrust::pair<T, T>;
 
 /**
  * @brief functor to be summed over in a prefix sum such that
- * the recurrence in question is solved.
- * see https://www.cs.cmu.edu/~guyb/papers/Ble93.pdf S. 1.4
+ * the recurrence in question is solved. See
+ * G. E. Blelloch. Prefix sums and their applications. Technical Report
+ * CMU-CS-90-190, Nov. 1990. S. 1.4
  * for details
  */
 template <typename T>
@@ -66,7 +67,7 @@ class ewma_adjust_functor : public ewma_functor_base<T> {
  public:
   using tupletype = std::conditional_t<nulls, thrust::tuple<bool, int, T>, T>;
 
-  __device__ pair_type<T> operator()(tupletype data)
+  __device__ pair_type<T> operator()(tupletype const data)
   {
     if constexpr (nulls) {
       bool const valid = thrust::get<0>(data);
@@ -118,7 +119,7 @@ class ewma_noadjust_functor : public ewma_functor_base<T> {
   using tupletype = std::
     conditional_t<nulls, thrust::tuple<T, size_type, bool, size_type>, thrust::tuple<T, size_type>>;
 
-  __device__ pair_type<T> operator()(tupletype data)
+  __device__ pair_type<T> operator()(tupletype const data)
   {
     T const beta    = this->beta;
     size_type index = thrust::get<1>(data);
