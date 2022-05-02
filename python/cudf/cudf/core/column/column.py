@@ -1040,7 +1040,12 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         header: Dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
-        header["dtype"] = self.dtype.str
+        if hasattr(self.dtype, "str"):
+            # Notice, "dtype" must be availabe for deserialization thus
+            # if the dtype doesn't support `str` or if it is insufficient
+            # for deserialization, please overwrite the serialize and/or
+            # deserialize methods.
+            header["dtype"] = self.dtype.str
 
         if self.data is not None:
             data_header, data_frames = self.data.serialize()
@@ -1058,12 +1063,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
         dtype = header["dtype"]
-        data = Buffer.deserialize(header["data"], [frames[0]])
+        data = None
+        offset = 0
+        if "data" in header:
+            data = Buffer.deserialize(header["data"], [frames[offset]])
+            offset += 1
         mask = None
         if "mask" in header:
-            mask = Buffer.deserialize(header["mask"], [frames[1]])
+            mask = Buffer.deserialize(header["mask"], [frames[offset]])
         return build_column(
-            data=data, dtype=dtype, mask=mask, size=header.get("size", None)
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=header.get("size", None),
+            children=header.get("children", ()),
         )
 
     def unary_operator(self, unaryop: str):
