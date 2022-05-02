@@ -174,7 +174,7 @@ class StructColumn(ColumnBase):
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> StructColumn:
-        header["dtype"] = cudf.StructDtype.deserialize(*header["dtype"])
+        header["dtype"] = cls.dtype.__class__.deserialize(*header["dtype"])
         sub_frame_offset = header["sub-frame-offset"]
         children = []
         for h, b in zip(header["sub-headers"], frames[sub_frame_offset:]):
