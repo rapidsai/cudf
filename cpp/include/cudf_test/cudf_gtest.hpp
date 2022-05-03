@@ -115,7 +115,8 @@ struct TypeList<Types<TYPES...>> {
   } while (0)
 
 #define CUDF_EXPECT_THROW_MESSAGE(...)                                     \
-  GET_CUDF_EXPECT_THROW_MESSAGE_MACRO(__VA_ARGS__, CUDF_ETM_3, CUDF_ETM_2) \
+  GET_CUDF_EXPECT_THROW_MESSAGE_MACRO(                                     \
+    __VA_ARGS__, CUDF_EXPECT_THROW_MESSAGE_3, CUDF_EXPECT_THROW_MESSAGE_2) \
   (__VA_ARGS__)
 #define GET_CUDF_EXPECT_THROW_MESSAGE_MACRO(_1, _2, _3, NAME, ...) NAME
 #define CUDF_EXPECT_THROW_MESSAGE_3(x, exception, msg) \
