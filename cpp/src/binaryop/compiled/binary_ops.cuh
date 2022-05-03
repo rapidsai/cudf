@@ -19,8 +19,15 @@
 #include "binary_ops.hpp"
 #include "operation.cuh"
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_view.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/table/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -271,33 +278,83 @@ void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
   const int grid_size = util::div_rounding_up_safe(size, 2 * block_size);
   for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
 }
-
+namespace detail {
+template <class T, class... Ts>
+inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value;
+}
 template <class BinaryOperator>
-void apply_binary_op(mutable_column_device_view& outd,
-                     column_device_view const& lhsd,
-                     column_device_view const& rhsd,
+void apply_binary_op(mutable_column_view& out,
+                     column_view const& lhs,
+                     column_view const& rhs,
                      bool is_lhs_scalar,
                      bool is_rhs_scalar,
                      rmm::cuda_stream_view stream)
 {
-  auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
+  if (is_struct(lhs.type()) && is_struct(rhs.type())) {
+    auto op_order        = detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
+                             ? order::DESCENDING
+                             : order::ASCENDING;
+    auto accept_equality = detail::is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>;
+    auto const nullability =
+      structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
+        ? structs::detail::column_nullability::FORCE
+        : structs::detail::column_nullability::MATCH_INCOMING;
+    auto const lhs_flattened =
+      structs::detail::flatten_nested_columns(table_view{{lhs}}, {}, {}, nullability);
+    auto const rhs_flattened =
+      structs::detail::flatten_nested_columns(table_view{{rhs}}, {}, {}, nullability);
 
-  // Create binop functor instance
-  if (common_dtype) {
-    // Execute it on every element
-    for_each(stream,
-             outd.size(),
-             binary_op_device_dispatcher<BinaryOperator>{
-               *common_dtype, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+    auto lhsd = table_device_view::create(lhs_flattened);
+    auto rhsd = table_device_view::create(rhs_flattened);
+    auto compare_orders =
+      cudf::detail::make_device_uvector_async(std::vector<order>(lhs.size(), op_order), stream);
+    auto comparator =
+      experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC, true>{
+        nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
+        *lhsd,
+        *rhsd,
+        std::nullopt,
+        device_span<order const>{compare_orders},
+        std::nullopt};
+
+    auto outd = column_device_view::create(out, stream);
+    auto optional_iter =
+      cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      out.begin<bool>(),
+      out.end<bool>(),
+      [optional_iter, is_lhs_scalar, is_rhs_scalar, accept_equality, comparator] __device__(
+        size_type i) {
+        auto lhs = is_lhs_scalar ? 0 : i;
+        auto rhs = is_rhs_scalar ? 0 : i;
+        return optional_iter[i].has_value() &&
+               (accept_equality ? comparator(lhs, rhs) != weak_ordering::GREATER
+                                : comparator(lhs, rhs) == weak_ordering::LESS);
+      });
+
   } else {
-    // Execute it on every element
-    for_each(stream,
-             outd.size(),
-             binary_op_double_device_dispatcher<BinaryOperator>{
-               outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+    auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
+
+    auto lhsd = column_device_view::create(lhs, stream);
+    auto rhsd = column_device_view::create(rhs, stream);
+    auto outd = mutable_column_device_view::create(out, stream);
+    // Create binop functor instance
+    if (common_dtype) {
+      // Execute it on every element
+      for_each(stream,
+               out.size(),
+               binary_op_device_dispatcher<BinaryOperator>{
+                 *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+    } else {
+      // Execute it on every element
+      for_each(stream,
+               out.size(),
+               binary_op_double_device_dispatcher<BinaryOperator>{
+                 *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+    }
   }
 }
-
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf
