@@ -311,8 +311,6 @@ void operator_dispatcher(mutable_column_view& out,
                          binary_operator op,
                          rmm::cuda_stream_view stream)
 {
-  if (!is_supported_operation(out.type(), lhs, rhs, op))
-    CUDF_FAIL("Unsupported operator for these types");
   // clang-format off
 switch (op) {
 case binary_operator::ADD:                  apply_binary_op<ops::Add>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
