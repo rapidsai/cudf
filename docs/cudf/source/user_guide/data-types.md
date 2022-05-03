@@ -28,7 +28,7 @@ All data types in cuDF are [nullable](/user_guide/missing-data).
 
 We use NumPy data types for integer, floating, datetime, timedelta,
 and string data types.  Thus, just like in NumPy,
-`np.dtype("float32")`, `np.float32`, or `"float32"` are all acceptable
+`np.dtype("float32")`, `np.float32`, and `"float32"` are all acceptable
 ways to specify the `float32` data type:
 
 ```python
