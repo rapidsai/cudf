@@ -2107,7 +2107,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def _reindex(
-        self, columns, dtypes=None, deep=False, index=None, inplace=False
+        self,
+        columns,
+        dtypes=None,
+        deep=False,
+        index=None,
+        inplace=False,
+        fill_value=cudf.NA,
     ):
         """
         Helper for `.reindex`
@@ -2180,11 +2186,22 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             index=index,
         )
 
+        result.fillna(fill_value, inplace=True)
         return self._mimic_inplace(result, inplace=inplace)
 
     @_cudf_nvtx_annotate
     def reindex(
-        self, labels=None, axis=None, index=None, columns=None, copy=True
+        self,
+        labels=None,
+        index=None,
+        columns=None,
+        axis=None,
+        method=None,
+        copy=True,
+        level=None,
+        fill_value=cudf.NA,
+        limit=None,
+        tolerance=None,
     ):
         """
         Return a new DataFrame whose axes conform to a new index
@@ -2196,12 +2213,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Parameters
         ----------
         labels : Index, Series-convertible, optional, default None
-        axis : {0 or 'index', 1 or 'columns'}, optional, default 0
         index : Index, Series-convertible, optional, default None
             Shorthand for ``df.reindex(labels=index_labels, axis=0)``
         columns : array-like, optional, default None
             Shorthand for ``df.reindex(labels=column_names, axis=1)``
+        axis : {0 or 'index', 1 or 'columns'}, optional, default 0
+        method : Not supported
         copy : boolean, optional, default True
+        level : Not supported
+        fill_value : Value to use for missing values.
+            Defaults to ``NA``, but can be any “compatible” value.
+        limit : Not supported
+        tolerance : Not supported
 
         Returns
         -------
@@ -2259,6 +2282,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             deep=copy,
             index=index,
             inplace=False,
+            fill_value=fill_value,
         )
 
     @_cudf_nvtx_annotate
