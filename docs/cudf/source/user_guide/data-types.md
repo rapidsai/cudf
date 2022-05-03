@@ -130,6 +130,8 @@ dtype: object
 0 {'a': 1, 'b': 2}
 1 {'a': 3, 'b': 4}
 dtype: struct
+>>> gsr.dtype
+StructDtype({'a': dtype('int64'), 'b': dtype('int64')})
 ```
 
 Or by reading them from disk, using a [file format that supports
