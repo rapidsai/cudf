@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <stdexcept>
 #include <tests/groupby/groupby_test_util.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -55,6 +56,7 @@ TYPED_TEST(groupby_count_scan_test, basic)
 
   auto agg1 = cudf::make_count_aggregation<groupby_scan_aggregation>();
   CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg1)),
+                            std::invalid_argument,
                             "Unsupported groupby scan aggregation");
 
   auto agg2 = cudf::make_count_aggregation<groupby_scan_aggregation>(null_policy::INCLUDE);
@@ -173,13 +175,11 @@ TYPED_TEST(FixedPointTestAllReps, GroupByCountScan)
   using result_wrapper = fixed_width_column_wrapper<R, int32_t>;
 
   auto const scale = scale_type{-1};
-  // clang-format off
-  auto const keys = key_wrapper{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  auto const vals = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+  auto const keys  = key_wrapper{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
 
   auto const expect_keys = key_wrapper{1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
   auto const expect_vals = result_wrapper{0, 1, 2, 0, 1, 2, 3, 0, 1, 2};
-  // clang-format on
 
   CUDF_EXPECT_THROW_MESSAGE(
     test_single_scan(keys,
@@ -187,6 +187,7 @@ TYPED_TEST(FixedPointTestAllReps, GroupByCountScan)
                      expect_keys,
                      expect_vals,
                      cudf::make_count_aggregation<groupby_scan_aggregation>()),
+    std::invalid_argument,
     "Unsupported groupby scan aggregation");
 
   auto agg2 = cudf::make_count_aggregation<groupby_scan_aggregation>(null_policy::INCLUDE);
@@ -211,6 +212,7 @@ TEST_F(groupby_dictionary_count_scan_test, basic)
 
   auto agg1 = cudf::make_count_aggregation<groupby_scan_aggregation>();
   CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg1)),
+                            std::invalid_argument,
                             "Unsupported groupby scan aggregation");
   test_single_scan(keys,
                    vals,

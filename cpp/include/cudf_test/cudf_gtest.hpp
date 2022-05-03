@@ -114,8 +114,13 @@ struct TypeList<Types<TYPES...>> {
       exception);                                                   \
   } while (0)
 
-#define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
-  EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
+#define CUDF_EXPECT_THROW_MESSAGE(...)                                     \
+  GET_CUDF_EXPECT_THROW_MESSAGE_MACRO(__VA_ARGS__, CUDF_ETM_3, CUDF_ETM_2) \
+  (__VA_ARGS__)
+#define GET_CUDF_EXPECT_THROW_MESSAGE_MACRO(_1, _2, _3, NAME, ...) NAME
+#define CUDF_EXPECT_THROW_MESSAGE_3(x, exception, msg) \
+  EXPECT_THROW_MESSAGE(x, exception, "cuDF failure at:", msg)
+#define CUDF_EXPECT_THROW_MESSAGE_2(x, msg) CUDF_EXPECT_THROW_MESSAGE_3(x, cudf::logic_error, msg)
 
 #define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
   EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)

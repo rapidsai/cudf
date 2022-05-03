@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
+#include <stdexcept>
 
 namespace cudf {
 namespace groupby {
@@ -49,7 +50,7 @@ struct scan_result_functor final : store_result_functor {
   template <aggregation::Kind k>
   void operator()(aggregation const& agg)
   {
-    CUDF_FAIL("Unsupported groupby scan aggregation");
+    CUDF_FAIL("Unsupported groupby scan aggregation", std::invalid_argument);
   }
 
  private:
