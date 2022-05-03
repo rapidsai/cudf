@@ -48,7 +48,7 @@ Here are some guidelines to help the review process go smoothly.
    merging the target branch into the branch used for making the pull request.
 
 8. Pull requests that modify cpp source that are marked ready for review 
-   will automatically be assign two cudf-cpp-codeowners reviewers.
+   will automatically be assigned two cudf-cpp-codeowners reviewers.
    Ensure at least two approvals from cudf-cpp-codeowners before merging.
 
 Many thanks in advance for your cooperation!
