@@ -249,23 +249,17 @@ int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data,
  * @param[in] comp_data Raw compressed data
  * @param[in] comp_len Compressed data size
  */
-int cpu_inflate_vector(std::vector<uint8_t>& dst, const uint8_t* comp_data, size_t comp_len)
+void cpu_inflate_vector(std::vector<uint8_t>& dst, const uint8_t* comp_data, size_t comp_len)
 {
-  int zerr;
-  z_stream strm;
-
-  memset(&strm, 0, sizeof(strm));
+  z_stream strm{};
   strm.next_in   = const_cast<Bytef*>(reinterpret_cast<Bytef const*>(comp_data));
   strm.avail_in  = comp_len;
   strm.total_in  = 0;
   strm.next_out  = dst.data();
   strm.avail_out = dst.size();
   strm.total_out = 0;
-  zerr           = inflateInit2(&strm, -15);  // -15 for raw data without GZIP headers
-  if (zerr != 0) {
-    dst.resize(0);
-    return zerr;
-  }
+  auto zerr      = inflateInit2(&strm, -15);  // -15 for raw data without GZIP headers
+  CUDF_EXPECTS(zerr == 0, "Error in DEFLATE stream");
   do {
     if (strm.avail_out == 0) {
       dst.resize(strm.total_out + (1 << 30));
@@ -277,7 +271,7 @@ int cpu_inflate_vector(std::vector<uint8_t>& dst, const uint8_t* comp_data, size
            strm.total_out == dst.size());
   dst.resize(strm.total_out);
   inflateEnd(&strm);
-  return (zerr == Z_STREAM_END) ? Z_OK : zerr;
+  CUDF_EXPECTS(zerr == Z_STREAM_END, "Error in DEFLATE stream");
 }
 
 std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t const> src)
@@ -352,13 +346,10 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
         }
       }
       if (compression != compression_type::AUTO) break;  // Fall through for INFER
-    default:
-      // Unsupported format
-      break;
+    default: CUDF_FAIL("Unsupported compressed stream type");
   }
 
-  CUDF_EXPECTS(comp_data != nullptr, "Unsupported compressed stream type");
-  CUDF_EXPECTS(comp_len > 0, "Unsupported compressed stream type");
+  CUDF_EXPECTS(comp_data != nullptr and comp_len > 0, "Unsupported compressed stream type");
 
   if (uncomp_len <= 0) {
     uncomp_len = comp_len * 4 + 4096;  // In case uncompressed size isn't known in advance, assume
@@ -368,8 +359,7 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
   if (compression == compression_type::GZIP || compression == compression_type::ZIP) {
     // INFLATE
     std::vector<uint8_t> dst(uncomp_len);
-    CUDF_EXPECTS(cpu_inflate_vector(dst, comp_data, comp_len) == 0,
-                 "Decompression: error in stream");
+    cpu_inflate_vector(dst, comp_data, comp_len);
     return dst;
   }
   if (compression == compression_type::BZIP2) {
@@ -405,11 +395,9 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
 size_t decompress_zlib(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
   size_t uncomp_size = dst.size();
-  if (0 == cpu_inflate(dst.data(), &uncomp_size, src.data(), src.size())) {
-    return uncomp_size;
-  } else {
-    return 0;  // Throw?
-  }
+  CUDF_EXPECTS(0 == cpu_inflate(dst.data(), &uncomp_size, src.data(), src.size()),
+               "ZLIB decompression failed");
+  return uncomp_size;
 }
 
 /**
@@ -418,7 +406,8 @@ size_t decompress_zlib(host_span<uint8_t const> src, host_span<uint8_t> dst)
 size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
   gz_archive_s gz;
-  if (!ParseGZArchive(&gz, src.data(), src.size())) { return 0; }
+  auto const parse_succeeded = ParseGZArchive(&gz, src.data(), src.size());
+  CUDF_EXPECTS(parse_succeeded, "Failed to parse GZIP header");
   return decompress_zlib({gz.comp_data, gz.comp_len}, dst);
 }
 
@@ -427,7 +416,7 @@ size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
  */
 size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
-  if (dst.empty() || src.size() < 1) { return 0; }
+  CUDF_EXPECTS(not dst.empty() and src.size() >= 1, "invalid Snappy decompress inputs");
   uint32_t uncompressed_size, bytes_left, dst_pos;
   auto cur       = src.begin();
   auto const end = src.end();
@@ -443,10 +432,8 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
       uncompressed_size |= lo7 << l;
       l += 7;
     } while (c > 0x7f && cur < end);
-    if (!uncompressed_size || uncompressed_size > dst.size() || cur >= end) {
-      // Destination buffer too small or zero size
-      return 0;
-    }
+    CUDF_EXPECTS(uncompressed_size != 0 and uncompressed_size <= dst.size() and cur < end,
+                 "Destination buffer too small");
   }
   // Decode lz77
   dst_pos    = 0;
@@ -505,7 +492,8 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
       bytes_left -= blen;
     }
   } while (bytes_left && cur < end);
-  return (bytes_left) ? 0 : uncompressed_size;
+  CUDF_EXPECTS(bytes_left == 0, "Snappy Decompression failed");
+  return uncompressed_size;
 }
 
 size_t decompress(compression_type compression,
