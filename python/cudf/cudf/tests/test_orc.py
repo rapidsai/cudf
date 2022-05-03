@@ -748,6 +748,9 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
     pdf1 = gdf.to_pandas()
     writer.write_table(gdf)
+    # gdf is specifically being reused here to ensure the data is destroyed
+    # before the next write_table call to ensure the data is persisted inside
+    # write and no pointers are saved into the original table
     gdf = cudf.DataFrame(
         {
             "col_"
