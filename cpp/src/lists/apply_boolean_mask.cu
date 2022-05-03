@@ -89,13 +89,13 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
   auto constexpr offset_data_type = data_type{type_id::INT32};
 
   auto filtered_child = [&] {
-    std::unique_ptr<cudf::table> tbl =
+    auto filtered =
       cudf::detail::apply_boolean_mask(cudf::table_view{{input.get_sliced_child(stream)}},
                                        boolean_mask.get_sliced_child(stream),
                                        stream,
-                                       mr);
-    std::vector<std::unique_ptr<cudf::column>> columns = tbl->release();
-    return std::move(columns.front());
+                                       mr)
+        ->release();
+    return std::move(filtered.front());
   };
 
   auto output_offsets = [&] {
