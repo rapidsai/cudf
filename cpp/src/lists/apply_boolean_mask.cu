@@ -54,13 +54,10 @@ class get_list_size {
   bitmask_type const* bitmask;
 };
 
-void assert_same_sizes(lists_column_view const& input,
-                       lists_column_view const& boolean_mask,
-                       rmm::cuda_stream_view stream)
+void assert_same_list_sizes(lists_column_view const& input,
+                            lists_column_view const& boolean_mask,
+                            rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(input.size() == boolean_mask.size(),
-               "Boolean masks column must have same number of rows as input.");
-
   auto const begin = cudf::detail::make_counting_transform_iterator(
     0,
     [get_list_size = get_list_size{input}, get_mask_size = get_list_size{boolean_mask}] __device__(
@@ -76,12 +73,15 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(input.size() == boolean_mask.size(),
+               "Boolean masks column must have same number of rows as input.");
+
   auto const num_rows = input.size();
 
   if (num_rows == 0) { return cudf::empty_like(input.parent()); }
   // Note: This assert guarantees that no elements are gathered
   // from nominally NULL input list rows.
-  assert_same_sizes(input, boolean_mask, stream);
+  assert_same_list_sizes(input, boolean_mask, stream);
 
   auto constexpr offset_data_type = data_type{type_id::INT32};
 
