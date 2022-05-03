@@ -72,6 +72,9 @@ void launch_search(size_type search_table_size,
                    bool find_first,
                    rmm::cuda_stream_view stream)
 {
+  // We use lhs and rhs to control the direction of the comparison with
+  // strongly-typed indices. The first pair of iterators are always the search
+  // table, and the second pair are the values.
   auto const it_lhs = cudf::make_lhs_index_counting_iterator(0);
   auto const it_rhs = cudf::make_rhs_index_counting_iterator(0);
   if (find_first) {
@@ -134,39 +137,6 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto const d_comparator      = comparator.device_comparator(nullate::DYNAMIC{has_null_elements});
 
   launch_search(t.num_rows(), values.num_rows(), result_out, d_comparator, find_first, stream);
-  /*
-  // Prepare to flatten the structs column
-  auto const has_null_elements   = has_nested_nulls(t) or has_nested_nulls(values);
-  auto const flatten_nullability = has_null_elements
-                                     ? structs::detail::column_nullability::FORCE
-                                     : structs::detail::column_nullability::MATCH_INCOMING;
-
-  // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
-  auto const t_flattened = structs::detail::flatten_nested_columns(
-    matched.second.front(), column_order, null_precedence, flatten_nullability);
-  auto const values_flattened =
-    structs::detail::flatten_nested_columns(matched.second.back(), {}, {}, flatten_nullability);
-
-  auto const t_d      = table_device_view::create(t_flattened, stream);
-  auto const values_d = table_device_view::create(values_flattened, stream);
-  auto const& lhs     = find_first ? *t_d : *values_d;
-  auto const& rhs     = find_first ? *values_d : *t_d;
-
-  auto const& column_order_flattened    = t_flattened.orders();
-  auto const& null_precedence_flattened = t_flattened.null_orders();
-  auto const column_order_dv = detail::make_device_uvector_async(column_order_flattened, stream);
-  auto const null_precedence_dv =
-    detail::make_device_uvector_async(null_precedence_flattened, stream);
-
-  auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  auto const comp     = row_lexicographic_comparator(nullate::DYNAMIC{has_null_elements},
-                                                 lhs,
-                                                 rhs,
-                                                 column_order_dv.data(),
-                                                 null_precedence_dv.data());
-  launch_search(
-    count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
-  */
 
   return result;
 }
