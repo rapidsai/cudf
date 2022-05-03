@@ -44,8 +44,9 @@ import cudf
 >>> gb3 = df.groupby(cudf.Series(['a', 'a', 'b', 'b', 'b']))  # grouping by an external column
 ```
 
-:::{warning}
+````{warning}
 cuDF uses `sort=False` by default to achieve better performance, which provides no gaurentee to the group order in outputs. This deviates from Pandas default behavior.
+
 
 For example:
 
@@ -72,7 +73,7 @@ a
 1  11
 2  63
 ```
-:::
+````
 
 ### Grouping by index levels
 
