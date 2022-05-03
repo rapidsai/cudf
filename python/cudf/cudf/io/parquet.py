@@ -213,26 +213,22 @@ def _process_dataset(
         filters = pq._filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
-    if (
-        s3fs is not None
-        and isinstance(fs, s3fs.S3FileSystem)
-        and len(paths) == 1
-        and fs.isdir(paths[0])
-    ):
-        # TODO: Remove this workaround after following bug is fixed:
-        # https://issues.apache.org/jira/browse/ARROW-16438
-        dataset = ds.dataset(
-            "s3://" + paths[0],
-            format="parquet",
-            partitioning="hive",
+    # TODO: Remove the s3fs workaround after following bug is fixed:
+    # https://issues.apache.org/jira/browse/ARROW-16438
+    dataset = ds.dataset(
+        source=paths[0]
+        if (
+            s3fs is not None
+            and isinstance(fs, s3fs.S3FileSystem)
+            and len(paths) == 1
+            and fs.isdir(paths[0])
         )
-    else:
-        dataset = ds.dataset(
-            paths,
-            filesystem=fs,
-            format="parquet",
-            partitioning="hive",
-        )
+        else paths,
+        filesystem=fs,
+        format="parquet",
+        partitioning="hive",
+    )
+
     file_list = dataset.files
     if len(file_list) == 0:
         raise FileNotFoundError(f"{paths} could not be resolved to any files")
