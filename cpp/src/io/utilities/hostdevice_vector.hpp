@@ -51,10 +51,10 @@ class hostdevice_vector {
   }
 
   explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
-    : num_elements(initial_size), max_elements(max_size)
+    : max_elements(max_size), num_elements(initial_size)
   {
     if (max_elements != 0) {
-      CUDF_CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
+      CUDF_CUDA_TRY(cudaMallocHost(reinterpret_cast<void**>(&h_data), sizeof(T) * max_elements));
       d_data.resize(sizeof(T) * max_elements, stream);
     }
   }
@@ -62,7 +62,7 @@ class hostdevice_vector {
   ~hostdevice_vector()
   {
     if (max_elements != 0) {
-      auto const free_result = cudaFreeHost(h_data);
+      [[maybe_unused]] auto const free_result = cudaFreeHost(h_data);
       assert(free_result == cudaSuccess);
     }
   }

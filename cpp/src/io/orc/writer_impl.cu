@@ -1314,7 +1314,7 @@ void writer::impl::write_index_stream(int32_t stripe_id,
                                       file_segmentation const& segmentation,
                                       host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
                                       host_2dspan<gpu::StripeStream const> strm_desc,
-                                      host_span<gpu_inflate_status_s const> comp_out,
+                                      host_span<decompress_status const> comp_out,
                                       std::vector<ColStatsBlob> const& rg_stats,
                                       StripeInformation* stripe,
                                       orc_streams* streams,
@@ -2050,8 +2050,9 @@ void writer::impl::write(table_view const& table)
 
     // Compress the data streams
     rmm::device_buffer compressed_data(compressed_bfr_size, stream);
-    hostdevice_vector<gpu_inflate_status_s> comp_out(num_compressed_blocks, stream);
-    hostdevice_vector<gpu_inflate_input_s> comp_in(num_compressed_blocks, stream);
+    hostdevice_vector<device_span<uint8_t const>> comp_in(num_compressed_blocks, stream);
+    hostdevice_vector<device_span<uint8_t>> comp_out(num_compressed_blocks, stream);
+    hostdevice_vector<decompress_status> comp_stats(num_compressed_blocks, stream);
     if (compression_kind_ != NONE) {
       strm_descs.host_to_device(stream);
       gpu::CompressOrcDataStreams(static_cast<uint8_t*>(compressed_data.data()),
@@ -2063,9 +2064,10 @@ void writer::impl::write(table_view const& table)
                                   enc_data.streams,
                                   comp_in,
                                   comp_out,
+                                  comp_stats,
                                   stream);
       strm_descs.device_to_host(stream);
-      comp_out.device_to_host(stream, true);
+      comp_stats.device_to_host(stream, true);
     }
 
     ProtobufWriter pbw_(&buffer_);
@@ -2097,7 +2099,7 @@ void writer::impl::write(table_view const& table)
                            segmentation,
                            enc_data.streams,
                            strm_descs,
-                           comp_out,
+                           comp_stats,
                            intermediate_stats.rowgroup_blobs,
                            &stripe,
                            &streams,

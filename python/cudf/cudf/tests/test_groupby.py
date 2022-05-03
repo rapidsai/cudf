@@ -1811,6 +1811,50 @@ def test_groupby_2keys_scan(nelem, func):
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
 
 
+@pytest.mark.parametrize("nelem", [100, 1000])
+@pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("na_option", ["keep", "top", "bottom"])
+@pytest.mark.parametrize("pct", [False, True])
+def test_groupby_2keys_rank(nelem, method, ascending, na_option, pct):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    pdf = t.to_pandas()
+    pdf.columns = ["x", "y", "z"]
+    gdf = cudf.from_pandas(pdf)
+    expect_df = pdf.groupby(["x", "y"], sort=True).rank(
+        method=method, ascending=ascending, na_option=na_option, pct=pct
+    )
+    got_df = gdf.groupby(["x", "y"], sort=True).rank(
+        method=method, ascending=ascending, na_option=na_option, pct=pct
+    )
+
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=False)
+
+
+def test_groupby_rank_fails():
+    gdf = cudf.DataFrame(
+        {"x": [1, 2, 3, 4], "y": [1, 2, 3, 4], "z": [1, 2, 3, 4]}
+    )
+    with pytest.raises(NotImplementedError):
+        gdf.groupby(["x", "y"]).rank(method="min", axis=1)
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2, 2],
+            "b": [[1, 2], [3, None, 5], None, [], [7, 8], [9]],
+        }
+    )
+    with pytest.raises(NotImplementedError):
+        gdf.groupby(["a"]).rank(method="min", axis=1)
+
+
 def test_groupby_mix_agg_scan():
     err_msg = "Cannot perform both aggregation and scan in one operation"
     func = ["cumsum", "sum"]

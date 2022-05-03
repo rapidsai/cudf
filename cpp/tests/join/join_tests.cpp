@@ -67,7 +67,7 @@ struct JoinTest : public cudf::test::BaseFixture {
     auto gold_sort_order = cudf::sorted_order(gold);
     auto sorted_gold     = cudf::gather(gold, *gold_sort_order);
 
-    return std::make_pair(std::move(sorted_gold), std::move(sorted_result));
+    return std::pair(std::move(sorted_gold), std::move(sorted_result));
   }
 };
 
