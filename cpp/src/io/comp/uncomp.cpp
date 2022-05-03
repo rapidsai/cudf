@@ -430,147 +430,122 @@ std::vector<char> get_uncompressed_data(compression_type compression,
 }
 
 /**
- * @brief ZLIB host decompressor class
+ * @brief ZLIB host decompressor (no header)
  */
-class HostDecompressor_ZLIB : public HostDecompressor {
- public:
-  HostDecompressor_ZLIB(bool gz_hdr_) : gz_hdr(gz_hdr_) {}
-  size_t decompress(host_span<uint8_t const> src, host_span<uint8_t> dst) override
-  {
-    if (gz_hdr) {
-      gz_archive_s gz;
-      if (!ParseGZArchive(&gz, src.data(), src.size())) { return 0; }
-      src = {gz.comp_data, gz.comp_len};
-    }
-    size_t uncomp_size = dst.size();
-    if (0 == cpu_inflate(dst.data(), &uncomp_size, src.data(), src.size())) {
-      return uncomp_size;
-    } else {
-      return 0;  // Throw?
-    }
+size_t decompress_zlib(host_span<uint8_t const> src, host_span<uint8_t> dst)
+{
+  size_t uncomp_size = dst.size();
+  if (0 == cpu_inflate(dst.data(), &uncomp_size, src.data(), src.size())) {
+    return uncomp_size;
+  } else {
+    return 0;  // Throw?
   }
-
- protected:
-  const bool gz_hdr;
-};
+}
 
 /**
- * @brief SNAPPY host decompressor class
+ * @brief GZIP host decompressor (includes header)
  */
-class HostDecompressor_SNAPPY : public HostDecompressor {
- public:
-  HostDecompressor_SNAPPY() {}
-  size_t decompress(host_span<uint8_t const> src, host_span<uint8_t> dst) override
-  {
-    if (dst.empty() || src.size() < 1) { return 0; }
-    uint32_t uncompressed_size, bytes_left, dst_pos;
-    auto cur       = src.begin();
-    auto const end = src.end();
-    // Read uncompressed length (varint)
-    {
-      uint32_t l        = 0, c;
-      uncompressed_size = 0;
-      do {
-        uint32_t lo7;
-        c   = *cur++;
-        lo7 = c & 0x7f;
-        if (l >= 28 && c > 0xf) { return 0; }
-        uncompressed_size |= lo7 << l;
-        l += 7;
-      } while (c > 0x7f && cur < end);
-      if (!uncompressed_size || uncompressed_size > dst.size() || cur >= end) {
-        // Destination buffer too small or zero size
-        return 0;
-      }
-    }
-    // Decode lz77
-    dst_pos    = 0;
-    bytes_left = uncompressed_size;
-    do {
-      uint32_t blen = *cur++;
+size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
+{
+  gz_archive_s gz;
+  if (!ParseGZArchive(&gz, src.data(), src.size())) { return 0; }
+  return decompress_zlib({gz.comp_data, gz.comp_len}, dst);
+}
 
-      if (blen & 3) {
-        // Copy
-        uint32_t offset;
-        if (blen & 2) {
-          // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
-          if (cur + 2 > end) break;
-          offset = *reinterpret_cast<const uint16_t*>(cur);
-          cur += 2;
-          if (blen & 1)  // 4-byte offset
-          {
-            if (cur + 2 > end) break;
-            offset |= (*reinterpret_cast<const uint16_t*>(cur)) << 16;
-            cur += 2;
-          }
-          blen = (blen >> 2) + 1;
-        } else {
-          // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
-          if (cur >= end) break;
-          offset = ((blen & 0xe0) << 3) | (*cur++);
-          blen   = ((blen >> 2) & 7) + 4;
-        }
-        if (offset - 1u >= dst_pos || blen > bytes_left) break;
-        bytes_left -= blen;
-        do {
-          dst[dst_pos] = dst[dst_pos - offset];
-          dst_pos++;
-        } while (--blen);
-      } else {
-        // xxxxxx00: literal
-        blen >>= 2;
-        if (blen >= 60) {
-          uint32_t num_bytes = blen - 59;
-          if (cur + num_bytes >= end) break;
-          blen = cur[0];
-          if (num_bytes > 1) {
-            blen |= cur[1] << 8;
-            if (num_bytes > 2) {
-              blen |= cur[2] << 16;
-              if (num_bytes > 3) { blen |= cur[3] << 24; }
-            }
-          }
-          cur += num_bytes;
-        }
-        blen++;
-        if (cur + blen > end || blen > bytes_left) break;
-        memcpy(dst.data() + dst_pos, cur, blen);
-        cur += blen;
-        dst_pos += blen;
-        bytes_left -= blen;
-      }
-    } while (bytes_left && cur < end);
-    return (bytes_left) ? 0 : uncompressed_size;
+/**
+ * @brief SNAPPY host decompressor
+ */
+size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
+{
+  if (dst.empty() || src.size() < 1) { return 0; }
+  uint32_t uncompressed_size, bytes_left, dst_pos;
+  auto cur       = src.begin();
+  auto const end = src.end();
+  // Read uncompressed length (varint)
+  {
+    uint32_t l        = 0, c;
+    uncompressed_size = 0;
+    do {
+      uint32_t lo7;
+      c   = *cur++;
+      lo7 = c & 0x7f;
+      if (l >= 28 && c > 0xf) { return 0; }
+      uncompressed_size |= lo7 << l;
+      l += 7;
+    } while (c > 0x7f && cur < end);
+    if (!uncompressed_size || uncompressed_size > dst.size() || cur >= end) {
+      // Destination buffer too small or zero size
+      return 0;
+    }
   }
-};
+  // Decode lz77
+  dst_pos    = 0;
+  bytes_left = uncompressed_size;
+  do {
+    uint32_t blen = *cur++;
+
+    if (blen & 3) {
+      // Copy
+      uint32_t offset;
+      if (blen & 2) {
+        // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
+        if (cur + 2 > end) break;
+        offset = *reinterpret_cast<const uint16_t*>(cur);
+        cur += 2;
+        if (blen & 1)  // 4-byte offset
+        {
+          if (cur + 2 > end) break;
+          offset |= (*reinterpret_cast<const uint16_t*>(cur)) << 16;
+          cur += 2;
+        }
+        blen = (blen >> 2) + 1;
+      } else {
+        // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
+        if (cur >= end) break;
+        offset = ((blen & 0xe0) << 3) | (*cur++);
+        blen   = ((blen >> 2) & 7) + 4;
+      }
+      if (offset - 1u >= dst_pos || blen > bytes_left) break;
+      bytes_left -= blen;
+      do {
+        dst[dst_pos] = dst[dst_pos - offset];
+        dst_pos++;
+      } while (--blen);
+    } else {
+      // xxxxxx00: literal
+      blen >>= 2;
+      if (blen >= 60) {
+        uint32_t num_bytes = blen - 59;
+        if (cur + num_bytes >= end) break;
+        blen = cur[0];
+        if (num_bytes > 1) {
+          blen |= cur[1] << 8;
+          if (num_bytes > 2) {
+            blen |= cur[2] << 16;
+            if (num_bytes > 3) { blen |= cur[3] << 24; }
+          }
+        }
+        cur += num_bytes;
+      }
+      blen++;
+      if (cur + blen > end || blen > bytes_left) break;
+      memcpy(dst.data() + dst_pos, cur, blen);
+      cur += blen;
+      dst_pos += blen;
+      bytes_left -= blen;
+    }
+  } while (bytes_left && cur < end);
+  return (bytes_left) ? 0 : uncompressed_size;
+}
+
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
                   host_span<uint8_t> dst)
 {
-  auto const decomp = [compression]() -> std::unique_ptr<HostDecompressor> {
-    switch (compression) {
-      case compression_type::GZIP: return std::make_unique<HostDecompressor_ZLIB>(true);
-      case compression_type::ZLIB: return std::make_unique<HostDecompressor_ZLIB>(false);
-      case compression_type::SNAPPY: return std::make_unique<HostDecompressor_SNAPPY>();
-      default: CUDF_FAIL("Unsupported compression type");
-    }
-  }();
-  return decomp->decompress(src, dst);
-}
-
-/**
- * @brief CPU decompression class
- *
- * @param[in] type compression type
- *
- * @returns corresponding HostDecompressor class, nullptr if failure
- */
-std::unique_ptr<HostDecompressor> HostDecompressor::Create(compression_type compression)
-{
   switch (compression) {
-    case compression_type::GZIP: return std::make_unique<HostDecompressor_ZLIB>(true);
-    case compression_type::ZLIB: return std::make_unique<HostDecompressor_ZLIB>(false);
-    case compression_type::SNAPPY: return std::make_unique<HostDecompressor_SNAPPY>();
+    case compression_type::GZIP: return decompress_gzip(src, dst);
+    case compression_type::ZLIB: return decompress_zlib(src, dst);
+    case compression_type::SNAPPY: return decompress_snappy(src, dst);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }

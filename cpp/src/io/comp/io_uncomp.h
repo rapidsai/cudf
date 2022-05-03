@@ -33,14 +33,6 @@ std::vector<char> get_uncompressed_data(compression_type compression, host_span<
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
                   host_span<uint8_t> dst);
-class HostDecompressor {
- public:
-  virtual size_t decompress(host_span<uint8_t const> src, host_span<uint8_t> dst) = 0;
-  virtual ~HostDecompressor() {}
-
- public:
-  static std::unique_ptr<HostDecompressor> Create(compression_type compression);
-};
 
 /**
  * @brief GZIP header flags
