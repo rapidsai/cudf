@@ -90,9 +90,9 @@ gpuci_mamba_retry install -y \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-# gpuci_mamba_retry update -c conda-forge -y "pandas=1.4.2" --force-reinstall
-pip install -I pandas==1.4.2
-pip install -I numpy<=1.21
+gpuci_mamba_retry update -c conda-forge -y "pandas=1.4.2" "numpy<=1.21" --force-reinstall
+#pip install -I pandas==1.4.2
+
 
 
 gpuci_logger "Check compiler versions"
