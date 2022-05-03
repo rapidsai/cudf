@@ -2,6 +2,7 @@
 
 import os
 import shlex
+import socket
 import subprocess
 import time
 from contextlib import contextmanager
@@ -26,6 +27,14 @@ flask = pytest.importorskip("flask")
 flask_cors = pytest.importorskip("flask_cors")
 
 
+@pytest.fixture(scope="session")
+def endpoint_port():
+    # Return a free port per worker session.
+    sock = socket.socket()
+    sock.bind(("", 0))
+    return sock.getsockname()[1]
+
+
 @contextmanager
 def ensure_safe_environment_variables():
     """
@@ -42,7 +51,7 @@ def ensure_safe_environment_variables():
 
 
 @pytest.fixture(scope="session")
-def s3_base(worker_id):
+def s3_base(endpoint_port):
     """
     Fixture to set up moto server in separate process
     """
@@ -56,11 +65,6 @@ def s3_base(worker_id):
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost
 
-        endpoint_port = (
-            5000
-            if worker_id == "master"
-            else 5550 + int(worker_id.lstrip("gw"))
-        )
         endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
 
         proc = subprocess.Popen(
@@ -85,13 +89,10 @@ def s3_base(worker_id):
 
 
 @pytest.fixture()
-def s3so(worker_id):
+def s3so(endpoint_port):
     """
     Returns s3 storage options to pass to fsspec
     """
-    endpoint_port = (
-        5000 if worker_id == "master" else 5550 + int(worker_id.lstrip("gw"))
-    )
     endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
 
     return {"client_kwargs": {"endpoint_url": endpoint_uri}}
