@@ -478,6 +478,7 @@ ConfigureTest(
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
   lists/sort_lists_tests.cpp
+  lists/segmented_test.cu
 )
 
 # ##################################################################################################
