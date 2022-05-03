@@ -155,18 +155,6 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, dense_rank_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, percent_rank_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, collect_list_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -330,16 +318,6 @@ void aggregation_finalizer::visit(row_number_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(rank_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(dense_rank_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(percent_rank_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -644,36 +622,33 @@ template std::unique_ptr<rolling_aggregation> make_row_number_aggregation<rollin
 
 /// Factory to create a RANK aggregation
 template <typename Base>
-std::unique_ptr<Base> make_rank_aggregation()
+std::unique_ptr<Base> make_rank_aggregation(rank_method method,
+                                            order column_order,
+                                            null_policy null_handling,
+                                            null_order null_precedence,
+                                            rank_percentage percentage)
 {
-  return std::make_unique<detail::rank_aggregation>();
+  return std::make_unique<detail::rank_aggregation>(
+    method, column_order, null_handling, null_precedence, percentage);
 }
-template std::unique_ptr<aggregation> make_rank_aggregation<aggregation>();
-template std::unique_ptr<groupby_scan_aggregation>
-make_rank_aggregation<groupby_scan_aggregation>();
-template std::unique_ptr<scan_aggregation> make_rank_aggregation<scan_aggregation>();
-
-/// Factory to create a DENSE_RANK aggregation
-template <typename Base>
-std::unique_ptr<Base> make_dense_rank_aggregation()
-{
-  return std::make_unique<detail::dense_rank_aggregation>();
-}
-template std::unique_ptr<aggregation> make_dense_rank_aggregation<aggregation>();
-template std::unique_ptr<groupby_scan_aggregation>
-make_dense_rank_aggregation<groupby_scan_aggregation>();
-template std::unique_ptr<scan_aggregation> make_dense_rank_aggregation<scan_aggregation>();
-
-/// Factory to create a PERCENT_RANK aggregation
-template <typename Base>
-std::unique_ptr<Base> make_percent_rank_aggregation()
-{
-  return std::make_unique<detail::percent_rank_aggregation>();
-}
-template std::unique_ptr<aggregation> make_percent_rank_aggregation<aggregation>();
-template std::unique_ptr<groupby_scan_aggregation>
-make_percent_rank_aggregation<groupby_scan_aggregation>();
-template std::unique_ptr<scan_aggregation> make_percent_rank_aggregation<scan_aggregation>();
+template std::unique_ptr<aggregation> make_rank_aggregation<aggregation>(
+  rank_method method,
+  order column_order,
+  null_policy null_handling,
+  null_order null_precedence,
+  rank_percentage percentage);
+template std::unique_ptr<groupby_scan_aggregation> make_rank_aggregation<groupby_scan_aggregation>(
+  rank_method method,
+  order column_order,
+  null_policy null_handling,
+  null_order null_precedence,
+  rank_percentage percentage);
+template std::unique_ptr<scan_aggregation> make_rank_aggregation<scan_aggregation>(
+  rank_method method,
+  order column_order,
+  null_policy null_handling,
+  null_order null_precedence,
+  rank_percentage percentage);
 
 /// Factory to create a COLLECT_LIST aggregation
 template <typename Base>

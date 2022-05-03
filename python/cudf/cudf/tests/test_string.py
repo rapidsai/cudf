@@ -923,6 +923,16 @@ def test_string_replace(
         assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("pat", ["A*", "F?H?"])
+def test_string_replace_zero_length(ps_gs, pat):
+    ps, gs = ps_gs
+
+    expect = ps.str.replace(pat, "_", regex=True)
+    got = gs.str.replace(pat, "_", regex=True)
+
+    assert_eq(expect, got)
+
+
 def test_string_lower(ps_gs):
     ps, gs = ps_gs
 
@@ -1299,6 +1309,12 @@ def test_string_slice_replace(string, number, diff, repr):
     )
 
 
+def test_string_slice_replace_fail():
+    gs = cudf.Series(["abc", "xyz", ""])
+    with pytest.raises(TypeError):
+        gs.str.slice_replace(0, 1, ["_"])
+
+
 def test_string_insert():
     gs = cudf.Series(["hello world", "holy accéntéd", "batman", None, ""])
 
@@ -1311,6 +1327,9 @@ def test_string_insert():
         gs.str.insert(5, "---"),
         ps.str.slice(stop=5) + "---" + ps.str.slice(start=5),
     )
+
+    with pytest.raises(TypeError):
+        gs.str.insert(0, ["+"])
 
 
 _string_char_types_data = [
@@ -1403,6 +1422,9 @@ def test_string_filter_alphanum():
                 rs = rs + "*"
         expected.append(rs)
     assert_eq(gs.str.filter_alphanum("*", keep=False), cudf.Series(expected))
+
+    with pytest.raises(TypeError):
+        gs.str.filter_alphanum(["a"])
 
 
 @pytest.mark.parametrize(
@@ -1502,6 +1524,14 @@ def test_strings_partition(data):
     assert_eq(pi.str.partition(), gi.str.partition())
     assert_eq(pi.str.partition(","), gi.str.partition(","))
     assert_eq(pi.str.partition("-"), gi.str.partition("-"))
+
+
+def test_string_partition_fail():
+    gs = cudf.Series(["abc", "aa", "cba"])
+    with pytest.raises(TypeError):
+        gs.str.partition(["a"])
+    with pytest.raises(TypeError):
+        gs.str.rpartition(["a"])
 
 
 @pytest.mark.parametrize(
@@ -1638,6 +1668,16 @@ def test_strings_strip_tests(data, to_strip):
     assert_eq(
         pi.str.lstrip(to_strip=to_strip), gi.str.lstrip(to_strip=to_strip)
     )
+
+
+def test_string_strip_fail():
+    gs = cudf.Series(["a", "aa", ""])
+    with pytest.raises(TypeError):
+        gs.str.strip(["a"])
+    with pytest.raises(TypeError):
+        gs.str.lstrip(["a"])
+    with pytest.raises(TypeError):
+        gs.str.rstrip(["a"])
 
 
 @pytest.mark.parametrize(
@@ -2363,6 +2403,9 @@ def test_string_str_filter_characters():
         ["hello world", "A B C D", "           ", "acc nt", None, " 1 50", ""]
     )
     assert_eq(expected, gs.str.filter_characters(filter, True, " "))
+
+    with pytest.raises(TypeError):
+        gs.str.filter_characters(filter, True, ["a"])
 
 
 def test_string_str_code_points():

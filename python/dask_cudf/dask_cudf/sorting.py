@@ -85,7 +85,7 @@ def merge_quantiles(finalq, qs, vals):
         return val
 
     # Sort by calculated quantile values, then number of observations.
-    combined_vals_counts = gd.merge_sorted(
+    combined_vals_counts = gd.core.reshape._merge_sorted(
         [*map(_append_counts, vals, counts)]
     )
     combined_counts = cupy.asnumpy(combined_vals_counts["_counts"].values)
@@ -294,6 +294,6 @@ def sort_values(
     df4 = df3.map_partitions(sort_function, **sort_kwargs)
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
-        df4.divisions = methods.tolist(divisions)
+        df4.divisions = tuple(methods.tolist(divisions))
 
     return df4

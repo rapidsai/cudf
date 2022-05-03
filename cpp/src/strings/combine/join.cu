@@ -87,11 +87,11 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   auto offsets_view = offsets_column->mutable_view();
   // set the first entry to 0 and the last entry to bytes
   int32_t new_offsets[] = {0, static_cast<int32_t>(bytes)};
-  CUDA_TRY(cudaMemcpyAsync(offsets_view.data<int32_t>(),
-                           new_offsets,
-                           sizeof(new_offsets),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(offsets_view.data<int32_t>(),
+                                new_offsets,
+                                sizeof(new_offsets),
+                                cudaMemcpyHostToDevice,
+                                stream.value()));
 
   // build null mask
   // only one entry so it is either all valid or all null

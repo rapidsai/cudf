@@ -429,17 +429,19 @@ auto create_hash_map(table_device_view const& d_keys,
   size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
   size_type constexpr unused_value{std::numeric_limits<size_type>::max()};
 
-  using map_type = concurrent_unordered_map<size_type,
-                                            size_type,
-                                            row_hasher<default_hash, nullate::DYNAMIC>,
-                                            row_equality_comparator<nullate::DYNAMIC>>;
+  using map_type =
+    concurrent_unordered_map<size_type,
+                             size_type,
+                             row_hasher<cudf::detail::default_hash, nullate::DYNAMIC>,
+                             row_equality_comparator<nullate::DYNAMIC>>;
 
   using allocator_type = typename map_type::allocator_type;
 
   auto const null_keys_are_equal =
     include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
 
-  row_hasher<default_hash, nullate::DYNAMIC> hasher{nullate::DYNAMIC{keys_have_nulls}, d_keys};
+  row_hasher<cudf::detail::default_hash, nullate::DYNAMIC> hasher{nullate::DYNAMIC{keys_have_nulls},
+                                                                  d_keys};
   row_equality_comparator rows_equal{
     nullate::DYNAMIC{keys_have_nulls}, d_keys, d_keys, null_keys_are_equal};
 
@@ -645,10 +647,14 @@ bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request 
     // Currently, structs are not supported in any of hash-based aggregations.
     // Therefore, if any request contains structs then we must fallback to sort-based aggregations.
     // TODO: Support structs in hash-based aggregations.
+    auto const v_type = is_dictionary(r.values.type())
+                          ? cudf::dictionary_column_view(r.values).keys().type()
+                          : r.values.type();
+
     return not(r.values.type().id() == type_id::STRUCT) and
-           cudf::has_atomic_support(r.values.type()) and
-           std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
-             return is_hash_aggregation(a->kind);
+           std::all_of(r.aggregations.begin(), r.aggregations.end(), [v_type](auto const& a) {
+             return cudf::has_atomic_support(cudf::detail::target_type(v_type, a->kind)) and
+                    is_hash_aggregation(a->kind);
            });
   });
 }
@@ -666,7 +672,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   std::unique_ptr<table> unique_keys =
     groupby(keys, requests, &cache, has_nulls(keys), include_null_keys, stream, mr);
 
-  return std::make_pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
+  return std::pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
 }
 }  // namespace hash
 }  // namespace detail

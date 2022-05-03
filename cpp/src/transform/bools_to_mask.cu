@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
 {
   CUDF_EXPECTS(input.type().id() == type_id::BOOL8, "Input is not of type bool");
 
-  if (input.is_empty()) { return std::make_pair(std::make_unique<rmm::device_buffer>(), 0); }
+  if (input.is_empty()) { return std::pair(std::make_unique<rmm::device_buffer>(), 0); }
 
   auto input_device_view_ptr = column_device_view::create(input, stream);
   auto input_device_view     = *input_device_view_ptr;
@@ -45,12 +45,12 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
 
     auto mask = detail::valid_if(input_begin, input_begin + input.size(), pred, stream, mr);
 
-    return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
+    return std::pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
   } else {
     auto mask = detail::valid_if(
       input_device_view.begin<bool>(), input_device_view.end<bool>(), pred, stream, mr);
 
-    return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
+    return std::pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
   }
 }
 

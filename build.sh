@@ -109,6 +109,9 @@ function buildLibCudfJniInDocker {
     local imageName="cudf-build:${cudaVersion}-devel-centos7"
     local CMAKE_GENERATOR="${CMAKE_GENERATOR:-Ninja}"
     local workspaceDir="/rapids"
+    local localMavenRepo=${LOCAL_MAVEN_REPO:-"$HOME/.m2/repository"}
+    local workspaceRepoDir="$workspaceDir/cudf"
+    local workspaceMavenRepoDir="$workspaceDir/.m2/repository"
     mkdir -p "$CUDF_JAR_JAVA_BUILD_DIR/libcudf-cmake-build"
     nvidia-docker build \
         -f java/ci/Dockerfile.centos7 \
@@ -119,11 +122,12 @@ function buildLibCudfJniInDocker {
         -v "/etc/passwd:/etc/passwd:ro" \
         -v "/etc/shadow:/etc/shadow:ro" \
         -v "/etc/sudoers.d:/etc/sudoers.d:ro" \
-        -v "$REPODIR:/rapids:rw" \
-        --workdir "$workspaceDir/java/target/libcudf-cmake-build" \
+        -v "$REPODIR:$workspaceRepoDir:rw" \
+        -v "$localMavenRepo:$workspaceMavenRepoDir:rw" \
+        --workdir "$workspaceRepoDir/java/target/libcudf-cmake-build" \
         ${imageName} \
         scl enable devtoolset-9 \
-            "cmake $workspaceDir/cpp \
+            "cmake $workspaceRepoDir/cpp \
                 -G${CMAKE_GENERATOR} \
                 -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
                 -DCUDA_STATIC_RUNTIME=ON \
@@ -136,18 +140,16 @@ function buildLibCudfJniInDocker {
                 -DRMM_LOGGING_LEVEL=OFF \
                 -DBUILD_SHARED_LIBS=OFF && \
              cmake --build . --parallel ${PARALLEL_LEVEL} && \
-             cd $workspaceDir/java && \
+             cd $workspaceRepoDir/java && \
              mvn ${MVN_PHASES:-"package"} \
-                -Dmaven.repo.local=$workspaceDir/.m2 \
+                -Dmaven.repo.local=$workspaceMavenRepoDir \
                 -DskipTests=${SKIP_TESTS:-false} \
                 -Dparallel.level=${PARALLEL_LEVEL} \
-                -DCUDF_CPP_BUILD_DIR=$workspaceDir/java/target/libcudf-cmake-build \
+                -DCUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DPER_THREAD_DEFAULT_STREAM=ON \
-                -DRMM_LOGGING_LEVEL=OFF \
                 -DUSE_GDS=ON \
                 -DGPU_ARCHS=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
-                -DCUDF_JNI_ARROW_STATIC=ON \
                 -DCUDF_JNI_LIBCUDF_STATIC=ON \
                 -Dtest=*,!CuFileTest"
 }

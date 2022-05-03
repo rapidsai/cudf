@@ -107,7 +107,8 @@ struct statistics_group {
 };
 
 struct statistics_merge_group {
-  const stats_column_desc* col;  //!< Column information
+  data_type col_dtype;           //!< Column data type
+  statistics_dtype stats_dtype;  //!< Statistics data type for this column
   uint32_t start_chunk;          //!< Start chunk of this group
   uint32_t num_chunks;           //!< Number of chunks in group
 };

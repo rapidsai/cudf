@@ -83,7 +83,6 @@ strings and apply several methods to it. These can be accessed like
    rsplit
    startswith
    strip
-   subword_tokenize
    swapcase
    title
    token_count
