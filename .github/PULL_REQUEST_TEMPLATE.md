@@ -1,6 +1,7 @@
 ## Description
-<!-- Standalone description of changes (will be included in CHANGELOG). -->
+<!-- Provide a standalone description of changes in this PR. -->
 <!-- Reference any issues closed by this PR with "closes #1234". -->
+<!-- Note: The pull request title will be included in the CHANGELOG. -->
 
 ## Checklist
 - [ ] I am familiar with the [Contributing Guidelines](https://github.com/rapidsai/cudf/blob/HEAD/CONTRIBUTING.md).
