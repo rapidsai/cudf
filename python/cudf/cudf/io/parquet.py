@@ -715,17 +715,10 @@ def _get_partitioned(
 ):
     fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
     fs.mkdirs(root_path, exist_ok=True)
-    if not (set(df._data) - set(partition_cols)):
-        raise ValueError("No data left to save outside partition columns")
 
-    part_names, part_offsets, _, grouped_df = df.groupby(
-        partition_cols
-    )._grouped()
-    if not preserve_index:
-        grouped_df.reset_index(drop=True, inplace=True)
-    grouped_df.drop(columns=partition_cols, inplace=True)
-    # Copy the entire keys df in one operation rather than using iloc
-    part_names = part_names.to_pandas().to_frame(index=False)
+    part_names, grouped_df, part_offsets = _get_groups_and_offsets(
+        df, partition_cols, preserve_index
+    )
 
     full_paths = []
     metadata_file_paths = []
@@ -744,7 +737,7 @@ def _get_partitioned(
 
 
 @_cudf_nvtx_annotate
-def _get_partitioned_new(
+def _get_groups_and_offsets(
     df,
     partition_cols,
     preserve_index=False,
@@ -771,6 +764,8 @@ ParquetWriter = libparquet.ParquetWriter
 
 def _parse_bytes(s):
     """Parse byte string to numbers
+
+    Utility function vendored from Dask.
 
     >>> _parse_bytes('100')
     100
@@ -933,7 +928,7 @@ class ParquetDatasetWriter:
         """
         Write a dataframe to the file/dataset
         """
-        (part_names, grouped_df, part_offsets,) = _get_partitioned_new(
+        (part_names, grouped_df, part_offsets,) = _get_groups_and_offsets(
             df=df,
             partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],
@@ -974,9 +969,7 @@ class ParquetDatasetWriter:
 
                 curr_file_num = 0
                 while num_chunks > 0:
-                    new_file_name = (
-                        self.filename + "_" + str(curr_file_num) + ".parquet"
-                    )
+                    new_file_name = f"{self.filename}_{curr_file_num}.parquet"
                     new_full_path = fs.sep.join([prefix, new_file_name])
                     while (
                         new_full_path in self._file_sizes
@@ -988,10 +981,7 @@ class ParquetDatasetWriter:
                     ):
                         curr_file_num += 1
                         new_file_name = (
-                            self.filename
-                            + "_"
-                            + str(curr_file_num)
-                            + ".parquet"
+                            f"{self.filename}_{curr_file_num}.parquet"
                         )
                         new_full_path = fs.sep.join([prefix, new_file_name])
 
