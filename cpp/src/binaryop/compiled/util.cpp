@@ -18,8 +18,6 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_view.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -193,13 +191,5 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
 {
   return double_type_dispatcher(lhs, rhs, is_supported_operation_functor{}, out, op);
-}
-
-bool is_supported_operation(data_type out,
-                            column_view const& lhs,
-                            column_view const& rhs,
-                            binary_operator op)
-{
-  return is_supported_operation(out, lhs.type(), rhs.type(), op);
 }
 }  // namespace cudf::binops::compiled
