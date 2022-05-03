@@ -321,6 +321,7 @@ add_library(
   src/io/csv/writer_impl.cu
   src/io/functions.cpp
   src/io/json/json_gpu.cu
+  src/io/json/nested_json_gpu.cu
   src/io/json/reader_impl.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
