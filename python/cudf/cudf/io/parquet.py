@@ -17,24 +17,29 @@ from cudf.utils import ioutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 BYTE_SIZES = {
-    "kB": 10**3,
-    "MB": 10**6,
-    "GB": 10**9,
-    "TB": 10**12,
-    "PB": 10**15,
-    "KiB": 2**10,
-    "MiB": 2**20,
-    "GiB": 2**30,
-    "TiB": 2**40,
-    "PiB": 2**50,
-    "B": 1,
+    "kb": 1000,
+    "mb": 1000000,
+    "gb": 1000000000,
+    "tb": 1000000000000,
+    "pb": 1000000000000000,
+    "kib": 1024,
+    "mib": 1048576,
+    "gib": 1073741824,
+    "tib": 1099511627776,
+    "pib": 1125899906842624,
+    "b": 1,
     "": 1,
+    "k": 1000,
+    "m": 1000000,
+    "g": 1000000000,
+    "t": 1000000000000,
+    "p": 1000000000000000,
+    "ki": 1024,
+    "mi": 1048576,
+    "gi": 1073741824,
+    "ti": 1099511627776,
+    "pi": 1125899906842624,
 }
-BYTE_SIZES = {k.lower(): v for k, v in BYTE_SIZES.items()}
-BYTE_SIZES.update(
-    {k[0]: v for k, v in BYTE_SIZES.items() if k and "i" not in k}
-)
-BYTE_SIZES.update({k[:-1]: v for k, v in BYTE_SIZES.items() if k and "i" in k})
 
 
 @_cudf_nvtx_annotate
