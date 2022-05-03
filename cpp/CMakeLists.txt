@@ -189,7 +189,6 @@ add_library(
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
   src/binaryop/binaryop.cpp
-  src/binaryop/compiled/binary_ops.cu
   src/binaryop/compiled/Add.cu
   src/binaryop/compiled/ATan2.cu
   src/binaryop/compiled/BitwiseAnd.cu
@@ -220,6 +219,7 @@ add_library(
   src/binaryop/compiled/ShiftRightUnsigned.cu
   src/binaryop/compiled/Sub.cu
   src/binaryop/compiled/TrueDiv.cu
+  src/binaryop/compiled/binary_ops.cu
   src/binaryop/compiled/util.cpp
   src/labeling/label_bins.cu
   src/bitmask/null_mask.cu
