@@ -23,7 +23,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -310,6 +309,7 @@ void apply_binary_op(mutable_column_view& out,
                *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   }
 }
+
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf
