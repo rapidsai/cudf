@@ -308,7 +308,7 @@ def gen_rand(dtype, size, **kwargs):
     elif dtype.kind in ("O", "U"):
         low = kwargs.get("low", 10)
         high = kwargs.get("high", 11)
-        return pd.util.testing.rands_array(
+        return pd._testing.rands_array(
             np.random.randint(low=low, high=high, size=1)[0], size
         )
     raise NotImplementedError(f"dtype.kind={dtype.kind}")

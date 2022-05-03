@@ -1947,9 +1947,13 @@ string_dictionaries allocate_dictionaries(orc_table_view const& orc_table,
 struct string_length_functor {
   __device__ inline size_type operator()(int const i) const
   {
+    // we translate from 0 -> num_chunks * 2 because each statistic has a min and max
+    // string and we need to calculate lengths for both.
     if (i >= num_chunks * 2) return 0;
 
+    // min strings are even values, max strings are odd values of i
     auto const min = i % 2 == 0;
+    // index of the chunk
     auto const idx = i / 2;
     auto& str_val =
       min ? stripe_stat_chunks[idx].min_value.str_val : stripe_stat_chunks[idx].max_value.str_val;
@@ -1957,9 +1961,9 @@ struct string_length_functor {
     return str ? str_val.length : 0;
   }
 
-  int num_chunks;
-  statistics_chunk* stripe_stat_chunks;
-  statistics_merge_group* stripe_stat_merge;
+  int const num_chunks;
+  statistics_chunk const* stripe_stat_chunks;
+  statistics_merge_group const* stripe_stat_merge;
 };
 
 __global__ void copy_string_data(char* string_pool,
