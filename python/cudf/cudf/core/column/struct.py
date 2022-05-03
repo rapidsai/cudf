@@ -31,7 +31,7 @@ class StructColumn(ColumnBase):
             return len(self.base_children[0])
 
     @classmethod
-    def from_arrow(self, data):
+    def from_arrow(cls, data):
         size = len(data)
         dtype = cudf.core.dtypes.StructDtype.from_arrow(data.type)
 

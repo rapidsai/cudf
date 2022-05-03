@@ -16,75 +16,70 @@
 
 #pragma once
 
-#include <cstdint>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cstdint>
+
 namespace cudf {
 namespace io {
-/**
- * @brief Input parameters for the decompression interface
- */
-struct gpu_inflate_input_s {
-  const void* srcDevice;
-  uint64_t srcSize;
-  void* dstDevice;
-  uint64_t dstSize;
-};
 
 /**
  * @brief Output parameters for the decompression interface
  */
-struct gpu_inflate_status_s {
+struct decompress_status {
   uint64_t bytes_written;
   uint32_t status;
   uint32_t reserved;
 };
 
+enum class gzip_header_included { NO, YES };
+
 /**
  * @brief Interface for decompressing GZIP-compressed data
  *
  * Multiple, independent chunks of compressed data can be decompressed by using
- * separate gpu_inflate_input_s/gpu_inflate_status_s pairs for each chunk.
+ * separate input/output/status for each chunk.
  *
- * @param[in] inputs List of input argument structures
- * @param[out] outputs List of output status structures
- * @param[in] count Number of input/output structures
+ * @param[in] inputs List of input buffers
+ * @param[out] outputs List of output buffers
+ * @param[out] statuses List of output status structures
  * @param[in] parse_hdr Whether or not to parse GZIP header
  * @param[in] stream CUDA stream to use
  */
-cudaError_t gpuinflate(gpu_inflate_input_s* inputs,
-                       gpu_inflate_status_s* outputs,
-                       int count,
-                       int parse_hdr,
-                       rmm::cuda_stream_view stream);
+void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
+                device_span<device_span<uint8_t> const> outputs,
+                device_span<decompress_status> statuses,
+                gzip_header_included parse_hdr,
+                rmm::cuda_stream_view stream);
 
 /**
  * @brief Interface for copying uncompressed byte blocks
  *
- * @param[in] inputs List of input argument structures
- * @param[in] count Number of input structures
+ * @param[in] inputs List of input buffers
+ * @param[out] outputs List of output buffers
  * @param[in] stream CUDA stream to use
  */
-cudaError_t gpu_copy_uncompressed_blocks(gpu_inflate_input_s* inputs,
-                                         int count,
-                                         rmm::cuda_stream_view stream);
+void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> inputs,
+                                  device_span<device_span<uint8_t> const> outputs,
+                                  rmm::cuda_stream_view stream);
 
 /**
  * @brief Interface for decompressing Snappy-compressed data
  *
  * Multiple, independent chunks of compressed data can be decompressed by using
- * separate gpu_inflate_input_s/gpu_inflate_status_s pairs for each chunk.
+ * separate input/output/status for each chunk.
  *
- * @param[in] inputs List of input argument structures
- * @param[out] outputs List of output status structures
- * @param[in] count Number of input/output structures
+ * @param[in] inputs List of input buffers
+ * @param[out] outputs List of output buffers
+ * @param[out] statuses List of output status structures
  * @param[in] stream CUDA stream to use
  */
-cudaError_t gpu_unsnap(gpu_inflate_input_s* inputs,
-                       gpu_inflate_status_s* outputs,
-                       int count,
-                       rmm::cuda_stream_view stream);
+void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
+                device_span<device_span<uint8_t> const> outputs,
+                device_span<decompress_status> statuses,
+                rmm::cuda_stream_view stream);
 
 /**
  * @brief Computes the size of temporary memory for Brotli decompression
@@ -99,37 +94,37 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
  * @brief Interface for decompressing Brotli-compressed data
  *
  * Multiple, independent chunks of compressed data can be decompressed by using
- * separate gpu_inflate_input_s/gpu_inflate_status_s pairs for each chunk.
+ * separate input/output/status pairs for each chunk.
  *
- * @param[in] inputs List of input argument structures
- * @param[out] outputs List of output status structures
+ * @param[in] inputs List of input buffers
+ * @param[out] outputs List of output buffers
+ * @param[out] statuses List of output status structures
  * @param[in] scratch Temporary memory for intermediate work
  * @param[in] scratch_size Size in bytes of the temporary memory
- * @param[in] count Number of input/output structures
  * @param[in] stream CUDA stream to use
  */
-cudaError_t gpu_debrotli(gpu_inflate_input_s* inputs,
-                         gpu_inflate_status_s* outputs,
-                         void* scratch,
-                         size_t scratch_size,
-                         int count,
-                         rmm::cuda_stream_view stream);
+void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
+                  device_span<device_span<uint8_t> const> outputs,
+                  device_span<decompress_status> statuses,
+                  void* scratch,
+                  size_t scratch_size,
+                  rmm::cuda_stream_view stream);
 
 /**
  * @brief Interface for compressing data with Snappy
  *
  * Multiple, independent chunks of compressed data can be compressed by using
- * separate gpu_inflate_input_s/gpu_inflate_status_s pairs for each chunk.
+ * separate input/output/status for each chunk.
  *
- * @param[in] inputs List of input argument structures
- * @param[out] outputs List of output status structures
- * @param[in] count Number of input/output structures
+ * @param[in] inputs List of input buffers
+ * @param[out] outputs List of output buffers
+ * @param[out] statuses List of output status structures
  * @param[in] stream CUDA stream to use
  */
-cudaError_t gpu_snap(gpu_inflate_input_s* inputs,
-                     gpu_inflate_status_s* outputs,
-                     int count,
-                     rmm::cuda_stream_view stream);
+void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
+              device_span<device_span<uint8_t> const> outputs,
+              device_span<decompress_status> statuses,
+              rmm::cuda_stream_view stream);
 
 }  // namespace io
 }  // namespace cudf

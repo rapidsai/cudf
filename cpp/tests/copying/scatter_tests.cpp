@@ -574,6 +574,17 @@ TEST_F(ScatterStringsTests, ScatterScalarNoNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), expected_table);
 }
 
+TEST_F(ScatterStringsTests, EmptyStrings)
+{
+  cudf::test::strings_column_wrapper input{"", "", ""};
+  cudf::table_view t({input});
+
+  // Test for issue 10717: all-empty-string column scatter
+  auto map    = cudf::test::fixed_width_column_wrapper<int32_t>({0});
+  auto result = cudf::scatter(t, map, t);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), t);
+}
+
 template <typename T>
 class BooleanMaskScatter : public cudf::test::BaseFixture {
 };
