@@ -356,11 +356,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
             elif isinstance(value, cudf.DataFrame):
                 if value.shape != self._frame.loc[key[0]].shape:
-                    raise ValueError(
-                        shape_mismatch_error(
-                            value.shape,
-                            self._frame.loc[key[0]].shape,
-                        )
+                    shape_mismatch_error(
+                        value.shape,
+                        self._frame.loc[key[0]].shape,
                     )
                 value_column_names = set(value._column_names)
                 scatter_map = _indices_from_labels(self._frame, key[0])
@@ -379,20 +377,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     indexed_shape = columns_df.loc[key[0]].shape
                     if value.shape[1] == 1:
                         if value.shape[0] != indexed_shape[0]:
-                            raise ValueError(
-                                shape_mismatch_error(
-                                    value.shape, indexed_shape
-                                )
-                            )
+                            shape_mismatch_error(value.shape, indexed_shape)
                         for i, col in enumerate(columns_df._column_names):
                             self._frame[col].loc[key[0]] = value[:, 0]
                     else:
                         if value.shape != indexed_shape:
-                            raise ValueError(
-                                shape_mismatch_error(
-                                    value.shape, indexed_shape
-                                )
-                            )
+                            shape_mismatch_error(value.shape, indexed_shape)
                         for i, col in enumerate(columns_df._column_names):
                             self._frame[col].loc[key[0]] = value[:, i]
                 else:
@@ -482,11 +472,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
         elif isinstance(value, cudf.DataFrame):
             if value.shape != self._frame.iloc[key[0]].shape:
-                raise ValueError(
-                    shape_mismatch_error(
-                        value.shape,
-                        self._frame.loc[key[0]].shape,
-                    )
+                shape_mismatch_error(
+                    value.shape,
+                    self._frame.loc[key[0]].shape,
                 )
             value_column_names = set(value._column_names)
             for col in columns_df._column_names:
@@ -502,16 +490,12 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 indexed_shape = columns_df.iloc[key[0]].shape
                 if value.shape[1] == 1:
                     if value.shape[0] != indexed_shape[0]:
-                        raise ValueError(
-                            shape_mismatch_error(value.shape, indexed_shape)
-                        )
+                        shape_mismatch_error(value.shape, indexed_shape)
                     for i, col in enumerate(columns_df._column_names):
                         self._frame[col].iloc[key[0]] = value[:, 0]
                 else:
                     if value.shape != indexed_shape:
-                        raise ValueError(
-                            shape_mismatch_error(value.shape, indexed_shape)
-                        )
+                        shape_mismatch_error(value.shape, indexed_shape)
                     for i, col in enumerate(columns_df._column_names):
                         self._frame._data[col][key[0]] = value[:, i]
             else:
