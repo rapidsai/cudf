@@ -22,6 +22,12 @@
 
 namespace cudf::lists::detail {
 
+/**
+ * @copydoc cudf::lists::apply_boolean_mask(lists_column_view const&, lists_column_view const&,
+ * rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 std::unique_ptr<column> apply_boolean_mask(
   lists_column_view const& input,
   lists_column_view const& boolean_mask,
