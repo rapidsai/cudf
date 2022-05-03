@@ -78,7 +78,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 {
   auto const num_rows = input.size();
 
-  if (num_rows == 0) { return cudf::empty_like(input.child()); }
+  if (num_rows == 0) { return cudf::empty_like(input.parent()); }
   // Note: This assert guarantees that no elements are gathered
   // from nominally NULL input list rows.
   assert_same_sizes(input, boolean_mask, stream);

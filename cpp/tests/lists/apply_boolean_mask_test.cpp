@@ -106,30 +106,32 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, WithNullElements)
   }
 }
 
-/*
-TEST_F(SegmentedFilterTest, TheBasicForNestedLists)
+TEST_F(ApplyBooleanMaskTest, Trivial)
 {
-  std::cout << "CALEB: SegmentedFilterTest.TheBasicForNestedLists" << std::endl;
-  auto filteree =
-    lists{{{0, 1}, {2}}, {{3}, {4, 5}}, {{6, 7}, {8}}, {{9, 0, 1}}, {{2, 3, 4}}, {{5, 6, 7}}};
-  auto filterer = filter{{1, 0}, {0, 1}, {1, 0}, {0}, {1}, {0}}.release();
-  // auto filterer   = filter{{1,0,1}, {}, {1,0,1}, {0,1,0}, {1,0,1}, {0,1,0}}.release();
-  auto bools_cv = lists_column_view(*filterer);
-  std::cout << "Filteree: " << std::endl;
-  print(filteree);
-  std::cout << "Filterer: " << std::endl;
-  print(*filterer);
-
-  auto output_offsets = cudf::reduction::segmented_sum(
-    bools_cv.child(), bools_cv.offsets(), data_type{type_id::INT32}, null_policy::EXCLUDE);
-  std::cout << "Output offsets:\n";
-  print(*output_offsets);
-
-  auto filtered_child = cudf::detail::apply_boolean_mask(
-    cudf::table_view{{lists_column_view{filteree}.child()}}, bools_cv.child());
-  std::cout << "Filtered child:\n";
-  print(filtered_child->view().column(0));
+  auto const input  = lists<int32_t>{};
+  auto const filter = filter_t{};
+  auto const result = apply_boolean_mask(lists_column_view{input}, lists_column_view{filter});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, lists<int32_t>{});
 }
-*/
+
+TEST_F(ApplyBooleanMaskTest, Failure)
+{
+  {
+    // Mismatched number of rows.
+    auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
+    auto const filter = filter_t{{0, 0, 0}};
+    CUDF_EXPECT_THROW_MESSAGE(
+      apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
+      "Boolean masks column must have same number of rows as input.");
+  }
+  {
+    // Mismatched number of elements.
+    auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
+    auto const filter = filter_t{{0, 0}, {1, 1, 1}};
+    CUDF_EXPECT_THROW_MESSAGE(
+      apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
+      "Each list row must match the corresponding boolean mask row in size.");
+  }
+}
 
 }  // namespace cudf::test
