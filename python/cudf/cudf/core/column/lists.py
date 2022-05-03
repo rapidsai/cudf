@@ -17,7 +17,8 @@ from cudf._lib.lists import (
     drop_list_duplicates,
     extract_element_column,
     extract_element_scalar,
-    index_of,
+    index_of_column,
+    index_of_scalar,
     sort_lists,
 )
 from cudf._lib.strings.convert.convert_lists import format_list_column
@@ -463,10 +464,61 @@ class ListMethods(ColumnMethods):
             raise
         return res
 
-    def index(self, search_key: ScalarLike) -> ParentType:
-        search_key = cudf.Scalar(search_key)
+    def index(self, search_key: Union[ScalarLike, ColumnLike]) -> ParentType:
+        """
+        Returns integers representing the index of the search key for each row.
+
+        If ``search_key`` is a sequence, it must be the same length as the
+        Series and ``search_key[i]`` represents the search key for the
+        ``i``-th row of the Series.
+
+        If the search key is not contained in a row, -1 is returned. If either
+        the row or the search key are null, <NA> is returned. If the search key
+        is contained multiple times, the smallest matching index is returned.
+
+        Parameters
+        ----------
+        search_key : scalar or sequence of scalars
+            Element or elements being searched for in each row of the list
+            column
+
+        Returns
+        -------
+        Series or Index
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
+        >>> s.list.index(4)
+        0   -1
+        1    1
+        2    0
+        dtype: int32
+
+        >>> s = cudf.Series([["a", "b", "c"], ["x", "y", "z"]])
+        >>> s.list.index(["b", "z"])
+        0    1
+        1    2
+        dtype: int32
+
+        >>> s = cudf.Series([[4, 5, 6], None, [-3, -2, -1]])
+        >>> s.list.index([None, 3, -2])
+        0    <NA>
+        1    <NA>
+        2       1
+        dtype: int32
+        """
+
         try:
-            res = self._return_or_inplace(index_of(self._column, search_key))
+            if is_scalar(search_key):
+                return self._return_or_inplace(
+                    index_of_scalar(self._column, cudf.Scalar(search_key))
+                )
+            else:
+                return self._return_or_inplace(
+                    index_of_column(self._column, as_column(search_key))
+                )
+
         except RuntimeError as e:
             if (
                 "Type/Scale of search key does not "
@@ -474,7 +526,6 @@ class ListMethods(ColumnMethods):
             ):
                 raise TypeError(str(e)) from e
             raise
-        return res
 
     @property
     def leaves(self) -> ParentType:

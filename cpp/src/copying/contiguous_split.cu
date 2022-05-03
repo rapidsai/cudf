@@ -688,9 +688,9 @@ BufInfo build_output_columns(InputIter begin,
                                   ? 0
                                   : (current_info->num_rows - current_info->valid_count);
         ++current_info;
-        return std::make_pair(ptr, null_count);
+        return std::pair(ptr, null_count);
       }
-      return std::make_pair(static_cast<bitmask_type const*>(nullptr), 0);
+      return std::pair(static_cast<bitmask_type const*>(nullptr), 0);
     }();
 
     // size/data pointer for the column

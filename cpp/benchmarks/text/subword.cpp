@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -53,9 +54,9 @@ static std::string create_hash_vocab_file()
   return hash_file;
 }
 
-static void BM_cuda_tokenizer_cudf(benchmark::State& state)
+static void BM_subword_tokenizer(benchmark::State& state)
 {
-  uint32_t nrows = 1000;
+  auto const nrows = static_cast<cudf::size_type>(state.range(0));
   std::vector<const char*> h_strings(nrows, "This is a test ");
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   std::string hash_file = create_hash_vocab_file();
@@ -67,6 +68,7 @@ static void BM_cuda_tokenizer_cudf(benchmark::State& state)
   //
   auto vocab = nvtext::load_vocabulary_file(hash_file);
   for (auto _ : state) {
+    cuda_event_timer raii(state, true);
     auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
                                            *vocab,
                                            max_sequence_length,
@@ -76,6 +78,18 @@ static void BM_cuda_tokenizer_cudf(benchmark::State& state)
                                            MAX_ROWS_TENSOR);
   }
 }
-BENCHMARK(BM_cuda_tokenizer_cudf);
 
-BENCHMARK_MAIN();
+class Subword : public cudf::benchmark {
+};
+
+#define SUBWORD_BM_BENCHMARK_DEFINE(name)                                                        \
+  BENCHMARK_DEFINE_F(Subword, name)(::benchmark::State & state) { BM_subword_tokenizer(state); } \
+  BENCHMARK_REGISTER_F(Subword, name)                                                            \
+    ->RangeMultiplier(2)                                                                         \
+    ->Range(1 << 10, 1 << 17)                                                                    \
+    ->UseManualTime()                                                                            \
+    ->Unit(benchmark::kMillisecond);
+
+SUBWORD_BM_BENCHMARK_DEFINE(BM_subword_tokenizer);
+
+// BENCHMARK_MAIN();

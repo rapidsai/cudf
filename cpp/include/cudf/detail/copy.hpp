@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -299,5 +299,22 @@ std::unique_ptr<scalar> get_element(
   size_type index,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::has_nonempty_nulls
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+bool has_nonempty_nulls(column_view const& input,
+                        rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
+/**
+ * @copydoc cudf::may_have_nonempty_nulls
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+bool may_have_nonempty_nulls(column_view const& input,
+                             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
 }  // namespace detail
 }  // namespace cudf
