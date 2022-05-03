@@ -28,7 +28,18 @@ using cudf::host_span;
 namespace cudf {
 namespace io {
 
-std::vector<char> get_uncompressed_data(compression_type compression, host_span<char const> data);
+/**
+ * @brief Decompresses a gzip/zip/bzip2/xz file stored in system memory.
+ *
+ * The result is allocated and stored in a vector.
+ * If the function call fails, the output vector is empty.
+ *
+ * @param compression Type of compression of the input data
+ * @param src Compressed buffer
+ *
+ * @return Vector containing the Decompressed output
+ */
+std::vector<char> decompress(compression_type compression, host_span<char const> const src);
 
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,

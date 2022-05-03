@@ -280,35 +280,21 @@ int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t 
   return (zerr == Z_STREAM_END) ? Z_OK : zerr;
 }
 
-/**
- * @brief Uncompresses a gzip/zip/bzip2/xz file stored in system memory.
- *
- * The result is allocated and stored in a vector.
- * If the function call fails, the output vector is empty.
- *
- * @param[in] src Pointer to the compressed data in system memory
- * @param[in] src_size The size of the compressed data, in bytes
- * @param[in] stream_type Type of compression of the input data
- *
- * @return Vector containing the uncompressed output
- */
-std::vector<char> io_uncompress_single_h2d(const void* src,
-                                           size_t src_size,
-                                           compression_type compression)
+std::vector<char> decompress(compression_type compression, host_span<char const> const src)
 {
-  const uint8_t* raw       = static_cast<const uint8_t*>(src);
+  CUDF_EXPECTS(src.data() != nullptr, "Decompression: Source cannot be nullptr");
+  CUDF_EXPECTS(not src.empty(), "Decompression: Source size cannot be 0");
+
+  auto raw                 = reinterpret_cast<uint8_t const*>(src.data());
   const uint8_t* comp_data = nullptr;
   size_t comp_len          = 0;
   size_t uncomp_len        = 0;
-
-  CUDF_EXPECTS(src != nullptr, "Decompression: Source cannot be nullptr");
-  CUDF_EXPECTS(src_size != 0, "Decompression: Source size cannot be 0");
 
   switch (compression) {
     case compression_type::AUTO:
     case compression_type::GZIP: {
       gz_archive_s gz;
-      if (ParseGZArchive(&gz, raw, src_size)) {
+      if (ParseGZArchive(&gz, raw, src.size())) {
         compression = compression_type::GZIP;
         comp_data   = gz.comp_data;
         comp_len    = gz.comp_len;
@@ -318,7 +304,7 @@ std::vector<char> io_uncompress_single_h2d(const void* src,
     }
     case compression_type::ZIP: {
       zip_archive_s za;
-      if (OpenZipArchive(&za, raw, src_size)) {
+      if (OpenZipArchive(&za, raw, src.size())) {
         size_t cdfh_ofs = 0;
         for (int i = 0; i < za.eocd->num_entries; i++) {
           const zip_cdfh_s* cdfh = reinterpret_cast<const zip_cdfh_s*>(
@@ -332,12 +318,12 @@ std::vector<char> io_uncompress_single_h2d(const void* src,
           if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
             size_t lfh_ofs       = cdfh->hdr_ofs;
             const zip_lfh_s* lfh = reinterpret_cast<const zip_lfh_s*>(raw + lfh_ofs);
-            if (lfh_ofs + sizeof(zip_lfh_s) <= src_size && lfh->sig == 0x04034b50 &&
-                lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src_size) {
+            if (lfh_ofs + sizeof(zip_lfh_s) <= src.size() && lfh->sig == 0x04034b50 &&
+                lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src.size()) {
               if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
                 size_t file_start = lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len;
                 size_t file_end   = file_start + lfh->comp_size;
-                if (file_end <= src_size) {
+                if (file_end <= src.size()) {
                   // Pick the first valid file of non-zero size (only 1 file expected in archive)
                   compression = compression_type::ZIP;
                   comp_data   = raw + file_start;
@@ -354,14 +340,14 @@ std::vector<char> io_uncompress_single_h2d(const void* src,
     }
       if (compression != compression_type::AUTO) break;  // Fall through for INFER
     case compression_type::BZIP2:
-      if (src_size > 4) {
+      if (src.size() > 4) {
         const bz2_file_header_s* fhdr = reinterpret_cast<const bz2_file_header_s*>(raw);
         // Check for BZIP2 file signature "BZh1" to "BZh9"
         if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' &&
             fhdr->blksz >= '1' && fhdr->blksz <= '9') {
           compression = compression_type::BZIP2;
           comp_data   = raw;
-          comp_len    = src_size;
+          comp_len    = src.size();
           uncomp_len  = 0;
         }
       }
@@ -412,21 +398,6 @@ std::vector<char> io_uncompress_single_h2d(const void* src,
   }
 
   CUDF_FAIL("Unsupported compressed stream type");
-}
-
-/**
- * @brief Uncompresses the input data and stores the allocated result into
- * a vector.
- *
- * @param[in] data Pointer to the csv data in host memory
- * @param[in] compression String describing the compression type
- *
- * @return Vector containing the output uncompressed data
- */
-std::vector<char> get_uncompressed_data(compression_type compression,
-                                        host_span<char const> const data)
-{
-  return io_uncompress_single_h2d(data.data(), data.size(), compression);
 }
 
 /**

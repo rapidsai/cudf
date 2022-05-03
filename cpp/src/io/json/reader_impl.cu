@@ -241,7 +241,7 @@ std::vector<char> ingest_raw_input(std::vector<std::unique_ptr<datasource>> cons
   if (compression == compression_type::NONE) {
     return buffer;
   } else {
-    return get_uncompressed_data(compression, buffer);
+    return decompress(compression, buffer);
   }
 }
 
