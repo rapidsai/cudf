@@ -152,7 +152,7 @@ class device_row_comparator {
                                   weak_ordering nan_result   = weak_ordering::EQUIVALENT)
       : _lhs{lhs},
         _rhs{rhs},
-        _nulls{has_nulls},
+        _check_nulls{check_nulls},
         _null_precedence{null_precedence},
         _depth{depth},
         _nan_result{nan_result}
@@ -172,7 +172,7 @@ class device_row_comparator {
     __device__ cuda::std::pair<weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
-      if (_nulls) {
+      if (_check_nulls) {
         bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
         bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
 
@@ -181,12 +181,13 @@ class device_row_comparator {
         }
       }
 
-      weak_ordering res = NanConfig ? relational_compare(_lhs.element<Element>(lhs_element_index),
-                                                         _rhs.element<Element>(rhs_element_index),
-                                                         _nan_result)
-                                    : relational_compare(_lhs.element<Element>(lhs_element_index),
-                                                         _rhs.element<Element>(rhs_element_index));
-      return cuda::std::pair(res, std::numeric_limits<int>::max());
+      return cuda::std::pair(NanConfig
+                               ? relational_compare(_lhs.element<Element>(lhs_element_index),
+                                                    _rhs.element<Element>(rhs_element_index),
+                                                    _nan_result)
+                               : relational_compare(_lhs.element<Element>(lhs_element_index),
+                                                    _rhs.element<Element>(rhs_element_index)),
+                             std::numeric_limits<int>::max());
     }
 
     template <typename Element,
@@ -225,7 +226,7 @@ class device_row_comparator {
       }
 
       auto const comparator =
-        element_comparator{_nulls, lcol, rcol, _null_precedence, depth, _nan_result};
+        element_comparator{_check_nulls, lcol, rcol, _null_precedence, depth, _nan_result};
       return cudf::type_dispatcher<dispatch_void_if_nested>(
         lcol.type(), comparator, lhs_element_index, rhs_element_index);
     }
@@ -233,7 +234,7 @@ class device_row_comparator {
    private:
     column_device_view const _lhs;
     column_device_view const _rhs;
-    Nullate const _nulls;
+    Nullate const _check_nulls;
     null_order const _null_precedence;
     int const _depth;
     weak_ordering _nan_result;
@@ -263,14 +264,14 @@ class device_row_comparator {
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
       auto const comparator =
-        NanConfig ? element_comparator{_nulls,
+        NanConfig ? element_comparator{_check_nulls,
                                        _lhs.column(i),
                                        _rhs.column(i),
                                        null_precedence,
                                        depth,
                                        ascending ? weak_ordering::GREATER : weak_ordering::LESS}
 
-                  : element_comparator{_nulls,
+                  : element_comparator{_check_nulls,
                                        _lhs.column(i),
                                        _rhs.column(i),
                                        null_precedence,
@@ -327,13 +328,13 @@ class device_less_comparator {
    * `null_order::BEFORE` for all columns.
    */
   device_less_comparator(
-    Nullate has_nulls,
+    Nullate check_nulls,
     table_device_view lhs,
     table_device_view rhs,
     std::optional<device_span<int const>> depth                  = std::nullopt,
     std::optional<device_span<order const>> column_order         = std::nullopt,
     std::optional<device_span<null_order const>> null_precedence = std::nullopt) noexcept
-    : comparator{has_nulls, lhs, rhs, depth, column_order, null_precedence}
+    : comparator{check_nulls, lhs, rhs, depth, column_order, null_precedence}
   {
   }
 
