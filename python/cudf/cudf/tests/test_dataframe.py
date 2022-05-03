@@ -2861,22 +2861,6 @@ def test_dataframe_reindex_new(copy, reindex_data, args, gd_kwargs):
 
 
 @pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_10(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    columns = ["a", "b", "c", "d", "e"]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate reindexes both labels and column names when
-    # index=index_labels and columns=column_labels
-    assert_eq(
-        pdf.reindex(index=index, columns=columns, copy=True),
-        gdf.reindex(index=index, columns=columns, copy=copy),
-    )
-
-
-@pytest.mark.parametrize("copy", [True, False])
 def test_dataframe_reindex_change_dtype(copy):
     if PANDAS_GE_110:
         kwargs = {"check_freq": False}
