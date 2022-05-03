@@ -923,6 +923,16 @@ def test_string_replace(
         assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("pat", ["A*", "F?H?"])
+def test_string_replace_zero_length(ps_gs, pat):
+    ps, gs = ps_gs
+
+    expect = ps.str.replace(pat, "_", regex=True)
+    got = gs.str.replace(pat, "_", regex=True)
+
+    assert_eq(expect, got)
+
+
 def test_string_lower(ps_gs):
     ps, gs = ps_gs
 
