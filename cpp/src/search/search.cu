@@ -19,11 +19,13 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/strong_index.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/search.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -75,6 +77,24 @@ void launch_search(DataIterator it_data,
   }
 }
 
+struct make_lhs_index {
+  __device__ lhs_index_type operator()(size_type i) const { return static_cast<lhs_index_type>(i); }
+};
+
+struct make_rhs_index {
+  __device__ rhs_index_type operator()(size_type i) const { return static_cast<rhs_index_type>(i); }
+};
+
+auto make_lhs_index_counting_iterator(size_type start)
+{
+  return cudf::detail::make_counting_transform_iterator(start, make_lhs_index{});
+};
+
+auto make_rhs_index_counting_iterator(size_type start)
+{
+  return cudf::detail::make_counting_transform_iterator(start, make_rhs_index{});
+};
+
 std::unique_ptr<column> search_ordered(table_view const& t,
                                        table_view const& values,
                                        bool find_first,
@@ -104,8 +124,40 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
-  auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
+  auto const matched        = dictionary::detail::match_dictionaries({t, values}, stream);
+  auto const matched_t      = matched.second.front();
+  auto const matched_values = matched.second.back();
 
+  auto const& lhs       = find_first ? matched_t : matched_values;
+  auto const& rhs       = find_first ? matched_values : matched_t;
+  auto const comparator = cudf::experimental::row::lexicographic::two_table_comparator(
+    lhs, rhs, column_order, null_precedence, stream);
+  auto const has_null_elements = has_nested_nulls(lhs) or has_nested_nulls(rhs);
+  auto const d_comparator      = comparator.device_comparator(nullate::DYNAMIC{has_null_elements});
+
+  auto const left_it  = cudf::make_lhs_index_counting_iterator(0);
+  auto const right_it = cudf::make_rhs_index_counting_iterator(0);
+
+  if (find_first) {
+    launch_search(left_it,
+                  right_it,
+                  t.num_rows(),
+                  values.num_rows(),
+                  result_out,
+                  d_comparator,
+                  find_first,
+                  stream);
+  } else {
+    launch_search(right_it,
+                  left_it,
+                  t.num_rows(),
+                  values.num_rows(),
+                  result_out,
+                  d_comparator,
+                  find_first,
+                  stream);
+  }
+  /*
   // Prepare to flatten the structs column
   auto const has_null_elements   = has_nested_nulls(t) or has_nested_nulls(values);
   auto const flatten_nullability = has_null_elements
@@ -137,6 +189,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                                  null_precedence_dv.data());
   launch_search(
     count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
+  */
 
   return result;
 }
