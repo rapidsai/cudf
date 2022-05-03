@@ -18,6 +18,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/find.hpp>
@@ -28,6 +30,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
@@ -162,6 +165,81 @@ std::unique_ptr<column> rfind(strings_column_view const& strings,
 
 namespace detail {
 namespace {
+
+/**
+ * @brief Threshold to decide on using string or warp parallel functions.
+ *
+ * If the average byte length of a string in a column exceeds this value then
+ * the warp-parallel `contains_warp_fn` function is used.
+ * Otherwise, the string-parallel function in `contains_fn` is used.
+ *
+ * This is only used for the scalar version of `contains()` right now.
+ */
+constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 64;
+
+/**
+ * @brief Check if `d_target` appears in a row in `d_strings`.
+ *
+ * This executes as a warp per string/row.
+ */
+struct contains_warp_fn {
+  column_device_view const d_strings;
+  string_view const d_target;
+  bool* d_results;
+
+  __device__ void operator()(std::size_t idx)
+  {
+    auto const str_idx = static_cast<size_type>(idx / cudf::detail::warp_size);
+    if (d_strings.is_null(str_idx)) { return; }
+    // get the string for this warp
+    auto const d_str = d_strings.element<string_view>(str_idx);
+    // each thread of the warp will check just part of the string
+    auto found = false;
+    for (auto i = static_cast<size_type>(idx % cudf::detail::warp_size);
+         !found && (i + d_target.size_bytes()) < d_str.size_bytes();
+         i += cudf::detail::warp_size) {
+      // check the target matches this part of the d_str data
+      if (d_target.compare(d_str.data() + i, d_target.size_bytes()) == 0) { found = true; }
+    }
+    if (found) { atomicOr(d_results + str_idx, true); }
+  }
+};
+
+std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
+                                               string_scalar const& target,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
+  auto d_target = string_view(target.data(), target.size());
+
+  // create output column
+  auto results = make_numeric_column(data_type{type_id::BOOL8},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+
+  // fill the output with `false` unless the `d_target` is empty
+  auto results_view = results->mutable_view();
+  thrust::fill(rmm::exec_policy(stream),
+               results_view.begin<bool>(),
+               results_view.end<bool>(),
+               d_target.empty());
+
+  if (!d_target.empty()) {
+    // launch warp per string
+    auto d_strings = column_device_view::create(input.parent(), stream);
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<std::size_t>(0),
+                       static_cast<std::size_t>(input.size()) * cudf::detail::warp_size,
+                       contains_warp_fn{*d_strings, d_target, results_view.data<bool>()});
+  }
+  results->set_null_count(input.null_count());
+  return results;
+}
+
 /**
  * @brief Utility to return a bool column indicating the presence of
  * a given target string in a strings column.
@@ -286,15 +364,21 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
 }  // namespace
 
 std::unique_ptr<column> contains(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   string_scalar const& target,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
+  // use warp parallel when the average string width is greater than the threshold
+  if (!input.is_empty() && ((input.chars_size() / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
+    return contains_warp_parallel(input, target, stream, mr);
+  }
+
+  // benchmark measurements showed this to be faster for smaller strings
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     return d_string.find(d_target) >= 0;
   };
-  return contains_fn(strings, target, pfn, stream, mr);
+  return contains_fn(input, target, pfn, stream, mr);
 }
 
 std::unique_ptr<column> contains(
