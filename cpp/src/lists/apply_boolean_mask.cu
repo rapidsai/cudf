@@ -119,8 +119,8 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
     // Could have attempted an exclusive_scan(), but it would not compute the last entry.
     // Instead, inclusive_scan(), followed by writing `0` to the head of the offsets column.
     thrust::inclusive_scan(rmm::exec_policy(stream),
-                           sizes_view().begin<offset_type>(),
-                           sizes_view().end<offset_type>(),
+                           sizes_view.begin<offset_type>(),
+                           sizes_view.end<offset_type>(),
                            output_offsets_view.begin<offset_type>() + 1);
     CUDF_CUDA_TRY(cudaMemsetAsync(
       output_offsets_view.begin<offset_type>(), 0, sizeof(offset_type), stream.value()));
