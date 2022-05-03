@@ -9,7 +9,11 @@ from typing import Dict, List, Tuple
 from uuid import uuid4
 
 import numpy as np
-import s3fs
+
+try:
+    import s3fs
+except (ImportError, ModuleNotFoundError):
+    s3fs = None
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -210,7 +214,8 @@ def _process_dataset(
 
     # Initialize ds.FilesystemDataset
     if (
-        isinstance(fs, s3fs.S3FileSystem)
+        s3fs is not None
+        and isinstance(fs, s3fs.S3FileSystem)
         and len(paths) == 1
         and fs.isdir(paths[0])
     ):
