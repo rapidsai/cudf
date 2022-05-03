@@ -469,6 +469,7 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 # * lists tests ----------------------------------------------------------------------------------
 ConfigureTest(
   LISTS_TEST
+  lists/apply_boolean_mask_test.cpp
   lists/combine/concatenate_list_elements_tests.cpp
   lists/combine/concatenate_rows_tests.cpp
   lists/contains_tests.cpp
@@ -478,7 +479,6 @@ ConfigureTest(
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
   lists/sort_lists_tests.cpp
-  lists/segmented_test.cu
 )
 
 # ##################################################################################################

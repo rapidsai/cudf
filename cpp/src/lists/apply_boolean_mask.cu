@@ -30,7 +30,7 @@
 
 #include <thrust/reduce.h>
 
-namespace cudf {
+namespace cudf::lists {
 namespace detail {
 namespace {
 
@@ -61,7 +61,7 @@ void assert_same_sizes(lists_column_view const& input,
   CUDF_EXPECTS(input.size() == boolean_mask.size(),
                "Boolean masks column must have same number of rows as input.");
 
-  auto const begin = make_counting_transform_iterator(
+  auto const begin = cudf::detail::make_counting_transform_iterator(
     0,
     [get_list_size = get_list_size{input}, get_mask_size = get_list_size{boolean_mask}] __device__(
       size_type i) -> size_type { return get_list_size(i) != get_mask_size(i); });
@@ -76,8 +76,6 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
-  // TODO: Test sliced input. Offsets aren't sliced.
-
   auto const num_rows = input.size();
 
   if (num_rows == 0) { return cudf::empty_like(input.child()); }
@@ -86,7 +84,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
   assert_same_sizes(input, boolean_mask, stream);
 
   auto constexpr offset_data_type = data_type{type_id::INT32};
-
+  
   auto filtered_child = [&] {
     std::unique_ptr<cudf::table> tbl =
       cudf::detail::apply_boolean_mask(cudf::table_view{{input.get_sliced_child(stream)}},
@@ -98,10 +96,11 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
   };
 
   auto output_offsets = [&] {
-    auto boolean_mask_sliced_offsets =
+    auto boolean_mask_sliced_offsets = 
       cudf::detail::slice(
-        boolean_mask.offsets(), {boolean_mask.offset(), boolean_mask.size()}, stream)
+        boolean_mask.offsets(), {boolean_mask.offset(), boolean_mask.size() + 1}, stream)
         .front();
+
     auto const sizes         = cudf::reduction::segmented_sum(boolean_mask.get_sliced_child(stream),
                                                       boolean_mask_sliced_offsets,
                                                       offset_data_type,
@@ -112,10 +111,14 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 
     auto offsets = cudf::make_numeric_column(
       offset_data_type, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
-    thrust::exclusive_scan(rmm::exec_policy(stream),
+    thrust::inclusive_scan(rmm::exec_policy(stream),
                            no_null_sizes->view().begin<offset_type>(),
-                           no_null_sizes->view().end<offset_type>() + 1,
-                           offsets->mutable_view().begin<offset_type>());
+                           no_null_sizes->view().end<offset_type>(),
+                           offsets->mutable_view().begin<offset_type>() + 1);
+    CUDF_CUDA_TRY(cudaMemsetAsync(offsets->mutable_view().begin<offset_type>(),
+                                  0,
+                                  sizeof(offset_type),
+                                  stream.value()));
     return offsets;
   };
 
@@ -136,4 +139,4 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
   return detail::apply_boolean_mask(input, boolean_mask, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace cudf
+}  // namespace cudf::lists
