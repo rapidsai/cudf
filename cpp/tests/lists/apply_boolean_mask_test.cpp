@@ -106,6 +106,40 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, WithNullElements)
   }
 }
 
+TYPED_TEST(ApplyBooleanMaskTypedTest, NullInTheInput)
+{
+  using T = TypeParam;
+  auto input =
+    lists<T>{{{0, 1, 2, 3}, {}, {6, 7, 8, 9}, {}, {2, 3, 4, 5}, {6, 7}}, nulls_at({1, 3})}
+      .release();
+  auto filter = filter_t{{1, 0, 1, 0}, {}, {1, 0, 1, 0}, {}, {1, 0, 1, 0}, {1, 0}};
+
+  {
+    // Unsliced.
+    auto filtered = apply_boolean_mask(lists_column_view{*input}, lists_column_view{filter});
+    auto expected = lists<T>{{{0, 2}, {}, {6, 8}, {}, {2, 4}, {6}}, nulls_at({1, 3})};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*filtered, expected);
+  }
+  {
+    // Sliced input: Remove the first row.
+    auto sliced = cudf::slice(*input, {1, input->size()}).front();
+    //           == lists_t{{{}, {6, 7, 8, 9}, {}, {2, 3, 4, 5}, {6, 7}}, nulls_at({0,2})};
+    auto filter   = filter_t{{}, {0, 1, 0, 1}, {}, {0, 1, 0, 1}, {0, 0}};
+    auto filtered = apply_boolean_mask(lists_column_view{sliced}, lists_column_view{filter});
+    auto expected = lists<T>{{{}, {7, 9}, {}, {3, 5}, {}}, nulls_at({0, 2})};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*filtered, expected);
+  }
+  {
+    // Sliced input: Remove the first two rows.
+    auto sliced = cudf::slice(*input, {2, input->size()}).front();
+    //           == lists_t{{{6, 7, 8, 9}, {}, {2, 3, 4, 5}, {6, 7}}, null_at(1)};
+    auto filter   = filter_t{{0, 1, 0, 1}, {}, {0, 1, 0, 1}, {0, 0}};
+    auto filtered = apply_boolean_mask(lists_column_view{sliced}, lists_column_view{filter});
+    auto expected = lists<T>{{{7, 9}, {}, {3, 5}, {}}, null_at(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*filtered, expected);
+  }
+}
+
 TEST_F(ApplyBooleanMaskTest, Trivial)
 {
   auto const input  = lists<int32_t>{};

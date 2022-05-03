@@ -37,18 +37,21 @@ namespace {
 class get_list_size {
  public:
   explicit get_list_size(lists_column_view const& lcv)
-    : num_rows{lcv.size()},
-      offsets{lcv.offsets().begin<offset_type>() + lcv.offset()},
+    : offset{lcv.offset()},
+      num_rows{lcv.size()},
+      offsets{lcv.offsets().begin<offset_type>()},
       bitmask{lcv.null_mask()}
   {
   }
 
   size_type __device__ operator()(size_type i) const
   {
-    return bit_value_or(bitmask, i, true) ? (offsets[i + 1] - offsets[i]) : 0;
+    auto const offset_i = i + offset;
+    return bit_value_or(bitmask, offset_i, true) ? (offsets[offset_i + 1] - offsets[offset_i]) : 0;
   }
 
  private:
+  offset_type offset;
   size_type num_rows;
   offset_type const* offsets;
   bitmask_type const* bitmask;
