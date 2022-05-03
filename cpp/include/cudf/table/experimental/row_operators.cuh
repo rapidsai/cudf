@@ -72,6 +72,9 @@ namespace row {
 
 namespace lexicographic {
 
+template <typename Nullate>
+class two_table_device_row_comparator_adapter;
+
 /**
  * @brief Computes whether one row is lexicographically *less* than another row.
  *
@@ -90,7 +93,7 @@ namespace lexicographic {
 template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
-  // friend class two_table_device_row_comparator_adapter<Nullate>;
+  friend class two_table_device_row_comparator_adapter<Nullate>;
 
   /**
    * @brief Construct a function object for performing a lexicographic
@@ -297,6 +300,7 @@ struct preprocessed_table {
 
  private:
   friend class self_comparator;
+  friend class two_table_comparator;
 
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
