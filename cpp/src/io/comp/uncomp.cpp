@@ -249,7 +249,7 @@ int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data,
  * @param[in] comp_data Raw compressed data
  * @param[in] comp_len Compressed data size
  */
-int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t comp_len)
+int cpu_inflate_vector(std::vector<uint8_t>& dst, const uint8_t* comp_data, size_t comp_len)
 {
   int zerr;
   z_stream strm;
@@ -258,7 +258,7 @@ int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t 
   strm.next_in   = const_cast<Bytef*>(reinterpret_cast<Bytef const*>(comp_data));
   strm.avail_in  = comp_len;
   strm.total_in  = 0;
-  strm.next_out  = reinterpret_cast<uint8_t*>(dst.data());
+  strm.next_out  = dst.data();
   strm.avail_out = dst.size();
   strm.total_out = 0;
   zerr           = inflateInit2(&strm, -15);  // -15 for raw data without GZIP headers
@@ -280,12 +280,12 @@ int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t 
   return (zerr == Z_STREAM_END) ? Z_OK : zerr;
 }
 
-std::vector<char> decompress(compression_type compression, host_span<char const> const src)
+std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t const> src)
 {
   CUDF_EXPECTS(src.data() != nullptr, "Decompression: Source cannot be nullptr");
   CUDF_EXPECTS(not src.empty(), "Decompression: Source size cannot be 0");
 
-  auto raw                 = reinterpret_cast<uint8_t const*>(src.data());
+  auto raw                 = src.data();
   const uint8_t* comp_data = nullptr;
   size_t comp_len          = 0;
   size_t uncomp_len        = 0;
@@ -367,7 +367,7 @@ std::vector<char> decompress(compression_type compression, host_span<char const>
 
   if (compression == compression_type::GZIP || compression == compression_type::ZIP) {
     // INFLATE
-    std::vector<char> dst(uncomp_len);
+    std::vector<uint8_t> dst(uncomp_len);
     CUDF_EXPECTS(cpu_inflate_vector(dst, comp_data, comp_len) == 0,
                  "Decompression: error in stream");
     return dst;
@@ -376,11 +376,10 @@ std::vector<char> decompress(compression_type compression, host_span<char const>
     size_t src_ofs = 0;
     size_t dst_ofs = 0;
     int bz_err     = 0;
-    std::vector<char> dst(uncomp_len);
+    std::vector<uint8_t> dst(uncomp_len);
     do {
       size_t dst_len = uncomp_len - dst_ofs;
-      bz_err         = cpu_bz2_uncompress(
-        comp_data, comp_len, reinterpret_cast<uint8_t*>(dst.data()) + dst_ofs, &dst_len, &src_ofs);
+      bz_err = cpu_bz2_uncompress(comp_data, comp_len, dst.data() + dst_ofs, &dst_len, &src_ofs);
       if (bz_err == BZ_OUTBUFF_FULL) {
         // TBD: We could infer the compression ratio based on produced/consumed byte counts
         // in order to minimize realloc events and over-allocation
