@@ -41,6 +41,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(boolean_mask.child().type().id() == type_id::BOOL8, "Mask must be of type BOOL8.");
   CUDF_EXPECTS(input.size() == boolean_mask.size(),
                "Boolean masks column must have same number of rows as input.");
   auto const num_rows = input.size();
