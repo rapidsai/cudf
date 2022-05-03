@@ -111,16 +111,21 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                                       stream);
     auto const scalar_0      = cudf::numeric_scalar<offset_type>{0, true, stream};
     auto const no_null_sizes = cudf::detail::replace_nulls(*sizes, scalar_0, stream);
-
-    auto offsets = cudf::make_numeric_column(
+    auto const sizes_view    = no_null_sizes->view();
+    auto output_offsets      = cudf::make_numeric_column(
       offset_data_type, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
+    auto output_offsets_view = output_offsets->mutable_view();
+
+    // Could have attempted an exclusive_scan(), but it would not compute the last entry.
+    // Instead, inclusive_scan(), followed by writing `0` to the head of the offsets column.
     thrust::inclusive_scan(rmm::exec_policy(stream),
-                           no_null_sizes->view().begin<offset_type>(),
-                           no_null_sizes->view().end<offset_type>(),
-                           offsets->mutable_view().begin<offset_type>() + 1);
+                           sizes_view().begin<offset_type>(),
+                           sizes_view().end<offset_type>(),
+                           output_offsets_view.begin<offset_type>() + 1);
     CUDF_CUDA_TRY(cudaMemsetAsync(
-      offsets->mutable_view().begin<offset_type>(), 0, sizeof(offset_type), stream.value()));
-    return offsets;
+      output_offsets_view.begin<offset_type>(), 0, sizeof(offset_type), stream.value()));
+
+    return output_offsets;
   };
 
   return cudf::make_lists_column(input.size(),
