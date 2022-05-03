@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <binaryop/compiled/binary_ops.cuh>
+#include "binary_ops.cuh"
 
 namespace cudf::binops::compiled {
 template void apply_binary_op<ops::BitwiseAnd>(mutable_column_view&,

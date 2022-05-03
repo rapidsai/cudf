@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <binaryop/compiled/binary_ops.hpp>
-#include <binaryop/compiled/operation.cuh>
+#include "binary_ops.hpp"
+#include "operation.cuh"
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>

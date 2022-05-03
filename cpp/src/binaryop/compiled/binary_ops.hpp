@@ -167,7 +167,7 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
  * @param out output type of the binary operation
  * @param lhs first operand type of the binary operation
  * @param rhs second operand type of the binary operation
- * @param op binary operator enum
+ * @param op binary operator enum.
  * @return true if given binary operator supports given input and output types.
  */
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
@@ -214,8 +214,8 @@ void apply_binary_op(mutable_column_view& out,
                      bool is_rhs_scalar,
                      rmm::cuda_stream_view stream);
 /**
- * @brief Deploys single type or double type dispatcher that runs equality operation on each
- * element of @p lhsd and @p rhsd columns.
+ * @brief Deploys single type or double type dispatcher that runs equality operation on each element
+ * of @p lhsd and @p rhsd columns.
  *
  * Comparison operators are EQUAL, NOT_EQUAL, NULL_EQUALS.
  * @p outd type is boolean.

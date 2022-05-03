@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <binaryop/compiled/binary_ops.cuh>
+#include "binary_ops.cuh"
 
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/row_operators.cuh>
