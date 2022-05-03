@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cstdint>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/extract.hpp>
@@ -150,22 +149,11 @@ TEST_F(ApplyBooleanMaskTest, Trivial)
 
 TEST_F(ApplyBooleanMaskTest, Failure)
 {
-  {
-    // Mismatched number of rows.
-    auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
-    auto const filter = filter_t{{0, 0, 0}};
-    CUDF_EXPECT_THROW_MESSAGE(
-      apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
-      "Boolean masks column must have same number of rows as input.");
-  }
-  {
-    // Mismatched number of elements.
-    auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
-    auto const filter = filter_t{{0, 0}, {1, 1, 1}};
-    CUDF_EXPECT_THROW_MESSAGE(
-      apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
-      "Each list row must match the corresponding boolean mask row in size.");
-  }
+  // Mismatched number of rows.
+  auto const input  = lists<int32_t>{{1, 2, 3}, {4, 5, 6}};
+  auto const filter = filter_t{{0, 0, 0}};
+  CUDF_EXPECT_THROW_MESSAGE(apply_boolean_mask(lists_column_view{input}, lists_column_view{filter}),
+                            "Boolean masks column must have same number of rows as input.");
 }
 
 }  // namespace cudf::test
