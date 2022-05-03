@@ -16,9 +16,6 @@
 
 #include "binary_ops.cuh"
 
-#include <cudf/detail/structs/utilities.hpp>
-#include <cudf/table/row_operators.cuh>
-
 namespace cudf::binops::compiled {
 void dispatch_equality_op(mutable_column_view& out,
                           column_view const& lhs,
