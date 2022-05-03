@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <binaryop/compiled/operation.cuh>
+#include "operation.cuh"
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <binaryop/compiled/binary_ops.cuh>
+#include "binary_ops.cuh"
 
 namespace cudf::binops::compiled {
 template void apply_binary_op<ops::FloorDiv>(mutable_column_device_view&,
