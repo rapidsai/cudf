@@ -84,7 +84,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
   assert_same_sizes(input, boolean_mask, stream);
 
   auto constexpr offset_data_type = data_type{type_id::INT32};
-  
+
   auto filtered_child = [&] {
     std::unique_ptr<cudf::table> tbl =
       cudf::detail::apply_boolean_mask(cudf::table_view{{input.get_sliced_child(stream)}},
@@ -96,7 +96,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
   };
 
   auto output_offsets = [&] {
-    auto boolean_mask_sliced_offsets = 
+    auto boolean_mask_sliced_offsets =
       cudf::detail::slice(
         boolean_mask.offsets(), {boolean_mask.offset(), boolean_mask.size() + 1}, stream)
         .front();
@@ -115,10 +115,8 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                            no_null_sizes->view().begin<offset_type>(),
                            no_null_sizes->view().end<offset_type>(),
                            offsets->mutable_view().begin<offset_type>() + 1);
-    CUDF_CUDA_TRY(cudaMemsetAsync(offsets->mutable_view().begin<offset_type>(),
-                                  0,
-                                  sizeof(offset_type),
-                                  stream.value()));
+    CUDF_CUDA_TRY(cudaMemsetAsync(
+      offsets->mutable_view().begin<offset_type>(), 0, sizeof(offset_type), stream.value()));
     return offsets;
   };
 
