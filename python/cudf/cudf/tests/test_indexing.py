@@ -1624,7 +1624,7 @@ def test_dataframe_iloc_inplace_update_shape_mismatch(key, value):
 def test_dataframe_loc_inplace_update_shape_mismatch_RHS_df():
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     with pytest.raises(ValueError, match="shape mismatch:"):
-        gdf.iloc[([0, 2], ["x", "y"])] = cudf.DataFrame(
+        gdf.loc[([0, 2], ["x", "y"])] = cudf.DataFrame(
             {"x": [10, 20]}, index=cudf.Index([0, 2])
         )
 
@@ -1632,7 +1632,7 @@ def test_dataframe_loc_inplace_update_shape_mismatch_RHS_df():
 def test_dataframe_iloc_inplace_update_shape_mismatch_RHS_df():
     gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     with pytest.raises(ValueError, match="shape mismatch:"):
-        gdf.iloc[0, 2] = cudf.DataFrame(
+        gdf.iloc[[0, 2]] = cudf.DataFrame(
             {"x": [10, 20]}, index=cudf.Index([0, 2])
         )
 
