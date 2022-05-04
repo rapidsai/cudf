@@ -20,6 +20,7 @@
 #include "operation.cuh"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -271,30 +272,36 @@ void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
   const int grid_size = util::div_rounding_up_safe(size, 2 * block_size);
   for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
 }
-
+namespace detail {
+template <class T, class... Ts>
+inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value;
+}
 template <class BinaryOperator>
-void apply_binary_op(mutable_column_device_view& outd,
-                     column_device_view const& lhsd,
-                     column_device_view const& rhsd,
+void apply_binary_op(mutable_column_view& out,
+                     column_view const& lhs,
+                     column_view const& rhs,
                      bool is_lhs_scalar,
                      bool is_rhs_scalar,
                      rmm::cuda_stream_view stream)
 {
-  auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
+  auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
 
+  auto lhsd = column_device_view::create(lhs, stream);
+  auto rhsd = column_device_view::create(rhs, stream);
+  auto outd = mutable_column_device_view::create(out, stream);
   // Create binop functor instance
   if (common_dtype) {
     // Execute it on every element
     for_each(stream,
-             outd.size(),
+             out.size(),
              binary_op_device_dispatcher<BinaryOperator>{
-               *common_dtype, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+               *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   } else {
     // Execute it on every element
     for_each(stream,
-             outd.size(),
+             out.size(),
              binary_op_double_device_dispatcher<BinaryOperator>{
-               outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+               *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   }
 }
 
