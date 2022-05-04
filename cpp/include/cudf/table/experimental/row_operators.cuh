@@ -70,6 +70,9 @@ struct dispatch_void_if_nested {
 namespace row {
 namespace lexicographic {
 
+template <typename Nullate>
+class device_less_comparator;
+
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
  *
@@ -89,7 +92,7 @@ namespace lexicographic {
  */
 template <typename Nullate>
 class device_row_comparator {
- public:
+  friend class device_less_comparator<Nullate>;
   /**
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
