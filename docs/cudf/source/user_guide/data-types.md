@@ -98,10 +98,11 @@ Decimal128Dtype(precision=3, scale=2)
 ```
 
 Notice the data type of the result: `1.01`, `4.23`, `0.50` can all be
-represented with a precision at least 3 and a scale at least 2.
+represented with a precision of at least 3 and a scale of at least 2.
 
-However, the value `1.234` needs a precision at least 4, and a scale
-at least 3, and cannot be fully represented using this data type:
+However, the value `1.234` needs a precision of at least 4, and a
+scale of at least 3, and cannot be fully represented using this data
+type:
 
 ```python
 >>> s[1] = Decimal("1.234")  # raises an error
