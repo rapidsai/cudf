@@ -55,4 +55,3 @@ RUN cd /tmp && wget --quiet https://github.com/ccache/ccache/releases/download/v
       -DREDIS_STORAGE_BACKEND=OFF && \
    cmake --build . --parallel ${PARALLEL_LEVEL} && \
    cmake --build . --target install
-   
