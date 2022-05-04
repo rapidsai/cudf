@@ -53,7 +53,6 @@ RUN cd /tmp && wget --quiet https://github.com/ccache/ccache/releases/download/v
          -DCMAKE_BUILD_TYPE=Release \
          -DZSTD_FROM_INTERNET=ON \
          -DREDIS_STORAGE_BACKEND=OFF && \
-      cmake --build . --parallel ${PARALLEL_LEVEL} && \
-      cmake --build . --target install" && \
+      cmake --build . --parallel ${PARALLEL_LEVEL} --target install" && \
    cd ../.. && \
    rm -rf ccache-${CCACHE_VERSION}
