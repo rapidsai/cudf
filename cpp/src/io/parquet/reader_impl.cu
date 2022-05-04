@@ -335,9 +335,9 @@ class aggregate_reader_metadata {
   }
 
   /**
-   * @brief Merge the keyvalue maps from each per-file metadata object into a single map.
+   * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
    */
-  auto collect_keyval_metadata()
+  [[nodiscard]] auto collect_keyval_metadata()
   {
     std::vector<std::map<std::string, std::string>> kv_maps;
     std::transform(per_file_metadata.cbegin(),
