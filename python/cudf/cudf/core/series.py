@@ -693,7 +693,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super()._append(to_append, ignore_index, verify_integrity)
 
     @_cudf_nvtx_annotate
-    def reindex(self, index=None, copy=True):
+    def reindex(self, *args, **kwargs):
         """Return a Series that conforms to a new index
 
         Parameters
@@ -722,9 +722,26 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         z    <NA>
         dtype: int64
         """
+        if len(args) > 1:
+            raise TypeError("Only one positional argument ('index') is allowed")
+        if args:
+            (index,) = args
+            if "index" in kwargs:
+                raise TypeError(
+                    "'index' passed as both positional and keyword argument"
+                )
+        else:
+            index = kwargs.get('index', self._index)
+            
         name = self.name or 0
-        idx = self._index if index is None else index
-        series = self.to_frame(name).reindex(idx, copy=copy)[name]
+        series = self._reindex(
+            deep=kwargs.get('copy', True),
+            dtypes={self.name: self.dtype},
+            index=index,
+            columns=[name],
+            inplace=False,
+            fill_value=kwargs.get('fill_value', cudf.NA)
+        )
         series.name = self.name
         return series
 

@@ -7,16 +7,13 @@ import pyarrow as pa
 from pandas._libs.missing import NAType as pd_NAType
 
 import cudf
-from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import ListDtype, StructDtype
-from cudf.core.index import BaseIndex
 from cudf.core.mixins import BinaryOperand
-from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
-
+from cudf.api.types import is_scalar
 
 class Scalar(BinaryOperand):
     """
@@ -273,8 +270,7 @@ class Scalar(BinaryOperand):
         return cudf.dtype(out_dtype)
 
     def _binaryop(self, other, op: str):
-        if isinstance(other, (ColumnBase, Series, BaseIndex, np.ndarray)):
-            # dispatch to column implementation
+        if not is_scalar(other):
             return NotImplemented
         other = to_cudf_compatible_scalar(other)
         out_dtype = self._binop_result_dtype_or_error(other, op)
