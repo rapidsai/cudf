@@ -132,7 +132,7 @@ class Buffer(Serializable):
 
         if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(
-                f"Recieved a `Buffer` with the wrong size."
+                f"Received a `Buffer` with the wrong size."
                 f" Expected {header['desc']['shape']}, "
                 f"but got {buf.__cuda_array_interface__['shape']}"
             )
