@@ -6,7 +6,7 @@ import functools
 import inspect
 import pickle
 import warnings
-from collections import abc as abc
+from collections import abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
 
@@ -14,11 +14,11 @@ import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
+from pandas.core.dtypes.common import is_float
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.scalar import _is_null_host_scalar
-from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
@@ -42,7 +42,6 @@ from cudf.core.column import (
     arange,
     as_column,
     column,
-    column_empty_like,
     full,
 )
 from cudf.core.column.categorical import (
@@ -64,15 +63,16 @@ from cudf.core.indexed_frame import (
 )
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import _get_scalar_kernel
-from cudf.utils import cudautils, docutils
+from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
     find_common_type,
     is_mixed_with_object_dtype,
     min_scalar_type,
+    to_cudf_compatible_scalar,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate, to_cudf_compatible_scalar
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
@@ -1064,11 +1064,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ) or isinstance(
             preprocess._column, cudf.core.column.timedelta.TimeDeltaColumn
         ):
-            output = (
-                preprocess.astype("O")
-                .fillna(cudf._NA_REP)
-                .to_pandas()
-                .__repr__()
+            output = repr(
+                preprocess.astype("O").fillna(cudf._NA_REP).to_pandas()
             )
         elif isinstance(
             preprocess._column, cudf.core.column.CategoricalColumn
@@ -1111,7 +1108,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 na_rep=cudf._NA_REP,
             )
         else:
-            output = preprocess.to_pandas().__repr__()
+            output = repr(preprocess.to_pandas())
 
         lines = output.split("\n")
 
@@ -2110,7 +2107,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         if convert_dtype is not True:
             raise ValueError("Series.apply only supports convert_dtype=True")
-        return self._apply(func, _get_scalar_kernel, *args, **kwargs)
+
+        result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
+        result.name = self.name
+        return result
 
     @_cudf_nvtx_annotate
     def applymap(self, udf, out_dtype=None):
@@ -2969,18 +2969,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def diff(self, periods=1):
-        """Calculate the difference between values at positions i and i - N in
-        an array and store the output in a new array.
+        """First discrete difference of element.
+
+        Calculates the difference of a Series element compared with another
+        element in the Series (default is element in previous row).
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for calculating difference,
+            accepts negative values.
 
         Returns
         -------
         Series
             First differences of the Series.
-
-        Notes
-        -----
-        Diff currently only supports float and integer dtype columns with
-        no null values.
 
         Examples
         --------
@@ -3028,32 +3031,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5    <NA>
         dtype: int64
         """
-        if self.has_nulls:
-            raise AssertionError(
-                "Diff currently requires columns with no null values"
-            )
+        if not is_integer(periods):
+            if not (is_float(periods) and periods.is_integer()):
+                raise ValueError("periods must be an integer")
+            periods = int(periods)
 
-        if not np.issubdtype(self.dtype, np.number):
-            raise NotImplementedError(
-                "Diff currently only supports numeric dtypes"
-            )
-
-        # TODO: move this libcudf
-        input_col = self._column
-        output_col = column_empty_like(input_col)
-        output_mask = column_empty_like(input_col, dtype="bool")
-        if output_col.size > 0:
-            cudautils.gpu_diff.forall(output_col.size)(
-                input_col, output_col, output_mask, periods
-            )
-
-        output_col = column.build_column(
-            data=output_col.data,
-            dtype=output_col.dtype,
-            mask=bools_to_mask(output_mask),
-        )
-
-        return Series(output_col, name=self.name, index=self.index)
+        return self - self.shift(periods=periods)
 
     @copy_docstring(SeriesGroupBy)
     @_cudf_nvtx_annotate
@@ -4631,13 +4614,13 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
 
 @_cudf_nvtx_annotate
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    """Returns a boolean array where two arrays are equal within a tolerance.
+    r"""Returns a boolean array where two arrays are equal within a tolerance.
 
     Two values in ``a`` and ``b`` are  considered equal when the following
     equation is satisfied.
 
     .. math::
-       |a - b| \\le \\mathrm{atol} + \\mathrm{rtol} |b|
+       |a - b| \le \mathrm{atol} + \mathrm{rtol} |b|
 
     Parameters
     ----------

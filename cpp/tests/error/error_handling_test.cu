@@ -39,6 +39,7 @@ TEST(CudaTryTest, Error)
   CUDA_EXPECT_THROW_MESSAGE(CUDF_CUDA_TRY(cudaErrorLaunchFailure),
                             "cudaErrorLaunchFailure unspecified launch failure");
 }
+
 TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDF_CUDA_TRY(cudaSuccess)); }
 
 TEST(CudaTryTest, TryCatch)

@@ -91,8 +91,7 @@ struct Rank : public BaseFixture {
            test_case_t{table_view{{col1, col2, col3}},
                        table_view{{col1_rank, col2_rank, col3_rank}}},
          }) {
-      table_view input, output;
-      std::tie(input, output) = test_case;
+      auto [input, output] = test_case;
 
       run_rank_test(input,
                     output,

@@ -203,8 +203,8 @@ TEST_F(Distinct, ListOfStruct)
   // 12.  [{0,'a'}, {2,'c'}]  !=
   // 13.  [{0,Null}]          ==
   // 14.  [{0,Null}]          !=
-  // 15.  [{Null, 0}]         ==
-  // 16.  [{Null, 0}]
+  // 15.  [{Null, 'b'}]       ==
+  // 16.  [{Null, 'b'}]
 
   auto col1 = cudf::test::fixed_width_column_wrapper<int32_t>{
     {-1, -1, 0, 2, 2, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, 1, 2},
@@ -300,8 +300,6 @@ TEST_F(Distinct, StructOfStruct)
 
   auto sliced_result        = cudf::distinct(sliced_input, {1});
   auto sorted_sliced_result = cudf::sort_by_key(*sliced_result, sliced_result->select({0}));
-  cudf::test::print(sorted_sliced_result->get_column(1));
-  cudf::test::print(sliced_expect->get_column(1));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sliced_expect->get_column(1), sorted_sliced_result->get_column(1));
 }
 

@@ -491,6 +491,13 @@ std::vector<schema_tree_node> construct_schema_tree(
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
       bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
 
+      auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
+                                                column_in_metadata const& col_meta) {
+        if (schema[parent_idx].name != "list" and col_meta.is_parquet_field_id_set()) {
+          s.field_id = col_meta.get_parquet_field_id();
+        }
+      };
+
       if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
         schema_tree_node struct_schema{};
@@ -500,6 +507,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         struct_schema.num_children = col->children.size();
         struct_schema.parent_idx   = parent_idx;
+        set_field_id(struct_schema, col_meta);
         schema.push_back(std::move(struct_schema));
 
         auto struct_node_index = schema.size() - 1;
@@ -524,6 +532,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         list_schema_1.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         list_schema_1.num_children = 1;
         list_schema_1.parent_idx   = parent_idx;
+        set_field_id(list_schema_1, col_meta);
         schema.push_back(std::move(list_schema_1));
 
         schema_tree_node list_schema_2{};
@@ -555,7 +564,10 @@ std::vector<schema_tree_node> construct_schema_tree(
         map_schema.converted_type = ConvertedType::MAP;
         map_schema.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
-        map_schema.name         = col_meta.get_name();
+        map_schema.name = col_meta.get_name();
+        if (col_meta.is_parquet_field_id_set()) {
+          map_schema.field_id = col_meta.get_parquet_field_id();
+        }
         map_schema.num_children = 1;
         map_schema.parent_idx   = parent_idx;
         schema.push_back(std::move(map_schema));
@@ -612,6 +624,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
+        set_field_id(col_schema, col_meta);
         schema.push_back(col_schema);
       }
     };
@@ -863,7 +876,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<size_type>> dict_data;
   std::vector<rmm::device_uvector<uint16_t>> dict_index;
 
-  if (h_chunks.size() == 0) { return std::make_pair(std::move(dict_data), std::move(dict_index)); }
+  if (h_chunks.size() == 0) { return std::pair(std::move(dict_data), std::move(dict_index)); }
 
   // Allocate slots for each chunk
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
@@ -882,7 +895,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   chunks.host_to_device(stream);
 
   gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
-  gpu::populate_chunk_hash_maps(chunks, frags, stream);
+  gpu::populate_chunk_hash_maps(frags, stream);
 
   chunks.device_to_host(stream, true);
 
@@ -899,7 +912,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
       // We don't use dictionary if the indices are > 16 bits because that's the maximum bitpacking
       // bitsize we efficiently support
-      if (nbits > 16) { return std::make_pair(false, 0); }
+      if (nbits > 16) { return std::pair(false, 0); }
 
       // Only these bit sizes are allowed for RLE encoding because it's compute optimized
       constexpr auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
@@ -912,7 +925,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
       bool use_dict = (ck.plain_data_size > dict_enc_size);
       if (not use_dict) { rle_bits = 0; }
-      return std::make_pair(use_dict, rle_bits);
+      return std::pair(use_dict, rle_bits);
     }();
   }
 
@@ -931,9 +944,9 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   }
   chunks.host_to_device(stream);
   gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
-  gpu::get_dictionary_indices(chunks.device_view(), frags, stream);
+  gpu::get_dictionary_indices(frags, stream);
 
-  return std::make_pair(std::move(dict_data), std::move(dict_index));
+  return std::pair(std::move(dict_data), std::move(dict_index));
 }
 
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
@@ -971,8 +984,9 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
   stream.synchronize();
 }
 
-void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
-                     device_span<gpu_inflate_status_s> comp_stat,
+void snappy_compress(device_span<device_span<uint8_t const> const> comp_in,
+                     device_span<device_span<uint8_t> const> comp_out,
+                     device_span<decompress_status> comp_stats,
                      size_t max_page_uncomp_data_size,
                      rmm::cuda_stream_view stream)
 {
@@ -999,16 +1013,20 @@ void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
     // the space allocated unless one uses the API nvcompBatchedSnappyCompressGetOutputSize()
 
     // Prepare the vectors
-    auto comp_it = thrust::make_zip_iterator(uncompressed_data_ptrs.begin(),
-                                             uncompressed_data_sizes.begin(),
-                                             compressed_data_ptrs.begin());
+    auto comp_it =
+      thrust::make_zip_iterator(uncompressed_data_ptrs.begin(), uncompressed_data_sizes.begin());
+    thrust::transform(
+      rmm::exec_policy(stream),
+      comp_in.begin(),
+      comp_in.end(),
+      comp_it,
+      [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
+
     thrust::transform(rmm::exec_policy(stream),
-                      comp_in.begin(),
-                      comp_in.end(),
-                      comp_it,
-                      [] __device__(gpu_inflate_input_s in) {
-                        return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice);
-                      });
+                      comp_out.begin(),
+                      comp_out.end(),
+                      compressed_data_ptrs.begin(),
+                      [] __device__(auto const& out) { return out.data(); });
     nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
                                                      uncompressed_data_sizes.data(),
                                                      max_page_uncomp_data_size,
@@ -1028,9 +1046,9 @@ void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
     thrust::transform(rmm::exec_policy(stream),
                       compressed_bytes_written.begin(),
                       compressed_bytes_written.end(),
-                      comp_stat.begin(),
+                      comp_stats.begin(),
                       [] __device__(size_t size) {
-                        gpu_inflate_status_s status{};
+                        decompress_status status{};
                         status.bytes_written = size;
                         return status;
                       });
@@ -1038,9 +1056,9 @@ void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
   } catch (...) {
     // If we reach this then there was an error in compressing so set an error status for each page
     thrust::for_each(rmm::exec_policy(stream),
-                     comp_stat.begin(),
-                     comp_stat.end(),
-                     [] __device__(gpu_inflate_status_s & stat) { stat.status = 1; });
+                     comp_stats.begin(),
+                     comp_stats.end(),
+                     [] __device__(decompress_status & stat) { stat.status = 1; });
   };
 }
 
@@ -1064,19 +1082,17 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   uint32_t max_comp_pages =
     (compression_ != parquet::Compression::UNCOMPRESSED) ? pages_in_batch : 0;
 
-  rmm::device_uvector<gpu_inflate_input_s> compression_input(max_comp_pages, stream);
-  rmm::device_uvector<gpu_inflate_status_s> compression_status(max_comp_pages, stream);
+  rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
+  rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
+  rmm::device_uvector<decompress_status> comp_stats(max_comp_pages, stream);
 
-  device_span<gpu_inflate_input_s> comp_in{compression_input.data(), compression_input.size()};
-  device_span<gpu_inflate_status_s> comp_stat{compression_status.data(), compression_status.size()};
-
-  gpu::EncodePages(batch_pages, comp_in, comp_stat, stream);
+  gpu::EncodePages(batch_pages, comp_in, comp_out, comp_stats, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
       if (nvcomp_integration::is_stable_enabled()) {
-        snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
+        snappy_compress(comp_in, comp_out, comp_stats, max_page_uncomp_data_size, stream);
       } else {
-        CUDF_CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
+        gpu_snap(comp_in, comp_out, comp_stats, stream);
       }
       break;
     default: break;
@@ -1085,7 +1101,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   // chunk-level
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
   DecideCompression(d_chunks_in_batch.flat_view(), stream);
-  EncodePageHeaders(batch_pages, comp_stat, batch_pages_stats, chunk_stats, stream);
+  EncodePageHeaders(batch_pages, comp_stats, batch_pages_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);

@@ -56,7 +56,7 @@ std::vector<column_view> unslice_children(column_view const& c)
 };
 
 /**
- * @brief Removes the offsets children of struct columns in a table.
+ * @brief Removes the child column offsets of struct columns in a table.
  *
  * Given a table, this replaces any struct columns with similar struct columns that have their
  * offsets removed from their children. Structs that are children of list columns are not affected.

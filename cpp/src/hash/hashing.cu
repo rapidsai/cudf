@@ -16,6 +16,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -70,8 +71,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
     output_view.begin<int32_t>(),
     output_view.end<int32_t>(),
     [device_input = *device_input, nulls = has_nulls(leaf_table), seed] __device__(auto row_index) {
-      return thrust::reduce(
-        thrust::seq,
+      return detail::accumulate(
         device_input.begin(),
         device_input.end(),
         seed,
