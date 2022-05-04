@@ -79,10 +79,16 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
   auto binary_op = simple_op.get_binary_op();
   auto identity  = simple_op.template get_identity<ResultType>();
 
-  auto result =
-    make_fixed_width_column(col.type(), num_segments, mask_state::UNALLOCATED, stream, mr);
+  auto result = [&]() {
+    if (cudf::is_fixed_point(col.type())) {
+      return make_fixed_width_column(col.type(), num_segments, mask_state::UNALLOCATED, stream, mr);
+    } else {
+      return make_fixed_width_column(
+        data_type{type_to_id<ResultType>()}, num_segments, mask_state::UNALLOCATED, stream, mr);
+    }
+  }();
 
-  auto outit = result->mutable_view().begin<ResultType>();
+  auto outit = result->mutable_view().template begin<ResultType>();
 
   // TODO: Explore rewriting null_replacing_element_transformer/element_transformer with nullate
   if (col.has_nulls()) {
