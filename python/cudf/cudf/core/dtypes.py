@@ -531,6 +531,21 @@ class IntervalDtype(StructDtype):
             subtype=pd_dtype.subtype
         )  # TODO: needs `closed` when we upgrade Pandas
 
+    def serialize(self) -> Tuple[dict, list]:
+        header: Dict[str, Any] = {}
+        header["type-serialized"] = pickle.dumps(type(self))
+        header["subtype"] = pickle.dumps(self.subtype)
+        header["closed"] = pickle.dumps(self.closed)
+        return header, []
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list):
+        assert len(frames) == 0
+        klass = pickle.loads(header["type-serialized"])
+        subtype = pickle.loads(header["subtype"])
+        closed = pickle.loads(header["closed"])
+        return klass(subtype, closed=closed)
+
 
 def is_categorical_dtype(obj):
     """Check whether an array-like or dtype is of the Categorical dtype.
