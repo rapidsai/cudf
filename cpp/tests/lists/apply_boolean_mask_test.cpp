@@ -34,6 +34,11 @@ template <typename T>
 using lists    = lists_column_wrapper<T, int32_t>;
 using filter_t = lists_column_wrapper<bool, int32_t>;
 
+template <typename T>
+using fwcw    = fixed_width_column_wrapper<T, int32_t>;
+using offsets = fwcw<int32_t>;
+using strings = strings_column_wrapper;
+
 auto constexpr X = int32_t{0};  // Placeholder for NULL.
 
 struct ApplyBooleanMaskTest : public BaseFixture {
@@ -136,6 +141,58 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, NullListRowsInTheInputColumn)
     auto filtered = apply_boolean_mask(lists_column_view{sliced}, lists_column_view{filter});
     auto expected = lists<T>{{{7, 9}, {}, {3, 5}, {}}, null_at(1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*filtered, expected);
+  }
+}
+
+TYPED_TEST(ApplyBooleanMaskTypedTest, StructInput)
+{
+  using T    = TypeParam;
+  using fwcw = fwcw<T>;
+
+  auto const input = [] {
+    auto child_num = fwcw{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    auto child_str = strings{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+    return cudf::make_lists_column(7,
+                                   offsets{0, 2, 3, 6, 6, 8, 8, 10}.release(),
+                                   structs_column_wrapper{{child_num, child_str}}.release(),
+                                   0,
+                                   {});
+  }();
+  {
+    // Unsliced.
+    // The input should now look as follows: (String child dropped for brevity.)
+    // Input:                   { [0,1], [2], [3,4,5], [], [6,7], [], [8,9] }
+    auto const filter   = filter_t{{1, 1}, {0}, {0, 1, 0}, {}, {1, 0}, {}, {0, 1}};
+    auto const result   = apply_boolean_mask(lists_column_view{*input}, lists_column_view{filter});
+    auto const expected = [] {
+      auto child_num = fwcw{0, 1, 4, 6, 9};
+      auto child_str = strings{"0", "1", "4", "6", "9"};
+      return cudf::make_lists_column(7,
+                                     offsets{0, 2, 2, 3, 3, 4, 4, 5}.release(),
+                                     structs_column_wrapper{{child_num, child_str}}.release(),
+                                     0,
+                                     {});
+    }();
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
+  }
+  {
+    // Sliced. Remove the first row.
+    auto const sliced_input = cudf::slice(*input, {1, input->size()}).front();
+    // The input should now look as follows: (String child dropped for brevity.)
+    // Input:                   { [2], [3,4,5], [], [6,7], [], [8,9] }
+    auto const filter = filter_t{{0}, {0, 1, 0}, {}, {1, 0}, {}, {0, 1}};
+    auto const result =
+      apply_boolean_mask(lists_column_view{sliced_input}, lists_column_view{filter});
+    auto const expected = [] {
+      auto child_num = fwcw{4, 6, 9};
+      auto child_str = strings{"4", "6", "9"};
+      return cudf::make_lists_column(6,
+                                     offsets{0, 0, 1, 1, 2, 2, 3}.release(),
+                                     structs_column_wrapper{{child_num, child_str}}.release(),
+                                     0,
+                                     {});
+    }();
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
   }
 }
 
