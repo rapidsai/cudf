@@ -343,11 +343,14 @@ class aggregate_reader_metadata {
     std::transform(per_file_metadata.cbegin(),
                    per_file_metadata.cend(),
                    std::back_inserter(kv_maps),
-                   [](auto& pfm) {
+                   [](auto const& pfm) {
                      std::map<std::string, std::string> kv_map;
-                     for (auto& kv : pfm.key_value_metadata) {
-                       kv_map[kv.key] = kv.value;
-                     }
+                     std::transform(pfm.key_value_metadata.cbegin(),
+                                    pfm.key_value_metadata.cend(),
+                                    std::inserter(kv_map, kv_map.end()),
+                                    [](auto const& kv) {
+                                      return std::pair{kv.key, kv.value};
+                                    });
                      return kv_map;
                    });
 
