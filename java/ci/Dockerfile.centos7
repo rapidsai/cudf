@@ -26,8 +26,9 @@ ARG CUDA_VERSION=11.5.0
 FROM gpuci/cuda:$CUDA_VERSION-devel-centos7
 
 ### Install basic requirements
+ARG DEVTOOLSET_VERSION=9
 RUN yum install -y centos-release-scl
-RUN yum install -y devtoolset-9 epel-release
+RUN yum install -y devtoolset-${DEVTOOLSET_VERSION} epel-release
 RUN yum install -y git zlib-devel maven tar wget patch ninja-build
 
 ## pre-create the CMAKE_INSTALL_PREFIX folder, set writable by any user for Jenkins
@@ -47,6 +48,10 @@ RUN cd /tmp && wget --quiet https://github.com/ccache/ccache/releases/download/v
    cd ccache-${CCACHE_VERSION} && \
    mkdir build && \
    cd build && \
-   cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/opt/rh/devtoolset-9/root/usr/bin/gcc .. && \
-   cmake --build . && \ 
+   cmake .. \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_C_COMPILER=/opt/rh/devtoolset-${DEVTOOLSET_VERSION}/root/usr/bin/gcc \
+      -DZSTD_FROM_INTERNET=ON \
+      -DREDIS_STORAGE_BACKEND=OFF && \
+   cmake --build . --parallel ${PARALLEL_LEVEL} && \
    cmake --build . --target install

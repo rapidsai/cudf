@@ -120,6 +120,7 @@ function buildLibCudfJniInDocker {
         --build-arg CUDA_VERSION=${cudaVersion} \
         -t $imageName .
     nvidia-docker run -it -u $(id -u):$(id -g) --rm \
+        -e PARALLEL_LEVEL \
         -e CCACHE_DIR="$workspaceCcacheDir" \
         -v "/etc/group:/etc/group:ro" \
         -v "/etc/passwd:/etc/passwd:ro" \
@@ -136,6 +137,7 @@ function buildLibCudfJniInDocker {
                 -DCMAKE_C_COMPILER_LAUNCHER=ccache \
                 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
                 -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_LINKER_CXX_LAUNCHER=ccache \
                 -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
@@ -153,6 +155,10 @@ function buildLibCudfJniInDocker {
                 -Dmaven.repo.local=$workspaceMavenRepoDir \
                 -DskipTests=${SKIP_TESTS:-false} \
                 -Dparallel.level=${PARALLEL_LEVEL} \
+                -Dcmake.ccache.opts='-DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                                     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                                     -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
+                                     -DCMAKE_LINKER_CXX_LAUNCHER=ccache' \
                 -DCUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DPER_THREAD_DEFAULT_STREAM=ON \
