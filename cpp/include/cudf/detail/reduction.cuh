@@ -240,7 +240,6 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @param[in] binary_op     the reduction operator
  * @param[in] identity      the identity element of the reduction operator
  * @param[in] stream        CUDA stream used for device memory operations and kernel launches.
- * @returns   Output column in device memory
  *
  */
 template <typename InputIterator,
