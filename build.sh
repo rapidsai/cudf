@@ -121,6 +121,7 @@ function buildLibCudfJniInDocker {
         -t $imageName .
     nvidia-docker run -it -u $(id -u):$(id -g) --rm \
         -e PARALLEL_LEVEL \
+        -e CCACHE_DISABLE \
         -e CCACHE_DIR="$workspaceCcacheDir" \
         -v "/etc/group:/etc/group:ro" \
         -v "/etc/passwd:/etc/passwd:ro" \
