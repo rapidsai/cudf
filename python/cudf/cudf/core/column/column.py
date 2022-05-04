@@ -1037,32 +1037,65 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
-        header: Dict[Any, Any] = {}
+        """Serialize column
+
+        The following attributes are serialized:
+          - "size"
+          - "data"
+          - "mask"
+          - "children"
+        """
+        header = {}
         frames = []
+        # "type-serialized" are used in deserialize_columns() to dispatch
+        # the deserialization to the correct class. It must be compatible
+        # with Dask: see <https://github.com/rapidsai/cudf/pull/4149>.
         header["type-serialized"] = pickle.dumps(type(self))
-        if hasattr(self.dtype, "str"):
-            # Notice, "dtype" must be availabe for deserialization thus
-            # if the dtype doesn't support `str` or if it is insufficient
-            # for deserialization, please overwrite the serialize and/or
-            # deserialize methods.
-            header["dtype"] = self.dtype.str
+        # If `self.dtype` provies a `serialize` method we use it. If not,
+        # we pickle `self.dtype` itself.
+        if hasattr(self.dtype, "serialize"):
+            # Use "dtype-type-serialized" for dispatching the deserialization
+            # of the dtype.
+            header["dtype-type-serialized"] = pickle.dumps(type(self.dtype))
+            header["dtype-serialized"] = self.dtype.serialize()
+        else:
+            header["dtype-serialized"] = pickle.dumps(self.dtype)
+        header["size"] = self.size
 
         if self.data is not None:
             data_header, data_frames = self.data.serialize()
+            assert len(data_frames) == 1
             header["data"] = data_header
             frames.extend(data_frames)
 
         if self.mask is not None:
             mask_header, mask_frames = self.mask.serialize()
+            assert len(mask_frames) == 1
             header["mask"] = mask_header
             frames.extend(mask_frames)
 
+        if self.children:
+            header["children-frame-offset"] = len(frames)
+            children_headers = []
+            for child in self.children:
+                child_header, child_frames = child.serialize()
+                assert len(child_frames) == 1
+                children_headers.append(child_header)
+                frames.extend(child_frames)
+            header["children-headers"] = children_headers
+
+        # "frame_count" are used in deserialize_columns()
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
-        dtype = header["dtype"]
+        if "dtype-type-serialized" in header:
+            dtype_type = pickle.loads(header["dtype-type-serialized"])
+            dtype = dtype_type.deserialize(*header["dtype-serialized"])
+        else:
+            dtype = pickle.loads(header["dtype-serialized"])
+
         data = None
         offset = 0
         if "data" in header:
@@ -1071,12 +1104,24 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         mask = None
         if "mask" in header:
             mask = Buffer.deserialize(header["mask"], [frames[offset]])
+
+        children = []
+        if "children-headers" in header:
+            for child_header, child_frame in zip(
+                header["children-headers"],
+                frames[header["children-frame-offset"] :],
+            ):
+                column_type = pickle.loads(child_header["type-serialized"])
+                children.append(
+                    column_type.deserialize(child_header, [child_frame])
+                )
+
         return build_column(
             data=data,
             dtype=dtype,
             mask=mask,
             size=header.get("size", None),
-            children=header.get("children", ()),
+            children=tuple(children),
         )
 
     def unary_operator(self, unaryop: str):

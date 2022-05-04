@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import pickle
 import re
 import warnings
 from functools import cached_property
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
     Optional,
     Sequence,
     Tuple,
@@ -5335,56 +5333,6 @@ class StringColumn(column.ColumnBase):
         if index is not None:
             pd_series.index = index
         return pd_series
-
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[Any, Any] = {"null_count": self.null_count}
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["size"] = self.size
-
-        frames = []
-        sub_headers = []
-
-        for item in self.children:
-            sheader, sframes = item.serialize()
-            sub_headers.append(sheader)
-            frames.extend(sframes)
-
-        if self.null_count > 0:
-            frames.append(self.mask)
-
-        header["subheaders"] = sub_headers
-        header["frame_count"] = len(frames)
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header: dict, frames: list) -> StringColumn:
-        size = header["size"]
-        if not isinstance(size, int):
-            size = pickle.loads(size)
-
-        # Deserialize the mask, value, and offset frames
-        buffers = [Buffer(each_frame) for each_frame in frames]
-
-        nbuf = None
-        if header["null_count"] > 0:
-            nbuf = buffers[2]
-
-        children = []
-        for h, b in zip(header["subheaders"], buffers[:2]):
-            column_type = pickle.loads(h["type-serialized"])
-            children.append(column_type.deserialize(h, [b]))
-
-        col = cast(
-            StringColumn,
-            column.build_column(
-                data=None,
-                dtype="str",
-                mask=nbuf,
-                children=tuple(children),
-                size=size,
-            ),
-        )
-        return col
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = cudf.dtype(to_dtype)
