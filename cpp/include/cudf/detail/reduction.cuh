@@ -230,16 +230,16 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @tparam InputIterator    the input column iterator
  * @tparam OffsetIterator   the offset column iterator
  * @tparam BinaryOp         the device binary operator used to reduce
+ * @tparam OutputIterator   the output column iterator
  * @tparam OutputType       the output type of reduction
  *
+ * @param[in] d_out         the begin iterator to output
  * @param[in] d_in          the begin iterator to input
  * @param[in] d_offset      the begin iterator to offset
  * @param[in] num_segments  the number of segments
  * @param[in] binary_op     the reduction operator
  * @param[in] identity      the identity element of the reduction operator
  * @param[in] stream        CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr            Device memory resource used to allocate the returned column's device
- * memory
  * @returns   Output column in device memory
  *
  */
