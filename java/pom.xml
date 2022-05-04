@@ -173,6 +173,7 @@
         <arrow.version>0.15.1</arrow.version>
         <parallel.level>4</parallel.level>
         <CUDF_CPP_BUILD_DIR/>
+        <cmake.ccache.opts/>
     </properties>
 
     <profiles>

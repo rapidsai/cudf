@@ -48,10 +48,12 @@ RUN cd /tmp && wget --quiet https://github.com/ccache/ccache/releases/download/v
    cd ccache-${CCACHE_VERSION} && \
    mkdir build && \
    cd build && \
-   cmake .. \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_C_COMPILER=/opt/rh/devtoolset-${DEVTOOLSET_VERSION}/root/usr/bin/gcc \
-      -DZSTD_FROM_INTERNET=ON \
-      -DREDIS_STORAGE_BACKEND=OFF && \
-   cmake --build . --parallel ${PARALLEL_LEVEL} && \
-   cmake --build . --target install
+   scl enable devtoolset-${DEVTOOLSET_VERSION} \
+      "cmake .. \
+         -DCMAKE_BUILD_TYPE=Release \
+         -DZSTD_FROM_INTERNET=ON \
+         -DREDIS_STORAGE_BACKEND=OFF && \
+      cmake --build . --parallel ${PARALLEL_LEVEL} && \
+      cmake --build . --target install" && \
+   cd ../.. && \
+   rm -rf ccache-${CCACHE_VERSION}
