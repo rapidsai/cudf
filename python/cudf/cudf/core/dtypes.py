@@ -2,7 +2,7 @@
 
 import decimal
 import pickle
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -325,7 +325,7 @@ class StructDtype(_BaseDtype):
 
         frames: List[Buffer] = []
 
-        fields = {}
+        fields: Dict[str, Union[bytes, Tuple[Any, Tuple[int, int]]]] = {}
 
         for k, dtype in self.fields.items():
             if isinstance(dtype, _BaseDtype):
@@ -336,7 +336,7 @@ class StructDtype(_BaseDtype):
                 )
                 frames.extend(dtype_frames)
             else:
-                fields[k] = dtype
+                fields[k] = pickle.dumps(dtype)
         header["fields"] = fields
 
         return header, frames
@@ -354,7 +354,7 @@ class StructDtype(_BaseDtype):
                     frames[start:stop],
                 )
             else:
-                fields[k] = dtype
+                fields[k] = pickle.loads(dtype)
         return cls(fields)
 
 
