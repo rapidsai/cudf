@@ -2827,6 +2827,14 @@ def reindex_data():
     )
 
 
+@pytest.fixture()
+def reindex_data_numeric():
+    return cudf.datasets.randomdata(
+        nrows=6,
+        dtypes={"a": float, "b": float, "c": float},
+    )
+
+
 @pytest.mark.parametrize("copy", [True, False])
 @pytest.mark.parametrize(
     "args,gd_kwargs",
@@ -2858,6 +2866,38 @@ def test_dataframe_reindex_new(copy, reindex_data, args, gd_kwargs):
     pd_kwargs = gd_kwargs.copy()
     pd_kwargs["copy"] = True
     assert_eq(pdf.reindex(*args, **pd_kwargs), gdf.reindex(*args, **gd_kwargs))
+
+
+@pytest.mark.parametrize("fill_value", [-1.0, 0.0, 1.5])
+@pytest.mark.parametrize(
+    "args,kwargs",
+    [
+        ([], {}),
+        ([[-3, 0, 3, 0, -2, 1, 3, 4, 6]], {}),
+        ([[-3, 0, 3, 0, -2, 1, 3, 4, 6]], {}),
+        ([[-3, 0, 3, 0, -2, 1, 3, 4, 6]], {"axis": 0}),
+        ([["a", "b", "c", "d", "e"]], {"axis": 1}),
+        ([], {"labels": [-3, 0, 3, 0, -2, 1, 3, 4, 6], "axis": 0}),
+        ([], {"labels": ["a", "b", "c", "d", "e"], "axis": 1}),
+        ([], {"labels": [-3, 0, 3, 0, -2, 1, 3, 4, 6], "axis": "index"}),
+        ([], {"labels": ["a", "b", "c", "d", "e"], "axis": "columns"}),
+        ([], {"index": [-3, 0, 3, 0, -2, 1, 3, 4, 6]}),
+        ([], {"columns": ["a", "b", "c", "d", "e"]}),
+        (
+            [],
+            {
+                "index": [-3, 0, 3, 0, -2, 1, 3, 4, 6],
+                "columns": ["a", "b", "c", "d", "e"],
+            },
+        ),
+    ],
+)
+def test_dataframe_reindex_fill_value(
+    reindex_data_numeric, args, kwargs, fill_value
+):
+    pdf, gdf = reindex_data_numeric.to_pandas(), reindex_data_numeric
+    kwargs["fill_value"] = fill_value
+    assert_eq(pdf.reindex(*args, **kwargs), gdf.reindex(*args, **kwargs))
 
 
 @pytest.mark.parametrize("copy", [True, False])
