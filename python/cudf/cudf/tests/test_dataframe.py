@@ -2859,7 +2859,7 @@ def reindex_data_numeric():
         ),
     ],
 )
-def test_dataframe_reindex_new(copy, reindex_data, args, gd_kwargs):
+def test_dataframe_reindex(copy, reindex_data, args, gd_kwargs):
     pdf, gdf = reindex_data.to_pandas(), reindex_data
 
     gd_kwargs["copy"] = copy
