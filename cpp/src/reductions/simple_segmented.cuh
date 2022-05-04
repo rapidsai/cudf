@@ -219,6 +219,57 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
 }
 
 /**
+ * @brief Fixed point segmented reduction for 'min', 'max'.
+ *
+ * @tparam InputType    the input column data-type
+ * @tparam Op           the operator of cudf::reduction::op::
+
+ * @param col Input column of data to reduce.
+ * @param offsets Indices to segment boundaries.
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
+ * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
+ * the reduced value is valid if any element in the segment is valid.
+ * @param stream Used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Output column in device memory
+ */
+
+template <typename InputType,
+          typename Op,
+          CUDF_ENABLE_IF(std::is_same_v<Op, cudf::reduction::op::min> ||
+                         std::is_same_v<Op, cudf::reduction::op::max>)>
+std::unique_ptr<column> fixed_point_segmented_reduction(column_view const& col,
+                                                        device_span<size_type const> offsets,
+                                                        null_policy null_handling,
+                                                        rmm::cuda_stream_view stream,
+                                                        rmm::mr::device_memory_resource* mr)
+{
+  using base_t = device_storage_type_t<InputType>;
+  auto res =
+    simple_segmented_reduction<base_t, base_t, Op>(col, offsets, null_handling, stream, mr);
+  auto size       = res->size();
+  auto null_count = res->null_count();
+  auto contents   = res->release();
+  auto data       = contents.data.release();
+  auto null_mask  = contents.null_mask.release();
+  return std::make_unique<cudf::column>(
+    col.type(), size, std::move(*data), std::move(*null_mask), null_count);
+}
+
+template <typename InputType,
+          typename Op,
+          CUDF_ENABLE_IF(!std::is_same_v<Op, cudf::reduction::op::min>() &&
+                         !std::is_same_v<Op, cudf::reduction::op::max>())>
+std::unique_ptr<column> fixed_point_segmented_reduction(column_view const& col,
+                                                        device_span<size_type const> offsets,
+                                                        null_policy null_handling,
+                                                        rmm::cuda_stream_view stream,
+                                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FAIL("Segmented reduction on fixed point column only supports min and max reduction.");
+}
+
+/**
  * @brief Call reduce and return a column of type bool.
  *
  * This is used by operations `any()` and `all()`.
@@ -262,15 +313,15 @@ struct same_column_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_fixed_point<ElementType>() || cudf::is_dictionary<ElementType>() ||
-             std::is_same_v<ElementType, cudf::list_view> ||
+    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view> ||
              std::is_same_v<ElementType, cudf::struct_view>);
   }
 
  public:
   template <typename ElementType,
             CUDF_ENABLE_IF(is_supported<ElementType>() &&
-                           !std::is_same_v<ElementType, string_view>)>
+                           !std::is_same_v<ElementType, string_view> &&
+                           !cudf::is_fixed_point<ElementType>())>
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
@@ -290,6 +341,18 @@ struct same_column_type_dispatcher {
                                      rmm::mr::device_memory_resource* mr)
   {
     return string_segmented_reduction<ElementType, Op>(col, offsets, null_handling, stream, mr);
+  }
+
+  template <typename ElementType,
+            CUDF_ENABLE_IF(is_supported<ElementType>() && cudf::is_fixed_point<ElementType>())>
+  std::unique_ptr<column> operator()(column_view const& col,
+                                     device_span<size_type const> offsets,
+                                     null_policy null_handling,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    return fixed_point_segmented_reduction<ElementType, Op>(
+      col, offsets, null_handling, stream, mr);
   }
 
   template <typename ElementType, CUDF_ENABLE_IF(!is_supported<ElementType>())>
