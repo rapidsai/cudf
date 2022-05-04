@@ -17,7 +17,7 @@ Format](https://arrow.apache.org/docs/format/Columnar.html).
 A column represents a sequence of values, any number of which may be
 "null". Columns are specialized based on the type of data they contain.
 Thus we have `NumericalColumn`, `StringColumn`, `DatetimeColumn`,
-etc.,
+etc.
 
 A column is composed of the following:
 
