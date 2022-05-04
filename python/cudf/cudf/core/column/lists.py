@@ -1,6 +1,5 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import pickle
 from functools import cached_property
 from typing import List, Optional, Sequence, Union
 
@@ -28,7 +27,6 @@ from cudf.api.types import (
     is_list_dtype,
     is_scalar,
 )
-from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.dtypes import ListDtype
@@ -165,64 +163,6 @@ class ListColumn(ColumnBase):
             )
         else:
             super().set_base_data(value)
-
-    def serialize(self):
-        header = {}
-        frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["null_count"] = self.null_count
-        header["size"] = self.size
-        header["dtype"], dtype_frames = self.dtype.serialize()
-        header["dtype_frames_count"] = len(dtype_frames)
-        frames.extend(dtype_frames)
-
-        sub_headers = []
-
-        for item in self.children:
-            sheader, sframes = item.serialize()
-            sub_headers.append(sheader)
-            frames.extend(sframes)
-
-        if self.null_count > 0:
-            frames.append(self.mask)
-
-        header["subheaders"] = sub_headers
-        header["frame_count"] = len(frames)
-
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-
-        # Get null mask
-        if header["null_count"] > 0:
-            mask = Buffer(frames[-1])
-        else:
-            mask = None
-
-        # Deserialize dtype
-        dtype = pickle.loads(header["dtype"]["type-serialized"]).deserialize(
-            header["dtype"], frames[: header["dtype_frames_count"]]
-        )
-
-        # Deserialize child columns
-        children = []
-        f = header["dtype_frames_count"]
-        for h in header["subheaders"]:
-            fcount = h["frame_count"]
-            child_frames = frames[f : f + fcount]
-            column_type = pickle.loads(h["type-serialized"])
-            children.append(column_type.deserialize(h, child_frames))
-            f += fcount
-
-        # Materialize list column
-        return column.build_column(
-            data=None,
-            dtype=dtype,
-            mask=mask,
-            children=tuple(children),
-            size=header["size"],
-        )
 
     @property
     def __cuda_array_interface__(self):
