@@ -37,4 +37,16 @@ ARG CMAKE_VERSION=3.22.3
 RUN cd /usr/local/ && wget --quiet https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz && \
    tar zxf cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz && \
    rm cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz
+
 ENV PATH /usr/local/cmake-${CMAKE_VERSION}-linux-x86_64/bin:$PATH
+
+ARG CCACHE_VERSION=4.6
+RUN cd /tmp && wget --quiet https://github.com/ccache/ccache/releases/download/v${CCACHE_VERSION}/ccache-${CCACHE_VERSION}.tar.gz && \
+   tar zxf ccache-${CCACHE_VERSION}.tar.gz && \
+   rm ccache-${CCACHE_VERSION}.tar.gz && \
+   cd ccache-${CCACHE_VERSION} && \
+   mkdir build && \
+   cd build && \
+   cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/opt/rh/devtoolset-9/root/usr/bin/gcc .. && \
+   cmake --build . && \ 
+   cmake --build . --target install
