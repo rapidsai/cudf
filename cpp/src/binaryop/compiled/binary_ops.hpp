@@ -199,11 +199,11 @@ void apply_binary_op(mutable_column_view& out,
  * of @p lhs and @p rhs columns.
  *
  * Comparison operators are EQUAL, NOT_EQUAL, NULL_EQUALS.
- * @p outd type is boolean.
+ * @p out type is boolean.
  *
  * This template is instantiated for each binary operator.
  *
- * @param outd mutable view of output column
+ * @param out mutable view of output column
  * @param lhs view of left operand column
  * @param rhs view of right operand column
  * @param is_lhs_scalar true if @p lhs is a single element column representing a scalar
@@ -211,7 +211,7 @@ void apply_binary_op(mutable_column_view& out,
  * @param op comparison binary operator
  * @param stream CUDA stream used for device memory operations
  */
-void dispatch_equality_op(mutable_column_view& outd,
+void dispatch_equality_op(mutable_column_view& out,
                           column_view const& lhs,
                           column_view const& rhs,
                           bool is_lhs_scalar,
