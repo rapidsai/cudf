@@ -244,16 +244,8 @@ std::unique_ptr<column> fixed_point_segmented_reduction(column_view const& col,
                                                         rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
 {
-  using base_t = device_storage_type_t<InputType>;
-  auto res =
-    simple_segmented_reduction<base_t, base_t, Op>(col, offsets, null_handling, stream, mr);
-  auto size       = res->size();
-  auto null_count = res->null_count();
-  auto contents   = res->release();
-  auto data       = contents.data.release();
-  auto null_mask  = contents.null_mask.release();
-  return std::make_unique<cudf::column>(
-    col.type(), size, std::move(*data), std::move(*null_mask), null_count);
+  using RepType = device_storage_type_t<InputType>;
+  return simple_segmented_reduction<RepType, RepType, Op>(col, offsets, null_handling, stream, mr);
 }
 
 template <typename InputType,
