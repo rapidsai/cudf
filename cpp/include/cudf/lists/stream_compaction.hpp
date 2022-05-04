@@ -33,15 +33,18 @@ namespace cudf::lists {
  * E.g.
  * @code{.pseudo}
  * auto const input    = lcw<int32_t>{ {0,1,2}, {3,4}, {5,6,7}, {8,9} };
- * auto const selector = lcw<bool>   { {0,1,1}, {1,0}, {1,1,1}, {0,0} };
- * auto const results  = apply_boolean_mask(lists_column_view{input}, lists_column_view{selector});
+ * auto const boolmask = lcw<bool>   { {0,1,1}, {1,0}, {1,1,1}, {0,0} };
+ * auto const results  = apply_boolean_mask(lists_column_view{input}, lists_column_view{boolmask});
  * results             == { {1,2}, {3}, {5,6,7}, {} };
  * @endcode
  *
  * `input` and `boolean_mask` must have the same number of rows.
  * The output column has the same number of rows as the input column.
- * An element is copied to an output row *only* if the corresponding bool selector is `true`.
+ * An element is copied to an output row *only* if the corresponding boolean_mask element is `true`.
  * An output row is invalid only if the input row is invalid.
+ *
+ * @throws cudf::logic_error if `boolean_mask` is not a "lists of bools" column
+ * @throws cudf::logic_error if `input` and `boolean_mask` have different number of rows
  *
  * @param input The input list column view to be filtered
  * @param boolean_mask A nullable list of bools column used to filter `input` elements

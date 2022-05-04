@@ -68,7 +68,7 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, StraightLine)
   }
 }
 
-TYPED_TEST(ApplyBooleanMaskTypedTest, WithNullElements)
+TYPED_TEST(ApplyBooleanMaskTypedTest, NullElementsInTheListRows)
 {
   using T = TypeParam;
   auto input =
@@ -105,7 +105,7 @@ TYPED_TEST(ApplyBooleanMaskTypedTest, WithNullElements)
   }
 }
 
-TYPED_TEST(ApplyBooleanMaskTypedTest, NullInTheInput)
+TYPED_TEST(ApplyBooleanMaskTypedTest, NullListRowsInTheInputColumn)
 {
   using T = TypeParam;
   auto input =

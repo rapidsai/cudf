@@ -33,9 +33,6 @@
 namespace cudf::lists {
 namespace detail {
 
-/**
- * @copydoc cudf::lists::detail::apply_boolean_mask
- */
 std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::cuda_stream_view stream,
@@ -50,22 +47,22 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 
   auto constexpr offset_data_type = data_type{type_id::INT32};
 
-  auto filtered_child = [&] {
+  auto const boolean_mask_sliced_child = boolean_mask.get_sliced_child(stream);
+
+  auto const make_filtered_child = [&] {
     auto filtered =
-      cudf::detail::apply_boolean_mask(cudf::table_view{{input.get_sliced_child(stream)}},
-                                       boolean_mask.get_sliced_child(stream),
-                                       stream,
-                                       mr)
+      cudf::detail::apply_boolean_mask(
+        cudf::table_view{{input.get_sliced_child(stream)}}, boolean_mask_sliced_child, stream, mr)
         ->release();
     return std::move(filtered.front());
   };
 
-  auto output_offsets = [&] {
+  auto const make_output_offsets = [&] {
     auto boolean_mask_sliced_offsets =
       cudf::detail::slice(
         boolean_mask.offsets(), {boolean_mask.offset(), boolean_mask.size() + 1}, stream)
         .front();
-    auto const sizes       = cudf::reduction::segmented_sum(boolean_mask.get_sliced_child(stream),
+    auto const sizes       = cudf::reduction::segmented_sum(boolean_mask_sliced_child,
                                                       boolean_mask_sliced_offsets,
                                                       offset_data_type,
                                                       null_policy::EXCLUDE,
@@ -89,8 +86,8 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
   };
 
   return cudf::make_lists_column(input.size(),
-                                 output_offsets(),
-                                 filtered_child(),
+                                 make_output_offsets(),
+                                 make_filtered_child(),
                                  input.null_count(),
                                  cudf::detail::copy_bitmask(input.parent(), stream, mr),
                                  stream,
@@ -98,9 +95,6 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 }
 }  // namespace detail
 
-/**
- * @copydoc cudf::lists::apply_boolean_mask
- */
 std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::mr::device_memory_resource* mr)
