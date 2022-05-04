@@ -79,20 +79,23 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
   auto binary_op = simple_op.get_binary_op();
   auto identity  = simple_op.template get_identity<ResultType>();
 
+  auto result =
+    make_fixed_width_column(col.type(), num_segments, mask_state::UNALLOCATED, stream, mr);
+
+  auto outit = result->mutable_view().begin<ResultType>();
+
   // TODO: Explore rewriting null_replacing_element_transformer/element_transformer with nullate
-  auto result = [&] {
-    if (col.has_nulls()) {
-      auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
-      auto it = thrust::make_transform_iterator(dcol->pair_begin<InputType, true>(), f);
-      return cudf::reduction::detail::segmented_reduce(
-        it, offsets.begin(), num_segments, binary_op, identity, stream, mr);
-    } else {
-      auto f  = simple_op.template get_element_transformer<ResultType>();
-      auto it = thrust::make_transform_iterator(dcol->begin<InputType>(), f);
-      return cudf::reduction::detail::segmented_reduce(
-        it, offsets.begin(), num_segments, binary_op, identity, stream, mr);
-    }
-  }();
+  if (col.has_nulls()) {
+    auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
+    auto it = thrust::make_transform_iterator(dcol->pair_begin<InputType, true>(), f);
+    cudf::reduction::detail::segmented_reduce(
+      outit, it, offsets.begin(), num_segments, binary_op, identity, stream, mr);
+  } else {
+    auto f  = simple_op.template get_element_transformer<ResultType>();
+    auto it = thrust::make_transform_iterator(dcol->begin<InputType>(), f);
+    cudf::reduction::detail::segmented_reduce(
+      outit, it, offsets.begin(), num_segments, binary_op, identity, stream, mr);
+  }
 
   // Compute the output null mask
   auto const bitmask                 = col.null_mask();
@@ -153,14 +156,20 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   auto constexpr identity =
     is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
 
-  auto gather_map =
-    cudf::reduction::detail::segmented_reduce(it,
-                                              offsets.begin(),
-                                              num_segments,
-                                              string_comparator,
-                                              identity,
-                                              stream,
-                                              rmm::mr::get_current_device_resource());
+  auto gather_map = make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, num_segments, mask_state::UNALLOCATED, stream, mr);
+
+  auto gather_map_it = gather_map->mutable_view().begin<size_type>();
+
+  cudf::reduction::detail::segmented_reduce(gather_map_it,
+                                            it,
+                                            offsets.begin(),
+                                            num_segments,
+                                            string_comparator,
+                                            identity,
+                                            stream,
+                                            rmm::mr::get_current_device_resource());
+
   auto result = std::move(cudf::detail::gather(table_view{{col}},
                                                *gather_map,
                                                cudf::out_of_bounds_policy::NULLIFY,
