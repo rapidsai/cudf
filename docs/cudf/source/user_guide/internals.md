@@ -17,7 +17,7 @@ Format](https://arrow.apache.org/docs/format/Columnar.html).
 A column represents a sequence of values, any number of which may be
 "null". Columns are specialized based on the type of data they contain.
 Thus we have `NumericalColumn`, `StringColumn`, `DatetimeColumn`,
-etc.,
+etc.
 
 A column is composed of the following:
 
@@ -49,20 +49,18 @@ As another example, the `StringColumn` backing the Series
 `['do', 'you', 'have', 'any', 'cheese?']` is composed of:
 
 1. No data buffer
-
 2. No mask buffer as there are no nulls in the Series
-
 3. Two children columns:
 
    > - A column of UTF-8 characters
-   >   `['d', 'o', 'y', 'o', 'u', h' ... '?']`
+   >   `['d', 'o', 'y', 'o', 'u', 'h' ..., '?']`
    > - A column of "offsets" to the characters column (in this case,
    >   `[0, 2, 5, 9, 12, 19]`)
 
 ## Buffer
 
 The data and mask buffers of a column represent data in GPU memory
-(a.k.a *device memory*), and are object of type
+(a.k.a *device memory*), and are objects of type
 `cudf.core.buffer.Buffer`.
 
 Buffers can be constructed from array-like objects that live either on

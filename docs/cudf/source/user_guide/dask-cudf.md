@@ -3,14 +3,14 @@
 cuDF is a single-GPU library. For Multi-GPU cuDF solutions we use
 [Dask](https://dask.org/) and the [dask-cudf
 package](https://github.com/rapidsai/cudf/tree/main/python/dask_cudf),
-which is able to scale cuDF across multiple GPUs on a single machine, or
-multiple GPUs across many machines in a cluster.
+which is able to scale cuDF across multiple GPUs on a single machine,
+or multiple GPUs across many machines in a cluster.
 
 [Dask DataFrame](http://docs.dask.org/en/latest/dataframe.html) was
 originally designed to scale Pandas, orchestrating many Pandas
 DataFrames spread across many CPUs into a cohesive parallel DataFrame.
-Because cuDF currently implements only a subset of Pandas’s API, not all
-Dask DataFrame operations work with cuDF.
+Because cuDF currently implements only a subset of the Pandas API, not
+all Dask DataFrame operations work with cuDF.
 
 The following is tested and expected to work:
 
@@ -39,7 +39,7 @@ The following is tested and expected to work:
   - Support for reductions on full dataframes
   - `std`
   - Custom reductions with
-    [dask.dataframe.reduction](http://docs.dask.org/en/latest/generated/dask.dataframe.Series.reduction.html)
+    [dask.dataframe.reduction](https://docs.dask.org/en/latest/generated/dask.dataframe.Series.reduction.html)
 
 - Groupby aggregations
 

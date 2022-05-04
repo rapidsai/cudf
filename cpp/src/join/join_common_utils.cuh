@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,10 @@
  */
 #pragma once
 
-#include <join/join_common_utils.hpp>
+#include "join_common_utils.hpp"
 
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -26,6 +28,41 @@
 
 namespace cudf {
 namespace detail {
+/**
+ * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
+ *
+ * @param hash The hash value to potentially remap
+ * @param sentinel The reserved value
+ */
+template <typename H, typename S>
+constexpr auto remap_sentinel_hash(H hash, S sentinel)
+{
+  // Arbitrarily choose hash - 1
+  return (hash == sentinel) ? (hash - 1) : hash;
+}
+
+/**
+ * @brief Device functor to create a pair of hash value and index for a given row.
+ */
+class make_pair_function {
+ public:
+  CUDF_HOST_DEVICE make_pair_function(row_hash const& hash,
+                                      hash_value_type const empty_key_sentinel)
+    : _hash{hash}, _empty_key_sentinel{empty_key_sentinel}
+  {
+  }
+
+  __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
+  {
+    // Compute the hash value of row `i`
+    auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
+    return cuco::make_pair(row_hash_value, i);
+  }
+
+ private:
+  row_hash _hash;
+  hash_value_type const _empty_key_sentinel;
+};
 
 /**
  * @brief Device functor to determine if a row is valid.
@@ -97,6 +134,47 @@ get_trivial_left_join_indices(
   table_view const& left,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Builds the hash table based on the given `build_table`.
+ *
+ * @tparam MultimapType The type of the hash table
+ *
+ * @param build Table of columns used to build join hash.
+ * @param hash_table Build hash table.
+ * @param nulls_equal Flag to denote nulls are equal or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ */
+template <typename MultimapType>
+void build_join_hash_table(cudf::table_view const& build,
+                           MultimapType& hash_table,
+                           null_equality const nulls_equal,
+                           rmm::cuda_stream_view stream)
+{
+  auto build_table_ptr = cudf::table_device_view::create(build, stream);
+
+  CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
+
+  row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
+  auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_build, empty_key_sentinel};
+
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
+
+  size_type const build_table_num_rows{build_table_ptr->num_rows()};
+  if (nulls_equal == cudf::null_equality::EQUAL or (not nullable(build))) {
+    hash_table.insert(iter, iter + build_table_num_rows, stream.value());
+  } else {
+    thrust::counting_iterator<size_type> stencil(0);
+    auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
+    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+
+    // insert valid rows
+    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
+  }
+}
 
 // Convenient alias for a pair of unique pointers to device uvectors.
 using VectorPair = std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,

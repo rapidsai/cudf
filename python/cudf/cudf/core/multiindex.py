@@ -10,7 +10,7 @@ from functools import cached_property
 from numbers import Integral
 from typing import Any, List, MutableMapping, Tuple, Union
 
-import cupy
+import cupy as cp
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
@@ -29,11 +29,26 @@ from cudf.core.index import (
     as_index,
 )
 from cudf.utils.docutils import doc_apply
-from cudf.utils.utils import (
-    NotIterable,
-    _cudf_nvtx_annotate,
-    _maybe_indices_to_slice,
-)
+from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+
+
+def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
+    """Makes best effort to convert an array of indices into a python slice.
+    If the conversion is not possible, return input. `indices` are expected
+    to be valid.
+    """
+    # TODO: improve efficiency by avoiding sync.
+    if len(indices) == 1:
+        x = indices[0].item()
+        return slice(x, x + 1)
+    if len(indices) == 2:
+        x1, x2 = indices[0].item(), indices[1].item()
+        return slice(x1, x2 + 1, x2 - x1)
+    start, step = indices[0].item(), (indices[1] - indices[0]).item()
+    stop = start + step * len(indices)
+    if (indices == cp.arange(start, stop, step)).all():
+        return slice(start, stop, step)
+    return indices
 
 
 class MultiIndex(Frame, BaseIndex, NotIterable):
@@ -455,7 +470,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         else:
             preprocess = preprocess.to_pandas(nullable=True)
 
-        output = preprocess.__repr__()
+        output = repr(preprocess)
         output_prefix = self.__class__.__name__ + "("
         output = output.lstrip(output_prefix)
         lines = output.split("\n")
@@ -1709,7 +1724,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return true_inds
 
         # Not sorted and not unique. Return a boolean mask
-        mask = cupy.full(self._data.nrows, False)
+        mask = cp.full(self._data.nrows, False)
         mask[true_inds] = True
         return mask
 

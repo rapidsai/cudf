@@ -35,17 +35,24 @@ A GroupBy object is created by grouping the values of a `Series` or
 `DataFrame` by one or more columns:
 
 ```python
-import cudf
-
+>>> import cudf
 >>> df = cudf.DataFrame({'a': [1, 1, 1, 2, 2], 'b': [1, 1, 2, 2, 3], 'c': [1, 2, 3, 4, 5]})
 >>> df
+   a  b  c
+0  1  1  1
+1  1  1  2
+2  1  2  3
+3  2  2  4
+4  2  3  5
 >>> gb1 = df.groupby('a')  # grouping by a single column
 >>> gb2 = df.groupby(['a', 'b'])  # grouping by multiple columns
 >>> gb3 = df.groupby(cudf.Series(['a', 'a', 'b', 'b', 'b']))  # grouping by an external column
 ```
 
-:::{warning}
-cuDF uses `sort=False` by default to achieve better performance, which provides no gaurentee to the group order in outputs. This deviates from Pandas default behavior.
+````{warning}
+Unlike Pandas, cuDF uses `sort=False` by default to achieve better
+performance, which does not guarantee any particular group order in
+the result.
 
 For example:
 
@@ -72,7 +79,7 @@ a
 1  11
 2  63
 ```
-:::
+````
 
 ### Grouping by index levels
 
@@ -106,7 +113,7 @@ b
 
 ## Aggregation
 
-Aggregations on groups is supported via the `agg` method:
+Aggregations on groups are supported via the `agg` method:
 
 ```python
 >>> df
@@ -208,7 +215,7 @@ a
 - `apply` works by applying the provided function to each group
   sequentially, and concatenating the results together. **This can be
   very slow**, especially for a large number of small groups. For a
-  small number of large groups, it can give acceptable performance
+  small number of large groups, it can give acceptable performance.
 - The results may not always match Pandas exactly. For example, cuDF
   may return a `DataFrame` containing a single column where Pandas
   returns a `Series`. Some post-processing may be required to match
@@ -216,8 +223,6 @@ a
 - cuDF does not support some of the exceptional cases that Pandas
   supports with `apply`, such as calling [describe] inside the
   callable.
-
->
 
 ## Transform
 
