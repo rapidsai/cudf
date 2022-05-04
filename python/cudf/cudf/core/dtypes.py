@@ -169,11 +169,18 @@ class CategoricalDtype(_BaseDtype):
             categories_header, categories_frames = self.categories.serialize()
         header["categories"] = categories_header
         frames.extend(categories_frames)
-
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
+        assert header["frame_count"] == len(
+            frames
+        ), "Received unexpected number of frames."
+        klass = pickle.loads(header["type-serialized"])
+        assert (
+            klass == cls
+        ), "Header-encoded type does not match reconstructing type"
         ordered = header["ordered"]
         categories_header = header["categories"]
         categories_frames = frames
@@ -181,7 +188,7 @@ class CategoricalDtype(_BaseDtype):
         categories = categories_type.deserialize(
             categories_header, categories_frames
         )
-        return cls(categories=categories, ordered=ordered)
+        return klass(categories=categories, ordered=ordered)
 
 
 class ListDtype(_BaseDtype):
@@ -254,19 +261,25 @@ class ListDtype(_BaseDtype):
             header["element-type"], frames = self.element_type.serialize()
         else:
             header["element-type"] = self.element_type
-
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
+        assert header["frame_count"] == len(
+            frames
+        ), "Received unexpected number of frames."
+        klass = pickle.loads(header["type-serialized"])
+        assert (
+            klass == cls
+        ), "Header-encoded type does not match reconstructing type"
         if isinstance(header["element-type"], dict):
             element_type = pickle.loads(
                 header["element-type"]["type-serialized"]
             ).deserialize(header["element-type"], frames)
         else:
             element_type = header["element-type"]
-
-        return cls(element_type=element_type)
+        return klass(element_type=element_type)
 
 
 class StructDtype(_BaseDtype):
@@ -338,11 +351,18 @@ class StructDtype(_BaseDtype):
             else:
                 fields[k] = pickle.dumps(dtype)
         header["fields"] = fields
-
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
+        assert header["frame_count"] == len(
+            frames
+        ), "Received unexpected number of frames."
+        klass = pickle.loads(header["type-serialized"])
+        assert (
+            klass == cls
+        ), "Header-encoded type does not match reconstructing type"
         fields = {}
         for k, dtype in header["fields"].items():
             if isinstance(dtype, tuple):
@@ -452,13 +472,18 @@ class DecimalDtype(_BaseDtype):
                 "type-serialized": pickle.dumps(type(self)),
                 "precision": self.precision,
                 "scale": self.scale,
+                "frame_count": 0,
             },
             [],
         )
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        return cls(header["precision"], header["scale"])
+        assert header["frame_count"] == len(
+            frames
+        ), "Received unexpected number of frames."
+        klass = pickle.loads(header["type-serialized"])
+        return klass(header["precision"], header["scale"])
 
     def __eq__(self, other: Dtype) -> bool:
         if other is self:
@@ -532,18 +557,24 @@ class IntervalDtype(StructDtype):
         )  # TODO: needs `closed` when we upgrade Pandas
 
     def serialize(self) -> Tuple[dict, list]:
-        header: Dict[str, Any] = {}
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["subtype"] = pickle.dumps(self.subtype)
-        header["closed"] = pickle.dumps(self.closed)
+        header: Dict[str, Any] = {
+            "type-serialized": pickle.dumps(type(self)),
+            "fields": pickle.dumps((self.subtype, self.closed)),
+            "frame_count": 0,
+        }
         return header, []
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        assert len(frames) == 0
+        assert header["frame_count"] == len(
+            frames
+        ), "Received unexpected number of frames."
         klass = pickle.loads(header["type-serialized"])
-        subtype = pickle.loads(header["subtype"])
-        closed = pickle.loads(header["closed"])
+        assert (
+            klass == cls
+        ), "Header-encoded type does not match reconstructing type"
+        klass = pickle.loads(header["type-serialized"])
+        subtype, closed = pickle.loads(header["fields"])
         return klass(subtype, closed=closed)
 
 
