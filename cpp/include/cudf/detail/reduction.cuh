@@ -256,8 +256,7 @@ void segmented_reduce(OutputIterator d_out,
                       cudf::size_type num_segments,
                       BinaryOp binary_op,
                       OutputType identity,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
+                      rmm::cuda_stream_view stream)
 {
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -300,8 +299,7 @@ void segmented_reduce(OutputIterator,
                       cudf::size_type,
                       BinaryOp,
                       OutputType,
-                      rmm::cuda_stream_view,
-                      rmm::mr::device_memory_resource*)
+                      rmm::cuda_stream_view)
 {
   CUDF_FAIL(
     "Unsupported data types called on segmented_reduce. Only numeric and chrono types are "

@@ -89,12 +89,12 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
     auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
     auto it = thrust::make_transform_iterator(dcol->pair_begin<InputType, true>(), f);
     cudf::reduction::detail::segmented_reduce(
-      outit, it, offsets.begin(), num_segments, binary_op, identity, stream, mr);
+      outit, it, offsets.begin(), num_segments, binary_op, identity, stream);
   } else {
     auto f  = simple_op.template get_element_transformer<ResultType>();
     auto it = thrust::make_transform_iterator(dcol->begin<InputType>(), f);
     cudf::reduction::detail::segmented_reduce(
-      outit, it, offsets.begin(), num_segments, binary_op, identity, stream, mr);
+      outit, it, offsets.begin(), num_segments, binary_op, identity, stream);
   }
 
   // Compute the output null mask
@@ -161,14 +161,8 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
 
   auto gather_map_it = gather_map->mutable_view().begin<size_type>();
 
-  cudf::reduction::detail::segmented_reduce(gather_map_it,
-                                            it,
-                                            offsets.begin(),
-                                            num_segments,
-                                            string_comparator,
-                                            identity,
-                                            stream,
-                                            rmm::mr::get_current_device_resource());
+  cudf::reduction::detail::segmented_reduce(
+    gather_map_it, it, offsets.begin(), num_segments, string_comparator, identity, stream);
 
   auto result = std::move(cudf::detail::gather(table_view{{col}},
                                                *gather_map,
