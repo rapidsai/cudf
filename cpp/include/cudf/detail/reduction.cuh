@@ -246,28 +246,26 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 template <typename InputIterator,
           typename OffsetIterator,
           typename BinaryOp,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+          typename OutputIterator,
+          typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
           typename std::enable_if_t<is_fixed_width<OutputType>() &&
                                     !cudf::is_fixed_point<OutputType>()>* = nullptr>
-std::unique_ptr<column> segmented_reduce(InputIterator d_in,
-                                         OffsetIterator d_offset,
-                                         cudf::size_type num_segments,
-                                         BinaryOp binary_op,
-                                         OutputType identity,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+void segmented_reduce(OutputIterator d_out,
+                      InputIterator d_in,
+                      OffsetIterator d_offset,
+                      cudf::size_type num_segments,
+                      BinaryOp binary_op,
+                      OutputType identity,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr)
 {
-  auto dev_result = make_fixed_width_column(
-    data_type{type_to_id<OutputType>()}, num_segments, mask_state::UNALLOCATED, stream, mr);
-  auto dev_result_mview = dev_result->mutable_view();
-
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
   size_t temp_storage_bytes = 0;
   cub::DeviceSegmentedReduce::Reduce(d_temp_storage.data(),
                                      temp_storage_bytes,
                                      d_in,
-                                     dev_result_mview.data<OutputType>(),
+                                     d_out,
                                      num_segments,
                                      d_offset,
                                      d_offset + 1,
@@ -280,30 +278,30 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
   cub::DeviceSegmentedReduce::Reduce(d_temp_storage.data(),
                                      temp_storage_bytes,
                                      d_in,
-                                     dev_result_mview.data<OutputType>(),
+                                     d_out,
                                      num_segments,
                                      d_offset,
                                      d_offset + 1,
                                      binary_op,
                                      identity,
                                      stream.value());
-
-  return dev_result;
 }
 
 template <typename InputIterator,
           typename OffsetIterator,
           typename BinaryOp,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+          typename OutputIterator,
+          typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
           typename std::enable_if_t<!(is_fixed_width<OutputType>() &&
                                       !cudf::is_fixed_point<OutputType>())>* = nullptr>
-std::unique_ptr<column> segmented_reduce(InputIterator,
-                                         OffsetIterator,
-                                         cudf::size_type,
-                                         BinaryOp,
-                                         OutputType,
-                                         rmm::cuda_stream_view,
-                                         rmm::mr::device_memory_resource*)
+void segmented_reduce(OutputIterator,
+                      InputIterator,
+                      OffsetIterator,
+                      cudf::size_type,
+                      BinaryOp,
+                      OutputType,
+                      rmm::cuda_stream_view,
+                      rmm::mr::device_memory_resource*)
 {
   CUDF_FAIL(
     "Unsupported data types called on segmented_reduce. Only numeric and chrono types are "
