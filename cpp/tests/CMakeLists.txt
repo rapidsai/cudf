@@ -353,7 +353,10 @@ ConfigureTest(
 # ##################################################################################################
 # * search test -----------------------------------------------------------------------------------
 ConfigureTest(
-  SEARCH_TEST search/search_dictionary_test.cpp search/search_struct_test.cpp
+  SEARCH_TEST
+  search/search_dictionary_test.cpp
+  search/search_list_test.cpp
+  search/search_struct_test.cpp
   search/search_test.cpp
 )
 
