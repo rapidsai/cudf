@@ -228,8 +228,6 @@ TEST_F(FstTest, GroundTruth)
   // Run algorithm
   DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream};
 
-  std::size_t temp_storage_bytes = 0;
-
   // Allocate device-side temporary storage & run algorithm
   parser.Transduce(d_input.data(),
                    static_cast<SymbolOffsetT>(d_input.size()),
