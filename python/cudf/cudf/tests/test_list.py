@@ -11,6 +11,7 @@ import pytest
 import cudf
 from cudf import NA
 from cudf._lib.copying import get_element
+from cudf.api.types import is_scalar
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -320,6 +321,17 @@ def test_get_default():
     )
 
 
+def test_get_ind_sequence():
+    # test .list.get() when `index` is a sequence
+    sr = cudf.Series([[1, 2], [3, 4, 5], [6, 7, 8, 9]])
+    assert_eq(cudf.Series([1, 4, 8]), sr.list.get([0, 1, 2]))
+    assert_eq(cudf.Series([1, 4, 8]), sr.list.get(cudf.Series([0, 1, 2])))
+    assert_eq(cudf.Series([cudf.NA, 5, cudf.NA]), sr.list.get([2, 2, -5]))
+    assert_eq(cudf.Series([0, 5, 0]), sr.list.get([2, 2, -5], default=0))
+    sr_nested = cudf.Series([[[1, 2], [3, 4], [5, 6]], [[5, 6], [7, 8]]])
+    assert_eq(cudf.Series([[1, 2], [7, 8]]), sr_nested.list.get([0, 1]))
+
+
 @pytest.mark.parametrize(
     "data, scalar, expect",
     [
@@ -388,6 +400,137 @@ def test_contains_null_search_key(data, expect):
     expect = cudf.Series(expect, dtype="bool")
     got = sr.list.contains(cudf.Scalar(cudf.NA, sr.dtype.element_type))
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, scalar",
+    [
+        (
+            [[9, 0, 2], [], [1, None, 0]],
+            "x",
+        ),
+        (
+            [["z", "y", None], None, [None, "x"]],
+            5,
+        ),
+    ],
+)
+def test_contains_invalid(data, scalar):
+    sr = cudf.Series(data)
+    with pytest.raises(
+        TypeError,
+        match="Type/Scale of search key does not "
+        "match list column element type.",
+    ):
+        sr.list.contains(scalar)
+
+
+@pytest.mark.parametrize(
+    "data, search_key, expect",
+    [
+        (
+            [[1, 2, 3], [], [3, 4, 5]],
+            3,
+            [2, -1, 0],
+        ),
+        (
+            [[1.0, 2.0, 3.0], None, [2.0, 5.0]],
+            2.0,
+            [1, None, 0],
+        ),
+        (
+            [[None, "b", "c"], [], ["b", "e", "f"]],
+            "f",
+            [-1, -1, 2],
+        ),
+        ([[-5, None, 8], None, []], -5, [0, None, -1]),
+        (
+            [[None, "x", None, "y"], ["z", "i", "j"]],
+            "y",
+            [3, -1],
+        ),
+        (
+            [["h", "a", None], ["t", "g"]],
+            ["a", "b"],
+            [1, -1],
+        ),
+        (
+            [None, ["h", "i"], ["p", "k", "z"]],
+            ["x", None, "z"],
+            [None, None, 2],
+        ),
+        (
+            [["d", None, "e"], [None, "f"], []],
+            cudf.Scalar(cudf.NA, "O"),
+            [None, None, None],
+        ),
+        (
+            [None, [10, 9, 8], [5, 8, None]],
+            cudf.Scalar(cudf.NA, "int64"),
+            [None, None, None],
+        ),
+    ],
+)
+def test_index(data, search_key, expect):
+    sr = cudf.Series(data)
+    expect = cudf.Series(expect, dtype="int32")
+    if is_scalar(search_key):
+        got = sr.list.index(cudf.Scalar(search_key, sr.dtype.element_type))
+    else:
+        got = sr.list.index(
+            cudf.Series(search_key, dtype=sr.dtype.element_type)
+        )
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, search_key",
+    [
+        (
+            [[9, None, 8], [], [7, 6, 5]],
+            "c",
+        ),
+        (
+            [["a", "b", "c"], None, [None, "d"]],
+            2,
+        ),
+        (
+            [["e", "s"], ["t", "w"]],
+            [5, 6],
+        ),
+    ],
+)
+def test_index_invalid_type(data, search_key):
+    sr = cudf.Series(data)
+    with pytest.raises(
+        TypeError,
+        match="Type/Scale of search key does not "
+        "match list column element type.",
+    ):
+        sr.list.index(search_key)
+
+
+@pytest.mark.parametrize(
+    "data, search_key",
+    [
+        (
+            [[5, 8], [2, 6]],
+            [8, 2, 4],
+        ),
+        (
+            [["h", "j"], ["p", None], ["t", "z"]],
+            ["j", "a"],
+        ),
+    ],
+)
+def test_index_invalid_length(data, search_key):
+    sr = cudf.Series(data)
+    with pytest.raises(
+        RuntimeError,
+        match="Number of search keys must match list column size.",
+    ):
+        sr.list.index(search_key)
 
 
 @pytest.mark.parametrize(
@@ -659,3 +802,15 @@ def test_listcol_setitem_retain_dtype():
     # prior to this fix: https://github.com/rapidsai/cudf/pull/10151/
     df2 = df1.copy()
     assert df2["a"].dtype == df["a"].dtype
+
+
+def test_list_astype():
+    s = cudf.Series([[1, 2], [3, 4]])
+    s2 = s.list.astype("float64")
+    assert s2.dtype == cudf.ListDtype("float64")
+    assert_eq(s.list.leaves.astype("float64"), s2.list.leaves)
+
+    s = cudf.Series([[[1, 2], [3]], [[5, 6], None]])
+    s2 = s.list.astype("string")
+    assert s2.dtype == cudf.ListDtype(cudf.ListDtype("string"))
+    assert_eq(s.list.leaves.astype("string"), s2.list.leaves)

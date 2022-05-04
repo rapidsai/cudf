@@ -15,14 +15,13 @@
  */
 #pragma once
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/scatter.h>
@@ -68,20 +67,17 @@ std::unique_ptr<column> scatter(
   // create vector of string_view's to scatter into
   rmm::device_uvector<string_view> target_vector = create_string_vector_from_column(target, stream);
 
+  // this ensures empty strings are not mapped to nulls in the make_strings_column function
+  auto const size = thrust::distance(begin, end);
+  auto itr        = thrust::make_transform_iterator(
+    begin, [] __device__(string_view const sv) { return sv.empty() ? string_view{} : sv; });
+
   // do the scatter
-  thrust::scatter(rmm::exec_policy(stream), begin, end, scatter_map, target_vector.begin());
+  thrust::scatter(rmm::exec_policy(stream), itr, itr + size, scatter_map, target_vector.begin());
 
-  // build offsets column
-  auto offsets_column = child_offsets_from_string_vector(target_vector, stream, mr);
-  // build chars column
-  auto chars_column =
-    child_chars_from_string_vector(target_vector, offsets_column->view(), stream, mr);
-
-  return make_strings_column(target.size(),
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             UNKNOWN_NULL_COUNT,
-                             cudf::detail::copy_bitmask(target.parent(), stream, mr));
+  // build the output column
+  auto sv_span = cudf::device_span<string_view const>(target_vector);
+  return make_strings_column(sv_span, string_view{nullptr, 0}, stream, mr);
 }
 
 }  // namespace detail

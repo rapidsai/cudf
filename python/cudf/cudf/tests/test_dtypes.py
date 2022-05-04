@@ -189,10 +189,8 @@ def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
         )
     elif isinstance(column.dtype, StructDtype):
         return array.type.equals(column.dtype.to_arrow()) and all(
-            [
-                assert_column_array_dtype_equal(child, array.field(i))
-                for i, child in enumerate(column.base_children)
-            ]
+            assert_column_array_dtype_equal(child, array.field(i))
+            for i, child in enumerate(column.base_children)
         )
     elif isinstance(
         column.dtype, (Decimal128Dtype, Decimal64Dtype, Decimal32Dtype)

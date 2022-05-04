@@ -144,16 +144,17 @@ TEST_F(StringsDatetimeTest, ToTimestampTimezone)
                                              "2019-07-17 02:34:56-0300",
                                              "2019-03-20 12:34:56+1030",
                                              "2020-02-29 12:00:00-0500",
+                                             "2022-04-07 09:15:00Z",
                                              "1938-11-23 10:28:49+0700"};
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::to_timestamps(
     strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS}, "%Y-%m-%d %H:%M:%S%z");
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> expected{
-    131243025, 1563341696, 1553047496, 1582995600, -981664271};
+    131243025, 1563341696, 1553047496, 1582995600, 1649322900, -981664271};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
   results = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S%z");
-  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> is_expected({1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, is_expected);
 }
 
