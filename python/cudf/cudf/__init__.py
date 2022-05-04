@@ -18,7 +18,6 @@ from cudf.api.extensions import (
     register_series_accessor,
 )
 from cudf.core.scalar import (
-    NA,
     Scalar,
 )
 from cudf.core.index import (
@@ -45,6 +44,7 @@ from cudf.core.index import (
 )
 from cudf.core.dataframe import DataFrame, from_pandas, merge, from_dataframe
 from cudf.core.series import Series
+from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.cut import cut
 from cudf.core.algorithms import factorize
