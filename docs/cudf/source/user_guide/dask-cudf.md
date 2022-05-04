@@ -39,7 +39,7 @@ The following is tested and expected to work:
   - Support for reductions on full dataframes
   - `std`
   - Custom reductions with
-    [dask.dataframe.reduction](http://docs.dask.org/en/latest/generated/dask.dataframe.Series.reduction.html)
+    [dask.dataframe.reduction](https://docs.dask.org/en/latest/generated/dask.dataframe.Series.reduction.html)
 
 - Groupby aggregations
 

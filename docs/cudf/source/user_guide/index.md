@@ -3,15 +3,14 @@
 ```{toctree}
 :maxdepth: 2
 
-10min.md
-pandas-comparison.rst
-data-types.rst
-io.rst
-missing-data.md
-groupby.rst
-guide-to-udfs.md
-cupy-interop.md
-dask-cudf.rst
-internals.rst
-PandasCompat.rst
+10min
+data-types
+io
+missing-data
+groupby
+guide-to-udfs
+cupy-interop
+dask-cudf
+internals
+PandasCompat
 ```

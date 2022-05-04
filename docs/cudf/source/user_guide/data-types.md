@@ -5,7 +5,7 @@ numeric, datetime, timedelta, categorical and string data types. We
 also provide special data types for working with decimals, list-like,
 and dictionary-like data.
 
-All data types in cuDF are [nullable](/user_guide/missing-data).
+All data types in cuDF are [nullable](missing-data).
 
 <div class="special-table">
 
@@ -34,10 +34,14 @@ ways to specify the `float32` data type:
 ```python
 >>> import cudf
 >>> s = cudf.Series([1, 2, 3], dtype="float32")
->>> print(s)
+>>> s
+0    1.0
+1    2.0
+2    3.0
+dtype: float32
 ```
 
-## A note on ``object``
+## A note on `object`
 
 The data type associated with string data in cuDF is `"np.object"`.
 
@@ -60,7 +64,8 @@ We provide special data types for working with decimal data, namely
 data types when you need to store values with greater precision than
 allowed by floating-point representation.
 
-A decimal data type is composed of a _precision_ and a _scale_.  The
+Decimal data types in cuDF are based on fixed-point representation.  A
+decimal data type is composed of a _precision_ and a _scale_.  The
 precision represents the total number of digits in each value of this
 dtype. For example, the precision associated with the decimal value
 `1.023` is `4`. The scale is the total number of digits to the right
@@ -72,10 +77,8 @@ Each decimal data type is associated with a maximum precision:
 ```python
 >>> cudf.Decimal32Dtype.MAX_PRECISION
 9.0
-
 >>> cudf.Decimal64Dtype.MAX_PRECISION
 18.0
-
 >>> cudf.Decimal128Dtype.MAX_PRECISION
 38
 ```
@@ -85,24 +88,20 @@ One way to create a decimal Series is from values of type [decimal.Decimal][pyth
 ```python
 >>> from decimal import Decimal
 >>> s = cudf.Series([Decimal("1.01"), Decimal("4.23"), Decimal("0.5")])
-
 >>> s
 0    1.01
 1    4.23
 2    0.50
 dtype: decimal128
-
 >>> s.dtype
->>> Decimal128Dtype(precision=3, scale=2)
+Decimal128Dtype(precision=3, scale=2)
 ```
 
 Notice the data type of the result: `1.01`, `4.23`, `0.50` can all be
-represented with a precision at least equal to 3 and a scale at least
-equal to 2.
+represented with a precision at least 3 and a scale at least 2.
 
-However, the value `1.234` needs a precision at least equal to 4, and
-a scale at least equal to 3, and cannot be fully represented
-using this data type:
+However, the value `1.234` needs a precision at least 4, and a scale
+at least 3, and cannot be fully represented using this data type:
 
 ```python
 >>> s[1] = Decimal("1.234")  # raises an error
@@ -124,7 +123,6 @@ lists and dictionaries respectively:
 0 {'a': 1, 'b': 2}
 1 {'a': 3, 'b': 4}
 dtype: object
-
 >>> gsr = cudf.from_pandas(psr)
 >>> gsr
 0 {'a': 1, 'b': 2}
@@ -140,14 +138,12 @@ nested data](io).
 ```python
 >>> pdf = pd.DataFrame({"a": [[1, 2], [3, 4, 5], [6, 7, 8]]})
 >>> pdf.to_parquet("lists.pq")
-
 >>> gdf = cudf.read_parquet("lists.pq")
 >>> gdf
            a
 0     [1, 2]
 1  [3, 4, 5]
 2  [6, 7, 8]
-
 >>> gdf["a"].dtype
 ListDtype(int64)
 ```
