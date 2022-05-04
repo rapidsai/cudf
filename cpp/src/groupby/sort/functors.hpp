@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,7 +87,6 @@ struct store_result_functor {
    */
   column_view get_sorted_values()
   {
-    if (is_presorted()) { return values; }
     return sorted_values ? sorted_values->view()
                          : (sorted_values = helper.sorted_values(values, stream))->view();
   };

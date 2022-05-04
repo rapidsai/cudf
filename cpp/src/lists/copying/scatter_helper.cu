@@ -232,6 +232,8 @@ struct list_child_constructor {
 
     auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream);
 
+    auto const null_string_view = string_view{nullptr, 0};  // placeholder for factory function
+
     thrust::transform(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
@@ -241,7 +243,8 @@ struct list_child_constructor {
        offset_size   = list_offsets.size(),
        d_list_vector = list_vector.begin(),
        source_lists,
-       target_lists] __device__(auto index) {
+       target_lists,
+       null_string_view] __device__(auto index) {
         auto const list_index_iter =
           thrust::upper_bound(thrust::seq, offset_begin, offset_begin + offset_size, index);
         auto const list_index =
@@ -254,14 +257,16 @@ struct list_child_constructor {
         auto child_strings_column = lists_column.child();
         auto strings_offset       = lists_offsets_ptr[row_index] + intra_index;
 
-        return child_strings_column.is_null(strings_offset)
-                 ? string_view{nullptr, 0}
-                 : child_strings_column.template element<string_view>(strings_offset);
+        if (child_strings_column.is_null(strings_offset)) { return null_string_view; }
+        auto const d_str = child_strings_column.template element<string_view>(strings_offset);
+        // ensure a string from an all-empty column is not mapped to the null placeholder
+        auto const empty_string_view = string_view{};
+        return d_str.empty() ? empty_string_view : d_str;
       });
 
     // string_views should now have been populated with source and target references.
     auto sv_span = cudf::device_span<string_view const>(string_views);
-    return cudf::make_strings_column(sv_span, string_view{nullptr, 0}, stream, mr);
+    return cudf::make_strings_column(sv_span, null_string_view, stream, mr);
   }
 
   /**

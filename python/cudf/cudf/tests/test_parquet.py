@@ -2386,6 +2386,32 @@ def test_parquet_reader_one_level_list(datadir):
     assert_eq(expect, got)
 
 
+# testing a specific bug-fix/edge case.
+# specifically:  int a parquet file containing a particular way of representing
+#                a list column in a schema, the cudf reader was confusing
+#                nesting information between a list column and a subsequent
+#                string column, ultimately causing a crash.
+def test_parquet_reader_one_level_list2(datadir):
+    # we are reading in a file containing binary types, but cudf returns
+    # those as strings. so we have to massage the pandas data to get
+    # them to compare correctly.
+    def postprocess(val):
+        if isinstance(val, bytes):
+            return val.decode()
+        elif isinstance(val, np.ndarray):
+            return np.array([v.decode() for v in val])
+        else:
+            return val
+
+    fname = datadir / "one_level_list2.parquet"
+
+    expect = pd.read_parquet(fname)
+    expect = expect.applymap(postprocess)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
 @pytest.mark.parametrize("size_bytes", [4_000_000, 1_000_000, 600_000])
 @pytest.mark.parametrize("size_rows", [1_000_000, 100_000, 10_000])
 def test_parquet_writer_row_group_size(

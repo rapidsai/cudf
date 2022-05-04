@@ -1148,7 +1148,7 @@ def test_dataframe_hash_values(nrows, method):
     out = gdf.hash_values()
     assert isinstance(out, cudf.Series)
     assert len(out) == nrows
-    assert out.dtype == np.int32
+    assert out.dtype == np.uint32
 
     # Check single column
     out_one = gdf[["a"]].hash_values(method=method)
@@ -8698,43 +8698,6 @@ def test_frame_series_where():
 
 
 @pytest.mark.parametrize(
-    "array,is_error",
-    [
-        (cupy.arange(20, 40).reshape(-1, 2), False),
-        (cupy.arange(20, 50).reshape(-1, 3), True),
-        (np.arange(20, 40).reshape(-1, 2), False),
-        (np.arange(20, 30).reshape(-1, 1), False),
-        (cupy.arange(20, 30).reshape(-1, 1), False),
-    ],
-)
-def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
-    gdf = cudf.DataFrame({"a": range(10), "b": range(10)})
-    pdf = gdf.to_pandas()
-    if not is_error:
-        gdf.loc[:, ["a", "b"]] = array
-        pdf.loc[:, ["a", "b"]] = cupy.asnumpy(array)
-
-        assert_eq(gdf, pdf)
-    else:
-        assert_exceptions_equal(
-            lfunc=pdf.loc.__setitem__,
-            rfunc=gdf.loc.__setitem__,
-            lfunc_args_and_kwargs=(
-                [(slice(None, None, None), ["a", "b"]), cupy.asnumpy(array)],
-                {},
-            ),
-            rfunc_args_and_kwargs=(
-                [(slice(None, None, None), ["a", "b"]), array],
-                {},
-            ),
-            compare_error_message=False,
-            expected_error_message="shape mismatch: value array of shape "
-            "(10, 3) could not be broadcast to indexing "
-            "result of shape (10, 2)",
-        )
-
-
-@pytest.mark.parametrize(
     "data",
     [{"a": [1, 2, 3], "b": [1, 1, 0]}],
 )
@@ -9266,3 +9229,90 @@ def test_empty_numeric_only(data):
     expected = pdf.prod(numeric_only=True)
     actual = gdf.prod(numeric_only=True)
     assert_eq(expected, actual)
+
+
+@pytest.fixture
+def df_eval():
+    N = 10
+    int_max = 10
+    rng = cupy.random.default_rng(0)
+    return cudf.DataFrame(
+        {
+            "a": rng.integers(N, size=int_max),
+            "b": rng.integers(N, size=int_max),
+            "c": rng.integers(N, size=int_max),
+            "d": rng.integers(N, size=int_max),
+        }
+    )
+
+
+# Note that for now expressions do not automatically handle casting, so inputs
+# need to be casted appropriately
+@pytest.mark.parametrize(
+    "expr, dtype",
+    [
+        ("a", int),
+        ("+a", int),
+        ("a + b", int),
+        ("a == b", int),
+        ("a / b", float),
+        ("a * b", int),
+        ("a > b", int),
+        ("a > b > c", int),
+        ("a > b < c", int),
+        ("a & b", int),
+        ("a & b | c", int),
+        ("sin(a)", float),
+        ("exp(sin(abs(a)))", float),
+        ("sqrt(floor(a))", float),
+        ("ceil(arctanh(a))", float),
+        ("(a + b) - (c * d)", int),
+        ("~a", int),
+        ("(a > b) and (c > d)", int),
+        ("(a > b) or (c > d)", int),
+        ("not (a > b)", int),
+        ("a + 1", int),
+        ("a + 1.0", float),
+        ("-a + 1", int),
+        ("+a + 1", int),
+        ("e = a + 1", int),
+        (
+            """
+            e = log(cos(a)) + 1.0
+            f = abs(c) - exp(d)
+            """,
+            float,
+        ),
+        ("a_b_are_equal = (a == b)", int),
+    ],
+)
+def test_dataframe_eval(df_eval, expr, dtype):
+    df_eval = df_eval.astype(dtype)
+    expect = df_eval.to_pandas().eval(expr)
+    got = df_eval.eval(expr)
+    # In the specific case where the evaluated expression is a unary function
+    # of a single column with no nesting, pandas will retain the name. This
+    # level of compatibility is out of scope for now.
+    assert_eq(expect, got, check_names=False)
+
+    # Test inplace
+    if re.search("[^=]=[^=]", expr) is not None:
+        pdf_eval = df_eval.to_pandas()
+        pdf_eval.eval(expr, inplace=True)
+        df_eval.eval(expr, inplace=True)
+        assert_eq(pdf_eval, df_eval)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        """
+        e = a + b
+        a == b
+        """,
+        "a_b_are_equal = (a == b) = c",
+    ],
+)
+def test_dataframe_eval_errors(df_eval, expr):
+    with pytest.raises(ValueError):
+        df_eval.eval(expr)

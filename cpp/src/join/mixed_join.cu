@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
+#include "mixed_join_kernels.cuh"
+
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -23,12 +27,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
-#include <join/hash_join.cuh>
-#include <join/join_common_utils.cuh>
-#include <join/join_common_utils.hpp>
-#include <join/mixed_join_kernels.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/scan.h>
@@ -134,7 +135,9 @@ mixed_join(
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  build_join_hash_table(build, hash_table, compare_nulls, stream);
+  auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
+  build_join_hash_table(
+    build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
@@ -380,7 +383,9 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  build_join_hash_table(build, hash_table, compare_nulls, stream);
+  auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
+  build_join_hash_table(
+    build, hash_table, compare_nulls, static_cast<bitmask_type const*>(row_bitmask.data()), stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
