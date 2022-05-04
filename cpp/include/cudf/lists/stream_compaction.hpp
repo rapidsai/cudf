@@ -32,10 +32,9 @@ namespace cudf::lists {
  *
  * E.g.
  * @code{.pseudo}
- * auto const input    = lcw<int32_t>{ {0,1,2}, {3,4}, {5,6,7}, {8,9} };
- * auto const boolmask = lcw<bool>   { {0,1,1}, {1,0}, {1,1,1}, {0,0} };
- * auto const results  = apply_boolean_mask(lists_column_view{input}, lists_column_view{boolmask});
- * results             == { {1,2}, {3}, {5,6,7}, {} };
+ * input        = { {0,1,2}, {3,4}, {5,6,7}, {8,9} };
+ * boolean_mask = { {0,1,1}, {1,0}, {1,1,1}, {0,0} };
+ * results      = { {1,2},   {3},   {5,6,7}, {} };
  * @endcode
  *
  * `input` and `boolean_mask` must have the same number of rows.
