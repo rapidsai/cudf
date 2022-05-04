@@ -17,6 +17,7 @@ from pandas.core.dtypes.dtypes import (
 
 import cudf
 from cudf._typing import Dtype
+from cudf.core._compat import PANDAS_GE_130
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 
@@ -503,6 +504,8 @@ class IntervalDtype(StructDtype):
     def __init__(self, subtype, closed="right"):
         super().__init__(fields={"left": subtype, "right": subtype})
 
+        if closed is None:
+            closed = "right"
         if closed in ["left", "right", "neither", "both"]:
             self.closed = closed
         else:
@@ -527,9 +530,10 @@ class IntervalDtype(StructDtype):
 
     @classmethod
     def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> "IntervalDtype":
-        return cls(
-            subtype=pd_dtype.subtype
-        )  # TODO: needs `closed` when we upgrade Pandas
+        if PANDAS_GE_130:
+            return cls(subtype=pd_dtype.subtype, closed=pd_dtype.closed)
+        else:
+            return cls(subtype=pd_dtype.subtype)
 
     def __eq__(self, other):
         if isinstance(other, str):
