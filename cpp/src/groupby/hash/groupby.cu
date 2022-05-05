@@ -425,10 +425,12 @@ void sparse_to_dense_results(table_view const& keys,
  * @brief Construct hash map that uses row comparator and row hasher on
  * `d_keys` table and stores indices
  */
-auto create_hash_map(table_view const& keys,
-                     bool keys_have_nulls,
-                     null_policy include_null_keys,
-                     rmm::cuda_stream_view stream)
+auto create_hash_map(
+  std::shared_ptr<cudf::experimental::row::hash::preprocessed_table> const& preprocessed_keys,
+  cudf::size_type const num_keys,
+  bool const keys_have_nulls,
+  null_policy const include_null_keys,
+  rmm::cuda_stream_view stream)
 {
   size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
   size_type constexpr unused_value{std::numeric_limits<size_type>::max()};
@@ -439,12 +441,11 @@ auto create_hash_map(table_view const& keys,
     include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
   auto const has_null = nullate::DYNAMIC{keys_have_nulls};
 
-  auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
   cudf::experimental::row::equality::self_comparator row_equal(preprocessed_keys);
   auto key_equal = row_equal.device_comparator(has_null, null_keys_are_equal);
   auto row_hash  = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
 
-  return map_type::create(compute_hash_table_size(keys.num_rows()),
+  return map_type::create(compute_hash_table_size(num_keys),
                           stream,
                           unused_key,
                           unused_value,
@@ -591,7 +592,10 @@ std::unique_ptr<table> groupby(table_view const& keys,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto map = create_hash_map(keys, keys_have_nulls, include_null_keys, stream);
+  auto const num_keys    = keys.num_rows();
+  auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
+  auto map =
+    create_hash_map(preprocessed_keys, num_keys, keys_have_nulls, include_null_keys, stream);
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash map
