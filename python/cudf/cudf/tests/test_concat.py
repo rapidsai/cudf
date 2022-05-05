@@ -660,7 +660,7 @@ def test_concat_dataframe_with_multiindex(df1, df2):
     expected = pd.concat([pdf1, pdf2], axis=1)
 
     # Will need to sort_index before comparing as
-    # ordering is not deterministic incase of pandas
+    # ordering is not deterministic in case of pandas
     # multiIndex with concat.
     assert_eq(
         expected.sort_index(),
