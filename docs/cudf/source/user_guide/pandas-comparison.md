@@ -2,7 +2,7 @@
 
 cuDF is a DataFrame library that closely matches the Pandas API, but
 leverages NVIDIA GPUs for performing computations for speed.  However,
-there are some differences between cuDF and Pandas, both in terms API
+there are some differences between cuDF and Pandas, both in terms of API
 and behavior. This page documents the similarities and differences
 between cuDF and Pandas.
 
