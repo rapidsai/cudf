@@ -305,13 +305,21 @@ def test_orc_read_skiprows():
     buff = BytesIO()
     data = [
         True,
-        None,
+        False,
         True,
         False,
         None,
         True,
         True,
+        True,
         False,
+        None,
+        False,
+        False,
+        True,
+        True,
+        True,
+        True,
     ]
     writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
     writer.writerows([(d,) for d in data])
