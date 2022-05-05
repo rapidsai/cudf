@@ -317,7 +317,9 @@ def test_orc_read_skiprows():
     writer.writerows([(d,) for d in data])
     writer.close()
 
-    skiprows = 3
+    # testing 10 skiprows due to a boolean specific bug fix that didn't
+    # repro for other sizes of data
+    skiprows = 10
 
     expected = cudf.read_orc(buff)[skiprows:].reset_index(drop=True)
     got = cudf.read_orc(buff, skiprows=skiprows)
