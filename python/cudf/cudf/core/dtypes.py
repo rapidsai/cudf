@@ -513,7 +513,7 @@ class IntervalDtype(StructDtype):
         return self.fields["left"]
 
     def __repr__(self):
-        return f"interval[{self.fields['left']}]"
+        return f"interval[{self.subtype}, {self.closed}]"
 
     @classmethod
     def from_arrow(cls, typ):
