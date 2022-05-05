@@ -9,6 +9,7 @@ import pytest
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
+from cudf.core._compat import PANDAS_LT_140
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
@@ -893,6 +894,10 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
 @pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.xfail(
+    condition=PANDAS_LT_140,
+    reason="https://github.com/pandas-dev/pandas/issues/43584",
+)
 def test_concat_join_no_overlapping_columns(
     pdf1, pdf2, ignore_index, sort, join, axis
 ):
