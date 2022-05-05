@@ -112,16 +112,22 @@ function buildLibCudfJniInDocker {
     local localMavenRepo=${LOCAL_MAVEN_REPO:-"$HOME/.m2/repository"}
     local workspaceRepoDir="$workspaceDir/cudf"
     local workspaceMavenRepoDir="$workspaceDir/.m2/repository"
+    local workspaceCcacheDir="$workspaceDir/.ccache"
     mkdir -p "$CUDF_JAR_JAVA_BUILD_DIR/libcudf-cmake-build"
+    mkdir -p "$HOME/.ccache" "$HOME/.m2"
     nvidia-docker build \
         -f java/ci/Dockerfile.centos7 \
         --build-arg CUDA_VERSION=${cudaVersion} \
         -t $imageName .
     nvidia-docker run -it -u $(id -u):$(id -g) --rm \
+        -e PARALLEL_LEVEL \
+        -e CCACHE_DISABLE \
+        -e CCACHE_DIR="$workspaceCcacheDir" \
         -v "/etc/group:/etc/group:ro" \
         -v "/etc/passwd:/etc/passwd:ro" \
         -v "/etc/shadow:/etc/shadow:ro" \
         -v "/etc/sudoers.d:/etc/sudoers.d:ro" \
+        -v "$HOME/.ccache:$workspaceCcacheDir:rw" \
         -v "$REPODIR:$workspaceRepoDir:rw" \
         -v "$localMavenRepo:$workspaceMavenRepoDir:rw" \
         --workdir "$workspaceRepoDir/java/target/libcudf-cmake-build" \
@@ -129,11 +135,16 @@ function buildLibCudfJniInDocker {
         scl enable devtoolset-9 \
             "cmake $workspaceRepoDir/cpp \
                 -G${CMAKE_GENERATOR} \
+                -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_CXX_LINKER_LAUNCHER=ccache \
                 -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
-                -DCMAKE_INSTALL_PREFIX==/usr/local/rapids \
-                -DUSE_NVTX=ON -DCUDF_USE_ARROW_STATIC=ON \
+                -DCMAKE_INSTALL_PREFIX=/usr/local/rapids \
+                -DUSE_NVTX=ON \
+                -DCUDF_USE_ARROW_STATIC=ON \
                 -DCUDF_ENABLE_ARROW_S3=OFF \
                 -DBUILD_TESTS=OFF \
                 -DPER_THREAD_DEFAULT_STREAM=ON \
@@ -145,6 +156,10 @@ function buildLibCudfJniInDocker {
                 -Dmaven.repo.local=$workspaceMavenRepoDir \
                 -DskipTests=${SKIP_TESTS:-false} \
                 -Dparallel.level=${PARALLEL_LEVEL} \
+                -Dcmake.ccache.opts='-DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                                     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                                     -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
+                                     -DCMAKE_CXX_LINKER_LAUNCHER=ccache' \
                 -DCUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DPER_THREAD_DEFAULT_STREAM=ON \

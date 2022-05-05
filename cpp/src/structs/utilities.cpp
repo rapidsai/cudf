@@ -441,6 +441,12 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
   return {table_view{superimposed_columns}, std::move(superimposed_nullmasks)};
 }
 
+bool contains_null_structs(column_view const& col)
+{
+  return (is_struct(col) && col.has_nulls()) ||
+         std::any_of(col.child_begin(), col.child_end(), contains_null_structs);
+}
+
 }  // namespace detail
 }  // namespace structs
 }  // namespace cudf
