@@ -634,7 +634,7 @@ TEST_F(StructColumnWrapperTest, TestStructsColumnWithEmptyChild)
   int num_rows{empty_col->size()};
   vector_of_columns cols;
   cols.push_back(std::move(empty_col));
-  auto mask_vec    = std::vector<bool>{true, false false};
+  auto mask_vec    = std::vector<bool>{true, false, false};
   auto mask        = cudf::test::detail::make_null_mask(mask_vec.begin(), mask_vec.end());
   auto structs_col = cudf::make_structs_column(num_rows, std::move(cols), 2, std::move(mask));
   EXPECT_NO_THROW(structs_col->view());
