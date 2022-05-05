@@ -147,8 +147,8 @@ bool contains(column_view const& haystack, scalar const& needle);
  *
  * @param haystack The column containing search space.
  * @param needles A column of values to check for existence in the search space.
- * @return A BOOL column indicating if each element in @p needles exists in the search space.
  * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return A BOOL column indicating if each element in @p needles exists in the search space.
  */
 std::unique_ptr<column> contains(
   column_view const& haystack,
