@@ -557,17 +557,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     @_cudf_nvtx_annotate
-    def __getattr__(self, key):
-        # For methods that are not defined for RangeIndex we attempt to operate
-        # on the corresponding integer index if possible.
-        try:
-            return getattr(self._as_int64(), key)
-        except AttributeError:
-            raise AttributeError(
-                f"'{type(self)}' object has no attribute {key}"
-            )
-
-    @_cudf_nvtx_annotate
     def get_loc(self, key, method=None, tolerance=None):
         # Given an actual integer,
         idx = (key - self._start) / self._step
