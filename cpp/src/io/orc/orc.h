@@ -533,7 +533,15 @@ class ProtobufWriter {
 class OrcDecompressor {
  public:
   OrcDecompressor(CompressionKind kind, uint32_t blockSize);
-  const uint8_t* Decompress(const uint8_t* srcBytes, size_t srcLen, size_t* dstLen);
+
+  /**
+   * @brief ORC block decompression
+   *
+   * @param src compressed data
+   *
+   * @return decompressed data
+   */
+  host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src);
   [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
   [[nodiscard]] uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
