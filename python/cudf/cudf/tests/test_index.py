@@ -706,6 +706,7 @@ def test_index_argsort(data):
         pd.Index([102, 1001, 1002, 0.0, 23], dtype="datetime64[ns]"),
         pd.Index([13240.2, 1001, 100.2, 0.0, 23], dtype="datetime64[ns]"),
         pd.RangeIndex(0, 10, 1),
+        pd.RangeIndex(0, -100, -2),
         pd.Index([-10.2, 100.1, -100.2, 0.0, 23], dtype="timedelta64[ns]"),
     ],
 )
