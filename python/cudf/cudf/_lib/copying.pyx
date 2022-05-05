@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import pickle
+import warnings
 
 import pandas as pd
 
@@ -9,7 +10,6 @@ from libcpp cimport bool
 from libcpp.memory cimport make_shared, make_unique, shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-import warnings
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
