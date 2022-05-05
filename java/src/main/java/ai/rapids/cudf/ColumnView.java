@@ -3498,6 +3498,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new Scalar(getType(), getElement(getNativeView(), index));
   }
 
+  public final ColumnVector applyBooleanMask(ColumnView booleanMaskView) {
+    return new ColumnVector(applyBooleanMask(getNativeView(), booleanMaskView.getNativeView()));
+  }
+
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
    * According to cudf::bitmask_allocation_size_bytes, the padding boundary for null mask is 64 bytes.
@@ -4175,6 +4179,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
 
   static native long generateListOffsets(long handle) throws CudfException;
+
+  static native long applyBooleanMask(long arrayColumnView, long booleanMaskHandle);
 
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when
