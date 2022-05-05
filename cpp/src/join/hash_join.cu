@@ -283,6 +283,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                              cudf::null_equality compare_nulls,
                              rmm::cuda_stream_view stream)
   : _is_empty{build.num_rows() == 0},
+    _composite_bitmask{cudf::detail::bitmask_and(build, stream).first},
     _nulls_equal{compare_nulls},
     _hash_table{compute_hash_table_size(build.num_rows()),
                 std::numeric_limits<hash_value_type>::max(),
@@ -302,7 +303,11 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
 
   if (_is_empty) { return; }
 
-  cudf::detail::build_join_hash_table(_build, _hash_table, _nulls_equal, stream);
+  cudf::detail::build_join_hash_table(_build,
+                                      _hash_table,
+                                      _nulls_equal,
+                                      static_cast<bitmask_type const*>(_composite_bitmask.data()),
+                                      stream);
 }
 
 template <typename Hasher>
