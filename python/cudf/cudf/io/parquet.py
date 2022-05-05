@@ -958,7 +958,8 @@ class ParquetDatasetWriter:
 
                 current_file_size = get_estimated_file_size(sliced_df)
                 if current_file_size > self.max_file_size:
-                    # if the file is too large, compute metadata for smaller chunks
+                    # if the file is too large, compute metadata for
+                    # smaller chunks
                     parts = int(current_file_size // self.max_file_size)
                     new_offsets = list(
                         range(start, end, int((end - start) / parts))
@@ -973,6 +974,9 @@ class ParquetDatasetWriter:
                 while num_chunks > 0:
                     new_file_name = f"{self.filename}_{curr_file_num}.parquet"
                     new_full_path = fs.sep.join([prefix, new_file_name])
+
+                    # Check if the same `new_file_name` exists and
+                    # generate a `new_file_name`
                     while (
                         new_full_path in self._file_sizes
                         and (

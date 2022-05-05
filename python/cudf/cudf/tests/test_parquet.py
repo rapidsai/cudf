@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
+import glob
 import math
 import os
 import pathlib
@@ -1696,8 +1697,12 @@ def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
     assert_eq(got_pd, got_cudf)
 
 
-@pytest.mark.parametrize("max_file_size", [100, "10KB"])
-def test_parquet_writer_chunked_max_file_size(tmpdir_factory, max_file_size):
+@pytest.mark.parametrize(
+    "max_file_size,max_file_size_in_bytes", [(100, 100), ("1000KB", 1000000)]
+)
+def test_parquet_writer_chunked_max_file_size(
+    tmpdir_factory, max_file_size, max_file_size_in_bytes
+):
     pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
     gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
 
@@ -1733,6 +1738,14 @@ def test_parquet_writer_chunked_max_file_size(tmpdir_factory, max_file_size):
         got_pd.sort_values(["b"]).reset_index(drop=True),
         got_cudf.sort_values(["b"]).reset_index(drop=True),
     )
+
+    all_files = glob.glob(gdf_dir + "/**/*.parquet", recursive=True)
+    for each_file in all_files:
+        # Validate file sizes with some extra 1000
+        # bytes buffer to spare
+        assert os.path.getsize(each_file) <= (
+            max_file_size_in_bytes + 1000
+        ), "File exceeded max_file_sizec"
 
 
 def test_parquet_writer_chunked_max_file_size_error():
