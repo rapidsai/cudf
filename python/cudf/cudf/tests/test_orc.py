@@ -301,27 +301,36 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
     assert_eq(pdf, gdf)
 
 
-def test_orc_read_skiprows(tmpdir):
+def test_orc_read_skiprows():
     buff = BytesIO()
-    df = pd.DataFrame(
-        {"a": [1, 0, 1, 0, None, 1, 1, 1, 0, None, 0, 0, 1, 1, 1, 1]},
-        dtype=pd.BooleanDtype(),
-    )
+    data = [
+        True,
+        False,
+        True,
+        False,
+        None,
+        True,
+        True,
+        True,
+        False,
+        None,
+        False,
+        False,
+        True,
+        True,
+        True,
+        True,
+    ]
     writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
-    tuples = list(
-        map(
-            lambda x: (None,) if x[0] is pd.NA else (bool(x[0]),),
-            list(df.itertuples(index=False, name=None)),
-        )
-    )
-    writer.writerows(tuples)
+    writer.writerows([(d,) for d in data])
     writer.close()
 
+    # testing 10 skiprows due to a boolean specific bug fix that didn't
+    # repro for other sizes of data
     skiprows = 10
 
-    expected = cudf.read_orc(buff)[skiprows::].reset_index(drop=True)
+    expected = cudf.read_orc(buff)[skiprows:].reset_index(drop=True)
     got = cudf.read_orc(buff, skiprows=skiprows)
-
     assert_eq(expected, got)
 
 
