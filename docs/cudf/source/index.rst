@@ -14,6 +14,7 @@ the details of CUDA programming.
    :caption: Contents:
 
    user_guide/index
+   developer_guide/index
    api_docs/index
 
 
