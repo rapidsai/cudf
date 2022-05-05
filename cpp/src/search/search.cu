@@ -43,37 +43,6 @@
 
 namespace cudf {
 namespace {
-template <typename DataIterator,
-          typename ValuesIterator,
-          typename OutputIterator,
-          typename Comparator>
-void launch_search(DataIterator it_data,
-                   ValuesIterator it_vals,
-                   size_type data_size,
-                   size_type values_size,
-                   OutputIterator it_output,
-                   Comparator comp,
-                   bool find_first,
-                   rmm::cuda_stream_view stream)
-{
-  if (find_first) {
-    thrust::lower_bound(rmm::exec_policy(stream),
-                        it_data,
-                        it_data + data_size,
-                        it_vals,
-                        it_vals + values_size,
-                        it_output,
-                        comp);
-  } else {
-    thrust::upper_bound(rmm::exec_policy(stream),
-                        it_data,
-                        it_data + data_size,
-                        it_vals,
-                        it_vals + values_size,
-                        it_output,
-                        comp);
-  }
-}
 
 std::unique_ptr<column> search_ordered(table_view const& haystack,
                                        table_view const& needles,
@@ -93,12 +62,12 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   // Allocate result column
   auto result = make_numeric_column(
     data_type{type_to_id<size_type>()}, needles.num_rows(), mask_state::UNALLOCATED, stream, mr);
-  auto const result_out = result->mutable_view().data<size_type>();
+  auto const out_it = result->mutable_view().data<size_type>();
 
   // Handle empty inputs
   if (haystack.num_rows() == 0) {
     CUDF_CUDA_TRY(
-      cudaMemsetAsync(result_out, 0, needles.num_rows() * sizeof(size_type), stream.value()));
+      cudaMemsetAsync(out_it, 0, needles.num_rows() * sizeof(size_type), stream.value()));
     return result;
   }
 
@@ -135,14 +104,21 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
                                                  rhs,
                                                  column_order_dv.data(),
                                                  null_precedence_dv.data());
-  launch_search(count_it,
-                count_it,
-                haystack.num_rows(),
-                needles.num_rows(),
-                result_out,
-                comp,
-                find_first,
-                stream);
+
+  auto const do_search = [find_first](auto&&... args) {
+    if (find_first) {
+      thrust::lower_bound(std::forward<decltype(args)>(args)...);
+    } else {
+      thrust::upper_bound(std::forward<decltype(args)>(args)...);
+    }
+  };
+  do_search(rmm::exec_policy(stream),
+            count_it,
+            count_it + haystack.num_rows(),
+            count_it,
+            count_it + needles.num_rows(),
+            out_it,
+            comp);
 
   return result;
 }
