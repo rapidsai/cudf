@@ -250,6 +250,7 @@ ConfigureTest(
   copying/gather_tests.cpp
   copying/get_value_tests.cpp
   copying/pack_tests.cpp
+  copying/purge_nonempty_nulls_tests.cpp
   copying/sample_tests.cpp
   copying/scatter_tests.cpp
   copying/scatter_list_tests.cpp
@@ -469,6 +470,7 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 # * lists tests ----------------------------------------------------------------------------------
 ConfigureTest(
   LISTS_TEST
+  lists/apply_boolean_mask_test.cpp
   lists/combine/concatenate_list_elements_tests.cpp
   lists/combine/concatenate_rows_tests.cpp
   lists/contains_tests.cpp
