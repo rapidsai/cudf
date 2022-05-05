@@ -14,15 +14,15 @@ operations on them such as unary and binary operations, indexing,
 filtering, concatenating, joining, groupby and window operations -
 among many others.
 
-The best way to see if we support a particular Pandas API is to search
+The best way to check if we support a particular Pandas API is to search
 our [API docs](/api_docs/index).
 
 ## Data types
 
-cuDF supports many common data types supported by Pandas, including
-numeric, datetime, timestamp, string, and categorical data types.  In
-addition, we support special data types for decimal, list and "struct"
-values.  See the section on [Data Types](data-types) for
+cuDF supports many of the commonly-used data types in Pandas,
+including numeric, datetime, timestamp, string, and categorical data
+types.  In addition, we support special data types for decimal, list
+and "struct" values.  See the section on [Data Types](data-types) for
 details.
 
 Note that we do not support custom data types like Pandas'
@@ -64,7 +64,7 @@ dtype: category
 Categories (2, int64): [1, 2]
 ```
 
-See the docs on [missing data](Working-with-missing-data) for
+See the docs on [missing data](missing-data) for
 details.
 
 ## Iteration
