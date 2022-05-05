@@ -493,7 +493,7 @@ class IntervalDtype(StructDtype):
     """
     subtype: str, np.dtype
         The dtype of the Interval bounds.
-    closed: {‘right’, ‘left’, ‘both’, ‘neither’}, default ‘right’
+    closed: {'right', 'left', 'both', 'neither'}, default 'right'
         Whether the interval is closed on the left-side, right-side,
         both or neither. See the Notes for more detailed explanation.
     """
