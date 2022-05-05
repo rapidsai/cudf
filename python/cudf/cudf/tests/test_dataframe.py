@@ -6951,6 +6951,7 @@ def test_dataframe_append_series_dict(df, other, sort):
             actual.fillna(-1),
             check_dtype=False,
             check_column_type=False,
+            check_index_type=True,
         )
     else:
         assert_eq(
