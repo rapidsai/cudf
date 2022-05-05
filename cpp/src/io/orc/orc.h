@@ -545,8 +545,7 @@ class OrcDecompressor {
   [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
   [[nodiscard]] uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
-    return (block_len < (m_blockSize >> m_log2MaxRatio)) ? block_len << m_log2MaxRatio
-                                                         : m_blockSize;
+    return std::min(block_len << m_log2MaxRatio, m_blockSize);
   }
   [[nodiscard]] compression_type compression() const { return _compression; }
   [[nodiscard]] uint32_t GetBlockSize() const { return m_blockSize; }
