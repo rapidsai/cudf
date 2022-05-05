@@ -61,10 +61,10 @@ enum class compression_type {
   BROTLI,  ///< BROTLI format, using LZ77 + Huffman + 2nd order context modeling
   ZIP,     ///< ZIP format, using DEFLATE algorithm
   XZ,      ///< XZ format, using LZMA(2) algorithm
-  ZLIB,    ///< ZIP format, using DEFLATE algorithm
-  LZ4,
-  LZO,
-  ZSTD
+  ZLIB,    ///< ZLIB format, using DEFLATE algorithm
+  LZ4,     ///< LZ4 format, using LZ77
+  LZO,     ///< Lempel–Ziv–Oberhumer format
+  ZSTD     ///< Zstandard format
 };
 
 /**

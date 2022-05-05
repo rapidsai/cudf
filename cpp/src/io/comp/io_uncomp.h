@@ -29,13 +29,10 @@ namespace cudf {
 namespace io {
 
 /**
- * @brief Decompresses a gzip/zip/bzip2/xz file stored in system memory.
- *
- * The result is allocated and stored in a vector.
- * If the function call fails, the output vector is empty.
+ * @brief Decompresses a system memory buffer.
  *
  * @param compression Type of compression of the input data
- * @param src Compressed buffer
+ * @param src Compressed host buffer
  *
  * @return Vector containing the Decompressed output
  */

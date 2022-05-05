@@ -1164,16 +1164,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         }
         // Setup row group descriptors if using indexes
         if (_metadata.per_file_metadata[0].ps.compression != orc::NONE and not is_data_empty) {
-          auto decomp_data =
-            decompress_stripe_data(chunks,
-                                   stripe_data,
-                                   *_metadata.per_file_metadata[0].decompressor,
-                                   stream_info,
-                                   total_num_stripes,
-                                   row_groups,
-                                   _metadata.get_row_index_stride(),
-                                   level == 0,
-                                   stream);
+          auto decomp_data = decompress_stripe_data(chunks,
+                                                    stripe_data,
+                                                    *_metadata.per_file_metadata[0].decompressor,
+                                                    stream_info,
+                                                    total_num_stripes,
+                                                    row_groups,
+                                                    _metadata.get_row_index_stride(),
+                                                    level == 0,
+                                                    stream);
           stripe_data.clear();
           stripe_data.push_back(std::move(decomp_data));
         } else {
