@@ -629,7 +629,7 @@ class DateOffset:
     def _is_no_op(self) -> bool:
         # some logic could be implemented here for more complex cases
         # such as +1 year, -12 months
-        return all([i == 0 for i in self._kwds.values()])
+        return all(i == 0 for i in self._kwds.values())
 
     def __neg__(self):
         new_scalars = {k: -v for k, v in self._kwds.items()}

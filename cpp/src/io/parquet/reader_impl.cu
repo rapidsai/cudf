@@ -679,6 +679,10 @@ class aggregate_reader_metadata {
           }
 
           std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
+
+          // pop off the extra nesting element.
+          if (schema_elem.is_one_level_list()) { nesting.pop_back(); }
+
           path_is_valid = true;  // If we're able to reach leaf then path is valid
         }
 

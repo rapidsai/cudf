@@ -72,13 +72,9 @@ struct linked_column_view : public column_view_base {
  */
 inline LinkedColVector table_to_linked_columns(table_view const& table)
 {
-  LinkedColVector result;
-  result.reserve(table.num_columns());
-  std::transform(table.begin(), table.end(), std::back_inserter(result), [&](column_view const& c) {
-    return std::make_shared<linked_column_view>(c);
-  });
-
-  return result;
+  auto linked_it = thrust::make_transform_iterator(
+    table.begin(), [](auto const& c) { return std::make_shared<linked_column_view>(c); });
+  return LinkedColVector(linked_it, linked_it + table.num_columns());
 }
 
 }  // namespace cudf::detail

@@ -120,7 +120,7 @@ TEST_F(ListRankScanTest, ListOfStruct)
   auto col2 = cudf::test::strings_column_wrapper{
     {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
     {1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1}};
-  auto struc = cudf::test::structs_column_wrapper{
+  auto struct_col = cudf::test::structs_column_wrapper{
     {col1, col2}, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
 
   auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
@@ -135,7 +135,7 @@ TEST_F(ListRankScanTest, ListOfStruct)
                                        static_cast<cudf::bitmask_type*>(nullmask_buf.data()),
                                        cudf::UNKNOWN_NULL_COUNT,
                                        0,
-                                       {offsets, struc});
+                                       {offsets, struct_col});
 
   {  // Non-sliced
     auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{

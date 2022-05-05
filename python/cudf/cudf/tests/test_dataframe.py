@@ -1148,7 +1148,7 @@ def test_dataframe_hash_values(nrows, method):
     out = gdf.hash_values()
     assert isinstance(out, cudf.Series)
     assert len(out) == nrows
-    assert out.dtype == np.int32
+    assert out.dtype == np.uint32
 
     # Check single column
     out_one = gdf[["a"]].hash_values(method=method)
