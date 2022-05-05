@@ -3,5 +3,5 @@
 ```{toctree}
 :maxdepth: 2
 
-internals
+ARCHITECTURE
 ```
