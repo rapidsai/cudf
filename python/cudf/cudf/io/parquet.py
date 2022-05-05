@@ -952,11 +952,13 @@ class ParquetDatasetWriter:
             current_offset = (part_offsets[idx], part_offsets[idx + 1])
             num_chunks = 1
             if self.max_file_size is not None:
+                # get the current partition
                 start, end = current_offset
                 sliced_df = grouped_df[start:end]
 
                 current_file_size = get_estimated_file_size(sliced_df)
                 if current_file_size > self.max_file_size:
+                    # if the file is too large, compute metadata for smaller chunks
                     parts = int(current_file_size // self.max_file_size)
                     new_offsets = list(
                         range(start, end, int((end - start) / parts))
