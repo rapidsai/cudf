@@ -236,7 +236,7 @@ ConfigureBench(ORC_WRITER_BENCH io/orc/orc_writer.cpp)
 
 # ##################################################################################################
 # * orc writer chunks benchmark ---------------------------------------------------------------
-ConfigureBench(ORC_WRITER_CHUNKS_BENCH io/orc/orc_writer_chunks.cpp)
+ConfigureNVBench(ORC_WRITER_CHUNKS_NVBENCH io/orc/orc_writer_chunks.cpp)
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------
