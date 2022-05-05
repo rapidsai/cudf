@@ -531,6 +531,19 @@ class IntervalDtype(StructDtype):
             subtype=pd_dtype.subtype
         )  # TODO: needs `closed` when we upgrade Pandas
 
+    def __eq__(self, other):
+        if isinstance(other, str):
+            # This means equality isn't transitive but mimics pandas
+            return other == self.name
+        return (
+            type(self) == type(other)
+            and self.subtype == other.subtype
+            and self.closed == other.closed
+        )
+
+    def __hash__(self):
+        return hash((self.subtype, self.closed))
+
 
 def is_categorical_dtype(obj):
     """Check whether an array-like or dtype is of the Categorical dtype.
