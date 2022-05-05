@@ -310,7 +310,7 @@ def test_orc_read_skiprows(tmpdir):
     writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
     tuples = list(
         map(
-            lambda x: (None,) if x[0] is pd.NA else x,
+            lambda x: (None,) if x[0] is pd.NA else (bool(x[0]),),
             list(df.itertuples(index=False, name=None)),
         )
     )
@@ -640,6 +640,12 @@ def test_int_overflow(tmpdir):
 
 
 def normalized_equals(value1, value2):
+    # need naive time object for numpy to convert to datetime64
+    if isinstance(value1, datetime.datetime):
+        value1 = value1.replace(tzinfo=None)
+    if isinstance(value2, datetime.datetime):
+        value2 = value2.replace(tzinfo=None)
+
     if isinstance(value1, (datetime.datetime, np.datetime64)):
         value1 = np.datetime64(value1, "ms")
     if isinstance(value2, (datetime.datetime, np.datetime64)):

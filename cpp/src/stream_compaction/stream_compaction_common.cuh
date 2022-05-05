@@ -47,6 +47,28 @@ class compaction_hash {
   row_hash _hash;
 };
 
+namespace experimental {
+
+/**
+ * @brief Device callable to hash a given row.
+ */
+template <typename RowHash>
+class compaction_hash {
+ public:
+  compaction_hash(RowHash row_hasher) : _hash{row_hasher} {}
+
+  __device__ inline auto operator()(size_type i) const noexcept
+  {
+    auto hash = _hash(i);
+    return (hash == COMPACTION_EMPTY_KEY_SENTINEL) ? (hash - 1) : hash;
+  }
+
+ private:
+  RowHash _hash;
+};
+
+}  // namespace experimental
+
 /**
 ￼ * @brief Device functor to determine if a row is valid.
 ￼ */

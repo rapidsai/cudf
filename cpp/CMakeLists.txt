@@ -189,7 +189,6 @@ add_library(
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
   src/binaryop/binaryop.cpp
-  src/binaryop/compiled/binary_ops.cu
   src/binaryop/compiled/Add.cu
   src/binaryop/compiled/ATan2.cu
   src/binaryop/compiled/BitwiseAnd.cu
@@ -220,6 +219,7 @@ add_library(
   src/binaryop/compiled/ShiftRightUnsigned.cu
   src/binaryop/compiled/Sub.cu
   src/binaryop/compiled/TrueDiv.cu
+  src/binaryop/compiled/binary_ops.cu
   src/binaryop/compiled/util.cpp
   src/labeling/label_bins.cu
   src/bitmask/null_mask.cu
@@ -238,6 +238,7 @@ add_library(
   src/copying/gather.cu
   src/copying/get_element.cu
   src/copying/pack.cpp
+  src/copying/purge_nonempty_nulls.cu
   src/copying/reverse.cu
   src/copying/sample.cu
   src/copying/scatter.cu
@@ -302,6 +303,8 @@ add_library(
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
+  src/io/comp/nvcomp_adapter.cpp
+  src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu

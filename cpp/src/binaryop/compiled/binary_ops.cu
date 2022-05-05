@@ -37,23 +37,20 @@ namespace compiled {
 
 namespace {
 /**
- * @brief Converts scalar to column_device_view with single element.
+ * @brief Converts scalar to column_view with single element.
  *
- * @return pair with column_device_view and column containing any auxilary data to create
- * column_view from scalar
+ * @return pair with column_view and column containing any auxilary data to create column_view from
+ * scalar
  */
-struct scalar_as_column_device_view {
-  using return_type = typename std::pair<decltype(column_device_view::create(column_view{})),
-                                         std::unique_ptr<column>>;
+struct scalar_as_column_view {
+  using return_type = typename std::pair<column_view, std::unique_ptr<column>>;
   template <typename T, std::enable_if_t<(is_fixed_width<T>())>* = nullptr>
-  return_type operator()(scalar const& s,
-                         rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource*)
+  return_type operator()(scalar const& s, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
   {
     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
     auto col_v =
       column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
-    return std::pair{column_device_view::create(col_v, stream), std::unique_ptr<column>(nullptr)};
+    return std::pair{col_v, std::unique_ptr<column>(nullptr)};
   }
   template <typename T, std::enable_if_t<(!is_fixed_width<T>())>* = nullptr>
   return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
@@ -63,10 +60,8 @@ struct scalar_as_column_device_view {
 };
 // specialization for cudf::string_view
 template <>
-scalar_as_column_device_view::return_type
-scalar_as_column_device_view::operator()<cudf::string_view>(scalar const& s,
-                                                            rmm::cuda_stream_view stream,
-                                                            rmm::mr::device_memory_resource* mr)
+scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::string_view>(
+  scalar const& s, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   using T                  = cudf::string_view;
   auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
@@ -87,24 +82,24 @@ scalar_as_column_device_view::operator()<cudf::string_view>(scalar const& s,
                            cudf::UNKNOWN_NULL_COUNT,
                            0,
                            {offsets_column->view(), chars_column_v});
-  return std::pair{column_device_view::create(col_v, stream), std::move(offsets_column)};
+  return std::pair{col_v, std::move(offsets_column)};
 }
 
 /**
- * @brief Converts scalar to column_device_view with single element.
+ * @brief Converts scalar to column_view with single element.
  *
  * @param scal    scalar to convert
  * @param stream  CUDA stream used for device memory operations and kernel launches.
  * @param mr      Device memory resource used to allocate the returned column's device memory
- * @return        pair with column_device_view and column containing any auxilary data to create
+ * @return        pair with column_view and column containing any auxilary data to create
  * column_view from scalar
  */
-auto scalar_to_column_device_view(
+auto scalar_to_column_view(
   scalar const& scal,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  return type_dispatcher(scal.type(), scalar_as_column_device_view{}, scal, stream, mr);
+  return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
 }
 
 // This functor does the actual comparison between string column value and a scalar string
@@ -300,9 +295,9 @@ std::unique_ptr<column> string_null_min_max(column_view const& lhs,
     *lhs_device_view, *rhs_device_view, op, output_type, lhs.size(), stream, mr);
 }
 
-void operator_dispatcher(mutable_column_device_view& out,
-                         column_device_view const& lhs,
-                         column_device_view const& rhs,
+void operator_dispatcher(mutable_column_view& out,
+                         column_view const& lhs,
+                         column_view const& rhs,
                          bool is_lhs_scalar,
                          bool is_rhs_scalar,
                          binary_operator op,
@@ -358,10 +353,7 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto lhsd = column_device_view::create(lhs, stream);
-  auto rhsd = column_device_view::create(rhs, stream);
-  auto outd = mutable_column_device_view::create(out, stream);
-  operator_dispatcher(*outd, *lhsd, *rhsd, false, false, op, stream);
+  operator_dispatcher(out, lhs, rhs, false, false, op, stream);
 }
 // scalar_vector
 void binary_operation(mutable_column_view& out,
@@ -370,10 +362,8 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto [lhsd, aux] = scalar_to_column_device_view(lhs, stream);
-  auto rhsd        = column_device_view::create(rhs, stream);
-  auto outd        = mutable_column_device_view::create(out, stream);
-  operator_dispatcher(*outd, *lhsd, *rhsd, true, false, op, stream);
+  auto [lhsv, aux] = scalar_to_column_view(lhs, stream);
+  operator_dispatcher(out, lhsv, rhs, true, false, op, stream);
 }
 // vector_scalar
 void binary_operation(mutable_column_view& out,
@@ -382,12 +372,9 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto lhsd        = column_device_view::create(lhs, stream);
-  auto [rhsd, aux] = scalar_to_column_device_view(rhs, stream);
-  auto outd        = mutable_column_device_view::create(out, stream);
-  operator_dispatcher(*outd, *lhsd, *rhsd, false, true, op, stream);
+  auto [rhsv, aux] = scalar_to_column_view(rhs, stream);
+  operator_dispatcher(out, lhs, rhsv, false, true, op, stream);
 }
-
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf
