@@ -399,16 +399,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         nan_as_null=True,
     ):
         if isinstance(data, pd.Series):
-            name = name or data.name
+            if name is None:
+                name = data.name
             if isinstance(data.index, pd.MultiIndex):
                 index = cudf.from_pandas(data.index)
             else:
                 index = as_index(data.index)
         elif isinstance(data, pd.Index):
-            name = name or data.name
+            if name is None:
+                name = data.name
             data = data.values
         elif isinstance(data, BaseIndex):
-            name = name or data.name
+            if name is None:
+                name = data.name
             data = data._values
             if dtype is not None:
                 data = data.astype(dtype)
@@ -420,7 +423,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         if isinstance(data, Series):
             index = data._index if index is None else index
-            name = name or data.name
+            if name is None:
+                name = data.name
             data = data._column
             if dtype is not None:
                 data = data.astype(dtype)
