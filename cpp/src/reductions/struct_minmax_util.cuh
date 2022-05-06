@@ -27,18 +27,23 @@ namespace cudf {
 namespace reduction {
 namespace detail {
 
+using row_comparator = cudf::experimental::row::lexicographic::self_comparator;
+using device_row_comparator =
+  cudf::experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC>;
+using column_device_view_ptr =
+  std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>;
+
 /**
  * @brief Binary operator ArgMin/ArgMax with index values into the input column.
  */
 struct row_arg_minmax_fn {
-  column_device_view input;
-  cudf::experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC> const comp;
+  column_device_view const input;
+  device_row_comparator const comp;
   bool const is_arg_min;
 
-  row_arg_minmax_fn(
-    column_device_view const& input_,
-    cudf::experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC>&& comp_,
-    bool const is_arg_min_)
+  row_arg_minmax_fn(column_device_view const& input_,
+                    device_row_comparator&& comp_,
+                    bool const is_arg_min_)
     : input(input_), comp(std::move(comp_)), is_arg_min(is_arg_min_)
   {
   }
@@ -49,11 +54,10 @@ struct row_arg_minmax_fn {
   // `thrust::reduce_by_key` or `thrust::scan_by_key` will result in significant compile time.
   __attribute__((noinline)) __device__ auto operator()(size_type lhs_idx, size_type rhs_idx) const
   {
-    auto const num_rows = input.size();
-
     // The extra bounds checking is due to issue github.com/rapidsai/cudf/issues/9156 and
     // github.com/NVIDIA/thrust/issues/1525
     // where invalid random values may be passed here by thrust::reduce_by_key
+    auto const num_rows = input.size();
     if (lhs_idx < 0 || lhs_idx >= num_rows) { return rhs_idx; }
     if (rhs_idx < 0 || rhs_idx >= num_rows) { return lhs_idx; }
 
@@ -84,9 +88,9 @@ auto static constexpr DEFAULT_NULL_ORDER = cudf::null_order::BEFORE;
  */
 class comparison_binop_generator {
  private:
-  std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> input_cdv_ptr;
-  cudf::experimental::row::lexicographic::self_comparator row_comparator;
-  rmm::cuda_stream_view stream;
+  column_device_view_ptr const input_cdv_ptr;
+  row_comparator const comparator;
+  rmm::cuda_stream_view const stream;
   bool const has_nulls;
   bool const is_min_op;
 
@@ -94,8 +98,7 @@ class comparison_binop_generator {
                              rmm::cuda_stream_view stream_,
                              bool is_min_op_)
     : input_cdv_ptr(column_device_view::create(input_)),
-      row_comparator(
-        table_view{{input_}}, {}, std::vector<null_order>{DEFAULT_NULL_ORDER}, stream_),
+      comparator(table_view{{input_}}, {}, std::vector<null_order>{DEFAULT_NULL_ORDER}, stream_),
       stream(stream_),
       has_nulls(has_nested_nulls(table_view{{input_}})),
       is_min_op(is_min_op_)
@@ -106,7 +109,7 @@ class comparison_binop_generator {
   auto binop() const
   {
     return row_arg_minmax_fn(
-      *input_cdv_ptr, row_comparator.device_comparator(nullate::DYNAMIC{has_nulls}), is_min_op);
+      *input_cdv_ptr, comparator.device_comparator(nullate::DYNAMIC{has_nulls}), is_min_op);
   }
 
   template <typename BinOp>
