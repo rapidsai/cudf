@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/reduction_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
@@ -24,6 +25,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+
+#include <cudf/table/experimental/row_operators.cuh>
 
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
@@ -36,17 +39,17 @@ namespace detail {
  * @brief Binary operator ArgMin/ArgMax with index values into the input table.
  */
 struct row_arg_minmax_fn {
-  size_type const num_rows;
-  row_lexicographic_comparator<nullate::DYNAMIC> const comp;
+  column_device_view input;
+  cudf::experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC> const comp;
   bool const is_arg_min;
+  size_type num_rows;
 
-  row_arg_minmax_fn(table_device_view const& table,
-                    bool has_nulls,
-                    null_order const* null_precedence,
-                    bool const is_arg_min)
-    : num_rows(table.num_rows()),
-      comp(nullate::DYNAMIC{has_nulls}, table, table, nullptr, null_precedence),
-      is_arg_min(is_arg_min)
+  row_arg_minmax_fn(
+    column_device_view const& input_,
+    size_type num_rows_,
+    cudf::experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC>&& comp_,
+    bool const is_arg_min_)
+    : input(input_), comp(std::move(comp_)), is_arg_min(is_arg_min_), num_rows(num_rows_)
   {
   }
 
@@ -56,11 +59,21 @@ struct row_arg_minmax_fn {
   // `thrust::reduce_by_key` or `thrust::scan_by_key` will result in significant compile time.
   __attribute__((noinline)) __device__ auto operator()(size_type lhs_idx, size_type rhs_idx) const
   {
+    auto const num_rows = input.size();
+
     // The extra bounds checking is due to issue github.com/rapidsai/cudf/issues/9156 and
     // github.com/NVIDIA/thrust/issues/1525
     // where invalid random values may be passed here by thrust::reduce_by_key
     if (lhs_idx < 0 || lhs_idx >= num_rows) { return rhs_idx; }
     if (rhs_idx < 0 || rhs_idx >= num_rows) { return lhs_idx; }
+
+    auto const lhs_is_null = input.is_null(lhs_idx);
+    auto const rhs_is_null = input.is_null(rhs_idx);
+
+    // Nulls at top level are excluded from the operation.
+    // Thus, if the is one null, return index of the non-null element.
+    // If both sides are nulls, just return any index.
+    if (lhs_is_null || rhs_is_null) { return lhs_is_null ? rhs_idx : lhs_idx; }
 
     // Return `lhs_idx` iff:
     //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
@@ -87,42 +100,31 @@ auto static constexpr DEFAULT_NULL_ORDER = cudf::null_order::BEFORE;
  */
 class comparison_binop_generator {
  private:
-  cudf::structs::detail::flattened_table const flattened_input;
-  std::unique_ptr<table_device_view, std::function<void(table_device_view*)>> const
-    d_flattened_input_ptr;
+  column_view const input;
+
+  cudf::experimental::row::lexicographic::self_comparator comp;
+  std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> input_cdv_ptr;
+  rmm::cuda_stream_view stream;
   bool const is_min_op;
   bool const has_nulls;
 
-  std::vector<null_order> null_orders;
-  rmm::device_uvector<null_order> null_orders_dvec;
-
-  comparison_binop_generator(column_view const& input, rmm::cuda_stream_view stream, bool is_min_op)
-    : flattened_input{cudf::structs::detail::flatten_nested_columns(
-        table_view{{input}}, {}, std::vector<null_order>{DEFAULT_NULL_ORDER})},
-      d_flattened_input_ptr{table_device_view::create(flattened_input, stream)},
-      is_min_op(is_min_op),
-      has_nulls{has_nested_nulls(table_view{{input}})},
-      null_orders_dvec(0, stream)
+  comparison_binop_generator(column_view const& input_,
+                             rmm::cuda_stream_view stream_,
+                             bool is_min_op_)
+    : input(input_),
+      comp(table_view{{input_}}, {}, {}, stream_),
+      input_cdv_ptr(column_device_view::create(input_)),
+      stream(stream_),
+      is_min_op(is_min_op_),
+      has_nulls{has_nested_nulls(table_view{{input_}})}
   {
-    if (is_min_op) {
-      null_orders = flattened_input.null_orders();
-      // If the input column has nulls (at the top level), null structs are excluded from the
-      // operations, and that is equivalent to considering top-level nulls as larger than all other
-      // non-null STRUCT elements (if finding for ARGMIN), or smaller than all other non-null STRUCT
-      // elements (if finding for ARGMAX). Thus, we need to set a separate null order for the top
-      // level structs column (which is stored at the first position in the null_orders array) to
-      // achieve this purpose.
-      if (input.has_nulls()) { null_orders.front() = cudf::null_order::AFTER; }
-      null_orders_dvec = cudf::detail::make_device_uvector_async(null_orders, stream);
-    }
-    // else: Don't need to generate nulls order to copy to device memory if we have all null orders
-    // are BEFORE (that happens when we have is_min_op == false).
   }
 
  public:
   auto binop() const
   {
-    return row_arg_minmax_fn(*d_flattened_input_ptr, has_nulls, null_orders_dvec.data(), is_min_op);
+    return row_arg_minmax_fn(
+      *input_cdv_ptr, input.size(), comp.device_comparator(nullate::DYNAMIC{has_nulls}), is_min_op);
   }
 
   template <typename BinOp>
