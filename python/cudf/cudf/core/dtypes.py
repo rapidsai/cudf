@@ -102,16 +102,14 @@ def _decode_type(
         if the number of frames doesn't match the count encoded in the
         headers, or `is_valid_class` is not true.
     """
-    if header["frame_count"] != len(frames):
-        raise AssertionError(
-            f"Deserialization expected {header['frame_count']} frames, "
-            f"but received {len(frames)}."
-        )
+    assert header["frame_count"] == len(frames), (
+        f"Deserialization expected {header['frame_count']} frames, "
+        f"but received {len(frames)}."
+    )
     klass = pickle.loads(header["type-serialized"])
-    if not is_valid_class(klass, cls):
-        raise AssertionError(
-            f"Header-encoded {klass=} does not match decoding {cls=}."
-        )
+    assert is_valid_class(
+        klass, cls
+    ), f"Header-encoded {klass=} does not match decoding {cls=}."
     return header, frames, klass
 
 
