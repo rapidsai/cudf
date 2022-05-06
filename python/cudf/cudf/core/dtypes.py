@@ -586,7 +586,7 @@ class IntervalDtype(StructDtype):
         )  # TODO: needs `closed` when we upgrade Pandas
 
     def serialize(self) -> Tuple[dict, list]:
-        header: Dict[str, Any] = {
+        header = {
             "type-serialized": pickle.dumps(type(self)),
             "fields": pickle.dumps((self.subtype, self.closed)),
             "frame_count": 0,
