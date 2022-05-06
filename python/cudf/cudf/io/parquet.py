@@ -721,6 +721,58 @@ ParquetWriter = libparquet.ParquetWriter
 
 
 class ParquetDatasetWriter:
+    """
+    Write a parquet file or dataset incrementally
+
+    Parameters
+    ----------
+    path : str or s3 and URL
+        A Local directory path/s3 URL. Will be used as Root Directory
+        path while writing a partitioned dataset.
+    partition_cols : list
+        Column names by which to partition the dataset
+        Columns are partitioned in the order they are given
+    index : bool, default None
+        If ``True``, include the dataframe’s index(es) in the file output.
+        If ``False``, they will not be written to the file. If ``None``,
+        index(es) other than RangeIndex will be saved as columns.
+    compression : {'snappy', None}, default 'snappy'
+        Name of the compression to use. Use ``None`` for no compression.
+    statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+        Level at which column statistics should be included in file.
+
+
+    Examples
+    --------
+    Using a context
+
+    >>> df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1], "b": [9, 8, 7, 6, 5]})
+    >>> df2 = cudf.DataFrame({"a": [1, 3, 3, 1, 3], "b": [4, 3, 2, 1, 0]})
+    >>> with ParquetDatasetWriter("./dataset", partition_cols=["a"]) as cw:
+    ...     cw.write_table(df1)
+    ...     cw.write_table(df2)
+
+    By manually calling ``close()``
+
+    >>> cw = ParquetDatasetWriter("./dataset", partition_cols=["a"])
+    >>> cw.write_table(df1)
+    >>> cw.write_table(df2)
+    >>> cw.close()
+
+    Both the methods will generate the same directory structure
+
+    .. code-block:: bash
+
+        dataset/
+            a=1
+                <filename>.parquet
+            a=2
+                <filename>.parquet
+            a=3
+                <filename>.parquet
+
+    """
+
     @_cudf_nvtx_annotate
     def __init__(
         self,
@@ -731,57 +783,6 @@ class ParquetDatasetWriter:
         statistics="ROWGROUP",
         **kwargs,
     ) -> None:
-        """
-        Write a parquet file or dataset incrementally
-
-        Parameters
-        ----------
-        path : str
-            File path or Root Directory path. Will be used as Root Directory
-            path while writing a partitioned dataset.
-        partition_cols : list
-            Column names by which to partition the dataset
-            Columns are partitioned in the order they are given
-        index : bool, default None
-            If ``True``, include the dataframe’s index(es) in the file output.
-            If ``False``, they will not be written to the file. If ``None``,
-            index(es) other than RangeIndex will be saved as columns.
-        compression : {'snappy', None}, default 'snappy'
-            Name of the compression to use. Use ``None`` for no compression.
-        statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
-            Level at which column statistics should be included in file.
-
-
-        Examples
-        ________
-        Using a context
-
-        >>> df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1], "b": [9, 8, 7, 6, 5]})
-        >>> df2 = cudf.DataFrame({"a": [1, 3, 3, 1, 3], "b": [4, 3, 2, 1, 0]})
-        >>> with ParquetDatasetWriter("./dataset", partition_cols=["a"]) as cw:
-        ...     cw.write_table(df1)
-        ...     cw.write_table(df2)
-
-        By manually calling ``close()``
-
-        >>> cw = ParquetDatasetWriter("./dataset", partition_cols=["a"])
-        >>> cw.write_table(df1)
-        >>> cw.write_table(df2)
-        >>> cw.close()
-
-        Both the methods will generate the same directory structure
-
-        .. code-block:: bash
-
-            dataset/
-                a=1
-                    <filename>.parquet
-                a=2
-                    <filename>.parquet
-                a=3
-                    <filename>.parquet
-
-        """
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
             self.path = tempfile.TemporaryDirectory().name
