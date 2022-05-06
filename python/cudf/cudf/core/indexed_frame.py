@@ -144,7 +144,6 @@ def _drop_columns(f: Frame, columns: abc.Iterable, errors: str):
 
 
 def _indices_from_labels(obj, labels):
-
     if not isinstance(labels, cudf.MultiIndex):
         labels = cudf.core.column.as_column(labels)
 

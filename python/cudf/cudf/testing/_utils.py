@@ -311,7 +311,11 @@ def gen_rand(dtype, size, **kwargs):
             np.random.randint(low=low, high=high, size=size), unit=time_unit
         )
     elif dtype.kind in ("O", "U"):
-        return pd._testing.rands_array(10, size)
+        low = kwargs.get("low", 10)
+        high = kwargs.get("high", 11)
+        return pd._testing.rands_array(
+            np.random.randint(low=low, high=high, size=1)[0], size
+        )
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 

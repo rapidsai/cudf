@@ -111,6 +111,14 @@ _cupy_nan_methods_map = {
 }
 
 
+def _shape_mismatch_error(x, y):
+    raise ValueError(
+        f"shape mismatch: value array of shape {x} "
+        f"could not be broadcast to indexing result of "
+        f"shape {y}"
+    )
+
+
 class _DataFrameIndexer(_FrameIndexer):
     def __getitem__(self, arg):
         if (
@@ -342,27 +350,57 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 )
             self._frame._data.insert(key[1], new_col)
         else:
-            if isinstance(value, (cupy.ndarray, np.ndarray)):
-                value_df = DataFrame(value)
-                if value_df.shape[1] != columns_df.shape[1]:
-                    if value_df.shape[1] == 1:
-                        value_cols = (
-                            value_df._data.columns * columns_df.shape[1]
-                        )
-                    else:
-                        raise ValueError(
-                            f"shape mismatch: value array of shape "
-                            f"{value_df.shape} could not be "
-                            f"broadcast to indexing result of shape "
-                            f"{columns_df.shape}"
-                        )
-                else:
-                    value_cols = value_df._data.columns
-                for i, col in enumerate(columns_df._column_names):
-                    self._frame[col].loc[key[0]] = value_cols[i]
-            else:
+            if is_scalar(value):
                 for col in columns_df._column_names:
                     self._frame[col].loc[key[0]] = value
+
+            elif isinstance(value, cudf.DataFrame):
+                if value.shape != self._frame.loc[key[0]].shape:
+                    _shape_mismatch_error(
+                        value.shape,
+                        self._frame.loc[key[0]].shape,
+                    )
+                value_column_names = set(value._column_names)
+                scatter_map = _indices_from_labels(self._frame, key[0])
+                for col in columns_df._column_names:
+                    columns_df[col][scatter_map] = (
+                        value._data[col]
+                        if col in value_column_names
+                        else cudf.NA
+                    )
+
+            else:
+                value = cupy.asarray(value)
+                if cupy.ndim(value) == 2:
+                    # If the inner dimension is 1, it's broadcastable to
+                    # all columns of the dataframe.
+                    indexed_shape = columns_df.loc[key[0]].shape
+                    if value.shape[1] == 1:
+                        if value.shape[0] != indexed_shape[0]:
+                            _shape_mismatch_error(value.shape, indexed_shape)
+                        for i, col in enumerate(columns_df._column_names):
+                            self._frame[col].loc[key[0]] = value[:, 0]
+                    else:
+                        if value.shape != indexed_shape:
+                            _shape_mismatch_error(value.shape, indexed_shape)
+                        for i, col in enumerate(columns_df._column_names):
+                            self._frame[col].loc[key[0]] = value[:, i]
+                else:
+                    # handle cases where value is 1d object:
+                    # If the key on column axis is a scalar, we indexed
+                    # a single column; The 1d value should assign along
+                    # the columns.
+                    if is_scalar(key[1]):
+                        for col in columns_df._column_names:
+                            self._frame[col].loc[key[0]] = value
+                    # Otherwise, there are two situations. The key on row axis
+                    # can be a scalar or 1d. In either of the situation, the
+                    # ith element in value corresponds to the ith row in
+                    # the indexed object.
+                    # If the key is 1d, a broadcast will happen.
+                    else:
+                        for i, col in enumerate(columns_df._column_names):
+                            self._frame[col].loc[key[0]] = value[i]
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
@@ -424,10 +462,49 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @_cudf_nvtx_annotate
     def _setitem_tuple_arg(self, key, value):
-        # TODO: Determine if this usage is prevalent enough to expose this
-        # selection logic at a higher level than ColumnAccessor.
-        for col in self._frame._data.get_labels_by_index(key[1]):
-            self._frame[col].iloc[key[0]] = value
+        columns_df = self._frame._from_data(
+            self._frame._data.select_by_index(key[1]), self._frame._index
+        )
+
+        if is_scalar(value):
+            for col in columns_df._column_names:
+                self._frame[col].iloc[key[0]] = value
+
+        elif isinstance(value, cudf.DataFrame):
+            if value.shape != self._frame.iloc[key[0]].shape:
+                _shape_mismatch_error(
+                    value.shape,
+                    self._frame.loc[key[0]].shape,
+                )
+            value_column_names = set(value._column_names)
+            for col in columns_df._column_names:
+                columns_df[col][key[0]] = (
+                    value._data[col] if col in value_column_names else cudf.NA
+                )
+
+        else:
+            # TODO: consolidate code path with identical counterpart
+            # in `_DataFrameLocIndexer._setitem_tuple_arg`
+            value = cupy.asarray(value)
+            if cupy.ndim(value) == 2:
+                indexed_shape = columns_df.iloc[key[0]].shape
+                if value.shape[1] == 1:
+                    if value.shape[0] != indexed_shape[0]:
+                        _shape_mismatch_error(value.shape, indexed_shape)
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame[col].iloc[key[0]] = value[:, 0]
+                else:
+                    if value.shape != indexed_shape:
+                        _shape_mismatch_error(value.shape, indexed_shape)
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame._data[col][key[0]] = value[:, i]
+            else:
+                if is_scalar(key[1]):
+                    for col in columns_df._column_names:
+                        self._frame[col].iloc[key[0]] = value
+                else:
+                    for i, col in enumerate(columns_df._column_names):
+                        self._frame[col].iloc[key[0]] = value[i]
 
     def _getitem_scalar(self, arg):
         col = self._frame.columns[arg[1]]
