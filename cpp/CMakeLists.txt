@@ -471,6 +471,7 @@ add_library(
   src/strings/filter_chars.cu
   src/strings/padding.cu
   src/strings/json/json_path.cu
+  src/strings/regex/config.cpp
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cu
   src/strings/repeat_strings.cu

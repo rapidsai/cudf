@@ -140,7 +140,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
       size_and_exec_fn, d_prog, strings_count);
   }
 
-  return std::make_pair(std::move(offsets), std::move(chars));
+  return std::pair(std::move(offsets), std::move(chars));
 }
 
 }  // namespace detail

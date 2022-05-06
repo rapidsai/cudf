@@ -152,7 +152,7 @@ std::pair<std::size_t, int32_t> reprog_device::compute_strided_working_memory(
     thread_count = min_rows;
     buffer_size  = working_memory_size(thread_count);
   }
-  return std::make_pair(buffer_size, thread_count);
+  return std::pair(buffer_size, thread_count);
 }
 
 void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32_t max_insts)
