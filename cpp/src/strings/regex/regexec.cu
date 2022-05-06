@@ -16,6 +16,7 @@
 
 #include <strings/regex/regcomp.h>
 #include <strings/regex/regex.cuh>
+#include <strings/utilities.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/error.hpp>
@@ -35,27 +36,21 @@ reprog_device::reprog_device(reprog& prog)
     _num_capturing_groups{prog.groups_count()},
     _insts_count{prog.insts_count()},
     _starts_count{prog.starts_count()},
-    _classes_count{prog.classes_count()}
+    _classes_count{prog.classes_count()},
+    _max_insts{prog.insts_count()},
+    _codepoint_flags{get_character_flags_table()}
 {
 }
 
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
-  std::string const& pattern,
-  uint8_t const* codepoint_flags,
-  size_type strings_count,
-  rmm::cuda_stream_view stream)
+  std::string const& pattern, rmm::cuda_stream_view stream)
 {
-  return reprog_device::create(
-    pattern, regex_flags::MULTILINE, codepoint_flags, strings_count, stream);
+  return reprog_device::create(pattern, regex_flags::MULTILINE, stream);
 }
 
 // Create instance of the reprog that can be passed into a device kernel
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
-  std::string const& pattern,
-  regex_flags const flags,
-  uint8_t const* codepoint_flags,
-  size_type strings_count,
-  rmm::cuda_stream_view stream)
+  std::string const& pattern, regex_flags const flags, rmm::cuda_stream_view stream)
 {
   // compile pattern into host object
   reprog h_prog = reprog::create_from(pattern, flags);
@@ -82,7 +77,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   auto d_buffer = new rmm::device_buffer(memsize, stream);      // output device memory;
   auto d_ptr    = reinterpret_cast<u_char*>(d_buffer->data());  // running device pointer
 
-  // put everything into a flat host buffer first
+  // create our device object; this is managed separately and returned to the caller
   reprog_device* d_prog = new reprog_device(h_prog);
 
   // copy the instructions array first (fixed-sized structs)
@@ -120,31 +115,57 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   }
 
   // initialize the rest of the elements
-  d_prog->_codepoint_flags = codepoint_flags;
-
-  // allocate execute memory if needed
-  rmm::device_buffer* d_relists{};
-  if (insts_count > RX_LARGE_INSTS) {
-    // two relist state structures are needed for execute per string
-    auto const rlm_size  = relist::alloc_size(insts_count) * 2 * strings_count;
-    d_relists            = new rmm::device_buffer(rlm_size, stream);
-    d_prog->_relists_mem = d_relists->data();
-  }
+  d_prog->_max_insts = insts_count;
+  d_prog->_prog_size = memsize + sizeof(reprog_device);
 
   // copy flat prog to device memory
   CUDF_CUDA_TRY(cudaMemcpyAsync(
     d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice, stream.value()));
 
   // build deleter to cleanup device memory
-  auto deleter = [d_buffer, d_relists](reprog_device* t) {
+  auto deleter = [d_buffer](reprog_device* t) {
     t->destroy();
     delete d_buffer;
-    delete d_relists;
   };
+
   return std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>(d_prog, deleter);
 }
 
 void reprog_device::destroy() { delete this; }
+
+std::size_t reprog_device::working_memory_size(int32_t num_threads) const
+{
+  return relist::alloc_size(_insts_count, num_threads) * 2;
+}
+
+std::pair<std::size_t, int32_t> reprog_device::compute_strided_working_memory(
+  int32_t rows, int32_t min_rows, std::size_t requested_max_size) const
+{
+  auto thread_count = rows;
+  auto buffer_size  = working_memory_size(thread_count);
+  while ((buffer_size > requested_max_size) && (thread_count > min_rows)) {
+    thread_count = thread_count / 2;
+    buffer_size  = working_memory_size(thread_count);
+  }
+  // clamp to min_rows but only if rows is greater than min_rows
+  if (rows > min_rows && thread_count < min_rows) {
+    thread_count = min_rows;
+    buffer_size  = working_memory_size(thread_count);
+  }
+  return std::make_pair(buffer_size, thread_count);
+}
+
+void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32_t max_insts)
+{
+  _buffer       = buffer;
+  _thread_count = thread_count;
+  _max_insts    = _max_insts > 0 ? _max_insts : _insts_count;
+}
+
+int32_t reprog_device::compute_shared_memory_size() const
+{
+  return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0;
+}
 
 }  // namespace detail
 }  // namespace strings
