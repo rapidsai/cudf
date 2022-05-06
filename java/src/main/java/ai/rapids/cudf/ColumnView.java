@@ -233,6 +233,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get a ColumnView that is the offsets for this list.
+   * Please note that it is the responsibility of the caller to close this view, and the parent
+   * column must out live this view.
    */
   public ColumnView getListOffsetsView() {
     assert(getType().equals(DType.LIST));
