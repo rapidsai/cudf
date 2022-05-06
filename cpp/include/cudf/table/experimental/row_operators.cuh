@@ -45,6 +45,7 @@
 #include <utility>
 
 namespace cudf {
+
 namespace experimental {
 
 /**
@@ -70,9 +71,6 @@ struct dispatch_void_if_nested {
 namespace row {
 namespace lexicographic {
 
-template <typename Nullate>
-class device_less_comparator;
-
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
  *
@@ -92,7 +90,8 @@ class device_less_comparator;
  */
 template <typename Nullate>
 class device_row_comparator {
-  friend class device_less_comparator<Nullate>;
+  // friend class device_less_comparator<Nullate>;
+  friend class self_comparator;
   /**
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
@@ -234,7 +233,7 @@ class device_row_comparator {
  public:
   /**
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
-   * lexicographically less, greater, or equal to the row at `rhs_index` in the `rhs` table.
+   * lexicographically less, greater, or equivalent to the row at `rhs_index` in the `rhs` table.
    *
    * @param lhs_index The index of row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
@@ -278,6 +277,32 @@ class device_row_comparator {
   std::optional<device_span<null_order const>> const _null_precedence;
 };  // class device_row_comparator
 
+template <typename... WeakOrderings>
+__device__ bool any_equal(weak_ordering result, weak_ordering v, WeakOrderings... vs)
+{
+  if constexpr (sizeof...(WeakOrderings) == 0) {
+    return result == v;
+  } else {
+    return result == v or any_equal(result, vs...);
+  }
+}
+
+/**
+ * @brief Wraps and interprets the result of templated Comparator that returns a weak_ordering.
+ * Returns true if the weak_ordering matches any of the templated values.
+ *
+ * @tparam Comparator generic comparator that returns a weak_ordering.
+ * @tparam values weak_ordering parameter pack of orderings to interpret as true
+ */
+template <typename Comparator, weak_ordering... values>
+struct weak_ordering_comparator_impl {
+  __device__ bool operator()(size_type const& lhs, size_type const& rhs)
+  {
+    return any_equal(comparator(lhs, rhs), values...);
+  }
+  Comparator comparator;
+};
+
 /**
  * @brief Wraps and interprets the result of device_row_comparator, true if the result is
  * weak_ordering::LESS meaning one row is lexicographically *less* than another row.
@@ -285,52 +310,13 @@ class device_row_comparator {
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <typename Nullate>
-class device_less_comparator {
-  friend class self_comparator;
-  /**
-   * @brief Construct a function object for performing a lexicographic
-   * comparison between the rows of two tables.
-   *
-   * @param has_nulls Indicates if either input table contains columns with nulls.
-   * @param lhs The first table
-   * @param rhs The second table (may be the same table as `lhs`)
-   * @param depth Optional, device array the same length as a row that contains starting depths of
-   * columns if they're nested, and 0 otherwise.
-   * @param column_order Optional, device array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If `nullopt`, it is assumed all columns are
-   * sorted in ascending order.
-   * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If `nullopt`, then null precedence would be
-   * `null_order::BEFORE` for all columns.
-   */
-  device_less_comparator(
-    Nullate check_nulls,
-    table_device_view lhs,
-    table_device_view rhs,
-    std::optional<device_span<int const>> depth                  = std::nullopt,
-    std::optional<device_span<order const>> column_order         = std::nullopt,
-    std::optional<device_span<null_order const>> null_precedence = std::nullopt) noexcept
-    : comparator{check_nulls, lhs, rhs, depth, column_order, null_precedence}
-  {
-  }
+using less_comparator =
+  weak_ordering_comparator_impl<device_row_comparator<Nullate>, weak_ordering::LESS>;
 
- public:
-  /**
-   * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
-   * lexicographically less than the row at `rhs_index` in the `rhs` table.
-   *
-   * @param lhs_index The index of row in the `lhs` table to examine
-   * @param rhs_index The index of the row in the `rhs` table to examine
-   * @return `true` if row from the `lhs` table compares less than row in the `rhs` table
-   */
-  __device__ bool operator()(size_type const lhs_index, size_type const rhs_index) const noexcept
-  {
-    return comparator(lhs_index, rhs_index) == weak_ordering::LESS;
-  }
-
- private:
-  device_row_comparator<Nullate> comparator;
-};  // class device_less_comparator
+template <typename Nullate>
+using less_equivalent_comparator = weak_ordering_comparator_impl<device_row_comparator<Nullate>,
+                                                                 weak_ordering::LESS,
+                                                                 weak_ordering::EQUIVALENT>;
 
 struct preprocessed_table {
   using table_device_view_owner =
@@ -480,10 +466,10 @@ class self_comparator {
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
-  device_less_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  less_comparator<Nullate> device_comparator(Nullate nullate = {}) const
   {
-    return device_less_comparator(
-      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence());
+    return less_comparator<Nullate>{device_row_comparator<Nullate>(
+      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
   }
 
  private:
