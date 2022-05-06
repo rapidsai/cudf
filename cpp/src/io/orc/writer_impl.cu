@@ -1952,11 +1952,11 @@ struct string_length_functor {
     if (i >= num_chunks * 2) return 0;
 
     // min strings are even values, max strings are odd values of i
-    auto const min = i % 2 == 0;
+    auto const should_copy_min = i % 2 == 0;
     // index of the chunk
     auto const idx = i / 2;
-    auto& str_val =
-      min ? stripe_stat_chunks[idx].min_value.str_val : stripe_stat_chunks[idx].max_value.str_val;
+    auto& str_val  = should_copy_min ? stripe_stat_chunks[idx].min_value.str_val
+                                     : stripe_stat_chunks[idx].max_value.str_val;
     auto const str = stripe_stat_merge[idx].stats_dtype == dtype_string;
     return str ? str_val.length : 0;
   }
@@ -1973,10 +1973,11 @@ __global__ void copy_string_data(char* string_pool,
 {
   auto const idx = blockIdx.x / 2;
   if (groups[idx].stats_dtype == dtype_string) {
-    auto const min = blockIdx.x % 2 == 0;
-    auto& str_val  = min ? chunks[idx].min_value.str_val : chunks[idx].max_value.str_val;
-    auto dst       = &string_pool[offsets[blockIdx.x]];
-    auto src       = str_val.ptr;
+    // min strings are even values, max strings are odd values of i
+    auto const should_copy_min = blockIdx.x % 2 == 0;
+    auto& str_val = should_copy_min ? chunks[idx].min_value.str_val : chunks[idx].max_value.str_val;
+    auto dst      = &string_pool[offsets[blockIdx.x]];
+    auto src      = str_val.ptr;
 
     for (int i = threadIdx.x; i < str_val.length; i += blockDim.x) {
       dst[i] = src[i];
@@ -2001,8 +2002,7 @@ void writer::impl::persisted_statistics::persist(int num_table_rows,
       string_length_functor{num_chunks,
                             intermediate_stats.stripe_stat_chunks.data(),
                             intermediate_stats.stripe_stat_merge.device_ptr()});
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), iter, iter + (num_chunks * 2) + 1, offsets.begin());
+    thrust::exclusive_scan(rmm::exec_policy(stream), iter, iter + offsets.size(), offsets.begin());
 
     // pull size back to host
     auto const total_string_pool_size = offsets.element(num_chunks * 2, stream);
