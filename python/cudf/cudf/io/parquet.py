@@ -208,7 +208,7 @@ def _process_dataset(
         filters = pq._filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
-    # TODO: Remove the s3fs workaround after following bug is fixed:
+    # TODO: Remove the if len(paths) workaround after following bug is fixed:
     # https://issues.apache.org/jira/browse/ARROW-16438
     dataset = ds.dataset(
         source=paths[0] if len(paths) == 1 else paths,
