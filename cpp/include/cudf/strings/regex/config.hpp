@@ -43,7 +43,7 @@ namespace strings {
  * @param pattern Regex pattern to be used
  * @param flags Regex flags for interpreting special characters in the pattern
  * @return Size of the state memory in bytes required for processing `pattern` on `strings`
- *         and the number of concurrent row that memory will support
+ *         and the number of concurrent rows this memory will support
  */
 std::pair<std::size_t, size_type> compute_regex_state_memory(
   strings_column_view const& input,
