@@ -575,7 +575,7 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
   }
   // Return user metadata
   metadata_out.user_data          = meta.user_data;
-  metadata_out.per_file_user_data = {meta.user_data};
+  metadata_out.per_file_user_data = {{meta.user_data.begin(), meta.user_data.end()}};
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata_out)};
 }

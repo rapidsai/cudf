@@ -318,7 +318,7 @@ struct metadata : public FileMetaData {
 
 class aggregate_reader_metadata {
   std::vector<metadata> per_file_metadata;
-  std::vector<std::map<std::string, std::string>> keyval_maps;
+  std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
   size_type num_rows;
   size_type num_row_groups;
   /**
@@ -339,12 +339,12 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] auto collect_keyval_metadata()
   {
-    std::vector<std::map<std::string, std::string>> kv_maps;
+    std::vector<std::unordered_map<std::string, std::string>> kv_maps;
     std::transform(per_file_metadata.cbegin(),
                    per_file_metadata.cend(),
                    std::back_inserter(kv_maps),
                    [](auto const& pfm) {
-                     std::map<std::string, std::string> kv_map;
+                     std::unordered_map<std::string, std::string> kv_map;
                      std::transform(pfm.key_value_metadata.cbegin(),
                                     pfm.key_value_metadata.cend(),
                                     std::inserter(kv_map, kv_map.end()),
@@ -1770,7 +1770,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
   // Return user metadata
   out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
-  out_metadata.user_data          = out_metadata.per_file_user_data[0];
+  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
+                            out_metadata.per_file_user_data[0].end()};
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
