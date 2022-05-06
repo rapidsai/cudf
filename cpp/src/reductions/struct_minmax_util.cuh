@@ -36,20 +36,18 @@ namespace reduction {
 namespace detail {
 
 /**
- * @brief Binary operator ArgMin/ArgMax with index values into the input table.
+ * @brief Binary operator ArgMin/ArgMax with index values into the input column.
  */
 struct row_arg_minmax_fn {
   column_device_view input;
   cudf::experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC> const comp;
   bool const is_arg_min;
-  size_type num_rows;
 
   row_arg_minmax_fn(
     column_device_view const& input_,
-    size_type num_rows_,
     cudf::experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC>&& comp_,
     bool const is_arg_min_)
-    : input(input_), comp(std::move(comp_)), is_arg_min(is_arg_min_), num_rows(num_rows_)
+    : input(input_), comp(std::move(comp_)), is_arg_min(is_arg_min_)
   {
   }
 
@@ -91,32 +89,24 @@ auto static constexpr DEFAULT_NULL_ORDER = cudf::null_order::BEFORE;
 /**
  * @brief The utility class to provide a binary operator object for lexicographic comparison of
  * struct elements.
- *
- * The input of this class is a structs column. Using the binary operator provided by this class,
- * nulls STRUCT are compared as larger than all other non-null STRUCT elements - if finding for
- * ARGMIN, or smaller than all other non-null STRUCT elements - if finding for ARGMAX. This helps
- * achieve the results of finding the min or max STRUCT element when nulls are excluded from the
- * operations, returning null only when all the input elements are nulls.
  */
 class comparison_binop_generator {
  private:
-  column_view const input;
-
-  cudf::experimental::row::lexicographic::self_comparator comp;
   std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> input_cdv_ptr;
+  cudf::experimental::row::lexicographic::self_comparator row_comparator;
   rmm::cuda_stream_view stream;
-  bool const is_min_op;
   bool const has_nulls;
+  bool const is_min_op;
 
   comparison_binop_generator(column_view const& input_,
                              rmm::cuda_stream_view stream_,
                              bool is_min_op_)
-    : input(input_),
-      comp(table_view{{input_}}, {}, {}, stream_),
-      input_cdv_ptr(column_device_view::create(input_)),
+    : input_cdv_ptr(column_device_view::create(input_)),
+      row_comparator(
+        table_view{{input_}}, {}, std::vector<null_order>{DEFAULT_NULL_ORDER}, stream_),
       stream(stream_),
-      is_min_op(is_min_op_),
-      has_nulls{has_nested_nulls(table_view{{input_}})}
+      has_nulls(has_nested_nulls(table_view{{input_}})),
+      is_min_op(is_min_op_)
   {
   }
 
@@ -124,7 +114,7 @@ class comparison_binop_generator {
   auto binop() const
   {
     return row_arg_minmax_fn(
-      *input_cdv_ptr, input.size(), comp.device_comparator(nullate::DYNAMIC{has_nulls}), is_min_op);
+      *input_cdv_ptr, row_comparator.device_comparator(nullate::DYNAMIC{has_nulls}), is_min_op);
   }
 
   template <typename BinOp>
