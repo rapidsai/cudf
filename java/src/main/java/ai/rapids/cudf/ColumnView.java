@@ -234,7 +234,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Get a ColumnView that is the offsets for this list.
    */
-  ColumnView getListOffsetsView() {
+  public ColumnView getListOffsetsView() {
     assert(getType().equals(DType.LIST));
     return new ColumnView(getListOffsetCvPointer(viewHandle));
   }
