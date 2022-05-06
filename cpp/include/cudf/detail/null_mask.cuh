@@ -164,7 +164,7 @@ size_type inplace_bitmask_binop(
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
                "Mask pointer cannot be null");
 
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
   rmm::device_scalar<size_type> d_counter{0, stream, mr};
   rmm::device_uvector<bitmask_type const*> d_masks(masks.size(), stream, mr);
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
