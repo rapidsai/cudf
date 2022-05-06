@@ -27,8 +27,12 @@ namespace strings {
  */
 
 /**
- * @brief Compute working memory size for evaluating a regex pattern
- * for a given strings column.
+ * @brief Compute the working memory size for evaluating a regex pattern
+ * on a given strings column.
+ *
+ * This returns the size in bytes for the memory needed to evaluate the pattern
+ * as well as the number of concurrent rows this memory can support.
+ * The number of rows may be less than the size of the input column.
  *
  * This computes only the state data memory size required to process
  * a regex pattern over the given strings column.
@@ -39,7 +43,7 @@ namespace strings {
  * @param pattern Regex pattern to be used
  * @param flags Regex flags for interpreting special characters in the pattern
  * @return Size of the state memory in bytes required for processing `pattern` on `strings`
- *         and the number of concurrent that memory will support
+ *         and the number of concurrent row that memory will support
  */
 std::pair<std::size_t, size_type> compute_regex_state_memory(
   strings_column_view const& input,
