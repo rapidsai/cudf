@@ -125,6 +125,17 @@ def test_serialize(df, to_host):
     assert_eq(a, b)
 
 
+def test_serialize_dtype_error_checking():
+    dtype = cudf.IntervalDtype("float", "right")
+    header, frames = dtype.serialize()
+    with pytest.raises(AssertionError):
+        # Invalid number of frames
+        type(dtype).deserialize(header, [None] * (header["frame_count"] + 1))
+    with pytest.raises(AssertionError):
+        # mismatching class
+        cudf.StructDtype.deserialize(header, frames)
+
+
 def test_serialize_dataframe():
     df = cudf.DataFrame()
     df["a"] = np.arange(100)
