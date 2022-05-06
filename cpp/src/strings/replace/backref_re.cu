@@ -100,7 +100,7 @@ std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string con
 
 //
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
-                                              std::string const& pattern,
+                                              std::string_view pattern,
                                               std::string const& replacement,
                                               regex_flags const flags,
                                               rmm::cuda_stream_view stream,
@@ -144,7 +144,7 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
 // external API
 
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
-                                              std::string const& pattern,
+                                              std::string_view pattern,
                                               std::string const& replacement,
                                               regex_flags const flags,
                                               rmm::mr::device_memory_resource* mr)
