@@ -364,20 +364,33 @@ def test_read_parquet_filters(s3_base, s3so, pdf_ext, precache):
 
 @pytest.mark.parametrize("partition_cols", [None, ["String"]])
 def test_write_parquet(s3_base, s3so, pdf, partition_cols):
-    fname = "test_parquet_writer.parquet"
+    fname_cudf = "test_parquet_writer_cudf"
+    fname_pandas = "test_parquet_writer_pandas"
     bname = "parquet"
     gdf = cudf.from_pandas(pdf)
+
     with s3_context(s3_base=s3_base, bucket=bname) as s3fs:
         gdf.to_parquet(
-            f"s3://{bname}/{fname}",
+            f"s3://{bname}/{fname_cudf}",
             partition_cols=partition_cols,
             storage_options=s3so,
         )
-        assert s3fs.exists(f"s3://{bname}/{fname}")
+        assert s3fs.exists(f"s3://{bname}/{fname_cudf}")
+        pdf.to_parquet(
+            f"s3://{bname}/{fname_pandas}",
+            partition_cols=partition_cols,
+            storage_options=s3so,
+        )
+        assert s3fs.exists(f"s3://{bname}/{fname_pandas}")
 
-        got = pd.read_parquet(s3fs.open(f"s3://{bname}/{fname}"))
+        got = pd.read_parquet(
+            f"s3://{bname}/{fname_pandas}", storage_options=s3so
+        )
+        expect = cudf.read_parquet(
+            f"s3://{bname}/{fname_cudf}", storage_options=s3so
+        )
 
-    assert_eq(pdf, got)
+    assert_eq(expect, got)
 
 
 def test_read_json(s3_base, s3so):

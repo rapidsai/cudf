@@ -9,11 +9,6 @@ from typing import Dict, List, Tuple
 from uuid import uuid4
 
 import numpy as np
-
-try:
-    import s3fs
-except (ImportError, ModuleNotFoundError):
-    s3fs = None
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -216,14 +211,7 @@ def _process_dataset(
     # TODO: Remove the s3fs workaround after following bug is fixed:
     # https://issues.apache.org/jira/browse/ARROW-16438
     dataset = ds.dataset(
-        source=paths[0]
-        if (
-            s3fs is not None
-            and isinstance(fs, s3fs.S3FileSystem)
-            and len(paths) == 1
-            and fs.isdir(paths[0])
-        )
-        else paths,
+        source=paths[0] if len(paths) == 1 else paths,
         filesystem=fs,
         format="parquet",
         partitioning="hive",
