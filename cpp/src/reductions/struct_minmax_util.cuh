@@ -17,19 +17,11 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/reduction_operators.cuh>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
 #include <cudf/table/experimental/row_operators.cuh>
-
-#include <thrust/reduce.h>
-#include <thrust/scan.h>
 
 namespace cudf {
 namespace reduction {
