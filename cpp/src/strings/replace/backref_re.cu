@@ -16,9 +16,7 @@
 
 #include "backref_re.cuh"
 
-#include <strings/regex/dispatcher.hpp>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+#include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -43,7 +41,7 @@ namespace {
  * @brief Return the capturing group index pattern to use with the given replacement string.
  *
  * Only two patterns are supported at this time `\d` and `${d}` where `d` is an integer in
- * the range 1-99. The `\d` pattern is returned by default unless no `\d` pattern is found in
+ * the range 0-99. The `\d` pattern is returned by default unless no `\d` pattern is found in
  * the `repl` string,
  *
  * Reference: https://www.regular-expressions.info/refreplacebackref.html
@@ -98,45 +96,15 @@ std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string con
   return {rtn, backrefs};
 }
 
-template <typename Iterator>
-struct replace_dispatch_fn {
-  reprog_device d_prog;
-
-  template <int stack_size>
-  std::unique_ptr<column> operator()(strings_column_view const& input,
-                                     string_view const& d_repl_template,
-                                     Iterator backrefs_begin,
-                                     Iterator backrefs_end,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    auto const d_strings = column_device_view::create(input.parent(), stream);
-
-    auto children = make_strings_children(
-      backrefs_fn<Iterator, stack_size>{
-        *d_strings, d_prog, d_repl_template, backrefs_begin, backrefs_end},
-      input.size(),
-      stream,
-      mr);
-
-    return make_strings_column(input.size(),
-                               std::move(children.first),
-                               std::move(children.second),
-                               input.null_count(),
-                               cudf::detail::copy_bitmask(input.parent(), stream, mr));
-  }
-};
-
 }  // namespace
 
 //
-std::unique_ptr<column> replace_with_backrefs(
-  strings_column_view const& input,
-  std::string const& pattern,
-  std::string const& replacement,
-  regex_flags const flags,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
+                                              std::string const& pattern,
+                                              std::string const& replacement,
+                                              regex_flags const flags,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -144,8 +112,7 @@ std::unique_ptr<column> replace_with_backrefs(
   CUDF_EXPECTS(!replacement.empty(), "Parameter replacement must not be empty");
 
   // compile regex into device object
-  auto d_prog =
-    reprog_device::create(pattern, flags, get_character_flags_table(), input.size(), stream);
+  auto d_prog = reprog_device::create(pattern, flags, stream);
 
   // parse the repl string for back-ref indicators
   auto group_count = std::min(99, d_prog->group_counts());  // group count should NOT exceed 99
@@ -155,15 +122,21 @@ std::unique_ptr<column> replace_with_backrefs(
   string_scalar repl_scalar(parse_result.first, true, stream);
   string_view const d_repl_template = repl_scalar.value();
 
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+
   using BackRefIterator = decltype(backrefs.begin());
-  return regex_dispatcher(*d_prog,
-                          replace_dispatch_fn<BackRefIterator>{*d_prog},
-                          input,
-                          d_repl_template,
-                          backrefs.begin(),
-                          backrefs.end(),
-                          stream,
-                          mr);
+  auto children         = make_strings_children(
+    backrefs_fn<BackRefIterator>{*d_strings, d_repl_template, backrefs.begin(), backrefs.end()},
+    *d_prog,
+    input.size(),
+    stream,
+    mr);
+
+  return make_strings_column(input.size(),
+                             std::move(children.first),
+                             std::move(children.second),
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail

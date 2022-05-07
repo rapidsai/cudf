@@ -15,9 +15,7 @@
  */
 
 #include <strings/count_matches.hpp>
-#include <strings/regex/dispatcher.hpp>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+#include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -28,12 +26,10 @@
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/distance.h>
-#include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
@@ -59,18 +55,17 @@ enum class split_direction {
  * The `d_token_offsets` specifies the output position within `d_tokens`
  * for each string.
  */
-template <int stack_size>
 struct token_reader_fn {
   column_device_view const d_strings;
-  reprog_device prog;
   split_direction const direction;
   offset_type const* d_token_offsets;
   string_index_pair* d_tokens;
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) { return; }
-    auto const d_str = d_strings.element<string_view>(idx);
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
 
     auto const token_offset = d_token_offsets[idx];
     auto const token_count  = d_token_offsets[idx + 1] - token_offset;
@@ -78,9 +73,9 @@ struct token_reader_fn {
 
     size_type token_idx = 0;
     size_type begin     = 0;  // characters
-    size_type end       = d_str.length();
+    size_type end       = nchars;
     size_type last_pos  = 0;  // bytes
-    while (prog.find<stack_size>(idx, d_str, begin, end) > 0) {
+    while (prog.find(prog_idx, d_str, begin, end) > 0) {
       // get the token (characters just before this match)
       auto const token =
         string_index_pair{d_str.data() + last_pos, d_str.byte_offset(begin) - last_pos};
@@ -97,7 +92,7 @@ struct token_reader_fn {
       // setup for next match
       last_pos = d_str.byte_offset(end);
       begin    = end + (begin == end);
-      end      = d_str.length();
+      end      = nchars;
     }
 
     // set the last token to the remainder of the string
@@ -113,28 +108,6 @@ struct token_reader_fn {
         d_result[0] = string_index_pair{d_str.data(), first_offset + d_result[0].second};
       }
     }
-  }
-};
-
-struct generate_dispatch_fn {
-  reprog_device d_prog;
-
-  template <int stack_size>
-  rmm::device_uvector<string_index_pair> operator()(column_device_view const& d_strings,
-                                                    size_type total_tokens,
-                                                    split_direction direction,
-                                                    offset_type const* d_offsets,
-                                                    rmm::cuda_stream_view stream)
-  {
-    rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
-
-    thrust::for_each_n(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      d_strings.size(),
-      token_reader_fn<stack_size>{d_strings, d_prog, direction, d_offsets, tokens.data()});
-
-    return tokens;
   }
 };
 
@@ -176,8 +149,15 @@ rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const&
   // the last offset entry is the total number of tokens to be generated
   auto const total_tokens = cudf::detail::get_value<offset_type>(offsets, strings_count, stream);
 
-  return regex_dispatcher(
-    d_prog, generate_dispatch_fn{d_prog}, d_strings, total_tokens, direction, d_offsets, stream);
+  rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
+  if (total_tokens == 0) { return tokens; }
+
+  launch_for_each_kernel(token_reader_fn{d_strings, direction, d_offsets, tokens.data()},
+                         d_prog,
+                         d_strings.size(),
+                         stream);
+
+  return tokens;
 }
 
 /**
@@ -221,7 +201,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   }
 
   // create the regex device prog from the given pattern
-  auto d_prog = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
+  auto d_prog    = reprog_device::create(pattern, stream);
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
@@ -283,7 +263,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   auto const strings_count = input.size();
 
   // create the regex device prog from the given pattern
-  auto d_prog = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
+  auto d_prog    = reprog_device::create(pattern, stream);
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
