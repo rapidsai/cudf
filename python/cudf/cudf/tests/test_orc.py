@@ -733,6 +733,105 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
                 assert stats_num_vals == actual_num_vals
 
 
+@pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
+@pytest.mark.parametrize("nrows", [2, 100, 6000000])
+def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
+    supported_stat_types = supported_numpy_dtypes + ["str"]
+    # Can't write random bool columns until issue #6763 is fixed
+    if nrows == 6000000:
+        supported_stat_types.remove("bool")
+
+    gdf_fname = tmpdir.join("chunked_stats.orc")
+    writer = ORCWriter(gdf_fname)
+
+    max_char_length = 1000 if nrows < 10000 else 100
+
+    # Make a dataframe
+    gdf = cudf.DataFrame(
+        {
+            "col_"
+            + str(dtype): gen_rand_series(
+                dtype,
+                int(nrows / 2),
+                has_nulls=True,
+                low=0,
+                high=max_char_length,
+            )
+            for dtype in supported_stat_types
+        }
+    )
+
+    pdf1 = gdf.to_pandas()
+    writer.write_table(gdf)
+    # gdf is specifically being reused here to ensure the data is destroyed
+    # before the next write_table call to ensure the data is persisted inside
+    # write and no pointers are saved into the original table
+    gdf = cudf.DataFrame(
+        {
+            "col_"
+            + str(dtype): gen_rand_series(
+                dtype,
+                int(nrows / 2),
+                has_nulls=True,
+                low=0,
+                high=max_char_length,
+            )
+            for dtype in supported_stat_types
+        }
+    )
+    pdf2 = gdf.to_pandas()
+    writer.write_table(gdf)
+    writer.close()
+
+    # pandas is unable to handle min/max of string col with nulls
+    expect = cudf.DataFrame(pd.concat([pdf1, pdf2]).reset_index(drop=True))
+
+    # Read back written ORC's statistics
+    orc_file = pa.orc.ORCFile(gdf_fname)
+    (
+        file_stats,
+        stripes_stats,
+    ) = cudf.io.orc.read_orc_statistics([gdf_fname])
+
+    # check file stats
+    for col in expect:
+        if "minimum" in file_stats[0][col]:
+            stats_min = file_stats[0][col]["minimum"]
+            actual_min = expect[col].min()
+            assert normalized_equals(actual_min, stats_min)
+        if "maximum" in file_stats[0][col]:
+            stats_max = file_stats[0][col]["maximum"]
+            actual_max = expect[col].max()
+            assert normalized_equals(actual_max, stats_max)
+        if "number_of_values" in file_stats[0][col]:
+            stats_num_vals = file_stats[0][col]["number_of_values"]
+            actual_num_vals = expect[col].count()
+            assert stats_num_vals == actual_num_vals
+
+    # compare stripe statistics with actual min/max
+    for stripe_idx in range(0, orc_file.nstripes):
+        stripe = orc_file.read_stripe(stripe_idx)
+        # pandas is unable to handle min/max of string col with nulls
+        stripe_df = cudf.DataFrame(stripe.to_pandas())
+        for col in stripe_df:
+            if "minimum" in stripes_stats[stripe_idx][col]:
+                actual_min = stripe_df[col].min()
+                stats_min = stripes_stats[stripe_idx][col]["minimum"]
+                assert normalized_equals(actual_min, stats_min)
+
+            if "maximum" in stripes_stats[stripe_idx][col]:
+                actual_max = stripe_df[col].max()
+                stats_max = stripes_stats[stripe_idx][col]["maximum"]
+                assert normalized_equals(actual_max, stats_max)
+
+            if "number_of_values" in stripes_stats[stripe_idx][col]:
+                stats_num_vals = stripes_stats[stripe_idx][col][
+                    "number_of_values"
+                ]
+                actual_num_vals = stripe_df[col].count()
+                assert stats_num_vals == actual_num_vals
+
+
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
 def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
     # Make a dataframe
