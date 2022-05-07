@@ -188,7 +188,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     len(self.obj), "int8", masked=False
                 )
             )
-            .groupby(self.grouping, sort=self._sort)
+            .groupby(self.grouping, sort=self._sort, dropna=self._dropna)
             .agg("size")
         )
 

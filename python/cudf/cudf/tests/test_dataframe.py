@@ -4257,7 +4257,7 @@ def test_df_values_property(data):
     np.testing.assert_array_equal(pmtr, gmtr)
 
 
-def test_value_counts():
+def test_numeric_alpha_value_counts():
     pdf = pd.DataFrame(
         {
             "numeric": [1, 2, 3, 4, 5, 6, 1, 2, 4] * 10,
@@ -9316,3 +9316,77 @@ def test_dataframe_eval(df_eval, expr, dtype):
 def test_dataframe_eval_errors(df_eval, expr):
     with pytest.raises(ValueError):
         df_eval.eval(expr)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "gdf": cudf.DataFrame(
+                {"num_legs": [2, 4, 4, 6], "num_wings": [2, 0, 0, 0]},
+                index=["falcon", "dog", "cat", "ant"],
+            ),
+            "subset": ["num_legs"],
+        },
+        {
+            "gdf": cudf.DataFrame(
+                {
+                    "first_name": ["John", "Anne", "John", "Beth"],
+                    "middle_name": ["Smith", None, None, "Louise"],
+                }
+            ),
+            "subset": ["first_name"],
+        },
+    ],
+)
+@pytest.mark.parametrize("boolean", [True, False])
+def test_value_counts(data, boolean):
+    subset = data["subset"]
+    gdf = data["gdf"]
+    pdf = gdf.to_pandas()
+
+    got = gdf.value_counts()
+    expected = pdf.value_counts()
+    assert_eq(got, expected)
+
+    got = gdf.value_counts(sort=boolean)
+    expected = pdf.value_counts(sort=boolean)
+    assert_eq(got, expected)
+
+    got = gdf.value_counts(ascending=boolean)
+    expected = pdf.value_counts(ascending=boolean)
+    assert_eq(got, expected)
+
+    got = gdf.value_counts(normalize=boolean)
+    expected = pdf.value_counts(normalize=boolean)
+    assert_eq(got, expected)
+
+    got = gdf.value_counts(dropna=boolean)
+    expected = pdf.value_counts(dropna=boolean)
+    # Convert the Pandas series to a cuDF one due to difference
+    # in the handling of NaNs between the two (<NA> in cuDF and
+    # NaN in Pandas) when dropna=False.
+    assert_eq(got, cudf.from_pandas(expected))
+
+    got = gdf.value_counts(subset=subset)
+    expected = pdf.value_counts(subset=subset)
+    assert_eq(got, expected)
+
+    with pytest.raises(KeyError):
+        gdf.value_counts(subset=["not_a_column_name"])
+
+    got = gdf.value_counts(subset=subset, sort=boolean)
+    expected = pdf.value_counts(subset=subset, sort=boolean)
+    assert_eq(got, expected)
+
+    got = gdf.value_counts(subset=subset, ascending=boolean)
+    expected = pdf.value_counts(subset=subset, ascending=boolean)
+    assert_eq(got, expected)
+
+    got = gdf.value_counts(subset=subset, normalize=boolean)
+    expected = pdf.value_counts(subset=subset, normalize=boolean)
+    assert_eq(got, expected)
+
+    got = gdf.value_counts(subset=subset, dropna=boolean)
+    expected = pdf.value_counts(subset=subset, dropna=boolean)
+    assert_eq(got, expected)

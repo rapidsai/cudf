@@ -68,7 +68,7 @@ from cudf.core.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, StringIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -6487,6 +6487,87 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ret._data[name] = col
         if not inplace:
             return ret
+
+    def value_counts(
+        self,
+        subset=None,
+        normalize=False,
+        sort=True,
+        ascending=False,
+        dropna=True,
+    ):
+        """
+        Return a Series containing counts of unique rows in the DataFrame.
+
+        Parameters
+        ----------
+        subset: list-like, optional
+            Columns to use when counting unique combinations.
+        normalize: bool, default False
+            Return proportions rather than frequencies.
+        sort: bool, default True
+            Sort by frequencies.
+        ascending: bool, default False
+            Sort in ascending order.
+        dropna: bool, default True
+            Don't include counts of rows that contain NA values.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        The returned Series will have a MultiIndex with one level per input
+        column. By default, rows that contain any NA values are omitted from
+        the result. By default, the resulting Series will be in descending
+        order so that the first element is the most frequently-occurring row.
+
+        Examples
+        --------
+        >>> df = pd.DataFrame({'num_legs': [2, 4, 4, 6],
+                            'num_wings': [2, 0, 0, 0]},
+                            index=['falcon', 'dog', 'cat', 'ant'])
+        >>> df.value_counts()
+        num_legs  num_wings
+        4         0            2
+        2         2            1
+        6         0            1
+        dtype: int64
+        """
+        if subset:
+            diff = set(subset) - set(self._data)
+            if len(diff) != 0:
+                raise KeyError(f"columns {diff} do not exist")
+        columns = subset
+        if subset is None:
+            columns = list(self._data.names)
+        result = (
+            self.groupby(
+                by=columns,
+                sort=True,
+                dropna=dropna,
+            )
+            .size()
+            .astype("int64")
+        )
+        if sort:
+            result = result.sort_values(ascending=ascending)
+        if normalize:
+            result = result / float(result._column.sum())
+        # Pandas always returns MultiIndex even if only one column.
+        if not isinstance(result.index, MultiIndex):
+            if isinstance(result.index, StringIndex):
+                temp_df = result.to_frame().reset_index()
+                temp_df = temp_df[temp_df._column_names[0]]
+                result.index = MultiIndex.from_frame(
+                    temp_df, names=[result.index.name]
+                )
+            else:
+                result.index = MultiIndex.from_frame(
+                    DataFrame(result.index.values), names=[result.index.name]
+                )
+        return result
 
 
 def from_dataframe(df, allow_copy=False):
