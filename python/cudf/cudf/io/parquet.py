@@ -698,7 +698,7 @@ def _generate_filename():
 
 
 def _get_estimated_file_size(df):
-    # NOTE: This is purely a guesstimator method
+    # NOTE: This is purely a guesstimation method
     # and the y = mx+c has been arrived
     # after extensive experimentation of parquet file size
     # vs dataframe sizes.
