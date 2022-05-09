@@ -59,7 +59,7 @@ class MultiFragmentInRegArray {
   //------------------------------------------------------------------------------
   // HELPER FUNCTIONS
   //------------------------------------------------------------------------------
-  __device__ __host__ __forceinline__ uint32_t bfe(const uint32_t& data,
+  __host__ __device__ __forceinline__ uint32_t bfe(const uint32_t& data,
                                                    uint32_t bit_start,
                                                    uint32_t num_bits) const
   {
@@ -71,7 +71,7 @@ class MultiFragmentInRegArray {
 #endif
   }
 
-  __device__ __host__ __forceinline__ void bfi(uint32_t& data,
+  __host__ __device__ __forceinline__ void bfi(uint32_t& data,
                                                uint32_t bits,
                                                uint32_t bit_start,
                                                uint32_t num_bits) const
@@ -97,7 +97,6 @@ class MultiFragmentInRegArray {
   {
     uint32_t val = 0;
 
-    // #pragma unroll
     for (uint32_t i = 0; i < FRAGMENTS_PER_ITEM; ++i) {
       val = val | bfe(data[i], index * BITS_PER_FRAG_ITEM, BITS_PER_FRAG_ITEM)
                     << (i * BITS_PER_FRAG_ITEM);
@@ -107,7 +106,6 @@ class MultiFragmentInRegArray {
 
   __host__ __device__ __forceinline__ void Set(uint32_t index, uint32_t value)
   {
-    // #pragma unroll
     for (uint32_t i = 0; i < FRAGMENTS_PER_ITEM; ++i) {
       uint32_t frag_bits = bfe(value, i * BITS_PER_FRAG_ITEM, BITS_PER_FRAG_ITEM);
       bfi(data[i], frag_bits, index * BITS_PER_FRAG_ITEM, BITS_PER_FRAG_ITEM);
