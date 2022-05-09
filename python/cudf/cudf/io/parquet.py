@@ -726,14 +726,14 @@ class ParquetDatasetWriter:
 
     Parameters
     ----------
-    path : str or s3 and URL
-        A Local directory path/s3 URL. Will be used as Root Directory
+    path : str
+        A local directory path or S3 URL. Will be used as root directory
         path while writing a partitioned dataset.
     partition_cols : list
         Column names by which to partition the dataset
         Columns are partitioned in the order they are given
     index : bool, default None
-        If ``True``, include the dataframe’s index(es) in the file output.
+        If ``True``, include the dataframe's index(es) in the file output.
         If ``False``, they will not be written to the file. If ``None``,
         index(es) other than RangeIndex will be saved as columns.
     compression : {'snappy', None}, default 'snappy'
@@ -761,7 +761,7 @@ class ParquetDatasetWriter:
 
     Both the methods will generate the same directory structure
 
-    .. code-block:: bash
+    .. code-block:: none
 
         dataset/
             a=1
