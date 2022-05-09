@@ -1,116 +1,104 @@
 # cuDF Architecture
 
-The cuDF library is a GPU-accelerated version of the [Pandas](https://pandas.pydata.org/) library.
-Its primary goals are pandas API compatibility and performance.
-Each of these has certain implications that inform the design of the library.
+The cuDF library is a GPU-accelerated, [Pandas-like](https://pandas.pydata.org/) DataFrame library.
+pandas APIs provide users a greate deal of power and flexibility, and we aim to match that.
+As a result, a key design challenge for cuDF is finding the simplest, most performant approaches to mimic pandas APIs.
 
-**pandas compatibility**: We endeavor to expose the same classes, methods, and free functions.
-Ideally, cuDF and pandas should be interchangeable such that one library is a drop-in replacement for the other.
-Note that this requirement works both ways: replacing cuDF with pandas also works as expected.
-This consideration of two-way compatibility is an important guiding principle in our library's design.
+At a high level, cuDF is structured in three layers, each of which serves a distinct purpose in this regard:
 
-**Performance**: The core of cuDF's performance comes from the underlying `libcudf` C++ library.
-Most of cuDF's code is essentially a complex wrapper to provide a pandas-like interface to libcudf.
-For large datasets, cuDF can usually rely on libcudf to provide speedups over CPU libraries.
-However, the overhead of matching pandas's complex APIs often masks these performance benefits for smaller datasets.
-Much of cuDF's architecture is designed to robustly mimic pandas APIs with minimal performance overhead.
+1. The `Frame` layer: The user-facing implementation of pandas-like data structures.
+2. The `Column` layer: The core internal data structures used to bridge the gap to our lower-level implementations.
+3. The `Cython` layer: The wrappers around the fast C++ `libcudf` library.
 
-**TODO**: Talk about interop with other libraries
-**TODO**: Talk more about Arrow?
-
-At a high level, cuDF is structured in three layers:
-
-1. The `Frame` layer: The user-facing implementation of pandas data structures.
-2. The `Column` layer: The internal Arrow-like, typed columnar data representation.
-3. The `Cython` layer: A set of wrappers around the C++ libcudf library.
-
-The emphasis of this document is describing each of these layers in turn.
+In this document we will review each of these layers, their roles, and the requisite tradeoffs.
 Afterwards, we provide some context on other, ancillary structural components of the package.
+
+**TODO**: Talk about interop with other libraries. This fits in multiple places.
 
 
 ## The Frame layer
 
-Broadly speaking, the `Frame` layer is composed of two types of objects:
-indexed table-like objects (`cudf.Series` and `cudf.DataFrame`) and index objects.
-All of these classes inherit from one or both of the two base classes in this layer: `Frame` and `BaseIndex`.
+Broadly speaking, the `Frame` layer is composed of two types of objects: indexed tables and indexes.
+The mapping between these types and cuDF data types is not obvious, however.
+To ease our way into understanding why, let's first take a birds-eye view of the Frame layer.
+
+All classes in this layer inherit from one or both of the two base classes in this layer: `Frame` and `BaseIndex`.
+The eponymous `Frame` class is, at its core, a simple tabular data structure composed of columnar data.
+Some types of `Frame` contain indexes; in particular, any `DataFrame` or `Series` has an index.
+However, as a general container of columnar data, `Frame` is also the parent class for most types of index.
+
+`BaseIndex`, meanwhile, is essentially an abstract base class encoding the `pandas.Index` API.
+Various subclasses of `BaseIndex` implement this API in specific ways depending on their underlying data.
+Most indexes consist of a single column (of e.g. strings), but `RangeIndex` and `MultiIndex` are clear exceptions.
+As a result, using a single abstract parent provides the flexibility we need to support these different types.
+
+With those preliminaries out of the way, let's dive in a little bit deeper.
 
 ### Frames
-The eponymous `Frame` class contains a set of Columns and defines the methods common to all of them.
-A `Frame` stores its Columns in an instance of the `ColumnAccessor` class discussed in the next section.
-All user-facing classes except `RangeIndex` (see below) are subclasses of `Frame`.
-The `Frame` class hierarchy is somewhat complex, reflecting the subtleties of matching the pandas API.
-There are two main subclasses of interest here:
 
-- An `IndexedFrame` is a `Frame` that has an `Index`, i.e. a `DataFrame` or `Series`.
-  Due to pandas compatibility considerations, methods that _could_ be defined for any `Frame` but are not defined for
-  pandas `Index` objects should be defined in `IndexedFrame`.
-- A `SingleColumnFrame` is a `Frame` with a single Column.
-  `Series` and every type of `Index` except `MultiIndex` is a `SingleColumnFrame`.
+`Frame` exposes numerous methods common to all pandas data structures.
+Any methods that have the same API across `Series`, `DataFrame`, and `Index` should be defined here.
+Additionally any (internal) methods that could be used to share code between those classes may also be defined here.
 
-A `Series` is both an `IndexedFrame` and a `SingleColumnFrame`;  all other API classes inherit from one of these two.
+The primary internal subclass of `Frame` is `IndexedFrame`, a `Frame` with an index.
+An `IndexedFrame` represents the first type of object mentioned above: indexed tables.
+In particular, `IndexedFrame` is the parent class for `DataFrame` and `Series`.
+Any pandas methods that are defined for those two classes should be defined here.
+
+The second internal subclass of `Frame` is `SingleColumnFrame`.
+As you may surmise, it is a `Frame` with a single column of data.
+This class is the parent for most types of indexes as well as `Series` (note the diamond inheritance pattern here).
+While `IndexedFrame` provides a large amount of functionality, this class is much simpler.
+It adds some simple APIs provided by all 1D pandas objects, and it flattens outputs where needed.
 
 ### Indexes
 
-The class hierarchy for Indexes in cuDF is particularly complex due to some of the constraints of the pandas API.
-Before introducing that complexity, let's look at the simpler pattern structure used by the majority of classes.
-At the top of this hierarchy is the `BaseIndex` class,  the parent for all indexes.
-This class has no state and is largely intended to function as an abstract base class for all indexes.
-
-```{note}
-Certain functions may be implemented in `BaseIndex` if they are truly identical for all types of indexes.
+While we've highlighted some exceptional cases of Indexes before, let's start with the base cases here first.
+`BaseIndex` is generally intended to be a true abstract class, i.e. it should contain no implementations.
+Functions may be implemented in `BaseIndex` if they are truly identical for all types of indexes.
 However, currently most such implementations are not applicable to all subclasses and will be eventaully be removed.
-```
 
-Almost all indexes are subclasses of `GenericIndex`, which has the following class hierarchy:
+Almost all indexes are subclasses of `GenericIndex`, a single-columned index with the class hierarchy:
 `Frame`->`SingleColumnFrame`->`GenericIndex`<-`BaseIndex`.
-In other words, a typical index in cuDF is a `Frame`s composed of a single Column.
-For instance, integer, float, or string indexes are all examples of indexes backed by a single Column of GPU data.
-While these cases represent the most common types of indexes, however, there are three notable exceptions.
+Integer, float, or string indexes are all examples single Column indexes.
+Most `GenericIndex` methods are inherited from `Frame`, saving us the trouble of rewriting them.
 
-The first problematic case is the `RangeIndex`.
-`RangeIndex` is the only user-facing class that is not actually backed by GPU memory.
-Like `pandas.RangeIndex` (or a Python `range`), this class is meant to _prevent_ memory allocations.
-As a result, while `RangeIndex` is a `BaseIndex`, it is the only index type that does not also inherit from `Frame`.
-Where possible, `RangeIndex` methods avoid materializing Columns to minimize device memory usage.
-A subset of its functions are implemented by converting to an `Int64Index`, but we endeavor to keep these to a minimum.
+We now consider the three main exceptions to this model:
 
-The second case is the `MultiIndex`.
-For obvious reasons, `MultiIndex` inherits directly from `Frame` rather than from `SingleColumnFrame`.
-Like `RangeIndex`, almost all of its methods must be implemented differently from other types of indexes.
-
-The final issue is the `Index` class itself.
-In `pandas`, the `Index` class is the parent of all other types.
-Although this makes sense conceptually, this inheritance pattern leads to significant headaches in concert with another
-pandas decision.
-
-The `pandas.Index` constructor is essentially a factory that will return the appropriate type of index depending on the
-data type of the parameters.
-For example constructing an index from a list of integers returns an `Int64Index`.
-Python classes can support this type of construction via overrides of the `__new__` method.
-Unfortunately, overriding `__new__` rather than (or in addition to `__init__`) is significantly more cumbersome.
-Moreover, once `__new__` is overridden for a class, all its subclasses must also do the same.
-This requirement makes it significantly more difficult to maintain complex inheritance trees.
-Considering that multiple inheritance is used by all index classes, we wanted a way to avoid this complexity.
-
-To solve this problem, we instead define `cudf.Index` as a subclass of `BaseIndex`.
-No other index classes inherit from `cudf.Index`, nor does it define any important members.
-`Index.__new__` will return the appropriate subclass of `BaseIndex` for a given input, matching pandas behavior.
-A custom metaclass ensures that subclasses of `BaseIndex` appear as subclasses of `Index` to `isinstance` or `issubclass`.
-This implementation simplifies all other index types while allowing `cudf.Index` to behave like `pandas.Index`.
-
-**TODO**: Add a note about how to figure out where to add new APIs. Frame is where you should start, then if it's not
-defined for Indexes, go down to IndexedFrame, then determine if it's DataFrame- or Series-only. However, if there is
-shared logic between classes it may often make sense to implement a version of the function in Frame (or perhaps an
-internal helper) but then override it in the child classes.
+- A `RangeIndex` is not backed by a column of data, so it inherits directly from `BaseIndex` alone.
+  Wherever possible, its methods have special implementations designed to avoid materializing columns.
+  Where such an implementation is infeasible, we fall back to converting it to an integer index first instead.
+- A `MultiIndex` is backed by _multiple_ columns of data.
+  Therefore, its inheritance hierarchy looks like `Frame`->``MultiIndex`<-`BaseIndex`.
+  Some of its more `Frame`-like methods may be inherited,
+  but many others must be reimplemented since in many cases a `MultiIndex` is not expected to behave like a `Frame`.
+- Just like in pandas, `Index` itself can never be instantiated.
+  `pandas.Index` is the parent class for indexes,
+  but its constructor returns an appropriate subclass depending on the input data type and shape.
+  Unfortunately, mimicking this behavior requires overriding `__new__`,
+  which in turn makes shared intialization across inheritance trees much more cumbersome to manage.
+  To reenable sharing constructor logic across different index classes,
+  we instead define `BaseIndex` as the parent class of all indexes.
+  `Index` inherits from `BaseIndex`, but it masquerades as a `BaseIndex` to match pandas.
+  This class should contain no implementations since it is simply a factory for other indexes.
 
 
 ## The Column layer
+
+**TODO**: Talk more about Arrow?
 
 The next layer in the cuDF stack is the Column layer.
 The principal objects in the Column layer are the ColumnAccessor and the various Column classes.
 We now consider these objects and their roles.
 
 ### ColumnAccessor
+
+
+The underlying composition
+
+contains a set of Columns and defines the methods common to all of them.
+A `Frame` stores its Columns in an instance of the `ColumnAccessor` class discussed in the next section.
+
 
 A ColumnAccessor is a dictionary-like interface to a sequence of Columns that is used to store the Columns in a Frame.
 Most Frame operations are implemented as loops over ColumnAccessors that operate on their underlying Columns.
