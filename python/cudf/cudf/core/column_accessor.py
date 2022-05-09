@@ -149,7 +149,7 @@ class ColumnAccessor(abc.MutableMapping):
         return obj
 
     def __iter__(self):
-        return self._data.__iter__()
+        return iter(self._data)
 
     def __getitem__(self, key: Any) -> ColumnBase:
         return self._data[key]
@@ -158,7 +158,7 @@ class ColumnAccessor(abc.MutableMapping):
         self.set_by_label(key, value)
 
     def __delitem__(self, key: Any):
-        self._data.__delitem__(key)
+        del self._data[key]
         self._clear_cache()
 
     def __len__(self) -> int:

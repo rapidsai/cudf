@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+
 repos:
       - repo: https://github.com/PyCQA/isort
         rev: 5.6.4
@@ -56,20 +58,24 @@ repos:
         hooks:
               - id: pydocstyle
                 args: ["--config=python/.flake8"]
-      - repo: local
+                exclude: |
+                    (?x)^(
+                    ci|
+                    cpp|
+                    conda|
+                    docs|
+                    java|
+                    notebooks
+                    )
+      - repo: https://github.com/pre-commit/mirrors-clang-format
+        rev: v11.1.0
         hooks:
               - id: clang-format
-                # Using the pre-commit stage to simplify invocation of all
-                # other hooks simultaneously (via any other hook stage).  This
-                # can be removed if we also move to running clang-format
-                # entirely through pre-commit.
-                stages: [commit]
-                name: clang-format
-                description: Format files with ClangFormat.
-                entry: clang-format -i
-                language: system
                 files: \.(cu|cuh|h|hpp|cpp|inl)$
-                args: ['-fallback-style=none']
+                types_or: [file]
+                args: ['-fallback-style=none', '-style=file', '-i']
+      - repo: local
+        hooks:
               - id: cmake-format
                 name: cmake-format
                 entry: ./cpp/scripts/run-cmake-format.sh cmake-format
@@ -78,7 +84,7 @@ repos:
                 # Note that pre-commit autoupdate does not update the versions
                 # of dependencies, so we'll have to update this manually.
                 additional_dependencies:
-                  - cmake-format==0.6.11
+                  - cmakelang==0.6.13
               - id: cmake-lint
                 name: cmake-lint
                 entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
@@ -87,7 +93,7 @@ repos:
                 # Note that pre-commit autoupdate does not update the versions
                 # of dependencies, so we'll have to update this manually.
                 additional_dependencies:
-                  - cmake-format==0.6.11
+                  - cmakelang==0.6.13
               - id: copyright-check
                 name: copyright-check
                 # This hook's use of Git tools appears to conflict with

@@ -148,7 +148,7 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
 
   auto schema = std::make_shared<arrow::Schema>(schema_vector);
 
-  return std::make_pair(
+  return std::pair(
     std::make_unique<cudf::table>(std::move(columns)),
     arrow::Table::Make(
       schema, {int64array, string_array, dict_array, boolarray, list_array, struct_array}));

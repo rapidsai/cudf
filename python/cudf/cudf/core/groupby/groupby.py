@@ -207,6 +207,30 @@ class GroupBy(Serializable, Reducible, Scannable):
             .reset_index(drop=True)
         )
 
+    def rank(
+        self,
+        method="average",
+        ascending=True,
+        na_option="keep",
+        pct=False,
+        axis=0,
+    ):
+        """
+        Return the rank of values within each group.
+        """
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        def rank(x):
+            return getattr(x, "rank")(
+                method=method,
+                ascending=ascending,
+                na_option=na_option,
+                pct=pct,
+            )
+
+        return self.agg(rank)
+
     @cached_property
     def _groupby(self):
         return libgroupby.GroupBy(

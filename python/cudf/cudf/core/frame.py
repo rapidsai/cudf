@@ -538,7 +538,7 @@ class Frame(BinaryOperand, Scannable):
         Parameters
         ----------
         dtype : str or numpy.dtype, optional
-            The dtype to pass to :meth:`numpy.asarray`.
+            The dtype to pass to :func:`numpy.asarray`.
         copy : bool, default False
             Whether to ensure that the returned value is not a view on
             another array. Note that ``copy=False`` does not *ensure* that
@@ -573,7 +573,7 @@ class Frame(BinaryOperand, Scannable):
         Parameters
         ----------
         dtype : str or numpy.dtype, optional
-            The dtype to pass to :meth:`numpy.asarray`.
+            The dtype to pass to :func:`numpy.asarray`.
         copy : bool, default True
             Whether to ensure that the returned value is not a view on
             another array. This parameter must be ``True`` since cuDF must copy
@@ -1141,7 +1141,13 @@ class Frame(BinaryOperand, Scannable):
                 filled_data[col_name] = col.copy(deep=True)
 
         return self._mimic_inplace(
-            self._from_data(data=filled_data),
+            self._from_data(
+                data=ColumnAccessor._create_unsafe(
+                    data=filled_data,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                )
+            ),
             inplace=inplace,
         )
 
@@ -3350,7 +3356,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def to_string(self):
-        """
+        r"""
         Convert to string
 
         cuDF uses Pandas internals for efficient string formatting.
@@ -3367,9 +3373,9 @@ class Frame(BinaryOperand, Scannable):
         >>> df['key'] = [0, 1, 2]
         >>> df['val'] = [float(i + 10) for i in range(3)]
         >>> df.to_string()
-        '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
+        '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
         """
-        return self.__repr__()
+        return repr(self)
 
     def __str__(self):
         return self.to_string()

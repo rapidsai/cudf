@@ -80,8 +80,15 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     list(APPEND ARROW_PYTHON_OPTIONS "ARROW_PYTHON ON")
     # Arrow's logic to build Boost from source is busted, so we have to get it from the system.
     list(APPEND ARROW_PYTHON_OPTIONS "BOOST_SOURCE SYSTEM")
-    list(APPEND ARROW_PYTHON_OPTIONS "Thrift_SOURCE BUNDLED")
     list(APPEND ARROW_PYTHON_OPTIONS "ARROW_DEPENDENCY_SOURCE AUTO")
+  endif()
+
+  set(ARROW_PARQUET_OPTIONS "")
+  if(ENABLE_PARQUET)
+    # Arrow's logic to build Boost from source is busted, so we have to get it from the system.
+    list(APPEND ARROW_PARQUET_OPTIONS "BOOST_SOURCE SYSTEM")
+    list(APPEND ARROW_PARQUET_OPTIONS "Thrift_SOURCE BUNDLED")
+    list(APPEND ARROW_PARQUET_OPTIONS "ARROW_DEPENDENCY_SOURCE AUTO")
   endif()
 
   # Set this so Arrow correctly finds the CUDA toolkit when the build machine does not have the CUDA
@@ -106,6 +113,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
             "ARROW_S3 ${ENABLE_S3}"
             "ARROW_ORC ${ENABLE_ORC}"
             # e.g. needed by blazingsql-io
+            ${ARROW_PARQUET_OPTIONS}
             "ARROW_PARQUET ${ENABLE_PARQUET}"
             ${ARROW_PYTHON_OPTIONS}
             # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off

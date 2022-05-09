@@ -37,7 +37,7 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
 {
   // If there are no rows in the input, return successfully
   if (input.num_columns() == 0 || input.num_rows() == 0) {
-    return std::make_pair(std::make_unique<column>(), table_view{});
+    return std::pair(std::make_unique<column>(), table_view{});
   }
 
   // Check datatype homogeneity
@@ -54,7 +54,7 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
   auto splits = std::vector<size_type>(splits_iter, splits_iter + input.num_rows() - 1);
   auto output_column_views = split(output_column->view(), splits, stream);
 
-  return std::make_pair(std::move(output_column), table_view(output_column_views));
+  return std::pair(std::move(output_column), table_view(output_column_views));
 }
 }  // namespace detail
 

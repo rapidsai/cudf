@@ -32,9 +32,6 @@
 #include <thrust/reverse.h>
 
 namespace cudf {
-
-using hash_value_type = uint32_t;
-
 namespace detail {
 
 /**

@@ -154,7 +154,7 @@ include(cmake/thirdparty/get_gtest.cmake)
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
-include(cmake/Modules/FindcuFile.cmake)
+include(cmake/thirdparty/get_cufile.cmake)
 # find KvikIO
 include(cmake/thirdparty/get_kvikio.cmake)
 
@@ -162,15 +162,20 @@ include(cmake/thirdparty/get_kvikio.cmake)
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
+  list(APPEND dependencies cuco KvikIO ZLIB nvcomp)
+  if(TARGET cufile::cuFile_interface)
+    list(APPEND dependencies cuFile)
+  endif()
+
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
-    rapids_export_find_package_file(
-      ${METADATA_KIND} "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
-    )
-    rapids_export_package(${METADATA_KIND} cuco cudf-exports)
-    rapids_export_package(${METADATA_KIND} ZLIB cudf-exports)
-    rapids_export_package(${METADATA_KIND} cuFile cudf-exports)
-    rapids_export_package(${METADATA_KIND} nvcomp cudf-exports)
+    foreach(dep IN LISTS dependencies)
+      rapids_export_package(${METADATA_KIND} ${dep} cudf-exports)
+    endforeach()
   endforeach()
+
+  if(TARGET conda_env)
+    install(TARGETS conda_env EXPORT cudf-exports)
+  endif()
 endif()
 
 # ##################################################################################################
@@ -184,7 +189,6 @@ add_library(
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
   src/binaryop/binaryop.cpp
-  src/binaryop/compiled/binary_ops.cu
   src/binaryop/compiled/Add.cu
   src/binaryop/compiled/ATan2.cu
   src/binaryop/compiled/BitwiseAnd.cu
@@ -215,6 +219,7 @@ add_library(
   src/binaryop/compiled/ShiftRightUnsigned.cu
   src/binaryop/compiled/Sub.cu
   src/binaryop/compiled/TrueDiv.cu
+  src/binaryop/compiled/binary_ops.cu
   src/binaryop/compiled/util.cpp
   src/labeling/label_bins.cu
   src/bitmask/null_mask.cu
@@ -233,6 +238,7 @@ add_library(
   src/copying/gather.cu
   src/copying/get_element.cu
   src/copying/pack.cpp
+  src/copying/purge_nonempty_nulls.cu
   src/copying/reverse.cu
   src/copying/sample.cu
   src/copying/scatter.cu
@@ -297,6 +303,8 @@ add_library(
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
+  src/io/comp/nvcomp_adapter.cpp
+  src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
@@ -354,6 +362,7 @@ add_library(
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
+  src/lists/apply_boolean_mask.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
   src/lists/combine/concatenate_rows.cu
@@ -589,16 +598,12 @@ target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} libcudacxx::libcudacxx cudf::Thrust rmm::rmm
   PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
+          $<TARGET_NAME_IF_EXISTS:cuFile_interface>
 )
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
-endif()
-
-# Add cuFile interface if available
-if(TARGET cuFile::cuFile_interface)
-  target_link_libraries(cudf PRIVATE cuFile::cuFile_interface)
 endif()
 
 if(CUDA_STATIC_RUNTIME)

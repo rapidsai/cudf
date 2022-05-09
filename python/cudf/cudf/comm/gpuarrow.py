@@ -119,12 +119,12 @@ class GpuArrowNodeReader:
 
     @property
     def data_raw(self):
-        "Accessor for the data buffer as a device array"
+        """Accessor for the data buffer as a device array"""
         return self._series._column.data_array_view
 
     @property
     def null_raw(self):
-        "Accessor for the null buffer as a device array"
+        """Accessor for the null buffer as a device array"""
         return self._series._column.mask_array_view
 
     def make_series(self):
