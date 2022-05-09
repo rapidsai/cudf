@@ -58,7 +58,7 @@ namespace cudf {
  * @endcode
  *
  * @param haystack The table containing search space.
- * @param needles Values to find insert locations for them in the search space.
+ * @param needles Values for which to find the insert locations in the search space.
  * @param column_order Vector of column sort order.
  * @param null_precedence Vector of null_precedence enums needles.
  * @param mr Device memory resource used to allocate the returned column's device memory.
@@ -98,7 +98,7 @@ std::unique_ptr<column> lower_bound(
  * @endcode
  *
  * @param haystack The table containing search space.
- * @param needles Values to find insert locations for them in the search space.
+ * @param needles Values for which to find the insert locations in the search space.
  * @param column_order Vector of column sort order.
  * @param null_precedence Vector of null_precedence enums needles.
  * @param mr Device memory resource used to allocate the returned column's device memory.
@@ -126,7 +126,7 @@ std::unique_ptr<column> upper_bound(
  *
  * @param haystack The column containing search space.
  * @param needle A scalar value to check for existence in the search space.
- * @return A boolean value indicating if the given @p needle value exists in the @p haystack column.
+ * @return true if the given @p needle value exists in the @p haystack column.
  */
 bool contains(column_view const& haystack, scalar const& needle);
 
@@ -134,7 +134,7 @@ bool contains(column_view const& haystack, scalar const& needle);
  * @brief Check if the given @p needles values exists in the @p haystack column.
  *
  * The new column will have type BOOL and have the same size and null mask as the input @p needles
- * column.  That is, any null row in the @p needles column will result in a nul row in the output
+ * column. That is, any null row in the @p needles column will result in a nul row in the output
  * column.
  *
  * @throws cudf::logic_error If `haystack.type() != needles.type()`
