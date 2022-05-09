@@ -12,7 +12,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
+from cudf.core._compat import PANDAS_GE_120, PANDAS_LT_140
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
@@ -596,7 +596,7 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
 
 
 @pytest.mark.parametrize(
-    "df",
+    "gs",
     [
         cudf.Series([1, 2, 3]),
         cudf.Series([None]),
@@ -648,11 +648,11 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
     ],
 )
 @pytest.mark.parametrize("dropna", [True, False])
-def test_series_mode(df, dropna):
-    pdf = df.to_pandas()
+def test_series_mode(gs, dropna):
+    ps = gs.to_pandas()
 
-    expected = pdf.mode(dropna=dropna)
-    actual = df.mode(dropna=dropna)
+    expected = ps.mode(dropna=dropna)
+    actual = gs.mode(dropna=dropna)
 
     assert_eq(expected, actual, check_dtype=False)
 
@@ -1248,7 +1248,8 @@ def test_series_upcast_float16(data):
             pd.RangeIndex(4, -1, -2),
             marks=[
                 pytest.mark.xfail(
-                    reason="https://github.com/pandas-dev/pandas/issues/43591"
+                    condition=PANDAS_LT_140,
+                    reason="https://github.com/pandas-dev/pandas/issues/43591",
                 )
             ],
         ),
