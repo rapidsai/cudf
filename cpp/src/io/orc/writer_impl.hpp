@@ -304,7 +304,7 @@ class writer::impl {
         stats_dtypes(std::move(sdt)),
         col_types(std::move(sct)){};
 
-    // blobs for the rowgroups and stripes. Not persisted
+    // blobs for the rowgroups. Not persisted
     std::vector<ColStatsBlob> rowgroup_blobs;
 
     rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
@@ -322,13 +322,20 @@ class writer::impl {
     {
       stripe_stat_chunks.clear();
       stripe_stat_merge.clear();
+      string_pools.clear();
       stats_dtypes.clear();
       col_types.clear();
       num_rows = 0;
     }
 
+    void persist(int num_table_rows,
+                 bool single_write_mode,
+                 intermediate_statistics& intermediate_stats,
+                 rmm::cuda_stream_view stream);
+
     std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
     std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
+    std::vector<rmm::device_uvector<char>> string_pools;
     std::vector<statistics_dtype> stats_dtypes;
     std::vector<data_type> col_types;
     int num_rows = 0;

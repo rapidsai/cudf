@@ -24,7 +24,7 @@ from cudf.testing._utils import (
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     if dtype not in ["float32", "float64"] and nulls in ["some", "all"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+        pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame()
     id_vars = []
@@ -87,7 +87,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_df_stack(nulls, num_cols, num_rows, dtype):
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+        pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame()
     for i in range(num_cols):
@@ -139,7 +139,7 @@ def test_df_stack_reset_index():
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
 
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+        pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
@@ -176,7 +176,7 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
 def test_tile(nulls, num_cols, num_rows, dtype, count):
 
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
-        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+        pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
@@ -269,7 +269,7 @@ def test_df_merge_sorted(nparts, keys, na_position, ascending):
     expect = df.sort_values(
         keys_1, na_position=na_position, ascending=ascending
     )
-    result = cudf.merge_sorted(
+    result = cudf.core.reshape._merge_sorted(
         dfs, keys=keys, na_position=na_position, ascending=ascending
     )
     if keys:
@@ -290,7 +290,8 @@ def test_df_merge_sorted_index(nparts, index, ascending):
     )
 
     expect = df.sort_index(ascending=ascending)
-    result = cudf.merge_sorted(dfs, by_index=True, ascending=ascending)
+    with pytest.warns(FutureWarning, match="deprecated and will be removed"):
+        result = cudf.merge_sorted(dfs, by_index=True, ascending=ascending)
 
     assert_eq(expect.index, result.index)
 
@@ -317,7 +318,7 @@ def test_df_merge_sorted_ignore_index(keys, na_position, ascending):
     expect = df.sort_values(
         keys_1, na_position=na_position, ascending=ascending
     )
-    result = cudf.merge_sorted(
+    result = cudf.core.reshape._merge_sorted(
         dfs,
         keys=keys,
         na_position=na_position,
@@ -347,7 +348,7 @@ def test_series_merge_sorted(nparts, key, na_position, ascending):
     )
 
     expect = df.sort_values(na_position=na_position, ascending=ascending)
-    result = cudf.merge_sorted(
+    result = cudf.core.reshape._merge_sorted(
         dfs, na_position=na_position, ascending=ascending
     )
 
