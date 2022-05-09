@@ -24,7 +24,7 @@ s3fs = pytest.importorskip("s3fs")
 def endpoint_port():
     # Return a free port per worker session.
     sock = socket.socket()
-    sock.bind(("", 0))
+    sock.bind(("127.0.0.1", 0))
     return sock.getsockname()[1]
 
 
