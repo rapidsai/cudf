@@ -974,9 +974,7 @@ class ParquetDatasetWriter:
                 if current_file_size > self.max_file_size:
                     # if the file is too large, compute metadata for
                     # smaller chunks
-                    parts = int(
-                        math.ceil(current_file_size / self.max_file_size)
-                    )
+                    parts = math.ceil(current_file_size / self.max_file_size)
                     new_offsets = list(
                         range(start, end, int((end - start) / parts))
                     )[1:]
