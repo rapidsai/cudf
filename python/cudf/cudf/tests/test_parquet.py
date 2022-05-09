@@ -1698,7 +1698,8 @@ def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
 
 
 @pytest.mark.parametrize(
-    "max_file_size,max_file_size_in_bytes", [(100, 100), ("1000KB", 1000000)]
+    "max_file_size,max_file_size_in_bytes",
+    [("500KB", 500000), ("1000KB", 1000000)],
 )
 def test_parquet_writer_chunked_max_file_size(
     tmpdir_factory, max_file_size, max_file_size_in_bytes
@@ -1744,8 +1745,8 @@ def test_parquet_writer_chunked_max_file_size(
         # Validate file sizes with some extra 1000
         # bytes buffer to spare
         assert os.path.getsize(each_file) <= (
-            max_file_size_in_bytes + 1000
-        ), "File exceeded max_file_sizec"
+            max_file_size_in_bytes
+        ), "File exceeded max_file_size"
 
 
 def test_parquet_writer_chunked_max_file_size_error():

@@ -697,9 +697,17 @@ def _generate_filename():
     return uuid4().hex + ".parquet"
 
 
-def get_estimated_file_size(df):
+def _get_estimated_file_size(df):
+    # NOTE: This is purely a guesstimator method
     df_mem_usage = df.memory_usage().sum()
-    file_size = df_mem_usage // 2.5
+    # Parquet file size of a dataframe with all unique values
+    # seems to be 1/1.5 times as that of on GPU for >10000 rows
+    # and 0.6 times else-wise.
+    # Y(file_size) = M(0.6) * X(df_mem_usage) + C(705)
+    file_size = int((df_mem_usage * 0.6) + 705)
+    # 1000 Bytes accounted for row-group metadata.
+    # A parquet file takes roughly ~810 Bytes of metadata per column.
+    file_size = file_size + 1000 + (810 * df.shape[1])
     return file_size
 
 
@@ -951,54 +959,54 @@ class ParquetDatasetWriter:
             fs.mkdirs(prefix, exist_ok=True)
             current_offset = (part_offsets[idx], part_offsets[idx + 1])
             num_chunks = 1
+            parts = 1
+
             if self.max_file_size is not None:
                 # get the current partition
                 start, end = current_offset
                 sliced_df = grouped_df[start:end]
 
-                current_file_size = get_estimated_file_size(sliced_df)
+                current_file_size = _get_estimated_file_size(sliced_df)
                 if current_file_size > self.max_file_size:
                     # if the file is too large, compute metadata for
                     # smaller chunks
-                    parts = int(current_file_size // self.max_file_size)
+                    parts = int((current_file_size / self.max_file_size) + 0.5)
                     new_offsets = list(
                         range(start, end, int((end - start) / parts))
                     )[1:]
                     new_offsets.append(end)
                     num_chunks = len(new_offsets)
+                    parts = len(new_offsets)
                     full_offsets.extend(new_offsets)
                 else:
                     full_offsets.append(end)
 
                 curr_file_num = 0
-                while num_chunks > 0:
+                num_chunks = 0
+                while num_chunks < parts:
                     new_file_name = f"{self.filename}_{curr_file_num}.parquet"
                     new_full_path = fs.sep.join([prefix, new_file_name])
 
                     # Check if the same `new_file_name` exists and
                     # generate a `new_file_name`
-                    while (
-                        new_full_path in self._file_sizes
-                        and (
-                            self._file_sizes[new_full_path]
-                            + (current_file_size / num_chunks)
-                        )
-                        > self.max_file_size
-                    ):
+                    while new_full_path in self._file_sizes and (
+                        self._file_sizes[new_full_path]
+                        + (current_file_size / parts)
+                    ) > (self.max_file_size):
                         curr_file_num += 1
                         new_file_name = (
                             f"{self.filename}_{curr_file_num}.parquet"
                         )
                         new_full_path = fs.sep.join([prefix, new_file_name])
 
-                    self._file_sizes[new_full_path] = (
-                        current_file_size / num_chunks
-                    )
+                    self._file_sizes[new_full_path] = self._file_sizes.get(
+                        new_full_path, 0
+                    ) + (current_file_size / parts)
                     full_paths.append(new_full_path)
                     metadata_file_paths.append(
                         fs.sep.join([subdir, new_file_name])
                     )
-                    num_chunks -= 1
+                    num_chunks += 1
                     curr_file_num += 1
             else:
                 self.filename = self.filename or _generate_filename()
@@ -1009,8 +1017,6 @@ class ParquetDatasetWriter:
                 )
                 full_offsets.append(current_offset[1])
 
-        # return full_paths, metadata_file_paths, grouped_df,
-        # part_offsets, filename
         paths, metadata_file_paths, offsets = (
             full_paths,
             metadata_file_paths,
