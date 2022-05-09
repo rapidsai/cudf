@@ -17,9 +17,8 @@ from cudf.api.extensions import (
     register_index_accessor,
     register_series_accessor,
 )
-from cudf.core.scalar import (
-    Scalar,
-)
+from cudf.core.scalar import Scalar
+
 from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
