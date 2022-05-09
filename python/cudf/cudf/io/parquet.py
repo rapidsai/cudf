@@ -699,6 +699,9 @@ def _generate_filename():
 
 def _get_estimated_file_size(df):
     # NOTE: This is purely a guesstimator method
+    # and the y = mx+c has been arrived
+    # after extensive experimentation of parquet file size
+    # vs dataframe sizes.
     df_mem_usage = df.memory_usage().sum()
     # Parquet file size of a dataframe with all unique values
     # seems to be 1/1.5 times as that of on GPU for >10000 rows
