@@ -34,7 +34,7 @@ namespace cudf {
 /**
  * @brief Find smallest indices in a sorted table where values should be inserted to maintain order.
  *
- * For each row in @p needles, find the first index in @p haystack where inserting the row still
+ * For each row in `needles`, find the first index in `haystack` where inserting the row still
  * maintains its sort order.
  *
  * @code{.pseudo}
@@ -74,7 +74,7 @@ std::unique_ptr<column> lower_bound(
 /**
  * @brief Find largest indices in a sorted table where values should be inserted to maintain order.
  *
- * For each row in @p needles, find the last index in @p haystack where inserting the row still
+ * For each row in `needles`, find the last index in `haystack` where inserting the row still
  * maintains its sort order.
  *
  * @code{.pseudo}
@@ -112,7 +112,7 @@ std::unique_ptr<column> upper_bound(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Check if the given @p needle value exists in the @p haystack column.
+ * @brief Check if the given `needle` value exists in the `haystack` column.
  *
  * @throws cudf::logic_error If `haystack.type() != needle.type()`.
  *
@@ -126,15 +126,15 @@ std::unique_ptr<column> upper_bound(
  *
  * @param haystack The column containing search space.
  * @param needle A scalar value to check for existence in the search space.
- * @return true if the given @p needle value exists in the @p haystack column.
+ * @return true if the given `needle` value exists in the `haystack` column.
  */
 bool contains(column_view const& haystack, scalar const& needle);
 
 /**
- * @brief Check if the given @p needles values exists in the @p haystack column.
+ * @brief Check if the given `needles` values exists in the `haystack` column.
  *
- * The new column will have type BOOL and have the same size and null mask as the input @p needles
- * column. That is, any null row in the @p needles column will result in a nul row in the output
+ * The new column will have type BOOL and have the same size and null mask as the input `needles`
+ * column. That is, any null row in the `needles` column will result in a nul row in the output
  * column.
  *
  * @throws cudf::logic_error If `haystack.type() != needles.type()`
@@ -142,13 +142,13 @@ bool contains(column_view const& haystack, scalar const& needle);
  * @code{.pseudo}
  *   haystack = { 10, 20, 30, 40, 50 }
  *   needles  = { 20, 40, 60, 80 }
- *   result   = { false, true, false, true, false }
+ *   result   = { true, true, false, false }
  * @endcode
  *
  * @param haystack The column containing search space.
  * @param needles A column of values to check for existence in the search space.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return A BOOL column indicating if each element in @p needles exists in the search space.
+ * @return A BOOL column indicating if each element in `needles` exists in the search space.
  */
 std::unique_ptr<column> contains(
   column_view const& haystack,
