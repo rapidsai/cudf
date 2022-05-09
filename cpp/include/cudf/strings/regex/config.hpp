@@ -30,12 +30,13 @@ namespace strings {
  * @brief Compute the working memory size for evaluating a regex pattern
  * on a given strings column.
  *
- * This returns the size in bytes for the memory needed to evaluate the pattern
- * as well as the number of concurrent rows this memory can support.
- * The number of rows may be less than the size of the input column.
+ * This function returns the size in bytes of the memory needed to evaluate
+ * the given regex pattern in parallel over the returned output rows.
+ * The number of output rows will be less than or equal to the size of the
+ * input column.
  *
- * This computes only the state data memory size required to process
- * a regex pattern over the given strings column.
+ * This function computes only the state data memory size required to process
+ * a regex pattern over the output row count.
  * Specific functions that use regex may require additional working memory
  * unrelated to the regex processing.
  *
