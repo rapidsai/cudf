@@ -478,31 +478,30 @@ def test_write_chunked_parquet(s3_base, s3so):
     df1 = cudf.DataFrame({"b": [10, 11, 12], "a": [1, 2, 3]})
     df2 = cudf.DataFrame({"b": [20, 30, 50], "a": [3, 2, 1]})
     dirname = "chunked_writer_directory"
-    bname = "parquet"
+    bucket = "parquet"
     from cudf.io.parquet import ParquetDatasetWriter
 
     with s3_context(
-        s3_base=s3_base, bucket=bname, files={dirname: BytesIO()}
+        s3_base=s3_base, bucket=bucket, files={dirname: BytesIO()}
     ) as s3fs:
-        cw = ParquetDatasetWriter(
-            f"s3://{bname}/{dirname}",
+        with ParquetDatasetWriter(
+            f"s3://{bucket}/{dirname}",
             partition_cols=["a"],
             storage_options=s3so,
-        )
-        cw.write_table(df1)
-        cw.write_table(df2)
-        cw.close()
+        ) as cw:
+            cw.write_table(df1)
+            cw.write_table(df2)
 
         # TODO: Replace following workaround with:
-        # expect = cudf.read_parquet(f"s3://{bname}/{dirname}/",
+        # expect = cudf.read_parquet(f"s3://{bucket}/{dirname}/",
         # storage_options=s3so)
         # after the following bug is fixed:
         # https://issues.apache.org/jira/browse/ARROW-16438
 
         dfs = []
         for folder in {"a=1", "a=2", "a=3"}:
-            assert s3fs.exists(f"s3://{bname}/{dirname}/{folder}")
-            for file in s3fs.ls(f"s3://{bname}/{dirname}/{folder}"):
+            assert s3fs.exists(f"s3://{bucket}/{dirname}/{folder}")
+            for file in s3fs.ls(f"s3://{bucket}/{dirname}/{folder}"):
                 df = cudf.read_parquet("s3://" + file, storage_options=s3so)
                 dfs.append(df)
 
