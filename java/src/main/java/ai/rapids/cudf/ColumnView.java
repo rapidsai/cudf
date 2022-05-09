@@ -1769,22 +1769,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a new ColumnVector of {@link DType#BOOL8} elements containing true if the corresponding
-   * entry in haystack is contained in needles and false if it is not. The caller will be responsible
-   * for the lifecycle of the new vector.
+   * Returns a new column of {@link DType#BOOL8} elements having the same size as this column,
+   * each row value is true if the corresponding entry in this column is contained in the
+   * given searchSpace column and false if it is not.
+   * The caller will be responsible for the lifecycle of the new vector.
    *
    * example:
    *
-   *   haystack = { 10, 20, 30, 40, 50 }
-   *   needles  = { 20, 40, 60, 80 }
+   *   col         = { 10, 20, 30, 40, 50 }
+   *   searchSpace = { 20, 40, 60, 80 }
    *
    *   result = { false, true, false, true, false }
    *
-   * @param needles
+   * @param searchSpace
    * @return A new ColumnVector of type {@link DType#BOOL8}
    */
-  public final ColumnVector contains(ColumnView needles) {
-    return new ColumnVector(containsVector(getNativeView(), needles.getNativeView()));
+  public final ColumnVector contains(ColumnView searchSpace) {
+    return new ColumnVector(containsVector(getNativeView(), searchSpace.getNativeView()));
   }
 
   /**
@@ -4080,7 +4081,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
-  private static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
+  private static native long containsVector(long valuesHandle, long searchSpaceHandle) throws CudfException;
 
   private static native long transform(long viewHandle, String udf, boolean isPtx);
 
