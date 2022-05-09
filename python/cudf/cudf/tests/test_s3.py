@@ -23,8 +23,6 @@ moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
 requests = pytest.importorskip("requests")
 s3fs = pytest.importorskip("s3fs")
-flask = pytest.importorskip("flask")
-flask_cors = pytest.importorskip("flask_cors")
 
 
 @pytest.fixture(scope="session")
