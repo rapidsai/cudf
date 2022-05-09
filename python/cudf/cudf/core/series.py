@@ -736,7 +736,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         name = self.name or 0
         series = self._reindex(
             deep=kwargs.get('copy', True),
-            dtypes={self.name: self.dtype},
+            dtypes={name: self.dtype},
             index=index,
             columns=[name],
             inplace=False,
