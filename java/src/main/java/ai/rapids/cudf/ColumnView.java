@@ -1767,14 +1767,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a new ColumnVector of {@link DType#BOOL8} elements containing true if the corresponding
-   * entry in needles is contained in haystack and false if it is not. The caller will be responsible
-   * for the lifecycle of the new vector.
+   * Returns a new ColumnVector of {@link DType#BOOL8} elements containing true if the 
+   * corresponding entry in needles is contained in this column and false if it is not.
+   * The caller is responsible for the lifecycle of the new vector.
    *
-   * example:
+   * Example:
    *
-   *   haystack = { 10, 20, 30, 40, 50 }
-   *   needles  = { 20, 40, 60, 80 }
+   *   col     = { 10, 20, 30, 40, 50 }
+   *   needles = { 20, 40, 60, 80 }
    *
    *   result = { true, true, false, false }
    *
