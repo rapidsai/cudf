@@ -277,16 +277,6 @@ class device_row_comparator {
   std::optional<device_span<null_order const>> const _null_precedence;
 };  // class device_row_comparator
 
-template <typename... WeakOrderings>
-__device__ bool any_equal(weak_ordering result, weak_ordering v, WeakOrderings... vs)
-{
-  if constexpr (sizeof...(WeakOrderings) == 0) {
-    return result == v;
-  } else {
-    return result == v or any_equal(result, vs...);
-  }
-}
-
 /**
  * @brief Wraps and interprets the result of templated Comparator that returns a weak_ordering.
  * Returns true if the weak_ordering matches any of the templated values.
@@ -295,12 +285,12 @@ __device__ bool any_equal(weak_ordering result, weak_ordering v, WeakOrderings..
  * @tparam values weak_ordering parameter pack of orderings to interpret as true
  */
 template <typename Comparator, weak_ordering... values>
-struct weak_ordering_comparator_impl {
-  __device__ bool operator()(size_type const& lhs, size_type const& rhs)
-  {
-    return any_equal(comparator(lhs, rhs), values...);
-  }
-  Comparator comparator;
+struct weak_ordering_comparator_impl{
+    __device__ bool operator()(size_type const& lhs, size_type const& rhs){
+        weak_ordering const result = comparator(lhs, rhs);
+        return ( (result == values) || ...);
+   }
+   Comparator comparator;
 };
 
 /**
