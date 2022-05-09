@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <cudf/types.hpp>
+
 #include <cub/cub.cuh>
 
 #include <cstdint>
@@ -59,7 +61,7 @@ class MultiFragmentInRegArray {
   //------------------------------------------------------------------------------
   // HELPER FUNCTIONS
   //------------------------------------------------------------------------------
-  __host__ __device__ __forceinline__ uint32_t bfe(const uint32_t& data,
+  CUDF_HOST_DEVICE uint32_t bfe(const uint32_t& data,
                                                    uint32_t bit_start,
                                                    uint32_t num_bits) const
   {
@@ -71,7 +73,7 @@ class MultiFragmentInRegArray {
 #endif
   }
 
-  __host__ __device__ __forceinline__ void bfi(uint32_t& data,
+  CUDF_HOST_DEVICE void bfi(uint32_t& data,
                                                uint32_t bits,
                                                uint32_t bit_start,
                                                uint32_t num_bits) const
@@ -93,7 +95,7 @@ class MultiFragmentInRegArray {
   // ACCESSORS
   //------------------------------------------------------------------------------
  public:
-  __host__ __device__ __forceinline__ uint32_t Get(int32_t index) const
+  CUDF_HOST_DEVICE uint32_t Get(int32_t index) const
   {
     uint32_t val = 0;
 
@@ -104,7 +106,7 @@ class MultiFragmentInRegArray {
     return val;
   }
 
-  __host__ __device__ __forceinline__ void Set(uint32_t index, uint32_t value)
+  CUDF_HOST_DEVICE void Set(uint32_t index, uint32_t value)
   {
     for (uint32_t i = 0; i < FRAGMENTS_PER_ITEM; ++i) {
       uint32_t frag_bits = bfe(value, i * BITS_PER_FRAG_ITEM, BITS_PER_FRAG_ITEM);
@@ -115,14 +117,14 @@ class MultiFragmentInRegArray {
   //------------------------------------------------------------------------------
   // CONSTRUCTORS
   //------------------------------------------------------------------------------
-  __host__ __device__ __forceinline__ MultiFragmentInRegArray()
+  CUDF_HOST_DEVICE MultiFragmentInRegArray()
   {
     for (uint32_t i = 0; i < FRAGMENTS_PER_ITEM; ++i) {
       data[i] = 0;
     }
   }
 
-  __host__ __device__ __forceinline__ MultiFragmentInRegArray(uint32_t const (&array)[NUM_ITEMS])
+  CUDF_HOST_DEVICE MultiFragmentInRegArray(uint32_t const (&array)[NUM_ITEMS])
   {
     for (uint32_t i = 0; i < NUM_ITEMS; ++i) {
       Set(i, array[i]);
