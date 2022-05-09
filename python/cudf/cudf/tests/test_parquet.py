@@ -1699,7 +1699,7 @@ def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
 
 @pytest.mark.parametrize(
     "max_file_size,max_file_size_in_bytes",
-    [("500KB", 500000), ("1000KB", 1000000)],
+    [("500KB", 500000), ("MB", 1000000)],
 )
 def test_parquet_writer_chunked_max_file_size(
     tmpdir_factory, max_file_size, max_file_size_in_bytes
