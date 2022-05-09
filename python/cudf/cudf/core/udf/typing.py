@@ -17,8 +17,8 @@ from numba.core.typing.templates import (
 )
 from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
-from cudf.core.missing import NA
 
+from cudf.core.missing import NA
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
     arith_ops,
