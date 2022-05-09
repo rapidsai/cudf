@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
+import math
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack
@@ -973,7 +974,9 @@ class ParquetDatasetWriter:
                 if current_file_size > self.max_file_size:
                     # if the file is too large, compute metadata for
                     # smaller chunks
-                    parts = int((current_file_size / self.max_file_size) + 0.5)
+                    parts = int(
+                        math.ceil(current_file_size / self.max_file_size)
+                    )
                     new_offsets = list(
                         range(start, end, int((end - start) / parts))
                     )[1:]
