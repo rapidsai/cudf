@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#include <strings/regex/dispatcher.hpp>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+#include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -38,16 +36,14 @@ namespace {
  * @brief This functor handles replacing strings by applying the compiled regex pattern
  * and inserting the new string within the matched range of characters.
  */
-template <int stack_size>
 struct replace_regex_fn {
   column_device_view const d_strings;
-  reprog_device prog;
   string_view const d_repl;
   size_type const maxrepl;
   int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) {
       if (!d_chars) d_offsets[idx] = 0;
@@ -62,13 +58,13 @@ struct replace_regex_fn {
     auto out_ptr = d_chars ? d_chars + d_offsets[idx]   // output pointer (o)
                            : nullptr;
     size_type last_pos = 0;
-    int32_t begin      = 0;   // these are for calling prog.find
-    int32_t end        = -1;  // matches final word-boundary if at the end of the string
+    size_type begin    = 0;   // these are for calling prog.find
+    size_type end      = -1;  // matches final word-boundary if at the end of the string
 
     // copy input to output replacing strings as we go
     while (mxn-- > 0 && begin <= nchars) {  // maximum number of replaces
 
-      if (prog.is_empty() || prog.find<stack_size>(idx, d_str, begin, end) <= 0) {
+      if (prog.is_empty() || prog.find(prog_idx, d_str, begin, end) <= 0) {
         break;  // no more matches
       }
 
@@ -100,32 +96,6 @@ struct replace_regex_fn {
   }
 };
 
-struct replace_dispatch_fn {
-  reprog_device d_prog;
-
-  template <int stack_size>
-  std::unique_ptr<column> operator()(strings_column_view const& input,
-                                     string_view const& d_replacement,
-                                     size_type max_replace_count,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    auto const d_strings = column_device_view::create(input.parent(), stream);
-
-    auto children = make_strings_children(
-      replace_regex_fn<stack_size>{*d_strings, d_prog, d_replacement, max_replace_count},
-      input.size(),
-      stream,
-      mr);
-
-    return make_strings_column(input.size(),
-                               std::move(children.first),
-                               std::move(children.second),
-                               input.null_count(),
-                               cudf::detail::copy_bitmask(input.parent(), stream, mr));
-  }
-};
-
 }  // namespace
 
 //
@@ -144,13 +114,20 @@ std::unique_ptr<column> replace_re(
   string_view d_repl(replacement.data(), replacement.size());
 
   // compile regex into device object
-  auto d_prog =
-    reprog_device::create(pattern, flags, get_character_flags_table(), input.size(), stream);
+  auto d_prog = reprog_device::create(pattern, flags, stream);
 
   auto const maxrepl = max_replace_count.value_or(-1);
 
-  return regex_dispatcher(
-    *d_prog, replace_dispatch_fn{*d_prog}, input, d_repl, maxrepl, stream, mr);
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+
+  auto children = make_strings_children(
+    replace_regex_fn{*d_strings, d_repl, maxrepl}, *d_prog, input.size(), stream, mr);
+
+  return make_strings_column(input.size(),
+                             std::move(children.first),
+                             std::move(children.second),
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail
