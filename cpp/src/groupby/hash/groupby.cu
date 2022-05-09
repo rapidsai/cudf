@@ -426,7 +426,7 @@ void sparse_to_dense_results(table_view const& keys,
  * `d_keys` table and stores indices
  */
 auto create_hash_map(
-  std::shared_ptr<cudf::experimental::row::hash::preprocessed_table> const& preprocessed_keys,
+  std::shared_ptr<cudf::experimental::row::hash::preprocessed_table> preprocessed_keys,
   cudf::size_type const num_keys,
   null_policy const include_null_keys,
   rmm::cuda_stream_view stream)
@@ -442,7 +442,7 @@ auto create_hash_map(
 
   cudf::experimental::row::equality::self_comparator row_equal(preprocessed_keys);
   auto key_equal = row_equal.device_comparator(has_null, null_keys_are_equal);
-  auto row_hash  = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
+  auto row_hash  = cudf::experimental::row::hash::row_hasher(std::move(preprocessed_keys));
 
   return map_type::create(compute_hash_table_size(num_keys),
                           stream,
