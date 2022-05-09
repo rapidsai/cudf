@@ -104,7 +104,7 @@ class DFASimulationCallbackWrapper {
                                                       StateVectorT const& new_state,
                                                       SymbolIndexT const& symbol_id)
   {
-    uint32_t count = transducer_table(old_state.Get(0), symbol_id);
+    uint32_t const count = transducer_table(old_state.Get(0), symbol_id);
     if (write) {
       for (uint32_t out_char = 0; out_char < count; out_char++) {
         out_it[out_count + out_char]     = transducer_table(old_state.Get(0), symbol_id, out_char);
@@ -117,7 +117,7 @@ class DFASimulationCallbackWrapper {
   __host__ __device__ __forceinline__ void TearDown() {}
 
  public:
-  TransducerTableT transducer_table;
+  TransducerTableT const transducer_table;
   TransducedOutItT out_it;
   TransducedIndexOutItT out_idx_it;
   uint32_t out_count;
