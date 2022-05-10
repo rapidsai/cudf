@@ -67,6 +67,11 @@ dependencies:
   - pydata-sphinx-theme
   - librdkafka=1.7.0
   - python-confluent-kafka=1.7.0
+  - moto>=3.1.6
+  - boto3>=1.21.21
+  - botocore>=1.24.21
+  - aiobotocore>=2.2.0
+  - s3fs>=2022.3.0
   - pip:
       - git+https://github.com/python-streamz/streamz.git@master
       - pyorc

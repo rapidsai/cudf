@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import os
+import socket
 import time
 from contextlib import contextmanager
 from io import BytesIO
@@ -11,7 +12,7 @@ import pytest
 
 import dask_cudf
 
-moto = pytest.importorskip("moto", minversion="1.3.14")
+moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
 requests = pytest.importorskip("requests")
 s3fs = pytest.importorskip("s3fs")
@@ -22,6 +23,16 @@ from moto.server import ThreadedMotoServer  # noqa: E402
 @pytest.fixture(scope="session")
 def endpoint_ip():
     return "127.0.0.1"
+
+
+@pytest.fixture(scope="session")
+def endpoint_port():
+    # Return a free port per worker session.
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
 
 
 @contextmanager
@@ -40,7 +51,7 @@ def ensure_safe_environment_variables():
 
 
 @pytest.fixture(scope="session")
-def s3_base(endpoint_ip, worker_id):
+def s3_base(endpoint_ip, endpoint_port):
     """
     Fixture to set up moto server in separate process
     """
@@ -49,15 +60,11 @@ def s3_base(endpoint_ip, worker_id):
         # system aws credentials, https://github.com/spulec/moto/issues/1793
         os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
         os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
+        os.environ.setdefault("S3FS_LOGGING_LEVEL", "DEBUG")
 
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost
 
-        endpoint_port = (
-            5000
-            if worker_id == "master"
-            else 5550 + int(worker_id.lstrip("gw"))
-        )
         endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
 
         server = ThreadedMotoServer(ip_address=endpoint_ip, port=endpoint_port)
@@ -80,13 +87,10 @@ def s3_base(endpoint_ip, worker_id):
 
 
 @pytest.fixture()
-def s3so(endpoint_ip, worker_id):
+def s3so(endpoint_ip, endpoint_port):
     """
     Returns s3 storage options to pass to fsspec
     """
-    endpoint_port = (
-        5000 if worker_id == "master" else 5550 + int(worker_id.lstrip("gw"))
-    )
     endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
 
     return {"client_kwargs": {"endpoint_url": endpoint_uri}}
