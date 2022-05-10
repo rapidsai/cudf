@@ -11,9 +11,6 @@ At a high level, cuDF is structured in three layers, each of which serves a dist
 3. The Cython layer: The wrappers around the fast C++ `libcudf` library.
 
 In this document we will review each of these layers, their roles, and the requisite tradeoffs.
-Afterwards, we provide some context on other, ancillary structural components of the package.
-
-**TODO**: Talk about interop with other libraries. This fits in multiple places.
 
 
 ## The Frame layer
@@ -199,10 +196,4 @@ These wrappers translate cuDF objects into their `libcudf` equivalents and then 
 
 We endeavor to make these wrappers as thin as possible.
 By the time code reaches this layer, all questions of pandas compatibility should already have been addressed.
-
-
-## Misc
-
-### Mixins
-
-### Scalar
+These functions should be as close to trivial wrappers around `libcudf` APIs as possible.
