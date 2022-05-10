@@ -6,9 +6,9 @@ As a result, a key design challenge for cuDF is finding the simplest, most perfo
 
 At a high level, cuDF is structured in three layers, each of which serves a distinct purpose in this regard:
 
-1. The `Frame` layer: The user-facing implementation of pandas-like data structures.
-2. The `Column` layer: The core internal data structures used to bridge the gap to our lower-level implementations.
-3. The `Cython` layer: The wrappers around the fast C++ `libcudf` library.
+1. The Frame layer: The user-facing implementation of pandas-like data structures.
+2. The Column layer: The core internal data structures used to bridge the gap to our lower-level implementations.
+3. The Cython layer: The wrappers around the fast C++ `libcudf` library.
 
 In this document we will review each of these layers, their roles, and the requisite tradeoffs.
 Afterwards, we provide some context on other, ancillary structural components of the package.
@@ -60,7 +60,7 @@ However, currently most such implementations are not applicable to all subclasse
 
 Almost all indexes are subclasses of `GenericIndex`, a single-columned index with the class hierarchy:
 `Frame`->`SingleColumnFrame`->`GenericIndex`<-`BaseIndex`.
-Integer, float, or string indexes are all examples single Column indexes.
+Integer, float, or string indexes are all composed of a single column of data.
 Most `GenericIndex` methods are inherited from `Frame`, saving us the trouble of rewriting them.
 
 We now consider the three main exceptions to this model:
@@ -85,50 +85,43 @@ We now consider the three main exceptions to this model:
 
 ## The Column layer
 
-**TODO**: Talk more about Arrow?
-
 The next layer in the cuDF stack is the Column layer.
-The principal objects in the Column layer are the ColumnAccessor and the various Column classes.
-We now consider these objects and their roles.
+This layer forms the glue between pandas-like APIs and our underlying data layouts.
+Under the hood, cuDF is built around the [Apache Arrow Format](https://arrow.apache.org).
+This data format is both conducive to high-performance algorithms and suitable for data interchange between libraries.
+
+The principal objects in the Column layer are the `ColumnAccessor` and the various `Column` classes.
+The `Column` is cuDF's core data structure and is modeled after the
+[Apache Arrow Columnar Format](https://arrow.apache.org/docs/format/Columnar.html).
+A `ColumnAccessor` is a dictionary-like interface to a sequence of `Columns`.
+A `Frame` owns a `ColumnAccessor`, and most of its operations are implemented as loops over that object's `Column`s.
 
 ### ColumnAccessor
 
-
-The underlying composition
-
-contains a set of Columns and defines the methods common to all of them.
-A `Frame` stores its Columns in an instance of the `ColumnAccessor` class discussed in the next section.
-
-
-A ColumnAccessor is a dictionary-like interface to a sequence of Columns that is used to store the Columns in a Frame.
-Most Frame operations are implemented as loops over ColumnAccessors that operate on their underlying Columns.
-The primary purpose of the ColumnAccessor is to encapsulate pandas column selection semantics.
+The primary purpose of the `ColumnAccessor` is to encapsulate pandas column selection semantics.
 Columns may be selected or inserted by index or by label, and label-based selections are as flexible as pandas is.
 For instance, Columns may be selected hierarchically (using tuples) or via wildcards.
-ColumnAccessors also support the MultiIndex columns that can result from operations like groupbys.
+`ColumnAccessors` also support the `MultiIndex` columns that can result from operations like groupbys.
 
 ### Columns
 
-The `Column` is cuDF's core data structure and is modeled after the
-[Apache Arrow Columnar Format](https://arrow.apache.org/docs/format/Columnar.html).
-A Column represents a sequence of values, any number of which may be "null".
-
-Columns are typed, i.e. there are different columns for different types of data.
-Thus, we have `NumericalColumn`, `StringColumn`, `DatetimeColumn`, etc.
-Many `Frame` operations either behave differently or only make sense for data of a specific data type.
-Those decisions should be made at the level of each `Column` subclass.
+The parent `Column` class is implemented in Cython to support interchange with C++ (more on that later).
+However, the bulk of the `Column`'s functionality is embodied by the `ColumnBase` subclass.
+`ColumnBase` provides many standard methods, while others only make sense for data of a specific type.
+As a result, we have various subclasses of `ColumnBase` like `NumericalColumn`, `StringColumn`, and `DatetimeColumn`.
+Most dtype-specific decisions should be handled at the level of a specific `Column` subclass.
 Each type of `Column` only implements methods supported by that data type.
 
-A column is composed of the following:
+A `Column` is composed of the following:
 
 - A **data type**, specifying the type of each element.
 - A **data buffer** that may store the data for the column elements.
   Some column types do not have a data buffer, instead storing data in the children columns.
-- A **mask buffer** whose bits represent the validity (null or not
-  null) of each element. Columns whose elements are all valid may not
-  have a mask buffer. Mask buffers are padded to 64 bytes.
-- A tuple of **children** columns, which enable the representation of complex
-  types with non-fixed width elements such as strings or lists.
+- A **mask buffer** whose bits represent the validity (null or not null) of each element.
+  Nullability is a core concept in the Arrow data model.
+  Columns whose elements are all valid may not have a mask buffer.
+  Mask buffers are padded to 64 bytes.
+- A tuple of **children** columns used to represent complex types with non-fixed width elements like strings or lists.
 - A **size** indicating the number of elements in the column.
 - An integer **offset** use to represent the first element of column that is the "slice" of another column.
   The size of the column then gives the extent of the slice rather than the size of the underlying buffer.
@@ -155,14 +148,9 @@ As another example, a `StringColumn` backing the Series `['do', 'you', 'have', '
 
 ### Data types
 
-Data types, or `dtypes`, are extensions of the
-[data type objects introduced by numpy](https://numpy.org/doc/stable/reference/arrays.dtypes.html).
-cuDF supports most standard data types, with the notable exception of the arbitrary `object` dtype.
-Efficient GPU algorithms generally require knowledge of data layouts, making arbitrary objects infeasible to handle.
-
-For this purpose, cuDF in fact defines certain additional `dtypes` to handle common uses cases of the `object` dtype.
-All cuDF `dtypes` subclass the pandas `ExtensionDtype`.
-The following are the list of cuDF's extension `dtypes` along with a description of elements of that type:
+cuDF uses [dtypes](https://numpy.org/doc/stable/reference/arrays.dtypes.html) to represent different types of data.
+Since efficient GPU algorithms require preexisting knowledge of data layouts,
+cuDF does not support the arbitrary `object` dtype, but instead defines a few custom types for common use-cases:
 - `ListDtype`: Lists where each element in every list in a Column is of the same type.
 - `StructDtype`: Dicts where a given key always maps to values of the same type
 - `CategoricalDtype`: Analogous to the pandas categorical dtype except that the categories are stored in device memory.
@@ -175,9 +163,9 @@ For instance, all numerical types (floats and ints of different widths) are all 
 
 ### Buffer
 
-Columns in cuDF do not directly own their memory; instead, memory ownership is handled at the level of the `Buffer` object.
-A `Buffer` represents a device memory allocation that it _may or may not_ own.
-A `Buffer` constructed from a preexisting device memory allocation (such as a CuPy array) will simply view that memory.
+Although a `Column` represents an Arrow-compliant data structure, it does not directly handle memory mangaement.
+That job is delegated to the `Buffer` class, which represents a device memory allocation that it _may or may not_ own.
+A `Buffer` constructed from a preexisting device memory allocation (such as a CuPy array) will view that memory.
 Conversely, a `Buffer` constructed from a host object will allocate new device memory and copy in the data.
 cuDF uses the [RMM](https://github.com/rapidsai/rmm) library for allocating device memory.
 You can read more about device memory allocation with RMM [here](https://github.com/rapidsai/rmm#devicebuffers).
@@ -185,14 +173,14 @@ You can read more about device memory allocation with RMM [here](https://github.
 ```{note}
 cuDF needs to interoperate with a wide range of Python libraries, many of which allocate device memory.
 The ownership behavior described above is designed to minimize new memory allocations for externally-owned memory.
-Developers familiar with cuDF-`libcudf` interoperability will recognize a discrepancy in this ownership model.
-cuDF's employs `libcudf` under the hood, but libcudf objects aren't Python objects, so something must own their memory.
+cuDF's use of `libcudf`, however, represents a slight break from the paradigm employed above:
+since `libcudf` objects are not Python objects, we need something to manage their lifetimes from within cuDF.
 
 The key is to recognize that `libcudf` offers both owning (e.g. `column`) and non-owning (e.g. `column_view`) objects.
 All `libcudf` algorithms accept views as parameters while returning (new) owning objects.
 When calling `libcudf` APIs, cuDF Python construct views from cudf `Buffers`.
 When owning objects are returned, cuDF has an rmm object take ownership of that memory and stores that in a `Buffer`.
-The result is that the `Buffer` always owns memory allocated by `libcudf`.
+The result is that all memory allocated by `libcudf` inside cuDF eventually has ownership transferred to a `Buffer`.
 ```
 
 ## The Cython layer
