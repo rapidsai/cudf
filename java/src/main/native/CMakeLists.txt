@@ -240,3 +240,18 @@ else()
   # Tell CMake what CUDA language runtime to use
   set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
 endif()
+
+# ##################################################################################################
+# * install shared libraries ----------------------------------------------------------------------
+if(TARGET nvcomp::nvcomp)
+  get_target_property(NVCOMP_LOCATION nvcomp::nvcomp LOCATION)
+  get_filename_component(NVCOMP_LIB_PATH "${NVCOMP_LOCATION}" DIRECTORY)
+
+  add_custom_command(
+    TARGET cudfjni PRE_LINK COMMAND ${CMAKE_COMMAND} -E copy
+    "${NVCOMP_LIB_PATH}/libnvcomp.so"
+    "${NVCOMP_LIB_PATH}/libnvcomp_gdeflate.so"
+    "${NVCOMP_LIB_PATH}/libnvcomp_bitcomp.so"
+    "${PROJECT_BINARY_DIR}"
+  )
+endif()
