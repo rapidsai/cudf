@@ -2231,12 +2231,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_applyBooleanMask(
   try {
     cudf::jni::auto_set_device(env);
 
-    cudf::column_view *list_column = reinterpret_cast<cudf::column_view *>(list_column_handle);
-    cudf::lists_column_view list_view = cudf::lists_column_view(*list_column);
+    cudf::column_view const *list_column =
+        reinterpret_cast<cudf::column_view const *>(list_column_handle);
+    cudf::lists_column_view const list_view = cudf::lists_column_view(*list_column);
 
-    cudf::column_view *boolean_mask_list_column =
-        reinterpret_cast<cudf::column_view *>(boolean_mask_list_column_handle);
-    cudf::lists_column_view boolean_mask_list_view =
+    cudf::column_view const *boolean_mask_list_column =
+        reinterpret_cast<cudf::column_view const *>(boolean_mask_list_column_handle);
+    cudf::lists_column_view const boolean_mask_list_view =
         cudf::lists_column_view(*boolean_mask_list_column);
 
     return release_as_jlong(cudf::lists::apply_boolean_mask(list_view, boolean_mask_list_view));
