@@ -1262,11 +1262,21 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
   out_metadata.schema_info = std::move(schema_info);
 
-  for (const auto& meta : _metadata.per_file_metadata) {
-    for (const auto& kv : meta.ff.metadata) {
-      out_metadata.user_data.insert({kv.name, kv.value});
-    }
-  }
+  std::transform(_metadata.per_file_metadata.cbegin(),
+                 _metadata.per_file_metadata.cend(),
+                 std::back_inserter(out_metadata.per_file_user_data),
+                 [](auto& meta) {
+                   std::unordered_map<std::string, std::string> kv_map;
+                   std::transform(meta.ff.metadata.cbegin(),
+                                  meta.ff.metadata.cend(),
+                                  std::inserter(kv_map, kv_map.end()),
+                                  [](auto const& kv) {
+                                    return std::pair{kv.name, kv.value};
+                                  });
+                   return kv_map;
+                 });
+  out_metadata.user_data = {out_metadata.per_file_user_data[0].begin(),
+                            out_metadata.per_file_user_data[0].end()};
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
