@@ -119,7 +119,7 @@ class BaseIndex(Serializable):
 
         See Also
         --------
-        cudf.core.multiindex.MultiIndex.get_level_values : Get values for
+        cudf.MultiIndex.get_level_values : Get values for
             a level of a MultiIndex.
 
         Notes
@@ -708,7 +708,18 @@ class BaseIndex(Serializable):
         if is_mixed_with_object_dtype(self, other):
             difference = self.copy()
         else:
-            difference = self.join(other, how="leftanti")
+            other = other.copy(deep=False)
+            other.names = self.names
+            difference = cudf.core.index._index_from_data(
+                cudf.DataFrame._from_data(self._data)
+                ._merge(
+                    cudf.DataFrame._from_data(other._data),
+                    how="leftanti",
+                    on=self.name,
+                )
+                ._data
+            )
+
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
@@ -990,7 +1001,17 @@ class BaseIndex(Serializable):
         return union_result
 
     def _intersection(self, other, sort=None):
-        intersection_result = self.unique().join(other.unique(), how="inner")
+        other_unique = other.unique()
+        other_unique.names = self.names
+        intersection_result = cudf.core.index._index_from_data(
+            cudf.DataFrame._from_data(self.unique()._data)
+            ._merge(
+                cudf.DataFrame._from_data(other_unique._data),
+                how="inner",
+                on=self.name,
+            )
+            ._data
+        )
 
         if sort is None and len(other):
             return intersection_result.sort_values()
@@ -1142,6 +1163,9 @@ class BaseIndex(Serializable):
                     (1, 2)],
                    names=['a', 'b'])
         """
+        warnings.warn(
+            "Index.join is deprecated and will be removed", FutureWarning
+        )
 
         if isinstance(self, cudf.MultiIndex) and isinstance(
             other, cudf.MultiIndex
@@ -1390,7 +1414,9 @@ class BaseIndex(Serializable):
         return cudf.MultiIndex
 
     def drop_duplicates(
-        self, keep="first", nulls_are_equal=True,
+        self,
+        keep="first",
+        nulls_are_equal=True,
     ):
         """
         Drop duplicate rows in index.
@@ -1436,7 +1462,11 @@ class BaseIndex(Serializable):
         ]
 
         return self._from_columns_like_self(
-            drop_nulls(data_columns, how=how, keys=range(len(data_columns)),),
+            drop_nulls(
+                data_columns,
+                how=how,
+                keys=range(len(data_columns)),
+            ),
             self._column_names,
         )
 
@@ -1512,6 +1542,37 @@ class BaseIndex(Serializable):
             column_names=self._column_names,
         )
 
+    def repeat(self, repeats, axis=None):
+        """Repeat elements of a Index.
+
+        Returns a new Index where each element of the current Index is repeated
+        consecutively a given number of times.
+
+        Parameters
+        ----------
+        repeats : int, or array of ints
+            The number of repetitions for each element. This should
+            be a non-negative integer. Repeating 0 times will return
+            an empty object.
+
+        Returns
+        -------
+        Index
+            A newly created object of same type as caller with repeated
+            elements.
+
+        Examples
+        --------
+        >>> index = cudf.Index([10, 22, 33, 55])
+        >>> index
+        Int64Index([10, 22, 33, 55], dtype='int64')
+        >>> index.repeat(5)
+        Int64Index([10, 10, 10, 10, 10, 22, 22, 22, 22, 22, 33,
+                    33, 33, 33, 33, 55, 55, 55, 55, 55],
+                dtype='int64')
+        """
+        raise NotImplementedError
+
     def _split_columns_by_levels(self, levels):
         if isinstance(levels, int) and levels > 0:
             raise ValueError(f"Out of bound level: {levels}")
@@ -1524,27 +1585,6 @@ class BaseIndex(Serializable):
 
     def _split(self, splits):
         raise NotImplementedError
-
-    def sample(
-        self,
-        n=None,
-        frac=None,
-        replace=False,
-        weights=None,
-        random_state=None,
-        axis=None,
-        ignore_index=False,
-    ):
-        warnings.warn(
-            "Index.sample is deprecated and will be removed.", FutureWarning,
-        )
-        return cudf.core.index._index_from_data(
-            self.to_frame()
-            .sample(
-                n, frac, replace, weights, random_state, axis, ignore_index
-            )
-            ._data
-        )
 
 
 def _get_result_name(left_name, right_name):

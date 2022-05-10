@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,28 +36,29 @@ TEST(ExpectsTest, TryCatch)
 
 TEST(CudaTryTest, Error)
 {
-  CUDA_EXPECT_THROW_MESSAGE(CUDA_TRY(cudaErrorLaunchFailure),
+  CUDA_EXPECT_THROW_MESSAGE(CUDF_CUDA_TRY(cudaErrorLaunchFailure),
                             "cudaErrorLaunchFailure unspecified launch failure");
 }
-TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDA_TRY(cudaSuccess)); }
+
+TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDF_CUDA_TRY(cudaSuccess)); }
 
 TEST(CudaTryTest, TryCatch)
 {
-  CUDA_EXPECT_THROW_MESSAGE(CUDA_TRY(cudaErrorMemoryAllocation),
+  CUDA_EXPECT_THROW_MESSAGE(CUDF_CUDA_TRY(cudaErrorMemoryAllocation),
                             "cudaErrorMemoryAllocation out of memory");
 }
 
-TEST(StreamCheck, success) { EXPECT_NO_THROW(CHECK_CUDA(0)); }
+TEST(StreamCheck, success) { EXPECT_NO_THROW(CUDF_CHECK_CUDA(0)); }
 
 namespace {
 // Some silly kernel that will cause an error
 void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 }  // namespace
 
-// In a release build and without explicit synchronization, CHECK_CUDA may
+// In a release build and without explicit synchronization, CUDF_CHECK_CUDA may
 // or may not fail on erroneous asynchronous CUDA calls. Invoke
 // cudaStreamSynchronize to guarantee failure on error. In a non-release build,
-// CHECK_CUDA deterministically fails on erroneous asynchronous CUDA
+// CUDF_CHECK_CUDA deterministically fails on erroneous asynchronous CUDA
 // calls.
 TEST(StreamCheck, FailedKernel)
 {
@@ -67,7 +68,7 @@ TEST(StreamCheck, FailedKernel)
 #ifdef NDEBUG
   stream.synchronize();
 #endif
-  EXPECT_THROW(CHECK_CUDA(stream.value()), cudf::cuda_error);
+  EXPECT_THROW(CUDF_CHECK_CUDA(stream.value()), cudf::cuda_error);
 }
 
 TEST(StreamCheck, CatchFailedKernel)
@@ -78,7 +79,7 @@ TEST(StreamCheck, CatchFailedKernel)
 #ifndef NDEBUG
   stream.synchronize();
 #endif
-  CUDA_EXPECT_THROW_MESSAGE(CHECK_CUDA(stream.value()),
+  CUDA_EXPECT_THROW_MESSAGE(CUDF_CHECK_CUDA(stream.value()),
                             "cudaErrorInvalidConfiguration "
                             "invalid configuration argument");
 }

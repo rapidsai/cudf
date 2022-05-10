@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,17 @@
  */
 
 #include "writer_impl.hpp"
-#include <io/statistics/column_statistics.cuh>
 
+#include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+
+#include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 #include <io/utilities/config_utils.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -42,6 +45,10 @@
 #include <nvcomp/snappy.h>
 
 #include <thrust/binary_search.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <cstring>
@@ -71,9 +78,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
     case compression_type::AUTO:
     case compression_type::SNAPPY: return parquet::Compression::SNAPPY;
     case compression_type::NONE: return parquet::Compression::UNCOMPRESSED;
-    default:
-      CUDF_EXPECTS(false, "Unsupported compression type");
-      return parquet::Compression::UNCOMPRESSED;
+    default: CUDF_FAIL("Unsupported compression type");
   }
 }
 
@@ -186,55 +191,6 @@ struct aggregate_writer_metadata {
   uint32_t column_order_listsize = 0;
 };
 
-struct linked_column_view;
-
-using LinkedColPtr    = std::shared_ptr<linked_column_view>;
-using LinkedColVector = std::vector<LinkedColPtr>;
-
-/**
- * @brief column_view with the added member pointer to the parent of this column.
- *
- */
-struct linked_column_view : public column_view {
-  // TODO(cp): we are currently keeping all column_view children info multiple times - once for each
-  //       copy of this object. Options:
-  // 1. Inherit from column_view_base. Only lose out on children vector. That is not needed.
-  // 2. Don't inherit at all. make linked_column_view keep a reference wrapper to its column_view
-  linked_column_view(column_view const& col) : column_view(col), parent(nullptr)
-  {
-    for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
-      children.push_back(std::make_shared<linked_column_view>(this, *child_it));
-    }
-  }
-
-  linked_column_view(linked_column_view* parent, column_view const& col)
-    : column_view(col), parent(parent)
-  {
-    for (auto child_it = col.child_begin(); child_it < col.child_end(); ++child_it) {
-      children.push_back(std::make_shared<linked_column_view>(this, *child_it));
-    }
-  }
-
-  linked_column_view* parent;  //!< Pointer to parent of this column. Nullptr if root
-  LinkedColVector children;
-};
-
-/**
- * @brief Converts all column_views of a table into linked_column_views
- *
- * @param table table of columns to convert
- * @return Vector of converted linked_column_views
- */
-LinkedColVector input_table_to_linked_columns(table_view const& table)
-{
-  LinkedColVector result;
-  for (column_view const& col : table) {
-    result.emplace_back(std::make_shared<linked_column_view>(col));
-  }
-
-  return result;
-}
-
 /**
  * @brief Extends SchemaElement to add members required in constructing parquet_column_view
  *
@@ -246,7 +202,7 @@ LinkedColVector input_table_to_linked_columns(table_view const& table)
  *    supported types
  */
 struct schema_tree_node : public SchemaElement {
-  LinkedColPtr leaf_column;
+  cudf::detail::LinkedColPtr leaf_column;
   statistics_dtype stats_dtype;
   int32_t ts_scale;
 
@@ -258,7 +214,7 @@ struct schema_tree_node : public SchemaElement {
 
 struct leaf_schema_fn {
   schema_tree_node& col_schema;
-  LinkedColPtr const& col;
+  cudf::detail::LinkedColPtr const& col;
   column_in_metadata const& col_meta;
   bool timestamp_is_int96;
 
@@ -392,11 +348,17 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, cudf::timestamp_ns>, void> operator()()
   {
-    col_schema.type = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
-    col_schema.converted_type =
-      (timestamp_is_int96) ? ConvertedType::UNKNOWN : ConvertedType::TIMESTAMP_MICROS;
-    col_schema.stats_dtype = statistics_dtype::dtype_timestamp64;
-    col_schema.ts_scale    = -1000;  // negative value indicates division by absolute value
+    col_schema.type           = (timestamp_is_int96) ? Type::INT96 : Type::INT64;
+    col_schema.converted_type = ConvertedType::UNKNOWN;
+    col_schema.stats_dtype    = statistics_dtype::dtype_timestamp64;
+    if (timestamp_is_int96) {
+      col_schema.ts_scale = -1000;  // negative value indicates division by absolute value
+    }
+    // set logical type if it's not int96
+    else {
+      col_schema.logical_type.isset.TIMESTAMP            = true;
+      col_schema.logical_type.TIMESTAMP.unit.isset.NANOS = true;
+    }
   }
 
   //  unsupported outside cudf for parquet 1.0.
@@ -484,7 +446,7 @@ struct leaf_schema_fn {
   }
 };
 
-inline bool is_col_nullable(LinkedColPtr const& col,
+inline bool is_col_nullable(cudf::detail::LinkedColPtr const& col,
                             column_in_metadata const& col_meta,
                             bool single_write_mode)
 {
@@ -510,10 +472,11 @@ inline bool is_col_nullable(LinkedColPtr const& col,
  * Recursively traverses through linked_columns and corresponding metadata to construct schema tree.
  * The resulting schema tree is stored in a vector in pre-order traversal order.
  */
-std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linked_columns,
-                                                    table_input_metadata& metadata,
-                                                    bool single_write_mode,
-                                                    bool int96_timestamps)
+std::vector<schema_tree_node> construct_schema_tree(
+  cudf::detail::LinkedColVector const& linked_columns,
+  table_input_metadata& metadata,
+  bool single_write_mode,
+  bool int96_timestamps)
 {
   std::vector<schema_tree_node> schema;
   schema_tree_node root{};
@@ -524,9 +487,16 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
   root.parent_idx      = -1;  // root schema has no parent
   schema.push_back(std::move(root));
 
-  std::function<void(LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
-    [&](LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
+  std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
+    [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
       bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
+
+      auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
+                                                column_in_metadata const& col_meta) {
+        if (schema[parent_idx].name != "list" and col_meta.is_parquet_field_id_set()) {
+          s.field_id = col_meta.get_parquet_field_id();
+        }
+      };
 
       if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
@@ -535,15 +505,16 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 
         struct_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
-        struct_schema.num_children = col->num_children();
+        struct_schema.num_children = col->children.size();
         struct_schema.parent_idx   = parent_idx;
+        set_field_id(struct_schema, col_meta);
         schema.push_back(std::move(struct_schema));
 
         auto struct_node_index = schema.size() - 1;
         // for (auto child_it = col->children.begin(); child_it < col->children.end(); child_it++) {
         //   add_schema(*child_it, struct_node_index);
         // }
-        CUDF_EXPECTS(col->num_children() == static_cast<int>(col_meta.num_children()),
+        CUDF_EXPECTS(col->children.size() == static_cast<size_t>(col_meta.num_children()),
                      "Mismatch in number of child columns between input table and metadata");
         for (size_t i = 0; i < col->children.size(); ++i) {
           add_schema(col->children[i], col_meta.child(i), struct_node_index);
@@ -561,6 +532,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         list_schema_1.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         list_schema_1.num_children = 1;
         list_schema_1.parent_idx   = parent_idx;
+        set_field_id(list_schema_1, col_meta);
         schema.push_back(std::move(list_schema_1));
 
         schema_tree_node list_schema_2{};
@@ -582,7 +554,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         // "col_name" : { "key_value" : { "key", "value" } }
 
         // verify the List child structure is a struct<left_child, right_child>
-        auto const& struct_col = col->child(lists_column_view::child_column_index);
+        column_view struct_col = *col->children[lists_column_view::child_column_index];
         CUDF_EXPECTS(struct_col.type().id() == type_id::STRUCT, "Map should be a List of struct");
         CUDF_EXPECTS(struct_col.num_children() == 2,
                      "Map should be a List of struct with two children only but found " +
@@ -592,7 +564,10 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         map_schema.converted_type = ConvertedType::MAP;
         map_schema.repetition_type =
           col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
-        map_schema.name         = col_meta.get_name();
+        map_schema.name = col_meta.get_name();
+        if (col_meta.is_parquet_field_id_set()) {
+          map_schema.field_id = col_meta.get_parquet_field_id();
+        }
         map_schema.num_children = 1;
         map_schema.parent_idx   = parent_idx;
         schema.push_back(std::move(map_schema));
@@ -649,6 +624,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         col_schema.name = (schema[parent_idx].name == "list") ? "element" : col_meta.get_name();
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
+        set_field_id(col_schema, col_meta);
         schema.push_back(col_schema);
       }
     };
@@ -730,7 +706,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
     // For list columns, we still need to retain the offset child column.
     auto children =
       (parent.type().id() == type_id::LIST)
-        ? std::vector<column_view>{parent.child(lists_column_view::offsets_column_index),
+        ? std::vector<column_view>{*parent.children[lists_column_view::offsets_column_index],
                                    single_inheritance_cudf_col}
         : std::vector<column_view>{single_inheritance_cudf_col};
 
@@ -870,8 +846,11 @@ void writer::impl::gather_fragment_statistics(
     device_2dspan<statistics_group>(frag_stats_group.data(), num_columns, num_fragments);
 
   gpu::InitFragmentStatistics(frag_stats_group_2dview, frag, col_desc, stream);
-  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
-    frag_stats_chunk.data(), frag_stats_group.data(), num_fragments * num_columns, stream);
+  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(frag_stats_chunk.data(),
+                                                                      frag_stats_group.data(),
+                                                                      num_fragments * num_columns,
+                                                                      stream,
+                                                                      int96_timestamps);
   stream.synchronize();
 }
 
@@ -897,7 +876,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<size_type>> dict_data;
   std::vector<rmm::device_uvector<uint16_t>> dict_index;
 
-  if (h_chunks.size() == 0) { return std::make_pair(std::move(dict_data), std::move(dict_index)); }
+  if (h_chunks.size() == 0) { return std::pair(std::move(dict_data), std::move(dict_index)); }
 
   // Allocate slots for each chunk
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
@@ -916,7 +895,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   chunks.host_to_device(stream);
 
   gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
-  gpu::populate_chunk_hash_maps(chunks, frags, stream);
+  gpu::populate_chunk_hash_maps(frags, stream);
 
   chunks.device_to_host(stream, true);
 
@@ -933,7 +912,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
       // We don't use dictionary if the indices are > 16 bits because that's the maximum bitpacking
       // bitsize we efficiently support
-      if (nbits > 16) { return std::make_pair(false, 0); }
+      if (nbits > 16) { return std::pair(false, 0); }
 
       // Only these bit sizes are allowed for RLE encoding because it's compute optimized
       constexpr auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
@@ -946,7 +925,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
       bool use_dict = (ck.plain_data_size > dict_enc_size);
       if (not use_dict) { rle_bits = 0; }
-      return std::make_pair(use_dict, rle_bits);
+      return std::pair(use_dict, rle_bits);
     }();
   }
 
@@ -965,9 +944,9 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   }
   chunks.host_to_device(stream);
   gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
-  gpu::get_dictionary_indices(chunks.device_view(), frags, stream);
+  gpu::get_dictionary_indices(frags, stream);
 
-  return std::make_pair(std::move(dict_data), std::move(dict_index));
+  return std::pair(std::move(dict_data), std::move(dict_index));
 }
 
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
@@ -1005,8 +984,9 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
   stream.synchronize();
 }
 
-void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
-                     device_span<gpu_inflate_status_s> comp_stat,
+void snappy_compress(device_span<device_span<uint8_t const> const> comp_in,
+                     device_span<device_span<uint8_t> const> comp_out,
+                     device_span<decompress_status> comp_stats,
                      size_t max_page_uncomp_data_size,
                      rmm::cuda_stream_view stream)
 {
@@ -1033,16 +1013,20 @@ void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
     // the space allocated unless one uses the API nvcompBatchedSnappyCompressGetOutputSize()
 
     // Prepare the vectors
-    auto comp_it = thrust::make_zip_iterator(uncompressed_data_ptrs.begin(),
-                                             uncompressed_data_sizes.begin(),
-                                             compressed_data_ptrs.begin());
+    auto comp_it =
+      thrust::make_zip_iterator(uncompressed_data_ptrs.begin(), uncompressed_data_sizes.begin());
+    thrust::transform(
+      rmm::exec_policy(stream),
+      comp_in.begin(),
+      comp_in.end(),
+      comp_it,
+      [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
+
     thrust::transform(rmm::exec_policy(stream),
-                      comp_in.begin(),
-                      comp_in.end(),
-                      comp_it,
-                      [] __device__(gpu_inflate_input_s in) {
-                        return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice);
-                      });
+                      comp_out.begin(),
+                      comp_out.end(),
+                      compressed_data_ptrs.begin(),
+                      [] __device__(auto const& out) { return out.data(); });
     nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
                                                      uncompressed_data_sizes.data(),
                                                      max_page_uncomp_data_size,
@@ -1062,9 +1046,9 @@ void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
     thrust::transform(rmm::exec_policy(stream),
                       compressed_bytes_written.begin(),
                       compressed_bytes_written.end(),
-                      comp_stat.begin(),
+                      comp_stats.begin(),
                       [] __device__(size_t size) {
-                        gpu_inflate_status_s status{};
+                        decompress_status status{};
                         status.bytes_written = size;
                         return status;
                       });
@@ -1072,9 +1056,9 @@ void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
   } catch (...) {
     // If we reach this then there was an error in compressing so set an error status for each page
     thrust::for_each(rmm::exec_policy(stream),
-                     comp_stat.begin(),
-                     comp_stat.end(),
-                     [] __device__(gpu_inflate_status_s & stat) { stat.status = 1; });
+                     comp_stats.begin(),
+                     comp_stats.end(),
+                     [] __device__(decompress_status & stat) { stat.status = 1; });
   };
 }
 
@@ -1098,19 +1082,17 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   uint32_t max_comp_pages =
     (compression_ != parquet::Compression::UNCOMPRESSED) ? pages_in_batch : 0;
 
-  rmm::device_uvector<gpu_inflate_input_s> compression_input(max_comp_pages, stream);
-  rmm::device_uvector<gpu_inflate_status_s> compression_status(max_comp_pages, stream);
+  rmm::device_uvector<device_span<uint8_t const>> comp_in(max_comp_pages, stream);
+  rmm::device_uvector<device_span<uint8_t>> comp_out(max_comp_pages, stream);
+  rmm::device_uvector<decompress_status> comp_stats(max_comp_pages, stream);
 
-  device_span<gpu_inflate_input_s> comp_in{compression_input.data(), compression_input.size()};
-  device_span<gpu_inflate_status_s> comp_stat{compression_status.data(), compression_status.size()};
-
-  gpu::EncodePages(batch_pages, comp_in, comp_stat, stream);
+  gpu::EncodePages(batch_pages, comp_in, comp_out, comp_stats, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
       if (nvcomp_integration::is_stable_enabled()) {
-        snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
+        snappy_compress(comp_in, comp_out, comp_stats, max_page_uncomp_data_size, stream);
       } else {
-        CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
+        gpu_snap(comp_in, comp_out, comp_stats, stream);
       }
       break;
     default: break;
@@ -1119,15 +1101,15 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   // chunk-level
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
   DecideCompression(d_chunks_in_batch.flat_view(), stream);
-  EncodePageHeaders(batch_pages, comp_stat, batch_pages_stats, chunk_stats, stream);
+  EncodePageHeaders(batch_pages, comp_stats, batch_pages_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
-  CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
-                           d_chunks_in_batch.data(),
-                           d_chunks_in_batch.flat_view().size_bytes(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+  CUDF_CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
+                                d_chunks_in_batch.data(),
+                                d_chunks_in_batch.flat_view().size_bytes(),
+                                cudaMemcpyDeviceToHost,
+                                stream.value()));
   stream.synchronize();
 }
 
@@ -1208,7 +1190,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     add_default_name(table_meta->column_metadata[i], "_col" + std::to_string(i));
   }
 
-  auto vec         = input_table_to_linked_columns(table);
+  auto vec         = table_to_linked_columns(table);
   auto schema_tree = construct_schema_tree(vec, *table_meta, single_write_mode, int96_timestamps);
   // Construct parquet_column_views from the schema tree leaf nodes.
   std::vector<parquet_column_view> parquet_columns;
@@ -1566,28 +1548,28 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           // we still need to do a (much smaller) memcpy for the statistics.
           if (ck.ck_stat_size != 0) {
             column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
-            CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
-                                     dev_bfr,
-                                     ck.ck_stat_size,
-                                     cudaMemcpyDeviceToHost,
-                                     stream.value()));
+            CUDF_CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
+                                          dev_bfr,
+                                          ck.ck_stat_size,
+                                          cudaMemcpyDeviceToHost,
+                                          stream.value()));
             stream.synchronize();
           }
         } else {
           if (!host_bfr) {
             host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
                                                 uint8_t* ptr = nullptr;
-                                                CUDA_TRY(cudaMallocHost(&ptr, size));
+                                                CUDF_CUDA_TRY(cudaMallocHost(&ptr, size));
                                                 return ptr;
                                               }(max_chunk_bfr_size),
                                               cudaFreeHost};
           }
           // copy the full data
-          CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
-                                   dev_bfr,
-                                   ck.ck_stat_size + ck.compressed_size,
-                                   cudaMemcpyDeviceToHost,
-                                   stream.value()));
+          CUDF_CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
+                                        dev_bfr,
+                                        ck.ck_stat_size + ck.compressed_size,
+                                        cudaMemcpyDeviceToHost,
+                                        stream.value()));
           stream.synchronize();
           out_sink_[p]->host_write(host_bfr.get() + ck.ck_stat_size, ck.compressed_size);
           if (ck.ck_stat_size != 0) {

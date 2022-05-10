@@ -10,17 +10,17 @@ import versioneer
 
 install_requires = [
     "cudf",
-    "dask>=2022.02.1",
-    "distributed>=2022.02.1",
+    "dask>=2022.03.0",
+    "distributed>=2022.03.0",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<1.4.0dev0",
+    "pandas>=1.0,<1.5.0dev0",
 ]
 
 extras_require = {
     "test": [
         "numpy",
-        "pandas>=1.0,<1.4.0dev0",
+        "pandas>=1.0,<1.5.0dev0",
         "pytest",
         "numba>=0.53.1",
         "dask>=2021.09.1",
@@ -84,8 +84,8 @@ setup(
         "Topic :: Scientific/Engineering",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     packages=find_packages(exclude=["tests", "tests.*"]),
     cmdclass=versioneer.get_cmdclass(),

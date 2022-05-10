@@ -20,6 +20,7 @@ package ai.rapids.cudf;
 
 import ai.rapids.cudf.ColumnView.FindOptions;
 import ai.rapids.cudf.HostColumnVector.*;
+import com.google.common.collect.Lists;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -4987,6 +4988,22 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, actual);
     }
 
+    // test zero as group index
+    try (ColumnVector v = ColumnVector.fromStrings("aa-11 b2b-345", "aa-11a 1c-2b2 b2-c3", "11-aa", null);
+         ColumnVector expected = ColumnVector.fromStrings("aa-11:aa:11; b2b-345:b:345;",
+             "aa-11:aa:11;a 1c-2:c:2;b2 b2-c3", "11-aa", null);
+         ColumnVector actual = v.stringReplaceWithBackrefs(
+             "([a-z]+)-([0-9]+)", "${0}:${1}:${2};")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    // group index exceeds group count
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("ABC123defgh");
+           ColumnVector r = v.stringReplaceWithBackrefs("([A-Z]+)([0-9]+)([a-z]+)", "\\4")) {
+      }
+    });
+
   }
 
   @Test
@@ -6242,5 +6259,44 @@ public class ColumnVectorTest extends CudfTestBase {
       }
     });
     assertTrue(x.getMessage().contains("Exemplar and validity columns must have the same size"));
+  }
+
+  @Test
+  void testSegmentedGather() {
+    HostColumnVector.DataType dt = new ListType(true, new BasicType(true, DType.STRING));
+    try (ColumnVector source = ColumnVector.fromLists(dt,
+        Lists.newArrayList("a", "b", null, "c"),
+        null,
+        Lists.newArrayList(),
+        Lists.newArrayList(null, "A", "B", "C", "D"));
+         ColumnVector gatherMap = ColumnVector.fromLists(
+             new ListType(false, new BasicType(false, DType.INT32)),
+             Lists.newArrayList(-3, 0, 2, 3, 4),
+             Lists.newArrayList(),
+             Lists.newArrayList(1),
+             Lists.newArrayList(1, -4, 5, -1, -6));
+         ColumnVector actual = source.segmentedGather(gatherMap);
+         ColumnVector expected = ColumnVector.fromLists(dt,
+             Lists.newArrayList("b", "a", null, "c", null),
+             null,
+             Lists.newArrayList((String) null),
+             Lists.newArrayList("A", "A", null, "D", null))) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testGenerateListOffsets() {
+    try (ColumnVector index = ColumnVector.fromInts(1, 3, 3, 0, 2, 0, 0, 5, 10, 25);
+         ColumnVector actual = index.generateListOffsets();
+         ColumnVector expected = ColumnVector.fromInts(0, 1, 4, 7, 7, 9, 9, 9, 14, 24, 49)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    try (ColumnVector index = ColumnVector.fromInts(0, 0, 1, 0, 0);
+         ColumnVector actual = index.generateListOffsets();
+         ColumnVector expected = ColumnVector.fromInts(0, 0, 0, 1, 1, 1)) {
+      assertColumnsAreEqual(expected, actual);
+    }
   }
 }

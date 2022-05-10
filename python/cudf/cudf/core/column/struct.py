@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import pandas as pd
@@ -31,7 +31,7 @@ class StructColumn(ColumnBase):
             return len(self.base_children[0])
 
     @classmethod
-    def from_arrow(self, data):
+    def from_arrow(cls, data):
         size = len(data)
         dtype = cudf.core.dtypes.StructDtype.from_arrow(data.type)
 
@@ -91,14 +91,12 @@ class StructColumn(ColumnBase):
             pd_series.index = index
         return pd_series
 
-    def __getitem__(self, args):
-        result = super().__getitem__(args)
-        if isinstance(result, dict):
-            return {
-                field: value
-                for field, value in zip(self.dtype.fields, result.values())
-            }
-        return result
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        return {
+            field: value
+            for field, value in zip(self.dtype.fields, result.values())
+        }
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,9 +34,14 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
 #include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/optional.h>
+#include <thrust/pair.h>
+#include <thrust/transform.h>
 
 #include <map>
 #include <numeric>
@@ -293,12 +298,14 @@ struct parse_datetime {
         }
         case 'z': {
           // 'z' format is +hh:mm -- single sign char and 2 chars each for hour and minute
-          auto const sign     = *ptr == '-' ? 1 : -1;
-          auto const [hh, lh] = parse_int(ptr + 1, 2);
-          auto const [mm, lm] = parse_int(ptr + 3, 2);
-          // revert timezone back to UTC
-          timeparts.tz_minutes = sign * ((hh * 60) + mm);
-          bytes_read -= lh + lm;
+          if (item.length == 5) {
+            auto const sign     = *ptr == '-' ? 1 : -1;
+            auto const [hh, lh] = parse_int(ptr + 1, 2);
+            auto const [mm, lm] = parse_int(ptr + 3, 2);
+            // revert timezone back to UTC
+            timeparts.tz_minutes = sign * ((hh * 60) + mm);
+            bytes_read -= lh + lm;
+          }
           break;
         }
         case 'Z': break;  // skip
@@ -569,6 +576,8 @@ struct check_datetime_format {
             auto const cvm = check_value(ptr + 3, 2, 0, 59);
             result         = (*ptr == '-' || *ptr == '+') && cvh.first && cvm.first;
             bytes_read -= cvh.second + cvm.second;
+          } else if (item.length == 1) {
+            result = *ptr == 'Z';
           }
           break;
         }
@@ -1077,7 +1086,7 @@ struct dispatch_from_timestamps_fn {
                        thrust::make_counting_iterator<cudf::size_type>(0),
                        d_timestamps.size(),
                        pfn);
-    return std::make_pair(std::move(offsets_column), std::move(chars_column));
+    return std::pair(std::move(offsets_column), std::move(chars_column));
   }
 
   template <typename T, typename... Args>

@@ -124,6 +124,31 @@ constexpr inline bool is_relationally_comparable()
   return detail::is_relationally_comparable_impl<L, R>::value;
 }
 
+namespace detail {
+/**
+ * @brief Helper functor to check if a specified type `T` supports relational comparisons.
+ */
+struct unary_relationally_comparable_functor {
+  template <typename T>
+  inline bool operator()() const
+  {
+    return cudf::is_relationally_comparable<T, T>();
+  }
+};
+}  // namespace detail
+
+/**
+ * @brief Checks whether `data_type` `type` supports relational comparisons.
+ *
+ * @param type Data_type for comparison.
+ * @return true If `type` supports relational comparisons.
+ * @return false If `type` does not support relational comparisons.
+ */
+inline bool is_relationally_comparable(data_type type)
+{
+  return type_dispatcher(type, detail::unary_relationally_comparable_functor{});
+}
+
 /**
  * @brief Indicates whether objects of types `L` and `R` can be compared
  * for equality.
@@ -672,6 +697,37 @@ struct is_nested_impl {
 constexpr inline bool is_nested(data_type type)
 {
   return cudf::type_dispatcher(type, is_nested_impl{});
+}
+
+/**
+ * @brief Indicates whether `T` is a struct type.
+ *
+ * @param T The type to verify
+ * @return A boolean indicating if T is a struct type
+ */
+template <typename T>
+constexpr inline bool is_struct()
+{
+  return std::is_same_v<T, cudf::struct_view>;
+}
+
+struct is_struct_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_struct<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a struct type.
+ *
+ * @param type The `data_type` to verify
+ * @return A boolean indicating if `type` is a struct type
+ */
+constexpr inline bool is_struct(data_type type)
+{
+  return cudf::type_dispatcher(type, is_struct_impl{});
 }
 
 template <typename FromType>

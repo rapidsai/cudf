@@ -448,11 +448,8 @@ public class HostColumnVectorCore implements AutoCloseable {
    * @return true if null else false
    */
   public boolean isNull(long rowIndex) {
-    assert (rowIndex >= 0 && rowIndex < rows) : "index is out of range 0 <= " + rowIndex + " < " + rows;
-    if (hasValidityVector()) {
-      return BitVectorHelper.isNull(offHeap.valid, rowIndex);
-    }
-    return false;
+    return rowIndex < 0 || rowIndex >= rows // unknown, hence NULL
+           || hasValidityVector() && BitVectorHelper.isNull(offHeap.valid, rowIndex);
   }
 
   /**

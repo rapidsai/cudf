@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import os
 import re
@@ -34,7 +34,7 @@ install_requires = [
     "Cython>=0.29,<0.30",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<1.4.0dev0",
+    "pandas>=1.0,<1.5.0dev0",
     "typing_extensions",
     "protobuf",
     "nvtx>=0.2.1",
@@ -47,7 +47,8 @@ extras_require = {
         "pytest",
         "pytest-benchmark",
         "pytest-xdist",
-        "hypothesis" "mimesis",
+        "hypothesis",
+        "mimesis",
         "fastavro>=0.22.9",
         "python-snappy>=0.6.0",
         "pyorc",
@@ -245,15 +246,16 @@ setup(
         "Topic :: Scientific/Engineering",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     # Include the separately-compiled shared library
     setup_requires=["cython", "protobuf"],
     ext_modules=extensions,
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf._lib*"]), ["*.pxd"],
+        find_packages(include=["cudf._lib*"]),
+        ["*.pxd"],
     ),
     cmdclass=cmdclass,
     install_requires=install_requires,

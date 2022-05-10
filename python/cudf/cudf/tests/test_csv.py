@@ -580,7 +580,9 @@ def test_csv_reader_NaN_values():
 
     # data type detection should evaluate the column to int8 (all nulls)
     gdf = read_csv(
-        StringIO(all_cells), header=None, na_values=custom_na_values,
+        StringIO(all_cells),
+        header=None,
+        na_values=custom_na_values,
     )
     assert gdf.dtypes[0] == "int8"
     assert all(gdf["0"][idx] is cudf.NA for idx in range(len(gdf["0"])))
@@ -1273,6 +1275,7 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10618")
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a

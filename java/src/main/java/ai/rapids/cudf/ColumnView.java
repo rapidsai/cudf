@@ -233,8 +233,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get a ColumnView that is the offsets for this list.
+   * Please note that it is the responsibility of the caller to close this view, and the parent
+   * column must out live this view.
    */
-  ColumnView getListOffsetsView() {
+  public ColumnView getListOffsetsView() {
     assert(getType().equals(DType.LIST));
     return new ColumnView(getListOffsetCvPointer(viewHandle));
   }
@@ -1544,6 +1546,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     } finally {
       Aggregation.close(nativeId);
     }
+  }
+
+  /**
+   * Segmented gather of the elements within a list element in each row of a list column.
+   * For each list, assuming the size is N, valid indices of gather map ranges in [-N, N).
+   * Out of bound indices refer to null.
+   * @param gatherMap ListColumnView carrying lists of integral indices which maps the
+   * element in list of each row in the source columns to rows of lists in the result columns.
+   * @return the result.
+   */
+  public ColumnVector segmentedGather(ColumnView gatherMap) {
+    return segmentedGather(gatherMap, OutOfBoundsPolicy.NULLIFY);
+  }
+
+  /**
+   * Segmented gather of the elements within a list element in each row of a list column.
+   * @param gatherMap ListColumnView carrying lists of integral indices which maps the
+   * element in list of each row in the source columns to rows of lists in the result columns.
+   * @param policy OutOfBoundsPolicy, `DONT_CHECK` leads to undefined behaviour; `NULLIFY`
+   * replaces out of bounds with null.
+   * @return the result.
+   */
+  public ColumnVector segmentedGather(ColumnView gatherMap, OutOfBoundsPolicy policy) {
+    return new ColumnVector(segmentedGather(getNativeView(), gatherMap.getNativeView(),
+        policy.equals(OutOfBoundsPolicy.NULLIFY)));
   }
 
   /**
@@ -3449,6 +3476,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Generate list offsets from sizes of each list.
+   * NOTICE: This API only works for INT32. Otherwise, the behavior is undefined. And no null and negative value is allowed.
+   *
+   * @return a column of list offsets whose size is N + 1
+   */
+  public final ColumnVector generateListOffsets() {
+    return new ColumnVector(generateListOffsets(getNativeView()));
+  }
+
+  /**
    * Get a single item from the column at the specified index as a Scalar.
    *
    * Be careful. This is expensive and may involve running a kernel to copy the data out.
@@ -3998,6 +4035,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long segmentedReduce(long dataViewHandle, long offsetsViewHandle,
       long aggregation, boolean includeNulls, int dtype, int scale) throws CudfException;
 
+  private static native long segmentedGather(long sourceColumnHandle, long gatherMapListHandle,
+      boolean isNullifyOutBounds) throws CudfException;
+
   private static native long isNullNative(long viewHandle);
 
   private static native long isNanNative(long viewHandle);
@@ -4133,6 +4173,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native long getDeviceMemorySize(long viewHandle) throws CudfException;
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
+
+  static native long generateListOffsets(long handle) throws CudfException;
 
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when

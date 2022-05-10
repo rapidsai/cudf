@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,9 +25,11 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
+#include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -39,7 +41,15 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <nvcomp/snappy.h>
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <iterator>
@@ -97,20 +107,20 @@ constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
     case orc::DATA:
       skip_count += 1;
       skip_count |= (skip_count & 0xff) << 8;
-      return std::make_pair(gpu::CI_DATA, skip_count);
+      return std::pair(gpu::CI_DATA, skip_count);
     case orc::LENGTH:
     case orc::SECONDARY:
       skip_count += 1;
       skip_count |= (skip_count & 0xff) << 16;
-      return std::make_pair(gpu::CI_DATA2, skip_count);
-    case orc::DICTIONARY_DATA: return std::make_pair(gpu::CI_DICTIONARY, skip_count);
+      return std::pair(gpu::CI_DATA2, skip_count);
+    case orc::DICTIONARY_DATA: return std::pair(gpu::CI_DICTIONARY, skip_count);
     case orc::PRESENT:
       skip_count += (non_child ? 1 : 0);
-      return std::make_pair(gpu::CI_PRESENT, skip_count);
-    case orc::ROW_INDEX: return std::make_pair(gpu::CI_INDEX, skip_count);
+      return std::pair(gpu::CI_PRESENT, skip_count);
+    case orc::ROW_INDEX: return std::pair(gpu::CI_INDEX, skip_count);
     default:
       // Skip this stream as it's not strictly required
-      return std::make_pair(gpu::CI_NUM_STREAMS, 0);
+      return std::pair(gpu::CI_NUM_STREAMS, 0);
   }
 }
 
@@ -230,95 +240,47 @@ size_t gather_stream_info(const size_t stripe_index,
 /**
  * @brief Determines cuDF type of an ORC Decimal column.
  */
-auto decimal_column_type(std::vector<std::string> const& float64_columns,
-                         std::vector<std::string> const& decimal128_columns,
+auto decimal_column_type(std::vector<std::string> const& decimal128_columns,
                          cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
                          int column_index)
 {
-  if (metadata.get_col_type(column_index).kind != DECIMAL) return type_id::EMPTY;
+  if (metadata.get_col_type(column_index).kind != DECIMAL) { return type_id::EMPTY; }
 
-  auto const& column_path = metadata.column_path(0, column_index);
-  auto is_column_in       = [&](const std::vector<std::string>& cols) {
-    return std::find(cols.cbegin(), cols.cend(), column_path) != cols.end();
-  };
-
-  auto const user_selected_float64    = is_column_in(float64_columns);
-  auto const user_selected_decimal128 = is_column_in(decimal128_columns);
-  CUDF_EXPECTS(not user_selected_float64 or not user_selected_decimal128,
-               "Both decimal128 and float64 types selected for column " + column_path);
-
-  if (user_selected_float64) return type_id::FLOAT64;
-  if (user_selected_decimal128) return type_id::DECIMAL128;
+  if (std::find(decimal128_columns.cbegin(),
+                decimal128_columns.cend(),
+                metadata.column_path(0, column_index)) != decimal128_columns.end()) {
+    return type_id::DECIMAL128;
+  }
 
   auto const precision = metadata.get_col_type(column_index)
                            .precision.value_or(cuda::std::numeric_limits<int64_t>::digits10);
-  if (precision <= cuda::std::numeric_limits<int32_t>::digits10) return type_id::DECIMAL32;
-  if (precision <= cuda::std::numeric_limits<int64_t>::digits10) return type_id::DECIMAL64;
+  if (precision <= cuda::std::numeric_limits<int32_t>::digits10) { return type_id::DECIMAL32; }
+  if (precision <= cuda::std::numeric_limits<int64_t>::digits10) { return type_id::DECIMAL64; }
   return type_id::DECIMAL128;
 }
 
 }  // namespace
 
-void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
-                       device_span<gpu_inflate_status_s> comp_stat,
-                       size_t max_uncomp_page_size,
-                       rmm::cuda_stream_view stream)
+__global__ void decompress_check_kernel(device_span<decompress_status const> stats,
+                                        bool* any_block_failure)
 {
-  size_t num_blocks = comp_in.size();
-  size_t temp_size;
+  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < stats.size()) {
+    if (stats[tid].status != 0) {
+      *any_block_failure = true;  // Doesn't need to be atomic
+    }
+  }
+}
 
-  auto status =
-    nvcompBatchedSnappyDecompressGetTempSize(num_blocks, max_uncomp_page_size, &temp_size);
-  CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess == status,
-               "Unable to get scratch size for snappy decompression");
+void decompress_check(device_span<decompress_status> stats,
+                      bool* any_block_failure,
+                      rmm::cuda_stream_view stream)
+{
+  if (stats.empty()) { return; }  // early exit for empty stats
 
-  rmm::device_buffer scratch(temp_size, stream);
-  rmm::device_uvector<void const*> compressed_data_ptrs(num_blocks, stream);
-  rmm::device_uvector<size_t> compressed_data_sizes(num_blocks, stream);
-  rmm::device_uvector<void*> uncompressed_data_ptrs(num_blocks, stream);
-  rmm::device_uvector<size_t> uncompressed_data_sizes(num_blocks, stream);
-
-  rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_blocks, stream);
-  rmm::device_uvector<nvcompStatus_t> statuses(num_blocks, stream);
-
-  // Prepare the vectors
-  auto comp_it = thrust::make_zip_iterator(compressed_data_ptrs.begin(),
-                                           compressed_data_sizes.begin(),
-                                           uncompressed_data_ptrs.begin(),
-                                           uncompressed_data_sizes.data());
-  thrust::transform(rmm::exec_policy(stream),
-                    comp_in.begin(),
-                    comp_in.end(),
-                    comp_it,
-                    [] __device__(gpu_inflate_input_s in) {
-                      return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice, in.dstSize);
-                    });
-
-  status = nvcompBatchedSnappyDecompressAsync(compressed_data_ptrs.data(),
-                                              compressed_data_sizes.data(),
-                                              uncompressed_data_sizes.data(),
-                                              actual_uncompressed_data_sizes.data(),
-                                              num_blocks,
-                                              scratch.data(),
-                                              scratch.size(),
-                                              uncompressed_data_ptrs.data(),
-                                              statuses.data(),
-                                              stream.value());
-  CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess == status, "unable to perform snappy decompression");
-
-  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
-                             statuses.begin(),
-                             statuses.end(),
-                             thrust::make_constant_iterator(nvcompStatus_t::nvcompSuccess)),
-               "Error during snappy decompression");
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    num_blocks,
-    [=, actual_uncomp_sizes = actual_uncompressed_data_sizes.data()] __device__(auto i) {
-      comp_stat[i].bytes_written = actual_uncomp_sizes[i];
-      comp_stat[i].status        = 0;
-    });
+  dim3 block(128);
+  dim3 grid(cudf::util::div_rounding_up_safe(stats.size(), static_cast<size_t>(block.x)));
+  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
 }
 
 rmm::device_buffer reader::impl::decompress_stripe_data(
@@ -332,6 +294,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   bool use_base_stride,
   rmm::cuda_stream_view stream)
 {
+  // For checking whether we decompress successfully
+  hostdevice_vector<bool> any_block_failure(1, stream);
+  any_block_failure[0] = false;
+  any_block_failure.host_to_device(stream);
+
   // Parse the columns' compressed info
   hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, stream_info.size(), stream);
   for (const auto& info : stream_info) {
@@ -340,6 +307,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
       info.length));
   }
   compinfo.host_to_device(stream);
+
   gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                  compinfo.size(),
                                  decompressor->GetBlockSize(),
@@ -359,9 +327,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   CUDF_EXPECTS(total_decomp_size > 0, "No decompressible data found");
 
   rmm::device_buffer decomp_data(total_decomp_size, stream);
-  rmm::device_uvector<gpu_inflate_input_s> inflate_in(
+  rmm::device_uvector<device_span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
-  rmm::device_uvector<gpu_inflate_status_s> inflate_out(num_compressed_blocks, stream);
+  rmm::device_uvector<device_span<uint8_t>> inflate_out(
+    num_compressed_blocks + num_uncompressed_blocks, stream);
+  rmm::device_uvector<decompress_status> inflate_stats(num_compressed_blocks, stream);
 
   // Parse again to populate the decompression input/output buffers
   size_t decomp_offset           = 0;
@@ -371,9 +341,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   for (size_t i = 0; i < compinfo.size(); ++i) {
     auto dst_base                 = static_cast<uint8_t*>(decomp_data.data());
     compinfo[i].uncompressed_data = dst_base + decomp_offset;
-    compinfo[i].decctl            = inflate_in.data() + start_pos;
-    compinfo[i].decstatus         = inflate_out.data() + start_pos;
-    compinfo[i].copyctl           = inflate_in.data() + start_pos_uncomp;
+    compinfo[i].dec_in_ctl        = inflate_in.data() + start_pos;
+    compinfo[i].dec_out_ctl       = inflate_out.data() + start_pos;
+    compinfo[i].decstatus   = {inflate_stats.data() + start_pos, compinfo[i].num_compressed_blocks};
+    compinfo[i].copy_in_ctl = inflate_in.data() + start_pos_uncomp;
+    compinfo[i].copy_out_ctl = inflate_out.data() + start_pos_uncomp;
 
     stream_info[i].dst_pos = decomp_offset;
     decomp_offset += compinfo[i].max_uncompressed_size;
@@ -391,41 +363,53 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
 
   // Dispatch batches of blocks to decompress
   if (num_compressed_blocks > 0) {
+    device_span<device_span<uint8_t const>> inflate_in_view{inflate_in.data(),
+                                                            num_compressed_blocks};
+    device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
     switch (decompressor->GetKind()) {
       case orc::ZLIB:
-        CUDA_TRY(
-          gpuinflate(inflate_in.data(), inflate_out.data(), num_compressed_blocks, 0, stream));
+        gpuinflate(
+          inflate_in_view, inflate_out_view, inflate_stats, gzip_header_included::NO, stream);
         break;
       case orc::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {
-          device_span<gpu_inflate_input_s> inflate_in_view{inflate_in.data(),
-                                                           num_compressed_blocks};
-          device_span<gpu_inflate_status_s> inflate_out_view{inflate_out.data(),
-                                                             num_compressed_blocks};
-          snappy_decompress(inflate_in_view, inflate_out_view, max_uncomp_block_size, stream);
+          nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
+                                     inflate_in_view,
+                                     inflate_out_view,
+                                     inflate_stats,
+                                     max_uncomp_block_size,
+                                     stream);
         } else {
-          CUDA_TRY(
-            gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
+          gpu_unsnap(inflate_in_view, inflate_out_view, inflate_stats, stream);
         }
         break;
-      default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
+      default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
+    decompress_check(inflate_stats, any_block_failure.device_ptr(), stream);
   }
   if (num_uncompressed_blocks > 0) {
-    CUDA_TRY(gpu_copy_uncompressed_blocks(
-      inflate_in.data() + num_compressed_blocks, num_uncompressed_blocks, stream));
+    device_span<device_span<uint8_t const>> copy_in_view{inflate_in.data() + num_compressed_blocks,
+                                                         num_uncompressed_blocks};
+    device_span<device_span<uint8_t>> copy_out_view{inflate_out.data() + num_compressed_blocks,
+                                                    num_uncompressed_blocks};
+    gpu_copy_uncompressed_blocks(copy_in_view, copy_out_view, stream);
   }
   gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
+
+  any_block_failure.device_to_host(stream);
+
+  compinfo.device_to_host(stream, true);
+
+  // We can check on host after stream synchronize
+  CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
+
+  const size_t num_columns = chunks.size().second;
 
   // Update the stream information with the updated uncompressed info
   // TBD: We could update the value from the information we already
   // have in stream_info[], but using the gpu results also updates
   // max_uncompressed_size to the actual uncompressed size, or zero if
   // decompression failed.
-  compinfo.device_to_host(stream, true);
-
-  const size_t num_columns = chunks.size().second;
-
   for (size_t i = 0; i < num_stripes; ++i) {
     for (size_t j = 0; j < num_columns; ++j) {
       auto& chunk = chunks[i][j];
@@ -746,12 +730,11 @@ std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_co
                                                           rmm::cuda_stream_view stream)
 {
   schema_info.name = _metadata.column_name(0, orc_col_id);
-  auto const type  = to_type_id(
-    _metadata.get_schema(orc_col_id),
-    _use_np_dtypes,
-    _timestamp_type.id(),
-    decimal_column_type(_decimal_cols_as_float, decimal128_columns, _metadata, orc_col_id));
-  int32_t scale = 0;
+  auto const type  = to_type_id(_metadata.get_schema(orc_col_id),
+                               _use_np_dtypes,
+                               _timestamp_type.id(),
+                               decimal_column_type(decimal128_columns, _metadata, orc_col_id));
+  int32_t scale    = 0;
   std::vector<std::unique_ptr<column>> child_columns;
   std::unique_ptr<column> out_col = nullptr;
   auto kind                       = _metadata.get_col_type(orc_col_id).kind;
@@ -893,8 +876,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   _use_np_dtypes = options.is_enabled_use_np_dtypes();
 
   // Control decimals conversion
-  _decimal_cols_as_float = options.get_decimal_cols_as_float();
-  decimal128_columns     = options.get_decimal128_columns();
+  decimal128_columns = options.get_decimal128_columns();
 }
 
 timezone_table reader::impl::compute_timezone_table(
@@ -954,11 +936,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Get a list of column data types
     std::vector<data_type> column_types;
     for (auto& col : columns_level) {
-      auto col_type = to_type_id(
-        _metadata.get_col_type(col.id),
-        _use_np_dtypes,
-        _timestamp_type.id(),
-        decimal_column_type(_decimal_cols_as_float, decimal128_columns, _metadata, col.id));
+      auto col_type = to_type_id(_metadata.get_col_type(col.id),
+                                 _use_np_dtypes,
+                                 _timestamp_type.id(),
+                                 decimal_column_type(decimal128_columns, _metadata, col.id));
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
           col_type == type_id::DECIMAL128) {
@@ -1081,16 +1062,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             if (_metadata.per_file_metadata[stripe_source_mapping.source_idx]
                   .source->is_device_read_preferred(len)) {
               read_tasks.push_back(
-                std::make_pair(_metadata.per_file_metadata[stripe_source_mapping.source_idx]
-                                 .source->device_read_async(offset, len, d_dst, stream),
-                               len));
+                std::pair(_metadata.per_file_metadata[stripe_source_mapping.source_idx]
+                            .source->device_read_async(offset, len, d_dst, stream),
+                          len));
 
             } else {
               const auto buffer =
                 _metadata.per_file_metadata[stripe_source_mapping.source_idx].source->host_read(
                   offset, len);
               CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
-              CUDA_TRY(cudaMemcpyAsync(
+              CUDF_CUDA_TRY(cudaMemcpyAsync(
                 d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
               stream.synchronize();
             }
@@ -1281,11 +1262,21 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
   out_metadata.schema_info = std::move(schema_info);
 
-  for (const auto& meta : _metadata.per_file_metadata) {
-    for (const auto& kv : meta.ff.metadata) {
-      out_metadata.user_data.insert({kv.name, kv.value});
-    }
-  }
+  std::transform(_metadata.per_file_metadata.cbegin(),
+                 _metadata.per_file_metadata.cend(),
+                 std::back_inserter(out_metadata.per_file_user_data),
+                 [](auto& meta) {
+                   std::unordered_map<std::string, std::string> kv_map;
+                   std::transform(meta.ff.metadata.cbegin(),
+                                  meta.ff.metadata.cend(),
+                                  std::inserter(kv_map, kv_map.end()),
+                                  [](auto const& kv) {
+                                    return std::pair{kv.name, kv.value};
+                                  });
+                   return kv_map;
+                 });
+  out_metadata.user_data = {out_metadata.per_file_user_data[0].begin(),
+                            out_metadata.per_file_user_data[0].end()};
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }

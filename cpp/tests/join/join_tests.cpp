@@ -67,7 +67,7 @@ struct JoinTest : public cudf::test::BaseFixture {
     auto gold_sort_order = cudf::sorted_order(gold);
     auto sorted_gold     = cudf::gather(gold, *gold_sort_order);
 
-    return std::make_pair(std::move(sorted_gold), std::move(sorted_result));
+    return std::pair(std::move(sorted_gold), std::move(sorted_result));
   }
 };
 
@@ -1423,7 +1423,7 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
   // self-join a table of zeroes to generate an output row count that would overflow int32_t
   std::size_t col_size = 65567;
   rmm::device_buffer zeroes(col_size * sizeof(int32_t), rmm::cuda_stream_default);
-  CUDA_TRY(cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), rmm::cuda_stream_default.value()));
+  CUDF_CUDA_TRY(cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), rmm::cuda_stream_default.value()));
   cudf::column_view col_zeros(cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data());
   cudf::table_view tview{{col_zeros}};
   cudf::hash_join hash_join(tview, cudf::null_equality::UNEQUAL);

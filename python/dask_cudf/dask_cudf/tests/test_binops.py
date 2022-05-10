@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 import operator
 
 import numpy as np
@@ -8,21 +10,14 @@ from dask import dataframe as dd
 
 import cudf
 
+from dask_cudf.tests.utils import _make_random_frame
+
 
 def _make_empty_frame(npartitions=2):
     df = pd.DataFrame({"x": [], "y": []})
     gdf = cudf.DataFrame.from_pandas(df)
     dgf = dd.from_pandas(gdf, npartitions=npartitions)
     return dgf
-
-
-def _make_random_frame(nelem, npartitions=2):
-    df = pd.DataFrame(
-        {"x": np.random.random(size=nelem), "y": np.random.random(size=nelem)}
-    )
-    gdf = cudf.DataFrame.from_pandas(df)
-    dgf = dd.from_pandas(gdf, npartitions=npartitions)
-    return df, dgf
 
 
 def _make_random_frame_float(nelem, npartitions=2):

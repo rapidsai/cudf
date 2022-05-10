@@ -43,7 +43,12 @@ def arrow_arrays(request):
     "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
 )
 def test_basic_assert_index_equal(
-    rdata, exact, check_names, rname, check_categorical, dtype,
+    rdata,
+    exact,
+    check_names,
+    rname,
+    check_categorical,
+    dtype,
 ):
     p_left = pd.Index([1, 2, 3], name="a", dtype=dtype)
     p_right = pd.Index(rdata, name=rname, dtype=dtype)
@@ -100,7 +105,12 @@ def test_basic_assert_index_equal(
     "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
 )
 def test_basic_assert_series_equal(
-    rdata, rname, check_names, check_category_order, check_categorical, dtype,
+    rdata,
+    rname,
+    check_names,
+    check_category_order,
+    check_categorical,
+    dtype,
 ):
 
     p_left = pd.Series([1, 2, 3], name="a", dtype=dtype)
@@ -160,8 +170,8 @@ def test_assert_column_equal_dtype_edge_cases(other):
         assert_column_equal(base, other, check_dtype=False)
 
     # the exceptions are the empty and all null cases
-    assert_column_equal(base[:0], other[:0], check_dtype=False)
-    assert_column_equal(other[:0], base[:0], check_dtype=False)
+    assert_column_equal(base.slice(0, 0), other.slice(0, 0), check_dtype=False)
+    assert_column_equal(other.slice(0, 0), base.slice(0, 0), check_dtype=False)
 
     base = full(len(base), fill_value=cudf.NA, dtype=base.dtype)
     other = full(len(other), fill_value=cudf.NA, dtype=other.dtype)
@@ -401,8 +411,8 @@ def test_assert_column_memory_basic(arrow_arrays):
 
 def test_assert_column_memory_slice(arrow_arrays):
     col = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
-    left = col[0:1]
-    right = col[1:2]
+    left = col.slice(0, 1)
+    right = col.slice(1, 2)
 
     with pytest.raises(AssertionError):
         assert_column_memory_eq(left, right)

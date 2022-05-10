@@ -14,7 +14,7 @@
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cpp common/generate_nullmask.cu)
+add_library(cudf_datagen STATIC common/generate_input.cu)
 target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(
@@ -136,7 +136,7 @@ ConfigureBench(COPY_IF_ELSE_BENCH copying/copy_if_else.cpp)
 
 # ##################################################################################################
 # * transpose benchmark ---------------------------------------------------------------------------
-ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cu)
+ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
 # * apply_boolean_mask benchmark ------------------------------------------------------------------
@@ -145,7 +145,7 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureNVBench(
-  STREAM_COMPACTION_BENCH stream_compaction/distinct.cpp stream_compaction/unique.cpp
+  STREAM_COMPACTION_NVBENCH stream_compaction/distinct.cpp stream_compaction/unique.cpp
 )
 
 # ##################################################################################################
@@ -164,6 +164,7 @@ ConfigureBench(SEARCH_BENCH search/search.cpp)
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
+ConfigureNVBench(SORT_NVBENCH sort/sort_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -180,7 +181,7 @@ ConfigureBench(
   REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
   reduction/reduce.cpp reduction/scan.cpp
 )
-ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu)
+ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu reduction/rank.cpp)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
@@ -193,9 +194,17 @@ ConfigureBench(FILL_BENCH filling/repeat.cpp)
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(
-  GROUPBY_BENCH groupby/group_sum.cu groupby/group_nth.cu groupby/group_shift.cu
-  groupby/group_struct.cu groupby/group_no_requests.cu groupby/group_scan.cu
+  GROUPBY_BENCH
+  groupby/group_sum.cu
+  groupby/group_nth.cu
+  groupby/group_shift.cu
+  groupby/group_struct.cu
+  groupby/group_no_requests.cu
+  groupby/group_scan.cu
+  groupby/group_rank_benchmark.cu
 )
+
+ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank_benchmark.cu)
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
@@ -232,6 +241,10 @@ ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
 # ##################################################################################################
 # * orc writer benchmark --------------------------------------------------------------------------
 ConfigureBench(ORC_WRITER_BENCH io/orc/orc_writer.cpp)
+
+# ##################################################################################################
+# * orc writer chunks benchmark ---------------------------------------------------------------
+ConfigureNVBench(ORC_WRITER_CHUNKS_NVBENCH io/orc/orc_writer_chunks.cpp)
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------

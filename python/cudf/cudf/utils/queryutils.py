@@ -1,7 +1,7 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import ast
-import datetime as dt
+import datetime
 from typing import Any, Dict
 
 import numpy as np
@@ -232,7 +232,7 @@ def query_execute(df, expr, callenv):
         name = name[len(ENVREF_PREFIX) :]
         try:
             val = envdict[name]
-            if isinstance(val, dt.datetime):
+            if isinstance(val, datetime.datetime):
                 val = np.datetime64(val)
         except KeyError:
             msg = "{!r} not defined in the calling environment"

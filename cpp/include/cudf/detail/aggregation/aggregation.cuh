@@ -28,6 +28,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/fill.h>
+
 namespace cudf {
 namespace detail {
 /**
@@ -122,7 +124,7 @@ struct update_target_element {
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    cudf_assert(false and "Invalid source type and aggregation combination.");
+    CUDF_UNREACHABLE("Invalid source type and aggregation combination.");
   }
 };
 

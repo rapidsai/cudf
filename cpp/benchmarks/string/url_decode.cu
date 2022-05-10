@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+
+#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/filling.hpp>
@@ -24,15 +25,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/random.h>
+#include <thrust/tuple.h>
 
 struct url_string_generator {
   char* chars;

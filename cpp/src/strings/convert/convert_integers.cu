@@ -32,7 +32,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -147,14 +150,13 @@ std::unique_ptr<column> is_integer(
       d_column->pair_begin<string_view, true>(),
       d_column->pair_end<string_view, true>(),
       d_results,
-      [] __device__(auto const& p) { return p.second ? string::is_integer(p.first) : false; });
+      [] __device__(auto const& p) { return p.second ? strings::is_integer(p.first) : false; });
   } else {
-    thrust::transform(
-      rmm::exec_policy(stream),
-      d_column->pair_begin<string_view, false>(),
-      d_column->pair_end<string_view, false>(),
-      d_results,
-      [] __device__(auto const& p) { return p.second ? string::is_integer(p.first) : false; });
+    thrust::transform(rmm::exec_policy(stream),
+                      d_column->pair_begin<string_view, false>(),
+                      d_column->pair_end<string_view, false>(),
+                      d_results,
+                      [] __device__(auto const& p) { return strings::is_integer(p.first); });
   }
 
   // Calling mutable_view() on a column invalidates it's null count so we need to set it back

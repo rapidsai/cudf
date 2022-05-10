@@ -289,7 +289,10 @@ public final class Table implements AutoCloseable {
                                                    int statsFreq,
                                                    boolean[] isInt96,
                                                    int[] precisions,
-                                                   boolean[] isMapValues, String filename) throws CudfException;
+                                                   boolean[] isMapValues,
+                                                   boolean[] hasParquetFieldIds,
+                                                   int[] parquetFieldIds,
+                                                   String filename) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
@@ -319,6 +322,8 @@ public final class Table implements AutoCloseable {
                                                      boolean[] isInt96,
                                                      int[] precisions,
                                                      boolean[] isMapValues,
+                                                     boolean[] hasParquetFieldIds,
+                                                     int[] parquetFieldIds,
                                                      HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -1201,6 +1206,8 @@ public final class Table implements AutoCloseable {
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
       boolean[] isMapValues = options.getFlatIsMap();
       int[] precisions = options.getFlatPrecision();
+      boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
+      int[] parquetFieldIds = options.getFlatParquetFieldId();
       int[] flatNumChildren = options.getFlatNumChildren();
 
       this.consumer = null;
@@ -1215,6 +1222,8 @@ public final class Table implements AutoCloseable {
           timeInt96Values,
           precisions,
           isMapValues,
+          hasParquetFieldIds,
+          parquetFieldIds,
           outputFile.getAbsolutePath());
     }
 
@@ -1224,6 +1233,8 @@ public final class Table implements AutoCloseable {
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
       boolean[] isMapValues = options.getFlatIsMap();
       int[] precisions = options.getFlatPrecision();
+      boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
+      int[] parquetFieldIds = options.getFlatParquetFieldId();
       int[] flatNumChildren = options.getFlatNumChildren();
 
       this.consumer = consumer;
@@ -1238,6 +1249,8 @@ public final class Table implements AutoCloseable {
           timeInt96Values,
           precisions,
           isMapValues,
+          hasParquetFieldIds,
+          parquetFieldIds,
           consumer);
     }
 
