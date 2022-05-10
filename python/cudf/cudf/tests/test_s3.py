@@ -30,7 +30,9 @@ def endpoint_port():
     # Return a free port per worker session.
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
-    return sock.getsockname()[1]
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
 
 
 @contextmanager

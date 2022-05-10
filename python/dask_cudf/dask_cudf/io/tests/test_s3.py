@@ -14,7 +14,7 @@ import pytest
 
 import dask_cudf
 
-moto = pytest.importorskip("moto", minversion="1.3.14")
+moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
 requests = pytest.importorskip("requests")
 s3fs = pytest.importorskip("s3fs")
@@ -25,7 +25,9 @@ def endpoint_port():
     # Return a free port per worker session.
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
-    return sock.getsockname()[1]
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
 
 
 @contextmanager
