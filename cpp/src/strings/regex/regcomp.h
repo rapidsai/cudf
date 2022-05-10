@@ -114,8 +114,7 @@ class reprog {
   void set_start_inst(int32_t id);
   [[nodiscard]] int32_t get_start_inst() const;
 
-  void optimize1();
-  void optimize2();
+  void finalize();
   void check_for_errors();
 #ifndef NDEBUG
   void print(regex_flags const flags);
@@ -128,6 +127,8 @@ class reprog {
   std::vector<int32_t> _startinst_ids;  // short-cut to speed-up ORs
   int32_t _num_capturing_groups{};
 
+  void collapse_nops();
+  void build_start_ids();
   void check_for_errors(int32_t id, int32_t next_id);
 };
 
