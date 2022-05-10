@@ -11,6 +11,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
+from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
 
 
@@ -116,7 +117,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             scalar_result = result.element_indexing(0)
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-                if scalar_result is cudf.NA
+                if scalar_result is NA
                 else scalar_result
             )
         return result

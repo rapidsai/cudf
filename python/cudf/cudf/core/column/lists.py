@@ -30,6 +30,7 @@ from cudf.api.types import (
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.dtypes import ListDtype
+from cudf.core.missing import NA
 
 
 class ListColumn(ColumnBase):
@@ -91,7 +92,7 @@ class ListColumn(ColumnBase):
         if isinstance(value, cudf.Scalar):
             if value.dtype != self.dtype:
                 raise TypeError("list nesting level mismatch")
-        elif value is cudf.NA:
+        elif value is NA:
             value = cudf.Scalar(value, dtype=self.dtype)
         else:
             raise ValueError(f"Can not set {value} into ListColumn")
@@ -354,7 +355,7 @@ class ListMethods(ColumnMethods):
             index = as_column(index)
             out = extract_element_column(self._column, as_column(index))
 
-        if not (default is None or default is cudf.NA):
+        if not (default is None or default is NA):
             # determine rows for which `index` is out-of-bounds
             lengths = count_elements(self._column)
             out_of_bounds_mask = (np.negative(index) > lengths) | (
