@@ -285,12 +285,13 @@ class device_row_comparator {
  * @tparam values weak_ordering parameter pack of orderings to interpret as true
  */
 template <typename Comparator, weak_ordering... values>
-struct weak_ordering_comparator_impl{
-    __device__ bool operator()(size_type const& lhs, size_type const& rhs){
-        weak_ordering const result = comparator(lhs, rhs);
-        return ( (result == values) || ...);
-   }
-   Comparator comparator;
+struct weak_ordering_comparator_impl {
+  __device__ bool operator()(size_type const& lhs, size_type const& rhs)
+  {
+    weak_ordering const result = comparator(lhs, rhs);
+    return ((result == values) || ...);
+  }
+  Comparator comparator;
 };
 
 /**
