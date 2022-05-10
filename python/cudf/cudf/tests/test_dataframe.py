@@ -9319,30 +9319,29 @@ def test_dataframe_eval_errors(df_eval, expr):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "data,subset",
     [
-        {
-            "gdf": cudf.DataFrame(
+        (
+            cudf.DataFrame(
                 {"num_legs": [2, 4, 4, 6], "num_wings": [2, 0, 0, 0]},
                 index=["falcon", "dog", "cat", "ant"],
             ),
-            "subset": ["num_legs"],
-        },
-        {
-            "gdf": cudf.DataFrame(
+            ["num_legs"],
+        ),
+        (
+            cudf.DataFrame(
                 {
                     "first_name": ["John", "Anne", "John", "Beth"],
                     "middle_name": ["Smith", None, None, "Louise"],
                 }
             ),
-            "subset": ["first_name"],
-        },
+            ["first_name"],
+        ),
     ],
 )
 @pytest.mark.parametrize("boolean", [True, False])
-def test_value_counts(data, boolean):
-    subset = data["subset"]
-    gdf = data["gdf"]
+def test_value_counts(data, subset, boolean):
+    gdf = data
     pdf = gdf.to_pandas()
 
     got = gdf.value_counts()
