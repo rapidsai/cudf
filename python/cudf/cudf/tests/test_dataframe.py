@@ -9323,10 +9323,7 @@ def test_dataframe_eval_errors(df_eval, expr):
     [
         {
             "gdf": cudf.DataFrame(
-                {
-                    "num_legs": [2, 4, 4, 6],
-                    "num_wings": [2, 0, 0, 0]
-                },
+                {"num_legs": [2, 4, 4, 6], "num_wings": [2, 0, 0, 0]},
                 index=["falcon", "dog", "cat", "ant"],
             ),
             "subset": ["num_legs"],
