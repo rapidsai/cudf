@@ -56,6 +56,8 @@ template <typename T>
 using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
 
 namespace {
+static constexpr auto null = -1;
+
 // Checking with a single aggregation, and aggregation column.
 // This test is orthogonal to the aggregation type; it focuses on testing the grouping
 // with LISTS keys.
@@ -158,11 +160,24 @@ TYPED_TEST(groupby_lists_test, basic)
   if (std::is_same_v<TypeParam, bool>) { return; }
 
   // clang-format off
-  auto keys   = lcw<TypeParam> { {1,1},  {2,2},  {3,3},   {1,1},   {2,2} };
-  auto values = fwcw<int32_t>  {    0,      1,      2,       3,       4  };
+  auto keys   = lcw<TypeParam> { {1,1}, {2,2}, {3,3}, {1,1}, {2,2} };
+  auto values = fwcw<int32_t>  {    0,     1,     2,     3,     4  };
 
-  auto expected_keys   = lcw<TypeParam> { {1,1},  {2,2},  {3,3} };
-  auto expected_values = fwcw<R>        {    3,      5,      2  };
+  auto expected_keys   = lcw<TypeParam> { {1,1}, {2,2}, {3,3} };
+  auto expected_values = fwcw<R>        {    3,     5,     2  };
+  // clang-format on
+
+  test_sum_agg(keys, values, expected_keys, expected_values);
+}
+
+TYPED_TEST(groupby_lists_test, all_null_input)
+{
+  // clang-format off
+  auto keys   = lcw<TypeParam> { {{1,1}, {2,2}, {3,3}, {1,1}, {2,2}}, all_nulls()};
+  auto values = fwcw<int32_t>  {     0,     1,     2,     3,     4 };
+
+  auto expected_keys   = lcw<TypeParam> { {{null,null}}, all_nulls()};
+  auto expected_values = fwcw<R>        {          10 };
   // clang-format on
 
   test_sum_agg(keys, values, expected_keys, expected_values);
