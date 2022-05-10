@@ -42,8 +42,8 @@ enum InstType {
   EOL     = 0304,  // End of line, $
   CCLASS  = 0305,  // Character class, []
   NCCLASS = 0306,  // Negated character class, [^ ]
-  BOW     = 0307,  // Boundary of word, /b
-  NBOW    = 0310,  // Not boundary of word, /B
+  BOW     = 0307,  // Boundary of word, \b
+  NBOW    = 0310,  // Not boundary of word, \B
   END     = 0377   // Terminate: match found
 };
 
@@ -60,9 +60,9 @@ struct reclass {
 constexpr int32_t CCLASS_W{1 << 0};   // [a-z], [A-Z], [0-9], and '_'
 constexpr int32_t CCLASS_S{1 << 1};   // all spaces or ctrl characters
 constexpr int32_t CCLASS_D{1 << 2};   // digits [0-9]
-constexpr int32_t NCCLASS_W{1 << 3};  // not cclass_w plus '\n'
-constexpr int32_t NCCLASS_S{1 << 4};  // not cclass_s
-constexpr int32_t NCCLASS_D{1 << 5};  // not cclass_d plus '\n'
+constexpr int32_t NCCLASS_W{1 << 3};  // not CCLASS_W or '\n'
+constexpr int32_t NCCLASS_S{1 << 4};  // not CCLASS_S
+constexpr int32_t NCCLASS_D{1 << 5};  // not CCLASS_D or '\n'
 
 /**
  * @brief Structure of an encoded regex instruction
