@@ -2,19 +2,9 @@
 
 from __future__ import annotations
 
-import pickle
 from collections import abc
 from functools import cached_property
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
 
 import numpy as np
 import pandas as pd
@@ -684,53 +674,6 @@ class CategoricalColumn(column.ColumnBase):
         except ValueError:
             return False
         return self._encode(item) in self.as_numerical
-
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[Any, Any] = {}
-        frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["dtype"], dtype_frames = self.dtype.serialize()
-        header["dtype_frames_count"] = len(dtype_frames)
-        frames.extend(dtype_frames)
-        header["data"], data_frames = self.codes.serialize()
-        header["data_frames_count"] = len(data_frames)
-        frames.extend(data_frames)
-        if self.mask is not None:
-            mask_header, mask_frames = self.mask.serialize()
-            header["mask"] = mask_header
-            frames.extend(mask_frames)
-        header["frame_count"] = len(frames)
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header: dict, frames: list) -> CategoricalColumn:
-        n_dtype_frames = header["dtype_frames_count"]
-        dtype = CategoricalDtype.deserialize(
-            header["dtype"], frames[:n_dtype_frames]
-        )
-        n_data_frames = header["data_frames_count"]
-
-        column_type = pickle.loads(header["data"]["type-serialized"])
-        data = column_type.deserialize(
-            header["data"],
-            frames[n_dtype_frames : n_dtype_frames + n_data_frames],
-        )
-        mask = None
-        if "mask" in header:
-            mask = Buffer.deserialize(
-                header["mask"], [frames[n_dtype_frames + n_data_frames]]
-            )
-        return cast(
-            CategoricalColumn,
-            column.build_column(
-                data=None,
-                dtype=dtype,
-                mask=mask,
-                children=(
-                    column.build_column(data.base_data, dtype=data.dtype),
-                ),
-            ),
-        )
 
     def set_base_data(self, value):
         if value is not None:
