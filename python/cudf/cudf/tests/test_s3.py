@@ -74,20 +74,7 @@ def s3_base(endpoint_ip, endpoint_port):
 
         server = ThreadedMotoServer(ip_address=endpoint_ip, port=endpoint_port)
         server.start()
-
-        timeout = 5
-        while timeout > 0:
-            try:
-                # OK to go once server is accepting connections
-                r = requests.get(endpoint_uri)
-                if r.ok:
-                    break
-            except Exception:
-                pass
-            timeout -= 0.1
-            time.sleep(0.1)
         yield endpoint_uri
-
         server.stop()
 
 
