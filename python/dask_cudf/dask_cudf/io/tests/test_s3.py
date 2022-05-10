@@ -14,7 +14,6 @@ import dask_cudf
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
-requests = pytest.importorskip("requests")
 s3fs = pytest.importorskip("s3fs")
 ThreadedMotoServer = pytest.importorskip("moto.server").ThreadedMotoServer
 
