@@ -94,7 +94,7 @@ namespace lexicographic {
 template <typename Nullate, bool NanConfig = false>
 class device_row_comparator {
   // friend class self_comparator;
-public: // needs to be removed, pending strict typing for indices
+ public:  // needs to be removed, pending strict typing for indices
   /**
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
@@ -333,9 +333,10 @@ using less_comparator =
   weak_ordering_comparator_impl<device_row_comparator<Nullate, NanConfig>, weak_ordering::LESS>;
 
 template <typename Nullate, bool NanConfig = false>
-using less_equivalent_comparator = weak_ordering_comparator_impl<device_row_comparator<Nullate, NanConfig>,
-                                                                 weak_ordering::LESS,
-                                                                 weak_ordering::EQUIVALENT>;
+using less_equivalent_comparator =
+  weak_ordering_comparator_impl<device_row_comparator<Nullate, NanConfig>,
+                                weak_ordering::LESS,
+                                weak_ordering::EQUIVALENT>;
 
 struct preprocessed_table {
   using table_device_view_owner =
