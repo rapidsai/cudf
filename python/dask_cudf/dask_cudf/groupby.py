@@ -40,6 +40,9 @@ def _check_groupby_supported(func):
         gb = args[0]
         if _groupby_supported(gb):
             return func(*args, **kwargs)
+        # note that we use upstream Dask's default kwargs for this call if
+        # none are specified; this shouldn't be an issue as those defaults are
+        # consistent with dask-cudf
         return getattr(super(type(gb), gb), func.__name__)(*args[1:], **kwargs)
 
     return wrapper
