@@ -2,7 +2,6 @@
 
 import os
 import socket
-import time
 from contextlib import contextmanager
 from io import BytesIO
 
