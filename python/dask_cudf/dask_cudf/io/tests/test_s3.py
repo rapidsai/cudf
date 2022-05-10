@@ -16,8 +16,7 @@ moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
 requests = pytest.importorskip("requests")
 s3fs = pytest.importorskip("s3fs")
-
-from moto.server import ThreadedMotoServer  # noqa: E402
+ThreadedMotoServer = pytest.importorskip("moto.server").ThreadedMotoServer
 
 
 @pytest.fixture(scope="session")
