@@ -90,7 +90,6 @@ namespace lexicographic {
  */
 template <typename Nullate>
 class device_row_comparator {
-  // friend class device_less_comparator<Nullate>;
   friend class self_comparator;
   /**
    * @brief Construct a function object for performing a lexicographic
@@ -280,6 +279,9 @@ class device_row_comparator {
 /**
  * @brief Wraps and interprets the result of templated Comparator that returns a weak_ordering.
  * Returns true if the weak_ordering matches any of the templated values.
+ *
+ * Note that this should never be used with only `weak_ordering::EQUIVALENT`.
+ * An equality comparator should be used instead for optimal performance.
  *
  * @tparam Comparator generic comparator that returns a weak_ordering.
  * @tparam values weak_ordering parameter pack of orderings to interpret as true
