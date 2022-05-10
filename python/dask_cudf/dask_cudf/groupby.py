@@ -36,6 +36,12 @@ SUPPORTED_AGGS = (
 
 
 def _check_groupby_supported(func):
+    """
+    Decorator for dask-cudf's groupby methods that returns the dask-cudf
+    method if the groupby object is supported, otherwise reverting to the
+    upstream Dask method
+    """
+
     def wrapper(*args, **kwargs):
         gb = args[0]
         if _groupby_supported(gb):
