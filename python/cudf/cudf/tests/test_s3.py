@@ -1,8 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import os
-import shlex
-import subprocess
 import time
 from contextlib import contextmanager
 from io import BytesIO
@@ -23,6 +21,13 @@ boto3 = pytest.importorskip("boto3")
 requests = pytest.importorskip("requests")
 s3fs = pytest.importorskip("s3fs")
 
+from moto.server import ThreadedMotoServer  # noqa: E402
+
+
+@pytest.fixture(scope="session")
+def endpoint_ip():
+    return "127.0.0.1"
+
 
 @contextmanager
 def ensure_safe_environment_variables():
@@ -40,7 +45,7 @@ def ensure_safe_environment_variables():
 
 
 @pytest.fixture(scope="session")
-def s3_base(worker_id):
+def s3_base(endpoint_ip, worker_id):
     """
     Fixture to set up moto server in separate process
     """
@@ -58,11 +63,10 @@ def s3_base(worker_id):
             if worker_id == "master"
             else 5550 + int(worker_id.lstrip("gw"))
         )
-        endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
+        endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
 
-        proc = subprocess.Popen(
-            shlex.split(f"moto_server s3 -p {endpoint_port}"),
-        )
+        server = ThreadedMotoServer(ip_address=endpoint_ip, port=endpoint_port)
+        server.start()
 
         timeout = 5
         while timeout > 0:
@@ -77,19 +81,18 @@ def s3_base(worker_id):
             time.sleep(0.1)
         yield endpoint_uri
 
-        proc.terminate()
-        proc.wait()
+        server.stop()
 
 
 @pytest.fixture()
-def s3so(worker_id):
+def s3so(endpoint_ip, worker_id):
     """
     Returns s3 storage options to pass to fsspec
     """
     endpoint_port = (
         5000 if worker_id == "master" else 5550 + int(worker_id.lstrip("gw"))
     )
-    endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
+    endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
 
     return {"client_kwargs": {"endpoint_url": endpoint_uri}}
 
