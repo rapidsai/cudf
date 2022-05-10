@@ -1,6 +1,6 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import os
-import shlex
-import subprocess
 import time
 from contextlib import contextmanager
 from io import BytesIO
@@ -52,10 +52,10 @@ def s3_base(worker_id):
             else 5550 + int(worker_id.lstrip("gw"))
         )
         endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
+        from moto.server import ThreadedMotoServer
 
-        proc = subprocess.Popen(
-            shlex.split(f"moto_server s3 -p {endpoint_port}"),
-        )
+        server = ThreadedMotoServer(ip_address="127.0.0.1", port=endpoint_port)
+        server.start()
 
         timeout = 5
         while timeout > 0:
@@ -70,8 +70,7 @@ def s3_base(worker_id):
             time.sleep(0.1)
         yield endpoint_uri
 
-        proc.terminate()
-        proc.wait()
+        server.stop()
 
 
 @pytest.fixture()
