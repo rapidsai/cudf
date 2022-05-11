@@ -28,7 +28,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf import NA
+from cudf.core.missing import NA
 import cudf._lib as libcudf
 from cudf._typing import ColumnLike
 from cudf.api.types import (

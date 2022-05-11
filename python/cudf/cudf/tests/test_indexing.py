@@ -981,7 +981,13 @@ def test_series_setitem_iloc(key, value, nulls):
 @pytest.mark.parametrize(
     "key, value",
     [
-        (0, 0.5),
+        pytest.param(
+            0,
+            0.5,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/9913"
+            ),
+        ),
         ([0, 1], 0.5),
         ([0, 1], [0.5, 2.5]),
         (slice(0, 2), [0.5, 0.25]),
@@ -1446,7 +1452,12 @@ def test_loc_zero_dim_array():
         slice((1, 2), None),
         slice(None, (1, 2)),
         (1, 1),
-        (1, slice(None)),
+        pytest.param(
+            (1, slice(None)),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/46704"
+            ),
+        ),
     ],
 )
 def test_loc_series_multiindex(arg):

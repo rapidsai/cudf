@@ -36,6 +36,8 @@ from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
+from cudf.core.missing import NA
+
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
@@ -76,6 +78,7 @@ from cudf.core.indexed_frame import (
     _indices_from_labels,
     doc_reset_index_template,
 )
+from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
@@ -364,9 +367,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 scatter_map = _indices_from_labels(self._frame, key[0])
                 for col in columns_df._column_names:
                     columns_df[col][scatter_map] = (
-                        value._data[col]
-                        if col in value_column_names
-                        else cudf.NA
+                        value._data[col] if col in value_column_names else NA
                     )
 
             else:
@@ -479,7 +480,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             value_column_names = set(value._column_names)
             for col in columns_df._column_names:
                 columns_df[col][key[0]] = (
-                    value._data[col] if col in value_column_names else cudf.NA
+                    value._data[col] if col in value_column_names else NA
                 )
 
         else:
@@ -790,9 +791,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         data.extend([o for o in initial_data])
                 else:
                     raise ValueError(
-                        f"Shape of passed values is "
-                        f"{(data_length, len(data[0]))}, "
-                        f"indices imply {(index_length, len(data[0]))}"
+                        f"Length of values ({data_length}) does "
+                        f"not match length of index ({index_length})"
                     )
 
             final_index = as_index(index)
@@ -2193,7 +2193,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         method=None,
         copy=True,
         level=None,
-        fill_value=cudf.NA,
+        fill_value=NA,
         limit=None,
         tolerance=None,
     ):
@@ -3809,8 +3809,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # bytecode to generate the equivalent PTX
             # as a null-ignoring version of the function
             def _func(x):  # pragma: no cover
-                if x is cudf.NA:
-                    return cudf.NA
+                if x is NA:
+                    return NA
                 else:
                     return devfunc(x)
 
