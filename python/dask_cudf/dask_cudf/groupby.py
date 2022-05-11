@@ -83,22 +83,25 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         g._meta = g._meta[key]
         return g
 
+    def _columns_not_in_by(self):
+        """Generator of the columns contained in the groupby agg result"""
+
+        if isinstance(self.by, list):
+            for c in self.obj.columns:
+                if c not in self.by:
+                    yield c
+        else:
+            for c in self.obj.columns:
+                if c != self.by:
+                    yield c
+
     @_dask_cudf_nvtx_annotate
     @_check_groupby_supported
     def count(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
             self.by,
-            {
-                c: "count"
-                for c in self.obj.columns
-                if c
-                not in (
-                    self.by
-                    if isinstance(self.by, (tuple, list))
-                    else [self.by]
-                )
-            },
+            {c: "count" for c in self._columns_not_in_by()},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -113,16 +116,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {
-                c: "mean"
-                for c in self.obj.columns
-                if c
-                not in (
-                    self.by
-                    if isinstance(self.by, (tuple, list))
-                    else [self.by]
-                )
-            },
+            {c: "mean" for c in self._columns_not_in_by()},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -137,16 +131,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {
-                c: "std"
-                for c in self.obj.columns
-                if c
-                not in (
-                    self.by
-                    if isinstance(self.by, (tuple, list))
-                    else [self.by]
-                )
-            },
+            {c: "std" for c in self._columns_not_in_by()},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -161,16 +146,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {
-                c: "var"
-                for c in self.obj.columns
-                if c
-                not in (
-                    self.by
-                    if isinstance(self.by, (tuple, list))
-                    else [self.by]
-                )
-            },
+            {c: "var" for c in self._columns_not_in_by()},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -185,16 +161,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {
-                c: "sum"
-                for c in self.obj.columns
-                if c
-                not in (
-                    self.by
-                    if isinstance(self.by, (tuple, list))
-                    else [self.by]
-                )
-            },
+            {c: "sum" for c in self._columns_not_in_by()},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -209,16 +176,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {
-                c: "min"
-                for c in self.obj.columns
-                if c
-                not in (
-                    self.by
-                    if isinstance(self.by, (tuple, list))
-                    else [self.by]
-                )
-            },
+            {c: "min" for c in self._columns_not_in_by()},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -233,16 +191,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {
-                c: "max"
-                for c in self.obj.columns
-                if c
-                not in (
-                    self.by
-                    if isinstance(self.by, (tuple, list))
-                    else [self.by]
-                )
-            },
+            {c: "max" for c in self._columns_not_in_by()},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -257,16 +206,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {
-                c: "collect"
-                for c in self.obj.columns
-                if c
-                not in (
-                    self.by
-                    if isinstance(self.by, (tuple, list))
-                    else [self.by]
-                )
-            },
+            {c: "collect" for c in self._columns_not_in_by()},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -281,16 +221,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {
-                c: "first"
-                for c in self.obj.columns
-                if c
-                not in (
-                    self.by
-                    if isinstance(self.by, (tuple, list))
-                    else [self.by]
-                )
-            },
+            {c: "first" for c in self._columns_not_in_by()},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -305,16 +236,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {
-                c: "last"
-                for c in self.obj.columns
-                if c
-                not in (
-                    self.by
-                    if isinstance(self.by, (tuple, list))
-                    else [self.by]
-                )
-            },
+            {c: "last" for c in self._columns_not_in_by()},
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -750,6 +672,7 @@ def _aggs_supported(arg, supported: set):
     return False
 
 
+@_dask_cudf_nvtx_annotate
 def _groupby_supported(gb):
     """Check that groupby input is supported by dask-cudf"""
     return isinstance(gb.obj, DaskDataFrame) and (
