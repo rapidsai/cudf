@@ -96,10 +96,12 @@ std::unique_ptr<column> search_bound(table_view const& haystack,
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
   auto const matched = dictionary::detail::match_dictionaries({haystack, needles}, stream);
-  auto const& lhs    = matched.second.front();
-  auto const& rhs    = matched.second.back();
-  //  auto const& lhs = find_lower_bound ? matched.second.front() : matched.second.back();
-  //  auto const& rhs = find_lower_bound ? matched.second.back() : matched.second.front();
+  // auto const& lhs    = matched.second.front();
+  // auto const& rhs    = matched.second.back();
+  auto const& lhs   = find_lower_bound ? matched.second.front() : matched.second.back();
+  auto const& rhs   = find_lower_bound ? matched.second.back() : matched.second.front();
+  auto const it_lhs = cudf::make_lhs_index_counting_iterator(0);
+  auto const it_rhs = cudf::make_rhs_index_counting_iterator(0);
 
   auto const comp = cudf::experimental::row::lexicographic::two_table_comparator(
     lhs, rhs, column_order, null_precedence, stream);
@@ -114,10 +116,6 @@ std::unique_ptr<column> search_bound(table_view const& haystack,
     }
   };
 
-  auto const it_lhs = cudf::make_lhs_index_counting_iterator(0);
-  auto const it_rhs = cudf::make_rhs_index_counting_iterator(0);
-  //  auto const it_lhs = thrust::make_counting_iterator(0);
-  //  auto const it_rhs = thrust::make_counting_iterator(0);
   do_search(rmm::exec_policy(stream),
             it_lhs,
             it_lhs + haystack.num_rows(),

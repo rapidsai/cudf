@@ -503,8 +503,7 @@ class two_table_device_row_comparator_adapter {
     // equality returns true for operator(rhs, lhs), while operator(lhs, rhs)
     // returns false. This would have to be handled at a lower level, if it
     // matters. Do we just document that this means "rhs <= lhs"?
-    return not comp(static_cast<cudf::size_type>(lhs_index),
-                    static_cast<cudf::size_type>(rhs_index));
+    return comp(static_cast<cudf::size_type>(rhs_index), static_cast<cudf::size_type>(lhs_index));
   }
 
  private:
