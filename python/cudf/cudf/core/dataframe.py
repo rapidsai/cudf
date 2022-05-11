@@ -36,8 +36,6 @@ from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
-from cudf.core.missing import NA
-
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
@@ -2181,7 +2179,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self._set_column_names(
             other._data.names, other._data.multiindex, other._data.level_names
         )
-
 
     @_cudf_nvtx_annotate
     def reindex(

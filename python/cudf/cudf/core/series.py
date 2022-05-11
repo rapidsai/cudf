@@ -725,7 +725,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
         """
         if len(args) > 1:
-            raise TypeError("Only one positional argument ('index') is allowed")
+            raise TypeError(
+                "Only one positional argument ('index') is allowed"
+            )
         if args:
             (index,) = args
             if "index" in kwargs:
@@ -733,16 +735,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     "'index' passed as both positional and keyword argument"
                 )
         else:
-            index = kwargs.get('index', self._index)
-            
+            index = kwargs.get("index", self._index)
+
         name = self.name or 0
         series = self._reindex(
-            deep=kwargs.get('copy', True),
+            deep=kwargs.get("copy", True),
             dtypes={name: self.dtype},
             index=index,
             columns=[name],
             inplace=False,
-            fill_value=kwargs.get('fill_value', cudf.NA)
+            fill_value=kwargs.get("fill_value", cudf.NA),
         )
         series.name = self.name
         return series

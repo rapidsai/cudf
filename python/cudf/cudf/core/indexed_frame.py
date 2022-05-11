@@ -28,7 +28,6 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.core.missing import NA
 import cudf._lib as libcudf
 from cudf._typing import ColumnLike
 from cudf.api.types import (
@@ -44,6 +43,7 @@ from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.index import Index, RangeIndex, _index_from_columns
+from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
 from cudf.utils import docutils
@@ -1343,7 +1343,9 @@ class IndexedFrame(Frame):
                 )
                 df = cudf.DataFrame()
             else:
-                df = cudf.DataFrame(None, index).join(cudf.DataFrame(df), how="left", sort=True)
+                df = cudf.DataFrame(None, index).join(
+                    cudf.DataFrame(df), how="left", sort=True
+                )
                 # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
 
