@@ -82,8 +82,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   auto null_purged_offsets = strings::detail::make_offsets_child_column(
     null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream, mr);
 
-  return std::make_pair<std::unique_ptr<column>, std::unique_ptr<column>>(
-    std::move(null_purged_values), std::move(null_purged_offsets));
+  return std::pair(std::move(null_purged_values), std::move(null_purged_offsets));
 }
 
 std::unique_ptr<column> group_collect(column_view const& values,
@@ -109,8 +108,8 @@ std::unique_ptr<column> group_collect(column_view const& values,
       return cudf::groupby::detail::purge_null_entries(
         values, offsets_column->view(), num_groups, stream, mr);
     } else {
-      return std::make_pair(std::make_unique<cudf::column>(values, stream, mr),
-                            std::move(offsets_column));
+      return std::pair(std::make_unique<cudf::column>(values, stream, mr),
+                       std::move(offsets_column));
     }
   }();
 

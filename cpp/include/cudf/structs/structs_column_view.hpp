@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,11 @@ class structs_column_view : public column_view {
   structs_column_view& operator=(structs_column_view&&) = default;
 
   explicit structs_column_view(column_view const& rhs);
+
+  /**
+   * @brief Returns the parent column.
+   */
+  [[nodiscard]] column_view parent() const;
 
   using column_view::child_begin;
   using column_view::child_end;

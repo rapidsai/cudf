@@ -45,7 +45,7 @@ namespace {
 /**
  * @brief Device functor to create a pair of hash value and index for a given row.
  */
-struct make_pair_function {
+struct make_pair_fn {
   __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
   {
     // The value is irrelevant since we only ever use the hash map to check for
@@ -101,7 +101,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto const right_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(right_flattened_keys)};
   row_hash const hash_build{right_nulls, *right_rows_d};
   row_equality equality_build{right_nulls, *right_rows_d, *right_rows_d, compare_nulls};
-  make_pair_function pair_func_build{};
+  make_pair_fn pair_func_build{};
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
 
@@ -137,18 +137,27 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto gather_map =
     std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
 
-  // gather_map_end will be the end of valid data in gather_map
-  auto gather_map_end = thrust::copy_if(
+  rmm::device_uvector<bool> flagged(left_num_rows, stream, mr);
+  auto flagged_d = flagged.data();
+
+  auto counting_iter = thrust::counting_iterator<size_type>(0);
+  thrust::for_each(
     rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(left_num_rows),
-    gather_map->begin(),
-    [hash_table_view, join_type_boolean, hash_probe, equality_probe] __device__(
-      size_type const idx) {
-      // Look up this row. The hash function used here needs to map a (left) row index to the hash
-      // of the row, so it's a row hash. The equality check needs to verify
-      return hash_table_view.contains(idx, hash_probe, equality_probe) == join_type_boolean;
+    counting_iter,
+    counting_iter + left_num_rows,
+    [flagged_d, hash_table_view, join_type_boolean, hash_probe, equality_probe] __device__(
+      const size_type idx) {
+      flagged_d[idx] =
+        hash_table_view.contains(idx, hash_probe, equality_probe) == join_type_boolean;
     });
+
+  // gather_map_end will be the end of valid data in gather_map
+  auto gather_map_end =
+    thrust::copy_if(rmm::exec_policy(stream),
+                    counting_iter,
+                    counting_iter + left_num_rows,
+                    gather_map->begin(),
+                    [flagged_d] __device__(size_type const idx) { return flagged_d[idx]; });
 
   auto join_size = thrust::distance(gather_map->begin(), gather_map_end);
   gather_map->resize(join_size, stream);

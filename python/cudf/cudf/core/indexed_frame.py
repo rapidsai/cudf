@@ -144,7 +144,6 @@ def _drop_columns(f: Frame, columns: abc.Iterable, errors: str):
 
 
 def _indices_from_labels(obj, labels):
-
     if not isinstance(labels, cudf.MultiIndex):
         labels = cudf.core.column.as_column(labels)
 
@@ -2207,7 +2206,7 @@ class IndexedFrame(Frame):
         Optional[cudf.BaseIndex],
     ]:
         raise NotImplementedError(
-            "Binary operations are not supported for {self.__class__}"
+            f"Binary operations are not supported for {self.__class__}"
         )
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -3632,7 +3631,7 @@ class IndexedFrame(Frame):
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 
-        method_enum = libcudf.sort.RankMethod[method.upper()]
+        method_enum = libcudf.aggregation.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"

@@ -1275,6 +1275,7 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10618")
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a
