@@ -2,7 +2,7 @@
 
 import warnings
 from decimal import Decimal
-from typing import Any, Sequence, Tuple, Union, cast
+from typing import Any, Sequence, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -320,18 +320,6 @@ class Decimal64Column(DecimalBaseColumn):
             length=self.size,
             buffers=[mask_buf, data_buf],
         )
-
-    def serialize(self) -> Tuple[dict, list]:
-        header, frames = super().serialize()
-        header["dtype"] = self.dtype.serialize()
-        header["size"] = self.size
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header: dict, frames: list) -> ColumnBase:
-        dtype = cudf.Decimal64Dtype.deserialize(*header["dtype"])
-        header["dtype"] = dtype
-        return super().deserialize(header, frames)
 
     @property
     def __cuda_array_interface__(self):

@@ -2586,7 +2586,7 @@ class Frame(BinaryOperand, Scannable):
     def min(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         level=None,
         numeric_only=None,
         **kwargs,
@@ -2637,7 +2637,7 @@ class Frame(BinaryOperand, Scannable):
     def max(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         level=None,
         numeric_only=None,
         **kwargs,
@@ -2688,7 +2688,7 @@ class Frame(BinaryOperand, Scannable):
     def sum(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         dtype=None,
         level=None,
         numeric_only=None,
@@ -2747,7 +2747,7 @@ class Frame(BinaryOperand, Scannable):
     def product(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         dtype=None,
         level=None,
         numeric_only=None,
@@ -2810,7 +2810,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def mean(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
         """
         Return the mean of the values for the requested axis.
@@ -2857,7 +2857,7 @@ class Frame(BinaryOperand, Scannable):
     def std(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         level=None,
         ddof=1,
         numeric_only=None,
@@ -2914,7 +2914,7 @@ class Frame(BinaryOperand, Scannable):
     def var(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         level=None,
         ddof=1,
         numeric_only=None,
@@ -2968,12 +2968,12 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def kurtosis(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
         """
         Return Fisher's unbiased kurtosis of a sample.
 
-        Kurtosis obtained using Fisher’s definition of
+        Kurtosis obtained using Fisher's definition of
         kurtosis (kurtosis of normal == 0.0). Normalized by N-1.
 
         Parameters
@@ -3025,7 +3025,7 @@ class Frame(BinaryOperand, Scannable):
     # Alias for kurtosis.
     @copy_docstring(kurtosis)
     def kurt(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
         return self.kurtosis(
             axis=axis,
@@ -3037,7 +3037,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def skew(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
         """
         Return unbiased Fisher-Pearson skew of a sample.
@@ -3199,7 +3199,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def median(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
         """
         Return the median of the values for the requested axis.
