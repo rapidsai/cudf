@@ -11,7 +11,7 @@ import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
-from dask_cudf.groupby import SUPPORTED_AGGS, _is_supported
+from dask_cudf.groupby import SUPPORTED_AGGS, _aggs_supported
 
 
 @pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
@@ -235,8 +235,7 @@ def test_groupby_split_out(split_out, column):
 @pytest.mark.parametrize(
     "by", ["a", "b", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]]
 )
-def test_groupby_dropna(dropna, by):
-
+def test_groupby_dropna_cudf(dropna, by):
     # NOTE: This test is borrowed from upstream dask
     #       (dask/dask/dataframe/tests/test_groupby.py)
     df = cudf.DataFrame(
@@ -263,6 +262,100 @@ def test_groupby_dropna(dropna, by):
         dask_result.index.name = cudf_result.index.name
 
     dd.assert_eq(dask_result, cudf_result)
+
+
+@pytest.mark.parametrize(
+    "dropna,by",
+    [
+        (False, "a"),
+        (False, "b"),
+        (False, "c"),
+        pytest.param(
+            False,
+            "d",
+            marks=pytest.mark.xfail(
+                reason="dropna=False is broken in Dask CPU for groupbys on "
+                "categorical columns"
+            ),
+        ),
+        pytest.param(
+            False,
+            ["a", "b"],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/dask/dask/issues/8817"
+            ),
+        ),
+        pytest.param(
+            False,
+            ["a", "c"],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/dask/dask/issues/8817"
+            ),
+        ),
+        pytest.param(
+            False,
+            ["a", "d"],
+            marks=pytest.mark.xfail(
+                reason="multi-col groupbys on categorical columns are broken "
+                "in Dask CPU"
+            ),
+        ),
+        (True, "a"),
+        (True, "b"),
+        (True, "c"),
+        (True, "d"),
+        (True, ["a", "b"]),
+        (True, ["a", "c"]),
+        pytest.param(
+            True,
+            ["a", "d"],
+            marks=pytest.mark.xfail(
+                reason="multi-col groupbys on categorical columns are broken "
+                "in Dask CPU"
+            ),
+        ),
+        (None, "a"),
+        (None, "b"),
+        (None, "c"),
+        (None, "d"),
+        (None, ["a", "b"]),
+        (None, ["a", "c"]),
+        pytest.param(
+            None,
+            ["a", "d"],
+            marks=pytest.mark.xfail(
+                reason="multi-col groupbys on categorical columns are broken "
+                "in Dask CPU"
+            ),
+        ),
+    ],
+)
+def test_groupby_dropna_dask(dropna, by):
+    # NOTE: This test is borrowed from upstream dask
+    #       (dask/dask/dataframe/tests/test_groupby.py)
+    df = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, None, None, 7, 8],
+            "b": [1, None, 1, 3, None, 3, 1, 3],
+            "c": ["a", "b", None, None, "e", "f", "g", "h"],
+            "e": [4, 5, 6, 3, 2, 1, 0, 0],
+        }
+    )
+    df["b"] = df["b"].astype("datetime64[ns]")
+    df["d"] = df["c"].astype("category")
+
+    gdf = cudf.from_pandas(df)
+    ddf = dd.from_pandas(df, npartitions=3)
+    gddf = dask_cudf.from_cudf(gdf, npartitions=3)
+
+    if dropna is None:
+        dask_cudf_result = gddf.groupby(by).e.sum()
+        dask_result = ddf.groupby(by).e.sum()
+    else:
+        dask_cudf_result = gddf.groupby(by, dropna=dropna).e.sum()
+        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+
+    dd.assert_eq(dask_cudf_result, dask_result)
 
 
 @pytest.mark.parametrize("myindex", [[1, 2] * 4, ["s1", "s2"] * 4])
@@ -570,7 +663,7 @@ def test_groupby_agg_redirect(aggregations):
     [["not_supported"], {"a": "not_supported"}, {"a": ["not_supported"]}],
 )
 def test_is_supported(arg):
-    assert _is_supported(arg, {"supported"}) is False
+    assert _aggs_supported(arg, {"supported"}) is False
 
 
 def test_groupby_unique_lists():

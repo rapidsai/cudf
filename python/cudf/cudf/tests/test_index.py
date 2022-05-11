@@ -11,7 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_133
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -504,7 +504,8 @@ def test_empty_df_head_tail_index(n):
             10,
             None,
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/43240"
+                condition=not PANDAS_GE_133,
+                reason="https://github.com/pandas-dev/pandas/issues/43240",
             ),
         ),
         (
@@ -705,6 +706,7 @@ def test_index_argsort(data):
         pd.Index([102, 1001, 1002, 0.0, 23], dtype="datetime64[ns]"),
         pd.Index([13240.2, 1001, 100.2, 0.0, 23], dtype="datetime64[ns]"),
         pd.RangeIndex(0, 10, 1),
+        pd.RangeIndex(0, -100, -2),
         pd.Index([-10.2, 100.1, -100.2, 0.0, 23], dtype="timedelta64[ns]"),
     ],
 )

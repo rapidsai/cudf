@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
+import glob
 import math
 import os
 import pathlib
@@ -1694,6 +1695,66 @@ def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
     assert_eq(got_pd, got_cudf)
+
+
+@pytest.mark.parametrize(
+    "max_file_size,max_file_size_in_bytes",
+    [("500KB", 500000), ("MB", 1000000)],
+)
+def test_parquet_writer_chunked_max_file_size(
+    tmpdir_factory, max_file_size, max_file_size_in_bytes
+):
+    pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
+    gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
+
+    df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1] * 10000, "b": range(0, 50000)})
+    df2 = cudf.DataFrame(
+        {"a": [1, 3, 3, 1, 3] * 10000, "b": range(50000, 100000)}
+    )
+
+    cw = ParquetDatasetWriter(
+        gdf_dir,
+        partition_cols=["a"],
+        max_file_size=max_file_size,
+        file_name_prefix="sample",
+    )
+    cw.write_table(df1)
+    cw.write_table(df2)
+    cw.close()
+    pdf = cudf.concat([df1, df2]).to_pandas()
+    pdf.to_parquet(pdf_dir, index=False, partition_cols=["a"])
+
+    expect_pd = pd.read_parquet(pdf_dir)
+    got_pd = pd.read_parquet(gdf_dir)
+
+    assert_eq(
+        expect_pd.sort_values(["b"]).reset_index(drop=True),
+        got_pd.sort_values(["b"]).reset_index(drop=True),
+    )
+
+    # Check that cudf and pd return the same read
+    got_cudf = cudf.read_parquet(gdf_dir)
+
+    assert_eq(
+        got_pd.sort_values(["b"]).reset_index(drop=True),
+        got_cudf.sort_values(["b"]).reset_index(drop=True),
+    )
+
+    all_files = glob.glob(gdf_dir + "/**/*.parquet", recursive=True)
+    for each_file in all_files:
+        # Validate file sizes with some extra 1000
+        # bytes buffer to spare
+        assert os.path.getsize(each_file) <= (
+            max_file_size_in_bytes
+        ), "File exceeded max_file_size"
+
+
+def test_parquet_writer_chunked_max_file_size_error():
+    with pytest.raises(
+        ValueError,
+        match="file_name_prefix cannot be None if max_file_size is passed",
+    ):
+        ParquetDatasetWriter("sample", partition_cols=["a"], max_file_size=100)
 
 
 def test_parquet_writer_chunked_partitioned_context(tmpdir_factory):
