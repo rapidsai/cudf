@@ -20,7 +20,12 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
+from cudf.core._compat import (
+    PANDAS_GE_110,
+    PANDAS_GE_120,
+    PANDAS_GE_134,
+    PANDAS_LT_140,
+)
 from cudf.core.column import column
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
@@ -1941,7 +1946,7 @@ def gdf(pdf):
         "any",
     ],
 )
-@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("skipna", [True, False])
 def test_dataframe_reductions(data, axis, func, skipna):
     pdf = pd.DataFrame(data=data)
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -2005,7 +2010,7 @@ def test_dataframe_count_reduction(data, func):
     ],
 )
 @pytest.mark.parametrize("ops", ["sum", "product", "prod"])
-@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("skipna", [True, False])
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 10])
 def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     psr = pd.DataFrame(data)
@@ -3072,7 +3077,8 @@ def test_dataframe_empty_sort_index():
             pd.RangeIndex(2, -1, -1),
             marks=[
                 pytest.mark.xfail(
-                    reason="https://github.com/pandas-dev/pandas/issues/43591"
+                    condition=PANDAS_LT_140,
+                    reason="https://github.com/pandas-dev/pandas/issues/43591",
                 )
             ],
         ),
@@ -6937,7 +6943,16 @@ def test_dataframe_append_series_dict(df, other, sort):
     actual = gdf.append(other_gd, ignore_index=True, sort=sort)
 
     if expected.shape != df.shape:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        # Ignore the column type comparison because pandas incorrectly
+        # returns pd.Index([1, 2, 3], dtype="object") instead
+        # of pd.Index([1, 2, 3], dtype="int64")
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=False,
+            check_index_type=True,
+        )
     else:
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
@@ -7156,7 +7171,12 @@ def test_dataframe_append_lists(df, other, sort, ignore_index):
     actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
 
     if expected.shape != df.shape:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=False if gdf.empty else True,
+        )
     else:
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
@@ -7510,6 +7530,12 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
     actual = cudf.DataFrame(gd_data, columns=columns)
 
     if ignore_dtype:
+        # When a union is performed to generate columns,
+        # the order is never guaranteed. Hence sort by
+        # columns before comparison.
+        if not expected.columns.equals(actual.columns):
+            expected = expected.sort_index(axis=1)
+            actual = actual.sort_index(axis=1)
         assert_eq(
             expected.fillna(-1),
             actual.fillna(-1),
@@ -7599,6 +7625,12 @@ def test_dataframe_init_from_series_list_with_index(
     actual = cudf.DataFrame(gd_data, columns=columns, index=index)
 
     if ignore_dtype:
+        # When a union is performed to generate columns,
+        # the order is never guaranteed. Hence sort by
+        # columns before comparison.
+        if not expected.columns.equals(actual.columns):
+            expected = expected.sort_index(axis=1)
+            actual = actual.sort_index(axis=1)
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
         assert_eq(expected, actual)
@@ -8630,14 +8662,16 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
     pdf = pd.DataFrame(data, index=p_index, columns=labels)
     gdf = cudf.from_pandas(pdf)
 
-    # TODO: Remove this workaround after
-    #  following issue is fixed:
-    # https://github.com/pandas-dev/pandas/issues/43314
-    if isinstance(label_to_explode, int):
-        pdlabel_to_explode = [label_to_explode]
+    if PANDAS_GE_134:
+        expect = pdf.explode(label_to_explode, ignore_index)
     else:
-        pdlabel_to_explode = label_to_explode
-    expect = pdf.explode(pdlabel_to_explode, ignore_index)
+        # https://github.com/pandas-dev/pandas/issues/43314
+        if isinstance(label_to_explode, int):
+            pdlabel_to_explode = [label_to_explode]
+        else:
+            pdlabel_to_explode = label_to_explode
+        expect = pdf.explode(pdlabel_to_explode, ignore_index)
+
     got = gdf.explode(label_to_explode, ignore_index)
 
     assert_eq(expect, got, check_dtype=False)
