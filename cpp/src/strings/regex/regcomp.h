@@ -41,9 +41,9 @@ enum InstType {
   BOL     = 0303,  // Beginning of line, ^
   EOL     = 0304,  // End of line, $
   CCLASS  = 0305,  // Character class, []
-  NCCLASS = 0306,  // Negated character class, []
-  BOW     = 0307,  // Boundary of word, /b
-  NBOW    = 0310,  // Not boundary of word, /b
+  NCCLASS = 0306,  // Negated character class, [^ ]
+  BOW     = 0307,  // Boundary of word, \b
+  NBOW    = 0310,  // Not boundary of word, \B
   END     = 0377   // Terminate: match found
 };
 
@@ -56,6 +56,13 @@ struct reclass {
   reclass() {}
   reclass(int m) : builtins(m) {}
 };
+
+constexpr int32_t CCLASS_W{1 << 0};   // [a-z], [A-Z], [0-9], and '_'
+constexpr int32_t CCLASS_S{1 << 1};   // all spaces or ctrl characters
+constexpr int32_t CCLASS_D{1 << 2};   // digits [0-9]
+constexpr int32_t NCCLASS_W{1 << 3};  // not CCLASS_W or '\n'
+constexpr int32_t NCCLASS_S{1 << 4};  // not CCLASS_S
+constexpr int32_t NCCLASS_D{1 << 5};  // not CCLASS_D or '\n'
 
 /**
  * @brief Structure of an encoded regex instruction
@@ -76,12 +83,11 @@ struct reinst {
 };
 
 /**
- * @brief Regex program handles parsing a pattern in to individual set
+ * @brief Regex program handles parsing a pattern into a vector
  * of chained instructions.
  */
 class reprog {
  public:
-  reprog()              = default;
   reprog(const reprog&) = default;
   reprog(reprog&&)      = default;
   ~reprog()             = default;
@@ -89,8 +95,12 @@ class reprog {
   reprog& operator=(reprog&&) = default;
 
   /**
-   * @brief Parses the given regex pattern and compiles
-   * into a list of chained instructions.
+   * @brief Parses the given regex pattern and produces an instance
+   * of this object
+   *
+   * @param pattern Regex pattern encoded as UTF-8
+   * @param flags For interpretting certain `pattern` characters
+   * @return Instance of reprog
    */
   static reprog create_from(std::string_view pattern, regex_flags const flags);
 
@@ -122,12 +132,13 @@ class reprog {
 #endif
 
  private:
-  std::vector<reinst> _insts;
-  std::vector<reclass> _classes;
-  int32_t _startinst_id;
+  std::vector<reinst> _insts;           // instructions
+  std::vector<reclass> _classes;        // data for CCLASS instructions
+  int32_t _startinst_id{};              // id of first instruction
   std::vector<int32_t> _startinst_ids;  // short-cut to speed-up ORs
   int32_t _num_capturing_groups{};
 
+  reprog() = default;
   void check_for_errors(int32_t id, int32_t next_id);
 };
 

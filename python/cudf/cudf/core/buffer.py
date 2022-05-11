@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import functools
@@ -123,16 +123,20 @@ class Buffer(Serializable):
         header["constructor-kwargs"] = {}
         header["desc"] = self.__cuda_array_interface__.copy()
         header["desc"]["strides"] = (1,)
+        header["frame_count"] = 1
         frames = [self]
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> Buffer:
+        assert (
+            header["frame_count"] == 1
+        ), "Only expecting to deserialize Buffer with a single frame."
         buf = cls(frames[0], **header["constructor-kwargs"])
 
         if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(
-                f"Recieved a `Buffer` with the wrong size."
+                f"Received a `Buffer` with the wrong size."
                 f" Expected {header['desc']['shape']}, "
                 f"but got {buf.__cuda_array_interface__['shape']}"
             )

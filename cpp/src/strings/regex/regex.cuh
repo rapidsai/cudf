@@ -39,23 +39,9 @@ struct relist;
 using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
 using match_result = thrust::optional<match_pair>;
 
-constexpr int32_t RX_STACK_SMALL  = 112;   ///< fastest stack size
-constexpr int32_t RX_STACK_MEDIUM = 1104;  ///< faster stack size
-constexpr int32_t RX_STACK_LARGE  = 2560;  ///< fast stack size
-constexpr int32_t RX_STACK_ANY    = 8;     ///< slowest: uses global memory
-
-/**
- * @brief Mapping the number of instructions to device code stack memory size.
- *
- * ```
- * 10128 ≈ 1000 instructions
- * Formula is based on relist::data_size_for() calculation;
- * Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
- * ```
- */
-constexpr int32_t RX_SMALL_INSTS  = (RX_STACK_SMALL / 11);
-constexpr int32_t RX_MEDIUM_INSTS = (RX_STACK_MEDIUM / 11);
-constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 11);
+constexpr int32_t MAX_SHARED_MEM      = 2048;  ///< Memory size for storing prog instruction data
+constexpr std::size_t MAX_WORKING_MEM = 0x01FFFFFFFF;  ///< Memory size for state data
+constexpr int32_t MINIMUM_THREADS     = 256;  // Minimum threads for computing working memory
 
 /**
  * @brief Regex class stored on the device and executed by reprog_device.
@@ -75,6 +61,12 @@ struct alignas(16) reclass_device {
  *
  * Once created, the find/extract methods are used to evaluate the regex instructions
  * against a single string.
+ *
+ * An instance of the class requires working memory for evaluating the regex
+ * instructions for the string. Determine the size of the required memory by
+ * calling either `working_memory_size()` or `compute_strided_working_memory()`.
+ * Once the buffer is allocated, pass the device pointer to the `set_working_memory()`
+ * member function.
  */
 class reprog_device {
  public:
@@ -92,33 +84,22 @@ class reprog_device {
    * regex.
    *
    * @param pattern The regex pattern to compile.
-   * @param codepoint_flags The code point lookup table for character types.
-   * @param strings_count Number of strings that will be evaluated.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return The program device object.
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    std::string const& pattern,
-    uint8_t const* codepoint_flags,
-    size_type strings_count,
-    rmm::cuda_stream_view stream);
+    std::string const& pattern, rmm::cuda_stream_view stream);
 
   /**
    * @brief Create the device program instance from a regex pattern.
    *
    * @param pattern The regex pattern to compile.
    * @param re_flags Regex flags for interpreting special characters in the pattern.
-   * @param codepoint_flags The code point lookup table for character types.
-   * @param strings_count Number of strings that will be evaluated.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return The program device object.
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    std::string const& pattern,
-    regex_flags const re_flags,
-    uint8_t const* codepoint_flags,
-    size_type strings_count,
-    rmm::cuda_stream_view stream);
+    std::string const& pattern, regex_flags const re_flags, rmm::cuda_stream_view stream);
 
   /**
    * @brief Called automatically by the unique_ptr returned from create().
@@ -144,11 +125,74 @@ class reprog_device {
   [[nodiscard]] __device__ inline bool is_empty() const;
 
   /**
+   * @brief Returns the size needed for working memory for the given thread count.
+   *
+   * @param num_threads Number of threads to be executed in parallel
+   * @return Size of working memory in bytes
+   */
+  [[nodiscard]] std::size_t working_memory_size(int32_t num_threads) const;
+
+  /**
+   * @brief Compute working memory for the given thread count with a maximum size.
+   *
+   * The `min_rows` overrules the `requested_max_size`.
+   * That is, the `requested_max_size` may be
+   * exceeded to keep the number of rows greater than `min_rows`.
+   * Also, if `rows < min_rows` then `min_rows` is not enforced.
+   *
+   * @param rows Number of rows to execute in parallel
+   * @param min_rows The least number of rows to meet `max_size`
+   * @param requested_max_size Requested maximum bytes for the working memory
+   * @return The size of the working memory and the number of parallel rows it will support
+   */
+  [[nodiscard]] std::pair<std::size_t, int32_t> compute_strided_working_memory(
+    int32_t rows,
+    int32_t min_rows               = MINIMUM_THREADS,
+    std::size_t requested_max_size = MAX_WORKING_MEM) const;
+
+  /**
+   * @brief Set the device working memory buffer to use for the regex execution.
+   *
+   * @param buffer Device memory pointer.
+   * @param thread_count Number of threads the memory buffer will support.
+   * @param max_insts Set to the maximum instruction count if reusing the
+   *                  memory buffer for other regex calls.
+   */
+  void set_working_memory(void* buffer, int32_t thread_count, int32_t max_insts = 0);
+
+  /**
+   * @brief Returns the size of shared memory required to hold this instance.
+   *
+   * This can be called on the CPU for specifying the shared-memory size in the
+   * kernel launch parameters.
+   * This may return 0 if the MAX_SHARED_MEM value is exceeded.
+   */
+  [[nodiscard]] int32_t compute_shared_memory_size() const;
+
+  /**
+   * @brief Returns the thread count passed on `set_working_memory`.
+   */
+  [[nodiscard]] __device__ inline int32_t thread_count() const { return _thread_count; }
+
+  /**
+   * @brief Store this object into the given device pointer (e.g. shared memory).
+   *
+   * No data is stored if MAX_SHARED_MEM is exceeded for this object.
+   */
+  __device__ inline void store(void* buffer) const;
+
+  /**
+   * @brief Load an instance of this class from a device buffer (e.g. shared memory).
+   *
+   * Data is loaded from the given buffer if MAX_SHARED_MEM is not exceeded for the given object.
+   * Otherwise, a copy of the object is returned.
+   */
+  [[nodiscard]] __device__ static inline reprog_device load(reprog_device const prog, void* buffer);
+
+  /**
    * @brief Does a find evaluation using the compiled expression on the given string.
    *
-   * @tparam stack_size One of the `RX_STACK_` values based on the `insts_count`.
-   * @param idx The string index used for mapping the state memory for this string in global memory
-   * (if necessary).
+   * @param thread_idx The index used for mapping the state memory for this string in global memory.
    * @param d_str The string to search.
    * @param[in,out] begin Position index to begin the search. If found, returns the position found
    * in the string.
@@ -156,8 +200,7 @@ class reprog_device {
    * matching in the string.
    * @return Returns 0 if no match is found.
    */
-  template <int stack_size>
-  __device__ inline int32_t find(int32_t idx,
+  __device__ inline int32_t find(int32_t const thread_idx,
                                  string_view const d_str,
                                  cudf::size_type& begin,
                                  cudf::size_type& end) const;
@@ -169,9 +212,7 @@ class reprog_device {
    * The find() function should be called first to locate the begin/end bounds of the
    * the matched section.
    *
-   * @tparam stack_size One of the `RX_STACK_` values based on the `insts_count`.
-   * @param idx The string index used for mapping the state memory for this string in global
-   * memory (if necessary).
+   * @param thread_idx The index used for mapping the state memory for this string in global memory.
    * @param d_str The string to search.
    * @param begin Position index to begin the search. If found, returns the position found
    * in the string.
@@ -180,8 +221,7 @@ class reprog_device {
    * @param group_id The specific group to return its matching position values.
    * @return If valid, returns the character position of the matched group in the given string,
    */
-  template <int stack_size>
-  __device__ inline match_result extract(cudf::size_type idx,
+  __device__ inline match_result extract(int32_t const thread_idx,
                                          string_view const d_str,
                                          cudf::size_type begin,
                                          cudf::size_type end,
@@ -220,8 +260,7 @@ class reprog_device {
   /**
    * @brief Utility wrapper to setup state memory structures for calling regexec
    */
-  template <int stack_size>
-  __device__ inline int32_t call_regexec(int32_t idx,
+  __device__ inline int32_t call_regexec(int32_t const thread_idx,
                                          string_view const d_str,
                                          cudf::size_type& begin,
                                          cudf::size_type& end,
@@ -234,13 +273,16 @@ class reprog_device {
   int32_t _insts_count;           // number of instructions
   int32_t _starts_count;          // number of start-insts ids
   int32_t _classes_count;         // number of classes
+  int32_t _max_insts;             // for partitioning working memory
 
   uint8_t const* _codepoint_flags{};  // table of character types
   reinst const* _insts{};             // array of regex instructions
   int32_t const* _startinst_ids{};    // array of start instruction ids
   reclass_device const* _classes{};   // array of regex classes
 
-  void* _relists_mem{};  // runtime relist memory for regexec()
+  std::size_t _prog_size{};  // total size of this instance
+  void* _buffer{};           // working memory buffer
+  int32_t _thread_count{};   // threads available in working memory
 };
 
 }  // namespace detail
