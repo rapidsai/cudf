@@ -44,17 +44,17 @@ enum OperatorType {
   NOP          = 0302,  // No operation, internal use only
 };
 
-static reclass ccls_w(1);   // [a-z], [A-Z], [0-9], and '_'
-static reclass ccls_W(8);   // now ccls_w plus '\n'
-static reclass ccls_s(2);   // all spaces or ctrl characters
-static reclass ccls_S(16);  // not ccls_s
-static reclass ccls_d(4);   // digits [0-9]
-static reclass ccls_D(32);  // not ccls_d plus '\n'
+static reclass ccls_w(CCLASS_W);   // \w
+static reclass ccls_s(CCLASS_S);   // \s
+static reclass ccls_d(CCLASS_D);   // \d
+static reclass ccls_W(NCCLASS_W);  // \W
+static reclass ccls_S(NCCLASS_S);  // \S
+static reclass ccls_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
 const std::array<int, 6> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL, RBRA}};
 const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
-// Valid regex characters that can be escaping to be used as literals
+// Valid regex characters that can be escaped and used as literals
 const std::array<char, 33> escapable_chars{
   {'.', '-', '+',  '*', '\\', '?', '^', '$', '|', '{', '}', '(', ')', '[', ']', '<', '>',
    '"', '~', '\'', '`', '_',  '@', '=', ';', ':', '!', '#', '%', '&', ',', '/', ' '}};

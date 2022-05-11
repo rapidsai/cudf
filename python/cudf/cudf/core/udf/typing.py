@@ -17,8 +17,8 @@ from numba.core.typing.templates import (
 )
 from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
-from pandas._libs.missing import NAType as _NAType
 
+from cudf.core.missing import NA
 from cudf.core.udf import api
 from cudf.core.udf._ops import (
     arith_ops,
@@ -214,7 +214,7 @@ class NAType(types.Type):
 na_type = NAType()
 
 
-@typeof_impl.register(_NAType)
+@typeof_impl.register(type(NA))
 def typeof_na(val, c):
     """
     Tie instances of _NAType (cudf.NA) to our NAType.
