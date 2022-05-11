@@ -233,10 +233,10 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @tparam OutputIterator   the output column iterator
  * @tparam OutputType       the output type of reduction
  *
- * @param[in] d_out         the begin iterator to output
  * @param[in] d_in          the begin iterator to input
  * @param[in] d_offset      the begin iterator to offset
  * @param[in] num_segments  the number of segments
+ * @param[out] d_out        the begin iterator to output
  * @param[in] binary_op     the reduction operator
  * @param[in] identity      the identity element of the reduction operator
  * @param[in] stream        CUDA stream used for device memory operations and kernel launches.
@@ -249,10 +249,10 @@ template <typename InputIterator,
           typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
           typename std::enable_if_t<is_fixed_width<OutputType>() &&
                                     !cudf::is_fixed_point<OutputType>()>* = nullptr>
-void segmented_reduce(OutputIterator d_out,
-                      InputIterator d_in,
+void segmented_reduce(InputIterator d_in,
                       OffsetIterator d_offset,
                       cudf::size_type num_segments,
+                      OutputIterator d_out,
                       BinaryOp binary_op,
                       OutputType identity,
                       rmm::cuda_stream_view stream)
@@ -292,10 +292,10 @@ template <typename InputIterator,
           typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
           typename std::enable_if_t<!(is_fixed_width<OutputType>() &&
                                       !cudf::is_fixed_point<OutputType>())>* = nullptr>
-void segmented_reduce(OutputIterator,
-                      InputIterator,
+void segmented_reduce(InputIterator,
                       OffsetIterator,
                       cudf::size_type,
+                      OutputIterator,
                       BinaryOp,
                       OutputType,
                       rmm::cuda_stream_view)
