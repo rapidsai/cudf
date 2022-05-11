@@ -83,6 +83,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         g._meta = g._meta[key]
         return g
 
+    @_dask_cudf_nvtx_annotate
     def _columns_not_in_by(self):
         """Generator of the columns contained in the groupby agg result"""
 
