@@ -21,6 +21,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/utilities/strong_index.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -46,6 +47,25 @@
 
 namespace cudf {
 namespace {
+
+struct make_lhs_index {
+  __device__ lhs_index_type operator()(size_type i) const { return static_cast<lhs_index_type>(i); }
+};
+
+struct make_rhs_index {
+  __device__ rhs_index_type operator()(size_type i) const { return static_cast<rhs_index_type>(i); }
+};
+
+auto make_lhs_index_counting_iterator(size_type start)
+{
+  return cudf::detail::make_counting_transform_iterator(start, make_lhs_index{});
+};
+
+auto make_rhs_index_counting_iterator(size_type start)
+{
+  return cudf::detail::make_counting_transform_iterator(start, make_rhs_index{});
+};
+
 std::unique_ptr<column> search_bound(table_view const& haystack,
                                      table_view const& needles,
                                      bool find_lower_bound,
@@ -76,14 +96,12 @@ std::unique_ptr<column> search_bound(table_view const& haystack,
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
   auto const matched = dictionary::detail::match_dictionaries({haystack, needles}, stream);
+  auto const& lhs    = matched.second.front();
+  auto const& rhs    = matched.second.back();
+  //  auto const& lhs = find_lower_bound ? matched.second.front() : matched.second.back();
+  //  auto const& rhs = find_lower_bound ? matched.second.back() : matched.second.front();
 
-  auto const count_it = thrust::make_counting_iterator<size_type>(0);
-
-  // todo: remove this when the new strong-typed comparator is in.
-  auto const& lhs = find_lower_bound ? matched.second.front() : matched.second.back();
-  auto const& rhs = find_lower_bound ? matched.second.back() : matched.second.front();
-
-  auto const comp = cudf::experimental::row::lexicographic::table_comparator(
+  auto const comp = cudf::experimental::row::lexicographic::two_table_comparator(
     lhs, rhs, column_order, null_precedence, stream);
   auto const has_any_nulls = has_nested_nulls(haystack) or has_nested_nulls(needles);
   auto const dcomp         = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
@@ -95,11 +113,16 @@ std::unique_ptr<column> search_bound(table_view const& haystack,
       thrust::upper_bound(std::forward<decltype(args)>(args)...);
     }
   };
+
+  auto const it_lhs = cudf::make_lhs_index_counting_iterator(0);
+  auto const it_rhs = cudf::make_rhs_index_counting_iterator(0);
+  //  auto const it_lhs = thrust::make_counting_iterator(0);
+  //  auto const it_rhs = thrust::make_counting_iterator(0);
   do_search(rmm::exec_policy(stream),
-            count_it,
-            count_it + haystack.num_rows(),
-            count_it,
-            count_it + needles.num_rows(),
+            it_lhs,
+            it_lhs + haystack.num_rows(),
+            it_rhs,
+            it_rhs + needles.num_rows(),
             out_it,
             dcomp);
 
@@ -109,8 +132,8 @@ std::unique_ptr<column> search_bound(table_view const& haystack,
 struct contains_scalar_dispatch {
   template <typename Type>
   std::enable_if_t<!is_nested<Type>(), bool> operator()(column_view const& haystack,
-                                                               scalar const& needle,
-                                                               rmm::cuda_stream_view stream)
+                                                        scalar const& needle,
+                                                        rmm::cuda_stream_view stream)
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
