@@ -99,7 +99,7 @@ std::unique_ptr<column> replace_re(
 std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& strings,
   std::string_view pattern,
-  std::string const& replacement,
+  std::string_view replacement,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
