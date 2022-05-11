@@ -183,5 +183,18 @@ TYPED_TEST(groupby_lists_test, all_null_input)
   test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
+TYPED_TEST(groupby_lists_test, lists_with_nulls)
+{
+  // clang-format off
+  auto keys   = lcw<TypeParam> { {{1,1}, {2,2}, {3,3}, {1,1}, {2,2}}, nulls_at({1,2,4})};
+  auto values = fwcw<int32_t>  {     0,     1,     2,     3,     4 };
+
+  auto expected_keys   = lcw<TypeParam> { {{1,1}, {null,null}}, null_at(1)};
+  auto expected_values = fwcw<R>        {     3,           7 };
+  // clang-format on
+
+  test_sum_agg(keys, values, expected_keys, expected_values);
+}
+
 }  // namespace test
 }  // namespace cudf
