@@ -60,7 +60,7 @@ std::unique_ptr<column> pad(
   strings_column_view const& strings,
   size_type width,
   pad_side side                       = pad_side::RIGHT,
-  std::string const& fill_char        = " ",
+  std::string_view fill_char          = " ",
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -68,7 +68,7 @@ std::unique_ptr<column> pad(
   if (strings_count == 0) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS(!fill_char.empty(), "fill_char parameter must not be empty");
   char_utf8 d_fill_char    = 0;
-  size_type fill_char_size = to_char_utf8(fill_char.c_str(), d_fill_char);
+  size_type fill_char_size = to_char_utf8(fill_char.data(), d_fill_char);
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
@@ -206,7 +206,7 @@ std::unique_ptr<column> zfill(
 std::unique_ptr<column> pad(strings_column_view const& strings,
                             size_type width,
                             pad_side side,
-                            std::string const& fill_char,
+                            std::string_view fill_char,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
