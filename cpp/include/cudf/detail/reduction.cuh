@@ -250,13 +250,15 @@ template <typename InputIterator,
           typename std::enable_if_t<is_fixed_width<OutputType>() &&
                                     !cudf::is_fixed_point<OutputType>()>* = nullptr>
 void segmented_reduce(InputIterator d_in,
-                      OffsetIterator d_offset,
-                      cudf::size_type num_segments,
+                      OffsetIterator d_offset_begin,
+                      OffsetIterator d_offset_end,
                       OutputIterator d_out,
                       BinaryOp binary_op,
                       OutputType identity,
                       rmm::cuda_stream_view stream)
 {
+  auto num_segments = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
+
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
   size_t temp_storage_bytes = 0;
@@ -265,8 +267,8 @@ void segmented_reduce(InputIterator d_in,
                                      d_in,
                                      d_out,
                                      num_segments,
-                                     d_offset,
-                                     d_offset + 1,
+                                     d_offset_begin,
+                                     d_offset_begin + 1,
                                      binary_op,
                                      identity,
                                      stream.value());
@@ -278,8 +280,8 @@ void segmented_reduce(InputIterator d_in,
                                      d_in,
                                      d_out,
                                      num_segments,
-                                     d_offset,
-                                     d_offset + 1,
+                                     d_offset_begin,
+                                     d_offset_begin + 1,
                                      binary_op,
                                      identity,
                                      stream.value());
@@ -294,7 +296,7 @@ template <typename InputIterator,
                                       !cudf::is_fixed_point<OutputType>())>* = nullptr>
 void segmented_reduce(InputIterator,
                       OffsetIterator,
-                      cudf::size_type,
+                      OffsetIterator,
                       OutputIterator,
                       BinaryOp,
                       OutputType,
