@@ -22,7 +22,6 @@
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include <cudf/detail/utilities/strong_index.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/sorting.hpp>
@@ -431,6 +430,27 @@ class self_comparator {
 
  private:
   std::shared_ptr<preprocessed_table> d_t;
+};
+
+enum class lhs_index_type : size_type {};
+enum class rhs_index_type : size_type {};
+
+struct make_lhs_index {
+  __device__ lhs_index_type operator()(size_type i) const { return static_cast<lhs_index_type>(i); }
+};
+
+struct make_rhs_index {
+  __device__ rhs_index_type operator()(size_type i) const { return static_cast<rhs_index_type>(i); }
+};
+
+auto inline make_lhs_index_counting_iterator(size_type start)
+{
+  return cudf::detail::make_counting_transform_iterator(start, make_lhs_index{});
+};
+
+auto inline make_rhs_index_counting_iterator(size_type start)
+{
+  return cudf::detail::make_counting_transform_iterator(start, make_rhs_index{});
 };
 
 template <typename Nullate>

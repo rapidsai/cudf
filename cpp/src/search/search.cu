@@ -19,7 +19,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/strong_index.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -45,24 +44,6 @@
 
 namespace cudf {
 namespace {
-
-struct make_lhs_index {
-  __device__ lhs_index_type operator()(size_type i) const { return static_cast<lhs_index_type>(i); }
-};
-
-struct make_rhs_index {
-  __device__ rhs_index_type operator()(size_type i) const { return static_cast<rhs_index_type>(i); }
-};
-
-auto make_lhs_index_counting_iterator(size_type start)
-{
-  return cudf::detail::make_counting_transform_iterator(start, make_lhs_index{});
-};
-
-auto make_rhs_index_counting_iterator(size_type start)
-{
-  return cudf::detail::make_counting_transform_iterator(start, make_rhs_index{});
-};
 
 std::unique_ptr<column> search_ordered(table_view const& haystack,
                                        table_view const& needles,
@@ -107,8 +88,8 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   // We use lhs and rhs to control the direction of the comparison with
   // strongly-typed indices. The first pair of iterators are always the
   // haystack, and the second pair are the needles.
-  auto const lhs_it = cudf::make_lhs_index_counting_iterator(0);
-  auto const rhs_it = cudf::make_rhs_index_counting_iterator(0);
+  auto const lhs_it = cudf::experimental::row::lexicographic::make_lhs_index_counting_iterator(0);
+  auto const rhs_it = cudf::experimental::row::lexicographic::make_rhs_index_counting_iterator(0);
 
   if (find_first) {
     thrust::lower_bound(rmm::exec_policy(stream),
