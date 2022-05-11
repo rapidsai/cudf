@@ -12,6 +12,7 @@ from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
 from cudf.core.frame import Frame
 from cudf.core.index import Index
+from cudf.core.missing import NA
 from cudf.core.series import Series
 from cudf.core.single_column_frame import SingleColumnFrame
 
@@ -28,9 +29,7 @@ def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
             f"{type(other).__name__} to {col.dtype.name}"
         )
 
-    return cudf.Scalar(
-        other, dtype=col.dtype if other in {None, cudf.NA} else None
-    )
+    return cudf.Scalar(other, dtype=col.dtype if other in {None, NA} else None)
 
 
 def _check_and_cast_columns_with_other(

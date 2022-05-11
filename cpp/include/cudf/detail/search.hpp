@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,11 +33,11 @@ namespace detail {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> lower_bound(
-  table_view const& t,
-  table_view const& values,
+  table_view const& haystack,
+  table_view const& needles,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -46,33 +46,29 @@ std::unique_ptr<column> lower_bound(
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> upper_bound(
-  table_view const& t,
-  table_view const& values,
+  table_view const& haystack,
+  table_view const& needles,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::contains(column_view const&, scalar const&,
- *                                       rmm::mr::device_memory_resource*)
+ * @copydoc cudf::contains(column_view const&, scalar const&, rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-bool contains(column_view const& col,
-              scalar const& value,
-              rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream);
 
 /**
- * @copydoc cudf::contains(column_view const&, column_view const&,
- *                                       rmm::mr::device_memory_resource*)
+ * @copydoc cudf::contains(column_view const&, column_view const&, rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> contains(
   column_view const& haystack,
   column_view const& needles,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

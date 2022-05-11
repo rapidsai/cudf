@@ -90,6 +90,8 @@ def test_ufunc_index(ufunc):
         if fname in ("power", "float_power"):
             if (got - expect).abs().max() == 1:
                 pytest.xfail("https://github.com/rapidsai/cudf/issues/10178")
+        elif fname in ("bitwise_and", "bitwise_or", "bitwise_xor"):
+            pytest.xfail("https://github.com/pandas-dev/pandas/issues/46769")
         raise
 
 

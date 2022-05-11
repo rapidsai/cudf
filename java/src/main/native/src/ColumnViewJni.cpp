@@ -1166,15 +1166,18 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ColumnView_containsScalar(JNIEnv 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsVector(JNIEnv *env, jobject j_object,
-                                                                      jlong j_haystack_handle,
-                                                                      jlong j_needle_handle) {
-  JNI_NULL_CHECK(env, j_haystack_handle, "haystack vector is null", false);
-  JNI_NULL_CHECK(env, j_needle_handle, "needle vector is null", false);
+                                                                      jlong j_values_handle,
+                                                                      jlong j_search_space_handle) {
+  JNI_NULL_CHECK(env, j_values_handle, "values vector is null", false);
+  JNI_NULL_CHECK(env, j_search_space_handle, "search_space vector is null", false);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *haystack = reinterpret_cast<cudf::column_view *>(j_haystack_handle);
-    cudf::column_view *needle = reinterpret_cast<cudf::column_view *>(j_needle_handle);
-    return release_as_jlong(cudf::contains(*haystack, *needle));
+    auto const search_space_ptr =
+        reinterpret_cast<cudf::column_view const *>(j_search_space_handle);
+    auto const values_ptr = reinterpret_cast<cudf::column_view const *>(j_values_handle);
+
+    // The C++ API `cudf::contains` requires that the search space is the first parameter.
+    return release_as_jlong(cudf::contains(*search_space_ptr, *values_ptr));
   }
   CATCH_STD(env, 0);
 }

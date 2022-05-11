@@ -15,9 +15,7 @@
  */
 
 #include <strings/count_matches.hpp>
-#include <strings/regex/dispatcher.hpp>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+#include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -33,7 +31,6 @@
 
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/reduce.h>
 
@@ -52,14 +49,12 @@ namespace {
  * For strings with fewer matches, null entries are appended into `d_indices`
  * up to the maximum column count.
  */
-template <int stack_size>
 struct findall_fn {
   column_device_view const d_strings;
-  reprog_device prog;
   size_type const* d_counts;  ///< match counts for each string
   indices_span d_indices;     ///< 2D-span: output matches added here
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     auto const match_count = d_counts[idx];
 
@@ -72,7 +67,7 @@ struct findall_fn {
       int32_t begin = 0;
       int32_t end   = -1;
       for (auto col_idx = 0; col_idx < match_count; ++col_idx) {
-        if (prog.find<stack_size>(idx, d_str, begin, end) > 0) {
+        if (prog.find(prog_idx, d_str, begin, end) > 0) {
           auto const begin_offset = d_str.byte_offset(begin);
           auto const end_offset   = d_str.byte_offset(end);
           d_output[col_idx] =
@@ -82,28 +77,12 @@ struct findall_fn {
         end   = nchars;
       }
     }
-
     // fill the remaining entries for this row with nulls
     thrust::fill(
       thrust::seq, d_output.begin() + match_count, d_output.end(), string_index_pair{nullptr, 0});
   }
 };
 
-struct findall_dispatch_fn {
-  reprog_device d_prog;
-
-  template <int stack_size>
-  void operator()(column_device_view const& d_strings,
-                  size_type const* d_find_counts,
-                  indices_span& d_indices,
-                  rmm::cuda_stream_view stream)
-  {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       d_strings.size(),
-                       findall_fn<stack_size>{d_strings, d_prog, d_find_counts, d_indices});
-  }
-};
 }  // namespace
 
 std::unique_ptr<table> findall(strings_column_view const& input,
@@ -115,11 +94,10 @@ std::unique_ptr<table> findall(strings_column_view const& input,
   auto const strings_count = input.size();
 
   // compile regex into device object
-  auto const d_prog =
-    reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
+  auto const d_prog = reprog_device::create(pattern, flags, stream);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
-  auto find_counts     = count_matches(*d_strings, *d_prog, strings_count + 1, stream);
+  auto find_counts     = count_matches(*d_strings, *d_prog, strings_count, stream);
   auto d_find_counts   = find_counts->view().data<size_type>();
 
   size_type const columns_count = thrust::reduce(
@@ -139,9 +117,8 @@ std::unique_ptr<table> findall(strings_column_view const& input,
   } else {
     // place all matching strings into the indices vector
     auto d_indices = indices_span(indices.data(), strings_count, columns_count);
-    regex_dispatcher(
-      *d_prog, findall_dispatch_fn{*d_prog}, *d_strings, d_find_counts, d_indices, stream);
-
+    launch_for_each_kernel(
+      findall_fn{*d_strings, d_find_counts, d_indices}, *d_prog, strings_count, stream);
     results.resize(columns_count);
   }
 
