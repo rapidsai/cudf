@@ -89,7 +89,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "count" for c in self.obj.columns if c not in self.by},
+            {
+                c: "count"
+                for c in self.obj.columns
+                if c
+                not in (
+                    self.by
+                    if isinstance(self.by, (tuple, list))
+                    else [self.by]
+                )
+            },
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -104,7 +113,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "mean" for c in self.obj.columns if c not in self.by},
+            {
+                c: "mean"
+                for c in self.obj.columns
+                if c
+                not in (
+                    self.by
+                    if isinstance(self.by, (tuple, list))
+                    else [self.by]
+                )
+            },
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -119,7 +137,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "std" for c in self.obj.columns if c not in self.by},
+            {
+                c: "std"
+                for c in self.obj.columns
+                if c
+                not in (
+                    self.by
+                    if isinstance(self.by, (tuple, list))
+                    else [self.by]
+                )
+            },
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -134,7 +161,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "var" for c in self.obj.columns if c not in self.by},
+            {
+                c: "var"
+                for c in self.obj.columns
+                if c
+                not in (
+                    self.by
+                    if isinstance(self.by, (tuple, list))
+                    else [self.by]
+                )
+            },
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -149,7 +185,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "sum" for c in self.obj.columns if c not in self.by},
+            {
+                c: "sum"
+                for c in self.obj.columns
+                if c
+                not in (
+                    self.by
+                    if isinstance(self.by, (tuple, list))
+                    else [self.by]
+                )
+            },
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -164,7 +209,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "min" for c in self.obj.columns if c not in self.by},
+            {
+                c: "min"
+                for c in self.obj.columns
+                if c
+                not in (
+                    self.by
+                    if isinstance(self.by, (tuple, list))
+                    else [self.by]
+                )
+            },
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -179,7 +233,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "max" for c in self.obj.columns if c not in self.by},
+            {
+                c: "max"
+                for c in self.obj.columns
+                if c
+                not in (
+                    self.by
+                    if isinstance(self.by, (tuple, list))
+                    else [self.by]
+                )
+            },
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -194,7 +257,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "collect" for c in self.obj.columns if c not in self.by},
+            {
+                c: "collect"
+                for c in self.obj.columns
+                if c
+                not in (
+                    self.by
+                    if isinstance(self.by, (tuple, list))
+                    else [self.by]
+                )
+            },
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -209,7 +281,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "first" for c in self.obj.columns if c not in self.by},
+            {
+                c: "first"
+                for c in self.obj.columns
+                if c
+                not in (
+                    self.by
+                    if isinstance(self.by, (tuple, list))
+                    else [self.by]
+                )
+            },
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -224,7 +305,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "last" for c in self.obj.columns if c not in self.by},
+            {
+                c: "last"
+                for c in self.obj.columns
+                if c
+                not in (
+                    self.by
+                    if isinstance(self.by, (tuple, list))
+                    else [self.by]
+                )
+            },
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
