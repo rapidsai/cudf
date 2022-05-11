@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-//#include <cudf/column/column_factories.hpp>
-//#include <cudf/detail/iterator.cuh>
-//#include <cudf/detail/search.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/structs/detail/search.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
