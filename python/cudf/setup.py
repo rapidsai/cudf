@@ -30,16 +30,16 @@ from setuptools.extension import Extension
 import versioneer
 
 install_requires = [
-    "numba>=0.53.1",
-    "Cython>=0.29,<0.30",
-    "fsspec>=0.6.0",
-    "numpy",
-    "pandas>=1.0,<1.5.0dev0",
-    "typing_extensions",
-    "protobuf",
-    "nvtx>=0.2.1",
     "cachetools",
+    "cuda-python>=11.5,<12.0",
+    "fsspec>=0.6.0",
+    "numba>=0.53.1",
+    "numpy",
+    "nvtx>=0.2.1",
     "packaging",
+    "pandas>=1.0,<1.5.0dev0",
+    "protobuf",
+    "typing_extensions",
 ]
 
 extras_require = {
