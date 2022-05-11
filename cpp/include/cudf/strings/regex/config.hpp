@@ -18,8 +18,7 @@
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 
 /**
  * @addtogroup strings_regex
@@ -52,5 +51,5 @@ std::pair<std::size_t, size_type> compute_regex_state_memory(
   regex_flags const flags = regex_flags::DEFAULT);
 
 /** @} */  // end of doxygen group
-}  // namespace strings
-}  // namespace cudf
+
+}  // namespace cudf::strings

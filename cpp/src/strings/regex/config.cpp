@@ -21,8 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace strings {
+namespace cudf::strings {
 namespace detail {
 
 std::pair<std::size_t, size_type> compute_regex_state_memory(strings_column_view const& input,
@@ -44,5 +43,4 @@ std::pair<std::size_t, size_type> compute_regex_state_memory(strings_column_view
   return detail::compute_regex_state_memory(input, pattern, flags, rmm::cuda_stream_default);
 }
 
-}  // namespace strings
-}  // namespace cudf
+}  // namespace cudf::strings
