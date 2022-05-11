@@ -18,6 +18,9 @@ from dask_cudf.groupby import SUPPORTED_AGGS, _aggs_supported
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation):
     np.random.seed(0)
+
+    # note that column name "x" is a substring of the groupby key;
+    # this gives us coverage for cudf#10829
     pdf = pd.DataFrame(
         {
             "xx": np.random.randint(0, 5, size=10000),
