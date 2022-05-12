@@ -65,6 +65,8 @@ namespace detail {
 namespace hash {
 namespace {
 
+// TODO: replace it with `cuco::static_map`
+// https://github.com/rapidsai/cudf/issues/10401
 using map_type = concurrent_unordered_map<
   cudf::size_type,
   cudf::size_type,
@@ -554,8 +556,8 @@ rmm::device_uvector<size_type> extract_populated_keys(map_type const& map,
 std::unique_ptr<table> groupby(table_view const& keys,
                                host_span<aggregation_request const> requests,
                                cudf::detail::result_cache* cache,
-                               bool keys_have_nulls,
-                               null_policy include_null_keys,
+                               bool const keys_have_nulls,
+                               null_policy const include_null_keys,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
