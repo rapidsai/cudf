@@ -1,10 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import os
-import shlex
 import socket
-import subprocess
-import time
 from contextlib import contextmanager
 from io import BytesIO
 
@@ -21,8 +18,14 @@ from cudf.testing._utils import assert_eq
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
-requests = pytest.importorskip("requests")
 s3fs = pytest.importorskip("s3fs")
+
+ThreadedMotoServer = pytest.importorskip("moto.server").ThreadedMotoServer
+
+
+@pytest.fixture(scope="session")
+def endpoint_ip():
+    return "127.0.0.1"
 
 
 @pytest.fixture(scope="session")
@@ -51,7 +54,7 @@ def ensure_safe_environment_variables():
 
 
 @pytest.fixture(scope="session")
-def s3_base(endpoint_port):
+def s3_base(endpoint_ip, endpoint_port):
     """
     Fixture to set up moto server in separate process
     """
@@ -65,35 +68,20 @@ def s3_base(endpoint_port):
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost
 
-        endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
+        endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
 
-        proc = subprocess.Popen(
-            shlex.split(f"moto_server s3 -p {endpoint_port}"),
-        )
-
-        timeout = 5
-        while timeout > 0:
-            try:
-                # OK to go once server is accepting connections
-                r = requests.get(endpoint_uri)
-                if r.ok:
-                    break
-            except Exception:
-                pass
-            timeout -= 0.1
-            time.sleep(0.1)
+        server = ThreadedMotoServer(ip_address=endpoint_ip, port=endpoint_port)
+        server.start()
         yield endpoint_uri
-
-        proc.terminate()
-        proc.wait()
+        server.stop()
 
 
 @pytest.fixture()
-def s3so(endpoint_port):
+def s3so(endpoint_ip, endpoint_port):
     """
     Returns s3 storage options to pass to fsspec
     """
-    endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
+    endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
 
     return {"client_kwargs": {"endpoint_url": endpoint_uri}}
 

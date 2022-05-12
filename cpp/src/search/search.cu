@@ -105,21 +105,23 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
                                                  column_order_dv.data(),
                                                  null_precedence_dv.data());
 
-  auto const do_search = [find_first](auto&&... args) {
-    if (find_first) {
-      thrust::lower_bound(std::forward<decltype(args)>(args)...);
-    } else {
-      thrust::upper_bound(std::forward<decltype(args)>(args)...);
-    }
-  };
-  do_search(rmm::exec_policy(stream),
-            count_it,
-            count_it + haystack.num_rows(),
-            count_it,
-            count_it + needles.num_rows(),
-            out_it,
-            comp);
-
+  if (find_first) {
+    thrust::lower_bound(rmm::exec_policy(stream),
+                        count_it,
+                        count_it + haystack.num_rows(),
+                        count_it,
+                        count_it + needles.num_rows(),
+                        out_it,
+                        comp);
+  } else {
+    thrust::upper_bound(rmm::exec_policy(stream),
+                        count_it,
+                        count_it + haystack.num_rows(),
+                        count_it,
+                        count_it + needles.num_rows(),
+                        out_it,
+                        comp);
+  }
   return result;
 }
 
