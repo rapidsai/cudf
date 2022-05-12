@@ -16,7 +16,7 @@
 
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/structs/detail/search.hpp>
+#include <cudf/structs/detail/contains.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
