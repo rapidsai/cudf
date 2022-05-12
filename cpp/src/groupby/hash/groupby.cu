@@ -564,7 +564,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
   auto const num_keys = keys.num_rows();
   auto const null_keys_are_equal =
     include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
-  auto const has_null = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
+  auto const has_null = nullate::DYNAMIC{keys_have_nulls};
 
   auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
   cudf::experimental::row::equality::self_comparator comparator(preprocessed_keys);
@@ -658,7 +658,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   cudf::detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys =
-    groupby(keys, requests, &cache, cudf::has_nulls(keys), include_null_keys, stream, mr);
+    groupby(keys, requests, &cache, cudf::has_nested_nulls(keys), include_null_keys, stream, mr);
 
   return std::pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
 }
