@@ -101,7 +101,7 @@ A `Frame` owns a `ColumnAccessor`, and most of its operations are implemented as
 The primary purpose of the `ColumnAccessor` is to encapsulate pandas column selection semantics.
 Columns may be selected or inserted by index or by label, and label-based selections are as flexible as pandas is.
 For instance, Columns may be selected hierarchically (using tuples) or via wildcards.
-`ColumnAccessors` also support the `MultiIndex` columns that can result from operations like groupbys.
+`ColumnAccessor`s also support the `MultiIndex` columns that can result from operations like groupbys.
 
 ### Columns
 
