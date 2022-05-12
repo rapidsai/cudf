@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Can be removed once we use Thrust 1.16+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpragmas"
 #pragma GCC diagnostic ignored "-Wsizeof-array-div"
