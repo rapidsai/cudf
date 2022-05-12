@@ -392,6 +392,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStop(JNIEnv *env, jclass
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_deviceSynchronize(JNIEnv *env, jclass clazz) {
   try {
+    cudf::jni::auto_set_device(env);
     CUDF_CUDA_TRY(cudaDeviceSynchronize());
   }
   CATCH_STD(env, );
