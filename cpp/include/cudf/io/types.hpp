@@ -124,7 +124,10 @@ struct table_metadata {
   std::vector<std::string> column_names;  //!< Names of columns contained in the table
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
-  std::map<std::string, std::string> user_data;  //!< Format-dependent metadata as key-values pairs
+  std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
+                                                 //!< file as key-values pairs (deprecated)
+  std::vector<std::unordered_map<std::string, std::string>>
+    per_file_user_data;  //!< Per file format-dependent metadata as key-values pairs
 };
 
 /**
