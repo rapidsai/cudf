@@ -182,7 +182,7 @@ since `libcudf` objects are not Python objects, we need something to manage thei
 
 The key is to recognize that `libcudf` offers both owning (e.g. `column`) and non-owning (e.g. `column_view`) objects.
 All `libcudf` algorithms accept views as parameters while returning (new) owning objects.
-When calling `libcudf` APIs, cuDF Python construct views from cudf `Buffers`.
+When calling `libcudf` APIs, cuDF Python constructs views from cuDF `Buffers`.
 When owning objects are returned, cuDF has an rmm object take ownership of that memory and stores that in a `Buffer`.
 The result is that all memory allocated by `libcudf` inside cuDF eventually has ownership transferred to a `Buffer`.
 ```
@@ -190,7 +190,7 @@ The result is that all memory allocated by `libcudf` inside cuDF eventually has 
 ## The Cython layer
 
 The lowest level of cuDF is its interaction with `libcudf` via Cython.
-Most algorithms in cudf follow a similar pattern.
+Most algorithms in cuDF follow a similar pattern.
 The `Frame` layer processes inputs and calls a `Column` method.
 That method in turn does some additional processing before finally calling a Cython function.
 The result is then passed back up through the layers, undergoing postprocessing as needed.
