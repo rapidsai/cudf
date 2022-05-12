@@ -34,6 +34,7 @@
 #include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
+#include <cudf/lists/stream_compaction.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
@@ -2222,6 +2223,27 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsSizes(
     results[0] = release_as_jlong(output_sizes);
     results[1] = static_cast<jlong>(total_bytes);
     return results.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_applyBooleanMask(
+    JNIEnv *env, jclass, jlong list_column_handle, jlong boolean_mask_list_column_handle) {
+  JNI_NULL_CHECK(env, list_column_handle, "list handle is null", 0);
+  JNI_NULL_CHECK(env, boolean_mask_list_column_handle, "boolean mask handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+
+    cudf::column_view const *list_column =
+        reinterpret_cast<cudf::column_view const *>(list_column_handle);
+    cudf::lists_column_view const list_view = cudf::lists_column_view(*list_column);
+
+    cudf::column_view const *boolean_mask_list_column =
+        reinterpret_cast<cudf::column_view const *>(boolean_mask_list_column_handle);
+    cudf::lists_column_view const boolean_mask_list_view =
+        cudf::lists_column_view(*boolean_mask_list_column);
+
+    return release_as_jlong(cudf::lists::apply_boolean_mask(list_view, boolean_mask_list_view));
   }
   CATCH_STD(env, 0);
 }
