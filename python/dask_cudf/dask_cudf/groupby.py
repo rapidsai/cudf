@@ -435,6 +435,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
 
         arg = _redirect_aggs(arg)
 
+        if not isinstance(arg, dict):
+            arg = {self._slice: arg}
+
         if _groupby_supported(self) and _aggs_supported(arg, SUPPORTED_AGGS):
             return groupby_agg(
                 self.obj,
