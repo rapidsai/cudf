@@ -18,20 +18,24 @@ from dask_cudf.groupby import SUPPORTED_AGGS, _aggs_supported
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation):
     np.random.seed(0)
+
+    # note that column name "x" is a substring of the groupby key;
+    # this gives us coverage for cudf#10829
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
+            "xx": np.random.randint(0, 5, size=10000),
+            "x": np.random.normal(size=10000),
             "y": np.random.normal(size=10000),
         }
     )
 
     gdf = cudf.DataFrame.from_pandas(pdf)
-    gdf_grouped = gdf.groupby("x")
-    ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby("x")
+    gdf_grouped = gdf.groupby("xx")
+    ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby("xx")
 
     if series:
-        gdf_grouped = gdf_grouped.x
-        ddf_grouped = ddf_grouped.x
+        gdf_grouped = gdf_grouped.xx
+        ddf_grouped = ddf_grouped.xx
 
     a = getattr(gdf_grouped, aggregation)()
     b = getattr(ddf_grouped, aggregation)().compute()
@@ -41,8 +45,8 @@ def test_groupby_basic(series, aggregation):
     else:
         dd.assert_eq(a, b)
 
-    a = gdf_grouped.agg({"x": aggregation})
-    b = ddf_grouped.agg({"x": aggregation}).compute()
+    a = gdf_grouped.agg({"xx": aggregation})
+    b = ddf_grouped.agg({"xx": aggregation}).compute()
 
     if aggregation == "count":
         dd.assert_eq(a, b, check_dtype=False)
