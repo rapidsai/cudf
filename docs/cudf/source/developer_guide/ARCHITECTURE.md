@@ -26,7 +26,8 @@ However, as a general container of columnar data, `Frame` is also the parent cla
 
 `BaseIndex`, meanwhile, is essentially an abstract base class encoding the `pandas.Index` API.
 Various subclasses of `BaseIndex` implement this API in specific ways depending on their underlying data.
-Most indexes consist of a single column (of e.g. strings), but `RangeIndex` and `MultiIndex` are clear exceptions.
+For example, `RangeIndex` avoids actually materializing a column, while a `MultiIndex` contains _multiple_ columns.
+Most other index classes consist of a single column of a given type, e.g. strings or datetimes.
 As a result, using a single abstract parent provides the flexibility we need to support these different types.
 
 With those preliminaries out of the way, let's dive in a little bit deeper.
@@ -39,12 +40,12 @@ Additionally any (internal) methods that could be used to share code between tho
 
 The primary internal subclass of `Frame` is `IndexedFrame`, a `Frame` with an index.
 An `IndexedFrame` represents the first type of object mentioned above: indexed tables.
-In particular, `IndexedFrame` is the parent class for `DataFrame` and `Series`.
+In particular, `IndexedFrame` is a parent class for `DataFrame` and `Series`.
 Any pandas methods that are defined for those two classes should be defined here.
 
 The second internal subclass of `Frame` is `SingleColumnFrame`.
 As you may surmise, it is a `Frame` with a single column of data.
-This class is the parent for most types of indexes as well as `Series` (note the diamond inheritance pattern here).
+This class is a parent for most types of indexes as well as `Series` (note the diamond inheritance pattern here).
 While `IndexedFrame` provides a large amount of functionality, this class is much simpler.
 It adds some simple APIs provided by all 1D pandas objects, and it flattens outputs where needed.
 
@@ -53,9 +54,12 @@ It adds some simple APIs provided by all 1D pandas objects, and it flattens outp
 While we've highlighted some exceptional cases of Indexes before, let's start with the base cases here first.
 `BaseIndex` is generally intended to be a true abstract class, i.e. it should contain no implementations.
 Functions may be implemented in `BaseIndex` if they are truly identical for all types of indexes.
-However, currently most such implementations are not applicable to all subclasses and will be eventaully be removed.
+However, currently most such implementations are not applicable to all subclasses and will be eventually be removed.
 
 Almost all indexes are subclasses of `GenericIndex`, a single-columned index with the class hierarchy:
+```python
+class GenericIndex(SingleColumnFrame, BaseIndex)
+```
 `Frame`->`SingleColumnFrame`->`GenericIndex`<-`BaseIndex`.
 Integer, float, or string indexes are all composed of a single column of data.
 Most `GenericIndex` methods are inherited from `Frame`, saving us the trouble of rewriting them.
@@ -66,15 +70,15 @@ We now consider the three main exceptions to this model:
   Wherever possible, its methods have special implementations designed to avoid materializing columns.
   Where such an implementation is infeasible, we fall back to converting it to an integer index first instead.
 - A `MultiIndex` is backed by _multiple_ columns of data.
-  Therefore, its inheritance hierarchy looks like `Frame`->``MultiIndex`<-`BaseIndex`.
+  Therefore, its inheritance hierarchy looks like `class MultiIndex(Frame, BaseIndex)`.
   Some of its more `Frame`-like methods may be inherited,
   but many others must be reimplemented since in many cases a `MultiIndex` is not expected to behave like a `Frame`.
 - Just like in pandas, `Index` itself can never be instantiated.
   `pandas.Index` is the parent class for indexes,
   but its constructor returns an appropriate subclass depending on the input data type and shape.
   Unfortunately, mimicking this behavior requires overriding `__new__`,
-  which in turn makes shared intialization across inheritance trees much more cumbersome to manage.
-  To reenable sharing constructor logic across different index classes,
+  which in turn makes shared initialization across inheritance trees much more cumbersome to manage.
+  To enable sharing constructor logic across different index classes,
   we instead define `BaseIndex` as the parent class of all indexes.
   `Index` inherits from `BaseIndex`, but it masquerades as a `BaseIndex` to match pandas.
   This class should contain no implementations since it is simply a factory for other indexes.
@@ -88,9 +92,8 @@ Under the hood, cuDF is built around the [Apache Arrow Format](https://arrow.apa
 This data format is both conducive to high-performance algorithms and suitable for data interchange between libraries.
 
 The principal objects in the Column layer are the `ColumnAccessor` and the various `Column` classes.
-The `Column` is cuDF's core data structure and is modeled after the
-[Apache Arrow Columnar Format](https://arrow.apache.org/docs/format/Columnar.html).
-A `ColumnAccessor` is a dictionary-like interface to a sequence of `Columns`.
+The `Column` is cuDF's core data structure that represents a single column of data of a specific data type.
+A `ColumnAccessor` is a dictionary-like interface to a sequence of `Column`s.
 A `Frame` owns a `ColumnAccessor`, and most of its operations are implemented as loops over that object's `Column`s.
 
 ### ColumnAccessor
@@ -118,11 +121,15 @@ A `Column` is composed of the following:
   Nullability is a core concept in the Arrow data model.
   Columns whose elements are all valid may not have a mask buffer.
   Mask buffers are padded to 64 bytes.
-- A tuple of **children** columns used to represent complex types with non-fixed width elements like strings or lists.
+- Its **children**, a tuple of columns used to represent complex types such as structs or lists.
 - A **size** indicating the number of elements in the column.
 - An integer **offset** use to represent the first element of column that is the "slice" of another column.
   The size of the column then gives the extent of the slice rather than the size of the underlying buffer.
   A column that is not a slice has an offset of 0.
+
+More information about these fields can be found in the documentation of the
+[Apache Arrow Columnar Format](https://arrow.apache.org/docs/format/Columnar.html),
+which is what the cuDF `Column` is based on.
 
 As one example, a `NumericalColumn` with 1000 `int32` elements and containing nulls is composed of:
 
@@ -137,10 +144,10 @@ As another example, a `StringColumn` backing the Series `['do', 'you', 'have', '
 2. No mask buffer as there are no nulls in the Series
 3. Two children columns:
 
-   > - A column of UTF-8 characters
-   >   `['d', 'o', 'y', 'o', 'u', 'h' ..., '?']`
-   > - A column of "offsets" to the characters column (in this case,
-   >   `[0, 2, 5, 9, 12, 19]`)
+   - A column of UTF-8 characters
+     `['d', 'o', 'y', 'o', 'u', 'h' ..., '?']`
+   - A column of "offsets" to the characters column (in this case,
+     `[0, 2, 5, 9, 12, 19]`)
 
 
 ### Data types
@@ -148,13 +155,13 @@ As another example, a `StringColumn` backing the Series `['do', 'you', 'have', '
 cuDF uses [dtypes](https://numpy.org/doc/stable/reference/arrays.dtypes.html) to represent different types of data.
 Since efficient GPU algorithms require preexisting knowledge of data layouts,
 cuDF does not support the arbitrary `object` dtype, but instead defines a few custom types for common use-cases:
-- `ListDtype`: Lists where each element in every list in a Column is of the same type.
+- `ListDtype`: Lists where each element in every list in a Column is of the same type
 - `StructDtype`: Dicts where a given key always maps to values of the same type
-- `CategoricalDtype`: Analogous to the pandas categorical dtype except that the categories are stored in device memory.
+- `CategoricalDtype`: Analogous to the pandas categorical dtype except that the categories are stored in device memory
 - `DecimalDtype`: Fixed-point numbers
 - `IntervalDtype`: Intervals
 
-Note that there is a many-to-one mapping between data type and `Column` class.
+Note that there is a many-to-one mapping between data types and `Column` classes.
 For instance, all numerical types (floats and ints of different widths) are all managed using `NumericalColumn`.
 
 
@@ -189,9 +196,11 @@ That method in turn does some additional processing before finally calling a Cyt
 The result is then passed back up through the layers, undergoing postprocessing as needed.
 
 The Cython layer itself is largely composed of two parts: C++ bindings and Cython wrappers.
-We use Cython to expose C++ functionality to Python.
-This code essentially consists of copying libcudf header files into new files with a slightly different format.
-Since these bindings are only accessible from Cython, we write Cython wrappers that can be called from pure Python code.
+In the first case, we expose `libcudf`'s C++ functionality to Cython by writing 
+[Cython `.pxd` (declaration) files](https://cython.readthedocs.io/en/latest/src/tutorial/pxd_files.html)
+that consist of Cython declarations equivalent to the contents of corresponding C++ header files.
+These `pxd` files make the contents of those C++ headers callable from Cython, but not pure Python.
+We then wrap these functions with wrappers written in Cython, which in turn _can_ be used in Python code.
 These wrappers translate cuDF objects into their `libcudf` equivalents and then invoke `libcudf` functions.
 
 We endeavor to make these wrappers as thin as possible.
