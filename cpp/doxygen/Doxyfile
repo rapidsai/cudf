@@ -892,7 +892,9 @@ EXCLUDE_PATTERNS       = */nvtx/* */detail/*
 # Note that the wildcards are matched against the file with absolute path, so to
 # exclude all test directories use the pattern */test/*
 
-EXCLUDE_SYMBOLS        = org::apache
+EXCLUDE_SYMBOLS        = org::apache \
+                         *_impl \
+                         *Impl
 
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include
