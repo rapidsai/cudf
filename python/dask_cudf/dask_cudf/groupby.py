@@ -96,10 +96,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def count(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             self._make_groupby_method_aggs("count"),
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )
 
     @_dask_cudf_nvtx_annotate
@@ -107,10 +106,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def mean(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             self._make_groupby_method_aggs("mean"),
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )
 
     @_dask_cudf_nvtx_annotate
@@ -118,10 +116,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def std(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             self._make_groupby_method_aggs("std"),
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )
 
     @_dask_cudf_nvtx_annotate
@@ -129,10 +126,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def var(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             self._make_groupby_method_aggs("var"),
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )
 
     @_dask_cudf_nvtx_annotate
@@ -140,10 +136,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def sum(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             self._make_groupby_method_aggs("sum"),
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )
 
     @_dask_cudf_nvtx_annotate
@@ -151,10 +146,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def min(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             self._make_groupby_method_aggs("min"),
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )
 
     @_dask_cudf_nvtx_annotate
@@ -162,10 +156,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def max(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             self._make_groupby_method_aggs("max"),
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )
 
     @_dask_cudf_nvtx_annotate
@@ -173,10 +166,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def collect(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             self._make_groupby_method_aggs("collect"),
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )
 
     @_dask_cudf_nvtx_annotate
@@ -184,10 +176,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def first(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             self._make_groupby_method_aggs("first"),
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )
 
     @_dask_cudf_nvtx_annotate
@@ -195,10 +186,9 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def last(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             self._make_groupby_method_aggs("last"),
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )
 
     @_dask_cudf_nvtx_annotate
@@ -213,8 +203,16 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             else:
                 keys = self._meta.grouping.keys.name
 
-            return _make_groupby_agg_call(
-                self, keys, arg, split_every=split_every, split_out=split_out
+            return groupby_agg(
+                self.obj,
+                keys,
+                arg,
+                split_every=split_every,
+                split_out=split_out,
+                sep=self.sep,
+                sort=self.sort,
+                as_index=self.as_index,
+                **self.dropna,
             )
 
         return super().aggregate(
@@ -234,10 +232,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def count(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             {self._slice: "count"},
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
@@ -245,10 +242,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def mean(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             {self._slice: "mean"},
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
@@ -256,10 +252,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def std(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             {self._slice: "std"},
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
@@ -267,10 +262,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def var(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             {self._slice: "var"},
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
@@ -278,10 +272,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def sum(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             {self._slice: "sum"},
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
@@ -289,10 +282,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def min(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             {self._slice: "min"},
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
@@ -300,10 +292,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def max(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             {self._slice: "max"},
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
@@ -311,10 +302,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def collect(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             {self._slice: "collect"},
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
@@ -322,10 +312,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def first(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             {self._slice: "first"},
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
@@ -333,10 +322,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def last(self, split_every=None, split_out=1):
         return _make_groupby_agg_call(
             self,
-            self.by,
             {self._slice: "last"},
-            split_every=split_every,
-            split_out=split_out,
+            split_every,
+            split_out,
         )[self._slice]
 
     @_dask_cudf_nvtx_annotate
@@ -349,7 +337,9 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             arg = {self._slice: arg}
 
         if _groupby_supported(self) and _aggs_supported(arg, SUPPORTED_AGGS):
-            return _make_groupby_agg_call(self, self.by, arg)[self._slice]
+            return _make_groupby_agg_call(self, arg, split_every, split_out)[
+                self._slice
+            ]
 
         return super().aggregate(
             arg, split_every=split_every, split_out=split_out
@@ -524,14 +514,14 @@ def groupby_agg(
 
 
 @_dask_cudf_nvtx_annotate
-def _make_groupby_agg_call(gb, by, aggs, split_every, split_out):
+def _make_groupby_agg_call(gb, aggs, split_every, split_out):
     """Helper method to consolidate the common `groupby_agg` call for all
     aggregations in one place
     """
 
     return groupby_agg(
         gb.obj,
-        by,
+        gb.by,
         aggs,
         split_every=split_every,
         split_out=split_out,
