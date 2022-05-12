@@ -354,6 +354,57 @@ TEST_F(StringsContainsTests, CountTest)
   }
 }
 
+TEST_F(StringsContainsTests, FixedQuantifier)
+{
+  auto input = cudf::test::strings_column_wrapper({"a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaa"});
+  auto sv    = cudf::strings_column_view(input);
+
+  {
+    // exact match
+    auto results = cudf::strings::count_re(sv, "a{3}");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 1, 1, 1, 2});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // range match (greedy quantifier)
+    auto results = cudf::strings::count_re(sv, "a{3,5}");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 1, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // minimum match (greedy quantifier)
+    auto results = cudf::strings::count_re(sv, "a{2,}");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 1, 1, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // range match (lazy quantifier)
+    auto results = cudf::strings::count_re(sv, "a{2,4}?");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 1, 1, 2, 2, 3});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // minimum match (lazy quantifier)
+    auto results = cudf::strings::count_re(sv, "a{1,}?");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 2, 3, 4, 5, 6});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // zero match
+    auto results = cudf::strings::count_re(sv, "aaaa{0}");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 1, 1, 1, 2});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // poorly formed
+    auto results = cudf::strings::count_re(sv, "aaaa{n,m}");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 0, 0, 0, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    results = cudf::strings::count_re(sv, "aaaa{1234,5678}");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
 TEST_F(StringsContainsTests, MultiLine)
 {
   auto input =
