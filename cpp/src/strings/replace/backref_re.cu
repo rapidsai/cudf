@@ -50,8 +50,8 @@ std::string get_backref_pattern(std::string_view repl)
 {
   std::string const backslash_pattern = "\\\\(\\d+)";
   std::string const bracket_pattern   = "\\$\\{(\\d+)\\}";
+  std::string const r{repl};
   std::smatch m;
-  std::string r{repl};
   return std::regex_search(r, m, std::regex(backslash_pattern)) ? backslash_pattern
                                                                 : bracket_pattern;
 }
