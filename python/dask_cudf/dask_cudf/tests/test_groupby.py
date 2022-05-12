@@ -58,7 +58,10 @@ def test_groupby_basic(series, aggregation):
     "func",
     [
         lambda df: df.groupby("x").agg({"y": "max"}),
+        lambda df: df.groupby("x").agg(["sum", "max"]),
         lambda df: df.groupby("x").y.agg(["sum", "max"]),
+        lambda df: df.groupby("x").agg("sum"),
+        lambda df: df.groupby("x").y.agg("sum"),
     ],
 )
 def test_groupby_agg(func):
