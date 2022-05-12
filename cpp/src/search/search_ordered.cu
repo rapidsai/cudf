@@ -31,6 +31,7 @@
 
 namespace cudf {
 namespace detail {
+namespace {
 
 std::unique_ptr<column> search_ordered(table_view const& haystack,
                                        table_view const& needles,
@@ -112,6 +113,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   }
   return result;
 }
+}  // namespace
 
 std::unique_ptr<column> lower_bound(table_view const& haystack,
                                     table_view const& needles,
