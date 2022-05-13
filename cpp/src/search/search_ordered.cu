@@ -23,6 +23,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
+#include <cudf/table/experimental/row_operators.cuh>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -64,6 +66,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   // It will return any new dictionary columns created as well as updated table_views.
   auto const matched = dictionary::detail::match_dictionaries({haystack, needles}, stream);
 
+#if 0
   // Prepare to flatten the structs column
   auto const has_null_elements   = has_nested_nulls(haystack) or has_nested_nulls(needles);
   auto const flatten_nullability = has_null_elements
@@ -88,28 +91,41 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
     detail::make_device_uvector_async(null_precedence_flattened, stream);
 
   auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  auto const comp     = row_lexicographic_comparator(nullate::DYNAMIC{has_null_elements},
-                                                 lhs,
-                                                 rhs,
-                                                 column_order_dv.data(),
-                                                 null_precedence_dv.data());
+
+  //  auto const comp     = row_lexicographic_comparator(nullate::DYNAMIC{has_null_elements},
+  //                                                 lhs,
+  //                                                 rhs,
+  //                                                 column_order_dv.data(),
+  //                                                 null_precedence_dv.data());
+
+#endif
+  auto const& lhs = matched.second.front();
+  auto const& rhs = matched.second.back();
+
+  auto const lhs_it = cudf::experimental::row::lexicographic::make_lhs_index_counting_iterator(0);
+  auto const rhs_it = cudf::experimental::row::lexicographic::make_rhs_index_counting_iterator(0);
+
+  auto const comp = cudf::experimental::row::lexicographic::two_table_comparator(
+    lhs, rhs, column_order, null_precedence, stream);
+  auto const has_any_nulls = has_nested_nulls(haystack) or has_nested_nulls(needles);
+  auto const dcomp         = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
 
   if (find_first) {
     thrust::lower_bound(rmm::exec_policy(stream),
-                        count_it,
-                        count_it + haystack.num_rows(),
-                        count_it,
-                        count_it + needles.num_rows(),
+                        lhs_it,
+                        lhs_it + haystack.num_rows(),
+                        rhs_it,
+                        rhs_it + needles.num_rows(),
                         out_it,
-                        comp);
+                        dcomp);
   } else {
     thrust::upper_bound(rmm::exec_policy(stream),
-                        count_it,
-                        count_it + haystack.num_rows(),
-                        count_it,
-                        count_it + needles.num_rows(),
+                        lhs_it,
+                        lhs_it + haystack.num_rows(),
+                        rhs_it,
+                        rhs_it + needles.num_rows(),
                         out_it,
-                        comp);
+                        dcomp);
   }
   return result;
 }
