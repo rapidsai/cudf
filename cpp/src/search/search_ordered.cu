@@ -16,17 +16,13 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
 #include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
@@ -65,54 +61,16 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
   auto const matched = dictionary::detail::match_dictionaries({haystack, needles}, stream);
+  auto const& matched_haystack = matched.second.front();
+  auto const& matched_needles  = matched.second.back();
 
-#if 0
-  // Prepare to flatten the structs column
-  auto const has_null_elements   = has_nested_nulls(haystack) or has_nested_nulls(needles);
-  auto const flatten_nullability = has_null_elements
-                                     ? structs::detail::column_nullability::FORCE
-                                     : structs::detail::column_nullability::MATCH_INCOMING;
+  auto const has_any_nulls = has_nested_nulls(haystack) or has_nested_nulls(needles);
+  auto const comp          = cudf::experimental::row::lexicographic::two_table_comparator(
+    matched_haystack, matched_needles, column_order, null_precedence, stream);
+  auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
 
-  // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
-  auto const t_flattened = structs::detail::flatten_nested_columns(
-    matched.second.front(), column_order, null_precedence, flatten_nullability);
-  auto const values_flattened =
-    structs::detail::flatten_nested_columns(matched.second.back(), {}, {}, flatten_nullability);
-
-  auto const t_d      = table_device_view::create(t_flattened, stream);
-  auto const values_d = table_device_view::create(values_flattened, stream);
-  auto const& lhs     = find_first ? *t_d : *values_d;
-  auto const& rhs     = find_first ? *values_d : *t_d;
-
-  auto const& column_order_flattened    = t_flattened.orders();
-  auto const& null_precedence_flattened = t_flattened.null_orders();
-  auto const column_order_dv = detail::make_device_uvector_async(column_order_flattened, stream);
-  auto const null_precedence_dv =
-    detail::make_device_uvector_async(null_precedence_flattened, stream);
-
-  auto const count_it = thrust::make_counting_iterator<size_type>(0);
-
-  //  auto const comp     = row_lexicographic_comparator(nullate::DYNAMIC{has_null_elements},
-  //                                                 lhs,
-  //                                                 rhs,
-  //                                                 column_order_dv.data(),
-  //                                                 null_precedence_dv.data());
-
-#endif
-#if 1
-  auto const& lhs = matched.second.front();
-  auto const& rhs = matched.second.back();
-#else
-  auto const& lhs = find_first ? matched.second.front() : matched.second.back();
-  auto const& rhs = find_first ? matched.second.back() : matched.second.front();
-#endif
   auto const lhs_it = cudf::experimental::row::lexicographic::make_lhs_index_counting_iterator(0);
   auto const rhs_it = cudf::experimental::row::lexicographic::make_rhs_index_counting_iterator(0);
-
-  auto const comp = cudf::experimental::row::lexicographic::two_table_comparator(
-    lhs, rhs, column_order, null_precedence, stream);
-  auto const has_any_nulls = has_nested_nulls(haystack) or has_nested_nulls(needles);
-  auto const dcomp         = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
 
   if (find_first) {
     thrust::lower_bound(rmm::exec_policy(stream),
