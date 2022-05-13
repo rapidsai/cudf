@@ -428,8 +428,8 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
     uint32_t l        = 0, c;
     uncompressed_size = 0;
     do {
-      c   = *cur++;
-      uint32_t const lo7 = c & 0x7f;
+      c              = *cur++;
+      auto const lo7 = c & 0x7f;
       if (l >= 28 && c > 0xf) { return 0; }
       uncompressed_size |= lo7 << l;
       l += 7;
