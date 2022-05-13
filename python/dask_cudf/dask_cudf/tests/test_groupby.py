@@ -6,12 +6,24 @@ import pytest
 
 import dask
 from dask import dataframe as dd
+from dask.utils_test import hlg_layer
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
 from dask_cudf.groupby import SUPPORTED_AGGS, _aggs_supported
+
+
+def check_groupby_result(ddf):
+    """Assert that groupby result is using dask-cudf's codepath"""
+
+    try:
+        hlg_layer(ddf.dask, "groupby_agg")
+    except KeyError:
+        raise AssertionError(
+            "Dask dataframe does not contain dask-cudf groupby layer"
+        )
 
 
 @pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
@@ -37,34 +49,36 @@ def test_groupby_basic(series, aggregation):
         gdf_grouped = gdf_grouped.xx
         ddf_grouped = ddf_grouped.xx
 
-    a = getattr(gdf_grouped, aggregation)()
-    b = getattr(ddf_grouped, aggregation)().compute()
+    check_dtype = False if aggregation == "count" else True
 
-    if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
-    else:
-        dd.assert_eq(a, b)
+    expect = getattr(gdf_grouped, aggregation)()
+    actual = getattr(ddf_grouped, aggregation)()
 
-    a = gdf_grouped.agg({"xx": aggregation})
-    b = ddf_grouped.agg({"xx": aggregation}).compute()
+    check_groupby_result(actual)
 
-    if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
-    else:
-        dd.assert_eq(a, b)
+    dd.assert_eq(expect, actual, check_dtype=check_dtype)
+
+    expect = gdf_grouped.agg({"xx": aggregation})
+    actual = ddf_grouped.agg({"xx": aggregation})
+
+    check_groupby_result(actual)
+
+    dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
 
+@pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
 @pytest.mark.parametrize(
     "func",
     [
-        lambda df: df.groupby("x").agg({"y": "max"}),
-        lambda df: df.groupby("x").agg(["sum", "max"]),
-        lambda df: df.groupby("x").y.agg(["sum", "max"]),
-        lambda df: df.groupby("x").agg("sum"),
-        lambda df: df.groupby("x").y.agg("sum"),
+        lambda df, agg: df.groupby("x").agg({"y": agg}),
+        lambda df, agg: df.groupby("x").y.agg({"y": agg}),
+        lambda df, agg: df.groupby("x").agg([agg]),
+        lambda df, agg: df.groupby("x").y.agg([agg]),
+        lambda df, agg: df.groupby("x").agg(agg),
+        lambda df, agg: df.groupby("x").y.agg(agg),
     ],
 )
-def test_groupby_agg(func):
+def test_groupby_agg(func, aggregation):
     pdf = pd.DataFrame(
         {
             "x": np.random.randint(0, 5, size=10000),
@@ -76,15 +90,14 @@ def test_groupby_agg(func):
 
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
-    a = func(gdf).to_pandas()
-    b = func(ddf).compute().to_pandas()
+    actual = func(ddf, aggregation)
+    expect = func(gdf, aggregation)
 
-    a.index.name = None
-    a.name = None
-    b.index.name = None
-    b.name = None
+    check_dtype = False if aggregation == "count" else True
 
-    dd.assert_eq(a, b)
+    check_groupby_result(actual)
+
+    dd.assert_eq(expect, actual, check_names=False, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize("split_out", [1, 3])
