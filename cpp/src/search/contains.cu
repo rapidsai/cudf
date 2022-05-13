@@ -67,10 +67,10 @@ struct contains_scalar_dispatch {
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
-    using DType      = device_storage_type_t<Type>;
-    using ScalarType = cudf::scalar_type_t<Type>;
-    auto d_haystack  = column_device_view::create(haystack, stream);
-    auto s           = static_cast<const ScalarType*>(&needle);
+    using DType           = device_storage_type_t<Type>;
+    using ScalarType      = cudf::scalar_type_t<Type>;
+    auto const d_haystack = column_device_view::create(haystack, stream);
+    auto const s          = static_cast<ScalarType const*>(&needle);
 
     auto const check_contain = [stream](auto const& begin, auto const& end, auto const& val) {
       auto const found_it = thrust::find(rmm::exec_policy(stream), begin, end, val);
@@ -91,75 +91,72 @@ struct contains_scalar_dispatch {
       return check_contain(begin, end, val);
     }
   }
-};
 
-template <>
-bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& haystack,
-                                                             scalar const& needle,
-                                                             rmm::cuda_stream_view stream) const
-{
-  CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
+  template <typename Type>
+  std::enable_if_t<std::is_same_v<Type, cudf::struct_view>, bool> operator()(
+    column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream) const
+  {
+    CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
-  auto const needle_tv = dynamic_cast<struct_scalar const*>(&needle)->view();
-  CUDF_EXPECTS(haystack.num_children() == needle_tv.num_columns(),
-               "struct scalar and structs column must have the same number of children");
-  for (size_type i = 0; i < col.num_children(); ++i) {
-    CUDF_EXPECTS(haystack.child(i).type() == needle_tv.column(i).type(),
-                 "scalar and column children types must match");
+    auto const needle_tv = dynamic_cast<struct_scalar const*>(&needle)->view();
+    CUDF_EXPECTS(haystack.num_children() == needle_tv.num_columns(),
+                 "struct scalar and structs column must have the same number of children");
+    for (size_type i = 0; i < haystack.num_children(); ++i) {
+      CUDF_EXPECTS(haystack.child(i).type() == needle_tv.column(i).type(),
+                   "scalar and column children types must match");
+    }
+
+    // Create a (structs) column_view of one row having children given from the input scalar.
+    auto const needle_as_col =
+      column_view(data_type{type_id::STRUCT},
+                  1,
+                  nullptr,
+                  nullptr,
+                  0,
+                  0,
+                  std::vector<column_view>{needle_tv.begin(), needle_tv.end()});
+
+    return contains_nested_element(haystack, needle_as_col, stream);
   }
 
-  // Create a (structs) column_view of one row having children given from the input scalar.
-  auto const needle_as_col =
-    column_view(data_type{type_id::STRUCT},
-                1,
-                nullptr,
-                nullptr,
-                0,
-                0,
-                std::vector<column_view>{needle_tv.begin(), needle_tv.end()});
+  template <typename Type>
+  std::enable_if_t<std::is_same_v<Type, cudf::list_view>, bool> operator()(
+    column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream) const
+  {
+    auto const needle_cv = dynamic_cast<list_scalar const*>(&needle)->view();
+    CUDF_EXPECTS(lists_column_view{haystack}.child().type() == needle_cv.type(),
+                 "scalar and column child types must match");
 
-  return contains_nested_element(haystack, needle_as_col, stream);
-}
+    // Create a (lists) column_view of one row having child given from the input scalar.
+    auto const offsets = cudf::detail::make_device_uvector_async<offset_type>(
+      std::vector<offset_type>{0, needle_cv.size()}, stream);
+    auto const offsets_cv    = column_view(data_type{type_id::INT32}, 2, offsets.data());
+    auto const needle_as_col = column_view(data_type{type_id::LIST},
+                                           1,
+                                           nullptr,
+                                           nullptr,
+                                           0,
+                                           0,
+                                           std::vector<column_view>{offsets_cv, needle_cv});
 
-template <>
-bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& haystack,
-                                                           scalar const& needle,
-                                                           rmm::cuda_stream_view stream) const
-{
-  auto const needle_cv = dynamic_cast<list_scalar const*>(&needle)->view();
-  CUDF_EXPECTS(lists_column_view{haystack}.child().type() == needle_cv.type(),
-               "scalar and column child types must match");
-
-  // Create a (lists) column_view of one row having child given from the input scalar.
-  auto const offsets = cudf::detail::make_device_uvector_async<offset_type>(
-    std::vector<offset_type>{0, needle_cv.size()}, stream);
-  auto const offsets_cv    = column_view(data_type{type_id::INT32}, 2, offsets.data());
-  auto const needle_as_col = column_view(data_type{type_id::LIST},
-                                         1,
-                                         nullptr,
-                                         nullptr,
-                                         0,
-                                         0,
-                                         std::vector<column_view>{offsets_cv, needle_cv});
-
-  return contains_nested_element(haystack, needle_as_col, stream);
-}
+    return contains_nested_element(haystack, needle_as_col, stream);
+  }
+};
 
 template <>
 bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& haystack,
                                                               scalar const& needle,
                                                               rmm::cuda_stream_view stream) const
 {
-  auto dict_col = cudf::dictionary_column_view(haystack);
+  auto const dict_col = cudf::dictionary_column_view(haystack);
   // first, find the needle in the dictionary's key set
-  auto index = cudf::dictionary::detail::get_index(dict_col, needle, stream);
+  auto const index = cudf::dictionary::detail::get_index(dict_col, needle, stream);
   // if found, check the index is actually in the indices column
-  return index->is_valid(stream) ? cudf::type_dispatcher(dict_col.indices().type(),
-                                                         contains_scalar_dispatch{},
-                                                         dict_col.indices(),
-                                                         *index,
-                                                         stream)
-                                 : false;
+  return index->is_valid(stream) && cudf::type_dispatcher(dict_col.indices().type(),
+                                                          contains_scalar_dispatch{},
+                                                          dict_col.indices(),
+                                                          *index,
+                                                          stream);
 }
 
 struct multi_contains_dispatch {
