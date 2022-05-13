@@ -120,6 +120,20 @@ a
 10  640.00
 ```
 
+## Floating-point computation
+
+cuDF leverages GPUs to execute operations in parallel.  This means the
+order of operations is not always deterministic.  This impacts the
+determinism of floating-point operations because floating-point
+arithmetic is non-associative, that is, `a + b` is not equal to `b + a`.
+
+For example, `s.sum()` is not guaranteed to produce identical results
+to Pandas nor produce identical results from run to run, when `s` is a
+Series of floats.  If you need to compare floating point results, you
+should typically do so using the functions provided in the
+[`cudf.testing`](testing-functions) module, which allow you to compare
+values up to a desired precision.
+
 ## Column names
 
 Unlike Pandas, cuDF does not support duplicate column names.
@@ -153,3 +167,7 @@ each group.  cuDF also supports `apply()`, but it relies on Numba to
 JIT compile the UDF and execute it on the GPU. This can be extremely
 fast, but imposes a few limitations on what operations are allowed in
 the UDF. See the docs on [UDFs](guide-to-udfs) for details.
+
+
+[floating-point]: https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
+[testing-functions]: https://docs.rapids.ai/api/cudf/nightly/api_docs/general_utilities.html#testing-functions
