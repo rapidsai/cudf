@@ -63,7 +63,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
-  auto const matched          = dictionary::detail::match_dictionaries({haystack, needles}, stream);
+  auto const matched = dictionary::detail::match_dictionaries({haystack, needles}, stream);
   auto const& matched_haystack = matched.second.front();
   auto const& matched_needles  = matched.second.back();
 
@@ -77,8 +77,8 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   // We use lhs and rhs to control the direction of the comparison with
   // strongly-typed indices. The first pair of iterators are always the
   // haystack, and the second pair are the needles.
-  auto const lhs_it = cudf::experimental::row::lexicographic::make_lhs_index_counting_iterator(0);
-  auto const rhs_it = cudf::experimental::row::lexicographic::make_rhs_index_counting_iterator(0);
+  auto const lhs_it = cudf::experimental::row::make_lhs_index_counting_iterator(0);
+  auto const rhs_it = cudf::experimental::row::make_rhs_index_counting_iterator(0);
 
   if (find_first) {
     thrust::lower_bound(rmm::exec_policy(stream),
