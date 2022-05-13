@@ -428,9 +428,8 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
     uint32_t l        = 0, c;
     uncompressed_size = 0;
     do {
-      uint32_t lo7;
       c   = *cur++;
-      lo7 = c & 0x7f;
+      uint32_t const lo7 = c & 0x7f;
       if (l >= 28 && c > 0xf) { return 0; }
       uncompressed_size |= lo7 << l;
       l += 7;
@@ -475,7 +474,7 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
       // xxxxxx00: literal
       blen >>= 2;
       if (blen >= 60) {
-        uint32_t num_bytes = blen - 59;
+        uint32_t const num_bytes = blen - 59;
         if (cur + num_bytes >= end) break;
         blen = cur[0];
         if (num_bytes > 1) {
