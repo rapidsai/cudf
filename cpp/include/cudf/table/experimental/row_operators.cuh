@@ -548,7 +548,8 @@ class two_table_device_row_comparator_adapter {
   __device__ bool operator()(lhs_index_type const lhs_index,
                              rhs_index_type const rhs_index) const noexcept
   {
-    return comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
+    return comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index)) ==
+           weak_ordering::LESS;
   }
 
   /**
@@ -562,11 +563,10 @@ class two_table_device_row_comparator_adapter {
   __device__ bool operator()(rhs_index_type const rhs_index,
                              lhs_index_type const lhs_index) const noexcept
   {
-    // TODO: "not lhs < rhs" isn't quite the same as "rhs < lhs". The case of
-    // equality returns true for operator(rhs, lhs), while operator(lhs, rhs)
-    // returns false. This would have to be handled at a lower level, if it
-    // matters. Do we just document that this means "rhs <= lhs"?
-    return comp(static_cast<cudf::size_type>(rhs_index), static_cast<cudf::size_type>(lhs_index));
+    // Compare `rhs < lhs` is equivalent to `lhs >= rhs`.
+    auto const comp_lhs_rhs =
+      comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
+    return comp_lhs_rhs == weak_ordering::GREATER || comp_lhs_rhs == weak_ordering::EQUIVALENT;
   }
 
  private:
