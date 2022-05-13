@@ -166,10 +166,10 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                  "from_dlpack of 1D tensor only for unit-stride data");
   } else if (tensor.ndim == 2) {
     CUDF_EXPECTS(
-      nullptr != tensor.strides && tensor.strides[0] == 1 && tensor.strides[1] == tensor.shape[0],
+      nullptr != tensor.strides && tensor.strides[0] == 1 && tensor.strides[1] >= tensor.shape[0],
       "from_dlpack of 2D tensor only for column-major unit-stride data");
   } else {
-    CUDF_UNREACHABLE("Unhandled tensor dimension in from_dlpack");
+    CUDF_FAIL("Unhandled tensor dimension in from_dlpack");
   }
 
   size_t const num_columns = (tensor.ndim == 2) ? static_cast<size_t>(tensor.shape[1]) : 1;
