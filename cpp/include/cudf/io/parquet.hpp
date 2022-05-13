@@ -39,7 +39,8 @@ namespace io {
 
 constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  // 128MB
 constexpr size_type default_row_group_size_rows = 1000000;
-constexpr size_type default_target_page_size = 512 * 1024;
+constexpr size_t default_target_page_size_bytes = 512 * 1024;
+constexpr size_type default_target_page_size_rows = 20000;
 
 /**
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
@@ -383,8 +384,10 @@ class parquet_writer_options {
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
   size_type _row_group_size_rows = default_row_group_size_rows;
-  // target page size uncompressed
-  size_t _target_page_size = default_target_page_size;
+  // Maximum size of each page (uncompressed)
+  size_t _target_page_size_bytes = default_target_page_size_bytes;
+  // Maximum number of rows in a page
+  size_type _target_page_size_rows = default_target_page_size_rows;
 
   /**
    * @brief Constructor from sink and table.
@@ -488,7 +491,12 @@ class parquet_writer_options {
   /**
    * @brief Returns target page size, in bytes.
    */
-  auto get_target_page_size() const { return _target_page_size; }
+  auto get_target_page_size_bytes() const { return _target_page_size_bytes; }
+
+  /**
+   * @brief Returns target page size, in rows.
+   */
+  auto get_target_page_size_rows() const { return _target_page_size_rows; }
 
   /**
    * @brief Sets partitions.
@@ -568,9 +576,14 @@ class parquet_writer_options {
   void set_row_group_size_rows(size_type size_rows) { _row_group_size_rows = size_rows; }
 
   /**
-   * @brief Returns target page size.
+   * @brief Sets the maximum page size, in bytes.
    */
-  void set_target_page_size(size_t target_pgsz) { _target_page_size = target_pgsz; }
+  void set_target_page_size_bytes(size_t pgsz_bytes) { _target_page_size_bytes = pgsz_bytes; }
+
+  /**
+   * @brief Sets the maximum page size, in rows.
+   */
+  void set_target_page_size_rows(size_type pgsz_rows) { _target_page_size_rows = pgsz_rows; }
 };
 
 class parquet_writer_options_builder {
@@ -701,14 +714,26 @@ class parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets target page size, in bytes.
+   * @brief Sets the maximum page size, in bytes.
    *
-   * @param ps The page size to use.
+   * @param val The page size to use.
    * @return this for chaining.
    */
-  parquet_writer_options_builder& target_page_size(size_t target_pgsz)
+  parquet_writer_options_builder& target_page_size_bytes(size_t val)
   {
-    options._target_page_size = target_pgsz;
+    options.set_target_page_size_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum page size, in rows.
+   *
+   * @param val The page size to use.
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& target_page_size_bytes(size_type val)
+  {
+    options.set_target_page_size_rows(val);
     return *this;
   }
 
@@ -796,8 +821,10 @@ class chunked_parquet_writer_options {
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
   size_type _row_group_size_rows = default_row_group_size_rows;
-  // target page size uncompressed
-  size_t _target_page_size = default_target_page_size;
+  // Maximum size of each page (uncompressed)
+  size_t _target_page_size_bytes = default_target_page_size_bytes;
+  // Maximum number of rows in a page
+  size_type _target_page_size_rows = default_target_page_size_rows;
 
   /**
    * @brief Constructor from sink.
@@ -862,7 +889,12 @@ class chunked_parquet_writer_options {
   /**
    * @brief Returns target page size, in bytes.
    */
-  auto get_target_page_size() const { return _target_page_size; }
+  auto get_target_page_size_bytes() const { return _target_page_size_bytes; }
+
+  /**
+   * @brief Returns target page size, in rows.
+   */
+  auto get_target_page_size_rows() const { return _target_page_size_rows; }
 
   /**
    * @brief Sets metadata.
@@ -916,9 +948,14 @@ class chunked_parquet_writer_options {
   void set_row_group_size_rows(size_type size_rows) { _row_group_size_rows = size_rows; }
 
   /**
-   * @brief Returns target page size.
+   * @brief Sets the maximum page size, in bytes.
    */
-  void set_target_page_size(size_t target_pgsz) { _target_page_size = target_pgsz; }
+  void set_target_page_size_bytes(size_t pgsz_bytes) { _target_page_size_bytes = pgsz_bytes; }
+
+  /**
+   * @brief Sets the maximum page size, in rows.
+   */
+  void set_target_page_size_rows(size_type pgsz_rows) { _target_page_size_rows = pgsz_rows; }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -1039,14 +1076,26 @@ class chunked_parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets target page size in parquet_writer_options.
+   * @brief Sets the maximum page size, in bytes.
    *
-   * @param ps The page size to use.
+   * @param val maximum page size
    * @return this for chaining.
    */
-  chunked_parquet_writer_options_builder& target_page_size(size_t target_pgsz)
+  chunked_parquet_writer_options_builder& target_page_size_bytes(size_t val)
   {
-    options._target_page_size = target_pgsz;
+    options.set_target_page_size_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum page size, in rows.
+   *
+   * @param val maximum page size
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& target_page_size_rows(size_type val)
+  {
+    options.set_target_page_size_rows(val);
     return *this;
   }
 

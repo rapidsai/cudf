@@ -893,7 +893,8 @@ void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chu
                                    uint32_t num_columns)
 {
   chunks.host_to_device(stream);
-  gpu::InitEncoderPages(chunks, {}, col_desc, num_columns, target_page_size_, nullptr, nullptr, 0, stream);
+  gpu::InitEncoderPages(chunks, {}, col_desc, num_columns, target_page_size_bytes, 
+                        target_page_size_rows, nullptr, nullptr, 0, stream);
   chunks.device_to_host(stream, true);
 }
 
@@ -999,7 +1000,8 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
                    pages,
                    col_desc,
                    num_columns,
-                   target_page_size_,
+                   target_page_size_bytes,
+                   target_page_size_rows,
                    (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
                    max_page_comp_data_size,
@@ -1154,7 +1156,8 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     stream(stream),
     max_row_group_size{options.get_row_group_size_bytes()},
     max_row_group_rows{options.get_row_group_size_rows()},
-    target_page_size_(options.get_target_page_size()),
+    target_page_size_bytes(options.get_target_page_size_bytes()),
+    target_page_size_rows(options.get_target_page_size_rows()),
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -1177,7 +1180,8 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     stream(stream),
     max_row_group_size{options.get_row_group_size_bytes()},
     max_row_group_rows{options.get_row_group_size_rows()},
-    target_page_size_(options.get_target_page_size()),
+    target_page_size_bytes(options.get_target_page_size_bytes()),
+    target_page_size_rows(options.get_target_page_size_rows()),
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
