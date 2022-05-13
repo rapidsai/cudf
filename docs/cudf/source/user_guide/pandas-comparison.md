@@ -149,7 +149,7 @@ collections of arbitrary Python objects.
 The `.apply()` function in Pandas accepts a user-defined function
 (UDF) that can include arbitrary operations that are applied to each
 value of a `Series`, `DataFrame`, or in the case of a groupby,
-each group.  cuDF also supports `apply()`, but it relies on Numba to
+each group.  cuDF also supports `.apply()`, but it relies on Numba to
 JIT compile the UDF and execute it on the GPU. This can be extremely
 fast, but imposes a few limitations on what operations are allowed in
 the UDF. See the docs on [UDFs](guide-to-udfs) for details.
