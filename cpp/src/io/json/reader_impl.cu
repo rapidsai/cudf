@@ -587,7 +587,7 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
   auto range_size        = reader_opts.get_byte_range_size();
   auto range_size_padded = reader_opts.get_byte_range_size_with_padding();
 
-  auto h_raw_data = ingest_raw_input(
+  auto const h_raw_data = ingest_raw_input(
     sources, reader_opts.get_compression(), range_offset, range_size, range_size_padded);
   host_span<char const> h_data{reinterpret_cast<char const*>(h_raw_data.data()), h_raw_data.size()};
 

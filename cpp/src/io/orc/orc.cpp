@@ -383,14 +383,14 @@ host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t co
   // If uncompressed, just pass-through the input
   if (src.empty() or _compression == compression_type::NONE) { return src; }
 
-  constexpr int header_size = 3;
+  constexpr size_t header_size = 3;
   CUDF_EXPECTS(src.size() >= header_size, "Total size is less than the 3-byte header");
 
   // First, scan the input for the number of blocks and worst-case output size
   size_t max_dst_length = 0;
   for (size_t i = 0; i + header_size < src.size();) {
-    uint32_t block_len       = src[i] | (src[i + 1] << 8) | (src[i + 2] << 16);
-    uint32_t is_uncompressed = block_len & 1;
+    uint32_t block_len         = src[i] | (src[i + 1] << 8) | (src[i + 2] << 16);
+    auto const is_uncompressed = static_cast<bool>(block_len & 1);
     i += header_size;
     block_len >>= 1;
     if (is_uncompressed) {
@@ -408,8 +408,8 @@ host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t co
   m_buf.resize(max_dst_length);
   size_t dst_length = 0;
   for (size_t i = 0; i + header_size < src.size();) {
-    uint32_t block_len       = src[i] | (src[i + 1] << 8) | (src[i + 2] << 16);
-    uint32_t is_uncompressed = block_len & 1;
+    uint32_t block_len         = src[i] | (src[i + 1] << 8) | (src[i + 2] << 16);
+    auto const is_uncompressed = static_cast<bool>(block_len & 1);
     i += header_size;
     block_len >>= 1;
     if (is_uncompressed) {
