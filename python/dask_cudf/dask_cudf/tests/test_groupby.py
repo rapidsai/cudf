@@ -58,7 +58,10 @@ def test_groupby_basic(series, aggregation):
     "func",
     [
         lambda df: df.groupby("x").agg({"y": "max"}),
+        lambda df: df.groupby("x").agg(["sum", "max"]),
         lambda df: df.groupby("x").y.agg(["sum", "max"]),
+        lambda df: df.groupby("x").agg("sum"),
+        lambda df: df.groupby("x").y.agg("sum"),
     ],
 )
 def test_groupby_agg(func):
@@ -663,11 +666,20 @@ def test_groupby_agg_redirect(aggregations):
 
 
 @pytest.mark.parametrize(
-    "arg",
-    [["not_supported"], {"a": "not_supported"}, {"a": ["not_supported"]}],
+    "arg,supported",
+    [
+        ("sum", True),
+        (["sum"], True),
+        ({"a": "sum"}, True),
+        ({"a": ["sum"]}, True),
+        ("not_supported", False),
+        (["not_supported"], False),
+        ({"a": "not_supported"}, False),
+        ({"a": ["not_supported"]}, False),
+    ],
 )
-def test_is_supported(arg):
-    assert _aggs_supported(arg, {"supported"}) is False
+def test_is_supported(arg, supported):
+    assert _aggs_supported(arg, SUPPORTED_AGGS) is supported
 
 
 def test_groupby_unique_lists():
