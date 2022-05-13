@@ -538,7 +538,7 @@ class Frame(BinaryOperand, Scannable):
         Parameters
         ----------
         dtype : str or numpy.dtype, optional
-            The dtype to pass to :meth:`numpy.asarray`.
+            The dtype to pass to :func:`numpy.asarray`.
         copy : bool, default False
             Whether to ensure that the returned value is not a view on
             another array. Note that ``copy=False`` does not *ensure* that
@@ -573,7 +573,7 @@ class Frame(BinaryOperand, Scannable):
         Parameters
         ----------
         dtype : str or numpy.dtype, optional
-            The dtype to pass to :meth:`numpy.asarray`.
+            The dtype to pass to :func:`numpy.asarray`.
         copy : bool, default True
             Whether to ensure that the returned value is not a view on
             another array. This parameter must be ``True`` since cuDF must copy
@@ -2586,7 +2586,7 @@ class Frame(BinaryOperand, Scannable):
     def min(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         level=None,
         numeric_only=None,
         **kwargs,
@@ -2637,7 +2637,7 @@ class Frame(BinaryOperand, Scannable):
     def max(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         level=None,
         numeric_only=None,
         **kwargs,
@@ -2688,7 +2688,7 @@ class Frame(BinaryOperand, Scannable):
     def sum(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         dtype=None,
         level=None,
         numeric_only=None,
@@ -2747,7 +2747,7 @@ class Frame(BinaryOperand, Scannable):
     def product(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         dtype=None,
         level=None,
         numeric_only=None,
@@ -2810,7 +2810,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def mean(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
         """
         Return the mean of the values for the requested axis.
@@ -2857,7 +2857,7 @@ class Frame(BinaryOperand, Scannable):
     def std(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         level=None,
         ddof=1,
         numeric_only=None,
@@ -2914,7 +2914,7 @@ class Frame(BinaryOperand, Scannable):
     def var(
         self,
         axis=None,
-        skipna=None,
+        skipna=True,
         level=None,
         ddof=1,
         numeric_only=None,
@@ -2968,12 +2968,12 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def kurtosis(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
         """
         Return Fisher's unbiased kurtosis of a sample.
 
-        Kurtosis obtained using Fisher’s definition of
+        Kurtosis obtained using Fisher's definition of
         kurtosis (kurtosis of normal == 0.0). Normalized by N-1.
 
         Parameters
@@ -3025,7 +3025,7 @@ class Frame(BinaryOperand, Scannable):
     # Alias for kurtosis.
     @copy_docstring(kurtosis)
     def kurt(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
         return self.kurtosis(
             axis=axis,
@@ -3037,7 +3037,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def skew(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
         """
         Return unbiased Fisher-Pearson skew of a sample.
@@ -3199,7 +3199,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def median(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
     ):
         """
         Return the median of the values for the requested axis.
@@ -3356,7 +3356,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def to_string(self):
-        """
+        r"""
         Convert to string
 
         cuDF uses Pandas internals for efficient string formatting.
@@ -3373,7 +3373,7 @@ class Frame(BinaryOperand, Scannable):
         >>> df['key'] = [0, 1, 2]
         >>> df['val'] = [float(i + 10) for i in range(3)]
         >>> df.to_string()
-        '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
+        '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
         """
         return repr(self)
 

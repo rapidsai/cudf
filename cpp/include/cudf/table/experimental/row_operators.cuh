@@ -17,7 +17,9 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/lists/list_device_view.cuh>
@@ -43,6 +45,7 @@
 #include <utility>
 
 namespace cudf {
+
 namespace experimental {
 
 /**
@@ -66,33 +69,33 @@ struct dispatch_void_if_nested {
 };
 
 namespace row {
-
 namespace lexicographic {
 
 /**
- * @brief Computes whether one row is lexicographically *less* than another row.
+ * @brief Computes the lexicographic comparison between 2 rows.
  *
  * Lexicographic ordering is determined by:
  * - Two rows are compared element by element.
  * - The first mismatching element defines which row is lexicographically less
  * or greater than the other.
+ * - If the rows are compared without mismatched elements, the rows are equivalent
+ *
  *
  * Lexicographic ordering is exactly equivalent to doing an alphabetical sort of
  * two words, for example, `aac` would be *less* than (or precede) `abb`. The
  * second letter in both words is the first non-equal letter, and `a < b`, thus
  * `aac < abb`.
  *
- * @tparam Nullate A cudf::nullate type describing how to check for nulls.
+ * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
-
   /**
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * @param has_nulls Indicates if either input table contains columns with nulls.
+   * @param check_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
    * @param depth Optional, device array the same length as a row that contains starting depths of
@@ -105,7 +108,7 @@ class device_row_comparator {
    * `null_order::BEFORE` for all columns.
    */
   device_row_comparator(
-    Nullate has_nulls,
+    Nullate check_nulls,
     table_device_view lhs,
     table_device_view rhs,
     std::optional<device_span<int const>> depth                  = std::nullopt,
@@ -113,7 +116,7 @@ class device_row_comparator {
     std::optional<device_span<null_order const>> null_precedence = std::nullopt) noexcept
     : _lhs{lhs},
       _rhs{rhs},
-      _nulls{has_nulls},
+      _check_nulls{check_nulls},
       _depth{depth},
       _column_order{column_order},
       _null_precedence{null_precedence}
@@ -131,19 +134,23 @@ class device_row_comparator {
      *
      * @note `lhs` and `rhs` may be the same.
      *
-     * @param has_nulls Indicates if either input column contains nulls.
+     * @param check_nulls Indicates if either input column contains nulls.
      * @param lhs The column containing the first element
      * @param rhs The column containing the second element (may be the same as lhs)
      * @param null_precedence Indicates how null values are ordered with other values
      * @param depth The depth of the column if part of a nested column @see
      * preprocessed_table::depths
      */
-    __device__ element_comparator(Nullate has_nulls,
+    __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
                                   null_order null_precedence = null_order::BEFORE,
                                   int depth                  = 0)
-      : _lhs{lhs}, _rhs{rhs}, _nulls{has_nulls}, _null_precedence{null_precedence}, _depth{depth}
+      : _lhs{lhs},
+        _rhs{rhs},
+        _check_nulls{check_nulls},
+        _null_precedence{null_precedence},
+        _depth{depth}
     {
     }
 
@@ -160,33 +167,32 @@ class device_row_comparator {
     __device__ cuda::std::pair<weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
-      if (_nulls) {
+      if (_check_nulls) {
         bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
         bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
 
         if (lhs_is_null or rhs_is_null) {  // at least one is null
-          return cuda::std::make_pair(null_compare(lhs_is_null, rhs_is_null, _null_precedence),
-                                      _depth);
+          return cuda::std::pair(null_compare(lhs_is_null, rhs_is_null, _null_precedence), _depth);
         }
       }
 
-      return cuda::std::make_pair(relational_compare(_lhs.element<Element>(lhs_element_index),
-                                                     _rhs.element<Element>(rhs_element_index)),
-                                  std::numeric_limits<int>::max());
+      return cuda::std::pair(relational_compare(_lhs.element<Element>(lhs_element_index),
+                                                _rhs.element<Element>(rhs_element_index)),
+                             std::numeric_limits<int>::max());
     }
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                              not std::is_same_v<Element, cudf::struct_view>),
               typename... Args>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(Args...)
+    __device__ cuda::std::pair<weak_ordering, int> operator()(Args...) const noexcept
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
     template <typename Element, CUDF_ENABLE_IF(std::is_same_v<Element, cudf::struct_view>)>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const lhs_element_index,
-                                                              size_type const rhs_element_index)
+    __device__ cuda::std::pair<weak_ordering, int> operator()(
+      size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
       column_device_view lcol = _lhs;
       column_device_view rcol = _rhs;
@@ -197,20 +203,20 @@ class device_row_comparator {
 
         if (lhs_is_null or rhs_is_null) {  // at least one is null
           weak_ordering state = null_compare(lhs_is_null, rhs_is_null, _null_precedence);
-          return cuda::std::make_pair(state, depth);
+          return cuda::std::pair(state, depth);
         }
 
         if (lcol.num_child_columns() == 0) {
-          return cuda::std::make_pair(weak_ordering::EQUIVALENT, depth);
+          return cuda::std::pair(weak_ordering::EQUIVALENT, depth);
         }
 
         // Non-empty structs have been modified to only have 1 child when using this.
-        lcol = lcol.children()[0];
-        rcol = rcol.children()[0];
+        lcol = detail::structs_column_device_view(lcol).sliced_child(0);
+        rcol = detail::structs_column_device_view(rcol).sliced_child(0);
         ++depth;
       }
 
-      auto const comparator = element_comparator{_nulls, lcol, rcol, _null_precedence, depth};
+      auto const comparator = element_comparator{_check_nulls, lcol, rcol, _null_precedence, depth};
       return cudf::type_dispatcher<dispatch_void_if_nested>(
         lcol.type(), comparator, lhs_element_index, rhs_element_index);
     }
@@ -218,7 +224,7 @@ class device_row_comparator {
    private:
     column_device_view const _lhs;
     column_device_view const _rhs;
-    Nullate const _nulls;
+    Nullate const _check_nulls;
     null_order const _null_precedence;
     int const _depth;
   };
@@ -226,13 +232,14 @@ class device_row_comparator {
  public:
   /**
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
-   * lexicographically less than the row at `rhs_index` in the `rhs` table.
+   * lexicographically less, greater, or equivalent to the row at `rhs_index` in the `rhs` table.
    *
    * @param lhs_index The index of row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
-   * @return `true` if row from the `lhs` table compares less than row in the `rhs` table
+   * @return weak ordering comparison of the row in the `lhs` table relative to the row in the `rhs`
+   * table
    */
-  __device__ bool operator()(size_type const lhs_index, size_type const rhs_index) const noexcept
+  __device__ weak_ordering operator()(size_type lhs_index, size_type rhs_index) const noexcept
   {
     int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
@@ -246,27 +253,63 @@ class device_row_comparator {
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
       auto const comparator =
-        element_comparator{_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
-
+        element_comparator{_check_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
       weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
         cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 
-      return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
+      return ascending
+               ? state
+               : (state == weak_ordering::GREATER ? weak_ordering::LESS : weak_ordering::GREATER);
     }
-    return false;
+    return weak_ordering::EQUIVALENT;
   }
 
  private:
   table_device_view const _lhs;
   table_device_view const _rhs;
-  Nullate const _nulls{};
+  Nullate const _check_nulls{};
   std::optional<device_span<int const>> const _depth;
   std::optional<device_span<order const>> const _column_order;
   std::optional<device_span<null_order const>> const _null_precedence;
 };  // class device_row_comparator
+
+/**
+ * @brief Wraps and interprets the result of templated Comparator that returns a weak_ordering.
+ * Returns true if the weak_ordering matches any of the templated values.
+ *
+ * Note that this should never be used with only `weak_ordering::EQUIVALENT`.
+ * An equality comparator should be used instead for optimal performance.
+ *
+ * @tparam Comparator generic comparator that returns a weak_ordering.
+ * @tparam values weak_ordering parameter pack of orderings to interpret as true
+ */
+template <typename Comparator, weak_ordering... values>
+struct weak_ordering_comparator_impl {
+  __device__ bool operator()(size_type const lhs, size_type const rhs) const noexcept
+  {
+    weak_ordering const result = comparator(lhs, rhs);
+    return ((result == values) || ...);
+  }
+  Comparator comparator;
+};
+
+/**
+ * @brief Wraps and interprets the result of device_row_comparator, true if the result is
+ * weak_ordering::LESS meaning one row is lexicographically *less* than another row.
+ *
+ * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+ */
+template <typename Nullate>
+using less_comparator =
+  weak_ordering_comparator_impl<device_row_comparator<Nullate>, weak_ordering::LESS>;
+
+template <typename Nullate>
+using less_equivalent_comparator = weak_ordering_comparator_impl<device_row_comparator<Nullate>,
+                                                                 weak_ordering::LESS,
+                                                                 weak_ordering::EQUIVALENT>;
 
 struct preprocessed_table {
   using table_device_view_owner =
@@ -409,17 +452,17 @@ class self_comparator {
   /**
    * @brief Return the binary operator for comparing rows in the table.
    *
-   * Returns a binary callable, `F`, with signature `bool F(size_t, size_t)`.
+   * Returns a binary callable, `F`, with signature `bool F(size_type, size_type)`.
    *
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
-   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
-  device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  less_comparator<Nullate> device_comparator(Nullate nullate = {}) const
   {
-    return device_row_comparator(
-      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence());
+    return less_comparator<Nullate>{device_row_comparator<Nullate>(
+      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
   }
 
  private:
@@ -427,6 +470,10 @@ class self_comparator {
 };
 
 }  // namespace lexicographic
+
+namespace hash {
+class row_hasher;
+}
 
 namespace equality {
 
@@ -439,7 +486,7 @@ class device_row_comparator {
    * @brief Checks whether the row at `lhs_index` in the `lhs` table is equal to the row at
    * `rhs_index` in the `rhs` table.
    *
-   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param lhs_index The index of the row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table is equal to the row in the `rhs` table
    */
@@ -447,7 +494,7 @@ class device_row_comparator {
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(
-        l.type(), element_comparator{nulls, l, r, nulls_are_equal}, lhs_index, rhs_index);
+        l.type(), element_comparator{check_nulls, l, r, nulls_are_equal}, lhs_index, rhs_index);
     };
 
     return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
@@ -458,23 +505,21 @@ class device_row_comparator {
    * @brief Construct a function object for performing equality comparison between the rows of two
    * tables.
    *
-   * @param has_nulls Indicates if either input table contains columns with nulls.
+   * @param check_nulls Indicates if either input table contains columns with nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    */
-  device_row_comparator(Nullate has_nulls,
+  device_row_comparator(Nullate check_nulls,
                         table_device_view lhs,
                         table_device_view rhs,
                         null_equality nulls_are_equal = null_equality::EQUAL) noexcept
-    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
+    : lhs{lhs}, rhs{rhs}, check_nulls{check_nulls}, nulls_are_equal{nulls_are_equal}
   {
   }
 
   /**
    * @brief Performs an equality comparison between two elements in two columns.
-   *
-   * @tparam Nullate A cudf::nullate type describing how to check for nulls.
    */
   class element_comparator {
    public:
@@ -484,16 +529,16 @@ class device_row_comparator {
      *
      * @note `lhs` and `rhs` may be the same.
      *
-     * @param has_nulls Indicates if either input column contains nulls.
+     * @param check_nulls Indicates if either input column contains nulls.
      * @param lhs The column containing the first element
      * @param rhs The column containing the second element (may be the same as lhs)
      * @param nulls_are_equal Indicates if two null elements are treated as equivalent
      */
-    __device__ element_comparator(Nullate has_nulls,
+    __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
                                   null_equality nulls_are_equal = null_equality::EQUAL) noexcept
-      : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
+      : lhs{lhs}, rhs{rhs}, check_nulls{check_nulls}, nulls_are_equal{nulls_are_equal}
     {
     }
 
@@ -503,13 +548,13 @@ class device_row_comparator {
      * @param lhs_element_index The index of the first element
      * @param rhs_element_index The index of the second element
      * @return True if lhs and rhs are equal or if both lhs and rhs are null and nulls are
-     * configured to be considered equal (`nulls_are_equal` == `null_equality::EQUAL`)
+     * considered equal (`nulls_are_equal` == `null_equality::EQUAL`)
      */
     template <typename Element, CUDF_ENABLE_IF(cudf::is_equality_comparable<Element, Element>())>
     __device__ bool operator()(size_type const lhs_element_index,
                                size_type const rhs_element_index) const noexcept
     {
-      if (nulls) {
+      if (check_nulls) {
         bool const lhs_is_null{lhs.is_null(lhs_element_index)};
         bool const rhs_is_null{rhs.is_null(rhs_element_index)};
         if (lhs_is_null and rhs_is_null) {
@@ -539,7 +584,7 @@ class device_row_comparator {
       column_device_view lcol = lhs.slice(lhs_element_index, 1);
       column_device_view rcol = rhs.slice(rhs_element_index, 1);
       while (is_nested(lcol.type())) {
-        if (nulls) {
+        if (check_nulls) {
           auto lvalid = detail::make_validity_iterator<true>(lcol);
           auto rvalid = detail::make_validity_iterator<true>(rcol);
           if (nulls_are_equal == null_equality::UNEQUAL) {
@@ -557,6 +602,7 @@ class device_row_comparator {
         }
         if (lcol.type().id() == type_id::STRUCT) {
           if (lcol.num_child_columns() == 0) { return true; }
+          // Non-empty structs are assumed to be decomposed and contain only one child
           lcol = detail::structs_column_device_view(lcol).sliced_child(0);
           rcol = detail::structs_column_device_view(rcol).sliced_child(0);
         } else if (lcol.type().id() == type_id::LIST) {
@@ -575,8 +621,8 @@ class device_row_comparator {
         }
       }
 
-      auto comp =
-        column_comparator{element_comparator{nulls, lcol, rcol, nulls_are_equal}, lcol.size()};
+      auto comp = column_comparator{element_comparator{check_nulls, lcol, rcol, nulls_are_equal},
+                                    lcol.size()};
       return type_dispatcher<dispatch_void_if_nested>(lcol.type(), comp);
     }
 
@@ -584,7 +630,7 @@ class device_row_comparator {
     /**
      * @brief Serially compare two columns for equality.
      *
-     * When we want to get the equivalence of two columns by serially comparing all elements in a
+     * When we want to get the equivalence of two columns by serially comparing all elements in
      * one column with the corresponding elements in the other column, this saves us from type
      * dispatching for each individual element in the range
      */
@@ -617,13 +663,13 @@ class device_row_comparator {
 
     column_device_view const lhs;
     column_device_view const rhs;
-    Nullate const nulls;
+    Nullate const check_nulls;
     null_equality const nulls_are_equal;
   };
 
   table_device_view const lhs;
   table_device_view const rhs;
-  Nullate const nulls;
+  Nullate const check_nulls;
   null_equality const nulls_are_equal;
 };
 
@@ -643,6 +689,7 @@ struct preprocessed_table {
 
  private:
   friend class self_comparator;
+  friend class hash::row_hasher;
 
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
@@ -693,16 +740,17 @@ class self_comparator {
   /**
    * @brief Get the comparison operator to use on the device
    *
-   * Returns a binary callable, `F`, with signature `bool F(size_t, size_t)`.
+   * Returns a binary callable, `F`, with signature `bool F(size_type, size_type)`.
    *
    * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
    *
-   * @tparam Nullate Optional, A cudf::nullate type describing how to check for nulls.
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
-  device_row_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  device_row_comparator<Nullate> device_comparator(
+    Nullate nullate = {}, null_equality nulls_are_equal = null_equality::EQUAL) const
   {
-    return device_row_comparator(nullate, *d_t, *d_t);
+    return device_row_comparator(nullate, *d_t, *d_t, nulls_are_equal);
   }
 
  private:
@@ -711,6 +759,202 @@ class self_comparator {
 
 }  // namespace equality
 
+namespace hash {
+
+/**
+ * @brief Computes the hash value of an element in the given column.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements.
+ * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+ */
+template <template <typename> class hash_function, typename Nullate>
+class element_hasher {
+ public:
+  __device__ element_hasher(
+    Nullate nulls,
+    uint32_t seed             = DEFAULT_HASH_SEED,
+    hash_value_type null_hash = std::numeric_limits<hash_value_type>::max()) noexcept
+    : _check_nulls(nulls), _seed(seed), _null_hash(null_hash)
+  {
+  }
+
+  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
+  __device__ hash_value_type operator()(column_device_view const& col,
+                                        size_type row_index) const noexcept
+  {
+    if (_check_nulls && col.is_null(row_index)) { return _null_hash; }
+    return hash_function<T>{_seed}(col.element<T>(row_index));
+  }
+
+  template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
+  __device__ hash_value_type operator()(column_device_view const& col,
+                                        size_type row_index) const noexcept
+  {
+    CUDF_UNREACHABLE("Unsupported type in hash.");
+  }
+
+  uint32_t _seed;
+  hash_value_type _null_hash;
+  Nullate _check_nulls;
+};
+
+/**
+ * @brief Computes the hash value of a row in the given table.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements.
+ * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+ */
+template <template <typename> class hash_function, typename Nullate>
+class device_row_hasher {
+  friend class row_hasher;
+
+ public:
+  device_row_hasher() = delete;
+
+  __device__ auto operator()(size_type row_index) const noexcept
+  {
+    auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
+      return cudf::type_dispatcher<dispatch_storage_type>(
+        column.type(), element_hasher_adapter<hash_function>{_check_nulls}, column, row_index);
+    });
+
+    // Hash each element and combine all the hash values together
+    return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
+      return cudf::detail::hash_combine(hash, h);
+    });
+  }
+
+ private:
+  /**
+   * @brief Computes the hash value of an element in the given column.
+   *
+   * When the column is non-nested, this is a simple wrapper around the element_hasher.
+   * When the column is nested, this uses the element_hasher to hash the shape and values of the
+   * column.
+   */
+  template <template <typename> class hash_fn>
+  class element_hasher_adapter {
+    static constexpr hash_value_type NULL_HASH     = std::numeric_limits<hash_value_type>::max();
+    static constexpr hash_value_type NON_NULL_HASH = 0;
+
+   public:
+    __device__ element_hasher_adapter(Nullate check_nulls) noexcept
+      : _element_hasher(check_nulls), _check_nulls(check_nulls)
+    {
+    }
+
+    template <typename T, CUDF_ENABLE_IF(not cudf::is_nested<T>())>
+    __device__ hash_value_type operator()(column_device_view const& col,
+                                          size_type row_index) const noexcept
+    {
+      return _element_hasher.template operator()<T>(col, row_index);
+    }
+
+    template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
+    __device__ hash_value_type operator()(column_device_view const& col,
+                                          size_type row_index) const noexcept
+    {
+      auto hash                   = hash_value_type{0};
+      column_device_view curr_col = col.slice(row_index, 1);
+      while (is_nested(curr_col.type())) {
+        if (_check_nulls) {
+          auto validity_it = detail::make_validity_iterator<true>(curr_col);
+          hash             = detail::accumulate(
+            validity_it, validity_it + curr_col.size(), hash, [](auto hash, auto is_valid) {
+              return cudf::detail::hash_combine(hash, is_valid ? NON_NULL_HASH : NULL_HASH);
+            });
+        }
+        if (curr_col.type().id() == type_id::STRUCT) {
+          if (curr_col.num_child_columns() == 0) { return hash; }
+          // Non-empty structs are assumed to be decomposed and contain only one child
+          curr_col = detail::structs_column_device_view(curr_col).sliced_child(0);
+        } else if (curr_col.type().id() == type_id::LIST) {
+          auto list_col   = detail::lists_column_device_view(curr_col);
+          auto list_sizes = make_list_size_iterator(list_col);
+          hash            = detail::accumulate(
+            list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
+              return cudf::detail::hash_combine(hash, hash_fn<size_type>{}(size));
+            });
+          curr_col = list_col.sliced_child();
+        }
+      }
+      for (int i = 0; i < curr_col.size(); ++i) {
+        hash = cudf::detail::hash_combine(
+          hash,
+          type_dispatcher<dispatch_void_if_nested>(curr_col.type(), _element_hasher, curr_col, i));
+      }
+      return hash;
+    }
+
+    element_hasher<hash_fn, Nullate> const _element_hasher;
+    Nullate const _check_nulls;
+  };
+
+  CUDF_HOST_DEVICE device_row_hasher(Nullate check_nulls,
+                                     table_device_view t,
+                                     uint32_t seed = DEFAULT_HASH_SEED) noexcept
+    : _table{t}, _seed(seed), _check_nulls{check_nulls}
+  {
+  }
+
+  table_device_view const _table;
+  Nullate const _check_nulls;
+  uint32_t const _seed;
+};
+
+// Inject row::equality::preprocessed_table into the row::hash namespace
+// As a result, row::equality::preprocessed_table and row::hash::preprocessed table are the same
+// type and are interchangeable.
+using preprocessed_table = row::equality::preprocessed_table;
+
+class row_hasher {
+ public:
+  /**
+   * @brief Construct an owning object for hashing the rows of a table
+   *
+   * @param t The table containing rows to hash
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
+  row_hasher(table_view const& t, rmm::cuda_stream_view stream)
+    : d_t(preprocessed_table::create(t, stream))
+  {
+  }
+
+  /**
+   * @brief Construct an owning object for hashing the rows of a table from an existing
+   * preprocessed_table
+   *
+   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
+   * multiple `row_hasher` and `equality::self_comparator` objects.
+   *
+   * @param t A table preprocessed for hashing or equality.
+   */
+  row_hasher(std::shared_ptr<preprocessed_table> t) : d_t{std::move(t)} {}
+
+  /**
+   * @brief Get the hash operator to use on the device
+   *
+   * Returns a unary callable, `F`, with signature `hash_function::hash_value_type F(size_type)`.
+   *
+   * `F(i)` returns the hash of row i.
+   *
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+   */
+  template <template <typename> class hash_function = detail::default_hash, typename Nullate>
+  device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
+                                                          uint32_t seed   = DEFAULT_HASH_SEED) const
+  {
+    return device_row_hasher<hash_function, Nullate>(nullate, *d_t, seed);
+  }
+
+ private:
+  std::shared_ptr<preprocessed_table> d_t;
+};
+
+}  // namespace hash
+
 }  // namespace row
+
 }  // namespace experimental
 }  // namespace cudf

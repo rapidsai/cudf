@@ -176,7 +176,7 @@ def contains_scalar(Column col, object py_search_key):
     return result
 
 
-def index_of(Column col, object py_search_key):
+def index_of_scalar(Column col, object py_search_key):
 
     cdef DeviceScalar search_key = py_search_key.device_value
 
@@ -191,6 +191,24 @@ def index_of(Column col, object py_search_key):
         c_result = move(cpp_index_of(
             list_view.get()[0],
             search_key_value[0],
+        ))
+    return Column.from_unique_ptr(move(c_result))
+
+
+def index_of_column(Column col, Column search_keys):
+
+    cdef column_view keys_view = search_keys.view()
+
+    cdef shared_ptr[lists_column_view] list_view = (
+        make_shared[lists_column_view](col.view())
+    )
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_index_of(
+            list_view.get()[0],
+            keys_view,
         ))
     return Column.from_unique_ptr(move(c_result))
 
