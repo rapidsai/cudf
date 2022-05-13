@@ -338,12 +338,9 @@ TEST_F(Distinct, StructWithNullElement)
 
   auto input = cudf::table_view({idx, s1});
 
-  auto expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1};
-  auto expect     = cudf::gather(input, expect_map);
-
   auto result        = cudf::distinct(input, {1});
   auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect->get_column(1), sorted_result->get_column(1));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input.column(1), sorted_result->get_column(1));
 }
 
 TEST_F(Distinct, ListOfEmptyStruct)
