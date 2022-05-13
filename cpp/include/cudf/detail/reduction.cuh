@@ -229,15 +229,14 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  *
  * @tparam InputIterator    the input column iterator
  * @tparam OffsetIterator   the offset column iterator
- * @tparam BinaryOp         the device binary operator used to reduce
  * @tparam OutputIterator   the output column iterator
+ * @tparam BinaryOp         the device binary operator used to reduce
  * @tparam OutputType       the output type of reduction
  *
  * @param[in] d_in          the begin iterator to input
  * @param[in] d_offset_begin the begin iterator to offset
- * @param[in] d_offset_end  the end iterator to offset. NOTE: This is N+1 elements past
- * `d_offset_begin`.
- * @param[in] num_segments  the number of segments
+ * @param[in] d_offset_end  the end iterator to offset. Note: This is
+ * num_segments+1 elements past `d_offset_begin`.
  * @param[out] d_out        the begin iterator to output
  * @param[in] binary_op     the reduction operator
  * @param[in] identity      the identity element of the reduction operator
