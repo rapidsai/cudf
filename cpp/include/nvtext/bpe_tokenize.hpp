@@ -107,7 +107,7 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(
  * @throw cudf::logic_error if `separator` is invalid
  *
  * @param input Strings to encode.
- * @param merge_pairs Created by a call to @ref nvtext::load_merge_pairs_file.
+ * @param merges_pairs Created by a call to @ref nvtext::load_merge_pairs_file.
  * @param separator String used to build the output after encoding.
  *                  Default is a space.
  * @param mr Memory resource to allocate any returned objects.
