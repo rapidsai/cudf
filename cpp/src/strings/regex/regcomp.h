@@ -92,7 +92,7 @@ class reprog {
    * @brief Parses the given regex pattern and compiles
    * into a list of chained instructions.
    */
-  static reprog create_from(const char32_t* pattern, regex_flags const flags);
+  static reprog create_from(std::string_view pattern, regex_flags const flags);
 
   int32_t add_inst(int32_t type);
   int32_t add_inst(reinst inst);

@@ -40,11 +40,12 @@ from cudf.core.column import (
     as_column,
     build_column,
     column,
+    full,
     string,
 )
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
     min_column_type,
@@ -254,9 +255,7 @@ class NumericalColumn(NumericalBaseColumn):
             if np.isscalar(other):
                 return cudf.dtype(other_dtype).type(other)
             else:
-                ary = utils.scalar_broadcast_to(
-                    other, size=len(self), dtype=other_dtype
-                )
+                ary = full(len(self), other, dtype=other_dtype)
                 return column.build_column(
                     data=Buffer(ary),
                     dtype=ary.dtype,
@@ -438,9 +437,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
             replacement_col = column.as_column(
-                utils.scalar_broadcast_to(
-                    replacement[0], (len(to_replace_col),), self.dtype
-                )
+                full(len(to_replace_col), replacement[0], self.dtype)
             )
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
@@ -774,6 +771,4 @@ def digitize(
     if bin_col.nullable:
         raise ValueError("`bins` cannot contain null entries.")
 
-    return as_column(
-        libcudf.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
-    )
+    return as_column(libcudf.sort.digitize([column], [bin_col], right))

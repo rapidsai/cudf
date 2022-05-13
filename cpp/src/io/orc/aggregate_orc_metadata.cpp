@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
                                              per_file_metadata[src_file_idx].ff.stripes.size()),
           "Invalid stripe index");
         stripe_infos.push_back(
-          std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+          std::pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
         row_count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
       }
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
@@ -206,7 +206,7 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
         count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
         if (count > row_start || count == 0) {
           stripe_infos.push_back(
-            std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+            std::pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
         } else {
           stripe_skip_rows = count;
         }

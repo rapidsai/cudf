@@ -41,7 +41,6 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
-option(CUDF_JNI_ARROW_STATIC "Statically link Arrow" ON)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
@@ -50,14 +49,15 @@ message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF_JNI: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
 message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
-message(VERBOSE "CUDF_JNI: Build with static Arrow library: ${CUDF_JNI_ARROW_STATIC}")
 message(VERBOSE "CUDF_JNI: Link with libcudf statically: ${CUDF_JNI_LIBCUDF_STATIC}")
 
 set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
-if(DEFINED ENV{CUDF_CPP_BUILD_DIR})
-  set(CUDF_CPP_BUILD_DIR "$ENV{CUDF_CPP_BUILD_DIR}")
-else()
-  set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+if(NOT DEFINED CUDF_CPP_BUILD_DIR OR CUDF_CPP_BUILD_DIR STREQUAL "")
+  if(DEFINED ENV{CUDF_CPP_BUILD_DIR})
+    set(CUDF_CPP_BUILD_DIR "$ENV{CUDF_CPP_BUILD_DIR}")
+  else()
+    set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+  endif()
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
@@ -91,67 +91,16 @@ endif()
 rapids_cmake_build_type("Release")
 
 # ##################################################################################################
-# * Thrust/CUB
-# ------------------------------------------------------------------------------------
-include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_thrust.cmake)
+# * nvcomp------------------------------------------------------------------------------------------
+
+set(nvcomp_DIR "${CUDF_CPP_BUILD_DIR}/_deps/nvcomp-build")
+rapids_find_package(nvcomp REQUIRED)
 
 # ##################################################################################################
 # * CUDF ------------------------------------------------------------------------------------------
 
-set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/src/"
-)
-
-set(CUDF_LIB_HINTS HINTS "$ENV{CUDF_ROOT}" "$ENV{CUDF_ROOT}/lib" "$ENV{CONDA_PREFIX}/lib"
-                   "${CUDF_CPP_BUILD_DIR}"
-)
-
-find_library(CUDF_LIB "cudf" REQUIRED HINTS ${CUDF_LIB_HINTS})
-
-# ##################################################################################################
-# * ZLIB ------------------------------------------------------------------------------------------
-
-# find zlib
-rapids_find_package(ZLIB REQUIRED)
-
-# ##################################################################################################
-# * RMM -------------------------------------------------------------------------------------------
-
-include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_rmm.cmake)
-
-# ##################################################################################################
-# * ARROW -----------------------------------------------------------------------------------------
-
-find_path(ARROW_INCLUDE "arrow" HINTS "$ENV{ARROW_ROOT}/include"
-                                      "${CUDF_CPP_BUILD_DIR}/_deps/arrow-src/cpp/src"
-)
-
-message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
-
-if(CUDF_JNI_ARROW_STATIC)
-  # Find static version of Arrow lib
-  set(CUDF_JNI_ARROW_LIBNAME "libarrow.a")
-else()
-  set(CUDF_JNI_ARROW_LIBNAME "arrow")
-endif()
-
-find_library(
-  ARROW_LIBRARY ${CUDF_JNI_ARROW_LIBNAME} REQUIRED
-  HINTS "$ENV{ARROW_ROOT}/lib" "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release"
-        "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/debug"
-)
-
-if(NOT ARROW_LIBRARY)
-  if(CUDF_JNI_ARROW_STATIC)
-    message(
-      FATAL_ERROR "Arrow static library not found. Was libcudf built with CUDF_USE_ARROW_STATIC=ON?"
-    )
-  else()
-    message(FATAL_ERROR "Arrow dynamic library not found.")
-  endif()
-else()
-  message(STATUS "ARROW: ARROW_LIBRARY set to ${ARROW_LIBRARY}")
-endif()
+set(cudf_ROOT "${CUDF_CPP_BUILD_DIR}")
+rapids_find_package(cudf REQUIRED)
 
 # ##################################################################################################
 # * find JNI -------------------------------------------------------------------------------------
@@ -160,27 +109,6 @@ if(JNI_FOUND)
   message(STATUS "JDK with JNI in ${JNI_INCLUDE_DIRS}")
 else()
   message(FATAL_ERROR "JDK with JNI not found, please check your settings.")
-endif()
-
-# ##################################################################################################
-# * nvcomp ----------------------------------------------------------------------------------------
-
-find_path(NVCOMP_INCLUDE "nvcomp" HINTS "${CUDF_CPP_BUILD_DIR}/_deps/nvcomp-src/include"
-                                        "$ENV{CONDA_PREFIX}/include"
-)
-
-message(STATUS "NVCOMP: NVCOMP_INCLUDE set to ${NVCOMP_INCLUDE}")
-
-set(CUDF_JNI_NVCOMP_LIBNAME "libnvcomp.a")
-find_library(
-  NVCOMP_LIBRARY ${CUDF_JNI_NVCOMP_LIBNAME} REQUIRED HINTS "${CUDF_CPP_BUILD_DIR}/lib"
-                                                           "$ENV{CONDA_PREFIX}/lib"
-)
-
-if(NOT NVCOMP_LIBRARY)
-  message(FATAL_ERROR "nvcomp static library not found.")
-else()
-  message(STATUS "NVCOMP: NVCOMP_LIBRARY set to ${NVCOMP_LIBRARY}")
 endif()
 
 # ##################################################################################################
@@ -236,17 +164,8 @@ endif()
 # * include paths ---------------------------------------------------------------------------------
 
 target_include_directories(
-  cudfjni
-  PUBLIC cudf::Thrust
-         "${LIBCUDACXX_INCLUDE}"
-         "${CUDAToolkit_INCLUDE_DIRS}"
-         "${NVCOMP_INCLUDE}"
-         "${CMAKE_BINARY_DIR}/include"
-         "${CMAKE_SOURCE_DIR}/include"
-         "${CMAKE_SOURCE_DIR}/src"
-         "${JNI_INCLUDE_DIRS}"
-         "${CUDF_INCLUDE}"
-         "${ARROW_INCLUDE}"
+  cudfjni PUBLIC "${CMAKE_BINARY_DIR}/include" "${CMAKE_SOURCE_DIR}/include"
+                 "${CMAKE_SOURCE_DIR}/src" "${JNI_INCLUDE_DIRS}"
 )
 
 # ##################################################################################################
@@ -289,39 +208,24 @@ if(USE_GDS)
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
-  target_include_directories(
-    cufilejni
-    PUBLIC "${LIBCUDACXX_INCLUDE}" "${CUDF_INCLUDE}"
-    PRIVATE "${cuFile_INCLUDE_DIRS}"
-  )
-  target_link_libraries(cufilejni PRIVATE cudfjni rmm::rmm "${cuFile_LIBRARIES}")
+  target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
+  target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
 endif()
-
-# ##################################################################################################
-# * rmm logging level -----------------------------------------------------------------------------
-
-set(RMM_LOGGING_LEVEL
-    "INFO"
-    CACHE STRING "Choose the logging level."
-)
-# Set the possible values of build type for cmake-gui
-set_property(
-  CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF"
-)
-message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
-
-target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL})
 
 # ##################################################################################################
 # * link libraries --------------------------------------------------------------------------------
 
-set(CUDF_LINK ${CUDF_LIB})
+set(CUDF_LINK PUBLIC cudf::cudf)
 if(CUDF_JNI_LIBCUDF_STATIC)
-  set(CUDF_LINK -Wl,--whole-archive ${CUDF_LIB} -Wl,--no-whole-archive ZLIB::ZLIB)
+  # Whole-link libcudf.a into the shared library but not its dependencies
+  set(CUDF_LINK PRIVATE -Wl,--whole-archive cudf::cudf -Wl,--no-whole-archive PUBLIC cudf::cudf)
 endif()
 
+# When nvcomp is installed we need to use nvcomp::nvcomp but from the cudf build directory it will
+# just be nvcomp.
 target_link_libraries(
-  cudfjni PRIVATE ${CUDF_LINK} ${NVCOMP_LIBRARY} ${ARROW_LIBRARY} rmm::rmm CUDA::cuda_driver
+  cudfjni ${CUDF_LINK} PRIVATE $<TARGET_NAME_IF_EXISTS:nvcomp>
+                               $<TARGET_NAME_IF_EXISTS:nvcomp::nvcomp>
 )
 
 # ##################################################################################################

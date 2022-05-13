@@ -57,7 +57,7 @@ class Fuzzer:
         logging.info(f"Run-Time elapsed (hh:mm:ss.ms) {total_time_taken}")
 
     def write_crash(self, error):
-        error_file_name = datetime.datetime.now().__str__()
+        error_file_name = str(datetime.datetime.now())
         if self._crash_dir:
             crash_path = os.path.join(
                 self._crash_dir,

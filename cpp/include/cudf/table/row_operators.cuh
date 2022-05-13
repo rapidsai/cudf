@@ -74,7 +74,7 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
  * @brief A specialization for floating-point `Element` type relational comparison
  * to derive the order of the elements with respect to `lhs`.
  *
- * This Specialization handles `nan` in the following order:
+ * This specialization handles `nan` in the following order:
  * `[-Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN, null] (for null_order::AFTER)`
  * `[null, -Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN] (for null_order::BEFORE)`
  *

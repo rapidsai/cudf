@@ -23,12 +23,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/pair.h>
 #include <thrust/tabulate.h>
 
-#include "rmm/exec_policy.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <limits>
