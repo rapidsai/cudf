@@ -563,7 +563,9 @@ class two_table_device_row_comparator_adapter {
   __device__ bool operator()(rhs_index_type const rhs_index,
                              lhs_index_type const lhs_index) const noexcept
   {
-    // Compare `rhs < lhs` is equivalent to `!(rhs >= lhs)`.
+    // Compare `rhs < lhs` is equivalent to `!(lhs <= rhs)`.
+    auto const comp_lhs_rhs =
+      comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
     return comp_lhs_rhs != weak_ordering::LESS && comp_lhs_rhs != weak_ordering::EQUIVALENT;
   }
 
