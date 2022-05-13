@@ -13,12 +13,12 @@
 # =============================================================================
 
 # This function finds nvcomp and sets any additional necessary environment variables.
-function(find_and_configure_nvcomp )
+function(find_and_configure_nvcomp)
 
   include(${rapids-cmake-dir}/cpm/nvcomp.cmake)
-  rapids_cpm_nvcomp(BUILD_EXPORT_SET cudf-exports
-                    INSTALL_EXPORT_SET cudf-exports
-                    USE_PROPRIETARY_BINARY ON)
+  rapids_cpm_nvcomp(
+    BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports USE_PROPRIETARY_BINARY ON
+  )
 
   # If we are building nvcomp use enable per-thread default stream
   if(TARGET nvcomp AND PER_THREAD_DEFAULT_STREAM)
