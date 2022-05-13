@@ -293,9 +293,10 @@ class device_row_comparator {
  */
 template <typename Comparator, weak_ordering... values>
 struct weak_ordering_comparator_impl {
-  __device__ bool operator()(size_type const lhs, size_type const rhs) const noexcept
+  template <typename... Ts>
+  __device__ bool operator()(Ts&&... args) const noexcept
   {
-    weak_ordering const result = comparator(lhs, rhs);
+    weak_ordering const result = comparator(std::forward<Ts>(args)...);
     return ((result == values) || ...);
   }
   Comparator comparator;
@@ -307,12 +308,11 @@ struct weak_ordering_comparator_impl {
  *
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
-template <typename Nullate>
-using less_comparator =
-  weak_ordering_comparator_impl<device_row_comparator<Nullate>, weak_ordering::LESS>;
+template <template <typename> class Comparator, typename Nullate>
+using less_comparator = weak_ordering_comparator_impl<Comparator<Nullate>, weak_ordering::LESS>;
 
-template <typename Nullate>
-using less_equivalent_comparator = weak_ordering_comparator_impl<device_row_comparator<Nullate>,
+template <template <typename> class Comparator, typename Nullate>
+using less_equivalent_comparator = weak_ordering_comparator_impl<Comparator<Nullate>,
                                                                  weak_ordering::LESS,
                                                                  weak_ordering::EQUIVALENT>;
 
@@ -465,9 +465,9 @@ class self_comparator {
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
-  less_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  less_comparator<device_row_comparator, Nullate> device_comparator(Nullate nullate = {}) const
   {
-    return less_comparator<Nullate>{device_row_comparator<Nullate>(
+    return less_comparator<device_row_comparator, Nullate>{device_row_comparator<Nullate>(
       nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
   }
 
@@ -641,14 +641,16 @@ class two_table_comparator {
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
-  two_table_device_row_comparator_adapter<Nullate> device_comparator(Nullate nullate = {}) const
+  less_comparator<two_table_device_row_comparator_adapter, Nullate> device_comparator(
+    Nullate nullate = {}) const
   {
-    return two_table_device_row_comparator_adapter<Nullate>(nullate,
-                                                            *d_left_table,
-                                                            *d_right_table,
-                                                            d_left_table->depths(),
-                                                            d_left_table->column_order(),
-                                                            d_left_table->null_precedence());
+    return less_comparator<two_table_device_row_comparator_adapter, Nullate>{
+      two_table_device_row_comparator_adapter<Nullate>(nullate,
+                                                       *d_left_table,
+                                                       *d_right_table,
+                                                       d_left_table->depths(),
+                                                       d_left_table->column_order(),
+                                                       d_left_table->null_precedence())};
   }
 
  private:
