@@ -121,28 +121,6 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
     dd.assert_eq(gb.compute().sort_index(), expect)
 
 
-@pytest.mark.parametrize(
-    "func",
-    [lambda df: df.groupby("x").std(), lambda df: df.groupby("x").y.std()],
-)
-def test_groupby_std(func):
-    pdf = pd.DataFrame(
-        {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
-        }
-    )
-
-    gdf = cudf.DataFrame.from_pandas(pdf)
-
-    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
-
-    a = func(gdf).to_pandas()
-    b = func(ddf).compute().to_pandas()
-
-    dd.assert_eq(a, b)
-
-
 # reason gotattr in cudf
 @pytest.mark.parametrize(
     "func",
@@ -707,43 +685,6 @@ def test_groupby_unique_lists():
     dd.assert_eq(
         gdf.groupby("a").b.unique(),
         gddf.groupby("a").b.unique().compute(),
-    )
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        {"a": [], "b": []},
-        {"a": [2, 1, 2, 1, 1, 3], "b": [None, 1, 2, None, 2, None]},
-        {"a": [None], "b": [None]},
-        {"a": [2, 1, 1], "b": [None, 1, 0], "c": [None, 0, 1]},
-    ],
-)
-@pytest.mark.parametrize("agg", ["first", "last"])
-def test_groupby_first_last(data, agg):
-    pdf = pd.DataFrame(data)
-    gdf = cudf.DataFrame.from_pandas(pdf)
-
-    ddf = dd.from_pandas(pdf, npartitions=2)
-    gddf = dask_cudf.from_cudf(gdf, npartitions=2)
-
-    dd.assert_eq(
-        ddf.groupby("a").agg(agg).compute(),
-        gddf.groupby("a").agg(agg).compute(),
-    )
-
-    dd.assert_eq(
-        getattr(ddf.groupby("a"), agg)().compute(),
-        getattr(gddf.groupby("a"), agg)().compute(),
-    )
-
-    dd.assert_eq(
-        gdf.groupby("a").agg(agg), gddf.groupby("a").agg(agg).compute()
-    )
-
-    dd.assert_eq(
-        getattr(gdf.groupby("a"), agg)(),
-        getattr(gddf.groupby("a"), agg)().compute(),
     )
 
 
