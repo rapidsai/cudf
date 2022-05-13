@@ -43,94 +43,113 @@
 #include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 
 /**
- * @brief Check if the (unique) row of the @p value column is contained in the @p col column.
+ * @brief Check if the (unique) row of the `needle` column is contained in the `haystack` column.
  *
- * This utility function is only applied for nested types (struct + list). Caller is responsible
- * to make sure the @p value column has EXACTLY ONE ROW.
+ * If the input `needle` column has more than one row, only the first row will be considered.
+ *
+ * This function is designed for nested types. It can also work with non-nested types
+ * but with lower performance due to the complexity of the implementation.
  */
-auto check_contain_scalar(column_view const& col,
-                          column_view const& value,
-                          rmm::cuda_stream_view stream)
+bool contains_nested_element(column_view const& haystack,
+                             column_view const& needle,
+                             rmm::cuda_stream_view stream)
 {
-  auto const col_tview     = table_view{{col}};
-  auto const val_tview     = table_view{{value}};
-  auto const has_any_nulls = has_nested_nulls(col_tview) || has_nested_nulls(val_tview);
+  CUDF_EXPECTS(needle.size() > 0, "Input needle column does not have any row.");
+
+  auto const haystack_tv   = table_view{{haystack}};
+  auto const needle_tv     = table_view{{needle}};
+  auto const has_any_nulls = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
 
   auto const comp =
-    cudf::experimental::row::equality::table_comparator(col_tview, val_tview, stream);
+    cudf::experimental::row::equality::table_comparator(haystack_tv, needle_tv, stream);
   auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
 
-  auto const col_cdv_ptr       = column_device_view::create(col, stream);
-  auto const col_validity_iter = cudf::detail::make_validity_iterator<true>(*col_cdv_ptr);
-  auto const begin             = thrust::make_counting_iterator(0);
-  auto const end               = begin + col.size();
-  auto const found_it          = thrust::find_if(
-    rmm::exec_policy(stream), begin, end, [dcomp, col_validity_iter] __device__(auto const idx) {
-      if (!col_validity_iter[idx]) { return false; }
-      return dcomp(idx, 0);  // compare col[idx] == val[0].
-    });
+  // TODO: Make this strong typed index
+  auto const begin    = thrust::make_counting_iterator(0);
+  auto const end      = begin + haystack.size();
+  auto const found_it = [&] {
+    if (haystack.has_nulls()) {
+      auto const haystack_cdv_ptr  = column_device_view::create(haystack, stream);
+      auto const haystack_valid_it = cudf::detail::make_validity_iterator<false>(*haystack_cdv_ptr);
+      return thrust::find_if(rmm::exec_policy(stream),
+                             begin,
+                             end,
+                             [dcomp, haystack_valid_it] __device__(auto const idx) {
+                               if (!haystack_valid_it[idx]) { return false; }
+                               return dcomp(idx, 0);  // compare haystack[idx] == needle[0].
+                             });
+
+    } else {
+      return thrust::find_if(
+        rmm::exec_policy(stream), begin, end, [dcomp] __device__(auto const idx) {
+          return dcomp(idx, 0);  // compare haystack[idx] == needle[0].
+        });
+    }
+  }();
 
   return found_it != end;
 }
 
-auto check_contain_column(column_view const& values /* => haystack */,
-                          column_view const& input /* => needles */,
-                          rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr)
+/**
+ * @brief Check if each row of the `needles` column is contained in the `haystack` column,
+ * specialized for nested type.
+ *
+ * This function is designed for nested types. It can also work with non-nested types
+ * but with lower performance due to the complexity of the implementation.
+ *
+ */
+std::unique_ptr<column> multi_contains_nested_elements(column_view const& haystack,
+                                                       column_view const& needles,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::mr::device_memory_resource* mr)
 {
-  auto const input_size  = input.size();
-  auto const values_size = values.size();
-  auto result            = make_numeric_column(data_type{type_to_id<bool>()},
-                                    values_size,
-                                    copy_bitmask(values),
-                                    values.null_count(),
+  auto result = make_numeric_column(data_type{type_to_id<bool>()},
+                                    needles.size(),
+                                    copy_bitmask(needles),
+                                    needles.null_count(),
                                     stream,
                                     mr);
-  if (values.is_empty()) { return result; }
+  if (needles.is_empty()) { return result; }
 
   auto const out_begin = result->mutable_view().template begin<bool>();
-  if (input.is_empty()) {
-    thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_begin + values_size, false);
+  if (haystack.is_empty()) {
+    thrust::uninitialized_fill(
+      rmm::exec_policy(stream), out_begin, out_begin + needles.size(), false);
     return result;
   }
 
-  auto const input_tview   = table_view{{input}};
-  auto const val_tview     = table_view{{values}};
-  auto const has_any_nulls = has_nested_nulls(input_tview) || has_nested_nulls(val_tview);
+  auto const haystack_tv   = table_view{{haystack}};
+  auto const needles_tv    = table_view{{needles}};
+  auto const has_any_nulls = has_nested_nulls(haystack_tv) || has_nested_nulls(needles_tv);
 
-  auto const preprocessed_input =
-    cudf::experimental::row::hash::preprocessed_table::create(input_tview, stream);
-  auto input_map =
-    detail::hash_map_type{compute_hash_table_size(input_size),
+  auto haystack_map =
+    detail::hash_map_type{compute_hash_table_size(haystack.size()),
                           detail::COMPACTION_EMPTY_KEY_SENTINEL,
                           detail::COMPACTION_EMPTY_VALUE_SENTINEL,
                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                           stream.value()};
 
-  auto const row_hash = cudf::experimental::row::hash::row_hasher(preprocessed_input);
-  auto const hash_input =
-    detail::experimental::compaction_hash(row_hash.device_hasher(has_any_nulls));
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(haystack_tv, stream);
+  auto const haystack_hash =
+    detail::experimental::compaction_hash(row_hasher.device_hasher(has_any_nulls));
 
   auto const comp =
-    cudf::experimental::row::equality::table_comparator(input_tview, val_tview, stream);
+    cudf::experimental::row::equality::table_comparator(haystack_tv, needles_tv, stream);
   auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
 
   // todo: make pair(i, i) type of left_index_type
   auto const pair_it = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
-  input_map.insert(pair_it, pair_it + input_size, hash_input, dcomp, stream.value());
+  haystack_map.insert(pair_it, pair_it + haystack.size(), haystack_hash, dcomp, stream.value());
 
   // todo: make count_it of type right_index_type
   auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  input_map.contains(count_it, count_it + values_size, out_begin, hash_input);
+  haystack_map.contains(count_it, count_it + needles.size(), out_begin, haystack_hash);
 
   return result;
 }
 
-}  // namespace detail
-
-}  // namespace cudf
+}  // namespace cudf::detail
