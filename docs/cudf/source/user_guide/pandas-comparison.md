@@ -63,8 +63,7 @@ dtype: category
 Categories (2, int64): [1, 2]
 ```
 
-See the docs on [missing data](missing-data) for
-details.
+See the docs on [missing data](missing-data) for details.
 
 ## Iteration
 
