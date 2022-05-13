@@ -234,7 +234,9 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @tparam OutputType       the output type of reduction
  *
  * @param[in] d_in          the begin iterator to input
- * @param[in] d_offset      the begin iterator to offset
+ * @param[in] d_offset_begin the begin iterator to offset
+ * @param[in] d_offset_end  the end iterator to offset. NOTE: This is N+1 elements past
+ * `d_offset_begin`.
  * @param[in] num_segments  the number of segments
  * @param[out] d_out        the begin iterator to output
  * @param[in] binary_op     the reduction operator
@@ -244,8 +246,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  */
 template <typename InputIterator,
           typename OffsetIterator,
-          typename BinaryOp,
           typename OutputIterator,
+          typename BinaryOp,
           typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
           typename std::enable_if_t<is_fixed_width<OutputType>() &&
                                     !cudf::is_fixed_point<OutputType>()>* = nullptr>
@@ -289,8 +291,8 @@ void segmented_reduce(InputIterator d_in,
 
 template <typename InputIterator,
           typename OffsetIterator,
-          typename BinaryOp,
           typename OutputIterator,
+          typename BinaryOp,
           typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
           typename std::enable_if_t<!(is_fixed_width<OutputType>() &&
                                       !cudf::is_fixed_point<OutputType>())>* = nullptr>
