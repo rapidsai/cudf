@@ -63,7 +63,7 @@ struct contains_scalar_dispatch {
   template <typename Type>
   std::enable_if_t<!is_nested<Type>(), bool> operator()(column_view const& haystack,
                                                         scalar const& needle,
-                                                        rmm::cuda_stream_view stream)
+                                                        rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
@@ -96,7 +96,7 @@ struct contains_scalar_dispatch {
 template <>
 bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& haystack,
                                                              scalar const& needle,
-                                                             rmm::cuda_stream_view stream)
+                                                             rmm::cuda_stream_view stream) const
 {
   CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
@@ -124,7 +124,7 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
 template <>
 bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& haystack,
                                                            scalar const& needle,
-                                                           rmm::cuda_stream_view stream)
+                                                           rmm::cuda_stream_view stream) const
 {
   auto const needle_cv = dynamic_cast<list_scalar const*>(&needle)->view();
   CUDF_EXPECTS(lists_column_view{haystack}.child().type() == needle_cv.type(),
@@ -148,7 +148,7 @@ bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& ha
 template <>
 bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& haystack,
                                                               scalar const& needle,
-                                                              rmm::cuda_stream_view stream)
+                                                              rmm::cuda_stream_view stream) const
 {
   auto dict_col = cudf::dictionary_column_view(haystack);
   // first, find the needle in the dictionary's key set
@@ -168,7 +168,7 @@ struct multi_contains_dispatch {
     column_view const& haystack,
     column_view const& needles,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::mr::device_memory_resource* mr) const
   {
     auto result = make_numeric_column(data_type{type_to_id<bool>()},
                                       needles.size(),
@@ -219,7 +219,7 @@ struct multi_contains_dispatch {
     column_view const& haystack,
     column_view const& needles,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::mr::device_memory_resource* mr) const
   {
     return multi_contains_nested_elements(haystack, needles, stream, mr);
   }
@@ -230,7 +230,7 @@ std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
   column_view const& haystack_in,
   column_view const& needles_in,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::mr::device_memory_resource* mr) const
 {
   dictionary_column_view const haystack(haystack_in);
   dictionary_column_view const needles(needles_in);
