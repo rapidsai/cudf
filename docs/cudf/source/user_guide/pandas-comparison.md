@@ -21,7 +21,7 @@ our [API docs](/api_docs/index).
 
 cuDF supports many of the commonly-used data types in Pandas,
 including numeric, datetime, timestamp, string, and categorical data
-types.  In addition, we support special data types for decimal, list
+types.  In addition, we support special data types for decimal, list,
 and "struct" values.  See the section on [Data Types](data-types) for
 details.
 
@@ -36,15 +36,14 @@ meaning they can contain missing values (represented by `cudf.NA`).
 ```{code} python
 >>> s = cudf.Series([1, 2, cudf.NA])
 >>> s
->>> s
 0       1
 1       2
 2    <NA>
 dtype: int64
 ```
 
-Nulls are not coerced to `nan` in any situation;
-compare the behaviour of cuDF with Pandas below:
+Nulls are not coerced to `NaN` in any situation;
+compare the behavior of cuDF with Pandas below:
 
 ```{code} python
 >>> s = cudf.Series([1, 2, cudf.NA], dtype="category")
@@ -64,8 +63,7 @@ dtype: category
 Categories (2, int64): [1, 2]
 ```
 
-See the docs on [missing data](missing-data) for
-details.
+See the docs on [missing data](missing-data) for details.
 
 ## Iteration
 
@@ -83,7 +81,7 @@ using `.from_arrow()` or `.from_pandas()`.
 ## Result ordering
 
 By default, `join` (or `merge`) and `groupby` operations in cuDF
-do *not* guarantee output ordering by default.
+do *not* guarantee output ordering.
 Compare the results obtained from Pandas and cuDF below:
 
 ```{code} python
@@ -160,10 +158,10 @@ collections of arbitrary Python objects.
 
 ## `.apply()` function limitations
 
-The `.apply()` function in Pandas accecpts a user-defined function
+The `.apply()` function in Pandas accepts a user-defined function
 (UDF) that can include arbitrary operations that are applied to each
 value of a `Series`, `DataFrame`, or in the case of a groupby,
-each group.  cuDF also supports `apply()`, but it relies on Numba to
+each group.  cuDF also supports `.apply()`, but it relies on Numba to
 JIT compile the UDF and execute it on the GPU. This can be extremely
 fast, but imposes a few limitations on what operations are allowed in
 the UDF. See the docs on [UDFs](guide-to-udfs) for details.
