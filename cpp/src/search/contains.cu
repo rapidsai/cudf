@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "stream_compaction/stream_compaction_common.cuh"
-#include "stream_compaction/stream_compaction_common.hpp"
+#include <hash/unordered_multiset.cuh>
+#include <stream_compaction/stream_compaction_common.cuh>
+#include <stream_compaction/stream_compaction_common.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -31,8 +32,6 @@
 #include <cudf/table/table_view.hpp>
 
 #include <cudf/table/experimental/row_operators.cuh>
-
-#include <hash/unordered_multiset.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
