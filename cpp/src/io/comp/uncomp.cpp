@@ -294,7 +294,8 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
         comp_len    = gz.comp_len;
         uncomp_len  = gz.isize;
       }
-      if (compression != compression_type::AUTO) break;  // Fall through for INFER
+      if (compression != compression_type::AUTO) break;
+      [[fallthrough]];
     }
     case compression_type::ZIP: {
       zip_archive_s za;
@@ -332,7 +333,8 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
         }
       }
     }
-      if (compression != compression_type::AUTO) break;  // Fall through for INFER
+      if (compression != compression_type::AUTO) break;
+      [[fallthrough]];
     case compression_type::BZIP2:
       if (src.size() > 4) {
         const bz2_file_header_s* fhdr = reinterpret_cast<const bz2_file_header_s*>(raw);
@@ -345,7 +347,8 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
           uncomp_len  = 0;
         }
       }
-      if (compression != compression_type::AUTO) break;  // Fall through for INFER
+      if (compression != compression_type::AUTO) break;
+      [[fallthrough]];
     default: CUDF_FAIL("Unsupported compressed stream type");
   }
 
