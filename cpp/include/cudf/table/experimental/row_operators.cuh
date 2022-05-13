@@ -239,7 +239,7 @@ class device_row_comparator {
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less, greater, or equivalent to the row at `rhs_index` in the `rhs` table.
    *
-   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param lhs_index The index of the row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return weak ordering comparison of the row in the `lhs` table relative to the row in the `rhs`
    * table
@@ -505,7 +505,7 @@ class two_table_device_row_comparator_adapter {
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less than the row at `rhs_index` in the `rhs` table.
    *
-   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param lhs_index The index of the row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table compares less than row in the `rhs` table
    */
@@ -519,7 +519,7 @@ class two_table_device_row_comparator_adapter {
    * @brief Checks whether the row at `rhs_index` in the `rhs` table compares
    * lexicographically less than the row at `lhs_index` in the `lhs` table.
    *
-   * @param rhs_index The index of row in the `rhs` table to examine
+   * @param rhs_index The index of the row in the `rhs` table to examine
    * @param lhs_index The index of the row in the `lhs` table to examine
    * @return `true` if row from the `rhs` table compares less than row in the `lhs` table
    */
