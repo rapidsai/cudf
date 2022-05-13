@@ -36,7 +36,6 @@ meaning they can contain missing values (represented by `cudf.NA`).
 ```{code} python
 >>> s = cudf.Series([1, 2, cudf.NA])
 >>> s
->>> s
 0       1
 1       2
 2    <NA>
