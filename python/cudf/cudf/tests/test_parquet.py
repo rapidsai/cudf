@@ -189,7 +189,9 @@ def gdf_day_timestamps(pdf_day_timestamps):
     return cudf.DataFrame.from_pandas(pdf_day_timestamps)
 
 
-@pytest.fixture(params=["snappy", "gzip", "brotli", None, np.str_("snappy")])
+@pytest.fixture(
+    params=["snappy", "gzip", "brotli", "zstd", None, np.str_("snappy")]
+)
 def parquet_file(request, tmp_path_factory, pdf):
     fname = tmp_path_factory.mktemp("parquet") / (
         str(request.param) + "_test.parquet"
@@ -2509,8 +2511,10 @@ def test_parquet_reader_decimal_columns():
     assert_eq(actual, expected)
 
 
-def test_parquet_reader_unsupported_compression(datadir):
+def test_parquet_reader_zstd_compression(datadir):
     fname = datadir / "spark_zstd.parquet"
 
-    with pytest.raises(RuntimeError):
-        cudf.read_parquet(fname)
+    actual = cudf.read_parquet(fname)
+    expected = pd.read_parquet(fname)
+
+    assert_eq(actual, expected)
