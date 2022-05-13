@@ -161,6 +161,16 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
     CUDF_EXPECTS(tensor.shape[1] < std::numeric_limits<size_type>::max(),
                  "DLTensor second dim exceeds size supported by cudf");
   }
+  if (tensor.ndim == 1) {
+    CUDF_EXPECTS(nullptr == tensor.strides || tensor.strides[0] == 1,
+                 "from_dlpack of 1D tensor only for unit-stride data");
+  } else if (tensor.ndim == 2) {
+    CUDF_EXPECTS(
+      nullptr != tensor.strides && tensor.strides[0] == 1 && tensor.strides[1] == tensor.shape[0],
+      "from_dlpack of 2D tensor only for column-major unit-stride data");
+  } else {
+    CUDF_UNREACHABLE("Unhandled tensor dimension in from_dlpack");
+  }
 
   size_t const num_columns = (tensor.ndim == 2) ? static_cast<size_t>(tensor.shape[1]) : 1;
 
