@@ -156,7 +156,7 @@ constexpr bool is_fixed_point(cudf::type_id id)
   template <>                                         \
   struct id_to_type_impl<Id> {                        \
     using type = Type;                                \
-  }
+  };
 #endif
 
 // Defines all of the mappings between C++ types and their corresponding `cudf::type_id` values.
