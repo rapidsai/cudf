@@ -27,9 +27,8 @@ namespace cudf {
 namespace reduction {
 namespace detail {
 
-using row_comparator = cudf::experimental::row::lexicographic::self_comparator;
-using device_row_comparator =
-  cudf::experimental::row::lexicographic::less_comparator<nullate::DYNAMIC>;
+using row_comparator  = cudf::experimental::row::lexicographic::self_comparator;
+using less_comparator = cudf::experimental::row::lexicographic::less_comparator<nullate::DYNAMIC>;
 using column_device_view_ptr =
   std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>;
 
@@ -38,11 +37,11 @@ using column_device_view_ptr =
  */
 struct row_arg_minmax_fn {
   column_device_view const input;
-  device_row_comparator const comp;
+  less_comparator const comp;
   bool const is_arg_min;
 
   row_arg_minmax_fn(column_device_view const& input_,
-                    device_row_comparator&& comp_,
+                    less_comparator&& comp_,
                     bool const is_arg_min_)
     : input(input_), comp(std::move(comp_)), is_arg_min(is_arg_min_)
   {
