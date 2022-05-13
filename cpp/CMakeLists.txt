@@ -428,7 +428,7 @@ add_library(
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
   src/search/contains.cu
-  src/search/contains_nested.cu
+  src/search/detail/contains_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
