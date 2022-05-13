@@ -3500,6 +3500,37 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Filters elements in each row of this LIST column using `booleanMaskView`
+   * LIST of booleans as a mask.
+   * <p>
+   * Given a list-of-bools column, the function produces
+   * a new `LIST` column of the same type as this column, where each element is copied
+   * from the row *only* if the corresponding `boolean_mask` is non-null and `true`.
+   * <p>
+   * E.g.
+   * column       = { {0,1,2}, {3,4}, {5,6,7}, {8,9} };
+   * boolean_mask = { {0,1,1}, {1,0}, {1,1,1}, {0,0} };
+   * results      = { {1,2},   {3},   {5,6,7}, {} };
+   * <p>
+   * This column and `boolean_mask` must have the same number of rows.
+   * The output column has the same number of rows as this column.
+   * An element is copied to an output row *only*
+   * if the corresponding boolean_mask element is `true`.
+   * An output row is invalid only if the row is invalid.
+   *
+   * @param booleanMaskView A nullable list of bools column used to filter elements in this column
+   * @return List column of the same type as this column, containing filtered list rows
+   * @throws CudfException if `boolean_mask` is not a "lists of bools" column
+   * @throws CudfException if this column and `boolean_mask` have different number of rows
+   */
+  public final ColumnVector applyBooleanMask(ColumnView booleanMaskView) {
+    assert (getType().equals(DType.LIST));
+    assert (booleanMaskView.getType().equals(DType.LIST));
+    assert (getRowCount() == booleanMaskView.getRowCount());
+    return new ColumnVector(applyBooleanMask(getNativeView(), booleanMaskView.getNativeView()));
+  }
+
+  /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
    * According to cudf::bitmask_allocation_size_bytes, the padding boundary for null mask is 64 bytes.
    */
@@ -4176,6 +4207,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
 
   static native long generateListOffsets(long handle) throws CudfException;
+
+  static native long applyBooleanMask(long arrayColumnView, long booleanMaskHandle) throws CudfException;
 
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when
