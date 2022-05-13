@@ -308,13 +308,12 @@ struct weak_ordering_comparator_impl {
  *
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
-template <template <typename> class Comparator, typename Nullate>
-using less_comparator = weak_ordering_comparator_impl<Comparator<Nullate>, weak_ordering::LESS>;
+template <typename Comparator>
+using less_comparator = weak_ordering_comparator_impl<Comparator, weak_ordering::LESS>;
 
-template <template <typename> class Comparator, typename Nullate>
-using less_equivalent_comparator = weak_ordering_comparator_impl<Comparator<Nullate>,
-                                                                 weak_ordering::LESS,
-                                                                 weak_ordering::EQUIVALENT>;
+template <typename Comparator>
+using less_equivalent_comparator =
+  weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT>;
 
 struct preprocessed_table {
   using table_device_view_owner =
@@ -465,9 +464,9 @@ class self_comparator {
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
-  less_comparator<device_row_comparator, Nullate> device_comparator(Nullate nullate = {}) const
+  less_comparator<device_row_comparator<Nullate>> device_comparator(Nullate nullate = {}) const
   {
-    return less_comparator<device_row_comparator, Nullate>{device_row_comparator<Nullate>(
+    return less_comparator<device_row_comparator<Nullate>>{device_row_comparator<Nullate>(
       nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
   }
 
@@ -641,10 +640,10 @@ class two_table_comparator {
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
-  less_comparator<two_table_device_row_comparator_adapter, Nullate> device_comparator(
+  less_comparator<two_table_device_row_comparator_adapter<Nullate>> device_comparator(
     Nullate nullate = {}) const
   {
-    return less_comparator<two_table_device_row_comparator_adapter, Nullate>{
+    return less_comparator<two_table_device_row_comparator_adapter<Nullate>>{
       two_table_device_row_comparator_adapter<Nullate>(nullate,
                                                        *d_left_table,
                                                        *d_right_table,
