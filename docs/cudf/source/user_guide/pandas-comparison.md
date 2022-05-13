@@ -21,7 +21,7 @@ our [API docs](/api_docs/index).
 
 cuDF supports many of the commonly-used data types in Pandas,
 including numeric, datetime, timestamp, string, and categorical data
-types.  In addition, we support special data types for decimal, list
+types.  In addition, we support special data types for decimal, list,
 and "struct" values.  See the section on [Data Types](data-types) for
 details.
 
