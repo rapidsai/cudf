@@ -742,7 +742,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             deep=kwargs.get("copy", True),
             dtypes={name: self.dtype},
             index=index,
-            columns=[name],
+            column_names=[name],
             inplace=False,
             fill_value=kwargs.get("fill_value", cudf.NA),
         )

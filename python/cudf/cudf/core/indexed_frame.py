@@ -1292,7 +1292,7 @@ class IndexedFrame(Frame):
     @_cudf_nvtx_annotate
     def _reindex(
         self,
-        columns,
+        column_names,
         dtypes=None,
         deep=False,
         index=None,
@@ -1338,19 +1338,19 @@ class IndexedFrame(Frame):
             )
 
             if not idx_dtype_match:
-                columns = (
-                    columns if columns is not None else list(df._column_names)
+                column_names = (
+                    column_names if column_names is not None else list(df._column_names)
                 )
                 df = cudf.DataFrame()
             else:
                 df = cudf.DataFrame(None, index).join(
                     cudf.DataFrame(df), how="left", sort=True
                 )
-                # double-argsort to map back from sorted to unsorted positions
+                # double-argsort to map back from sorted to qunsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
 
         index = index if index is not None else df.index
-        names = columns if columns is not None else list(df._data.names)
+        names = column_names if column_names is not None else list(df._data.names)
         cols = {
             name: (
                 df._data[name].copy(deep=deep)

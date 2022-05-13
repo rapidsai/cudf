@@ -639,7 +639,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if columns is not None:
                 self._data = data._data
                 self._reindex(
-                    columns=columns, index=index, deep=False, inplace=True
+                    column_names=columns, index=index, deep=False, inplace=True
                 )
             else:
                 self._data = data._data
@@ -2268,7 +2268,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
         return df._reindex(
-            columns=columns,
+            column_names=columns,
             dtypes=self._dtypes,
             deep=copy,
             index=index,
