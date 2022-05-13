@@ -24,7 +24,7 @@
 
 namespace cudf::io::nvcomp {
 
-enum class compression_type { SNAPPY };
+enum class compression_type { SNAPPY, ZSTD };
 
 /**
  * @brief Device batch decompression of given type.
