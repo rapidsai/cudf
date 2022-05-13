@@ -185,14 +185,14 @@ class device_row_comparator {
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                              not std::is_same_v<Element, cudf::struct_view>),
               typename... Args>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(Args...)
+    __device__ cuda::std::pair<weak_ordering, int> operator()(Args...) const noexcept
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
     template <typename Element, CUDF_ENABLE_IF(std::is_same_v<Element, cudf::struct_view>)>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const lhs_element_index,
-                                                              size_type const rhs_element_index)
+    __device__ cuda::std::pair<weak_ordering, int> operator()(
+      size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
       column_device_view lcol = _lhs;
       column_device_view rcol = _rhs;
@@ -288,7 +288,7 @@ class device_row_comparator {
  */
 template <typename Comparator, weak_ordering... values>
 struct weak_ordering_comparator_impl {
-  __device__ bool operator()(size_type const& lhs, size_type const& rhs)
+  __device__ bool operator()(size_type const lhs, size_type const rhs) const noexcept
   {
     weak_ordering const result = comparator(lhs, rhs);
     return ((result == values) || ...);
