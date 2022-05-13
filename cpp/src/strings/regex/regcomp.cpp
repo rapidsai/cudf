@@ -745,7 +745,7 @@ class regex_compiler {
   {
     std::vector<regex_parser::Item> out;
     std::stack<int> lbra_stack;
-    auto rep_start = -1;
+    auto repeat_start_index = -1;
 
     for (std::size_t index = 0; index < in.size(); index++) {
       regex_parser::Item item = in[index];
@@ -754,46 +754,47 @@ class regex_compiler {
         out.push_back(item);
         if (item.t == LBRA || item.t == LBRA_NC) {
           lbra_stack.push(index);
-          rep_start = -1;
+          repeat_start_index = -1;
         } else if (item.t == RBRA) {
-          rep_start = lbra_stack.top();
+          repeat_start_index = lbra_stack.top();
           lbra_stack.pop();
         } else if ((item.t & ITEM_MASK) != OPERATOR_MASK) {
-          rep_start = index;
+          repeat_start_index = index;
         }
       } else {
         // item is of type COUNTED or COUNTED_LAZY
+        // here we repeat the previous item(s) based on the count range in item
 
-        if (rep_start < 0)  // broken regex
-          return out;       // ? seems this should be an assert or an exception
+        CUDF_EXPECTS(repeat_start_index >= 0, "regex: invalid counted quantifier location");
 
-        // range of effected items to repeat
-        auto const begin = in.begin() + rep_start;
+        // range of affected item(s) to repeat
+        auto const begin = in.begin() + repeat_start_index;
         auto const end   = in.begin() + index;
+        // count range values
+        auto const n = item.d.yycount.n;  // minimum count
+        auto const m = item.d.yycount.m;  // maximum count
 
-        if (item.d.yycount.n <= 0) {
-          // need to erase previous items
-          out.erase(out.end() - (index - rep_start), out.end());
-        } else {
-          // minimum repeat
-          for (int j = 1; j < item.d.yycount.n; j++) {
-            out.insert(out.end(), begin, end);
-          }
+        // zero-repeat edge-case: need to erase the previous items
+        if (n <= 0) { out.erase(out.end() - (index - repeat_start_index), out.end()); }
+
+        // minimum repeats (n)
+        for (int j = 1; j < n; j++) {
+          out.insert(out.end(), begin, end);
         }
 
-        // optional repeats
-        if (item.d.yycount.m >= 0) {
-          for (int j = item.d.yycount.n; j < item.d.yycount.m; j++) {
+        // optional maximum repeats (m)
+        if (m >= 0) {
+          for (int j = n; j < m; j++) {
             out.push_back(regex_parser::Item{LBRA_NC, 0});
             out.insert(out.end(), begin, end);
           }
-          for (int j = item.d.yycount.n; j < item.d.yycount.m; j++) {
+          for (int j = n; j < m; j++) {
             out.push_back(regex_parser::Item{RBRA, 0});
             out.push_back(regex_parser::Item{item.t == COUNTED ? QUEST : QUEST_LAZY, 0});
           }
         } else {
           // infinite repeats
-          if (item.d.yycount.n > 0) {  // append '+' after last repetition
+          if (n > 0) {  // append '+' after last repetition
             out.push_back(regex_parser::Item{item.t == COUNTED ? PLUS : PLUS_LAZY, 0});
           } else {  // copy it once then append '*'
             out.insert(out.end(), begin, end);
