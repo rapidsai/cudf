@@ -44,7 +44,7 @@ dtype: int64
 ```
 
 Nulls are not coerced to `NaN` in any situation;
-compare the behaviour of cuDF with Pandas below:
+compare the behavior of cuDF with Pandas below:
 
 ```{code} python
 >>> s = cudf.Series([1, 2, cudf.NA], dtype="category")
