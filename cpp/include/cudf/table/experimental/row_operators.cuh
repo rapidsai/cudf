@@ -529,14 +529,13 @@ class two_table_device_row_comparator_adapter {
     auto const left_right_ordering =
       comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
 
-    // Invert less/greater values
+    // Invert less/greater values to reflect right to left ordering
     if (left_right_ordering == weak_ordering::LESS) {
       return weak_ordering::GREATER;
     } else if (left_right_ordering == weak_ordering::GREATER) {
       return weak_ordering::LESS;
-    } else {
-      return weak_ordering::EQUIVALENT;
     }
+    return weak_ordering::EQUIVALENT;
   }
 
  private:
