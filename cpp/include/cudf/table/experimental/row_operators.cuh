@@ -294,7 +294,7 @@ class device_row_comparator {
 template <typename Comparator, weak_ordering... values>
 struct weak_ordering_comparator_impl {
   template <typename... Ts>
-  __device__ bool operator()(Ts&&... args) const noexcept
+  __device__ bool operator()(Ts const... args) const noexcept
   {
     weak_ordering const result = comparator(std::forward<Ts>(args)...);
     return ((result == values) || ...);
