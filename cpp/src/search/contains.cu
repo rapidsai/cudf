@@ -123,6 +123,8 @@ struct contains_scalar_dispatch {
   std::enable_if_t<std::is_same_v<Type, cudf::list_view>, bool> operator()(
     column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream) const
   {
+    CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
+
     auto const needle_cv = dynamic_cast<list_scalar const*>(&needle)->view();
     CUDF_EXPECTS(lists_column_view{haystack}.child().type() == needle_cv.type(),
                  "scalar and column child types must match");
