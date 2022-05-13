@@ -43,7 +43,7 @@ def _align_objs(objs, how="outer", sort=None):
 
     if not_matching_index:
         if not all(o.index.is_unique for o in objs):
-            raise ValueError("cannot reindex from a duplicate axis")
+            raise ValueError("cannot reindex on an axis with duplicate labels")
 
         index = objs[0].index
         name = index.name
