@@ -99,9 +99,13 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   //                                                 null_precedence_dv.data());
 
 #endif
+#if 1
   auto const& lhs = matched.second.front();
   auto const& rhs = matched.second.back();
-
+#else
+  auto const& lhs = find_first ? matched.second.front() : matched.second.back();
+  auto const& rhs = find_first ? matched.second.back() : matched.second.front();
+#endif
   auto const lhs_it = cudf::experimental::row::lexicographic::make_lhs_index_counting_iterator(0);
   auto const rhs_it = cudf::experimental::row::lexicographic::make_rhs_index_counting_iterator(0);
 
