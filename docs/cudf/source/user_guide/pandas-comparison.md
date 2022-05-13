@@ -146,7 +146,7 @@ collections of arbitrary Python objects.
 
 ## `.apply()` function limitations
 
-The `.apply()` function in Pandas accecpts a user-defined function
+The `.apply()` function in Pandas accepts a user-defined function
 (UDF) that can include arbitrary operations that are applied to each
 value of a `Series`, `DataFrame`, or in the case of a groupby,
 each group.  cuDF also supports `apply()`, but it relies on Numba to
