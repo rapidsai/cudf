@@ -101,7 +101,7 @@ struct replace_regex_fn {
 //
 std::unique_ptr<column> replace_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   string_scalar const& replacement,
   std::optional<size_type> max_replace_count,
   regex_flags const flags,
@@ -135,7 +135,7 @@ std::unique_ptr<column> replace_re(
 // external API
 
 std::unique_ptr<column> replace_re(strings_column_view const& strings,
-                                   std::string const& pattern,
+                                   std::string_view pattern,
                                    string_scalar const& replacement,
                                    std::optional<size_type> max_replace_count,
                                    regex_flags const flags,

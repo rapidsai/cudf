@@ -84,12 +84,20 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return g
 
     @_dask_cudf_nvtx_annotate
+    def _make_groupby_method_aggs(self, agg_name):
+        """Create aggs dictionary for aggregation methods"""
+
+        if isinstance(self.by, list):
+            return {c: agg_name for c in self.obj.columns if c not in self.by}
+        return {c: agg_name for c in self.obj.columns if c != self.by}
+
+    @_dask_cudf_nvtx_annotate
     @_check_groupby_supported
     def count(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "count" for c in self.obj.columns if c not in self.by},
+            self._make_groupby_method_aggs("count"),
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -104,7 +112,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "mean" for c in self.obj.columns if c not in self.by},
+            self._make_groupby_method_aggs("mean"),
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -119,7 +127,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "std" for c in self.obj.columns if c not in self.by},
+            self._make_groupby_method_aggs("std"),
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -134,7 +142,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "var" for c in self.obj.columns if c not in self.by},
+            self._make_groupby_method_aggs("var"),
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -149,7 +157,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "sum" for c in self.obj.columns if c not in self.by},
+            self._make_groupby_method_aggs("sum"),
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -164,7 +172,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "min" for c in self.obj.columns if c not in self.by},
+            self._make_groupby_method_aggs("min"),
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -179,7 +187,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "max" for c in self.obj.columns if c not in self.by},
+            self._make_groupby_method_aggs("max"),
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -194,7 +202,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "collect" for c in self.obj.columns if c not in self.by},
+            self._make_groupby_method_aggs("collect"),
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -209,7 +217,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "first" for c in self.obj.columns if c not in self.by},
+            self._make_groupby_method_aggs("first"),
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -224,7 +232,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         return groupby_agg(
             self.obj,
             self.by,
-            {c: "last" for c in self.obj.columns if c not in self.by},
+            self._make_groupby_method_aggs("last"),
             split_every=split_every,
             split_out=split_out,
             sep=self.sep,
@@ -237,6 +245,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
+
         arg = _redirect_aggs(arg)
 
         if _groupby_supported(self) and _aggs_supported(arg, SUPPORTED_AGGS):
@@ -423,6 +432,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
+
         arg = _redirect_aggs(arg)
 
         if not isinstance(arg, dict):
@@ -495,7 +505,7 @@ def groupby_agg(
     if isinstance(gb_cols, str):
         gb_cols = [gb_cols]
     columns = [c for c in ddf.columns if c not in gb_cols]
-    if isinstance(aggs, list):
+    if not isinstance(aggs, dict):
         aggs = {col: aggs for col in columns}
 
     # Assert if our output will have a MultiIndex; this will be the case if
@@ -657,9 +667,12 @@ def _aggs_supported(arg, supported: set):
             _global_set = set(arg)
 
         return bool(_global_set.issubset(supported))
+    elif isinstance(arg, str):
+        return arg in supported
     return False
 
 
+@_dask_cudf_nvtx_annotate
 def _groupby_supported(gb):
     """Check that groupby input is supported by dask-cudf"""
     return isinstance(gb.obj, DaskDataFrame) and (

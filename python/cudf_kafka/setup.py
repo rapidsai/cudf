@@ -13,6 +13,8 @@ import versioneer
 
 install_requires = ["cudf", "cython"]
 
+extras_require = {"test": ["pytest", "pytest-xdist"]}
+
 cython_files = ["cudf_kafka/_lib/*.pyx"]
 
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
@@ -94,7 +96,6 @@ setup(
         "Programming Language :: Python :: 3.9",
     ],
     # Include the separately-compiled shared library
-    setup_requires=["Cython>=0.29,<0.30"],
     ext_modules=cythonize(
         extensions,
         nthreads=nthreads,
@@ -109,6 +110,6 @@ setup(
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
-    extras_require={"test": ["pytest", "pytest-xdist"]},
+    extras_require=extras_require,
     zip_safe=False,
 )
