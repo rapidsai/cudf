@@ -3184,6 +3184,10 @@ TEST_F(ParquetReaderTest, EmptyOutput)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+/* temporarily remove this test.  with page size being tunable, can no longer just test for
+ * row groups being smaller than 512KiB.  ideally one would use the configured page size, but
+ * then that would require setting the page size parameter before the row group size, which 
+ * seems odd.  should probably test for consistent parameters when instantiating the writer.
 TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
 {
   const auto unused_table = std::make_unique<table>();
@@ -3205,5 +3209,6 @@ TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
                  .row_group_size_bytes(511 << 10),
                cudf::logic_error);
 }
+*/
 
 CUDF_TEST_PROGRAM_MAIN()
