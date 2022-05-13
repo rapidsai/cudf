@@ -49,6 +49,24 @@ using PdaSymbolGroupIdT = char;
 /// Type being emitted by the pushdown automaton transducer
 using PdaTokenT = char;
 
+/// Type used to represent the class of a node (or a node "category") within the tree representation
+using NodeT = char;
+
+/// Type used to index into the nodes within the tree of structs, lists, field names, and value
+/// nodes
+using NodeIndexT = uint32_t;
+
+/// Type large enough to represent tree depth from [0, max-tree-depth); may be an unsigned type
+using TreeDepthT = StackLevelT;
+
+using tree_meta_t = std::tuple<std::vector<NodeT>,
+                               std::vector<NodeIndexT>,
+                               std::vector<TreeDepthT>,
+                               std::vector<SymbolOffsetT>,
+                               std::vector<SymbolOffsetT>>;
+
+constexpr NodeIndexT parent_node_sentinel = std::numeric_limits<NodeIndexT>::max();
+
 /**
  * @brief Tokens emitted while parsing a JSON input
  */
@@ -77,6 +95,26 @@ enum token_t : PdaTokenT {
   TK_EFN,
   /// Total number of tokens
   NUM_TOKENS
+};
+
+/**
+ * @brief Class of a node (or a node "category") within the tree representation
+ */
+enum node_t : NodeT {
+  /// A node representing a struct
+  NC_STRUCT,
+  /// A node representing a list
+  NC_LIST,
+  /// A node representing a field name
+  NC_FN,
+  /// A node representing a string value
+  NC_STR,
+  /// A node representing a numeric or literal value (e.g., true, false, null)
+  NC_VAL,
+  /// A node representing a parser error
+  NC_ERR,
+  /// Total number of node classes
+  NUM_NODE_CLASSES
 };
 
 /**
@@ -109,6 +147,17 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                       device_span<SymbolOffsetT> d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
                       rmm::cuda_stream_view stream);
+
+/**
+ * @briefTakes a JSON input in host memory and returns the tree representation of the JSON input.
+ * Specifically, the host-side JSON input is transferred to the GPU, where the JSON tokenizer is
+ * run. The token stream is then copied back to the CPU where the tree representation is computed.
+ *
+ * @param input The JSON input
+ * @param stream The CUDA stream to which kernels and memcpy'ies are dispatched
+ * @return Returns a tree representation of the JSON input on the host
+ */
+tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace json
