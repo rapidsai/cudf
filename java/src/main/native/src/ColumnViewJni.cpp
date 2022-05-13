@@ -31,6 +31,7 @@
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/lists/extract.hpp>
+#include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/null_mask.hpp>
@@ -284,6 +285,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedReduce(
     cudf::data_type out_dtype = cudf::jni::make_data_type(j_dtype, scale);
     return release_as_jlong(
         cudf::segmented_reduce(*data, *offsets, *s_agg, out_dtype, null_policy));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedGather(
+    JNIEnv *env, jclass, jlong source_column, jlong gather_map_list, jboolean nullify_out_bounds) {
+  JNI_NULL_CHECK(env, source_column, "source column view is null", 0);
+  JNI_NULL_CHECK(env, gather_map_list, "gather map is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const &src_col =
+        cudf::lists_column_view(*reinterpret_cast<cudf::column_view *>(source_column));
+    auto const &gather_map =
+        cudf::lists_column_view(*reinterpret_cast<cudf::column_view *>(gather_map_list));
+    auto out_bounds_policy = nullify_out_bounds ? cudf::out_of_bounds_policy::NULLIFY :
+                                                  cudf::out_of_bounds_policy::DONT_CHECK;
+    return release_as_jlong(cudf::lists::segmented_gather(src_col, gather_map, out_bounds_policy));
   }
   CATCH_STD(env, 0);
 }
@@ -602,6 +620,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listSortRows(JNIEnv *env,
     auto *cv = reinterpret_cast<cudf::column_view *>(column_view);
     return release_as_jlong(
         cudf::lists::sort_lists(cudf::lists_column_view(*cv), sort_order, null_order));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_generateListOffsets(JNIEnv *env, jclass,
+                                                                           jlong handle) {
+  JNI_NULL_CHECK(env, handle, "handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const cv = reinterpret_cast<cudf::column_view const *>(handle);
+    return release_as_jlong(cudf::jni::generate_list_offsets(*cv));
   }
   CATCH_STD(env, 0);
 }
@@ -1137,15 +1166,18 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ColumnView_containsScalar(JNIEnv 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsVector(JNIEnv *env, jobject j_object,
-                                                                      jlong j_haystack_handle,
-                                                                      jlong j_needle_handle) {
-  JNI_NULL_CHECK(env, j_haystack_handle, "haystack vector is null", false);
-  JNI_NULL_CHECK(env, j_needle_handle, "needle vector is null", false);
+                                                                      jlong j_values_handle,
+                                                                      jlong j_search_space_handle) {
+  JNI_NULL_CHECK(env, j_values_handle, "values vector is null", false);
+  JNI_NULL_CHECK(env, j_search_space_handle, "search_space vector is null", false);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *haystack = reinterpret_cast<cudf::column_view *>(j_haystack_handle);
-    cudf::column_view *needle = reinterpret_cast<cudf::column_view *>(j_needle_handle);
-    return release_as_jlong(cudf::contains(*haystack, *needle));
+    auto const search_space_ptr =
+        reinterpret_cast<cudf::column_view const *>(j_search_space_handle);
+    auto const values_ptr = reinterpret_cast<cudf::column_view const *>(j_values_handle);
+
+    // The C++ API `cudf::contains` requires that the search space is the first parameter.
+    return release_as_jlong(cudf::contains(*search_space_ptr, *values_ptr));
   }
   CATCH_STD(env, 0);
 }

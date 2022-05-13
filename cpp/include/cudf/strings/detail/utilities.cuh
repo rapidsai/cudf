@@ -72,28 +72,6 @@ std::unique_ptr<column> make_offsets_child_column(
 }
 
 /**
- * @brief Creates an offsets column from a string_view iterator, and size.
- *
- * @tparam Iter Iterator type that returns string_view instances
- * @param strings_begin Iterator to the beginning of the string_view sequence
- * @param num_strings The number of string_view instances in the sequence
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return Child offsets column
- */
-template <typename Iter>
-std::unique_ptr<cudf::column> child_offsets_from_string_iterator(
-  Iter strings_begin,
-  cudf::size_type num_strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
-  auto begin       = thrust::make_transform_iterator(strings_begin, transformer);
-  return make_offsets_child_column(begin, begin + num_strings, stream, mr);
-}
-
-/**
  * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
  * copied.
  *
@@ -178,7 +156,7 @@ auto make_strings_children(
     for_each_fn(size_and_exec_fn);
   }
 
-  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+  return std::pair(std::move(offsets_column), std::move(chars_column));
 }
 
 /**

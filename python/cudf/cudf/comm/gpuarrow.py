@@ -1,6 +1,5 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
-from collections import OrderedDict
-from collections.abc import Sequence
+from collections import OrderedDict, abc
 
 import numpy as np
 import pandas as pd
@@ -32,7 +31,7 @@ class CudaRecordBatchStreamReader(_CudaRecordBatchStreamReader):
         self._open(source, schema)
 
 
-class GpuArrowReader(Sequence):
+class GpuArrowReader(abc.Sequence):
     def __init__(self, schema, dev_ary):
         self._table = CudaRecordBatchStreamReader(dev_ary, schema).read_all()
 
@@ -120,12 +119,12 @@ class GpuArrowNodeReader:
 
     @property
     def data_raw(self):
-        "Accessor for the data buffer as a device array"
+        """Accessor for the data buffer as a device array"""
         return self._series._column.data_array_view
 
     @property
     def null_raw(self):
-        "Accessor for the null buffer as a device array"
+        """Accessor for the null buffer as a device array"""
         return self._series._column.mask_array_view
 
     def make_series(self):

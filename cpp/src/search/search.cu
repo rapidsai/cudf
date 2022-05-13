@@ -43,40 +43,9 @@
 
 namespace cudf {
 namespace {
-template <typename DataIterator,
-          typename ValuesIterator,
-          typename OutputIterator,
-          typename Comparator>
-void launch_search(DataIterator it_data,
-                   ValuesIterator it_vals,
-                   size_type data_size,
-                   size_type values_size,
-                   OutputIterator it_output,
-                   Comparator comp,
-                   bool find_first,
-                   rmm::cuda_stream_view stream)
-{
-  if (find_first) {
-    thrust::lower_bound(rmm::exec_policy(stream),
-                        it_data,
-                        it_data + data_size,
-                        it_vals,
-                        it_vals + values_size,
-                        it_output,
-                        comp);
-  } else {
-    thrust::upper_bound(rmm::exec_policy(stream),
-                        it_data,
-                        it_data + data_size,
-                        it_vals,
-                        it_vals + values_size,
-                        it_output,
-                        comp);
-  }
-}
 
-std::unique_ptr<column> search_ordered(table_view const& t,
-                                       table_view const& values,
+std::unique_ptr<column> search_ordered(table_view const& haystack,
+                                       table_view const& needles,
                                        bool find_first,
                                        std::vector<order> const& column_order,
                                        std::vector<null_order> const& null_precedence,
@@ -84,30 +53,30 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(
-    column_order.empty() or static_cast<std::size_t>(t.num_columns()) == column_order.size(),
+    column_order.empty() or static_cast<std::size_t>(haystack.num_columns()) == column_order.size(),
     "Mismatch between number of columns and column order.");
-  CUDF_EXPECTS(
-    null_precedence.empty() or static_cast<std::size_t>(t.num_columns()) == null_precedence.size(),
-    "Mismatch between number of columns and null precedence.");
+  CUDF_EXPECTS(null_precedence.empty() or
+                 static_cast<std::size_t>(haystack.num_columns()) == null_precedence.size(),
+               "Mismatch between number of columns and null precedence.");
 
   // Allocate result column
   auto result = make_numeric_column(
-    data_type{type_to_id<size_type>()}, values.num_rows(), mask_state::UNALLOCATED, stream, mr);
-  auto const result_out = result->mutable_view().data<size_type>();
+    data_type{type_to_id<size_type>()}, needles.num_rows(), mask_state::UNALLOCATED, stream, mr);
+  auto const out_it = result->mutable_view().data<size_type>();
 
   // Handle empty inputs
-  if (t.num_rows() == 0) {
+  if (haystack.num_rows() == 0) {
     CUDF_CUDA_TRY(
-      cudaMemsetAsync(result_out, 0, values.num_rows() * sizeof(size_type), stream.value()));
+      cudaMemsetAsync(out_it, 0, needles.num_rows() * sizeof(size_type), stream.value()));
     return result;
   }
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
-  auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
+  auto const matched = dictionary::detail::match_dictionaries({haystack, needles}, stream);
 
   // Prepare to flatten the structs column
-  auto const has_null_elements   = has_nested_nulls(t) or has_nested_nulls(values);
+  auto const has_null_elements   = has_nested_nulls(haystack) or has_nested_nulls(needles);
   auto const flatten_nullability = has_null_elements
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;
@@ -135,37 +104,50 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                                  rhs,
                                                  column_order_dv.data(),
                                                  null_precedence_dv.data());
-  launch_search(
-    count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
+
+  auto const do_search = [find_first](auto&&... args) {
+    if (find_first) {
+      thrust::lower_bound(std::forward<decltype(args)>(args)...);
+    } else {
+      thrust::upper_bound(std::forward<decltype(args)>(args)...);
+    }
+  };
+  do_search(rmm::exec_policy(stream),
+            count_it,
+            count_it + haystack.num_rows(),
+            count_it,
+            count_it + needles.num_rows(),
+            out_it,
+            comp);
 
   return result;
 }
 
 struct contains_scalar_dispatch {
   template <typename Element>
-  bool operator()(column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
+  bool operator()(column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream)
   {
-    CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
+    CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
     using Type       = device_storage_type_t<Element>;
     using ScalarType = cudf::scalar_type_t<Element>;
-    auto d_col       = column_device_view::create(col, stream);
-    auto s           = static_cast<const ScalarType*>(&value);
+    auto d_haystack  = column_device_view::create(haystack, stream);
+    auto s           = static_cast<const ScalarType*>(&needle);
 
-    if (col.has_nulls()) {
+    if (haystack.has_nulls()) {
       auto found_iter = thrust::find(rmm::exec_policy(stream),
-                                     d_col->pair_begin<Type, true>(),
-                                     d_col->pair_end<Type, true>(),
+                                     d_haystack->pair_begin<Type, true>(),
+                                     d_haystack->pair_end<Type, true>(),
                                      thrust::make_pair(s->value(stream), true));
 
-      return found_iter != d_col->pair_end<Type, true>();
+      return found_iter != d_haystack->pair_end<Type, true>();
     } else {
       auto found_iter = thrust::find(rmm::exec_policy(stream),  //
-                                     d_col->begin<Type>(),
-                                     d_col->end<Type>(),
+                                     d_haystack->begin<Type>(),
+                                     d_haystack->end<Type>(),
                                      s->value(stream));
 
-      return found_iter != d_col->end<Type>();
+      return found_iter != d_haystack->end<Type>();
     }
   }
 };
@@ -179,66 +161,69 @@ bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const&,
 }
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& col,
-                                                             scalar const& value,
+bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& haystack,
+                                                             scalar const& needle,
                                                              rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
+  CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
-  auto const scalar_table = static_cast<struct_scalar const*>(&value)->view();
-  CUDF_EXPECTS(col.num_children() == scalar_table.num_columns(),
+  auto const scalar_table = static_cast<struct_scalar const*>(&needle)->view();
+  CUDF_EXPECTS(haystack.num_children() == scalar_table.num_columns(),
                "struct scalar and structs column must have the same number of children");
-  for (size_type i = 0; i < col.num_children(); ++i) {
-    CUDF_EXPECTS(col.child(i).type() == scalar_table.column(i).type(),
+  for (size_type i = 0; i < haystack.num_children(); ++i) {
+    CUDF_EXPECTS(haystack.child(i).type() == scalar_table.column(i).type(),
                  "scalar and column children types must match");
   }
 
   // Prepare to flatten the structs column and scalar.
-  auto const has_null_elements =
-    has_nested_nulls(table_view{std::vector<column_view>{col.child_begin(), col.child_end()}}) ||
-    has_nested_nulls(scalar_table);
+  auto const has_null_elements = has_nested_nulls(table_view{std::vector<column_view>{
+                                   haystack.child_begin(), haystack.child_end()}}) ||
+                                 has_nested_nulls(scalar_table);
   auto const flatten_nullability = has_null_elements
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;
 
   // Flatten the input structs column, only materialize the bitmask if there is null in the input.
-  auto const col_flattened =
-    structs::detail::flatten_nested_columns(table_view{{col}}, {}, {}, flatten_nullability);
-  auto const val_flattened =
+  auto const haystack_flattened =
+    structs::detail::flatten_nested_columns(table_view{{haystack}}, {}, {}, flatten_nullability);
+  auto const needle_flattened =
     structs::detail::flatten_nested_columns(scalar_table, {}, {}, flatten_nullability);
 
   // The struct scalar only contains the struct member columns.
   // Thus, if there is any null in the input, we must exclude the first column in the flattened
   // table of the input column from searching because that column is the materialized bitmask of
   // the input structs column.
-  auto const col_flattened_content  = col_flattened.flattened_columns();
-  auto const col_flattened_children = table_view{std::vector<column_view>{
-    col_flattened_content.begin() + static_cast<size_type>(has_null_elements),
-    col_flattened_content.end()}};
+  auto const haystack_flattened_content  = haystack_flattened.flattened_columns();
+  auto const haystack_flattened_children = table_view{std::vector<column_view>{
+    haystack_flattened_content.begin() + static_cast<size_type>(has_null_elements),
+    haystack_flattened_content.end()}};
 
-  auto const d_col_children_ptr = table_device_view::create(col_flattened_children, stream);
-  auto const d_val_ptr          = table_device_view::create(val_flattened, stream);
+  auto const d_haystack_children_ptr =
+    table_device_view::create(haystack_flattened_children, stream);
+  auto const d_needle_ptr = table_device_view::create(needle_flattened, stream);
 
   auto const start_iter = thrust::make_counting_iterator<size_type>(0);
-  auto const end_iter   = start_iter + col.size();
-  auto const comp       = row_equality_comparator(
-    nullate::DYNAMIC{has_null_elements}, *d_col_children_ptr, *d_val_ptr, null_equality::EQUAL);
+  auto const end_iter   = start_iter + haystack.size();
+  auto const comp       = row_equality_comparator(nullate::DYNAMIC{has_null_elements},
+                                            *d_haystack_children_ptr,
+                                            *d_needle_ptr,
+                                            null_equality::EQUAL);
   auto const found_iter = thrust::find_if(
     rmm::exec_policy(stream), start_iter, end_iter, [comp] __device__(auto const idx) {
-      return comp(idx, 0);  // compare col[idx] == val[0].
+      return comp(idx, 0);  // compare haystack[idx] == val[0].
     });
 
   return found_iter != end_iter;
 }
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& col,
-                                                              scalar const& value,
+bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& haystack,
+                                                              scalar const& needle,
                                                               rmm::cuda_stream_view stream)
 {
-  auto dict_col = cudf::dictionary_column_view(col);
-  // first, find the value in the dictionary's key set
-  auto index = cudf::dictionary::detail::get_index(dict_col, value, stream);
+  auto dict_col = cudf::dictionary_column_view(haystack);
+  // first, find the needle in the dictionary's key set
+  auto index = cudf::dictionary::detail::get_index(dict_col, needle, stream);
   // if found, check the index is actually in the indices column
   return index->is_valid(stream) ? cudf::type_dispatcher(dict_col.indices().type(),
                                                          contains_scalar_dispatch{},
@@ -251,12 +236,13 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 }  // namespace
 
 namespace detail {
-bool contains(column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
+bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream)
 {
-  if (col.is_empty()) { return false; }
-  if (not value.is_valid(stream)) { return col.has_nulls(); }
+  if (haystack.is_empty()) { return false; }
+  if (not needle.is_valid(stream)) { return haystack.has_nulls(); }
 
-  return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream);
+  return cudf::type_dispatcher(
+    haystack.type(), contains_scalar_dispatch{}, haystack, needle, stream);
 }
 
 struct multi_contains_dispatch {
@@ -267,44 +253,44 @@ struct multi_contains_dispatch {
                                      rmm::mr::device_memory_resource* mr)
   {
     std::unique_ptr<column> result = make_numeric_column(data_type{type_to_id<bool>()},
-                                                         haystack.size(),
-                                                         copy_bitmask(haystack),
-                                                         haystack.null_count(),
+                                                         needles.size(),
+                                                         copy_bitmask(needles),
+                                                         needles.null_count(),
                                                          stream,
                                                          mr);
 
-    if (haystack.is_empty()) { return result; }
+    if (needles.is_empty()) { return result; }
 
     mutable_column_view result_view = result.get()->mutable_view();
 
-    if (needles.is_empty()) {
+    if (haystack.is_empty()) {
       thrust::fill(
         rmm::exec_policy(stream), result_view.begin<bool>(), result_view.end<bool>(), false);
       return result;
     }
 
-    auto hash_set        = cudf::detail::unordered_multiset<Element>::create(needles, stream);
+    auto hash_set        = cudf::detail::unordered_multiset<Element>::create(haystack, stream);
     auto device_hash_set = hash_set.to_device();
 
-    auto d_haystack_ptr = column_device_view::create(haystack, stream);
-    auto d_haystack     = *d_haystack_ptr;
+    auto d_needles_ptr = column_device_view::create(needles, stream);
+    auto d_needles     = *d_needles_ptr;
 
-    if (haystack.has_nulls()) {
+    if (needles.has_nulls()) {
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
-                        thrust::make_counting_iterator<size_type>(haystack.size()),
+                        thrust::make_counting_iterator<size_type>(needles.size()),
                         result_view.begin<bool>(),
-                        [device_hash_set, d_haystack] __device__(size_t index) {
-                          return d_haystack.is_null_nocheck(index) ||
-                                 device_hash_set.contains(d_haystack.element<Element>(index));
+                        [device_hash_set, d_needles] __device__(size_t index) {
+                          return d_needles.is_null_nocheck(index) ||
+                                 device_hash_set.contains(d_needles.element<Element>(index));
                         });
     } else {
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
-                        thrust::make_counting_iterator<size_type>(haystack.size()),
+                        thrust::make_counting_iterator<size_type>(needles.size()),
                         result_view.begin<bool>(),
-                        [device_hash_set, d_haystack] __device__(size_t index) {
-                          return device_hash_set.contains(d_haystack.element<Element>(index));
+                        [device_hash_set, d_needles] __device__(size_t index) {
+                          return device_hash_set.contains(d_needles.element<Element>(index));
                         });
     }
 
@@ -336,10 +322,10 @@ std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
   dictionary_column_view const haystack(haystack_in);
   dictionary_column_view const needles(needles_in);
   // first combine keys so both dictionaries have the same set
-  auto haystack_matched    = dictionary::detail::add_keys(haystack, needles.keys(), stream);
-  auto const haystack_view = dictionary_column_view(haystack_matched->view());
-  auto needles_matched     = dictionary::detail::set_keys(needles, haystack_view.keys(), stream);
+  auto needles_matched     = dictionary::detail::add_keys(needles, haystack.keys(), stream);
   auto const needles_view  = dictionary_column_view(needles_matched->view());
+  auto haystack_matched    = dictionary::detail::set_keys(haystack, needles_view.keys(), stream);
+  auto const haystack_view = dictionary_column_view(haystack_matched->view());
 
   // now just use the indices for the contains
   column_view const haystack_indices = haystack_view.get_indices_annotated();
@@ -363,56 +349,56 @@ std::unique_ptr<column> contains(column_view const& haystack,
     haystack.type(), multi_contains_dispatch{}, haystack, needles, stream, mr);
 }
 
-std::unique_ptr<column> lower_bound(table_view const& t,
-                                    table_view const& values,
+std::unique_ptr<column> lower_bound(table_view const& haystack,
+                                    table_view const& needles,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  return search_ordered(t, values, true, column_order, null_precedence, stream, mr);
+  return search_ordered(haystack, needles, true, column_order, null_precedence, stream, mr);
 }
 
-std::unique_ptr<column> upper_bound(table_view const& t,
-                                    table_view const& values,
+std::unique_ptr<column> upper_bound(table_view const& haystack,
+                                    table_view const& needles,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  return search_ordered(t, values, false, column_order, null_precedence, stream, mr);
+  return search_ordered(haystack, needles, false, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace detail
 
 // external APIs
 
-std::unique_ptr<column> lower_bound(table_view const& t,
-                                    table_view const& values,
+std::unique_ptr<column> lower_bound(table_view const& haystack,
+                                    table_view const& needles,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::lower_bound(
-    t, values, column_order, null_precedence, rmm::cuda_stream_default, mr);
+    haystack, needles, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> upper_bound(table_view const& t,
-                                    table_view const& values,
+std::unique_ptr<column> upper_bound(table_view const& haystack,
+                                    table_view const& needles,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::upper_bound(
-    t, values, column_order, null_precedence, rmm::cuda_stream_default, mr);
+    haystack, needles, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
-bool contains(column_view const& col, scalar const& value)
+bool contains(column_view const& haystack, scalar const& needle)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(col, value, rmm::cuda_stream_default);
+  return detail::contains(haystack, needle, rmm::cuda_stream_default);
 }
 
 std::unique_ptr<column> contains(column_view const& haystack,

@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import pickle
 import re
 import warnings
 from functools import cached_property
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
     Optional,
     Sequence,
     Tuple,
@@ -37,7 +35,6 @@ from cudf.api.types import (
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethods, ParentType
-from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import can_convert_to_column
 
@@ -202,7 +199,7 @@ class StringMethods(ColumnMethods):
             return self.get(key)
 
     def len(self) -> SeriesOrIndex:
-        """
+        r"""
         Computes the length of each element in the Series/Index.
 
         Returns
@@ -214,7 +211,7 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(["dog", "", "\\n", None])
+        >>> s = cudf.Series(["dog", "", "\n", None])
         >>> s.str.len()
         0       3
         1       0
@@ -365,9 +362,7 @@ class StringMethods(ColumnMethods):
             other_cols = _get_cols_list(self._parent, others)
             all_cols = [self._column] + other_cols
             data = libstrings.concatenate(
-                cudf.DataFrame(
-                    {index: value for index, value in enumerate(all_cols)}
-                ),
+                all_cols,
                 cudf.Scalar(sep),
                 cudf.Scalar(na_rep, "str"),
             )
@@ -963,7 +958,7 @@ class StringMethods(ColumnMethods):
         )
 
     def replace_with_backrefs(self, pat: str, repl: str) -> SeriesOrIndex:
-        """
+        r"""
         Use the ``repl`` back-ref template to create a new string
         with the extracted elements found using the ``pat`` expression.
 
@@ -983,7 +978,7 @@ class StringMethods(ColumnMethods):
         --------
         >>> import cudf
         >>> s = cudf.Series(["A543","Z756"])
-        >>> s.str.replace_with_backrefs('(\\\\d)(\\\\d)', 'V\\\\2\\\\1')
+        >>> s.str.replace_with_backrefs('(\\d)(\\d)', 'V\\2\\1')
         0    AV453
         1    ZV576
         dtype: object
@@ -1198,7 +1193,7 @@ class StringMethods(ColumnMethods):
         )
 
     def isfloat(self) -> SeriesOrIndex:
-        """
+        r"""
         Check whether all characters in each string form floating value.
 
         If a string has zero characters, False is returned for
@@ -1252,7 +1247,7 @@ class StringMethods(ColumnMethods):
         4     True
         5    False
         dtype: bool
-        >>> s = cudf.Series(["this is plain text", "\\t\\n", "9.9", "9.9.9"])
+        >>> s = cudf.Series(["this is plain text", "\t\n", "9.9", "9.9.9"])
         >>> s.str.isfloat()
         0    False
         1    False
@@ -2242,7 +2237,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(libstrings.get(self._column, i))
 
     def get_json_object(self, json_path):
-        """
+        r"""
         Applies a JSONPath string to an input strings column
         where each row in the column is a valid json string
 
@@ -2261,7 +2256,7 @@ class StringMethods(ColumnMethods):
         >>> import cudf
         >>> s = cudf.Series(
             [
-                \\"\\"\\"
+                \"\"\"
                 {
                     "store":{
                         "book":[
@@ -2280,13 +2275,13 @@ class StringMethods(ColumnMethods):
                         ]
                     }
                 }
-                \\"\\"\\"
+                \"\"\"
             ])
         >>> s
-            0    {"store": {\\n        "book": [\\n        { "cat...
+            0    {"store": {\n        "book": [\n        { "cat...
             dtype: object
         >>> s.str.get_json_object("$.store.book")
-            0    [\\n        { "category": "reference",\\n       ...
+            0    [\n        { "category": "reference",\n       ...
             dtype: object
         """
 
@@ -3141,7 +3136,7 @@ class StringMethods(ColumnMethods):
         )
 
     def strip(self, to_strip: str = None) -> SeriesOrIndex:
-        """
+        r"""
         Remove leading and trailing characters.
 
         Strip whitespaces (including newlines) or a set of
@@ -3172,11 +3167,11 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\\n', '3. Cat?\\t', None])
+        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\n', '3. Cat?\t', None])
         >>> s
         0    1. Ant.
-        1    2. Bee!\\n
-        2    3. Cat?\\t
+        1    2. Bee!\n
+        2    3. Cat?\t
         3         <NA>
         dtype: object
         >>> s.str.strip()
@@ -3185,7 +3180,7 @@ class StringMethods(ColumnMethods):
         2    3. Cat?
         3       <NA>
         dtype: object
-        >>> s.str.strip('123.!? \\n\\t')
+        >>> s.str.strip('123.!? \n\t')
         0     Ant
         1     Bee
         2     Cat
@@ -3200,7 +3195,7 @@ class StringMethods(ColumnMethods):
         )
 
     def lstrip(self, to_strip: str = None) -> SeriesOrIndex:
-        """
+        r"""
         Remove leading and trailing characters.
 
         Strip whitespaces (including newlines)
@@ -3231,11 +3226,11 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\\n', '3. Cat?\\t', None])
+        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\n', '3. Cat?\t', None])
         >>> s.str.lstrip('123.')
         0     Ant.
-        1     Bee!\\n
-        2     Cat?\\t
+        1     Bee!\n
+        2     Cat?\t
         3       <NA>
         dtype: object
         """
@@ -3247,7 +3242,7 @@ class StringMethods(ColumnMethods):
         )
 
     def rstrip(self, to_strip: str = None) -> SeriesOrIndex:
-        """
+        r"""
         Remove leading and trailing characters.
 
         Strip whitespaces (including newlines)
@@ -3280,14 +3275,14 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\\n', '3. Cat?\\t', None])
+        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\n', '3. Cat?\t', None])
         >>> s
         0    1. Ant.
-        1    2. Bee!\\n
-        2    3. Cat?\\t
+        1    2. Bee!\n
+        2    3. Cat?\t
         3         <NA>
         dtype: object
-        >>> s.str.rstrip('.!? \\n\\t')
+        >>> s.str.rstrip('.!? \n\t')
         0    1. Ant
         1    2. Bee
         2    3. Cat
@@ -3302,7 +3297,7 @@ class StringMethods(ColumnMethods):
         )
 
     def wrap(self, width: int, **kwargs) -> SeriesOrIndex:
-        """
+        r"""
         Wrap long strings in the Series/Index to be formatted in
         paragraphs with length less than a given width.
 
@@ -3343,8 +3338,8 @@ class StringMethods(ColumnMethods):
         >>> data = ['line to be wrapped', 'another line to be wrapped']
         >>> s = cudf.Series(data)
         >>> s.str.wrap(12)
-        0             line to be\\nwrapped
-        1    another line\\nto be\\nwrapped
+        0             line to be\nwrapped
+        1    another line\nto be\nwrapped
         dtype: object
         """
         if not is_integer(width):
@@ -3578,7 +3573,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace((self._column == "").fillna(False))
 
     def isspace(self) -> SeriesOrIndex:
-        """
+        r"""
         Check whether all characters in each string are whitespace.
 
         This is equivalent to running the Python string method
@@ -3626,7 +3621,7 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series([' ', '\\t\\r\\n ', ''])
+        >>> s = cudf.Series([' ', '\t\r\n ', ''])
         >>> s.str.isspace()
         0     True
         1     True
@@ -4274,7 +4269,7 @@ class StringMethods(ColumnMethods):
         )
 
     def normalize_characters(self, do_lower: bool = True) -> SeriesOrIndex:
-        """
+        r"""
         Normalizes strings characters for tokenizing.
 
         This uses the normalizer that is built into the
@@ -4283,7 +4278,7 @@ class StringMethods(ColumnMethods):
             - adding padding around punctuation (unicode category starts with
               "P") as well as certain ASCII symbols like "^" and "$"
             - adding padding around the CJK Unicode block characters
-            - changing whitespace (e.g. ``\\t``, ``\\n``, ``\\r``) to space
+            - changing whitespace (e.g. ``\t``, ``\n``, ``\r``) to space
             - removing control characters (unicode categories "Cc" and "Cf")
 
         If `do_lower_case = true`, lower-casing also removes the accents.
@@ -4306,7 +4301,7 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> ser = cudf.Series(["héllo, \\tworld","ĂĆCĖÑTED","$99"])
+        >>> ser = cudf.Series(["héllo, \tworld","ĂĆCĖÑTED","$99"])
         >>> ser.str.normalize_characters()
         0    hello ,  world
         1          accented
@@ -5339,56 +5334,6 @@ class StringColumn(column.ColumnBase):
             pd_series.index = index
         return pd_series
 
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[Any, Any] = {"null_count": self.null_count}
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["size"] = self.size
-
-        frames = []
-        sub_headers = []
-
-        for item in self.children:
-            sheader, sframes = item.serialize()
-            sub_headers.append(sheader)
-            frames.extend(sframes)
-
-        if self.null_count > 0:
-            frames.append(self.mask)
-
-        header["subheaders"] = sub_headers
-        header["frame_count"] = len(frames)
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header: dict, frames: list) -> StringColumn:
-        size = header["size"]
-        if not isinstance(size, int):
-            size = pickle.loads(size)
-
-        # Deserialize the mask, value, and offset frames
-        buffers = [Buffer(each_frame) for each_frame in frames]
-
-        nbuf = None
-        if header["null_count"] > 0:
-            nbuf = buffers[2]
-
-        children = []
-        for h, b in zip(header["subheaders"], buffers[:2]):
-            column_type = pickle.loads(h["type-serialized"])
-            children.append(column_type.deserialize(h, [b]))
-
-        col = cast(
-            StringColumn,
-            column.build_column(
-                data=None,
-                dtype="str",
-                mask=nbuf,
-                children=tuple(children),
-                size=size,
-            ),
-        )
-        return col
-
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = cudf.dtype(to_dtype)
 
@@ -5462,7 +5407,7 @@ class StringColumn(column.ColumnBase):
 
     def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
         found_indices = libcudf.search.contains(
-            self, column.as_column([value], dtype=self.dtype)
+            column.as_column([value], dtype=self.dtype), self
         )
         found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(np.int32(1))
@@ -5523,15 +5468,21 @@ class StringColumn(column.ColumnBase):
         if isinstance(other, (StringColumn, str, cudf.Scalar)):
             if op == "__add__":
                 if isinstance(other, cudf.Scalar):
-                    other = utils.scalar_broadcast_to(
-                        other, size=len(self), dtype="object"
+                    other = cast(
+                        StringColumn,
+                        column.full(len(self), other, dtype="object"),
                     )
+
+                # Explicit types are necessary because mypy infers ColumnBase
+                # rather than StringColumn and sometimes forgets Scalar.
+                lhs: Union[cudf.Scalar, StringColumn]
+                rhs: Union[cudf.Scalar, StringColumn]
                 lhs, rhs = (other, self) if reflect else (self, other)
 
                 return cast(
                     "column.ColumnBase",
                     libstrings.concatenate(
-                        cudf.DataFrame._from_data(data={0: lhs, 1: rhs}),
+                        [lhs, rhs],
                         sep=cudf.Scalar(""),
                         na_rep=cudf.Scalar(None, "str"),
                     ),

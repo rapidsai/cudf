@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import datetime as dt
+import datetime
 from collections import namedtuple
 from decimal import Decimal
 
@@ -12,6 +12,7 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
+from cudf.core.missing import NA
 
 _NA_REP = "<NA>"
 
@@ -259,9 +260,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
     ) or cudf.api.types.is_string_dtype(dtype):
         dtype = "str"
 
-    if isinstance(val, dt.datetime):
+    if isinstance(val, datetime.datetime):
         val = np.datetime64(val)
-    elif isinstance(val, dt.timedelta):
+    elif isinstance(val, datetime.timedelta):
         val = np.timedelta64(val)
     elif isinstance(val, pd.Timestamp):
         val = val.to_datetime64()
@@ -591,7 +592,7 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
-    if from_dtype in {None, cudf.NA}:
+    if from_dtype in {None, NA}:
         return True
     if isinstance(from_dtype, type):
         from_dtype = cudf.dtype(from_dtype)

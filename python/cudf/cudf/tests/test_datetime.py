@@ -1,7 +1,6 @@
 # Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
-import datetime as dt
 import operator
 import re
 
@@ -14,6 +13,7 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
+from cudf.core._compat import PANDAS_LT_140
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -219,8 +219,8 @@ def test_sort_datetime():
 
 def test_issue_165():
     df_pandas = pd.DataFrame()
-    start_date = dt.datetime.strptime("2000-10-21", "%Y-%m-%d")
-    data = [(start_date + dt.timedelta(days=x)) for x in range(6)]
+    start_date = datetime.datetime.strptime("2000-10-21", "%Y-%m-%d")
+    data = [(start_date + datetime.timedelta(days=x)) for x in range(6)]
     df_pandas["dates"] = data
     df_pandas["num"] = [1, 2, 3, 4, 5, 6]
     df_cudf = DataFrame.from_pandas(df_pandas)
@@ -1464,7 +1464,7 @@ date_range_test_freq = [
     pytest.param(
         {"hours": 10, "days": 57, "nanoseconds": 3},
         marks=pytest.mark.xfail(
-            True,
+            condition=PANDAS_LT_140,
             reason="Pandas ignoring nanoseconds component. "
             "https://github.com/pandas-dev/pandas/issues/44393",
         ),
@@ -1551,6 +1551,8 @@ def test_date_range_end_freq_periods(end, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
+        if "nanoseconds" in freq:
+            pytest.xfail("https://github.com/pandas-dev/pandas/issues/46877")
         _gfreq = cudf.DateOffset(**freq)
         _pfreq = pd.DateOffset(**freq)
 

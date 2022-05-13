@@ -21,12 +21,14 @@ function(find_and_configure_cucollections)
     cuco 0.0.1
     GLOBAL_TARGETS cuco::cuco
     BUILD_EXPORT_SET cudf-exports
-    INSTALL_EXPORT_SET cudf-exports
     CPM_ARGS GITHUB_REPOSITORY NVIDIA/cuCollections
-    GIT_TAG fb58a38701f1c24ecfe07d8f1f208bbe80930da5
+    GIT_TAG 8b15f06f38d034e815bc72045ca3403787f75e07
     EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS}
     OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
+  if(NOT BUILD_SHARED_LIBS)
+    rapids_export_package(INSTALL cuco cudf-exports)
+  endif()
 
 endfunction()
 

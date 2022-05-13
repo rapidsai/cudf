@@ -16,6 +16,7 @@
 
 #include <strings/regex/regcomp.h>
 
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
@@ -43,20 +44,51 @@ enum OperatorType {
   NOP          = 0302,  // No operation, internal use only
 };
 
-static reclass ccls_w(1);   // [a-z], [A-Z], [0-9], and '_'
-static reclass ccls_W(8);   // now ccls_w plus '\n'
-static reclass ccls_s(2);   // all spaces or ctrl characters
-static reclass ccls_S(16);  // not ccls_s
-static reclass ccls_d(4);   // digits [0-9]
-static reclass ccls_D(32);  // not ccls_d plus '\n'
+static reclass ccls_w(CCLASS_W);   // \w
+static reclass ccls_s(CCLASS_S);   // \s
+static reclass ccls_d(CCLASS_D);   // \d
+static reclass ccls_W(NCCLASS_W);  // \W
+static reclass ccls_S(NCCLASS_S);  // \S
+static reclass ccls_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
 const std::array<int, 6> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL, RBRA}};
 const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
-// Valid regex characters that can be escaping to be used as literals
+// Valid regex characters that can be escaped and used as literals
 const std::array<char, 33> escapable_chars{
   {'.', '-', '+',  '*', '\\', '?', '^', '$', '|', '{', '}', '(', ')', '[', ']', '<', '>',
    '"', '~', '\'', '`', '_',  '@', '=', ';', ':', '!', '#', '%', '&', ',', '/', ' '}};
+
+/**
+ * @brief Converts UTF-8 string into fixed-width 32-bit character vector.
+ *
+ * No character conversion occurs.
+ * Each UTF-8 character is promoted into a 32-bit value.
+ * The last entry in the returned vector will be a 0 value.
+ * The fixed-width vector makes it easier to compile and faster to execute.
+ *
+ * @param pattern Regular expression encoded with UTF-8.
+ * @return Fixed-width 32-bit character vector.
+ */
+std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
+{
+  size_type size  = static_cast<size_type>(pattern.size());
+  size_type count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
+    return is_begin_utf8_char(static_cast<uint8_t>(ch));
+  });
+  std::vector<char32_t> result(count + 1);
+  char32_t* output_ptr  = result.data();
+  const char* input_ptr = pattern.data();
+  for (size_type idx = 0; idx < size; ++idx) {
+    char_utf8 output_character = 0;
+    size_type ch_width         = to_char_utf8(input_ptr, output_character);
+    input_ptr += ch_width;
+    idx += ch_width - 1;
+    *output_ptr++ = output_character;
+  }
+  result[count] = 0;  // last entry set to 0
+  return result;
+}
 
 }  // namespace
 
@@ -838,10 +870,11 @@ class regex_compiler {
 };
 
 // Convert pattern into program
-reprog reprog::create_from(const char32_t* pattern, regex_flags const flags)
+reprog reprog::create_from(std::string_view pattern, regex_flags const flags)
 {
   reprog rtn;
-  regex_compiler compiler(pattern, flags, rtn);
+  auto pattern32 = string_to_char32_vector(pattern);
+  regex_compiler compiler(pattern32.data(), flags, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
