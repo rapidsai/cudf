@@ -362,6 +362,7 @@ add_library(
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
+  src/lists/apply_boolean_mask.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
   src/lists/combine/concatenate_rows.cu
@@ -426,7 +427,8 @@ add_library(
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
-  src/search/search.cu
+  src/search/contains.cu
+  src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
@@ -494,6 +496,7 @@ add_library(
   src/strings/utilities.cu
   src/strings/wrap.cu
   src/structs/copying/concatenate.cu
+  src/structs/search/contains.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp

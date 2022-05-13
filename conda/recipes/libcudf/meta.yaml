@@ -240,6 +240,7 @@ outputs:
         - test -f $PREFIX/include/cudf/structs/structs_column_view.hpp
         - test -f $PREFIX/include/cudf/structs/struct_view.hpp
         - test -f $PREFIX/include/cudf/structs/detail/concatenate.hpp
+        - test -f $PREFIX/include/cudf/structs/detail/contains.hpp
         - test -f $PREFIX/include/cudf/table/table.hpp
         - test -f $PREFIX/include/cudf/table/table_view.hpp
         - test -f $PREFIX/include/cudf/tdigest/tdigest_column_view.cuh

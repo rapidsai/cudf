@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,134 +32,123 @@ namespace cudf {
  */
 
 /**
- * @brief Find smallest indices in a sorted table where values should be
- *  inserted to maintain order
+ * @brief Find smallest indices in a sorted table where values should be inserted to maintain order.
  *
- * For each row v in @p values, find the first index in @p t where
- *  inserting the row will maintain the sort order of @p t
+ * For each row in `needles`, find the first index in `haystack` where inserting the row still
+ * maintains its sort order.
  *
  * @code{.pseudo}
  * Example:
  *
  *  Single column:
- *      idx      0   1   2   3   4
- *   column = { 10, 20, 20, 30, 50 }
- *   values = { 20 }
- *   result = {  1 }
+ *      idx        0   1   2   3   4
+ *   haystack = { 10, 20, 20, 30, 50 }
+ *   needles  = { 20 }
+ *   result   = {  1 }
  *
  *  Multi Column:
- *      idx        0    1    2    3    4
- *   t      = {{  10,  20,  20,  20,  20 },
- *             { 5.0,  .5,  .5,  .7,  .7 },
- *             {  90,  77,  78,  61,  61 }}
- *   values = {{ 20 },
- *             { .7 },
- *             { 61 }}
- *   result =  {  3 }
+ *      idx          0    1    2    3    4
+ *   haystack = {{  10,  20,  20,  20,  20 },
+ *               { 5.0,  .5,  .5,  .7,  .7 },
+ *               {  90,  77,  78,  61,  61 }}
+ *   needles  = {{ 20 },
+ *               { .7 },
+ *               { 61 }}
+ *   result   = {   3 }
  * @endcode
  *
- * @param t               Table to search
- * @param values          Find insert locations for these values
- * @param column_order    Vector of column sort order
- * @param null_precedence Vector of null_precedence enums values
- * @param mr              Device memory resource used to allocate the returned column's device
- * memory
+ * @param haystack The table containing search space.
+ * @param needles Values for which to find the insert locations in the search space.
+ * @param column_order Vector of column sort order.
+ * @param null_precedence Vector of null_precedence enums needles.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> lower_bound(
-  table_view const& t,
-  table_view const& values,
+  table_view const& haystack,
+  table_view const& needles,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Find largest indices in a sorted table where values should be
- *  inserted to maintain order
+ * @brief Find largest indices in a sorted table where values should be inserted to maintain order.
  *
- * For each row v in @p values, find the last index in @p t where
- *  inserting the row will maintain the sort order of @p t
+ * For each row in `needles`, find the last index in `haystack` where inserting the row still
+ * maintains its sort order.
  *
  * @code{.pseudo}
  * Example:
  *
  *  Single Column:
- *      idx      0   1   2   3   4
- *   column = { 10, 20, 20, 30, 50 }
- *   values = { 20 }
- *   result = {  3 }
+ *      idx        0   1   2   3   4
+ *   haystack = { 10, 20, 20, 30, 50 }
+ *   needles  = { 20 }
+ *   result   = {  3 }
  *
  *  Multi Column:
- *      idx        0    1    2    3    4
- *   t      = {{  10,  20,  20,  20,  20 },
- *             { 5.0,  .5,  .5,  .7,  .7 },
- *             {  90,  77,  78,  61,  61 }}
- *   values = {{ 20 },
- *             { .7 },
- *             { 61 }}
- *   result =  {  5 }
+ *      idx          0    1    2    3    4
+ *   haystack = {{  10,  20,  20,  20,  20 },
+ *               { 5.0,  .5,  .5,  .7,  .7 },
+ *               {  90,  77,  78,  61,  61 }}
+ *   needles  = {{ 20 },
+ *               { .7 },
+ *               { 61 }}
+ *   result =     { 5 }
  * @endcode
  *
- * @param search_table    Table to search
- * @param values          Find insert locations for these values
- * @param column_order    Vector of column sort order
- * @param null_precedence Vector of null_precedence enums values
- * @param mr              Device memory resource used to allocate the returned column's device
- * memory
+ * @param haystack The table containing search space.
+ * @param needles Values for which to find the insert locations in the search space.
+ * @param column_order Vector of column sort order.
+ * @param null_precedence Vector of null_precedence enums needles.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> upper_bound(
-  table_view const& search_table,
-  table_view const& values,
+  table_view const& haystack,
+  table_view const& needles,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Find if the `value` is present in the `col`
+ * @brief Check if the given `needle` value exists in the `haystack` column.
  *
- * @throws cudf::logic_error
- * If `col.type() != values.type()`
+ * @throws cudf::logic_error If `haystack.type() != needle.type()`.
  *
  * @code{.pseudo}
  *  Single Column:
- *      idx      0   1   2   3   4
- *      col = { 10, 20, 20, 30, 50 }
- *  Scalar:
- *   value = { 20 }
- *   result = true
+ *   idx           0   1   2   3   4
+ *   haystack = { 10, 20, 20, 30, 50 }
+ *   needle   = { 20 }
+ *   result   = true
  * @endcode
  *
- * @param col      A column object
- * @param value    A scalar value to search for in `col`
- *
- * @return bool    If `value` is found in `column` true, else false.
+ * @param haystack The column containing search space.
+ * @param needle A scalar value to check for existence in the search space.
+ * @return true if the given `needle` value exists in the `haystack` column.
  */
-bool contains(column_view const& col, scalar const& value);
+bool contains(column_view const& haystack, scalar const& needle);
 
 /**
- * @brief  Returns a new column of type bool identifying for each element of @p haystack column,
- *         if that element is contained in @p needles column.
+ * @brief Check if the given `needles` values exists in the `haystack` column.
  *
- * The new column will have the same dimension and null status as the @p haystack column.  That is,
- * any element that is invalid in the @p haystack column will be invalid in the returned column.
+ * The new column will have type BOOL and have the same size and null mask as the input `needles`
+ * column. That is, any null row in the `needles` column will result in a nul row in the output
+ * column.
  *
- * @throws cudf::logic_error
- * If `haystack.type() != needles.type()`
+ * @throws cudf::logic_error If `haystack.type() != needles.type()`
  *
  * @code{.pseudo}
  *   haystack = { 10, 20, 30, 40, 50 }
  *   needles  = { 20, 40, 60, 80 }
- *
- *   result = { false, true, false, true, false }
+ *   result   = { true, true, false, false }
  * @endcode
  *
- * @param haystack  A column object
- * @param needles   A column of values to search for in `col`
- * @param mr        Device memory resource used to allocate the returned column's device memory
- *
- * @return A column of bool elements containing true if the corresponding entry in haystack
- * appears in needles and false if it does not.
+ * @param haystack The column containing search space.
+ * @param needles A column of values to check for existence in the search space.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return A BOOL column indicating if each element in `needles` exists in the search space.
  */
 std::unique_ptr<column> contains(
   column_view const& haystack,

@@ -4,14 +4,12 @@ import decimal
 
 import numpy as np
 import pyarrow as pa
-from pandas._libs.missing import NAType as pd_NAType
 
 import cudf
-from cudf.core.column.column import ColumnBase
+from cudf.api.types import is_scalar
 from cudf.core.dtypes import ListDtype, StructDtype
-from cudf.core.index import BaseIndex
+from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand
-from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
@@ -273,19 +271,19 @@ class Scalar(BinaryOperand):
         return cudf.dtype(out_dtype)
 
     def _binaryop(self, other, op: str):
-        if isinstance(other, (ColumnBase, Series, BaseIndex, np.ndarray)):
-            # dispatch to column implementation
-            return NotImplemented
-        other = to_cudf_compatible_scalar(other)
-        out_dtype = self._binop_result_dtype_or_error(other, op)
-        valid = self.is_valid and (
-            isinstance(other, np.generic) or other.is_valid
-        )
-        if not valid:
-            return Scalar(None, dtype=out_dtype)
+        if is_scalar(other):
+            other = to_cudf_compatible_scalar(other)
+            out_dtype = self._binop_result_dtype_or_error(other, op)
+            valid = self.is_valid and (
+                isinstance(other, np.generic) or other.is_valid
+            )
+            if not valid:
+                return Scalar(None, dtype=out_dtype)
+            else:
+                result = self._dispatch_scalar_binop(other, op)
+                return Scalar(result, dtype=out_dtype)
         else:
-            result = self._dispatch_scalar_binop(other, op)
-            return Scalar(result, dtype=out_dtype)
+            return NotImplemented
 
     def _dispatch_scalar_binop(self, other, op):
         if isinstance(other, Scalar):
@@ -323,13 +321,3 @@ class Scalar(BinaryOperand):
 
     def astype(self, dtype):
         return Scalar(self.value, dtype)
-
-
-class _NAType(pd_NAType):
-    # Pandas NAType enforces a single instance exists at a time
-    # instantiating this class will yield the existing instance
-    # of pandas._libs.missing.NAType, id(cudf.NA) == id(pd.NA).
-    pass
-
-
-NA = _NAType()
