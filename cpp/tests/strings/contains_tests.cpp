@@ -313,6 +313,7 @@ TEST_F(StringsContainsTests, Errors)
 
   EXPECT_THROW(cudf::strings::contains_re(strings_view, "(3?)+"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::contains_re(strings_view, "3?+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::count_re(strings_view, "{3}a"), cudf::logic_error);
 }
 
 TEST_F(StringsContainsTests, CountTest)
