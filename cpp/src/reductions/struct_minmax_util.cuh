@@ -29,7 +29,7 @@ namespace detail {
 
 using row_comparator = cudf::experimental::row::lexicographic::self_comparator;
 using device_row_comparator =
-  cudf::experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC>;
+  cudf::experimental::row::lexicographic::less_comparator<nullate::DYNAMIC>;
 using column_device_view_ptr =
   std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>;
 

@@ -288,7 +288,7 @@ class device_row_comparator {
  */
 template <typename Comparator, weak_ordering... values>
 struct weak_ordering_comparator_impl {
-  __device__ bool operator()(size_type const& lhs, size_type const& rhs)
+  __device__ bool operator()(size_type const& lhs, size_type const& rhs) const
   {
     weak_ordering const result = comparator(lhs, rhs);
     return ((result == values) || ...);
