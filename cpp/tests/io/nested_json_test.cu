@@ -20,6 +20,9 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <stack>
+#include <string>
+
 namespace nested_json = cudf::io::json::gpu;
 
 // Base test fixture for tests
@@ -181,5 +184,174 @@ TEST_F(JsonTest, TokenStream)
     ASSERT_EQ(golden_token_stream[i].first, token_indices_gpu[i]);
     // Ensure the token category is correct
     ASSERT_EQ(golden_token_stream[i].second, tokens_gpu[i]);
+  }
+}
+
+std::string get_node_string(std::size_t const node_id,
+                            nested_json::tree_meta_t const& tree_rep,
+                            std::string const& json_input)
+{
+  auto const& node_categories  = std::get<0>(tree_rep);
+  auto const& parent_node_ids  = std::get<1>(tree_rep);
+  auto const& node_levels      = std::get<2>(tree_rep);
+  auto const& node_range_begin = std::get<3>(tree_rep);
+  auto const& node_range_end   = std::get<4>(tree_rep);
+
+  auto node_to_str = [] __host__ __device__(nested_json::PdaTokenT const token) {
+    switch (token) {
+      case nested_json::NC_STRUCT: return "STRUCT";
+      case nested_json::NC_LIST: return "LIST";
+      case nested_json::NC_FN: return "FN";
+      case nested_json::NC_STR: return "STR";
+      case nested_json::NC_VAL: return "VAL";
+      case nested_json::NC_ERR: return "ERR";
+      default: return "N/A";
+    };
+  };
+
+  return "<" + std::to_string(node_id) + ":" + node_to_str(node_categories[node_id]) + ":[" +
+         std::to_string(node_range_begin[node_id]) + ", " +
+         std::to_string(node_range_end[node_id]) + ") '" +
+         json_input.substr(node_range_begin[node_id],
+                           node_range_end[node_id] - node_range_begin[node_id]) +
+         "'>";
+}
+
+void print_tree_representation(std::string const& json_input,
+                               nested_json::tree_meta_t const& tree_rep)
+{
+  for (std::size_t i = 0; i < std::get<0>(tree_rep).size(); i++) {
+    auto const& parent_node_ids = std::get<1>(tree_rep);
+    std::size_t parent_id       = parent_node_ids[i];
+    std::stack<std::size_t> path;
+    path.push(i);
+    while (parent_id != nested_json::parent_node_sentinel) {
+      path.push(parent_id);
+      parent_id = parent_node_ids[parent_id];
+    }
+
+    while (path.size()) {
+      auto const node_id = path.top();
+      std::cout << get_node_string(node_id, tree_rep, json_input)
+                << (path.size() > 1 ? " -> " : "");
+      path.pop();
+    }
+    std::cout << "\n";
+  }
+}
+
+TEST_F(JsonTest, TreeRepresentation)
+{
+  using nested_json::PdaTokenT;
+  using nested_json::SymbolOffsetT;
+  using nested_json::SymbolT;
+
+  // Prepare cuda stream for data transfers & kernels
+  cudaStream_t stream = nullptr;
+  cudaStreamCreate(&stream);
+  rmm::cuda_stream_view stream_view(stream);
+
+  // Test input
+  std::string input = R"(  [{)"
+                      R"("category": "reference",)"
+                      R"("index:": [4,12,42],)"
+                      R"("author": "Nigel Rees",)"
+                      R"("title": "[Sayings of the Century]",)"
+                      R"("price": 8.95)"
+                      R"(},  )"
+                      R"({)"
+                      R"("category": "reference",)"
+                      R"("index": [4,{},null,{"a":[{ }, {}] } ],)"
+                      R"("author": "Nigel Rees",)"
+                      R"("title": "{}[], <=semantic-symbols-string",)"
+                      R"("price": 8.95)"
+                      R"(}] )";
+
+  // Get the JSON's tree representation
+  auto tree_rep = nested_json::get_tree_representation(
+    cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
+
+  auto const& node_categories  = std::get<0>(tree_rep);
+  auto const& parent_node_ids  = std::get<1>(tree_rep);
+  auto const& node_levels      = std::get<2>(tree_rep);
+  auto const& node_range_begin = std::get<3>(tree_rep);
+  auto const& node_range_end   = std::get<4>(tree_rep);
+
+  // Golden sample of node categories
+  std::vector<nested_json::node_t> golden_node_categories = {
+    nested_json::NC_LIST, nested_json::NC_STRUCT, nested_json::NC_FN,     nested_json::NC_STR,
+    nested_json::NC_FN,   nested_json::NC_LIST,   nested_json::NC_VAL,    nested_json::NC_VAL,
+    nested_json::NC_VAL,  nested_json::NC_FN,     nested_json::NC_STR,    nested_json::NC_FN,
+    nested_json::NC_STR,  nested_json::NC_FN,     nested_json::NC_VAL,    nested_json::NC_STRUCT,
+    nested_json::NC_FN,   nested_json::NC_STR,    nested_json::NC_FN,     nested_json::NC_LIST,
+    nested_json::NC_VAL,  nested_json::NC_STRUCT, nested_json::NC_VAL,    nested_json::NC_STRUCT,
+    nested_json::NC_FN,   nested_json::NC_LIST,   nested_json::NC_STRUCT, nested_json::NC_STRUCT,
+    nested_json::NC_FN,   nested_json::NC_STR,    nested_json::NC_FN,     nested_json::NC_STR,
+    nested_json::NC_FN,   nested_json::NC_VAL};
+
+  // Golden sample of node ids
+  std::vector<nested_json::NodeIndexT> golden_parent_node_ids = {nested_json::parent_node_sentinel,
+                                                                 0,
+                                                                 1,
+                                                                 2,
+                                                                 1,
+                                                                 4,
+                                                                 5,
+                                                                 5,
+                                                                 5,
+                                                                 1,
+                                                                 9,
+                                                                 1,
+                                                                 11,
+                                                                 1,
+                                                                 13,
+                                                                 0,
+                                                                 15,
+                                                                 16,
+                                                                 15,
+                                                                 18,
+                                                                 19,
+                                                                 19,
+                                                                 19,
+                                                                 19,
+                                                                 23,
+                                                                 24,
+                                                                 25,
+                                                                 25,
+                                                                 15,
+                                                                 28,
+                                                                 15,
+                                                                 30,
+                                                                 15,
+                                                                 32};
+
+  // Golden sample of node levels
+  std::vector<nested_json::TreeDepthT> golden_node_levels = {0, 1, 2, 3, 2, 3, 4, 4, 4, 2, 3, 2,
+                                                             3, 2, 3, 1, 2, 3, 2, 3, 4, 4, 4, 4,
+                                                             5, 6, 7, 7, 2, 3, 2, 3, 2, 3};
+
+  // Golden sample of the character-ranges from the original input that each node demarcates
+  std::vector<std::size_t> golden_node_range_begin = {
+    2,   3,   5,   17,  29,  38,  39,  41,  44,  49,  59,  72,  81,  108, 116, 124, 126,
+    138, 150, 158, 159, 161, 164, 169, 171, 174, 175, 180, 189, 199, 212, 221, 255, 263};
+
+  // Golden sample of the character-ranges from the original input that each node demarcates
+  std::vector<std::size_t> golden_node_range_end = {
+    3,   4,   13,  26,  35,  39,  40,  43,  46,  55,  69,  77,  105, 113, 120, 125, 134,
+    147, 155, 159, 160, 162, 168, 170, 172, 175, 176, 181, 195, 209, 217, 252, 260, 267};
+
+  // Check results against golden samples
+  ASSERT_EQ(golden_node_categories.size(), node_categories.size());
+  ASSERT_EQ(golden_parent_node_ids.size(), parent_node_ids.size());
+  ASSERT_EQ(golden_node_levels.size(), node_levels.size());
+  ASSERT_EQ(golden_node_range_begin.size(), node_range_begin.size());
+  ASSERT_EQ(golden_node_range_end.size(), node_range_end.size());
+
+  for (std::size_t i = 0; i < golden_node_categories.size(); i++) {
+    ASSERT_EQ(golden_node_categories[i], node_categories[i]);
+    ASSERT_EQ(golden_parent_node_ids[i], parent_node_ids[i]);
+    ASSERT_EQ(golden_node_levels[i], node_levels[i]);
+    ASSERT_EQ(golden_node_range_begin[i], node_range_begin[i]);
+    ASSERT_EQ(golden_node_range_end[i], node_range_end[i]);
   }
 }
