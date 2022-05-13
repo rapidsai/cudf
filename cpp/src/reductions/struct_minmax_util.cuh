@@ -61,13 +61,11 @@ struct row_arg_minmax_fn {
     if (lhs_idx < 0 || lhs_idx >= num_rows) { return rhs_idx; }
     if (rhs_idx < 0 || rhs_idx >= num_rows) { return lhs_idx; }
 
-    auto const lhs_is_null = input.is_null(lhs_idx);
-    auto const rhs_is_null = input.is_null(rhs_idx);
-
     // Nulls at top level are excluded from the operation.
     // Thus, if the is one null, return index of the non-null element.
     // If both sides are nulls, just return any index.
-    if (lhs_is_null || rhs_is_null) { return lhs_is_null ? rhs_idx : lhs_idx; }
+    if (input.is_null(lhs_idx)) { return rhs_idx; }
+    if (input.is_null(rhs_idx)) { return lhs_idx; }
 
     // Return `lhs_idx` iff:
     //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
