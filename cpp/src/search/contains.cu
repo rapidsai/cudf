@@ -320,8 +320,6 @@ std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
 }
 }  // namespace
 
-namespace detail {
-
 bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream)
 {
   if (haystack.is_empty()) { return false; }
