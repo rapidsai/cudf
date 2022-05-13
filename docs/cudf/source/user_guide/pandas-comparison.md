@@ -43,7 +43,7 @@ meaning they can contain missing values (represented by `cudf.NA`).
 dtype: int64
 ```
 
-Nulls are not coerced to `nan` in any situation;
+Nulls are not coerced to `NaN` in any situation;
 compare the behaviour of cuDF with Pandas below:
 
 ```{code} python
