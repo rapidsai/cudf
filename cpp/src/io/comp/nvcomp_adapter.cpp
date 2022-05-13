@@ -19,7 +19,14 @@
 #include <cudf/utilities/error.hpp>
 
 #include <nvcomp/snappy.h>
-#include <nvcomp/zstd.h>
+
+#define nvcomp_zstd_header <nvcomp/zstd.h>
+#if __has_include(nvcomp_zstd_header)
+#include nvcomp_zstd_header
+#define nvcomp_has_zstd 1
+#else
+#define nvcomp_has_zstd 0
+#endif
 
 namespace cudf::io::nvcomp {
 
@@ -29,8 +36,10 @@ auto batched_decompress_get_temp_size(compression_type type, Args&&... args)
   switch (type) {
     case compression_type::SNAPPY:
       return nvcompBatchedSnappyDecompressGetTempSize(std::forward<Args>(args)...);
+#if nvcomp_has_zstd
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressGetTempSize(std::forward<Args>(args)...);
+#endif
     default: CUDF_FAIL("Unsupported compression type");
   }
 };
@@ -41,8 +50,10 @@ auto batched_decompress_async(compression_type type, Args&&... args)
   switch (type) {
     case compression_type::SNAPPY:
       return nvcompBatchedSnappyDecompressAsync(std::forward<Args>(args)...);
+#if nvcomp_has_zstd
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressAsync(std::forward<Args>(args)...);
+#endif
     default: CUDF_FAIL("Unsupported compression type");
   }
 };
