@@ -4519,7 +4519,6 @@ class StringMethods(ColumnMethods):
         --------
         >>> import cudf
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
-        >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> str_series.str.ngrams(2, "_")
         0    this is my_favorite book
         dtype: object
