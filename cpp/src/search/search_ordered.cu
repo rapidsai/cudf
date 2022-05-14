@@ -77,8 +77,8 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   // We use lhs and rhs to control the direction of the comparison with
   // strongly-typed indices. The first pair of iterators are always the
   // haystack, and the second pair are the needles.
-  auto const lhs_it = cudf::experimental::row::make_lhs_index_counting_iterator(0);
-  auto const rhs_it = cudf::experimental::row::make_rhs_index_counting_iterator(0);
+  auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
+  auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
 
   if (find_first) {
     thrust::lower_bound(rmm::exec_policy(stream),

@@ -73,23 +73,101 @@ namespace row {
 enum class lhs_index_type : size_type {};
 enum class rhs_index_type : size_type {};
 
-struct make_lhs_index {
-  __device__ lhs_index_type operator()(size_type i) const { return static_cast<lhs_index_type>(i); }
+template <typename T>
+class strong_index_iterator {
+ public:
+  using iterator_category = std::random_access_iterator_tag;
+  using difference_type   = size_type;
+  using value_type        = T;
+  using reference         = value_type;
+  using pointer           = value_type*;
+
+  CUDF_HOST_DEVICE explicit constexpr strong_index_iterator(size_type begin) : v{begin} {};
+
+  CUDF_HOST_DEVICE constexpr inline value_type operator*() const { return static_cast<T>(v); }
+  CUDF_HOST_DEVICE constexpr inline value_type operator[](difference_type i) const
+  {
+    return static_cast<T>(v + i);
+  }
+
+  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T>& operator++()
+  {
+    v++;
+    return *this;
+  }
+  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T> operator++(int)
+  {
+    strong_index_iterator<T> tmp(*this);
+    ++(*this);
+    return tmp;
+  }
+  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T>& operator+=(difference_type i)
+  {
+    v += i;
+    return *this;
+  }
+  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T> operator+(difference_type i) const
+  {
+    return strong_index_iterator<T>(v + i);
+  }
+
+  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T>& operator--()
+  {
+    v--;
+    return *this;
+  }
+  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T> operator--(int)
+  {
+    strong_index_iterator<T> tmp(*this);
+    --(*this);
+    return tmp;
+  }
+  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T>& operator-=(difference_type i)
+  {
+    v -= i;
+    return *this;
+  }
+  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T> operator-(difference_type i) const
+  {
+    return strong_index_iterator<T>(v - i);
+  }
+  CUDF_HOST_DEVICE constexpr inline difference_type operator-(
+    strong_index_iterator<T> const& other) const
+  {
+    return v - other.v;
+  }
+
+  CUDF_HOST_DEVICE constexpr inline bool operator==(strong_index_iterator<T> const& other) const
+  {
+    return v == other.v;
+  }
+  CUDF_HOST_DEVICE constexpr inline bool operator!=(strong_index_iterator<T> const& other) const
+  {
+    return v != other.v;
+  }
+  CUDF_HOST_DEVICE constexpr inline bool operator<(strong_index_iterator<T> const& other) const
+  {
+    return v < other.v;
+  }
+  CUDF_HOST_DEVICE constexpr inline bool operator<=(strong_index_iterator<T> const& other) const
+  {
+    return v <= other.v;
+  }
+  CUDF_HOST_DEVICE constexpr inline bool operator>(strong_index_iterator<T> const& other) const
+  {
+    return v > other.v;
+  }
+  CUDF_HOST_DEVICE constexpr inline bool operator>=(strong_index_iterator<T> const& other) const
+  {
+    return v >= other.v;
+  }
+
+ private:
+  size_type v{0};
 };
 
-struct make_rhs_index {
-  __device__ rhs_index_type operator()(size_type i) const { return static_cast<rhs_index_type>(i); }
-};
-
-auto inline make_lhs_index_counting_iterator(size_type start)
-{
-  return cudf::detail::make_counting_transform_iterator(start, make_lhs_index{});
-};
-
-auto inline make_rhs_index_counting_iterator(size_type start)
-{
-  return cudf::detail::make_counting_transform_iterator(start, make_rhs_index{});
-};
+using lhs_iterator = strong_index_iterator<lhs_index_type>;
+using rhs_iterator = strong_index_iterator<rhs_index_type>;
 
 namespace lexicographic {
 
