@@ -6557,16 +6557,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             result = result / float(result._column.sum())
         # Pandas always returns MultiIndex even if only one column.
         if not isinstance(result.index, MultiIndex):
-            if isinstance(result.index, StringIndex):
-                temp_df = result.to_frame().reset_index()
-                temp_df = temp_df[temp_df._column_names[0]]
-                result.index = MultiIndex.from_frame(
-                    temp_df, names=[result.index.name]
-                )
-            else:
-                result.index = MultiIndex.from_frame(
-                    DataFrame(result.index.values), names=[result.index.name]
-                )
+            result.index = MultiIndex._from_data(result._index._data)
         return result
 
 
