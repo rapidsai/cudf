@@ -6555,7 +6555,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if sort:
             result = result.sort_values(ascending=ascending)
         if normalize:
-            result = result / float(result._column.sum())
+            result = result / result._column.sum()
         # Pandas always returns MultiIndex even if only one column.
         if not isinstance(result.index, MultiIndex):
             result.index = MultiIndex._from_data(result._index._data)
