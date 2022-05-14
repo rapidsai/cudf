@@ -68,7 +68,7 @@ from cudf.core.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import BaseIndex, Index, RangeIndex, StringIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
