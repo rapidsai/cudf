@@ -698,16 +698,16 @@ table_with_metadata read_csv(cudf::io::datasource* source,
     column_flags.resize(num_actual_columns, column_parse::enabled | column_parse::inferred);
 
     std::vector<size_t> col_loop_order(column_names.size());
-    auto unnamed_it =
-      std::copy_if(thrust::make_counting_iterator<size_t>(0),
-                   thrust::make_counting_iterator<size_t>(column_names.size()),
-                   col_loop_order.begin(),
-                   [&](auto col_idx) -> bool { return not column_names[col_idx].empty(); });
+    auto unnamed_it = std::copy_if(
+      thrust::make_counting_iterator<size_t>(0),
+      thrust::make_counting_iterator<size_t>(column_names.size()),
+      col_loop_order.begin(),
+      [&column_names](auto col_idx) -> bool { return not column_names[col_idx].empty(); });
     // Rename empty column names to "Unnamed: col_index"
     std::copy_if(thrust::make_counting_iterator<size_t>(0),
                  thrust::make_counting_iterator<size_t>(column_names.size()),
                  unnamed_it,
-                 [&](auto col_idx) -> bool {
+                 [&column_names](auto col_idx) -> bool {
                    auto is_empty = column_names[col_idx].empty();
                    if (is_empty)
                      column_names[col_idx] = string("Unnamed: ") + std::to_string(col_idx);
