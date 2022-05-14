@@ -79,8 +79,11 @@ class strong_index_iterator {
   using iterator_category = std::random_access_iterator_tag;
   using difference_type   = size_type;
   using value_type        = T;
-  using reference         = value_type;
-  using pointer           = value_type*;
+  // Dereferencing does not return a reference, but a copy of the value,
+  // because there is no underlying memory to reference safely. The internal
+  // iterator state can change or the iterator may be a temporary.
+  using reference = value_type;
+  using pointer   = value_type*;
 
   explicit constexpr strong_index_iterator(size_type begin) : v{begin} {};
 
