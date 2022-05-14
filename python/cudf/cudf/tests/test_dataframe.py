@@ -9319,7 +9319,7 @@ def test_dataframe_eval_errors(df_eval, expr):
 
 
 @pytest.mark.parametrize(
-    "data,subset",
+    "gdf,subset",
     [
         (
             cudf.DataFrame(
@@ -9339,53 +9339,44 @@ def test_dataframe_eval_errors(df_eval, expr):
         ),
     ],
 )
-@pytest.mark.parametrize("boolean", [True, False])
-def test_value_counts(data, subset, boolean):
-    gdf = data
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("normalize", [True, False])
+@pytest.mark.parametrize("dropna", [True, False])
+@pytest.mark.parametrize("use_subset", [True, False])
+def test_value_counts(
+    gdf,
+    subset,
+    sort,
+    ascending,
+    normalize,
+    dropna,
+    use_subset,
+):
     pdf = gdf.to_pandas()
 
-    got = gdf.value_counts()
-    expected = pdf.value_counts()
-    assert_eq(got, expected)
+    got = gdf.value_counts(
+        subset=subset if (use_subset) else None,
+        sort=sort,
+        ascending=ascending,
+        normalize=normalize,
+        dropna=dropna,
+    )
+    expected = pdf.value_counts(
+        subset=subset if (use_subset) else None,
+        sort=sort,
+        ascending=ascending,
+        normalize=normalize,
+        dropna=dropna,
+    )
 
-    got = gdf.value_counts(sort=boolean)
-    expected = pdf.value_counts(sort=boolean)
-    assert_eq(got, expected)
-
-    got = gdf.value_counts(ascending=boolean)
-    expected = pdf.value_counts(ascending=boolean)
-    assert_eq(got, expected)
-
-    got = gdf.value_counts(normalize=boolean)
-    expected = pdf.value_counts(normalize=boolean)
-    assert_eq(got, expected)
-
-    got = gdf.value_counts(dropna=boolean)
-    expected = pdf.value_counts(dropna=boolean)
-    # Convert the Pandas series to a cuDF one due to difference
-    # in the handling of NaNs between the two (<NA> in cuDF and
-    # NaN in Pandas) when dropna=False.
-    assert_eq(got, cudf.from_pandas(expected))
-
-    got = gdf.value_counts(subset=subset)
-    expected = pdf.value_counts(subset=subset)
-    assert_eq(got, expected)
+    if not dropna:
+        # Convert the Pandas series to a cuDF one due to difference
+        # in the handling of NaNs between the two (<NA> in cuDF and
+        # NaN in Pandas) when dropna=False.
+        assert_eq(got, cudf.from_pandas(expected))
+    else:
+        assert_eq(got, expected)
 
     with pytest.raises(KeyError):
         gdf.value_counts(subset=["not_a_column_name"])
-
-    got = gdf.value_counts(subset=subset, sort=boolean)
-    expected = pdf.value_counts(subset=subset, sort=boolean)
-    assert_eq(got, expected)
-
-    got = gdf.value_counts(subset=subset, ascending=boolean)
-    expected = pdf.value_counts(subset=subset, ascending=boolean)
-    assert_eq(got, expected)
-
-    got = gdf.value_counts(subset=subset, normalize=boolean)
-    expected = pdf.value_counts(subset=subset, normalize=boolean)
-    assert_eq(got, expected)
-
-    got = gdf.value_counts(subset=subset, dropna=boolean)
-    expected = pdf.value_counts(subset=subset, dropna=boolean)
-    assert_eq(got, expected)
