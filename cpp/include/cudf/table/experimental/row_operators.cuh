@@ -82,82 +82,81 @@ class strong_index_iterator {
   using reference         = value_type;
   using pointer           = value_type*;
 
-  CUDF_HOST_DEVICE explicit constexpr strong_index_iterator(size_type begin) : v{begin} {};
+  explicit constexpr strong_index_iterator(size_type begin) : v{begin} {};
 
-  CUDF_HOST_DEVICE constexpr inline value_type operator*() const { return static_cast<T>(v); }
-  CUDF_HOST_DEVICE constexpr inline value_type operator[](difference_type i) const
+  __device__ constexpr inline value_type operator*() const { return static_cast<T>(v); }
+  __device__ constexpr inline value_type operator[](difference_type i) const
   {
     return static_cast<T>(v + i);
   }
 
-  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T>& operator++()
+  __device__ constexpr inline strong_index_iterator<T>& operator++()
   {
     v++;
     return *this;
   }
-  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T> operator++(int)
+  __device__ constexpr inline strong_index_iterator<T> operator++(int)
   {
     strong_index_iterator<T> tmp(*this);
     ++(*this);
     return tmp;
   }
-  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T>& operator+=(difference_type i)
+  __device__ constexpr inline strong_index_iterator<T>& operator+=(difference_type i)
   {
     v += i;
     return *this;
   }
-  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T> operator+(difference_type i) const
+  __device__ constexpr inline strong_index_iterator<T> operator+(difference_type i) const
   {
     return strong_index_iterator<T>(v + i);
   }
 
-  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T>& operator--()
+  __device__ constexpr inline strong_index_iterator<T>& operator--()
   {
     v--;
     return *this;
   }
-  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T> operator--(int)
+  __device__ constexpr inline strong_index_iterator<T> operator--(int)
   {
     strong_index_iterator<T> tmp(*this);
     --(*this);
     return tmp;
   }
-  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T>& operator-=(difference_type i)
+  __device__ constexpr inline strong_index_iterator<T>& operator-=(difference_type i)
   {
     v -= i;
     return *this;
   }
-  CUDF_HOST_DEVICE constexpr inline strong_index_iterator<T> operator-(difference_type i) const
+  __device__ constexpr inline strong_index_iterator<T> operator-(difference_type i) const
   {
     return strong_index_iterator<T>(v - i);
   }
-  CUDF_HOST_DEVICE constexpr inline difference_type operator-(
-    strong_index_iterator<T> const& other) const
+  __device__ constexpr inline difference_type operator-(strong_index_iterator<T> const& other) const
   {
     return v - other.v;
   }
 
-  CUDF_HOST_DEVICE constexpr inline bool operator==(strong_index_iterator<T> const& other) const
+  __device__ constexpr inline bool operator==(strong_index_iterator<T> const& other) const
   {
     return v == other.v;
   }
-  CUDF_HOST_DEVICE constexpr inline bool operator!=(strong_index_iterator<T> const& other) const
+  __device__ constexpr inline bool operator!=(strong_index_iterator<T> const& other) const
   {
     return v != other.v;
   }
-  CUDF_HOST_DEVICE constexpr inline bool operator<(strong_index_iterator<T> const& other) const
+  __device__ constexpr inline bool operator<(strong_index_iterator<T> const& other) const
   {
     return v < other.v;
   }
-  CUDF_HOST_DEVICE constexpr inline bool operator<=(strong_index_iterator<T> const& other) const
+  __device__ constexpr inline bool operator<=(strong_index_iterator<T> const& other) const
   {
     return v <= other.v;
   }
-  CUDF_HOST_DEVICE constexpr inline bool operator>(strong_index_iterator<T> const& other) const
+  __device__ constexpr inline bool operator>(strong_index_iterator<T> const& other) const
   {
     return v > other.v;
   }
-  CUDF_HOST_DEVICE constexpr inline bool operator>=(strong_index_iterator<T> const& other) const
+  __device__ constexpr inline bool operator>=(strong_index_iterator<T> const& other) const
   {
     return v >= other.v;
   }
