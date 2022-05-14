@@ -126,7 +126,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
     mask_size_bits -
     inplace_bitmask_binop(op,
                           device_span<bitmask_type>(static_cast<bitmask_type*>(dest_mask.data()),
-                                                    num_bitmask_words(mask_size_bits)),
+                          num_bitmask_words(mask_size_bits)),
                           masks,
                           masks_begin_bits,
                           mask_size_bits,
@@ -145,7 +145,6 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
  * @param[in] masks_begin_bits The bit offsets from which each mask is to be merged
  * @param[in] mask_size_bits The number of bits to be ANDed in each mask
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate the returned device_buffer
  * @return size_type Count of set bits
  */
 template <typename Binop>
