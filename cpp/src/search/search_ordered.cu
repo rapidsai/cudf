@@ -67,33 +67,29 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   auto const& matched_haystack = matched.second.front();
   auto const& matched_needles  = matched.second.back();
 
-  auto const& lhs       = find_first ? matched_haystack : matched_needles;
-  auto const& rhs       = find_first ? matched_needles : matched_haystack;
   auto const comparator = cudf::experimental::row::lexicographic::two_table_comparator(
-    lhs, rhs, column_order, null_precedence, stream);
-  auto const has_null_elements = has_nested_nulls(lhs) or has_nested_nulls(rhs);
-  auto const d_comparator      = comparator.device_comparator(nullate::DYNAMIC{has_null_elements});
+    matched_haystack, matched_needles, column_order, null_precedence, stream);
+  auto const has_null_elements =
+    has_nested_nulls(matched_haystack) or has_nested_nulls(matched_needles);
+  auto const d_comparator = comparator.device_comparator(nullate::DYNAMIC{has_null_elements});
 
-  // We use lhs and rhs to control the direction of the comparison with
-  // strongly-typed indices. The first pair of iterators are always the
-  // haystack, and the second pair are the needles.
-  auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
-  auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
+  auto const haystack_it = cudf::experimental::row::lhs_iterator(0);
+  auto const needles_it  = cudf::experimental::row::rhs_iterator(0);
 
   if (find_first) {
     thrust::lower_bound(rmm::exec_policy(stream),
-                        lhs_it,
-                        lhs_it + haystack.num_rows(),
-                        rhs_it,
-                        rhs_it + needles.num_rows(),
+                        haystack_it,
+                        haystack_it + haystack.num_rows(),
+                        needles_it,
+                        needles_it + needles.num_rows(),
                         out_it,
                         d_comparator);
   } else {
     thrust::upper_bound(rmm::exec_policy(stream),
-                        rhs_it,
-                        rhs_it + haystack.num_rows(),
-                        lhs_it,
-                        lhs_it + needles.num_rows(),
+                        haystack_it,
+                        haystack_it + haystack.num_rows(),
+                        needles_it,
+                        needles_it + needles.num_rows(),
                         out_it,
                         d_comparator);
   }
