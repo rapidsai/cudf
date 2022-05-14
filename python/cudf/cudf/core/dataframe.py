@@ -6540,9 +6540,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             diff = set(subset) - set(self._data)
             if len(diff) != 0:
                 raise KeyError(f"columns {diff} do not exist")
-        columns = subset
-        if subset is None:
-            columns = list(self._data.names)
+        columns = list(self._data.names) if subset is None else subset
         result = (
             self.groupby(
                 by=columns,
