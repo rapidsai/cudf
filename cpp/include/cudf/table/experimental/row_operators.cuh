@@ -398,7 +398,7 @@ struct weak_ordering_comparator_impl {
   template <typename... Ts>
   __device__ constexpr bool operator()(Ts const... args) const noexcept
   {
-    weak_ordering const result = comparator(std::forward<Ts>(args)...);
+    weak_ordering const result = comparator(args...);
     return ((result == values) || ...);
   }
   Comparator comparator;
