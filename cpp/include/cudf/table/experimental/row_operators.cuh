@@ -589,8 +589,8 @@ class two_table_device_row_comparator_adapter {
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table compares less than row in the `rhs` table
    */
-  __device__ weak_ordering operator()(lhs_index_type const lhs_index,
-                                      rhs_index_type const rhs_index) const noexcept
+  __device__ constexpr weak_ordering operator()(lhs_index_type const lhs_index,
+                                                rhs_index_type const rhs_index) const noexcept
   {
     return comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
   }
@@ -603,8 +603,8 @@ class two_table_device_row_comparator_adapter {
    * @param lhs_index The index of the row in the `lhs` table to examine
    * @return `true` if row from the `rhs` table compares less than row in the `lhs` table
    */
-  __device__ weak_ordering operator()(rhs_index_type const rhs_index,
-                                      lhs_index_type const lhs_index) const noexcept
+  __device__ constexpr weak_ordering operator()(rhs_index_type const rhs_index,
+                                                lhs_index_type const lhs_index) const noexcept
   {
     auto const left_right_ordering =
       comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
