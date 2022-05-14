@@ -6525,9 +6525,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-        >>> df = pd.DataFrame({'num_legs': [2, 4, 4, 6],
-                            'num_wings': [2, 0, 0, 0]},
-                            index=['falcon', 'dog', 'cat', 'ant'])
+        >>> import cudf
+        >>> df = cudf.DataFrame({'num_legs': [2, 4, 4, 6],
+        ...                    'num_wings': [2, 0, 0, 0]},
+        ...                    index=['falcon', 'dog', 'cat', 'ant'])
         >>> df.value_counts()
         num_legs  num_wings
         4         0            2
