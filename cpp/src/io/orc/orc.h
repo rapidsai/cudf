@@ -173,7 +173,7 @@ int constexpr encode_field_number(int field_number) noexcept
   return encode_field_number_base<T>(field_number);
 }
 
-// containters change the field number encoding
+// containers change the field number encoding
 template <typename T,
           std::enable_if_t<std::is_same_v<T, std::vector<typename T::value_type>>>* = nullptr>
 int constexpr encode_field_number(int field_number) noexcept
