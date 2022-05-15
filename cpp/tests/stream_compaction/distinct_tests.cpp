@@ -192,24 +192,24 @@ TEST_F(Distinct, BasicList)
 
 TEST_F(Distinct, BasicSlicedLists)
 {
-  using LCW                = cudf::test::lists_column_wrapper<uint64_t>;
-  using ICW                = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  using int32s_col         = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using lists_col          = cudf::test::lists_column_wrapper<int32_t>;
   auto constexpr dont_care = int32_t{0};
 
-  auto const idx = ICW{dont_care, dont_care, 1, 2, 1, 3, 4, 5, 5, 6, 4, 4, dont_care};
-  auto const col =
-    LCW{{0, 0}, {0, 0}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}, {0, 0}};
+  auto const idx = int32s_col{dont_care, dont_care, 1, 2, 1, 3, 4, 5, 5, 6, 4, 4, dont_care};
+  auto const col = lists_col{
+    {0, 0}, {0, 0}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}, {5, 5}};
   auto const input_original = cudf::table_view({idx, col});
   auto const input          = cudf::slice(input_original, {2, 12})[0];
 
-  auto const exp_idx = ICW{1, 2, 3, 4, 5, 6};
-  auto const exp_val = LCW{{1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
-  auto const expect  = cudf::table_view({exp_idx, exp_val});
+  auto const exp_idx  = int32s_col{1, 2, 3, 4, 5, 6};
+  auto const exp_val  = lists_col{{1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
+  auto const expected = cudf::table_view({exp_idx, exp_val});
 
   auto const result        = cudf::distinct(input, {1});
   auto const sorted_result = cudf::sort_by_key(*result, result->select({0}));
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expect, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *sorted_result);
 }
 
 TEST_F(Distinct, NullableList)
@@ -323,7 +323,7 @@ TEST_F(Distinct, SlicedListsOfStructs)
   using structs_col = cudf::test::structs_column_wrapper;
   using cudf::test::iterators::nulls_at;
 
-  auto const struct_col = [] {
+  auto const structs = [] {
     auto child1 =
       int32s_col{{-1, -1, 0, 2, 2, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, 1, 2}, nulls_at({5, 16, 17})};
     auto child2 = strings_col{
@@ -333,29 +333,28 @@ TEST_F(Distinct, SlicedListsOfStructs)
   }();
 
   auto const offsets = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
-  auto const list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto const lists_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   auto const nullmask_buf =
-    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
-  auto const lists_column =
-    cudf::column_view(cudf::data_type(cudf::type_id::LIST),
-                      17,
-                      nullptr,
-                      static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
-                      cudf::UNKNOWN_NULL_COUNT,
-                      0,
-                      {offsets, struct_col});
+    cudf::test::detail::make_null_mask(lists_nullmask.begin(), lists_nullmask.end());
+  auto const lists = cudf::column_view(cudf::data_type(cudf::type_id::LIST),
+                                       17,
+                                       nullptr,
+                                       static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
+                                       cudf::UNKNOWN_NULL_COUNT,
+                                       0,
+                                       {offsets, structs});
 
   auto const idx            = int32s_col{1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10};
-  auto const input_original = cudf::table_view({idx, lists_column});
+  auto const input_original = cudf::table_view({idx, lists});
   auto const input          = cudf::slice(input_original, {8, 15})[0];
 
   auto const result        = cudf::distinct(input, {1});
   auto const sorted_result = cudf::sort_by_key(*result, result->select({0}));
 
-  auto const expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 9, 10, 11, 13};
-  auto const expect_table = cudf::gather(input_original, expect_map);
+  auto const exp_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 9, 10, 11, 13};
+  auto const expected_table = cudf::gather(input_original, exp_map);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expect_table, *sorted_result);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expected_table, *sorted_result);
 }
 
 TEST_F(Distinct, StructOfStruct)
@@ -414,6 +413,30 @@ TEST_F(Distinct, StructOfStruct)
   auto sliced_result        = cudf::distinct(sliced_input, {1});
   auto sorted_sliced_result = cudf::sort_by_key(*sliced_result, sliced_result->select({0}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sliced_expect->get_column(1), sorted_sliced_result->get_column(1));
+}
+
+TEST_F(Distinct, SlicedStructsOfLists)
+{
+  using lists_col   = cudf::test::lists_column_wrapper<int32_t>;
+  using structs_col = cudf::test::structs_column_wrapper;
+
+  auto const structs = [] {
+    auto child = lists_col{
+      {0, 0}, {0, 0}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}, {5, 5}};
+    return structs_col{{child}};
+  }();
+
+  auto const input_original = cudf::table_view({structs});
+  auto const input          = cudf::slice(input_original, {2, 12})[0];
+
+  auto const expected_structs = [] {
+    auto child = lists_col{{1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
+    return structs_col{{child}};
+  }();
+  auto const expected = cudf::table_view({expected_structs});
+
+  auto const result = cudf::distinct(input, {0});
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
 }
 
 TEST_F(Distinct, ListOfEmptyStruct)
