@@ -111,6 +111,35 @@ TEST_F(Distinct, NonNullTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, sorted_result->view());
 }
 
+TEST_F(Distinct, SlicedNonNullTable)
+{
+  using int32s_col         = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using floats_col         = cudf::test::fixed_width_column_wrapper<float>;
+  auto constexpr dont_care = int32_t{0};
+
+  auto const col1     = int32s_col{dont_care, dont_care, 6, 6, 3, 5, 8, 5, dont_care};
+  auto const col2     = floats_col{dont_care, dont_care, 6, 6, 3, 4, 9, 4, dont_care};
+  auto const col1_key = int32s_col{dont_care, dont_care, 20, 20, 20, 19, 21, 9, dont_care};
+  auto const col2_key = int32s_col{dont_care, dont_care, 19, 19, 20, 20, 9, 21, dont_care};
+
+  auto const input_original = cudf::table_view{{col1, col2, col1_key, col2_key}};
+  auto const input          = cudf::slice(input_original, {2, 8})[0];
+  auto const keys           = std::vector<cudf::size_type>{2, 3};
+
+  // The expected table would be sorted in ascending order with respect to keys.
+  auto const exp_col1     = int32s_col{{5, 5, 6, 3, 8}};
+  auto const exp_col2     = floats_col{{4, 4, 6, 3, 9}};
+  auto const exp_col1_key = int32s_col{{9, 19, 20, 20, 21}};
+  auto const exp_col2_key = int32s_col{{21, 20, 19, 20, 9}};
+  auto const expected     = cudf::table_view{{exp_col1, exp_col2, exp_col1_key, exp_col2_key}};
+
+  auto const result        = cudf::distinct(input, keys);
+  auto const key_view      = result->select(keys.begin(), keys.end());
+  auto const sorted_result = cudf::sort_by_key(result->view(), key_view);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, sorted_result->view());
+}
+
 TEST_F(Distinct, WithNull)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 4, 1, 8, 1}, {1, 0, 1, 1, 1, 1}};
