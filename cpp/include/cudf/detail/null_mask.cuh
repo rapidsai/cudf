@@ -126,11 +126,11 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
     mask_size_bits -
     inplace_bitmask_binop(op,
                           device_span<bitmask_type>(static_cast<bitmask_type*>(dest_mask.data()),
-                          num_bitmask_words(mask_size_bits)),
-                          masks,
-                          masks_begin_bits,
-                          mask_size_bits,
-                          stream);
+                                                    num_bitmask_words(mask_size_bits)),
+                                                    masks,
+                                                    masks_begin_bits,
+                                                    mask_size_bits,
+                                                    stream);
 
   return std::pair(std::move(dest_mask), null_count);
 }

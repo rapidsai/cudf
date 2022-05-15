@@ -275,8 +275,7 @@ cudf::size_type inplace_bitmask_and(
   host_span<bitmask_type const*> masks,
   host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream);
 
 }  // namespace detail
 
