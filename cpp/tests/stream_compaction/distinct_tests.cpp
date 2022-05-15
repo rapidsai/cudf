@@ -189,6 +189,28 @@ TEST_F(Distinct, BasicList)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expect, *sorted_result);
 }
 
+TEST_F(Distinct, BasicSlicedLists)
+{
+  using LCW                = cudf::test::lists_column_wrapper<uint64_t>;
+  using ICW                = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  auto constexpr dont_care = int32_t{0};
+
+  auto const idx = ICW{dont_care, dont_care, 1, 2, 1, 3, 4, 5, 5, 6, 4, 4, dont_care};
+  auto const col =
+    LCW{{0, 0}, {0, 0}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}, {0, 0}};
+  auto const input_original = cudf::table_view({idx, col});
+  auto const input          = cudf::slice(input_original, {2, 12})[0];
+
+  auto const exp_idx = ICW{1, 2, 3, 4, 5, 6};
+  auto const exp_val = LCW{{1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
+  auto const expect  = cudf::table_view({exp_idx, exp_val});
+
+  auto const result        = cudf::distinct(input, {1});
+  auto const sorted_result = cudf::sort_by_key(*result, result->select({0}));
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expect, *sorted_result);
+}
+
 TEST_F(Distinct, NullableList)
 {
   using LCW  = cudf::test::lists_column_wrapper<uint64_t>;
