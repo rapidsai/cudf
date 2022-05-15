@@ -270,12 +270,11 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return Count of set bits
  */
-cudf::size_type inplace_bitmask_and(
-  device_span<bitmask_type> dest_mask,
-  host_span<bitmask_type const*> masks,
-  host_span<size_type const> masks_begin_bits,
-  size_type mask_size_bits,
-  rmm::cuda_stream_view stream);
+cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
+                                    host_span<bitmask_type const*> masks,
+                                    host_span<size_type const> masks_begin_bits,
+                                    size_type mask_size_bits,
+                                    rmm::cuda_stream_view stream);
 
 }  // namespace detail
 

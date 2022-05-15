@@ -127,10 +127,10 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
     inplace_bitmask_binop(op,
                           device_span<bitmask_type>(static_cast<bitmask_type*>(dest_mask.data()),
                                                     num_bitmask_words(mask_size_bits)),
-                                                    masks,
-                                                    masks_begin_bits,
-                                                    mask_size_bits,
-                                                    stream);
+                          masks,
+                          masks_begin_bits,
+                          mask_size_bits,
+                          stream);
 
   return std::pair(std::move(dest_mask), null_count);
 }
@@ -148,13 +148,12 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
  * @return size_type Count of set bits
  */
 template <typename Binop>
-size_type inplace_bitmask_binop(
-  Binop op,
-  device_span<bitmask_type> dest_mask,
-  host_span<bitmask_type const*> masks,
-  host_span<size_type const> masks_begin_bits,
-  size_type mask_size_bits,
-  rmm::cuda_stream_view stream)
+size_type inplace_bitmask_binop(Binop op,
+                                device_span<bitmask_type> dest_mask,
+                                host_span<bitmask_type const*> masks,
+                                host_span<size_type const> masks_begin_bits,
+                                size_type mask_size_bits,
+                                rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(
     std::all_of(masks_begin_bits.begin(), masks_begin_bits.end(), [](auto b) { return b >= 0; }),
