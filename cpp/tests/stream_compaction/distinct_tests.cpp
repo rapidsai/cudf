@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -294,6 +295,67 @@ TEST_F(Distinct, ListOfStruct)
   auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *sorted_result);
+}
+
+TEST_F(Distinct, SlicedListsOfStructs)
+{
+  // Constructing a list of struct of two elements
+  // 0.   []                  ==                <- Don't care
+  // 1.   []                  !=                <- Don't care
+  // 2.   Null                ==                <- Don't care
+  // 3.   Null                !=                <- Don't care
+  // 4.   [Null, Null]        !=                <- Don't care
+  // 5.   [Null]              ==                <- Don't care
+  // 6.   [Null]              ==                <- Don't care
+  // 7.   [Null]              !=                <- Don't care
+  // 8.   [{Null, Null}]      !=
+  // 9.   [{1,'a'}, {2,'b'}]  !=
+  // 10.  [{0,'a'}, {2,'b'}]  !=
+  // 11.  [{0,'a'}, {2,'c'}]  ==
+  // 12.  [{0,'a'}, {2,'c'}]  !=
+  // 13.  [{0,Null}]          ==
+  // 14.  [{0,Null}]          !=
+  // 15.  [{Null, 'b'}]       ==                <- Don't care
+  // 16.  [{Null, 'b'}]                         <- Don't care
+
+  using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using strings_col = cudf::test::strings_column_wrapper;
+  using structs_col = cudf::test::structs_column_wrapper;
+  using cudf::test::iterators::nulls_at;
+
+  auto const struct_col = [] {
+    auto child1 =
+      int32s_col{{-1, -1, 0, 2, 2, 2, 1, 2, 0, 2, 0, 2, 0, 2, 0, 0, 1, 2}, nulls_at({5, 16, 17})};
+    auto child2 = strings_col{
+      {"x", "x", "a", "a", "b", "b", "a", "b", "a", "b", "a", "c", "a", "c", "a", "c", "b", "b"},
+      nulls_at({5, 14, 15})};
+    return structs_col{{child1, child2}, nulls_at({0, 1, 2, 3, 4})};
+  }();
+
+  auto const offsets = int32s_col{0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18};
+  auto const list_nullmask = std::vector<bool>{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto const nullmask_buf =
+    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
+  auto const lists_column =
+    cudf::column_view(cudf::data_type(cudf::type_id::LIST),
+                      17,
+                      nullptr,
+                      static_cast<cudf::bitmask_type const*>(nullmask_buf.data()),
+                      cudf::UNKNOWN_NULL_COUNT,
+                      0,
+                      {offsets, struct_col});
+
+  auto const idx            = int32s_col{1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10};
+  auto const input_original = cudf::table_view({idx, lists_column});
+  auto const input          = cudf::slice(input_original, {8, 15})[0];
+
+  auto const result        = cudf::distinct(input, {1});
+  auto const sorted_result = cudf::sort_by_key(*result, result->select({0}));
+
+  auto const expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 9, 10, 11, 13};
+  auto const expect_table = cudf::gather(input_original, expect_map);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*expect_table, *sorted_result);
 }
 
 TEST_F(Distinct, StructOfStruct)
