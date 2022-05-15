@@ -4519,7 +4519,6 @@ class StringMethods(ColumnMethods):
         --------
         >>> import cudf
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
-        >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> str_series.str.ngrams(2, "_")
         0    this is my_favorite book
         dtype: object
@@ -5407,7 +5406,7 @@ class StringColumn(column.ColumnBase):
 
     def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
         found_indices = libcudf.search.contains(
-            self, column.as_column([value], dtype=self.dtype)
+            column.as_column([value], dtype=self.dtype), self
         )
         found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(np.int32(1))
