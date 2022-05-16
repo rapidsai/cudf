@@ -69,7 +69,112 @@ struct dispatch_void_if_nested {
 };
 
 namespace row {
+
+enum class lhs_index_type : size_type {};
+enum class rhs_index_type : size_type {};
+
+template <typename T>
+class strong_index_iterator {
+ public:
+  using iterator_category = std::random_access_iterator_tag;
+  using difference_type   = size_type;
+  using value_type        = T;
+  // Dereferencing does not return a reference, but a copy of the value,
+  // because there is no underlying memory to reference safely. The internal
+  // iterator state can change or the iterator may be a temporary.
+  using reference = value_type;
+  using pointer   = value_type*;
+
+  explicit constexpr strong_index_iterator(size_type begin) : v{begin} {};
+
+  __device__ constexpr inline value_type operator*() const { return static_cast<T>(v); }
+  __device__ constexpr inline value_type operator[](difference_type i) const
+  {
+    return static_cast<T>(v + i);
+  }
+
+  __device__ constexpr inline strong_index_iterator<T>& operator++()
+  {
+    v++;
+    return *this;
+  }
+  __device__ constexpr inline strong_index_iterator<T> operator++(int)
+  {
+    strong_index_iterator<T> tmp(*this);
+    ++(*this);
+    return tmp;
+  }
+  __device__ constexpr inline strong_index_iterator<T>& operator+=(difference_type i)
+  {
+    v += i;
+    return *this;
+  }
+  __device__ constexpr inline strong_index_iterator<T> operator+(difference_type i) const
+  {
+    return strong_index_iterator<T>(v + i);
+  }
+
+  __device__ constexpr inline strong_index_iterator<T>& operator--()
+  {
+    v--;
+    return *this;
+  }
+  __device__ constexpr inline strong_index_iterator<T> operator--(int)
+  {
+    strong_index_iterator<T> tmp(*this);
+    --(*this);
+    return tmp;
+  }
+  __device__ constexpr inline strong_index_iterator<T>& operator-=(difference_type i)
+  {
+    v -= i;
+    return *this;
+  }
+  __device__ constexpr inline strong_index_iterator<T> operator-(difference_type i) const
+  {
+    return strong_index_iterator<T>(v - i);
+  }
+  __device__ constexpr inline difference_type operator-(strong_index_iterator<T> const& other) const
+  {
+    return v - other.v;
+  }
+
+  __device__ constexpr inline bool operator==(strong_index_iterator<T> const& other) const
+  {
+    return v == other.v;
+  }
+  __device__ constexpr inline bool operator!=(strong_index_iterator<T> const& other) const
+  {
+    return v != other.v;
+  }
+  __device__ constexpr inline bool operator<(strong_index_iterator<T> const& other) const
+  {
+    return v < other.v;
+  }
+  __device__ constexpr inline bool operator<=(strong_index_iterator<T> const& other) const
+  {
+    return v <= other.v;
+  }
+  __device__ constexpr inline bool operator>(strong_index_iterator<T> const& other) const
+  {
+    return v > other.v;
+  }
+  __device__ constexpr inline bool operator>=(strong_index_iterator<T> const& other) const
+  {
+    return v >= other.v;
+  }
+
+ private:
+  size_type v{0};
+};
+
+using lhs_iterator = strong_index_iterator<lhs_index_type>;
+using rhs_iterator = strong_index_iterator<rhs_index_type>;
+
 namespace lexicographic {
+
+template <typename Nullate>
+class two_table_device_row_comparator_adapter;
 
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
@@ -91,6 +196,8 @@ namespace lexicographic {
 template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
+  friend class two_table_device_row_comparator_adapter<Nullate>;
+
   /**
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
@@ -234,7 +341,7 @@ class device_row_comparator {
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less, greater, or equivalent to the row at `rhs_index` in the `rhs` table.
    *
-   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param lhs_index The index of the row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return weak ordering comparison of the row in the `lhs` table relative to the row in the `rhs`
    * table
@@ -288,9 +395,10 @@ class device_row_comparator {
  */
 template <typename Comparator, weak_ordering... values>
 struct weak_ordering_comparator_impl {
-  __device__ bool operator()(size_type const lhs, size_type const rhs) const noexcept
+  template <typename... Ts>
+  __device__ constexpr bool operator()(Ts const... args) const noexcept
   {
-    weak_ordering const result = comparator(lhs, rhs);
+    weak_ordering const result = comparator(args...);
     return ((result == values) || ...);
   }
   Comparator comparator;
@@ -302,14 +410,12 @@ struct weak_ordering_comparator_impl {
  *
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
-template <typename Nullate>
-using less_comparator =
-  weak_ordering_comparator_impl<device_row_comparator<Nullate>, weak_ordering::LESS>;
+template <typename Comparator>
+using less_comparator = weak_ordering_comparator_impl<Comparator, weak_ordering::LESS>;
 
-template <typename Nullate>
-using less_equivalent_comparator = weak_ordering_comparator_impl<device_row_comparator<Nullate>,
-                                                                 weak_ordering::LESS,
-                                                                 weak_ordering::EQUIVALENT>;
+template <typename Comparator>
+using less_equivalent_comparator =
+  weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT>;
 
 struct preprocessed_table {
   using table_device_view_owner =
@@ -319,7 +425,7 @@ struct preprocessed_table {
    * @brief Preprocess table for use with lexicographical comparison
    *
    * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can
-   * be passed to the constructor of `lex::self_comparator` to avoid preprocessing again.
+   * be passed to the constructor of `lexicographic::self_comparator` to avoid preprocessing again.
    *
    * @param table The table to preprocess
    * @param column_order Optional, host array the same length as a row that indicates the desired
@@ -337,6 +443,7 @@ struct preprocessed_table {
 
  private:
   friend class self_comparator;
+  friend class two_table_comparator;
 
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
@@ -459,14 +566,176 @@ class self_comparator {
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
-  less_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  less_comparator<device_row_comparator<Nullate>> device_comparator(Nullate nullate = {}) const
   {
-    return less_comparator<Nullate>{device_row_comparator<Nullate>(
+    return less_comparator<device_row_comparator<Nullate>>{device_row_comparator<Nullate>(
       nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
   }
 
  private:
   std::shared_ptr<preprocessed_table> d_t;
+};
+
+template <typename Nullate>
+class two_table_device_row_comparator_adapter {
+  friend class two_table_comparator;
+
+ public:
+  /**
+   * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
+   * lexicographically less than the row at `rhs_index` in the `rhs` table.
+   *
+   * @param lhs_index The index of the row in the `lhs` table to examine
+   * @param rhs_index The index of the row in the `rhs` table to examine
+   * @return `true` if row from the `lhs` table compares less than row in the `rhs` table
+   */
+  __device__ constexpr weak_ordering operator()(lhs_index_type const lhs_index,
+                                                rhs_index_type const rhs_index) const noexcept
+  {
+    return comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
+  }
+
+  /**
+   * @brief Checks whether the row at `rhs_index` in the `rhs` table compares
+   * lexicographically less than the row at `lhs_index` in the `lhs` table.
+   *
+   * @param rhs_index The index of the row in the `rhs` table to examine
+   * @param lhs_index The index of the row in the `lhs` table to examine
+   * @return `true` if row from the `rhs` table compares less than row in the `lhs` table
+   */
+  __device__ constexpr weak_ordering operator()(rhs_index_type const rhs_index,
+                                                lhs_index_type const lhs_index) const noexcept
+  {
+    auto const left_right_ordering =
+      comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
+
+    // Invert less/greater values to reflect right to left ordering
+    if (left_right_ordering == weak_ordering::LESS) {
+      return weak_ordering::GREATER;
+    } else if (left_right_ordering == weak_ordering::GREATER) {
+      return weak_ordering::LESS;
+    }
+    return weak_ordering::EQUIVALENT;
+  }
+
+ private:
+  /**
+   * @brief Construct a function object for performing a lexicographic
+   * comparison between the rows of two tables with strongly typed table index
+   * types.
+   *
+   * @param check_nulls Indicates if either input table contains columns with nulls.
+   * @param lhs The first table
+   * @param rhs The second table (may be the same table as `lhs`)
+   * @param depth Optional, device array the same length as a row that contains starting depths of
+   * columns if they're nested, and 0 otherwise.
+   * @param column_order Optional, device array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If `nullopt`, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If `nullopt`, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   */
+  two_table_device_row_comparator_adapter(
+    Nullate check_nulls,
+    table_device_view lhs,
+    table_device_view rhs,
+    std::optional<device_span<int const>> depth                  = std::nullopt,
+    std::optional<device_span<order const>> column_order         = std::nullopt,
+    std::optional<device_span<null_order const>> null_precedence = std::nullopt)
+    : comp{check_nulls, lhs, rhs, depth, column_order, null_precedence}
+  {
+  }
+
+  device_row_comparator<Nullate> comp;
+};
+
+/**
+ * @brief An owning object that can be used to lexicographically compare rows of two different
+ * tables
+ *
+ * This class takes two table_views and preprocesses certain columns to allow for lexicographical
+ * comparison. The preprocessed table and temporary data required for the comparison are created and
+ * owned by this class.
+ *
+ * Alternatively, `two_table_comparator` can be constructed from two existing
+ * `shared_ptr<preprocessed_table>`s when sharing the same tables among multiple comparators.
+ *
+ * This class can then provide a functor object that can used on the device.
+ * The object of this class must outlive the usage of the device functor.
+ */
+class two_table_comparator {
+ public:
+  /**
+   * @brief Construct an owning object for performing a lexicographic comparison between rows of
+   * two different tables.
+   *
+   * The left and right table are expected to have the same number of columns
+   * and data types for each column.
+   *
+   * @param left The left table to compare
+   * @param right The right table to compare
+   * @param column_order Optional, host array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If empty, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
+  two_table_comparator(table_view const& left,
+                       table_view const& right,
+                       host_span<order const> column_order         = {},
+                       host_span<null_order const> null_precedence = {},
+                       rmm::cuda_stream_view stream                = rmm::cuda_stream_default)
+    : d_left_table{preprocessed_table::create(left, column_order, null_precedence, stream)},
+      d_right_table{preprocessed_table::create(right, column_order, null_precedence, stream)}
+  {
+  }
+
+  /**
+   * @brief Construct an owning object for performing a lexicographic comparison between two rows of
+   * the same preprocessed table.
+   *
+   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
+   * multiple comparators.
+   *
+   * @param left A table preprocessed for lexicographic comparison
+   * @param right A table preprocessed for lexicographic comparison
+   */
+  two_table_comparator(std::shared_ptr<preprocessed_table> left,
+                       std::shared_ptr<preprocessed_table> right)
+    : d_left_table{std::move(left)}, d_right_table{std::move(right)}
+  {
+  }
+
+  /**
+   * @brief Return the binary operator for comparing rows in the table.
+   *
+   * Returns a binary callable, `F`, with signature `bool F(lhs_index_type, rhs_index_type)`.
+   *
+   * `F(i,j)` returns true if and only if row `i` of the left table compares
+   * lexicographically less than row `j` of the right table.
+   *
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+   */
+  template <typename Nullate>
+  less_comparator<two_table_device_row_comparator_adapter<Nullate>> device_comparator(
+    Nullate nullate = {}) const
+  {
+    return less_comparator<two_table_device_row_comparator_adapter<Nullate>>{
+      two_table_device_row_comparator_adapter<Nullate>(nullate,
+                                                       *d_left_table,
+                                                       *d_right_table,
+                                                       d_left_table->depths(),
+                                                       d_left_table->column_order(),
+                                                       d_left_table->null_precedence())};
+  }
+
+ private:
+  std::shared_ptr<preprocessed_table> d_left_table;
+  std::shared_ptr<preprocessed_table> d_right_table;
 };
 
 }  // namespace lexicographic
