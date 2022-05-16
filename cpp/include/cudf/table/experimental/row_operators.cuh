@@ -713,7 +713,9 @@ class two_table_comparator {
   /**
    * @brief Return the binary operator for comparing rows in the table.
    *
-   * Returns a binary callable, `F`, with signature `bool F(lhs_index_type, rhs_index_type)`.
+   * Returns a binary callable, `F`, with signatures
+   * `bool F(lhs_index_type, rhs_index_type)` and
+   * `bool F(rhs_index_type, lhs_index_type)`.
    *
    * `F(i,j)` returns true if and only if row `i` of the left table compares
    * lexicographically less than row `j` of the right table.
