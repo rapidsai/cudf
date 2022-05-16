@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,12 +121,17 @@ class scalar {
 };
 
 namespace detail {
+/**
+ * @brief An owning class to represent a fixed-width type value in device memory.
+ *
+ * @tparam T the data type of the fixed-width type value.
+ */
 template <typename T>
 class fixed_width_scalar : public scalar {
   static_assert(is_fixed_width<T>(), "Unexpected non-fixed-width type.");
 
  public:
-  using value_type = T;
+  using value_type = T;  ///< Type of the value held by the scalar.
 
   ~fixed_width_scalar() override                 = default;
   fixed_width_scalar(fixed_width_scalar&& other) = default;
@@ -162,6 +167,7 @@ class fixed_width_scalar : public scalar {
    * @brief Get the value of the scalar.
    *
    * @param stream CUDA stream used for device memory operations.
+   * @return Value of the scalar.
    */
   T value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
@@ -274,8 +280,8 @@ class fixed_point_scalar : public scalar {
   static_assert(is_fixed_point<T>(), "Unexpected non-fixed_point type.");
 
  public:
-  using rep_type   = typename T::rep;
-  using value_type = T;
+  using rep_type   = typename T::rep;  ///< The representation type of the fixed_point number.
+  using value_type = T;                ///< The value type of the fixed_point number.
 
   fixed_point_scalar()                           = delete;
   ~fixed_point_scalar() override                 = default;
@@ -355,6 +361,7 @@ class fixed_point_scalar : public scalar {
    * @brief Get the value of the scalar.
    *
    * @param stream CUDA stream used for device memory operations.
+   * @return The value of the scalar.
    */
   rep_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
@@ -362,6 +369,7 @@ class fixed_point_scalar : public scalar {
    * @brief Get the decimal32, decimal64 or decimal128.
    *
    * @param stream CUDA stream used for device memory operations.
+   * @return The decimal32, decimal64 or decimal128 value.
    */
   T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
@@ -389,7 +397,7 @@ class fixed_point_scalar : public scalar {
  */
 class string_scalar : public scalar {
  public:
-  using value_type = cudf::string_view;
+  using value_type = cudf::string_view;  ///< The value type of the string scalar.
 
   string_scalar()                      = delete;
   ~string_scalar() override            = default;
@@ -478,6 +486,7 @@ class string_scalar : public scalar {
    * @brief Get the value of the scalar in a host std::string.
    *
    * @param stream CUDA stream used for device memory operations.
+   * @return The value of the scalar in a host std::string.
    */
   [[nodiscard]] std::string to_string(
     rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
@@ -486,6 +495,7 @@ class string_scalar : public scalar {
    * @brief Get the value of the scalar as a string_view.
    *
    * @param stream CUDA stream used for device memory operations.
+   * @return The value of the scalar as a string_view.
    */
   [[nodiscard]] value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
@@ -559,12 +569,18 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 };
 
+/**
+ * @brief An owning class to represent a timestamp value in device memory.
+ *
+ * @tparam T the data type of the timestamp value.
+ * @see cudf/wrappers/timestamps.hpp for a list of allowed types.
+ */
 template <typename T>
 class timestamp_scalar : public chrono_scalar<T> {
  public:
   static_assert(is_timestamp<T>(), "Unexpected non-timestamp type");
   using chrono_scalar<T>::chrono_scalar;
-  using rep_type = typename T::rep;
+  using rep_type = typename T::rep;  ///< The underlying representation type of the timestamp.
 
   timestamp_scalar()                         = delete;
   timestamp_scalar(timestamp_scalar&& other) = default;
@@ -602,12 +618,18 @@ class timestamp_scalar : public chrono_scalar<T> {
   rep_type ticks_since_epoch();
 };
 
+/**
+ * @brief An owning class to represent a duration value in device memory.
+ *
+ * @tparam T the data type of the duration value.
+ * @see cudf/wrappers/durations.hpp for a list of allowed types.
+ */
 template <typename T>
 class duration_scalar : public chrono_scalar<T> {
  public:
   static_assert(is_duration<T>(), "Unexpected non-duration type");
   using chrono_scalar<T>::chrono_scalar;
-  using rep_type = typename T::rep;
+  using rep_type = typename T::rep;  ///< The duration's underlying representation type.
 
   duration_scalar()                        = delete;
   duration_scalar(duration_scalar&& other) = default;
@@ -713,6 +735,13 @@ class struct_scalar : public scalar {
   struct_scalar& operator=(struct_scalar const& other) = delete;
   struct_scalar& operator=(struct_scalar&& other) = delete;
 
+  /**
+   * @brief Construct a new struct scalar object by deep copying another.
+   *
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
+   */
   struct_scalar(struct_scalar const& other,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
