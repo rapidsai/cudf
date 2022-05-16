@@ -4,6 +4,7 @@
 :maxdepth: 2
 
 10min
+pandas-comparison
 data-types
 io
 missing-data
