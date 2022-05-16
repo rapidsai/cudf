@@ -50,7 +50,7 @@ class scalar {
   scalar& operator=(scalar&& other) = delete;
 
   /**
-   * @brief Returns the scalar's logical value type.
+   * @briefreturn{ the scalar's logical value type.}
    */
   [[nodiscard]] data_type type() const noexcept;
 
@@ -75,12 +75,12 @@ class scalar {
   [[nodiscard]] bool is_valid(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
-   * @brief Returns a raw pointer to the validity bool in device memory.
+   * @briefreturn{ a raw pointer to the validity bool in device memory.}
    */
   bool* validity_data();
 
   /**
-   * @brief Returns a const raw pointer to the validity bool in device memory.
+   * @briefreturn{ a const raw pointer to the validity bool in device memory.}
    */
   [[nodiscard]] bool const* validity_data() const;
 
@@ -90,7 +90,7 @@ class scalar {
 
   scalar() = delete;
 
-  scalar(scalar&& other) = default;
+  scalar(scalar&& other) = default;  ///< @movedoc{scalar}
 
   /**
    * @brief Construct a new scalar object by deep copying another.
@@ -134,7 +134,7 @@ class fixed_width_scalar : public scalar {
   using value_type = T;  ///< Type of the value held by the scalar.
 
   ~fixed_width_scalar() override                 = default;
-  fixed_width_scalar(fixed_width_scalar&& other) = default;
+  fixed_width_scalar(fixed_width_scalar&& other) = default;  ///< @movedoc{fixed_width_scalar}
 
   fixed_width_scalar& operator=(fixed_width_scalar const& other) = delete;
   fixed_width_scalar& operator=(fixed_width_scalar&& other) = delete;
@@ -172,12 +172,12 @@ class fixed_width_scalar : public scalar {
   T value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
-   * @brief Returns a raw pointer to the value in device memory.
+   * @briefreturn{ a raw pointer to the value in device memory.}
    */
   T* data();
 
   /**
-   * @brief Returns a const raw pointer to the value in device memory.
+   * @briefreturn{ a const raw pointer to the value in device memory.}
    */
   T const* data() const;
 
@@ -227,7 +227,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
  public:
   numeric_scalar()                       = delete;
   ~numeric_scalar()                      = default;
-  numeric_scalar(numeric_scalar&& other) = default;
+  numeric_scalar(numeric_scalar&& other) = default;  ///< @movedoc{numeric_scalar}
 
   numeric_scalar& operator=(numeric_scalar const& other) = delete;
   numeric_scalar& operator=(numeric_scalar&& other) = delete;
@@ -285,7 +285,7 @@ class fixed_point_scalar : public scalar {
 
   fixed_point_scalar()                           = delete;
   ~fixed_point_scalar() override                 = default;
-  fixed_point_scalar(fixed_point_scalar&& other) = default;
+  fixed_point_scalar(fixed_point_scalar&& other) = default;  ///< @movedoc{fixed_point_scalar}
 
   fixed_point_scalar& operator=(fixed_point_scalar const& other) = delete;
   fixed_point_scalar& operator=(fixed_point_scalar&& other) = delete;
@@ -379,12 +379,12 @@ class fixed_point_scalar : public scalar {
   explicit operator value_type() const;
 
   /**
-   * @brief Returns a raw pointer to the value in device memory.
+   * @briefreturn{a raw pointer to the value in device memory.}
    */
   rep_type* data();
 
   /**
-   * @brief Returns a const raw pointer to the value in device memory.
+   * @briefreturn{ a const raw pointer to the value in device memory.}
    */
   rep_type const* data() const;
 
@@ -401,7 +401,7 @@ class string_scalar : public scalar {
 
   string_scalar()                      = delete;
   ~string_scalar() override            = default;
-  string_scalar(string_scalar&& other) = default;
+  string_scalar(string_scalar&& other) = default;  ///< @movedoc{string_scalar}
 
   // string_scalar(string_scalar const& other) = delete;
   string_scalar& operator=(string_scalar const& other) = delete;
@@ -500,12 +500,12 @@ class string_scalar : public scalar {
   [[nodiscard]] value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
-   * @brief Returns the size of the string in bytes.
+   * @briefreturn{ the size of the string in bytes.}
    */
   [[nodiscard]] size_type size() const;
 
   /**
-   * @brief Returns a raw pointer to the string in device memory.
+   * @briefreturn{ a raw pointer to the string in device memory.}
    */
   [[nodiscard]] const char* data() const;
 
@@ -526,7 +526,7 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
  public:
   chrono_scalar()                      = delete;
   ~chrono_scalar()                     = default;
-  chrono_scalar(chrono_scalar&& other) = default;
+  chrono_scalar(chrono_scalar&& other) = default;  ///< @movedoc{chrono_scalar}
 
   chrono_scalar& operator=(chrono_scalar const& other) = delete;
   chrono_scalar& operator=(chrono_scalar&& other) = delete;
@@ -583,7 +583,7 @@ class timestamp_scalar : public chrono_scalar<T> {
   using rep_type = typename T::rep;  ///< The underlying representation type of the timestamp.
 
   timestamp_scalar()                         = delete;
-  timestamp_scalar(timestamp_scalar&& other) = default;
+  timestamp_scalar(timestamp_scalar&& other) = default;  ///< @movedoc{timestamp_scalar}
 
   /**
    * @brief Construct a new timestamp scalar object by deep copying another.
@@ -613,7 +613,7 @@ class timestamp_scalar : public chrono_scalar<T> {
                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Return the duration in number of ticks since the UNIX epoch.
+   * @briefreturn{the duration in number of ticks since the UNIX epoch.}
    */
   rep_type ticks_since_epoch();
 };
@@ -632,7 +632,7 @@ class duration_scalar : public chrono_scalar<T> {
   using rep_type = typename T::rep;  ///< The duration's underlying representation type.
 
   duration_scalar()                        = delete;
-  duration_scalar(duration_scalar&& other) = default;
+  duration_scalar(duration_scalar&& other) = default;  ///< @movedoc{duration_scalar}
 
   /**
    * @brief Construct a new duration scalar object by deep copying another.
@@ -659,7 +659,7 @@ class duration_scalar : public chrono_scalar<T> {
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Return the duration in number of ticks.
+   * @briefreturn{ the duration in number of ticks.}
    */
   rep_type count();
 };
@@ -671,7 +671,7 @@ class list_scalar : public scalar {
  public:
   list_scalar()                    = delete;
   ~list_scalar() override          = default;
-  list_scalar(list_scalar&& other) = default;
+  list_scalar(list_scalar&& other) = default;  ///< @movedoc{list_scalar}
 
   list_scalar& operator=(list_scalar const& other) = delete;
   list_scalar& operator=(list_scalar&& other) = delete;
@@ -716,7 +716,7 @@ class list_scalar : public scalar {
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Returns a non-owning, immutable view to underlying device data.
+   * @briefreturn{a non-owning, immutable view to underlying device data.}
    */
   [[nodiscard]] column_view view() const;
 
@@ -731,7 +731,7 @@ class struct_scalar : public scalar {
  public:
   struct_scalar()                      = delete;
   ~struct_scalar() override            = default;
-  struct_scalar(struct_scalar&& other) = default;
+  struct_scalar(struct_scalar&& other) = default;  ///< @movedoc{struct_scalar}
   struct_scalar& operator=(struct_scalar const& other) = delete;
   struct_scalar& operator=(struct_scalar&& other) = delete;
 
@@ -793,7 +793,7 @@ class struct_scalar : public scalar {
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Returns a non-owning, immutable view to underlying device data.
+   * @briefreturn{a non-owning, immutable view to underlying device data.}
    */
   [[nodiscard]] table_view view() const;
 
