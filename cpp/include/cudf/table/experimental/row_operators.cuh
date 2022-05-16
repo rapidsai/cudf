@@ -1028,7 +1028,7 @@ class two_table_device_row_comparator_adapter {
   {
   }
 
-  device_row_comparator<Nullate> comp;
+  device_row_comparator<Nullate> const comp;
 };
 
 class two_table_comparator {
@@ -1044,11 +1044,7 @@ class two_table_comparator {
    */
   two_table_comparator(table_view const& t_lhs,
                        table_view const& t_rhs,
-                       rmm::cuda_stream_view stream)
-    : dt_lhs(preprocessed_table::create(t_lhs, stream)),
-      dt_rhs(preprocessed_table::create(t_rhs, stream))
-  {
-  }
+                       rmm::cuda_stream_view stream);
 
   /**
    * @brief Construct an owning object for performing equality comparisons between two rows from two
