@@ -685,9 +685,9 @@ def _make_name(col_name, sep="_"):
     """Combine elements of `col_name` into a single string, or no-op if
     `col_name` is already a string
     """
-    if isinstance(col_name, tuple):
-        return sep.join(name for name in col_name if name != "")
-    return col_name
+    if isinstance(col_name, str):
+        return col_name
+    return sep.join(name for name in col_name if name != "")
 
 
 @_dask_cudf_nvtx_annotate
