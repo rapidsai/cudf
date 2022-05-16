@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/structs/detail/contains.hpp>
 #include <cudf/table/row_operators.cuh>
