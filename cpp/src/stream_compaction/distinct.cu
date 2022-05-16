@@ -59,7 +59,7 @@ std::unique_ptr<table> distinct(table_view const& input,
   auto keys_view = input.select(keys);
   auto preprocessed_keys =
     cudf::experimental::row::hash::preprocessed_table::create(keys_view, stream);
-  auto has_null = nullate::DYNAMIC{cudf::has_nulls(keys_view)};
+  auto const has_null = nullate::DYNAMIC{cudf::has_nested_nulls(keys_view)};
   auto const num_rows{keys_view.num_rows()};
 
   hash_map_type key_map{compute_hash_table_size(num_rows),
