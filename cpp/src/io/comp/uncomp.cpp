@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -249,23 +249,17 @@ int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data,
  * @param[in] comp_data Raw compressed data
  * @param[in] comp_len Compressed data size
  */
-int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t comp_len)
+void cpu_inflate_vector(std::vector<uint8_t>& dst, const uint8_t* comp_data, size_t comp_len)
 {
-  int zerr;
-  z_stream strm;
-
-  memset(&strm, 0, sizeof(strm));
+  z_stream strm{};
   strm.next_in   = const_cast<Bytef*>(reinterpret_cast<Bytef const*>(comp_data));
   strm.avail_in  = comp_len;
   strm.total_in  = 0;
-  strm.next_out  = reinterpret_cast<uint8_t*>(dst.data());
+  strm.next_out  = dst.data();
   strm.avail_out = dst.size();
   strm.total_out = 0;
-  zerr           = inflateInit2(&strm, -15);  // -15 for raw data without GZIP headers
-  if (zerr != 0) {
-    dst.resize(0);
-    return zerr;
-  }
+  auto zerr      = inflateInit2(&strm, -15);  // -15 for raw data without GZIP headers
+  CUDF_EXPECTS(zerr == 0, "Error in DEFLATE stream");
   do {
     if (strm.avail_out == 0) {
       dst.resize(strm.total_out + (1 << 30));
@@ -277,46 +271,35 @@ int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t 
            strm.total_out == dst.size());
   dst.resize(strm.total_out);
   inflateEnd(&strm);
-  return (zerr == Z_STREAM_END) ? Z_OK : zerr;
+  CUDF_EXPECTS(zerr == Z_STREAM_END, "Error in DEFLATE stream");
 }
 
-/**
- * @brief Uncompresses a gzip/zip/bzip2/xz file stored in system memory.
- *
- * The result is allocated and stored in a vector.
- * If the function call fails, the output vector is empty.
- *
- * @param[in] src Pointer to the compressed data in system memory
- * @param[in] src_size The size of the compressed data, in bytes
- * @param[in] stream_type Type of compression of the input data
- *
- * @return Vector containing the uncompressed output
- */
-std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int stream_type)
+std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t const> src)
 {
-  const uint8_t* raw       = static_cast<const uint8_t*>(src);
+  CUDF_EXPECTS(src.data() != nullptr, "Decompression: Source cannot be nullptr");
+  CUDF_EXPECTS(not src.empty(), "Decompression: Source size cannot be 0");
+
+  auto raw                 = src.data();
   const uint8_t* comp_data = nullptr;
   size_t comp_len          = 0;
   size_t uncomp_len        = 0;
 
-  CUDF_EXPECTS(src != nullptr, "Decompression: Source cannot be nullptr");
-  CUDF_EXPECTS(src_size != 0, "Decompression: Source size cannot be 0");
-
-  switch (stream_type) {
-    case IO_UNCOMP_STREAM_TYPE_INFER:
-    case IO_UNCOMP_STREAM_TYPE_GZIP: {
+  switch (compression) {
+    case compression_type::AUTO:
+    case compression_type::GZIP: {
       gz_archive_s gz;
-      if (ParseGZArchive(&gz, raw, src_size)) {
-        stream_type = IO_UNCOMP_STREAM_TYPE_GZIP;
+      if (ParseGZArchive(&gz, raw, src.size())) {
+        compression = compression_type::GZIP;
         comp_data   = gz.comp_data;
         comp_len    = gz.comp_len;
         uncomp_len  = gz.isize;
       }
-      if (stream_type != IO_UNCOMP_STREAM_TYPE_INFER) break;  // Fall through for INFER
+      if (compression != compression_type::AUTO) break;
+      [[fallthrough]];
     }
-    case IO_UNCOMP_STREAM_TYPE_ZIP: {
+    case compression_type::ZIP: {
       zip_archive_s za;
-      if (OpenZipArchive(&za, raw, src_size)) {
+      if (OpenZipArchive(&za, raw, src.size())) {
         size_t cdfh_ofs = 0;
         for (int i = 0; i < za.eocd->num_entries; i++) {
           const zip_cdfh_s* cdfh = reinterpret_cast<const zip_cdfh_s*>(
@@ -330,14 +313,14 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
           if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
             size_t lfh_ofs       = cdfh->hdr_ofs;
             const zip_lfh_s* lfh = reinterpret_cast<const zip_lfh_s*>(raw + lfh_ofs);
-            if (lfh_ofs + sizeof(zip_lfh_s) <= src_size && lfh->sig == 0x04034b50 &&
-                lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src_size) {
+            if (lfh_ofs + sizeof(zip_lfh_s) <= src.size() && lfh->sig == 0x04034b50 &&
+                lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src.size()) {
               if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
                 size_t file_start = lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len;
                 size_t file_end   = file_start + lfh->comp_size;
-                if (file_end <= src_size) {
+                if (file_end <= src.size()) {
                   // Pick the first valid file of non-zero size (only 1 file expected in archive)
-                  stream_type = IO_UNCOMP_STREAM_TYPE_ZIP;
+                  compression = compression_type::ZIP;
                   comp_data   = raw + file_start;
                   comp_len    = lfh->comp_size;
                   uncomp_len  = lfh->uncomp_size;
@@ -350,49 +333,46 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
         }
       }
     }
-      if (stream_type != IO_UNCOMP_STREAM_TYPE_INFER) break;  // Fall through for INFER
-    case IO_UNCOMP_STREAM_TYPE_BZIP2:
-      if (src_size > 4) {
+      if (compression != compression_type::AUTO) break;
+      [[fallthrough]];
+    case compression_type::BZIP2:
+      if (src.size() > 4) {
         const bz2_file_header_s* fhdr = reinterpret_cast<const bz2_file_header_s*>(raw);
         // Check for BZIP2 file signature "BZh1" to "BZh9"
         if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' &&
             fhdr->blksz >= '1' && fhdr->blksz <= '9') {
-          stream_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
+          compression = compression_type::BZIP2;
           comp_data   = raw;
-          comp_len    = src_size;
+          comp_len    = src.size();
           uncomp_len  = 0;
         }
       }
-      if (stream_type != IO_UNCOMP_STREAM_TYPE_INFER) break;  // Fall through for INFER
-    default:
-      // Unsupported format
-      break;
+      if (compression != compression_type::AUTO) break;
+      [[fallthrough]];
+    default: CUDF_FAIL("Unsupported compressed stream type");
   }
 
-  CUDF_EXPECTS(comp_data != nullptr, "Unsupported compressed stream type");
-  CUDF_EXPECTS(comp_len > 0, "Unsupported compressed stream type");
+  CUDF_EXPECTS(comp_data != nullptr and comp_len > 0, "Unsupported compressed stream type");
 
   if (uncomp_len <= 0) {
     uncomp_len = comp_len * 4 + 4096;  // In case uncompressed size isn't known in advance, assume
                                        // ~4:1 compression for initial size
   }
 
-  if (stream_type == IO_UNCOMP_STREAM_TYPE_GZIP || stream_type == IO_UNCOMP_STREAM_TYPE_ZIP) {
+  if (compression == compression_type::GZIP || compression == compression_type::ZIP) {
     // INFLATE
-    std::vector<char> dst(uncomp_len);
-    CUDF_EXPECTS(cpu_inflate_vector(dst, comp_data, comp_len) == 0,
-                 "Decompression: error in stream");
+    std::vector<uint8_t> dst(uncomp_len);
+    cpu_inflate_vector(dst, comp_data, comp_len);
     return dst;
   }
-  if (stream_type == IO_UNCOMP_STREAM_TYPE_BZIP2) {
+  if (compression == compression_type::BZIP2) {
     size_t src_ofs = 0;
     size_t dst_ofs = 0;
     int bz_err     = 0;
-    std::vector<char> dst(uncomp_len);
+    std::vector<uint8_t> dst(uncomp_len);
     do {
       size_t dst_len = uncomp_len - dst_ofs;
-      bz_err         = cpu_bz2_uncompress(
-        comp_data, comp_len, reinterpret_cast<uint8_t*>(dst.data()) + dst_ofs, &dst_len, &src_ofs);
+      bz_err = cpu_bz2_uncompress(comp_data, comp_len, dst.data() + dst_ofs, &dst_len, &src_ofs);
       if (bz_err == BZ_OUTBUFF_FULL) {
         // TBD: We could infer the compression ratio based on produced/consumed byte counts
         // in order to minimize realloc events and over-allocation
@@ -413,167 +393,121 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
 }
 
 /**
- * @brief Uncompresses the input data and stores the allocated result into
- * a vector.
- *
- * @param[in] data Pointer to the csv data in host memory
- * @param[in] compression String describing the compression type
- *
- * @return Vector containing the output uncompressed data
+ * @brief ZLIB host decompressor (no header)
  */
-std::vector<char> get_uncompressed_data(host_span<char const> const data,
-                                        compression_type compression)
+size_t decompress_zlib(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
-  auto const comp_type = [compression]() {
-    switch (compression) {
-      case compression_type::GZIP: return IO_UNCOMP_STREAM_TYPE_GZIP;
-      case compression_type::ZIP: return IO_UNCOMP_STREAM_TYPE_ZIP;
-      case compression_type::BZIP2: return IO_UNCOMP_STREAM_TYPE_BZIP2;
-      case compression_type::XZ: return IO_UNCOMP_STREAM_TYPE_XZ;
-      default: return IO_UNCOMP_STREAM_TYPE_INFER;
-    }
-  }();
-
-  return io_uncompress_single_h2d(data.data(), data.size(), comp_type);
+  size_t uncomp_size = dst.size();
+  CUDF_EXPECTS(0 == cpu_inflate(dst.data(), &uncomp_size, src.data(), src.size()),
+               "ZLIB decompression failed");
+  return uncomp_size;
 }
 
 /**
- * @brief ZLIB host decompressor class
+ * @brief GZIP host decompressor (includes header)
  */
-class HostDecompressor_ZLIB : public HostDecompressor {
- public:
-  HostDecompressor_ZLIB(bool gz_hdr_) : gz_hdr(gz_hdr_) {}
-  size_t Decompress(uint8_t* dstBytes,
-                    size_t dstLen,
-                    const uint8_t* srcBytes,
-                    size_t srcLen) override
-  {
-    if (gz_hdr) {
-      gz_archive_s gz;
-      if (!ParseGZArchive(&gz, srcBytes, srcLen)) { return 0; }
-      srcBytes = gz.comp_data;
-      srcLen   = gz.comp_len;
-    }
-    if (0 == cpu_inflate(dstBytes, &dstLen, srcBytes, srcLen)) {
-      return dstLen;
-    } else {
-      return 0;
-    }
-  }
-
- protected:
-  const bool gz_hdr;
-};
-
-/**
- * @brief SNAPPY host decompressor class
- */
-class HostDecompressor_SNAPPY : public HostDecompressor {
- public:
-  HostDecompressor_SNAPPY() {}
-  size_t Decompress(uint8_t* dstBytes,
-                    size_t dstLen,
-                    const uint8_t* srcBytes,
-                    size_t srcLen) override
-  {
-    uint32_t uncompressed_size, bytes_left, dst_pos;
-    const uint8_t* cur = srcBytes;
-    const uint8_t* end = srcBytes + srcLen;
-
-    if (!dstBytes || srcLen < 1) { return 0; }
-    // Read uncompressed length (varint)
-    {
-      uint32_t l        = 0, c;
-      uncompressed_size = 0;
-      do {
-        uint32_t lo7;
-        c   = *cur++;
-        lo7 = c & 0x7f;
-        if (l >= 28 && c > 0xf) { return 0; }
-        uncompressed_size |= lo7 << l;
-        l += 7;
-      } while (c > 0x7f && cur < end);
-      if (!uncompressed_size || uncompressed_size > dstLen || cur >= end) {
-        // Destination buffer too small or zero size
-        return 0;
-      }
-    }
-    // Decode lz77
-    dst_pos    = 0;
-    bytes_left = uncompressed_size;
-    do {
-      uint32_t blen = *cur++;
-
-      if (blen & 3) {
-        // Copy
-        uint32_t offset;
-        if (blen & 2) {
-          // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
-          if (cur + 2 > end) break;
-          offset = *reinterpret_cast<const uint16_t*>(cur);
-          cur += 2;
-          if (blen & 1)  // 4-byte offset
-          {
-            if (cur + 2 > end) break;
-            offset |= (*reinterpret_cast<const uint16_t*>(cur)) << 16;
-            cur += 2;
-          }
-          blen = (blen >> 2) + 1;
-        } else {
-          // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
-          if (cur >= end) break;
-          offset = ((blen & 0xe0) << 3) | (*cur++);
-          blen   = ((blen >> 2) & 7) + 4;
-        }
-        if (offset - 1u >= dst_pos || blen > bytes_left) break;
-        bytes_left -= blen;
-        do {
-          dstBytes[dst_pos] = dstBytes[dst_pos - offset];
-          dst_pos++;
-        } while (--blen);
-      } else {
-        // xxxxxx00: literal
-        blen >>= 2;
-        if (blen >= 60) {
-          uint32_t num_bytes = blen - 59;
-          if (cur + num_bytes >= end) break;
-          blen = cur[0];
-          if (num_bytes > 1) {
-            blen |= cur[1] << 8;
-            if (num_bytes > 2) {
-              blen |= cur[2] << 16;
-              if (num_bytes > 3) { blen |= cur[3] << 24; }
-            }
-          }
-          cur += num_bytes;
-        }
-        blen++;
-        if (cur + blen > end || blen > bytes_left) break;
-        memcpy(dstBytes + dst_pos, cur, blen);
-        cur += blen;
-        dst_pos += blen;
-        bytes_left -= blen;
-      }
-    } while (bytes_left && cur < end);
-    return (bytes_left) ? 0 : uncompressed_size;
-  }
-};
-
-/**
- * @brief CPU decompression class
- *
- * @param[in] stream_type compression method (IO_UNCOMP_STREAM_TYPE_XXX)
- *
- * @returns corresponding HostDecompressor class, nullptr if failure
- */
-std::unique_ptr<HostDecompressor> HostDecompressor::Create(int stream_type)
+size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
-  switch (stream_type) {
-    case IO_UNCOMP_STREAM_TYPE_GZIP: return std::make_unique<HostDecompressor_ZLIB>(true);
-    case IO_UNCOMP_STREAM_TYPE_INFLATE: return std::make_unique<HostDecompressor_ZLIB>(false);
-    case IO_UNCOMP_STREAM_TYPE_SNAPPY: return std::make_unique<HostDecompressor_SNAPPY>();
+  gz_archive_s gz;
+  auto const parse_succeeded = ParseGZArchive(&gz, src.data(), src.size());
+  CUDF_EXPECTS(parse_succeeded, "Failed to parse GZIP header");
+  return decompress_zlib({gz.comp_data, gz.comp_len}, dst);
+}
+
+/**
+ * @brief SNAPPY host decompressor
+ */
+size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
+{
+  CUDF_EXPECTS(not dst.empty() and src.size() >= 1, "invalid Snappy decompress inputs");
+  uint32_t uncompressed_size, bytes_left, dst_pos;
+  auto cur       = src.begin();
+  auto const end = src.end();
+  // Read uncompressed length (varint)
+  {
+    uint32_t l        = 0, c;
+    uncompressed_size = 0;
+    do {
+      c              = *cur++;
+      auto const lo7 = c & 0x7f;
+      if (l >= 28 && c > 0xf) { return 0; }
+      uncompressed_size |= lo7 << l;
+      l += 7;
+    } while (c > 0x7f && cur < end);
+    CUDF_EXPECTS(uncompressed_size != 0 and uncompressed_size <= dst.size() and cur < end,
+                 "Destination buffer too small");
   }
-  CUDF_FAIL("Unsupported compression type");
+  // Decode lz77
+  dst_pos    = 0;
+  bytes_left = uncompressed_size;
+  do {
+    uint32_t blen = *cur++;
+
+    if (blen & 3) {
+      // Copy
+      uint32_t offset;
+      if (blen & 2) {
+        // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
+        if (cur + 2 > end) break;
+        offset = *reinterpret_cast<const uint16_t*>(cur);
+        cur += 2;
+        if (blen & 1)  // 4-byte offset
+        {
+          if (cur + 2 > end) break;
+          offset |= (*reinterpret_cast<const uint16_t*>(cur)) << 16;
+          cur += 2;
+        }
+        blen = (blen >> 2) + 1;
+      } else {
+        // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
+        if (cur >= end) break;
+        offset = ((blen & 0xe0) << 3) | (*cur++);
+        blen   = ((blen >> 2) & 7) + 4;
+      }
+      if (offset - 1u >= dst_pos || blen > bytes_left) break;
+      bytes_left -= blen;
+      do {
+        dst[dst_pos] = dst[dst_pos - offset];
+        dst_pos++;
+      } while (--blen);
+    } else {
+      // xxxxxx00: literal
+      blen >>= 2;
+      if (blen >= 60) {
+        uint32_t const num_bytes = blen - 59;
+        if (cur + num_bytes >= end) break;
+        blen = cur[0];
+        if (num_bytes > 1) {
+          blen |= cur[1] << 8;
+          if (num_bytes > 2) {
+            blen |= cur[2] << 16;
+            if (num_bytes > 3) { blen |= cur[3] << 24; }
+          }
+        }
+        cur += num_bytes;
+      }
+      blen++;
+      if (cur + blen > end || blen > bytes_left) break;
+      memcpy(dst.data() + dst_pos, cur, blen);
+      cur += blen;
+      dst_pos += blen;
+      bytes_left -= blen;
+    }
+  } while (bytes_left && cur < end);
+  CUDF_EXPECTS(bytes_left == 0, "Snappy Decompression failed");
+  return uncompressed_size;
+}
+
+size_t decompress(compression_type compression,
+                  host_span<uint8_t const> src,
+                  host_span<uint8_t> dst)
+{
+  switch (compression) {
+    case compression_type::GZIP: return decompress_gzip(src, dst);
+    case compression_type::ZLIB: return decompress_zlib(src, dst);
+    case compression_type::SNAPPY: return decompress_snappy(src, dst);
+    default: CUDF_FAIL("Unsupported compression type");
+  }
 }
 
 }  // namespace io
