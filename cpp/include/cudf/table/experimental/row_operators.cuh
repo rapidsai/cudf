@@ -713,8 +713,13 @@ class two_table_comparator {
    * `bool F(lhs_index_type, rhs_index_type)` and
    * `bool F(rhs_index_type, lhs_index_type)`.
    *
-   * `F(i,j)` returns true if and only if row `i` of the left table compares
-   * lexicographically less than row `j` of the right table.
+   * `F(lhs_index_type i, rhs_index_type j)` returns true if and only if row
+   * `i` of the left table compares lexicographically less than row `j` of the
+   * right table.
+   *
+   * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and
+   * only if row `i` of the right table compares lexicographically less than row
+   * `j` of the left table.
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
