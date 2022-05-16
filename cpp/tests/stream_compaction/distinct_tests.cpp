@@ -303,6 +303,46 @@ TEST_F(Distinct, StructOfStruct)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sliced_expect->get_column(1), sorted_sliced_result->get_column(1));
 }
 
+TEST_F(Distinct, StructWithNullElement)
+{
+  using FWCW = cudf::test::fixed_width_column_wrapper<int>;
+  using MASK = std::vector<bool>;
+
+  /*
+    `@` indicates null
+
+       /+-------------+
+       |s1{s2{a,b}, c}|
+       +--------------+
+     0 |  { {1, 1}, 2}|
+     1 |  {@{1, 1}, 2}|
+       +--------------+
+  */
+
+  auto col_a   = FWCW{1, 1};
+  auto col_b   = FWCW{1, 1};
+  auto s2_mask = MASK{1, 0};
+  auto col_c   = FWCW{2, 2};
+  auto s1_mask = MASK{1, 1};
+  auto idx     = FWCW{0, 1};
+
+  std::vector<std::unique_ptr<cudf::column>> s2_children;
+  s2_children.push_back(col_a.release());
+  s2_children.push_back(col_b.release());
+  auto s2 = cudf::test::structs_column_wrapper(std::move(s2_children), s2_mask);
+
+  std::vector<std::unique_ptr<cudf::column>> s1_children;
+  s1_children.push_back(s2.release());
+  s1_children.push_back(col_c.release());
+  auto s1 = cudf::test::structs_column_wrapper(std::move(s1_children), s1_mask);
+
+  auto input = cudf::table_view({idx, s1});
+
+  auto result        = cudf::distinct(input, {1});
+  auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input.column(1), sorted_result->get_column(1));
+}
+
 TEST_F(Distinct, ListOfEmptyStruct)
 {
   // 0.  []             ==

@@ -62,12 +62,9 @@ def test_rank_all_arguments(
     else:
         expected = pdf.copy(deep=True)
 
-    # TODO: Remove per column iteration once the
-    # following issue is fixed :
-    # https://github.com/pandas-dev/pandas/issues/43310
-    for col in expected.columns:
-        expected[col] = pdf[col].rank(**kwargs)
     actual = gdf.rank(**kwargs)
+    expected = pdf.rank(**kwargs)
+
     assert_eq(expected, actual)
 
 
