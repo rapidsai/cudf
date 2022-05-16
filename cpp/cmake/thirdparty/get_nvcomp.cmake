@@ -17,8 +17,9 @@ function(find_and_configure_nvcomp)
 
   include(${rapids-cmake-dir}/cpm/nvcomp.cmake)
   rapids_cpm_nvcomp(
-    BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports USE_PROPRIETARY_BINARY
-    ${CUDF_USE_PROPRIETARY_NVCOMP}
+    BUILD_EXPORT_SET cudf-exports
+    INSTALL_EXPORT_SET cudf-exports
+    USE_PROPRIETARY_BINARY ${CUDF_USE_PROPRIETARY_NVCOMP}
   )
 
   # If we are building nvcomp use enable per-thread default stream
