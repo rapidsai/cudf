@@ -68,7 +68,8 @@ bool contains(structs_column_view const& haystack,
 
   auto const found_iter = thrust::find_if(
     rmm::exec_policy(stream), start_iter, end_iter, [d_comp] __device__(auto const idx) {
-      return d_comp(idx, static_cast<rhs_index_type>(0));  // compare haystack[idx] == needle[0].
+      // Compare needle_as_col[0] == haystack[idx].
+      return d_comp(static_cast<rhs_index_type>(0), idx);
     });
 
   return found_iter != end_iter;
