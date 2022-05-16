@@ -166,12 +166,12 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
     CUDF_FAIL("DLTensor must be 1D or 2D");
   }
   CUDF_EXPECTS(tensor.shape[0] >= 0,
-               "DLTensor first dim should be of shape greater than or equal-to 0.");
+               "DLTensor first dim should be of shape greater than or equal to 0.");
   CUDF_EXPECTS(tensor.shape[0] < std::numeric_limits<size_type>::max(),
                "DLTensor first dim exceeds size supported by cudf");
   if (tensor.ndim > 1) {
     CUDF_EXPECTS(tensor.shape[1] >= 0,
-                 "DLTensor second dim should be of shape greater than or equal-to 0.");
+                 "DLTensor second dim should be of shape greater than or equal to 0.");
     CUDF_EXPECTS(tensor.shape[1] < std::numeric_limits<size_type>::max(),
                  "DLTensor second dim exceeds size supported by cudf");
   }
