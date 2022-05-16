@@ -420,11 +420,13 @@ std::pair<rmm::device_uvector<char>, selected_rows_offsets> select_data_and_row_
       reinterpret_cast<const char*>(buffer->data()),
       buffer->size());
 
-    std::vector<char> h_uncomp_data_owner;
+    std::vector<uint8_t> h_uncomp_data_owner;
 
     if (reader_opts.get_compression() != compression_type::NONE) {
-      h_uncomp_data_owner = get_uncompressed_data(h_data, reader_opts.get_compression());
-      h_data              = h_uncomp_data_owner;
+      h_uncomp_data_owner =
+        decompress(reader_opts.get_compression(), {buffer->data(), buffer->size()});
+      h_data = {reinterpret_cast<char const*>(h_uncomp_data_owner.data()),
+                h_uncomp_data_owner.size()};
     }
     // None of the parameters for row selection is used, we are parsing the entire file
     const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&

@@ -214,11 +214,11 @@ std::pair<std::vector<std::string>, col_map_ptr_type> get_json_object_keys_hashe
           create_col_names_hash_map(sorted_info->get_column(2).view(), stream)};
 }
 
-std::vector<char> ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
-                                   compression_type compression,
-                                   size_t range_offset,
-                                   size_t range_size,
-                                   size_t range_size_padded)
+std::vector<uint8_t> ingest_raw_input(std::vector<std::unique_ptr<datasource>> const& sources,
+                                      compression_type compression,
+                                      size_t range_offset,
+                                      size_t range_size,
+                                      size_t range_size_padded)
 {
   // Iterate through the user defined sources and read the contents into the local buffer
   size_t total_source_size = 0;
@@ -227,13 +227,13 @@ std::vector<char> ingest_raw_input(std::vector<std::unique_ptr<datasource>> cons
   }
   total_source_size = total_source_size - (range_offset * sources.size());
 
-  auto buffer = std::vector<char>(total_source_size);
+  auto buffer = std::vector<uint8_t>(total_source_size);
 
   size_t bytes_read = 0;
   for (const auto& source : sources) {
     if (!source->is_empty()) {
       auto data_size   = (range_size_padded != 0) ? range_size_padded : source->size();
-      auto destination = reinterpret_cast<uint8_t*>(buffer.data()) + bytes_read;
+      auto destination = buffer.data() + bytes_read;
       bytes_read += source->host_read(range_offset, data_size, destination);
     }
   }
@@ -241,7 +241,7 @@ std::vector<char> ingest_raw_input(std::vector<std::unique_ptr<datasource>> cons
   if (compression == compression_type::NONE) {
     return buffer;
   } else {
-    return get_uncompressed_data(buffer, compression);
+    return decompress(compression, buffer);
   }
 }
 
@@ -587,8 +587,9 @@ table_with_metadata read_json(std::vector<std::unique_ptr<datasource>>& sources,
   auto range_size        = reader_opts.get_byte_range_size();
   auto range_size_padded = reader_opts.get_byte_range_size_with_padding();
 
-  auto h_data = ingest_raw_input(
+  auto const h_raw_data = ingest_raw_input(
     sources, reader_opts.get_compression(), range_offset, range_size, range_size_padded);
+  host_span<char const> h_data{reinterpret_cast<char const*>(h_raw_data.data()), h_raw_data.size()};
 
   CUDF_EXPECTS(h_data.size() != 0, "Ingest failed: uncompressed input data has zero size.\n");
 
