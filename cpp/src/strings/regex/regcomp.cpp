@@ -470,6 +470,7 @@ class regex_parser {
           int32_t count = 0;
           while (*input != 0 && input < end) {
             auto const ch = static_cast<char>(*input++);
+            // if ch not a digit or ch is a delimiter, we are done
             if (!std::isdigit(ch) || delimiters.find(ch) != delimiters.npos) { break; }
             *output++ = ch;
             ++count;
@@ -478,9 +479,9 @@ class regex_parser {
           return count;
         };
 
-        auto const exprp_backup  = exprp;  // rollback var in case '}' is not found
+        auto const exprp_backup  = exprp;  // save in case matching '}' is not found
         constexpr auto max_read  = 4;      // 3 digits plus the delimiter
-        constexpr auto max_value = 999;    // expects only 3 digits
+        constexpr auto max_value = 999;    // support only 3 digits
         std::vector<char> buffer(max_read + 1);
 
         // get left-side (n) value => min_count
@@ -511,7 +512,6 @@ class regex_parser {
           exprp++;
           return COUNTED_LAZY;
         }
-
         // otherwise, fixed counted quantifier
         return COUNTED;
       }
