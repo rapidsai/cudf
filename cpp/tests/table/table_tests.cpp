@@ -100,7 +100,7 @@ TEST_F(TableTest, SelectingOutOfBounds)
 
   Table t(std::move(cols));
 
-  EXPECT_THROW(t.select(std::vector<cudf::size_type>{0, 1, 2}), std::out_of_range);
+  EXPECT_THROW(cudf::table_view selected_tview = t.select(std::vector<cudf::size_type>{0, 1, 2}), std::out_of_range);
 }
 
 TEST_F(TableTest, SelectingNoColumns)
