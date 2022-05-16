@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1082,7 +1082,7 @@ class parquet_chunked_writer {
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
    * size as number of sinks.
    *
-   * @throws cudf::logic_error If the number of partitions is not the smae as number of sinks
+   * @throws cudf::logic_error If the number of partitions is not the same as number of sinks
    * @return returns reference of the class object
    */
   parquet_chunked_writer& write(table_view const& table,
