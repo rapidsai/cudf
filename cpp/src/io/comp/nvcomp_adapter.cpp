@@ -20,9 +20,9 @@
 
 #include <nvcomp/snappy.h>
 
-#define nvcomp_zstd_header <nvcomp/zstd.h>
-#if __has_include(nvcomp_zstd_header)
-#include nvcomp_zstd_header
+#define NVCOMP_ZSTD_HEADER <nvcomp/zstd.h>
+#if __has_include(NVCOMP_ZSTD_HEADER)
+#include NVCOMP_ZSTD_HEADER
 #define NVCOMP_HAS_ZSTD 1
 #else
 #define NVCOMP_HAS_ZSTD 0
