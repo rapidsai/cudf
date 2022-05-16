@@ -148,9 +148,19 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
     CUDF_EXPECTS(tensor.device.device_id == device_id, "DLTensor device ID must be current device");
   }
 
-  // Currently only 1D and 2D tensors are supported
-  CUDF_EXPECTS(tensor.ndim > 0 && tensor.ndim <= 2, "DLTensor must be 1D or 2D");
-
+  // We only support 1D and 2D tensors with some restrictions on layout
+  if (tensor.ndim == 1) {
+    // 1D tensors must have dense layout (strides == nullptr <=> dense row-major)
+    CUDF_EXPECTS(nullptr == tensor.strides || tensor.strides[0] == 1,
+                 "from_dlpack of 1D DLTensor only for unit-stride data");
+  } else if (tensor.ndim == 2) {
+    // 2D tensors must have column-major layout and the fastest dimension must have dense layout
+    CUDF_EXPECTS(
+      nullptr != tensor.strides && tensor.strides[0] == 1 && tensor.strides[1] >= tensor.shape[0],
+      "from_dlpack of 2D DLTensor only for column-major unit-stride data");
+  } else {
+    CUDF_FAIL("DLTensor must be 1D or 2D");
+  }
   CUDF_EXPECTS(tensor.shape[0] >= 0,
                "DLTensor first dim should be of shape greater than or equal-to 0.");
   CUDF_EXPECTS(tensor.shape[0] < std::numeric_limits<size_type>::max(),
@@ -161,17 +171,6 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
     CUDF_EXPECTS(tensor.shape[1] < std::numeric_limits<size_type>::max(),
                  "DLTensor second dim exceeds size supported by cudf");
   }
-  if (tensor.ndim == 1) {
-    CUDF_EXPECTS(nullptr == tensor.strides || tensor.strides[0] == 1,
-                 "from_dlpack of 1D tensor only for unit-stride data");
-  } else if (tensor.ndim == 2) {
-    CUDF_EXPECTS(
-      nullptr != tensor.strides && tensor.strides[0] == 1 && tensor.strides[1] >= tensor.shape[0],
-      "from_dlpack of 2D tensor only for column-major unit-stride data");
-  } else {
-    CUDF_FAIL("Unhandled tensor dimension in from_dlpack");
-  }
-
   size_t const num_columns = (tensor.ndim == 2) ? static_cast<size_t>(tensor.shape[1]) : 1;
 
   // Validate and convert data type to cudf
