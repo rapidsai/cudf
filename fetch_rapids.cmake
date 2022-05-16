@@ -12,12 +12,6 @@
 # the License.
 # =============================================================================
 include(FetchContent)
-FetchContent_Declare(
-  rapids-cmake
-  GIT_REPOSITORY https://github.com/robertmaynard/rapids-cmake.git
-  GIT_TAG add_cpm_nvcomp
-)
-
 file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.06/RAPIDS.cmake
      ${CMAKE_BINARY_DIR}/RAPIDS.cmake
 )
