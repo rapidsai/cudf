@@ -473,19 +473,26 @@ def test_csv_reader_usecols_int_char(tmpdir, pd_mixed_dataframe):
     assert_eq(df_out, out, check_names=False)
 
 
-def test_csv_reader_mangle_dupe_cols(tmpdir):
-    buffer = "abc,ABC,abc,abcd,abc\n1,2,3,4,5\n"
-
+@pytest.mark.parametrize(
+    "buffer",
+    [
+        "abc,ABC,abc,abcd,abc\n1,2,3,4,5\n",
+        "A,A,A.1,A,A.2,A,A.4,A,A\n1,2,3.1,4,a.2,a,a.4,a,a",
+        "A,A,A.1,,Unnamed: 4,A,A.4,A,A\n1,2,3.1,4,a.2,a,a.4,a,a",
+    ],
+)
+@pytest.mark.parametrize("mangle_dupe_cols", [True, False])
+def test_csv_reader_mangle_dupe_cols(tmpdir, buffer, mangle_dupe_cols):
     # Default: mangle_dupe_cols=True
-    pd_df = pd.read_csv(StringIO(buffer))
-    cu_df = read_csv(StringIO(buffer))
+    cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=mangle_dupe_cols)
+    if mangle_dupe_cols:
+        pd_df = pd.read_csv(StringIO(buffer))
+    else:
+        # Pandas does not support mangle_dupe_cols=False
+        head = buffer.split("\n")[0].split(",")
+        first_cols = np.unique(head, return_index=True)[1]
+        pd_df = pd.read_csv(StringIO(buffer), usecols=first_cols)
     assert_eq(cu_df, pd_df)
-
-    # Pandas does not support mangle_dupe_cols=False
-    cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=False)
-    # check that the dupe columns were removed
-    assert len(cu_df.columns) == 3
-    np.testing.assert_array_equal(cu_df["abc"].to_numpy(), [1])
 
 
 def test_csv_reader_float_decimal(tmpdir):
