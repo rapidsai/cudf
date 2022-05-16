@@ -135,7 +135,7 @@ module, which allow you to compare values up to a desired precision.
 ## Column names
 
 Unlike Pandas, cuDF does not support duplicate column names.
-It is best to use strings for column names.
+It is best to use unique strings for column names.
 
 ## No true `"object"` data type
 
