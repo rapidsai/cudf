@@ -325,6 +325,9 @@ def test_struct_int_values():
 
 
 def test_nested_struct_from_pandas_empty():
+    # tests constructing nested structs columns that would result in
+    # libcudf EMPTY type child columns inheriting their parent's null
+    # mask. See GH PR: #10761
     pdf = pd.Series([[{"c": {"x": None}}], [{"c": None}]])
     gdf = cudf.from_pandas(pdf)
 
