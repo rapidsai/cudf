@@ -155,9 +155,13 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                  "from_dlpack of 1D DLTensor only for unit-stride data");
   } else if (tensor.ndim == 2) {
     // 2D tensors must have column-major layout and the fastest dimension must have dense layout
-    CUDF_EXPECTS(
-      nullptr != tensor.strides && tensor.strides[0] == 1 && tensor.strides[1] >= tensor.shape[0],
-      "from_dlpack of 2D DLTensor only for column-major unit-stride data");
+    CUDF_EXPECTS((
+                   // 1D tensor reshaped into (N, 1) is fine
+                   tensor.shape[1] == 1 && (nullptr == tensor.strides || tensor.strides[0] == 1))
+                   // General case
+                   || (nullptr != tensor.strides && tensor.strides[0] == 1 &&
+                       tensor.strides[1] >= tensor.shape[0]),
+                 "from_dlpack of 2D DLTensor only for column-major unit-stride data");
   } else {
     CUDF_FAIL("DLTensor must be 1D or 2D");
   }
