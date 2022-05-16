@@ -32,6 +32,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/iterator/iterator_adaptor.h>
+#include <thrust/iterator/iterator_facade.h>
 #include <thrust/logical.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
@@ -73,99 +75,39 @@ namespace row {
 enum class lhs_index_type : size_type {};
 enum class rhs_index_type : size_type {};
 
-template <typename T>
-class strong_index_iterator {
- public:
-  using iterator_category = std::random_access_iterator_tag;
-  using difference_type   = size_type;
-  using value_type        = T;
-  // Dereferencing does not return a reference, but a copy of the value,
-  // because there is no underlying memory to reference safely. The internal
-  // iterator state can change or the iterator may be a temporary.
-  using reference = value_type;
-  using pointer   = value_type*;
+template <typename Index, typename Underlying = std::underlying_type_t<Index>>
+struct strong_index_iterator : public thrust::iterator_facade<strong_index_iterator<Index>,
+                                                              Index,
+                                                              thrust::use_default,
+                                                              thrust::random_access_traversal_tag,
+                                                              Index,
+                                                              Underlying> {
+  using super_t = thrust::iterator_adaptor<strong_index_iterator<Index>, Index>;
 
-  explicit constexpr strong_index_iterator(size_type begin) : v{begin} {};
+  explicit constexpr strong_index_iterator(Underlying n) : begin{n} {}
 
-  __device__ constexpr inline value_type operator*() const { return static_cast<T>(v); }
-  __device__ constexpr inline value_type operator[](difference_type i) const
-  {
-    return static_cast<T>(v + i);
-  }
-
-  __device__ constexpr inline strong_index_iterator<T>& operator++()
-  {
-    v++;
-    return *this;
-  }
-  __device__ constexpr inline strong_index_iterator<T> operator++(int)
-  {
-    strong_index_iterator<T> tmp(*this);
-    ++(*this);
-    return tmp;
-  }
-  __device__ constexpr inline strong_index_iterator<T>& operator+=(difference_type i)
-  {
-    v += i;
-    return *this;
-  }
-  __device__ constexpr inline strong_index_iterator<T> operator+(difference_type i) const
-  {
-    return strong_index_iterator<T>(v + i);
-  }
-
-  __device__ constexpr inline strong_index_iterator<T>& operator--()
-  {
-    v--;
-    return *this;
-  }
-  __device__ constexpr inline strong_index_iterator<T> operator--(int)
-  {
-    strong_index_iterator<T> tmp(*this);
-    --(*this);
-    return tmp;
-  }
-  __device__ constexpr inline strong_index_iterator<T>& operator-=(difference_type i)
-  {
-    v -= i;
-    return *this;
-  }
-  __device__ constexpr inline strong_index_iterator<T> operator-(difference_type i) const
-  {
-    return strong_index_iterator<T>(v - i);
-  }
-  __device__ constexpr inline difference_type operator-(strong_index_iterator<T> const& other) const
-  {
-    return v - other.v;
-  }
-
-  __device__ constexpr inline bool operator==(strong_index_iterator<T> const& other) const
-  {
-    return v == other.v;
-  }
-  __device__ constexpr inline bool operator!=(strong_index_iterator<T> const& other) const
-  {
-    return v != other.v;
-  }
-  __device__ constexpr inline bool operator<(strong_index_iterator<T> const& other) const
-  {
-    return v < other.v;
-  }
-  __device__ constexpr inline bool operator<=(strong_index_iterator<T> const& other) const
-  {
-    return v <= other.v;
-  }
-  __device__ constexpr inline bool operator>(strong_index_iterator<T> const& other) const
-  {
-    return v > other.v;
-  }
-  __device__ constexpr inline bool operator>=(strong_index_iterator<T> const& other) const
-  {
-    return v >= other.v;
-  }
+  friend class thrust::iterator_core_access;
 
  private:
-  size_type v{0};
+  __device__ constexpr void increment() { ++begin; }
+  __device__ constexpr void decrement() { --begin; }
+
+  __device__ constexpr void advance(Underlying n) { begin += n; }
+
+  __device__ constexpr bool equal(strong_index_iterator<Index> const& other) const noexcept
+  {
+    return begin == other.begin;
+  }
+
+  __device__ constexpr Index dereference() const noexcept { return static_cast<Index>(begin); }
+
+  __device__ constexpr Underlying distance_to(
+    strong_index_iterator<Index> const& other) const noexcept
+  {
+    return other.begin - begin;
+  }
+
+  Underlying begin{};
 };
 
 using lhs_iterator = strong_index_iterator<lhs_index_type>;
@@ -688,11 +630,7 @@ class two_table_comparator {
                        table_view const& right,
                        host_span<order const> column_order         = {},
                        host_span<null_order const> null_precedence = {},
-                       rmm::cuda_stream_view stream                = rmm::cuda_stream_default)
-    : d_left_table{preprocessed_table::create(left, column_order, null_precedence, stream)},
-      d_right_table{preprocessed_table::create(right, column_order, null_precedence, stream)}
-  {
-  }
+                       rmm::cuda_stream_view stream                = rmm::cuda_stream_default);
 
   /**
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of
@@ -713,10 +651,17 @@ class two_table_comparator {
   /**
    * @brief Return the binary operator for comparing rows in the table.
    *
-   * Returns a binary callable, `F`, with signature `bool F(lhs_index_type, rhs_index_type)`.
+   * Returns a binary callable, `F`, with signatures
+   * `bool F(lhs_index_type, rhs_index_type)` and
+   * `bool F(rhs_index_type, lhs_index_type)`.
    *
-   * `F(i,j)` returns true if and only if row `i` of the left table compares
-   * lexicographically less than row `j` of the right table.
+   * `F(lhs_index_type i, rhs_index_type j)` returns true if and only if row
+   * `i` of the left table compares lexicographically less than row `j` of the
+   * right table.
+   *
+   * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and
+   * only if row `i` of the right table compares lexicographically less than row
+   * `j` of the left table.
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
