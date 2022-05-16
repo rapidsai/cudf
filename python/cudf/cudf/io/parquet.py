@@ -307,7 +307,7 @@ def _process_dataset(
             path = file_fragment.path
 
             # Extract hive-partition keys, and make sure they
-            # are orederd the same as they are in `partition_categories`
+            # are ordered the same as they are in `partition_categories`
             if partition_categories:
                 raw_keys = ds._get_partition_keys(
                     file_fragment.partition_expression

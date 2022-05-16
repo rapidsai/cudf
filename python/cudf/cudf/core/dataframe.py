@@ -267,7 +267,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 tmp_arg = arg
                 if is_scalar(arg[0]):
                     # If a scalar, there is possibility of having duplicates.
-                    # Join would get all the duplicates. So, coverting it to
+                    # Join would get all the duplicates. So, converting it to
                     # an array kind.
                     tmp_arg = ([tmp_arg[0]], tmp_arg[1])
                 if len(tmp_arg[0]) == 0:
@@ -1099,7 +1099,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         except RuntimeError as e:
             # TODO: This allows setting properties that are marked as forbidden
-            # for internal usage. It is necesary because the __getattribute__
+            # for internal usage. It is necessary because the __getattribute__
             # call in the try block will trigger the error. We should see if
             # setting these variables can also always be disabled
             if "External-only API" not in str(e):
@@ -1613,7 +1613,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Get a list of the combined index and table column indices
         indices = list(range(functools.reduce(max, map(len, columns))))
-        # The position of the first table colum in each
+        # The position of the first table column in each
         # combined index + table columns list
         first_data_column_position = len(indices) - len(names)
 
@@ -1786,7 +1786,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _get_renderable_dataframe(self):
         """
         takes rows and columns from pandas settings or estimation from size.
-        pulls quadrents based off of some known parameters then style for
+        pulls quadrants based off of some known parameters then style for
         multiindex as well producing an efficient representative string
         for printing with the dataframe.
         """
@@ -2909,7 +2909,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Difference from pandas:
             * Not supporting: level
 
-        Rename will not overwite column names. If a list with duplicates is
+        Rename will not overwrite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
 
         Examples
@@ -4506,7 +4506,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Parameters
         ----------
         dataframe : Pandas DataFrame object
-            A Pandads DataFrame object which has to be converted
+            A Pandas DataFrame object which has to be converted
             to cuDF DataFrame.
         nan_as_null : bool, Default True
             If ``True``, converts ``np.nan`` values to ``null`` values.

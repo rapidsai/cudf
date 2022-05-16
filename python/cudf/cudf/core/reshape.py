@@ -395,7 +395,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 axis=axis,
                 join=join,
                 ignore_index=ignore_index,
-                # Explicitly cast rather than relying on None being falsy.
+                # Explicitly cast rather than relying on None being false.
                 sort=bool(sort),
             )
         return result
