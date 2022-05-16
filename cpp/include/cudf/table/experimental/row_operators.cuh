@@ -688,11 +688,7 @@ class two_table_comparator {
                        table_view const& right,
                        host_span<order const> column_order         = {},
                        host_span<null_order const> null_precedence = {},
-                       rmm::cuda_stream_view stream                = rmm::cuda_stream_default)
-    : d_left_table{preprocessed_table::create(left, column_order, null_precedence, stream)},
-      d_right_table{preprocessed_table::create(right, column_order, null_precedence, stream)}
-  {
-  }
+                       rmm::cuda_stream_view stream                = rmm::cuda_stream_default);
 
   /**
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of
