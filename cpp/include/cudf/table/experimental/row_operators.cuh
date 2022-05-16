@@ -420,7 +420,7 @@ class self_comparator {
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of
    * the same table.
    *
-   * @param table The table to compare
+   * @param t The table to compare
    * @param column_order Optional, host array the same length as a row that indicates the desired
    * ascending/descending order of each column in a row. If empty, it is assumed all columns are
    * sorted in ascending order.

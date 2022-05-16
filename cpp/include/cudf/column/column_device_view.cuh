@@ -1198,7 +1198,7 @@ struct optional_accessor {
   /**
    * @brief Constructor
    *
-   * @param col Column on which to iterator over its elements.
+   * @param _col Column on which to iterator over its elements.
    * @param with_nulls Indicates if the `col` should be checked for nulls.
    */
   optional_accessor(column_device_view const& _col, Nullate with_nulls)
