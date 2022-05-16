@@ -35,7 +35,7 @@ HELP="$0 [clean] [libcudf] [cudf] [cudfjar] [dask_cudf] [benchmarks] [tests] [li
    -n                            - no install step
    --allgpuarch                  - build for all supported GPU architectures
    --disable_nvtx                - disable inserting NVTX profiling ranges
-   --opensource_nvcomp           - disable use of propretary nvcomp extensions
+   --opensource_nvcomp           - disable use of proprietary nvcomp extensions
    --show_depr_warn              - show cmake deprecation warnings
    --ptds                        - enable per-thread default stream
    --build_metrics               - generate build metrics report for libcudf
