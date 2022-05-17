@@ -238,6 +238,9 @@ def resolve_aliases(app, doctree):
 def ignore_internal_references(app, env, node, contnode):
     name = node.get("reftarget", None)
     if name == "cudf.core.index.GenericIndex":
+        # We don't exposed docs for `cudf.core.index.GenericIndex`
+        # hence we would want the docstring & mypy references to
+        # use `cudf.Index`
         node["reftarget"] = "cudf.Index"
         return contnode
     elif name is not None and name in _internal_names_to_ignore:
