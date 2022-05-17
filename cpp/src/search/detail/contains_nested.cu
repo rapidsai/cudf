@@ -132,6 +132,7 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                           stream.value()};
 
+  // todo: create preprocess table for both row_hasher and table_comparator
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(haystack_tv, stream);
   auto const haystack_hash =
     detail::experimental::compaction_hash(row_hasher.device_hasher(has_any_nulls));
