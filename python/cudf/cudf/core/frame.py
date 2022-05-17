@@ -1615,9 +1615,9 @@ class Frame(BinaryOperand, Scannable):
         4    <NA>
         dtype: object
 
-        If there is a mimatch in types of the values in
+        If there is a mismatch in types of the values in
         ``to_replace`` & ``value`` with the actual series, then
-        cudf exhibits different behaviour with respect to pandas
+        cudf exhibits different behavior with respect to pandas
         and the pairs are ignored silently:
 
         >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
@@ -2044,7 +2044,7 @@ class Frame(BinaryOperand, Scannable):
             na_position=na_position,
         )
 
-        # Retrun result as cupy array if the values is non-scalar
+        # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
         result = cupy.asarray(outcol.data_array_view)
         if scalar_flag:

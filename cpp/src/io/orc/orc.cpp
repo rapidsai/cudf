@@ -356,53 +356,42 @@ size_t ProtobufWriter::write(const Metadata& s)
   return w.value();
 }
 
-OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
-  : m_kind(kind), m_blockSize(blockSize)
+OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize) : m_blockSize(blockSize)
 {
-  if (kind != NONE) {
-    int stream_type = IO_UNCOMP_STREAM_TYPE_INFER;  // Will be treated as invalid
-    switch (kind) {
-      case NONE: break;
-      case ZLIB:
-        stream_type    = IO_UNCOMP_STREAM_TYPE_INFLATE;
-        m_log2MaxRatio = 11;  // < 2048:1
-        break;
-      case SNAPPY:
-        stream_type    = IO_UNCOMP_STREAM_TYPE_SNAPPY;
-        m_log2MaxRatio = 5;  // < 32:1
-        break;
-      case LZO: stream_type = IO_UNCOMP_STREAM_TYPE_LZO; break;
-      case LZ4: stream_type = IO_UNCOMP_STREAM_TYPE_LZ4; break;
-      case ZSTD: stream_type = IO_UNCOMP_STREAM_TYPE_ZSTD; break;
-    }
-    m_decompressor = HostDecompressor::Create(stream_type);
-  } else {
-    m_log2MaxRatio = 0;
+  switch (kind) {
+    case NONE:
+      _compression   = compression_type::NONE;
+      m_log2MaxRatio = 0;
+      break;
+    case ZLIB:
+      _compression   = compression_type::ZLIB;
+      m_log2MaxRatio = 11;  // < 2048:1
+      break;
+    case SNAPPY:
+      _compression   = compression_type::SNAPPY;
+      m_log2MaxRatio = 5;  // < 32:1
+      break;
+    case LZO: _compression = compression_type::LZO; break;
+    case LZ4: _compression = compression_type::LZ4; break;
+    case ZSTD: _compression = compression_type::ZSTD; break;
+    default: CUDF_FAIL("Invalid compression type");
   }
 }
 
-/**
- * @brief ORC block decompression
- *
- * @param[in] srcBytes compressed data
- * @param[in] srcLen length of compressed data
- * @param[out] dstLen length of uncompressed data
- *
- * @returns pointer to uncompressed data, nullptr if error
- */
-const uint8_t* OrcDecompressor::Decompress(const uint8_t* srcBytes, size_t srcLen, size_t* dstLen)
+host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t const> src)
 {
   // If uncompressed, just pass-through the input
-  if (m_kind == NONE) {
-    *dstLen = srcLen;
-    return srcBytes;
-  }
+  if (src.empty() or _compression == compression_type::NONE) { return src; }
+
+  constexpr size_t header_size = 3;
+  CUDF_EXPECTS(src.size() >= header_size, "Total size is less than the 3-byte header");
+
   // First, scan the input for the number of blocks and worst-case output size
   size_t max_dst_length = 0;
-  for (size_t i = 0; i + 3 < srcLen;) {
-    uint32_t block_len       = srcBytes[i] | (srcBytes[i + 1] << 8) | (srcBytes[i + 2] << 16);
-    uint32_t is_uncompressed = block_len & 1;
-    i += 3;
+  for (size_t i = 0; i + header_size < src.size();) {
+    uint32_t block_len         = src[i] | (src[i + 1] << 8) | (src[i + 2] << 16);
+    auto const is_uncompressed = static_cast<bool>(block_len & 1);
+    i += header_size;
     block_len >>= 1;
     if (is_uncompressed) {
       // Uncompressed block
@@ -411,38 +400,32 @@ const uint8_t* OrcDecompressor::Decompress(const uint8_t* srcBytes, size_t srcLe
       max_dst_length += m_blockSize;
     }
     i += block_len;
-    if (i > srcLen || block_len > m_blockSize) { return nullptr; }
+    CUDF_EXPECTS(i <= src.size() and block_len <= m_blockSize, "Error in decompression");
   }
   // Check if we have a single uncompressed block, or no blocks
-  if (max_dst_length < m_blockSize) {
-    if (srcLen < 3) {
-      // Total size is less than the 3-byte header
-      return nullptr;
-    }
-    *dstLen = srcLen - 3;
-    return srcBytes + 3;
-  }
+  if (max_dst_length < m_blockSize) { return src.subspan(header_size, src.size() - header_size); }
+
   m_buf.resize(max_dst_length);
-  auto dst          = m_buf.data();
   size_t dst_length = 0;
-  for (size_t i = 0; i + 3 < srcLen;) {
-    uint32_t block_len       = srcBytes[i] | (srcBytes[i + 1] << 8) | (srcBytes[i + 2] << 16);
-    uint32_t is_uncompressed = block_len & 1;
-    i += 3;
+  for (size_t i = 0; i + header_size < src.size();) {
+    uint32_t block_len         = src[i] | (src[i + 1] << 8) | (src[i + 2] << 16);
+    auto const is_uncompressed = static_cast<bool>(block_len & 1);
+    i += header_size;
     block_len >>= 1;
     if (is_uncompressed) {
       // Uncompressed block
-      memcpy(dst + dst_length, srcBytes + i, block_len);
+      memcpy(m_buf.data() + dst_length, src.data() + i, block_len);
       dst_length += block_len;
     } else {
       // Compressed block
-      dst_length +=
-        m_decompressor->Decompress(dst + dst_length, m_blockSize, srcBytes + i, block_len);
+      dst_length += decompress(
+        _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize});
     }
     i += block_len;
   }
-  *dstLen = dst_length;
-  return m_buf.data();
+
+  m_buf.resize(dst_length);
+  return m_buf;
 }
 
 metadata::metadata(datasource* const src) : source(src)
@@ -462,18 +445,16 @@ metadata::metadata(datasource* const src) : source(src)
   decompressor = std::make_unique<OrcDecompressor>(ps.compression, ps.compressionBlockSize);
 
   // Read compressed filefooter section
-  buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
-  size_t ff_length = 0;
-  auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
-  ProtobufReader(ff_data, ff_length).read(ff);
+  buffer             = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
+  auto const ff_data = decompressor->decompress_blocks({buffer->data(), buffer->size()});
+  ProtobufReader(ff_data.data(), ff_data.size()).read(ff);
   CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
 
   // Read compressed metadata section
   buffer =
     source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
-  size_t md_length = 0;
-  auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
-  orc::ProtobufReader(md_data, md_length).read(md);
+  auto const md_data = decompressor->decompress_blocks({buffer->data(), buffer->size()});
+  orc::ProtobufReader(md_data.data(), md_data.size()).read(md);
 
   init_parent_descriptors();
   init_column_names();

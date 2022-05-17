@@ -349,8 +349,8 @@ def assert_column_memory_eq(
     """Assert the memory location and size of `lhs` and `rhs` are equivalent.
 
     Both data pointer and mask pointer are checked. Also recursively check for
-    children to the same contarints. Also fails check if the number of children
-    mismatches at any level.
+    children to the same constraints. Also fails check if the number of
+    children mismatches at any level.
     """
     assert lhs.base_data_ptr == rhs.base_data_ptr
     assert lhs.base_mask_ptr == rhs.base_mask_ptr
