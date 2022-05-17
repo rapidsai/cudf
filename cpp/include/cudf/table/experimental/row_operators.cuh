@@ -343,7 +343,7 @@ struct weak_ordering_comparator_impl {
     weak_ordering const result = comparator(args...);
     return ((result == values) || ...);
   }
-  Comparator comparator;
+  Comparator const comparator;
 };
 
 /**
@@ -444,10 +444,10 @@ struct preprocessed_table {
   }
 
  private:
-  table_device_view_owner _t;
-  rmm::device_uvector<order> _column_order;
-  rmm::device_uvector<null_order> _null_precedence;
-  rmm::device_uvector<size_type> _depths;
+  table_device_view_owner const _t;
+  rmm::device_uvector<order> const _column_order;
+  rmm::device_uvector<null_order> const _null_precedence;
+  rmm::device_uvector<size_type> const _depths;
 };
 
 /**
