@@ -25,7 +25,7 @@ namespace cudf {
  */
 bool is_ptds_enabled()
 {
-#ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
+#ifdef CUDF_USE_PER_THREAD_DEFAULT_STREAM
   return true;
 #else
   return false;

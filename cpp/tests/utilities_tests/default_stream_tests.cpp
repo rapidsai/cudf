@@ -18,7 +18,7 @@
 
 #include <cudf_test/cudf_gtest.hpp>
 
-#ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
+#ifdef CUDF_USE_PER_THREAD_DEFAULT_STREAM
 TEST(DefaultStreamTest, PtdsIsEnabled) { EXPECT_TRUE(cudf::is_ptds_enabled()); }
 #else
 TEST(DefaultStreamTest, PtdsIsNotEnabled) { EXPECT_FALSE(cudf::is_ptds_enabled()); }
