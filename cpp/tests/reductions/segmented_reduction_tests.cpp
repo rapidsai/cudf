@@ -556,9 +556,9 @@ TEST_F(SegmentedReductionStringTest, EmptyInputWithOffsets)
   // outputs:   {XXX}
   // output nullmask: {0}
   auto input     = strings_column_wrapper{};
-  auto offsets   = std::vector<size_type>{0, 0};
+  auto offsets   = std::vector<size_type>{0, 0, 0, 0};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
-  auto expect    = strings_column_wrapper({XXX}, {0});
+  auto expect    = strings_column_wrapper({XXX, XXX, XXX}, {0, 0, 0});
 
   auto result = segmented_reduce(input,
                                  d_offsets,
