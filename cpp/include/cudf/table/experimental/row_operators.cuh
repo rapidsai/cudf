@@ -619,16 +619,13 @@ class two_table_comparator {
   less_comparator<strong_index_comparator_adapter<device_row_comparator<Nullate>>>
   device_comparator(Nullate nullate = {}) const
   {
-    auto const comparator = device_row_comparator<Nullate>(nullate,
-                                                           *d_left_table,
-                                                           *d_right_table,
-                                                           d_left_table->depths(),
-                                                           d_left_table->column_order(),
-                                                           d_left_table->null_precedence());
-    auto const strong_index_comparator =
-      strong_index_comparator_adapter<device_row_comparator<Nullate>>{comparator};
     return less_comparator<strong_index_comparator_adapter<device_row_comparator<Nullate>>>{
-      strong_index_comparator};
+      device_row_comparator<Nullate>(nullate,
+                                     *d_left_table,
+                                     *d_right_table,
+                                     d_left_table->depths(),
+                                     d_left_table->column_order(),
+                                     d_left_table->null_precedence())};
   }
 
  private:
