@@ -111,13 +111,12 @@ cdef class Column:
             if self.base_data is None:
                 self._data = self.base_data
             else:
-                buf = Buffer(self.base_data)
-                if self.size == 0:
-                    buf.ptr = 0
-                else:
-                    buf.ptr = buf.ptr + (self.offset * self.dtype.itemsize)
-                buf.size = self.size * self.dtype.itemsize
-                self._data = buf
+                itemsize = self.dtype.itemsize
+                self._data = Buffer.from_buffer(
+                    buffer=self.base_data,
+                    size=self.size * itemsize,
+                    offset=self.offset * itemsize if self.size else 0
+                )
         return self._data
 
     @property
