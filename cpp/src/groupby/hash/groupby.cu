@@ -567,10 +567,10 @@ std::unique_ptr<table> groupby(table_view const& keys,
   auto const has_null = nullate::DYNAMIC{keys_have_nulls};
 
   auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
-  cudf::experimental::row::equality::self_comparator comparator(preprocessed_keys);
-  auto row_hash    = cudf::experimental::row::hash::row_hasher(std::move(preprocessed_keys));
-  auto d_key_equal = comparator.device_comparator(has_null, null_keys_are_equal);
-  auto d_row_hash  = row_hash.device_hasher(has_null);
+  auto const comparator  = cudf::experimental::row::equality::self_comparator{preprocessed_keys};
+  auto const row_hash    = cudf::experimental::row::hash::row_hasher{std::move(preprocessed_keys)};
+  auto const d_key_equal = comparator.device_comparator(has_null, null_keys_are_equal);
+  auto const d_row_hash  = row_hash.device_hasher(has_null);
 
   size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
   size_type constexpr unused_value{std::numeric_limits<size_type>::max()};
