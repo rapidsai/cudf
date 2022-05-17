@@ -115,9 +115,6 @@ using rhs_iterator = strong_index_iterator<rhs_index_type>;
 
 namespace lexicographic {
 
-template <typename Nullate>
-class two_table_device_row_comparator_adapter;
-
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
  *
@@ -138,7 +135,7 @@ class two_table_device_row_comparator_adapter;
 template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
-  friend class two_table_device_row_comparator_adapter<Nullate>;
+  friend class two_table_comparator;
 
   /**
    * @brief Construct a function object for performing a lexicographic
@@ -518,38 +515,20 @@ class self_comparator {
   std::shared_ptr<preprocessed_table> d_t;
 };
 
-template <typename Nullate>
-class two_table_device_row_comparator_adapter {
-  friend class two_table_comparator;
-
- public:
-  /**
-   * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
-   * lexicographically less than the row at `rhs_index` in the `rhs` table.
-   *
-   * @param lhs_index The index of the row in the `lhs` table to examine
-   * @param rhs_index The index of the row in the `rhs` table to examine
-   * @return `true` if row from the `lhs` table compares less than row in the `rhs` table
-   */
+template <typename Comparator>
+struct strong_index_comparator_adapter {
   __device__ constexpr weak_ordering operator()(lhs_index_type const lhs_index,
                                                 rhs_index_type const rhs_index) const noexcept
   {
-    return comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
+    return comparator(static_cast<cudf::size_type>(lhs_index),
+                      static_cast<cudf::size_type>(rhs_index));
   }
 
-  /**
-   * @brief Checks whether the row at `rhs_index` in the `rhs` table compares
-   * lexicographically less than the row at `lhs_index` in the `lhs` table.
-   *
-   * @param rhs_index The index of the row in the `rhs` table to examine
-   * @param lhs_index The index of the row in the `lhs` table to examine
-   * @return `true` if row from the `rhs` table compares less than row in the `lhs` table
-   */
   __device__ constexpr weak_ordering operator()(rhs_index_type const rhs_index,
                                                 lhs_index_type const lhs_index) const noexcept
   {
     auto const left_right_ordering =
-      comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
+      comparator(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
 
     // Invert less/greater values to reflect right to left ordering
     if (left_right_ordering == weak_ordering::LESS) {
@@ -560,36 +539,7 @@ class two_table_device_row_comparator_adapter {
     return weak_ordering::EQUIVALENT;
   }
 
- private:
-  /**
-   * @brief Construct a function object for performing a lexicographic
-   * comparison between the rows of two tables with strongly typed table index
-   * types.
-   *
-   * @param check_nulls Indicates if either input table contains columns with nulls.
-   * @param lhs The first table
-   * @param rhs The second table (may be the same table as `lhs`)
-   * @param depth Optional, device array the same length as a row that contains starting depths of
-   * columns if they're nested, and 0 otherwise.
-   * @param column_order Optional, device array the same length as a row that indicates the desired
-   * ascending/descending order of each column in a row. If `nullopt`, it is assumed all columns are
-   * sorted in ascending order.
-   * @param null_precedence Optional, device array the same length as a row and indicates how null
-   * values compare to all other for every column. If `nullopt`, then null precedence would be
-   * `null_order::BEFORE` for all columns.
-   */
-  two_table_device_row_comparator_adapter(
-    Nullate check_nulls,
-    table_device_view lhs,
-    table_device_view rhs,
-    std::optional<device_span<int const>> depth                  = std::nullopt,
-    std::optional<device_span<order const>> column_order         = std::nullopt,
-    std::optional<device_span<null_order const>> null_precedence = std::nullopt)
-    : comp{check_nulls, lhs, rhs, depth, column_order, null_precedence}
-  {
-  }
-
-  device_row_comparator<Nullate> comp;
+  Comparator const comparator;
 };
 
 /**
@@ -666,16 +616,19 @@ class two_table_comparator {
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
-  less_comparator<two_table_device_row_comparator_adapter<Nullate>> device_comparator(
-    Nullate nullate = {}) const
+  less_comparator<strong_index_comparator_adapter<device_row_comparator<Nullate>>>
+  device_comparator(Nullate nullate = {}) const
   {
-    return less_comparator<two_table_device_row_comparator_adapter<Nullate>>{
-      two_table_device_row_comparator_adapter<Nullate>(nullate,
-                                                       *d_left_table,
-                                                       *d_right_table,
-                                                       d_left_table->depths(),
-                                                       d_left_table->column_order(),
-                                                       d_left_table->null_precedence())};
+    auto const comparator = device_row_comparator<Nullate>(nullate,
+                                                           *d_left_table,
+                                                           *d_right_table,
+                                                           d_left_table->depths(),
+                                                           d_left_table->column_order(),
+                                                           d_left_table->null_precedence());
+    auto const strong_index_comparator =
+      strong_index_comparator_adapter<device_row_comparator<Nullate>>{comparator};
+    return less_comparator<strong_index_comparator_adapter<device_row_comparator<Nullate>>>{
+      strong_index_comparator};
   }
 
  private:
