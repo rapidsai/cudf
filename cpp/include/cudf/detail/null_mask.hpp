@@ -267,7 +267,6 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
  * @param masks_begin_bits The bit offsets from which each mask is to be ANDed
  * @param mask_size_bits The number of bits to be ANDed in each mask
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned device_buffer
  * @return Count of set bits
  */
 cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
