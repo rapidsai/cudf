@@ -61,11 +61,11 @@ class structs_column_view : public column_view {
    * Slice/split offset values are only stored at the root level of a struct column.
    * So when doing computations on them, we need to apply that offset to
    * the child columns when recursing.  Most functions operating in a recursive manner
-   * on struct columns should be using `get_sliced_child()` instead of `child()`.
+   * on struct columns should be using `sliced_child()` instead of `child()`.
    *
    * @throw cudf::logic error if this is an empty column
    */
-  [[nodiscard]] column_view get_sliced_child(int index) const;
+  [[nodiscard]] column_view sliced_child(int index) const;
 };         // class structs_column_view;
 /** @} */  // end of group
 }  // namespace cudf

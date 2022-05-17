@@ -352,7 +352,7 @@ struct column_gatherer_impl<list_view> {
     // the nesting case.
     if (list.child().type() == cudf::data_type{type_id::LIST}) {
       // gather children
-      auto child = lists::detail::gather_list_nested(list.get_sliced_child(stream), gd, stream, mr);
+      auto child = lists::detail::gather_list_nested(list.sliced_child(stream), gd, stream, mr);
 
       // return the final column
       return make_lists_column(gather_map_size,
@@ -363,7 +363,7 @@ struct column_gatherer_impl<list_view> {
     }
 
     // it's a leaf.  do a regular gather
-    auto child = lists::detail::gather_list_leaf(list.get_sliced_child(stream), gd, stream, mr);
+    auto child = lists::detail::gather_list_leaf(list.sliced_child(stream), gd, stream, mr);
 
     // assemble final column
     return make_lists_column(gather_map_size,
@@ -461,7 +461,7 @@ struct column_gatherer_impl<struct_view> {
                    thrust::make_counting_iterator(column.num_children()),
                    std::back_inserter(sliced_children),
                    [structs_view = structs_column_view{column}](auto const idx) {
-                     return structs_view.get_sliced_child(idx);
+                     return structs_view.sliced_child(idx);
                    });
 
     std::vector<std::unique_ptr<cudf::column>> output_struct_members;

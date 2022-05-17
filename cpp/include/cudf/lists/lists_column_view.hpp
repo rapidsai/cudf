@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,11 +85,11 @@ class lists_column_view : private column_view {
    * Slice/split offset values are only stored at the root level of a list column.
    * So when doing computations on them, we need to apply that offset to
    * the child columns when recursing.  Most functions operating in a recursive manner
-   * on lists columns should be using `get_sliced_child()` instead of `child()`.
+   * on lists columns should be using `sliced_child()` instead of `child()`.
    *
    * @throw cudf::logic error if this is an empty column
    */
-  [[nodiscard]] column_view get_sliced_child(rmm::cuda_stream_view stream) const;
+  [[nodiscard]] column_view sliced_child(rmm::cuda_stream_view stream) const;
 
   /**
    * @brief Return first offset (accounting for column offset)

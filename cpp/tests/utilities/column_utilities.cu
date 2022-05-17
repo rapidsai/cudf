@@ -280,12 +280,12 @@ struct column_property_comparator {
     cudf::lists_column_view rhs_l(rhs);
 
     // recurse
-    auto lhs_child = lhs_l.get_sliced_child(rmm::cuda_stream_default);
+    auto lhs_child = lhs_l.sliced_child(rmm::cuda_stream_default);
     // note: if a column is all nulls or otherwise empty, no indices are generated and no recursion
     // happens
     auto lhs_child_indices = generate_child_row_indices(lhs_l, lhs_row_indices);
     if (lhs_child_indices->size() > 0) {
-      auto rhs_child         = rhs_l.get_sliced_child(rmm::cuda_stream_default);
+      auto rhs_child         = rhs_l.sliced_child(rmm::cuda_stream_default);
       auto rhs_child_indices = generate_child_row_indices(rhs_l, rhs_row_indices);
       return cudf::type_dispatcher(lhs_child.type(),
                                    column_property_comparator<check_exact_equality>{},
@@ -311,8 +311,8 @@ struct column_property_comparator {
     structs_column_view r_scv(rhs);
 
     for (size_type i = 0; i < lhs.num_children(); i++) {
-      column_view lhs_child = l_scv.get_sliced_child(i);
-      column_view rhs_child = r_scv.get_sliced_child(i);
+      column_view lhs_child = l_scv.sliced_child(i);
+      column_view rhs_child = r_scv.sliced_child(i);
       if (!cudf::type_dispatcher(lhs_child.type(),
                                  column_property_comparator<check_exact_equality>{},
                                  lhs_child,
@@ -648,12 +648,12 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     }
 
     // recurse.
-    auto lhs_child = lhs_l.get_sliced_child(rmm::cuda_stream_default);
+    auto lhs_child = lhs_l.sliced_child(rmm::cuda_stream_default);
     // note: if a column is all nulls or otherwise empty, no indices are generated and no recursion
     // happens
     auto lhs_child_indices = generate_child_row_indices(lhs_l, lhs_row_indices);
     if (lhs_child_indices->size() > 0) {
-      auto rhs_child         = rhs_l.get_sliced_child(rmm::cuda_stream_default);
+      auto rhs_child         = rhs_l.sliced_child(rmm::cuda_stream_default);
       auto rhs_child_indices = generate_child_row_indices(rhs_l, rhs_row_indices);
       return cudf::type_dispatcher(lhs_child.type(),
                                    column_comparator<check_exact_equality>{},
@@ -684,8 +684,8 @@ struct column_comparator_impl<struct_view, check_exact_equality> {
     structs_column_view r_scv(rhs);
 
     for (size_type i = 0; i < lhs.num_children(); i++) {
-      column_view lhs_child = l_scv.get_sliced_child(i);
-      column_view rhs_child = r_scv.get_sliced_child(i);
+      column_view lhs_child = l_scv.sliced_child(i);
+      column_view rhs_child = r_scv.sliced_child(i);
       if (!cudf::type_dispatcher(lhs_child.type(),
                                  column_comparator<check_exact_equality>{},
                                  lhs_child,
@@ -1070,7 +1070,7 @@ struct column_view_printer {
     lists_column_view lcv(col);
 
     // propagate slicing to the child if necessary
-    column_view child    = lcv.get_sliced_child(rmm::cuda_stream_default);
+    column_view child    = lcv.sliced_child(rmm::cuda_stream_default);
     bool const is_sliced = lcv.offset() > 0 || child.offset() > 0;
 
     std::string tmp =
@@ -1113,7 +1113,7 @@ struct column_view_printer {
       iter + view.num_children(),
       std::ostream_iterator<std::string>(out_stream, "\n"),
       [&](size_type index) {
-        auto child = view.get_sliced_child(index);
+        auto child = view.sliced_child(index);
 
         // non-nested types don't typically display their null masks, so do it here for convenience.
         return (!is_nested(child.type()) && child.nullable()

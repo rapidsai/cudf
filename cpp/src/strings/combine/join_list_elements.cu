@@ -186,7 +186,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
   if (num_rows == 0) { return make_empty_column(type_id::STRING); }
 
   // Accessing the child strings column of the lists column must be done by calling `child()` on the
-  // lists column, not `get_sliced_child()`. This is because calling to `offsets_begin()` on the
+  // lists column, not `sliced_child()`. This is because calling to `offsets_begin()` on the
   // lists column returns a pointer to the offsets of the original lists column, which may not start
   // from `0`.
   auto const strings_col     = strings_column_view(lists_strings_column.child());
@@ -260,7 +260,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
   if (num_rows == 0) { return make_empty_column(type_id::STRING); }
 
   // Accessing the child strings column of the lists column must be done by calling `child()` on the
-  // lists column, not `get_sliced_child()`. This is because calling to `offsets_begin()` on the
+  // lists column, not `sliced_child()`. This is because calling to `offsets_begin()` on the
   // lists column returns a pointer to the offsets of the original lists column, which may not start
   // from `0`.
   auto const strings_col     = strings_column_view(lists_strings_column.child());

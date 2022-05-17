@@ -208,7 +208,7 @@ struct group_scan_functor<K,
     //
     // Gather the children elements of the prefix min/max struct elements first.
     //
-    // Typically, we should use `get_sliced_child` for each child column to properly handle the
+    // Typically, we should use `sliced_child` for each child column to properly handle the
     // input if it is a sliced view. However, since the input to this function is just generated
     // from groupby internal APIs which is never a sliced view, we just use `child_begin` and
     // `child_end` iterators for simplicity.

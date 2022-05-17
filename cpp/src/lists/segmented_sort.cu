@@ -254,7 +254,7 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
   // for non-numeric columns, calls segmented_sort_by_key.
   auto output_child = type_dispatcher(input.child().type(),
                                       SegmentedSortColumn{},
-                                      input.get_sliced_child(stream),
+                                      input.sliced_child(stream),
                                       output_offset->view(),
                                       column_order,
                                       null_precedence,
@@ -291,7 +291,7 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
                       return offset_index - *first;
                     });
 
-  auto const child              = input.get_sliced_child(stream);
+  auto const child              = input.sliced_child(stream);
   auto const sorted_child_table = stable_segmented_sort_by_key(table_view{{child}},
                                                                table_view{{child}},
                                                                output_offset->view(),

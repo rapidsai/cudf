@@ -75,7 +75,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 
   // The child column of the output lists column is just copied from the input column.
   auto out_entries = std::make_unique<column>(
-    lists_column_view(lists_column_view(input).get_sliced_child(stream)).get_sliced_child(stream),
+    lists_column_view(lists_column_view(input).sliced_child(stream)).sliced_child(stream),
     stream,
     mr);
 

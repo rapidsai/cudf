@@ -62,7 +62,7 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
                    "Mismatch in number of children during struct concatenate");
       CUDF_EXPECTS(struct_cols[0].child(child_index).type() == scv.child(child_index).type(),
                    "Mismatch in child types during struct concatenate");
-      children.push_back(scv.get_sliced_child(child_index));
+      children.push_back(scv.sliced_child(child_index));
     }
 
     result.push_back(std::move(children));
@@ -157,7 +157,7 @@ struct table_flattener {
       if (not null_precedence.empty()) { flat_null_precedence.push_back(col_null_order); }
     }
     for (decltype(col.num_children()) i = 0; i < col.num_children(); ++i) {
-      auto const& child = col.get_sliced_child(i);
+      auto const& child = col.sliced_child(i);
       if (child.type().id() == type_id::STRUCT) {
         flatten_struct_column(structs_column_view{child}, col_order, col_null_order);
       } else {
@@ -365,7 +365,7 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
 
   // Function to rewrite child null mask.
   auto rewrite_child_mask = [&](auto const& child_idx) {
-    auto child = structs_column.get_sliced_child(child_idx);
+    auto child = structs_column.sliced_child(child_idx);
 
     // If struct is not nullable, child null mask is retained. NOOP.
     if (not structs_column.nullable()) { return child; }

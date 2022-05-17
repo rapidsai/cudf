@@ -36,7 +36,7 @@ std::unique_ptr<scalar> drop_duplicates(list_scalar const& scalar,
   auto list_wrapper   = lists::detail::make_lists_column_from_scalar(scalar, 1, stream, mr);
   auto lcw            = lists_column_view(list_wrapper->view());
   auto no_dup_wrapper = lists::drop_list_duplicates(lcw, nulls_equal, nans_equal, mr);
-  auto no_dup         = lists_column_view(no_dup_wrapper->view()).get_sliced_child(stream);
+  auto no_dup         = lists_column_view(no_dup_wrapper->view()).sliced_child(stream);
   return make_list_scalar(no_dup, stream, mr);
 }
 
@@ -61,7 +61,7 @@ std::unique_ptr<scalar> merge_lists(lists_column_view const& col,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  auto flatten_col = col.get_sliced_child(stream);
+  auto flatten_col = col.sliced_child(stream);
   return make_list_scalar(flatten_col, stream, mr);
 }
 
@@ -83,7 +83,7 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  auto flatten_col = col.get_sliced_child(stream);
+  auto flatten_col = col.sliced_child(stream);
   auto scalar      = std::make_unique<list_scalar>(flatten_col, true, stream, mr);
   return drop_duplicates(*scalar, nulls_equal, nans_equal, stream, mr);
 }

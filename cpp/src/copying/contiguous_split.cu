@@ -618,7 +618,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
   std::transform(thrust::make_counting_iterator(0),
                  thrust::make_counting_iterator(scv.num_children()),
                  std::back_inserter(sliced_children),
-                 [&scv](size_type child_index) { return scv.get_sliced_child(child_index); });
+                 [&scv](size_type child_index) { return scv.sliced_child(child_index); });
   return setup_source_buf_info(sliced_children.begin(),
                                sliced_children.end(),
                                head,

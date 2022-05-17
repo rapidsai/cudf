@@ -221,7 +221,7 @@ struct flatten_functor {
 
     lists_column_view lcv(col);
     auto iter = cudf::detail::make_counting_transform_iterator(
-      0, [col = lcv.get_sliced_child(stream)](auto) { return col; });
+      0, [col = lcv.sliced_child(stream)](auto) { return col; });
     h_info.complex_type_count++;
 
     flatten_hierarchy(
@@ -246,7 +246,7 @@ struct flatten_functor {
 
     structs_column_view scv(col);
     auto iter = cudf::detail::make_counting_transform_iterator(
-      0, [&scv](auto i) { return scv.get_sliced_child(i); });
+      0, [&scv](auto i) { return scv.sliced_child(i); });
     flatten_hierarchy(iter,
                       iter + scv.num_children(),
                       out,

@@ -43,7 +43,7 @@ column_view lists_column_view::child() const
   return column_view::child(child_column_index);
 }
 
-column_view lists_column_view::get_sliced_child(rmm::cuda_stream_view stream) const
+column_view lists_column_view::sliced_child(rmm::cuda_stream_view stream) const
 {
   // if I have a positive offset, I need to slice my child
   if (offset() > 0) {

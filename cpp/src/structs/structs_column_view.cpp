@@ -27,7 +27,7 @@ structs_column_view::structs_column_view(column_view const& rhs) : column_view{r
 
 column_view structs_column_view::parent() const { return *this; }
 
-column_view structs_column_view::get_sliced_child(int index) const
+column_view structs_column_view::sliced_child(int index) const
 {
   std::vector<column_view> children;
   children.reserve(child(index).num_children());

@@ -41,7 +41,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   CUDF_EXPECTS(value_column.size() == gather_map.size(),
                "Gather map and list column should be same size");
 
-  auto const gather_map_sliced_child = gather_map.get_sliced_child(stream);
+  auto const gather_map_sliced_child = gather_map.sliced_child(stream);
   auto const gather_map_size         = gather_map_sliced_child.size();
   auto const gather_index_begin      = gather_map.offsets_begin() + 1;
   auto const gather_index_end        = gather_map.offsets_end();
@@ -80,7 +80,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   auto child_gather_index_begin = cudf::detail::make_counting_transform_iterator(0, transformer);
 
   // Call gather on child of value_column
-  auto child_table = cudf::detail::gather(table_view({value_column.get_sliced_child(stream)}),
+  auto child_table = cudf::detail::gather(table_view({value_column.sliced_child(stream)}),
                                           child_gather_index_begin,
                                           child_gather_index_begin + gather_map_size,
                                           bounds_policy,

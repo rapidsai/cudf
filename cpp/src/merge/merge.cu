@@ -362,7 +362,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::struct_view>(
   auto it = cudf::detail::make_counting_transform_iterator(
     0, [&, merger = column_merger{row_order_}](size_type i) {
       return cudf::type_dispatcher<dispatch_storage_type>(
-        lhs.child(i).type(), merger, lhs.get_sliced_child(i), rhs.get_sliced_child(i), stream, mr);
+        lhs.child(i).type(), merger, lhs.sliced_child(i), rhs.sliced_child(i), stream, mr);
     });
 
   auto merged_children   = std::vector<std::unique_ptr<column>>(it, it + lhs.num_children());

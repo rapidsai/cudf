@@ -413,7 +413,7 @@ void traverse_children::operator()<cudf::struct_view>(host_span<column_view cons
                    std::back_inserter(nth_children),
                    [child_index, stream](column_view const& col) {
                      structs_column_view scv(col);
-                     return scv.get_sliced_child(child_index);
+                     return scv.sliced_child(child_index);
                    });
 
     bounds_and_type_check(nth_children, stream);
@@ -434,7 +434,7 @@ void traverse_children::operator()<cudf::list_view>(host_span<column_view const>
   std::transform(
     cols.begin(), cols.end(), std::back_inserter(nth_children), [stream](column_view const& col) {
       lists_column_view lcv(col);
-      return lcv.get_sliced_child(stream);
+      return lcv.sliced_child(stream);
     });
   bounds_and_type_check(nth_children, stream);
 }

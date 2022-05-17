@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
 
   // The child column of the output lists column is just copied from the input column.
   auto child_column =
-    std::make_unique<column>(lists_column_view(values).get_sliced_child(stream), stream, mr);
+    std::make_unique<column>(lists_column_view(values).sliced_child(stream), stream, mr);
 
   return make_lists_column(num_groups,
                            std::move(offsets_column),

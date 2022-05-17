@@ -95,7 +95,7 @@ struct has_negative_nans_dispatch {
     return std::any_of(thrust::make_counting_iterator(0),
                        thrust::make_counting_iterator(input.num_children()),
                        [structs_view = structs_column_view{input}, stream](auto const child_idx) {
-                         auto const col = structs_view.get_sliced_child(child_idx);
+                         auto const col = structs_view.sliced_child(child_idx);
                          return type_dispatcher(
                            col.type(), has_negative_nans_dispatch{}, col, stream);
                        });
@@ -139,7 +139,7 @@ struct replace_negative_nans_dispatch {
                    thrust::make_counting_iterator(input.num_children()),
                    std::back_inserter(output_struct_members),
                    [structs_view = structs_column_view{input}, stream](auto const child_idx) {
-                     auto const col = structs_view.get_sliced_child(child_idx);
+                     auto const col = structs_view.sliced_child(child_idx);
                      return type_dispatcher(
                        col.type(), replace_negative_nans_dispatch{}, col, stream);
                    });
@@ -568,7 +568,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   }
 
   // The child column containing list entries.
-  auto const keys_child = keys.get_sliced_child(stream);
+  auto const keys_child = keys.sliced_child(stream);
 
   // Generate a mapping from list entries to their 1-based list indices for the keys column.
   auto const entries_list_indices =
@@ -603,9 +603,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
     }
   }();
 
-  auto const sorting_table = values
-                               ? table_view{{keys_child, values.value().get_sliced_child(stream)}}
-                               : table_view{{keys_child}};
+  auto const sorting_table = values ? table_view{{keys_child, values.value().sliced_child(stream)}}
+                                    : table_view{{keys_child}};
   auto const sorted_table  = cudf::detail::gather(sorting_table,
                                                  sorted_order->view(),
                                                  out_of_bounds_policy::DONT_CHECK,

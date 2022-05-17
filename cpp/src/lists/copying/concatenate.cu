@@ -78,7 +78,7 @@ std::unique_ptr<column> merge_offsets(host_span<lists_column_view const> columns
         d_merged_offsets.begin<size_type>() + count,
         [local_shift] __device__(size_type offset) { return offset + local_shift; });
 
-      shift += c.get_sliced_child(stream).size();
+      shift += c.sliced_child(stream).size();
       count += c.size();
     }
   });
@@ -112,7 +112,7 @@ std::unique_ptr<column> concatenate(
                 [&total_list_count, &children, stream](lists_column_view const& l) {
                   // count total # of lists
                   total_list_count += l.size();
-                  children.push_back(l.get_sliced_child(stream));
+                  children.push_back(l.sliced_child(stream));
                 });
   auto data = cudf::detail::concatenate(children, stream, mr);
 

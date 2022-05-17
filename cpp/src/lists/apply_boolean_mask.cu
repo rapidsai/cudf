@@ -47,12 +47,12 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
 
   auto constexpr offset_data_type = data_type{type_id::INT32};
 
-  auto const boolean_mask_sliced_child = boolean_mask.get_sliced_child(stream);
+  auto const boolean_mask_sliced_child = boolean_mask.sliced_child(stream);
 
   auto const make_filtered_child = [&] {
     auto filtered =
       cudf::detail::apply_boolean_mask(
-        cudf::table_view{{input.get_sliced_child(stream)}}, boolean_mask_sliced_child, stream, mr)
+        cudf::table_view{{input.sliced_child(stream)}}, boolean_mask_sliced_child, stream, mr)
         ->release();
     return std::move(filtered.front());
   };

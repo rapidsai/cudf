@@ -135,7 +135,7 @@ void map_input_check(column_view const &map_column, rmm::cuda_stream_view stream
   CUDF_EXPECTS(map_column.type().id() == type_id::LIST, "Expected LIST<STRUCT<key,value>>.");
 
   lists_column_view lcv{map_column};
-  column_view structs_column = lcv.get_sliced_child(stream);
+  column_view structs_column = lcv.sliced_child(stream);
 
   CUDF_EXPECTS(structs_column.type().id() == type_id::STRUCT, "Expected LIST<STRUCT<key,value>>.");
 
@@ -188,7 +188,7 @@ std::unique_ptr<column> map_lookup(column_view const &map_column, string_scalar 
   }
 
   lists_column_view lcv{map_column};
-  column_view structs_column = lcv.get_sliced_child(stream);
+  column_view structs_column = lcv.sliced_child(stream);
   // Two-pass plan: construct gather map, and then gather() on structs_column.child(1). Plan A.
   // (Can do in one pass perhaps, but that's Plan B.)
 

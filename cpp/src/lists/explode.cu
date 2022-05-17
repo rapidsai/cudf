@@ -114,7 +114,7 @@ std::unique_ptr<table> explode(table_view const& input_table,
                                rmm::mr::device_memory_resource* mr)
 {
   lists_column_view explode_col{input_table.column(explode_column_idx)};
-  auto sliced_child = explode_col.get_sliced_child(stream);
+  auto sliced_child = explode_col.sliced_child(stream);
   rmm::device_uvector<size_type> gather_map(sliced_child.size(), stream);
 
   // Sliced columns may require rebasing of the offsets.
@@ -150,7 +150,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
                                         rmm::mr::device_memory_resource* mr)
 {
   lists_column_view explode_col{input_table.column(explode_column_idx)};
-  auto sliced_child = explode_col.get_sliced_child(stream);
+  auto sliced_child = explode_col.sliced_child(stream);
   rmm::device_uvector<size_type> gather_map(sliced_child.size(), stream);
 
   // Sliced columns may require rebasing of the offsets.
@@ -198,7 +198,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                                      rmm::mr::device_memory_resource* mr)
 {
   lists_column_view explode_col{input_table.column(explode_column_idx)};
-  auto sliced_child  = explode_col.get_sliced_child(stream);
+  auto sliced_child  = explode_col.sliced_child(stream);
   auto counting_iter = thrust::make_counting_iterator(0);
   auto offsets       = explode_col.offsets_begin();
 
