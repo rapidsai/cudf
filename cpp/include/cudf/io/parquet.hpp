@@ -37,9 +37,9 @@ namespace io {
  * @file
  */
 
-constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  // 128MB
-constexpr size_type default_row_group_size_rows = 1000000;
-constexpr size_t default_target_page_size_bytes = 512 * 1024;
+constexpr size_t default_row_group_size_bytes     = 128 * 1024 * 1024;  // 128MB
+constexpr size_type default_row_group_size_rows   = 1000000;
+constexpr size_t default_target_page_size_bytes   = 512 * 1024;
 constexpr size_type default_target_page_size_rows = 20000;
 
 /**

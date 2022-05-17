@@ -3186,7 +3186,7 @@ TEST_F(ParquetReaderTest, EmptyOutput)
 
 /* temporarily remove this test.  with page size being tunable, can no longer just test for
  * row groups being smaller than 512KiB.  ideally one would use the configured page size, but
- * then that would require setting the page size parameter before the row group size, which 
+ * then that would require setting the page size parameter before the row group size, which
  * seems odd.  should probably test for consistent parameters when instantiating the writer.
 TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
 {

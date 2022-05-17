@@ -859,8 +859,16 @@ void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chu
                                    uint32_t num_columns)
 {
   chunks.host_to_device(stream);
-  gpu::InitEncoderPages(chunks, {}, col_desc, num_columns, target_page_size_bytes, 
-                        target_page_size_rows, nullptr, nullptr, 0, stream);
+  gpu::InitEncoderPages(chunks,
+                        {},
+                        col_desc,
+                        num_columns,
+                        target_page_size_bytes,
+                        target_page_size_rows,
+                        nullptr,
+                        nullptr,
+                        0,
+                        stream);
   chunks.device_to_host(stream, true);
 }
 
