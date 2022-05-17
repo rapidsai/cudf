@@ -23,6 +23,7 @@ Top-level conversions
    :toctree: api/
 
     cudf.to_numeric
+    cudf.from_dlpack
 
 Top-level dealing with datetimelike
 -----------------------------------
