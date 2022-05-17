@@ -537,7 +537,7 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-        dtype : str or numpy.dtype, optional
+        dtype : str or :class:`numpy.dtype`, optional
             The dtype to pass to :func:`numpy.asarray`.
         copy : bool, default False
             Whether to ensure that the returned value is not a view on
@@ -572,7 +572,7 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-        dtype : str or numpy.dtype, optional
+        dtype : str or :class:`numpy.dtype`, optional
             The dtype to pass to :func:`numpy.asarray`.
         copy : bool, default True
             Whether to ensure that the returned value is not a view on
