@@ -25,7 +25,7 @@ namespace cudf {
  */
 bool is_ptds_enabled()
 {
-#ifdef CUDF_USE_PER_THREAD_DEFAULT_STREAM
+#if defined(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   return true;
 #else
   return false;
