@@ -25,6 +25,62 @@
 
 namespace nested_json = cudf::io::json::gpu;
 
+namespace {
+
+std::string get_node_string(std::size_t const node_id,
+                            nested_json::tree_meta_t const& tree_rep,
+                            std::string const& json_input)
+{
+  auto const& node_categories  = std::get<0>(tree_rep);
+  auto const& parent_node_ids  = std::get<1>(tree_rep);
+  auto const& node_levels      = std::get<2>(tree_rep);
+  auto const& node_range_begin = std::get<3>(tree_rep);
+  auto const& node_range_end   = std::get<4>(tree_rep);
+
+  auto node_to_str = [] __host__ __device__(nested_json::PdaTokenT const token) {
+    switch (token) {
+      case nested_json::NC_STRUCT: return "STRUCT";
+      case nested_json::NC_LIST: return "LIST";
+      case nested_json::NC_FN: return "FN";
+      case nested_json::NC_STR: return "STR";
+      case nested_json::NC_VAL: return "VAL";
+      case nested_json::NC_ERR: return "ERR";
+      default: return "N/A";
+    };
+  };
+
+  return "<" + std::to_string(node_id) + ":" + node_to_str(node_categories[node_id]) + ":[" +
+         std::to_string(node_range_begin[node_id]) + ", " +
+         std::to_string(node_range_end[node_id]) + ") '" +
+         json_input.substr(node_range_begin[node_id],
+                           node_range_end[node_id] - node_range_begin[node_id]) +
+         "'>";
+}
+
+void print_tree_representation(std::string const& json_input,
+                               nested_json::tree_meta_t const& tree_rep)
+{
+  for (std::size_t i = 0; i < std::get<0>(tree_rep).size(); i++) {
+    auto const& parent_node_ids = std::get<1>(tree_rep);
+    std::size_t parent_id       = parent_node_ids[i];
+    std::stack<std::size_t> path;
+    path.push(i);
+    while (parent_id != nested_json::parent_node_sentinel) {
+      path.push(parent_id);
+      parent_id = parent_node_ids[parent_id];
+    }
+
+    while (path.size()) {
+      auto const node_id = path.top();
+      std::cout << get_node_string(node_id, tree_rep, json_input)
+                << (path.size() > 1 ? " -> " : "");
+      path.pop();
+    }
+    std::cout << "\n";
+  }
+}
+}  // namespace
+
 // Base test fixture for tests
 struct JsonTest : public cudf::test::BaseFixture {
 };
@@ -187,59 +243,6 @@ TEST_F(JsonTest, TokenStream)
   }
 }
 
-std::string get_node_string(std::size_t const node_id,
-                            nested_json::tree_meta_t const& tree_rep,
-                            std::string const& json_input)
-{
-  auto const& node_categories  = std::get<0>(tree_rep);
-  auto const& parent_node_ids  = std::get<1>(tree_rep);
-  auto const& node_levels      = std::get<2>(tree_rep);
-  auto const& node_range_begin = std::get<3>(tree_rep);
-  auto const& node_range_end   = std::get<4>(tree_rep);
-
-  auto node_to_str = [] __host__ __device__(nested_json::PdaTokenT const token) {
-    switch (token) {
-      case nested_json::NC_STRUCT: return "STRUCT";
-      case nested_json::NC_LIST: return "LIST";
-      case nested_json::NC_FN: return "FN";
-      case nested_json::NC_STR: return "STR";
-      case nested_json::NC_VAL: return "VAL";
-      case nested_json::NC_ERR: return "ERR";
-      default: return "N/A";
-    };
-  };
-
-  return "<" + std::to_string(node_id) + ":" + node_to_str(node_categories[node_id]) + ":[" +
-         std::to_string(node_range_begin[node_id]) + ", " +
-         std::to_string(node_range_end[node_id]) + ") '" +
-         json_input.substr(node_range_begin[node_id],
-                           node_range_end[node_id] - node_range_begin[node_id]) +
-         "'>";
-}
-
-void print_tree_representation(std::string const& json_input,
-                               nested_json::tree_meta_t const& tree_rep)
-{
-  for (std::size_t i = 0; i < std::get<0>(tree_rep).size(); i++) {
-    auto const& parent_node_ids = std::get<1>(tree_rep);
-    std::size_t parent_id       = parent_node_ids[i];
-    std::stack<std::size_t> path;
-    path.push(i);
-    while (parent_id != nested_json::parent_node_sentinel) {
-      path.push(parent_id);
-      parent_id = parent_node_ids[parent_id];
-    }
-
-    while (path.size()) {
-      auto const node_id = path.top();
-      std::cout << get_node_string(node_id, tree_rep, json_input)
-                << (path.size() > 1 ? " -> " : "");
-      path.pop();
-    }
-    std::cout << "\n";
-  }
-}
-
 TEST_F(JsonTest, TreeRepresentation)
 {
   using nested_json::PdaTokenT;
@@ -270,6 +273,9 @@ TEST_F(JsonTest, TreeRepresentation)
   // Get the JSON's tree representation
   auto tree_rep = nested_json::get_tree_representation(
     cudf::host_span<SymbolT const>{input.data(), input.size()}, stream_view);
+
+  // Print tree representation
+  if (std::getenv("CUDA_DBG_DUMP") != nullptr) { print_tree_representation(input, tree_rep); }
 
   auto const& node_categories  = std::get<0>(tree_rep);
   auto const& parent_node_ids  = std::get<1>(tree_rep);
