@@ -135,7 +135,7 @@ class StringMethods(ColumnMethods):
     def htoi(self) -> SeriesOrIndex:
         """
         Returns integer value represented by each hex string.
-        String is interpretted to have hex (base-16) characters.
+        String is interpreted to have hex (base-16) characters.
 
         Returns
         -------
@@ -4518,7 +4518,6 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> str_series.str.ngrams(2, "_")
         0    this is my_favorite book

@@ -23,9 +23,9 @@
 namespace cudf::io::nvcomp {
 
 template <typename... Args>
-auto batched_decompress_get_temp_size(compression_type type, Args&&... args)
+auto batched_decompress_get_temp_size(compression_type compression, Args&&... args)
 {
-  switch (type) {
+  switch (compression) {
     case compression_type::SNAPPY:
       return nvcompBatchedSnappyDecompressGetTempSize(std::forward<Args>(args)...);
     default: CUDF_FAIL("Unsupported compression type");
@@ -33,27 +33,27 @@ auto batched_decompress_get_temp_size(compression_type type, Args&&... args)
 };
 
 template <typename... Args>
-auto batched_decompress_async(compression_type type, Args&&... args)
+auto batched_decompress_async(compression_type compression, Args&&... args)
 {
-  switch (type) {
+  switch (compression) {
     case compression_type::SNAPPY:
       return nvcompBatchedSnappyDecompressAsync(std::forward<Args>(args)...);
     default: CUDF_FAIL("Unsupported compression type");
   }
 };
 
-size_t get_temp_size(compression_type type, size_t num_chunks, size_t max_uncomp_chunk_size)
+size_t get_temp_size(compression_type compression, size_t num_chunks, size_t max_uncomp_chunk_size)
 {
   size_t temp_size = 0;
   nvcompStatus_t nvcomp_status =
-    batched_decompress_get_temp_size(type, num_chunks, max_uncomp_chunk_size, &temp_size);
+    batched_decompress_get_temp_size(compression, num_chunks, max_uncomp_chunk_size, &temp_size);
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
                "Unable to get scratch size for decompression");
 
   return temp_size;
 }
 
-void batched_decompress(compression_type type,
+void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t const> const> inputs,
                         device_span<device_span<uint8_t> const> outputs,
                         device_span<decompress_status> statuses,
@@ -67,8 +67,8 @@ void batched_decompress(compression_type type,
   rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_chunks, stream);
   rmm::device_uvector<nvcompStatus_t> nvcomp_statuses(num_chunks, stream);
   // Temporary space required for decompression
-  rmm::device_buffer scratch(get_temp_size(type, num_chunks, max_uncomp_chunk_size), stream);
-  auto const nvcomp_status = batched_decompress_async(type,
+  rmm::device_buffer scratch(get_temp_size(compression, num_chunks, max_uncomp_chunk_size), stream);
+  auto const nvcomp_status = batched_decompress_async(compression,
                                                       nvcomp_args.compressed_data_ptrs.data(),
                                                       nvcomp_args.compressed_data_sizes.data(),
                                                       nvcomp_args.uncompressed_data_sizes.data(),

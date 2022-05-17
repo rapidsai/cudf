@@ -196,14 +196,14 @@ class device_row_comparator {
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                              not std::is_same_v<Element, cudf::struct_view>),
               typename... Args>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(Args...)
+    __device__ cuda::std::pair<weak_ordering, int> operator()(Args...) const noexcept
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
     template <typename Element, CUDF_ENABLE_IF(std::is_same_v<Element, cudf::struct_view>)>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const lhs_element_index,
-                                                              size_type const rhs_element_index)
+    __device__ cuda::std::pair<weak_ordering, int> operator()(
+      size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
     {
       column_device_view lcol = _lhs;
       column_device_view rcol = _rhs;
@@ -314,7 +314,7 @@ class device_row_comparator {
  */
 template <typename Comparator, weak_ordering... values>
 struct weak_ordering_comparator_impl {
-  __device__ bool operator()(size_type const& lhs, size_type const& rhs)
+  __device__ bool operator()(size_type const lhs, size_type const rhs) const noexcept
   {
     weak_ordering const result = comparator(lhs, rhs);
     return ((result == values) || ...);
@@ -447,7 +447,7 @@ class self_comparator {
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of
    * the same table.
    *
-   * @param table The table to compare
+   * @param t The table to compare
    * @param column_order Optional, host array the same length as a row that indicates the desired
    * ascending/descending order of each column in a row. If empty, it is assumed all columns are
    * sorted in ascending order.

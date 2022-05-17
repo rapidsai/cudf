@@ -1311,7 +1311,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Returns
         -------
         out : bool
-            If Series has atleast one null value, return True, if not
+            If Series has at least one null value, return True, if not
             return False.
 
         Examples
@@ -1447,7 +1447,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5     hippo
         Name: animal, dtype: object
 
-        With the `keep` parameter, the selection behaviour of duplicated
+        With the `keep` parameter, the selection behavior of duplicated
         values can be changed. The value 'first' keeps the first
         occurrence for each set of duplicated entries.
         The default value of keep is 'first'. Note that order of
@@ -3934,7 +3934,7 @@ class DatetimeProperties:
         Returns
         -------
         Series
-        Booleans indicating if dates are the begining of a quarter
+        Booleans indicating if dates are the beginning of a quarter
 
         Examples
         --------
@@ -4305,7 +4305,7 @@ class DatetimeProperties:
 
 class TimedeltaProperties:
     """
-    Accessor object for timedeltalike properties of the Series values.
+    Accessor object for timedelta-like properties of the Series values.
 
     Returns
     -------
