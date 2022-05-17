@@ -229,7 +229,6 @@ add_library(
   src/column/column_factories.cpp
   src/column/column_factories.cu
   src/column/column_view.cpp
-  src/comms/ipc/ipc.cpp
   src/copying/concatenate.cu
   src/copying/contiguous_split.cu
   src/copying/copy.cpp
@@ -620,16 +619,6 @@ else()
   target_link_libraries(cudf PUBLIC CUDA::cudart)
 endif()
 
-# The CUDA::cuda_driver is needed due to JITIFY sources which directly call the cuda driver API
-if(NOT TARGET CUDA::cuda_driver)
-  message(
-    FATAL_ERROR
-      "Building libcudf requires `libcuda.so` to be present.
-        This error often occurs when trying to build libcudf from a container without the NVIDIA runtime loaded."
-  )
-endif()
-target_link_libraries(cudf PUBLIC CUDA::cuda_driver)
-
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
   [=[
@@ -790,12 +779,6 @@ endif()
 ]=]
 )
 
-set(install_code_string
-    [=[
-set(ArrowCUDA_DIR "${Arrow_DIR}")
-find_dependency(ArrowCUDA)
-]=]
-)
 
 if(CUDF_ENABLE_ARROW_PARQUET)
   string(
