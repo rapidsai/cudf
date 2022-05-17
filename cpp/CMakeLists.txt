@@ -64,7 +64,8 @@ if(PER_THREAD_DEFAULT_STREAM)
   message(
     DEPRECATION
       "CUDF: PER_THREAD_DEFAULT_STREAM is deprecated, and will be removed in a future release,
-        please use CUDF_USE_PER_THREAD_DEFAULT_STREAM instead.")
+        please use CUDF_USE_PER_THREAD_DEFAULT_STREAM instead."
+  )
 endif()
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
@@ -75,7 +76,9 @@ message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_C
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
 message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
 message(VERBOSE "CUDF: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
-message(VERBOSE "CUDF: Build cuDF with per-thread default stream: ${CUDF_PER_THREAD_DEFAULT_STREAM}")
+message(VERBOSE
+        "CUDF: Build cuDF with per-thread default stream: ${CUDF_PER_THREAD_DEFAULT_STREAM}"
+)
 message(
   VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
@@ -593,7 +596,8 @@ endif()
 # Per-thread default stream
 if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   target_compile_definitions(
-    cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+    cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM
+  )
 endif()
 
 # Disable NVTX if necessary
