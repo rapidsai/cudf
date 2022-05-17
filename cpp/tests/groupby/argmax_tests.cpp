@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,61 +116,6 @@ TYPED_TEST(groupby_argmax_test, null_keys_and_values)
 
   auto agg2 = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
-}
-
-template <typename T>
-using FWCW = cudf::test::fixed_width_column_wrapper<T>;
-
-TYPED_TEST(groupby_argmax_test, structs)
-{
-  using V = TypeParam;
-
-  using R       = cudf::detail::target_type_t<int, aggregation::ARGMAX>;
-  using STRINGS = cudf::test::strings_column_wrapper;
-  using STRUCTS = cudf::test::structs_column_wrapper;
-
-  if (std::is_same_v<V, bool>) return;
-
-  /*
-    `@` indicates null
-       keys:               values:
-       /+---------------+
-       |s1{s2{a,b},   c}|
-       +----------------+
-     0 |  { {1, 1}, "a"}|  1
-     1 |  { {1, 2}, "b"}|  2
-     2 |  {@{2, 1}, "c"}|  3
-     3 |  {@{2, 1}, "c"}|  4
-     4 | @{ {2, 2}, "d"}|  5
-     5 | @{ {2, 2}, "d"}|  6
-     6 |  { {1, 1}, "a"}|  7
-     7 |  {@{2, 1}, "c"}|  8
-     8 |  { {1, 1}, "a"}|  9
-       +----------------+
-  */
-
-  // clang-format off
-  auto col_a = FWCW<V>{ 1,   1,   2,   2,   2,   2,   1,   2,   1};
-  auto col_b = FWCW<V>{ 1,   2,   1,   1,   2,   2,   1,   1,   1};
-  auto col_c = STRINGS{"a", "b", "c", "c", "d", "d", "a", "c", "a"};
-  // clang-format on
-  auto s2 = STRUCTS{{col_a, col_b}, nulls_at({2, 3, 7})};
-
-  auto keys = STRUCTS{{s2, col_c}, nulls_at({4, 5})};
-  auto vals = FWCW<int>{1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-  // clang-format off
-  auto expected_col_a = FWCW<V>{ 1,   1,   2,   2,   2};
-  auto expected_col_b = FWCW<V>{ 1,   2,   1,   1,   1};
-  auto expected_col_c = STRINGS{"a", "b", "c", "c", "c"};
-  // clang-format on
-  auto expected_s2 = STRUCTS{{expected_col_a, expected_col_b}, nulls_at({2, 3, 4})};
-
-  auto expect_keys = STRUCTS{{expected_s2, expected_col_c}, no_nulls()};
-  auto expect_vals = FWCW<R>{8, 1, 2, 3, 7};
-
-  auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 struct groupby_argmax_string_test : public cudf::test::BaseFixture {
