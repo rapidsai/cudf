@@ -979,7 +979,7 @@ bool has_nonempty_nulls(column_view const& input);
  *
  * @param input The column which is (and whose descendants are) to be checked for
  * non-empty null rows
- * @return true If either the column or its decendants have null rows
+ * @return true If either the column or its descendants have null rows
  * @return false If neither the column nor its descendants have null rows
  */
 bool may_have_nonempty_nulls(column_view const& input);
@@ -1009,7 +1009,7 @@ bool may_have_nonempty_nulls(column_view const& input);
  *
  * The purge operation only applies directly to LIST and STRING columns, but it
  * applies indirectly to STRUCT columns as well, since LIST and STRUCT columns
- * may have child/decendant columns that are LIST or STRING.
+ * may have child/descendant columns that are LIST or STRING.
  *
  * @param input The column whose null rows are to be checked and purged
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -1045,7 +1045,7 @@ std::unique_ptr<column> purge_nonempty_nulls(
  *
  * The purge operation only applies directly to LIST and STRING columns, but it
  * applies indirectly to STRUCT columns as well, since LIST and STRUCT columns
- * may have child/decendant columns that are LIST or STRING.
+ * may have child/descendant columns that are LIST or STRING.
  *
  * @param input The column whose null rows are to be checked and purged
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -1081,7 +1081,7 @@ std::unique_ptr<column> purge_nonempty_nulls(
  *
  * The purge operation only applies directly to LIST and STRING columns, but it
  * applies indirectly to STRUCT columns as well, since LIST and STRUCT columns
- * may have child/decendant columns that are LIST or STRING.
+ * may have child/descendant columns that are LIST or STRING.
  *
  * @param input The column whose null rows are to be checked and purged
  * @param mr Device memory resource used to allocate the returned column's device memory

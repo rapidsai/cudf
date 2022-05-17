@@ -47,7 +47,7 @@ class device_data_chunk {
  *
  * The data chunk reader API encapsulates the idea of statefully traversing and loading a data
  * source. A data source may be a file, a region of device memory, or a region of host memory.
- * Reading data from these data sources efficiently requires different strategies dependings on the
+ * Reading data from these data sources efficiently requires different strategies depending on the
  * type of data source, type of compression, capabilities of the host and device, the data's
  * destination. Whole-file decompression should be hidden behind this interface.
  */
