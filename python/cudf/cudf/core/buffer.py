@@ -72,7 +72,7 @@ class Buffer(Serializable):
             self._init_from_array_like(np.asarray(data), owner)
 
     @classmethod
-    def from_buffer(cls, buffer: Buffer, size=None, offset: int = 0):
+    def from_buffer(cls, buffer: Buffer, size: int = None, offset: int = 0):
         """
         Create a buffer from another buffer
 
