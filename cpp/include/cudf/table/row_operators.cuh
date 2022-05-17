@@ -98,6 +98,26 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
 }
 
 /**
+ * @brief A specialization for floating-point `Element` type relational comparison
+ * to derive the order of the elements with respect to `lhs`. Returns specified weak_ordering if
+ * either value is `nan`, enabling IEEE 754 compliant comparison.
+ *
+ * This specialization allows `nan` values to be evaluated as not equal to any other value, while
+ * also not evaluating as greater or less than
+ *
+ * @param lhs first element
+ * @param rhs second element
+ * @param nan_result specifies what value should be returned if either element is `nan`
+ * @return Indicates the relationship between the elements in
+ * the `lhs` and `rhs` columns.
+ */
+template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+__device__ weak_ordering relational_compare(Element lhs, Element rhs, weak_ordering nan_result)
+{
+  return isnan(lhs) or isnan(rhs) ? nan_result : detail::compare_elements(lhs, rhs);
+}
+
+/**
  * @brief Compare the nulls according to null order.
  *
  * @param lhs_is_null boolean representing if lhs is null
@@ -123,11 +143,14 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  *
  * @param[in] lhs first element
  * @param[in] rhs second element
+ * @param nan_result ignored for non-floating point operation
  * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
-__device__ weak_ordering relational_compare(Element lhs, Element rhs)
+__device__ weak_ordering relational_compare(Element lhs,
+                                            Element rhs,
+                                            weak_ordering const nan_result = weak_ordering::GREATER)
 {
   return detail::compare_elements(lhs, rhs);
 }
@@ -138,12 +161,15 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  *
  * @param lhs first element
  * @param rhs second element
+ * @param nan_result specifies what value should be returned if either element is `nan`
  * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
-__device__ bool equality_compare(Element lhs, Element rhs)
+__device__ bool equality_compare(Element lhs,
+                                 Element rhs,
+                                 nan_equality const nan_result = nan_equality::ALL_EQUAL)
 {
-  if (isnan(lhs) and isnan(rhs)) { return true; }
+  if (isnan(lhs) and isnan(rhs)) { return nan_result == nan_equality::ALL_EQUAL; }
   return lhs == rhs;
 }
 
@@ -153,10 +179,13 @@ __device__ bool equality_compare(Element lhs, Element rhs)
  *
  * @param lhs first element
  * @param rhs second element
+ * @param nan_result ignored for non-floating point operation
  * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
-__device__ bool equality_compare(Element const lhs, Element const rhs)
+__device__ bool equality_compare(Element const lhs,
+                                 Element const rhs,
+                                 nan_equality const nan_result = nan_equality::ALL_EQUAL)
 {
   return lhs == rhs;
 }
@@ -225,8 +254,8 @@ class element_equality_comparator {
  private:
   column_device_view lhs;
   column_device_view rhs;
-  Nullate nulls;
-  null_equality nulls_are_equal;
+  Nullate const nulls;
+  null_equality const nulls_are_equal;
 };
 
 template <typename Nullate>
@@ -256,8 +285,8 @@ class row_equality_comparator {
  private:
   table_device_view lhs;
   table_device_view rhs;
-  Nullate nulls;
-  null_equality nulls_are_equal;
+  Nullate const nulls;
+  null_equality const nulls_are_equal;
 };
 
 /**
