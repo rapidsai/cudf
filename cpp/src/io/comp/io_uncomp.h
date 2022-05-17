@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,35 +27,20 @@ using cudf::host_span;
 
 namespace cudf {
 namespace io {
-enum {
-  IO_UNCOMP_STREAM_TYPE_INFER   = 0,
-  IO_UNCOMP_STREAM_TYPE_GZIP    = 1,
-  IO_UNCOMP_STREAM_TYPE_ZIP     = 2,
-  IO_UNCOMP_STREAM_TYPE_BZIP2   = 3,
-  IO_UNCOMP_STREAM_TYPE_XZ      = 4,
-  IO_UNCOMP_STREAM_TYPE_INFLATE = 5,
-  IO_UNCOMP_STREAM_TYPE_SNAPPY  = 6,
-  IO_UNCOMP_STREAM_TYPE_BROTLI  = 7,
-  IO_UNCOMP_STREAM_TYPE_LZ4     = 8,
-  IO_UNCOMP_STREAM_TYPE_LZO     = 9,
-  IO_UNCOMP_STREAM_TYPE_ZSTD    = 10,
-};
 
-std::vector<char> io_uncompress_single_h2d(void const* src, size_t src_size, int stream_type);
+/**
+ * @brief Decompresses a system memory buffer.
+ *
+ * @param compression Type of compression of the input data
+ * @param src Compressed host buffer
+ *
+ * @return Vector containing the Decompressed output
+ */
+std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t const> src);
 
-std::vector<char> get_uncompressed_data(host_span<char const> data, compression_type compression);
-
-class HostDecompressor {
- public:
-  virtual size_t Decompress(uint8_t* dstBytes,
-                            size_t dstLen,
-                            uint8_t const* srcBytes,
-                            size_t srcLen) = 0;
-  virtual ~HostDecompressor() {}
-
- public:
-  static std::unique_ptr<HostDecompressor> Create(int stream_type);
-};
+size_t decompress(compression_type compression,
+                  host_span<uint8_t const> src,
+                  host_span<uint8_t> dst);
 
 /**
  * @brief GZIP header flags
