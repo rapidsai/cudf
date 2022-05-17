@@ -76,10 +76,10 @@ def _lexsorted_equal_range(
         sort_inds = None
         sort_vals = idx
     lower_bound = search_sorted(
-        sort_vals, key_as_table, side="left"
+        [*sort_vals._data.columns], [*key_as_table._columns], side="left"
     ).element_indexing(0)
     upper_bound = search_sorted(
-        sort_vals, key_as_table, side="right"
+        [*sort_vals._data.columns], [*key_as_table._columns], side="right"
     ).element_indexing(0)
 
     return lower_bound, upper_bound, sort_inds
@@ -722,6 +722,36 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         return new_index
 
+    def sort_values(
+        self,
+        return_indexer=False,
+        ascending=True,
+        na_position="last",
+        key=None,
+    ):
+        if key is not None:
+            raise NotImplementedError("key parameter is not yet implemented.")
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
+        sorted_index = self
+        indexer = RangeIndex(range(len(self)))
+
+        sorted_index = self
+        if ascending:
+            if self.step < 0:
+                sorted_index = self[::-1]
+                indexer = indexer[::-1]
+        else:
+            if self.step > 0:
+                sorted_index = self[::-1]
+                indexer = indexer = indexer[::-1]
+
+        if return_indexer:
+            return sorted_index, indexer
+        else:
+            return sorted_index
+
     @_cudf_nvtx_annotate
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
@@ -1116,7 +1146,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # related issue : https://github.com/pandas-dev/pandas/issues/35389
         if isinstance(preprocess, CategoricalIndex):
             if preprocess.categories.dtype.kind == "f":
-                output = (
+                output = repr(
                     preprocess.astype("str")
                     .to_pandas()
                     .astype(
@@ -1127,18 +1157,17 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                             ordered=preprocess.dtype.ordered,
                         )
                     )
-                    .__repr__()
                 )
                 break_idx = output.find("ordered=")
                 output = (
                     output[:break_idx].replace("'", "") + output[break_idx:]
                 )
             else:
-                output = preprocess.to_pandas().__repr__()
+                output = repr(preprocess.to_pandas())
 
             output = output.replace("nan", cudf._NA_REP)
         elif preprocess._values.nullable:
-            output = self._clean_nulls_from_index().to_pandas().__repr__()
+            output = repr(self._clean_nulls_from_index().to_pandas())
 
             if not isinstance(self, StringIndex):
                 # We should remove all the single quotes
@@ -1150,7 +1179,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 # of StringIndex and it is valid to have them.
                 output = output.replace("'", "")
         else:
-            output = preprocess.to_pandas().__repr__()
+            output = repr(preprocess.to_pandas())
 
         # Fix and correct the class name of the output
         # string by finding first occurrence of "(" in the output
@@ -2117,7 +2146,7 @@ class TimedeltaIndex(GenericIndex):
         This is not yet supported
     closed : str, optional
         This is not yet supported
-    dtype : str or numpy.dtype, optional
+    dtype : str or :class:`numpy.dtype`, optional
         Data type for the output Index. If not specified, the
         default dtype will be ``timedelta64[ns]``.
     name : object

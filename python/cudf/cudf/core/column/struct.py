@@ -10,6 +10,7 @@ from cudf.api.types import is_struct_dtype
 from cudf.core.column import ColumnBase, build_struct_column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
+from cudf.core.missing import NA
 
 
 class StructColumn(ColumnBase):
@@ -31,7 +32,7 @@ class StructColumn(ColumnBase):
             return len(self.base_children[0])
 
     @classmethod
-    def from_arrow(self, data):
+    def from_arrow(cls, data):
         size = len(data)
         dtype = cudf.core.dtypes.StructDtype.from_arrow(data.type)
 
@@ -102,7 +103,7 @@ class StructColumn(ColumnBase):
         if isinstance(value, dict):
             # filling in fields not in dict
             for field in self.dtype.fields:
-                value[field] = value.get(field, cudf.NA)
+                value[field] = value.get(field, NA)
 
             value = cudf.Scalar(value, self.dtype)
         super().__setitem__(key, value)

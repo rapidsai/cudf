@@ -5,12 +5,12 @@ from __future__ import annotations
 import itertools
 import numbers
 import pickle
-from collections.abc import Sequence
+from collections import abc
 from functools import cached_property
 from numbers import Integral
 from typing import Any, List, MutableMapping, Tuple, Union
 
-import cupy
+import cupy as cp
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
@@ -29,11 +29,26 @@ from cudf.core.index import (
     as_index,
 )
 from cudf.utils.docutils import doc_apply
-from cudf.utils.utils import (
-    NotIterable,
-    _cudf_nvtx_annotate,
-    _maybe_indices_to_slice,
-)
+from cudf.utils.utils import NotIterable, _cudf_nvtx_annotate
+
+
+def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
+    """Makes best effort to convert an array of indices into a python slice.
+    If the conversion is not possible, return input. `indices` are expected
+    to be valid.
+    """
+    # TODO: improve efficiency by avoiding sync.
+    if len(indices) == 1:
+        x = indices[0].item()
+        return slice(x, x + 1)
+    if len(indices) == 2:
+        x1, x2 = indices[0].item(), indices[1].item()
+        return slice(x1, x2 + 1, x2 - x1)
+    start, step = indices[0].item(), (indices[1] - indices[0]).item()
+    stop = start + step * len(indices)
+    if (indices == cp.arange(start, stop, step)).all():
+        return slice(start, stop, step)
+    return indices
 
 
 class MultiIndex(Frame, BaseIndex, NotIterable):
@@ -95,7 +110,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
         if not isinstance(codes, cudf.DataFrame) and not isinstance(
-            codes[0], (Sequence, np.ndarray)
+            codes[0], (abc.Sequence, np.ndarray)
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 
@@ -173,7 +188,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # we reconstruct self._data with the names as keys.
             # If they are not unique, the keys of self._data
             # and self._names will be different, which can lead
-            # to unexpected behaviour in some cases. This is
+            # to unexpected behavior in some cases. This is
             # definitely buggy, but we can't disallow non-unique
             # names either...
             self._data = self._data.__class__._create_unsafe(
@@ -328,7 +343,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         deep : Bool (default False)
             If True, `._data`, `._levels`, `._codes` will be copied. Ignored if
             `levels` or `codes` are specified.
-        name : object, optional (defulat None)
+        name : object, optional (default None)
             To keep consistent with `Index.copy`, should not be used.
 
         Returns
@@ -455,7 +470,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         else:
             preprocess = preprocess.to_pandas(nullable=True)
 
-        output = preprocess.__repr__()
+        output = repr(preprocess)
         output_prefix = self.__class__.__name__ + "("
         output = output.lstrip(output_prefix)
         lines = output.split("\n")
@@ -912,7 +927,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def __getitem__(self, index):
         flatten = isinstance(index, int)
 
-        if isinstance(index, (Integral, Sequence)):
+        if isinstance(index, (Integral, abc.Sequence)):
             index = np.array(index)
         elif isinstance(index, slice):
             start, stop, step = index.indices(len(self))
@@ -1709,7 +1724,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return true_inds
 
         # Not sorted and not unique. Return a boolean mask
-        mask = cupy.full(self._data.nrows, False)
+        mask = cp.full(self._data.nrows, False)
         mask[true_inds] = True
         return mask
 

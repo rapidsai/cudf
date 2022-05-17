@@ -7,7 +7,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.core.scalar import NA
+from cudf.core.missing import NA
 from cudf.core.udf._ops import (
     arith_ops,
     bitwise_ops,
@@ -367,9 +367,12 @@ def test_apply_everything():
 
 
 @pytest.mark.parametrize(
-    "data", [cudf.Series([1, 2, 3]), cudf.Series([1, cudf.NA, 3])]
+    "data,name",
+    [([1, 2, 3], None), ([1, cudf.NA, 3], None), ([1, 2, 3], "test_name")],
 )
-def test_series_apply_basic(data):
+def test_series_apply_basic(data, name):
+    data = cudf.Series(data, name=name)
+
     def func(x):
         return x + 1
 

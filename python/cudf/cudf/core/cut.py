@@ -1,6 +1,6 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-from collections.abc import Sequence
+from collections import abc
 
 import cupy
 import numpy as np
@@ -49,7 +49,7 @@ def cut(
     labels : array or False, default None
         Specifies the labels for the returned bins. Must be the same
         length as the resulting bins. If False, returns only integer
-        indicators of thebins. If True,raises an error. When ordered=False,
+        indicators of the bins. If True,raises an error. When ordered=False,
         labels must be provided.
     retbins : bool, default False
         Whether to return the bins or not.
@@ -140,7 +140,7 @@ def cut(
                 )
 
     # bins can either be an int, sequence of scalars or an intervalIndex
-    if isinstance(bins, Sequence):
+    if isinstance(bins, abc.Sequence):
         if len(set(bins)) is not len(bins):
             if duplicates == "raise":
                 raise ValueError(
@@ -158,7 +158,7 @@ def cut(
 
     # create bins if given an int or single scalar
     if not isinstance(bins, pd.IntervalIndex):
-        if not isinstance(bins, (Sequence)):
+        if not isinstance(bins, (abc.Sequence)):
             if isinstance(
                 x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)
             ):

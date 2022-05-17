@@ -5,6 +5,7 @@ from __future__ import annotations
 import pickle
 import warnings
 from functools import cached_property
+from itertools import chain
 from types import SimpleNamespace
 from typing import (
     Any,
@@ -67,8 +68,8 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
+from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand, Reducible
-from cudf.utils import utils
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     get_time_unit,
@@ -229,13 +230,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
           4
         ]
         """
-        return libcudf.interop.to_arrow(
-            cudf.core.frame.Frame(
-                cudf.core.column_accessor.ColumnAccessor({"None": self})
-            ),
-            [["None"]],
-            keep_index=False,
-        )["None"].chunk(0)
+        return libcudf.interop.to_arrow([self], [["None"]],)[
+            "None"
+        ].chunk(0)
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -280,12 +277,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 }
             )
 
-            codes = libcudf.interop.from_arrow(
-                indices_table, indices_table.column_names
-            )[0]["None"]
-            categories = libcudf.interop.from_arrow(
-                dictionaries_table, dictionaries_table.column_names
-            )[0]["None"]
+            codes = libcudf.interop.from_arrow(indices_table)[0]
+            categories = libcudf.interop.from_arrow(dictionaries_table)[0]
 
             return build_categorical_column(
                 categories=categories,
@@ -301,7 +294,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
 
-        result = libcudf.interop.from_arrow(data, data.column_names)[0]["None"]
+        result = libcudf.interop.from_arrow(data)[0]
 
         return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
 
@@ -507,7 +500,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             self._mimic_inplace(out, inplace=True)
 
     def _wrap_binop_normalization(self, other):
-        if other is cudf.NA or other is None:
+        if other is NA or other is None:
             return cudf.Scalar(other, dtype=self.dtype)
         if isinstance(other, np.ndarray) and other.ndim == 0:
             other = other.item()
@@ -1046,10 +1039,29 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
+        # data model:
+
+        # Serialization produces a nested metadata "header" and a flattened
+        # list of memoryviews/buffers that reference data (frames).  Each
+        # header advertises a frame_count slot which indicates how many
+        # frames deserialization will consume. The class used to construct
+        # an object is named under the key "type-serialized" to match with
+        # Dask's serialization protocol (see
+        # distributed.protocol.serialize). Since column dtypes may either be
+        # cudf native or foreign some special-casing is required here for
+        # serialization.
+
         header: Dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
-        header["dtype"] = self.dtype.str
+        try:
+            dtype, dtype_frames = self.dtype.serialize()
+            header["dtype"] = dtype
+            frames.extend(dtype_frames)
+            header["dtype-is-cudf-serialized"] = True
+        except AttributeError:
+            header["dtype"] = pickle.dumps(self.dtype)
+            header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
             data_header, data_frames = self.data.serialize()
@@ -1060,19 +1072,52 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             mask_header, mask_frames = self.mask.serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
-
+        if self.children:
+            child_headers, child_frames = zip(
+                *(c.serialize() for c in self.children)
+            )
+            header["subheaders"] = list(child_headers)
+            frames.extend(chain(*child_frames))
+        header["size"] = self.size
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
-        dtype = header["dtype"]
-        data = Buffer.deserialize(header["data"], [frames[0]])
-        mask = None
+        def unpack(header, frames) -> Tuple[Any, list]:
+            count = header["frame_count"]
+            klass = pickle.loads(header["type-serialized"])
+            obj = klass.deserialize(header, frames[:count])
+            return obj, frames[count:]
+
+        assert header["frame_count"] == len(frames), (
+            f"Deserialization expected {header['frame_count']} frames, "
+            f"but received {len(frames)}"
+        )
+        if header["dtype-is-cudf-serialized"]:
+            dtype, frames = unpack(header["dtype"], frames)
+        else:
+            dtype = pickle.loads(header["dtype"])
+        if "data" in header:
+            data, frames = unpack(header["data"], frames)
+        else:
+            data = None
         if "mask" in header:
-            mask = Buffer.deserialize(header["mask"], [frames[1]])
+            mask, frames = unpack(header["mask"], frames)
+        else:
+            mask = None
+        children = []
+        if "subheaders" in header:
+            for h in header["subheaders"]:
+                child, frames = unpack(h, frames)
+                children.append(child)
+        assert len(frames) == 0, "Deserialization did not consume all frames"
         return build_column(
-            data=data, dtype=dtype, mask=mask, size=header.get("size", None)
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=header.get("size", None),
+            children=tuple(children),
         )
 
     def unary_operator(self, unaryop: str):
@@ -1782,9 +1827,7 @@ def as_column(
             if dtype is None:
                 dtype = cudf.dtype("float64")
 
-        data = as_column(
-            utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
-        )
+        data = as_column(full(length, arbitrary, dtype=dtype))
         if not nan_as_null and not is_decimal_dtype(data.dtype):
             if np.issubdtype(data.dtype, np.floating):
                 data = data.fillna(np.nan)

@@ -47,9 +47,12 @@ extensions = [
     "numpydoc",
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
-    "nbsphinx",
     "PandasCompat",
+    "myst_nb",
 ]
+
+jupyter_execute_notebooks = "force"
+execution_timeout = 300
 
 copybutton_prompt_text = ">>> "
 autosummary_generate = True
@@ -195,8 +198,10 @@ texinfo_documents = [
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/", None),
+    "python": ("https://docs.python.org/3", None),
     "cupy": ("https://docs.cupy.dev/en/stable/", None),
+    "numpy": ("https://numpy.org/doc/stable", None),
+    "pyarrow": ("https://arrow.apache.org/docs/", None),
 }
 
 # Config numpydoc
@@ -258,11 +263,6 @@ def process_class_docstrings(app, what, name, obj, options, lines):
 
 
 nitpick_ignore = [("py:class", "SeriesOrIndex"),]
-intersphinx_mapping = {
-        "numpy": ("https://numpy.org/doc/stable/", None),
-        "pyarrow": ("https://arrow.apache.org/docs/", None),
-    }
-
 
 def setup(app):
     app.add_css_file("params.css")

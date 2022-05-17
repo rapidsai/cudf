@@ -85,7 +85,7 @@ def merge_quantiles(finalq, qs, vals):
         return val
 
     # Sort by calculated quantile values, then number of observations.
-    combined_vals_counts = gd.merge_sorted(
+    combined_vals_counts = gd.core.reshape._merge_sorted(
         [*map(_append_counts, vals, counts)]
     )
     combined_counts = cupy.asnumpy(combined_vals_counts["_counts"].values)

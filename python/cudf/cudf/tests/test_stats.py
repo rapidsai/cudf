@@ -9,7 +9,11 @@ import pytest
 
 import cudf
 from cudf.datasets import randomdata
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import (
+    _create_pandas_series,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -217,7 +221,7 @@ def test_approx_quantiles_int():
 )
 def test_misc_quantiles(data, q):
 
-    pdf_series = cudf.utils.utils._create_pandas_series(data=data)
+    pdf_series = _create_pandas_series(data)
     gdf_series = cudf.Series(data)
 
     expected = pdf_series.quantile(q.get() if isinstance(q, cp.ndarray) else q)
@@ -482,16 +486,16 @@ def test_df_corr(method):
         "cumprod",
     ],
 )
-@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("skipna", [True, False])
 def test_nans_stats(data, ops, skipna):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
+    psr = _create_pandas_series(data)
     gsr = cudf.Series(data, nan_as_null=False)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
 
-    psr = cudf.utils.utils._create_pandas_series(data=data)
+    psr = _create_pandas_series(data)
     gsr = cudf.Series(data, nan_as_null=False)
     # Since there is no concept of `nan_as_null` in pandas,
     # nulls will be returned in the operations. So only
@@ -508,7 +512,7 @@ def test_nans_stats(data, ops, skipna):
     ],
 )
 @pytest.mark.parametrize("ops", ["sum", "product", "prod"])
-@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("skipna", [True, False])
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 5, 10])
 def test_min_count_ops(data, ops, skipna, min_count):
     psr = pd.Series(data)

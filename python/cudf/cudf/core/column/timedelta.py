@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime as dt
+import datetime
 from typing import Any, Sequence, cast
 
 import numpy as np
@@ -211,7 +211,7 @@ class TimeDeltaColumn(ColumnBase):
     def normalize_binop_value(self, other) -> ColumnBinaryOperand:
         if isinstance(other, (ColumnBase, cudf.Scalar)):
             return other
-        if isinstance(other, dt.timedelta):
+        if isinstance(other, datetime.timedelta):
             other = np.timedelta64(other)
         elif isinstance(other, pd.Timestamp):
             other = other.to_datetime64()
@@ -343,7 +343,7 @@ class TimeDeltaColumn(ColumnBase):
         dtype: Dtype = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            # Since sum isn't overriden in Numerical[Base]Column, mypy only
+            # Since sum isn't overridden in Numerical[Base]Column, mypy only
             # sees the signature from Reducible (which doesn't have the extra
             # parameters from ColumnBase._reduce) so we have to ignore this.
             self.as_numerical.sum(  # type: ignore

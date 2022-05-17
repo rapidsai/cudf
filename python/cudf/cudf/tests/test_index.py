@@ -11,7 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_133
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -28,6 +28,7 @@ from cudf.testing._utils import (
     SIGNED_INTEGER_TYPES,
     SIGNED_TYPES,
     UNSIGNED_TYPES,
+    _create_pandas_series,
     assert_column_memory_eq,
     assert_column_memory_ne,
     assert_eq,
@@ -503,7 +504,8 @@ def test_empty_df_head_tail_index(n):
             10,
             None,
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/43240"
+                condition=not PANDAS_GE_133,
+                reason="https://github.com/pandas-dev/pandas/issues/43240",
             ),
         ),
         (
@@ -704,6 +706,7 @@ def test_index_argsort(data):
         pd.Index([102, 1001, 1002, 0.0, 23], dtype="datetime64[ns]"),
         pd.Index([13240.2, 1001, 100.2, 0.0, 23], dtype="datetime64[ns]"),
         pd.RangeIndex(0, 10, 1),
+        pd.RangeIndex(0, -100, -2),
         pd.Index([-10.2, 100.1, -100.2, 0.0, 23], dtype="timedelta64[ns]"),
     ],
 )
@@ -973,9 +976,7 @@ def test_index_equal_misc(data, other):
     actual = gd_data.equals(np.array(gd_other))
     assert_eq(expected, actual)
 
-    expected = pd_data.equals(
-        cudf.utils.utils._create_pandas_series(data=pd_other)
-    )
+    expected = pd_data.equals(_create_pandas_series(pd_other))
     actual = gd_data.equals(cudf.Series(gd_other))
     assert_eq(expected, actual)
 
@@ -2433,7 +2434,7 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
     ],
 )
 def test_isin_index(data, values):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
+    psr = _create_pandas_series(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.index.isin(values)
