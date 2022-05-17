@@ -335,10 +335,17 @@ class device_row_comparator {
  */
 template <typename Comparator, weak_ordering... values>
 struct weak_ordering_comparator_impl {
-  template <typename... Ts>
-  __device__ constexpr bool operator()(Ts const... args) const noexcept
+  template <
+    typename LhsType,
+    typename RhsType,
+    CUDF_ENABLE_IF(
+      (std::is_same_v<LhsType, size_type> and std::is_same_v<RhsType, size_type>) or
+      (std::is_same_v<LhsType, lhs_index_type> and std::is_same_v<RhsType, rhs_index_type>) or
+      (std::is_same_v<LhsType, rhs_index_type> and std::is_same_v<RhsType, lhs_index_type>))>
+  __device__ constexpr bool operator()(LhsType const lhs_index,
+                                       RhsType const rhs_index) const noexcept
   {
-    weak_ordering const result = comparator(args...);
+    weak_ordering const result = comparator(lhs_index, rhs_index);
     return ((result == values) || ...);
   }
   Comparator const comparator;
