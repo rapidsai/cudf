@@ -551,10 +551,6 @@ TEST_F(SegmentedReductionStringTest, MinExcludeNulls)
 
 TEST_F(SegmentedReductionStringTest, EmptyInputWithOffsets)
 {
-  // values:    {}
-  // offsets:   {0, 0}
-  // outputs:   {XXX}
-  // output nullmask: {0}
   auto input     = strings_column_wrapper{};
   auto offsets   = std::vector<size_type>{0, 0, 0, 0};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
