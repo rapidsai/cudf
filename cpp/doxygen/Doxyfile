@@ -252,8 +252,6 @@ TAB_SIZE               = 4
 # a double escape (\\{ and \\})
 
 ALIASES                =
-ALIASES                += briefreturn{1}="@brief Returns \1 @return \1"
-ALIASES                += movedoc{1}="@brief Move Constructor for \1. @param other The other \1 to move from."
 
 # Set the OPTIMIZE_OUTPUT_FOR_C tag to YES if your project consists of C sources
 # only. Doxygen will then generate output that is more tailored for C. For
