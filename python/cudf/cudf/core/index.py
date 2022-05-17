@@ -775,6 +775,12 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _columns(self):
         return self._as_int64()._columns
 
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def values_host(self):
+        return self.to_pandas().values
+
+    @_cudf_nvtx_annotate
     def argsort(
         self,
         ascending=True,
@@ -792,6 +798,23 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     def where(self, cond, other=None, inplace=False):
         return self._as_int64().where(cond, other, inplace)
+
+    def replace(self, to_replace, value):
+        return self._as_int64().replace(to_replace=to_replace, value=value)
+
+    def to_arrow(self):
+        return self._as_int64().to_arrow()
+
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed, To explicitly construct a GPU matrix, consider using "
+            ".to_cupy()\nTo explicitly construct a host matrix, consider "
+            "using .to_numpy()."
+        )
+
+    def nunique(self, dropna: bool = True):
+        return self._data.values.distinct_count(dropna=dropna)
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
