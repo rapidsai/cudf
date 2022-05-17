@@ -623,13 +623,12 @@ std::unique_ptr<table> groupby(table_view const& keys,
  * @brief Indicates if a set of aggregation requests can be satisfied with a
  * hash-based groupby implementation.
  *
- * @param keys The table of keys
  * @param requests The set of columns to aggregate and the aggregations to
  * perform
  * @return true A hash-based groupby should be used
  * @return false A hash-based groupby should not be used
  */
-bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests)
+bool can_use_hash_groupby(host_span<aggregation_request const> requests)
 {
   return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
     // Currently, structs are not supported in any of hash-based aggregations.

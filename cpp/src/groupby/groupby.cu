@@ -74,7 +74,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
   if (_keys_are_sorted == sorted::NO and not _helper and
-      detail::hash::can_use_hash_groupby(_keys, requests)) {
+      detail::hash::can_use_hash_groupby(requests)) {
     return detail::hash::groupby(_keys, requests, _include_null_keys, stream, mr);
   } else {
     return sort_aggregate(requests, stream, mr);
