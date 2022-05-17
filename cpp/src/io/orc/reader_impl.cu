@@ -266,6 +266,7 @@ __global__ void decompress_check_kernel(device_span<decompress_status const> sta
 {
   auto tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid < stats.size()) {
+    printf("bytes_written: %d, %lu\n", tid, stats[tid].bytes_written);
     if (stats[tid].status != 0) {
       *any_block_failure = true;  // Doesn't need to be atomic
     }
