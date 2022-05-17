@@ -155,10 +155,10 @@ class regex_parser {
   int id_ccls_d = -1;  // digit
   int id_ccls_D = -1;  // not digit
 
-  char32_t yy;    /* last lex'd Char */
-  int yyclass_id; /* last lex'd class */
-  short yy_min_count;
-  short yy_max_count;
+  char32_t yy{};    /* last lex'd Char */
+  int yyclass_id{}; /* last lex'd class */
+  int16_t yy_min_count{};
+  int16_t yy_max_count{};
 
   bool nextc(char32_t& c)  // return "quoted" == backslash-escape prefix
   {
@@ -774,8 +774,9 @@ class regex_compiler {
         auto const n = item.d.yycount.n;  // minimum count
         auto const m = item.d.yycount.m;  // maximum count
 
+        assert(n >= 0 && "invalid repeat count value n");
         // zero-repeat edge-case: need to erase the previous items
-        if (n <= 0) { out.erase(out.end() - (index - repeat_start_index), out.end()); }
+        if (n == 0) { out.erase(out.end() - (index - repeat_start_index), out.end()); }
 
         // minimum repeats (n)
         for (int j = 1; j < n; j++) {
