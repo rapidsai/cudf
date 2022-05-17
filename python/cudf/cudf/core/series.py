@@ -266,7 +266,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If both a dict and index sequence are used, the index will
         override the keys found in the dict.
 
-    dtype : str, numpy.dtype, or ExtensionDtype, optional
+    dtype : str, :class:`numpy.dtype`, or ExtensionDtype, optional
         Data type for the output Series. If not specified,
         this will be inferred from data.
 
@@ -2129,7 +2129,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Either a callable python function or a python function already
             decorated by ``numba.cuda.jit`` for call on the GPU as a device
 
-        out_dtype  : numpy.dtype; optional
+        out_dtype : :class:`numpy.dtype`; optional
             The dtype for use in the output.
             Only used for ``numba.cuda.jit`` decorated udf.
             By default, the result will have the same dtype as the source.
