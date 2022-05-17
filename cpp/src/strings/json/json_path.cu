@@ -509,7 +509,7 @@ struct path_operator {
   //    - you cannot retrieve a subscripted field (eg [5]) from an object.
   //    - you cannot retrieve a field by name (eg  .book) from an array.
   //    - you -can- use .* for both arrays and objects
-  // a value of NONE imples any type accepted
+  // a value of NONE implies any type accepted
   json_element_type expected_type{NONE};  // the expected type of the element we're working with
   string_view name;                       // name to match against (if applicable)
   int index{-1};                          // index for subscript operator

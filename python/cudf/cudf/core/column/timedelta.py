@@ -343,7 +343,7 @@ class TimeDeltaColumn(ColumnBase):
         dtype: Dtype = None,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            # Since sum isn't overriden in Numerical[Base]Column, mypy only
+            # Since sum isn't overridden in Numerical[Base]Column, mypy only
             # sees the signature from Reducible (which doesn't have the extra
             # parameters from ColumnBase._reduce) so we have to ignore this.
             self.as_numerical.sum(  # type: ignore

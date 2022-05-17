@@ -285,7 +285,7 @@ rmm::device_uvector<uint64_t> find_record_starts(json_reader_options const& read
     find_all_from_set(h_data, chars_to_find, 1, find_result_ptr, stream);
   }
 
-  // Previous call stores the record pinput_file.typeositions as encountered by all threads
+  // Previous call stores the record positions as encountered by all threads
   // Sort the record positions as subsequent processing may require filtering
   // certain rows or other processing on specific records
   thrust::sort(rmm::exec_policy(stream), rec_starts.begin(), rec_starts.end());

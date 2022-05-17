@@ -1889,7 +1889,7 @@ class IndexedFrame(Frame):
         Parameters
         ----------
         offset: str
-            The offset length of the data that will be selected. For intance,
+            The offset length of the data that will be selected. For instance,
             '1M' will display all rows having their index within the first
             month.
 
