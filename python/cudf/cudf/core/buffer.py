@@ -82,7 +82,7 @@ class Buffer(Serializable):
             The base buffer, which will also be set as the owner of
             the memory allocation.
         size : int, optional
-            Size of the memory allocation. Defaults to the size of `buffer`
+            Size of the memory allocation (default: `buffer.size`).
         offset : int, optional
             Start offset relative to `buffer.ptr`.
         """
@@ -106,14 +106,13 @@ class Buffer(Serializable):
 
     @property
     def __cuda_array_interface__(self) -> dict:
-        intf = {
+        return {
             "data": (self.ptr, False),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
             "version": 0,
         }
-        return intf
 
     def to_host_array(self):
         data = np.empty((self.size,), "u1")
