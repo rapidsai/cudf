@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "gpuinflate.h"
 #include "io/utilities/hostdevice_vector.hpp"
 #include "io_uncomp.h"
 #include "unbz2.h"  // bz2 uncompress
@@ -418,6 +417,9 @@ size_t decompress_gzip(host_span<uint8_t const> src, host_span<uint8_t> dst)
   return decompress_zlib({gz.comp_data, gz.comp_len}, dst);
 }
 
+/**
+ * @brief SNAPPY host decompressor
+ */
 size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
   CUDF_EXPECTS(not dst.empty() and src.size() >= 1, "invalid Snappy decompress inputs");
@@ -499,15 +501,20 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
   return uncompressed_size;
 }
 
+/**
+ * @brief ZSTD decompressor that uses nvcomp
+ */
 size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
 {
   auto stream = rmm::cuda_stream_default;
 
+  // Init device span of spans (source)
   auto const d_src = cudf::detail::make_device_uvector_async(src, stream);
   auto hd_srcs     = hostdevice_vector<device_span<uint8_t const>>(1, stream);
   hd_srcs[0]       = d_src;
   hd_srcs.host_to_device(stream);
 
+  // Init device span of spans (temporary destination)
   auto d_dst   = rmm::device_uvector<uint8_t>(dst.size(), stream);
   auto hd_dsts = hostdevice_vector<device_span<uint8_t>>(1, stream);
   hd_dsts[0]   = d_dst;
@@ -518,7 +525,7 @@ size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
   nvcomp::batched_decompress(
     nvcomp::compression_type::ZSTD, hd_srcs, hd_dsts, hd_stats, max_uncomp_page_size, stream);
 
-  // copy output to dst
+  // Copy temporary output to `dst`
   CUDF_CUDA_TRY(
     cudaMemcpyAsync(dst.data(), d_dst.data(), dst.size(), cudaMemcpyDeviceToHost, stream.value()));
 
