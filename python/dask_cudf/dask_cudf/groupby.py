@@ -32,6 +32,11 @@ SUPPORTED_AGGS = (
     "collect",
     "first",
     "last",
+    "cumsum",
+    "cummin",
+    "cumcount",
+    "cummax",
+    "cumprod"
 )
 
 
