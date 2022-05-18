@@ -48,7 +48,7 @@ THE SOFTWARE.
 
 */
 
-#include "brotli_dict.h"
+#include "brotli_dict.hpp"
 
 #include <cstdint>
 

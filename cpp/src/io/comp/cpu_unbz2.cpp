@@ -79,8 +79,8 @@ Jon L. Bentley
 For more information on these sources, see the manual.
 --*/
 
-#include "io_uncomp.h"
-#include "unbz2.h"
+#include "io_uncomp.hpp"
+#include "unbz2.hpp"
 
 #include <cstdio>
 #include <cstdlib>
