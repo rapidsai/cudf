@@ -33,8 +33,8 @@ class Buffer(Serializable):
         object is kept in this Buffer.
     """
 
-    _size: int
     _ptr: int
+    _size: int
     _owner: object
 
     def __init__(
@@ -97,16 +97,16 @@ class Buffer(Serializable):
         return self._size
 
     @property
+    def ptr(self) -> int:
+        return self._ptr
+
+    @property
     def size(self) -> int:
         return self._size
 
     @property
     def nbytes(self) -> int:
         return self._size
-
-    @property
-    def ptr(self) -> int:
-        return self._ptr
 
     @property
     def __cuda_array_interface__(self) -> dict:
