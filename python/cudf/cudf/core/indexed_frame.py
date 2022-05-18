@@ -1320,7 +1320,7 @@ class IndexedFrame(Frame):
 
         Returns
         -------
-        DataFrame
+        Series or DataFrame
         """
         if dtypes is None:
             dtypes = {}
@@ -1339,18 +1339,27 @@ class IndexedFrame(Frame):
 
             if not idx_dtype_match:
                 column_names = (
-                    column_names if column_names is not None else list(df._column_names)
+                    column_names
+                    if column_names is not None
+                    else list(df._column_names)
                 )
                 df = cudf.DataFrame()
             else:
-                df = cudf.DataFrame(None, index).join(
-                    cudf.DataFrame(df), how="left", sort=True
+                lhs = cudf.DataFrame._from_data({}, index=index)
+                rhs = cudf.DataFrame._from_data(
+                    ColumnAccessor(
+                        {name or 0: col for name, col in df._data.items()}
+                    ),
+                    index=df._index,
                 )
-                # double-argsort to map back from sorted to qunsorted positions
+                df = lhs.join(rhs, how="left", sort=True)
+                # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
 
         index = index if index is not None else df.index
-        names = column_names if column_names is not None else list(df._data.names)
+        names = (
+            column_names if column_names is not None else list(df._data.names)
+        )
         cols = {
             name: (
                 df._data[name].copy(deep=deep)
@@ -1363,7 +1372,6 @@ class IndexedFrame(Frame):
             )
             for name in names
         }
-
         result = self.__class__._from_data(
             data=cudf.core.column_accessor.ColumnAccessor(
                 cols,
