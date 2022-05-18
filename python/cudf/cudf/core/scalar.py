@@ -14,7 +14,7 @@ from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
-from cudf.api.types import is_scalar
+
 
 class Scalar(BinaryOperand):
     """
