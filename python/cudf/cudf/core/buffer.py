@@ -41,8 +41,8 @@ class Buffer(Serializable):
         self, data: Any = None, size: int = None, owner: object = None
     ):
         if isinstance(data, Buffer):
-            self._size = data.size
             self._ptr = data._ptr
+            self._size = data.size
             self._owner = owner or data._owner
         elif isinstance(data, rmm.DeviceBuffer):
             self._ptr = data.ptr
