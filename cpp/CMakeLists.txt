@@ -47,7 +47,12 @@ option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
 option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
-option(CUDF_USE_PER_THREAD_DEFAULT_STREAM "Build cuDF with per-thread default stream" OFF)
+option(
+  CUDF_USE_PER_THREAD_DEFAULT_STREAM
+  "Build cuDF with per-thread default stream, including passing the per-thread default
+         stream to external libraries."
+  OFF
+)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
