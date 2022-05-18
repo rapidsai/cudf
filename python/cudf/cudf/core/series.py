@@ -696,16 +696,24 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def reindex(self, *args, **kwargs):
-        """Return a Series that conforms to a new index
+        """
+        Conform Series to new index.
 
         Parameters
         ----------
         index : Index, Series-convertible, default None
+            New labels / index to conform to, should be specified using keywords.
+        method: Not Supported
         copy : boolean, default True
+        level: Not Supported
+        fill_value : Value to use for missing values.
+            Defaults to ``NA``, but can be any “compatible” value.
+        limit: Not Supported
+        tolerance: Not Supported
 
         Returns
         -------
-        A new Series that conforms to the supplied index
+        Series with changed index.
 
         Examples
         --------
