@@ -370,8 +370,7 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
 two_table_comparator::two_table_comparator(const table_view& lhs,
                                            const table_view& rhs,
                                            rmm::cuda_stream_view stream)
-  : dt_lhs(preprocessed_table::create(lhs, stream)),
-    dt_rhs(preprocessed_table::create(rhs, stream))
+  : dt_lhs(preprocessed_table::create(lhs, stream)), dt_rhs(preprocessed_table::create(rhs, stream))
 {
   check_shape_compatibility(lhs, rhs);
 }
