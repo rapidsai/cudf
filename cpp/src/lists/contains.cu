@@ -214,7 +214,11 @@ std::pair<rmm::device_uvector<offset_type>, table_view> get_search_keys_table_vi
   SearchKeyType const& search_keys, rmm::cuda_stream_view stream)
 {
   if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
-    if (static_cast<scalar const*>(&search_keys)->type().id() == type_id::STRUCT) {
+    auto const key_type = static_cast<scalar const*>(&search_keys)->type().id();
+    CUDF_EXPECTS(key_type == type_id::STRUCT || key_type == type_id::LIST,
+                 "This function expects to process only only nested types for scalar key.");
+
+    if (key_type == type_id::STRUCT) {
       auto const children = static_cast<struct_scalar const*>(&search_keys)->view();
       // Create a `column_view` of struct type that have the same children as from the input scalar.
       auto const structs_col = column_view{
