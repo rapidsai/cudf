@@ -21,6 +21,7 @@
 
 #include "orc.hpp"
 #include "orc_gpu.hpp"
+
 #include "reader_impl.hpp"
 #include "timezone.cuh"
 
