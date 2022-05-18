@@ -944,7 +944,7 @@ struct strong_index_comparator_adapter {
 };
 
 /**
- * @brief An owning object that can be used to equality compare rows of two different tables
+ * @brief An owning object that can be used to equality compare rows of two different tables.
  *
  * This class takes two table_views and preprocesses certain columns to allow for equality
  * comparison. The preprocessed table and temporary data required for the comparison are created and
@@ -962,14 +962,12 @@ class two_table_comparator {
    * @brief Construct an owning object for performing equality comparisons between two rows from two
    * tables.
    *
-   * @param t_lhs The lhs table to compare.
-   * @param t_rhs The rhs table to compare.
+   * @param lhs The left table to compare.
+   * @param rhs The right table to compare.
    * @param stream The stream to construct this object on. Not the stream that will be used for
    * comparisons using this object.
    */
-  two_table_comparator(table_view const& t_lhs,
-                       table_view const& t_rhs,
-                       rmm::cuda_stream_view stream);
+  two_table_comparator(table_view const& lhs, table_view const& rhs, rmm::cuda_stream_view stream);
 
   /**
    * @brief Construct an owning object for performing equality comparisons between two rows from two
@@ -978,12 +976,12 @@ class two_table_comparator {
    * This constructor allows independently constructing a `preprocessed_table` and sharing it among
    * multiple comparators.
    *
-   * @param t_lhs The lhs table preprocessed for equality comparison
-   * @param t_rhs The rhs table preprocessed for equality comparison
+   * @param dt_lhs The left table preprocessed for equality comparison
+   * @param dt_rhs The right table preprocessed for equality comparison
    */
-  two_table_comparator(std::shared_ptr<preprocessed_table> dt_lhs_,
-                       std::shared_ptr<preprocessed_table> dt_rhs_)
-    : dt_lhs{std::move(dt_lhs_)}, dt_rhs{std::move(dt_rhs_)}
+  two_table_comparator(std::shared_ptr<preprocessed_table> dt_lhs,
+                       std::shared_ptr<preprocessed_table> dt_rhs)
+    : dt_lhs{std::move(dt_lhs)}, dt_rhs{std::move(dt_rhs)}
   {
   }
 
