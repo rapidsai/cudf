@@ -95,8 +95,9 @@ class scalar {
   rmm::device_scalar<bool> _is_valid;  ///< Device bool signifying validity
 
   scalar() = delete;
+
   /**
-   * @brief Move Constructor for scalar.
+   * @brief Move constructor for scalar.
    * @param other The other scalar to move from.
    */
   scalar(scalar&& other) = default;
@@ -143,8 +144,9 @@ class fixed_width_scalar : public scalar {
   using value_type = T;  ///< Type of the value held by the scalar.
 
   ~fixed_width_scalar() override = default;
+
   /**
-   * @brief Move Constructor for fixed_width_scalar.
+   * @brief Move constructor for fixed_width_scalar.
    * @param other The other fixed_width_scalar to move from.
    */
   fixed_width_scalar(fixed_width_scalar&& other) = default;
@@ -242,8 +244,9 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
  public:
   numeric_scalar()  = delete;
   ~numeric_scalar() = default;
+
   /**
-   * @brief Move Constructor for numeric_scalar.
+   * @brief Move constructor for numeric_scalar.
    * @param other The other numeric_scalar to move from.
    */
   numeric_scalar(numeric_scalar&& other) = default;
@@ -304,8 +307,9 @@ class fixed_point_scalar : public scalar {
 
   fixed_point_scalar()           = delete;
   ~fixed_point_scalar() override = default;
+
   /**
-   * @brief Move Constructor for fixed_point_scalar.
+   * @brief Move constructor for fixed_point_scalar.
    * @param other The other fixed_point_scalar to move from.
    */
   fixed_point_scalar(fixed_point_scalar&& other) = default;
@@ -426,8 +430,9 @@ class string_scalar : public scalar {
 
   string_scalar()           = delete;
   ~string_scalar() override = default;
+
   /**
-   * @brief Move Constructor for string_scalar.
+   * @brief Move constructor for string_scalar.
    * @param other The other string_scalar to move from.
    */
   string_scalar(string_scalar&& other) = default;
@@ -557,8 +562,9 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
  public:
   chrono_scalar()  = delete;
   ~chrono_scalar() = default;
+
   /**
-   * @brief Move Constructor for chrono_scalar.
+   * @brief Move constructor for chrono_scalar.
    * @param other The other chrono_scalar to move from.
    */
   chrono_scalar(chrono_scalar&& other) = default;
@@ -618,8 +624,9 @@ class timestamp_scalar : public chrono_scalar<T> {
   using rep_type = typename T::rep;  ///< The underlying representation type of the timestamp.
 
   timestamp_scalar() = delete;
+
   /**
-   * @brief Move Constructor for timestamp_scalar.
+   * @brief Move constructor for timestamp_scalar.
    * @param other The other timestamp_scalar to move from.
    */
   timestamp_scalar(timestamp_scalar&& other) = default;
@@ -672,8 +679,9 @@ class duration_scalar : public chrono_scalar<T> {
   using rep_type = typename T::rep;  ///< The duration's underlying representation type.
 
   duration_scalar() = delete;
+
   /**
-   * @brief Move Constructor for duration_scalar.
+   * @brief Move constructor for duration_scalar.
    * @param other The other duration_scalar to move from.
    */
   duration_scalar(duration_scalar&& other) = default;
@@ -716,8 +724,9 @@ class list_scalar : public scalar {
  public:
   list_scalar()           = delete;
   ~list_scalar() override = default;
+
   /**
-   * @brief Move Constructor for list_scalar.
+   * @brief Move constructor for list_scalar.
    * @param other The other list_scalar to move from.
    */
   list_scalar(list_scalar&& other) = default;
@@ -781,8 +790,9 @@ class struct_scalar : public scalar {
  public:
   struct_scalar()           = delete;
   ~struct_scalar() override = default;
+
   /**
-   * @brief Move Constructor for struct_scalar.
+   * @brief Move constructor for struct_scalar.
    * @param other The other struct_scalar to move from.
    */
   struct_scalar(struct_scalar&& other) = default;

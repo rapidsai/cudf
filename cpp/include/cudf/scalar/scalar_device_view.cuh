@@ -125,6 +125,7 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
   {
     return static_cast<T*>(_data);
   }
+
   /**
    * @brief Returns a const raw pointer to the value in device memory
    *
@@ -195,6 +196,7 @@ class fixed_width_scalar_device_view : public detail::fixed_width_scalar_device_
    * @returns Raw pointer to the value in device memory
    */
   __device__ T* data() noexcept { return fixed_width_scalar_device_view_base::data<T>(); }
+
   /**
    * @brief Returns a const raw pointer to the value in device memory
    *
