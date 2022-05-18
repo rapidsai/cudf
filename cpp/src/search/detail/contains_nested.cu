@@ -121,9 +121,9 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
     return result;
   }
 
-  auto const haystack_tv   = table_view{{haystack}};
-  auto const needles_tv    = table_view{{needles}};
-  auto const has_any_nulls = has_nested_nulls(haystack_tv) || has_nested_nulls(needles_tv);
+  auto const haystack_tv = table_view{{haystack}};
+  auto const needles_tv  = table_view{{needles}};
+  auto const has_nulls   = has_nested_nulls(haystack_tv) || has_nested_nulls(needles_tv);
 
   auto haystack_map =
     detail::hash_map_type{compute_hash_table_size(haystack.size()),
@@ -132,23 +132,24 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                           stream.value()};
 
-  // todo: create preprocess table for both row_hasher and table_comparator
-  auto const row_hasher = cudf::experimental::row::hash::row_hasher(haystack_tv, stream);
-  auto const haystack_hash =
-    detail::experimental::compaction_hash(row_hasher.device_hasher(has_any_nulls));
+  auto const hasher = cudf::experimental::row::hash::row_hasher(haystack_tv, stream);
+  auto const d_hasher =
+    detail::experimental::compaction_hash(hasher.device_hasher(nullate::DYNAMIC{has_nulls}));
 
-  auto const comp =
-    cudf::experimental::row::equality::table_comparator(haystack_tv, needles_tv, stream);
-  auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
+  auto const comparator =
+    cudf::experimental::row::equality::two_table_comparator(haystack_tv, needles_tv, stream);
+  auto const d_comp = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
 
-  // todo: make pair(i, i) type of left_index_type
-  auto const pair_it = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
-  haystack_map.insert(pair_it, pair_it + haystack.size(), haystack_hash, dcomp, stream.value());
+  using cudf::experimental::row::lhs_index_type;
+  using cudf::experimental::row::rhs_index_type;
+  auto const haystack_it =
+    cudf::detail::make_counting_transform_iterator(0, [] __device__(size_type i) {
+      return cuco::make_pair(static_cast<lhs_index_type>(i), static_cast<lhs_index_type>(i));
+    });
+  haystack_map.insert(haystack_it, haystack_it + haystack.size(), d_hasher, d_comp, stream.value());
 
-  // todo: make count_it of type right_index_type
-  auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  haystack_map.contains(count_it, count_it + needles.size(), out_begin, haystack_hash);
+  auto const needles_it = cudf::experimental::row::rhs_iterator(0);
+  haystack_map.contains(needles_it, needles_it + needles.size(), out_begin, d_hasher);
 
   return result;
 }
