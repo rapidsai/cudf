@@ -24,7 +24,7 @@
 
 namespace cudf::io::nvcomp {
 
-enum class compression_type { SNAPPY };
+enum class compression_type { SNAPPY, ZSTD };
 
 /**
  * @brief Device batch decompression of given type.
@@ -36,7 +36,7 @@ enum class compression_type { SNAPPY };
  * @param[in] max_uncomp_page_size maximum size of uncompressed block
  * @param[in] stream CUDA stream to use
  */
-void batched_decompress(compression_type type,
+void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t const> const> inputs,
                         device_span<device_span<uint8_t> const> outputs,
                         device_span<decompress_status> statuses,
