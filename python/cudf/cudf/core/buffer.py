@@ -45,8 +45,8 @@ class Buffer(Serializable):
             self._ptr = data._ptr
             self._owner = owner or data._owner
         elif isinstance(data, rmm.DeviceBuffer):
-            self._size = data.size
             self._ptr = data.ptr
+            self._size = data.size
             self._owner = data
         elif hasattr(data, "__array_interface__") or hasattr(
             data, "__cuda_array_interface__"
