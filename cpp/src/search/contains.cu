@@ -25,6 +25,7 @@
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/lists/list_view.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/search.hpp>
 #include <cudf/structs/struct_view.hpp>
