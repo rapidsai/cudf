@@ -3,5 +3,4 @@
 ```{toctree}
 :maxdepth: 2
 
-ARCHITECTURE
-```
+library_design
