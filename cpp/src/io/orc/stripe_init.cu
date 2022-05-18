@@ -418,15 +418,14 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
  * value
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128, 8)
-  gpuParseRowGroupIndex(RowGroup* row_groups,
-                        CompressedStreamInfo* strm_info,
-                        ColumnDesc* chunks,
-                        uint32_t num_columns,
-                        uint32_t num_stripes,
-                        uint32_t num_rowgroups,
-                        uint32_t rowidx_stride,
-                        bool use_base_stride)
+__global__ void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_groups,
+                                                                CompressedStreamInfo* strm_info,
+                                                                ColumnDesc* chunks,
+                                                                uint32_t num_columns,
+                                                                uint32_t num_stripes,
+                                                                uint32_t num_rowgroups,
+                                                                uint32_t rowidx_stride,
+                                                                bool use_base_stride)
 {
   __shared__ __align__(16) rowindex_state_s state_g;
   rowindex_state_s* const s = &state_g;
