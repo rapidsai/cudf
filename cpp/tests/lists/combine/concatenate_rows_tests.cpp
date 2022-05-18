@@ -565,7 +565,7 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNulls)
                   {{}}
                 }, nulls_at({4}) };
         
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   // concatenate_policy::NULLIFY_OUTPUT_ROW
@@ -585,7 +585,7 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNulls)
                   {{}} 
                 }, nulls_at({3, 4}) };    
         
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
   }
 
   // clang-format on
@@ -717,18 +717,17 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNulls)
 
     // expected
     cudf::test::fixed_width_column_wrapper<int> se_0{
-      {0, 1, 10, 11, 12, 13, 2, 3, 4, 14, 15, 16, 5, 17, 18, 19, 20, 21, 22, 23, 24, 6, 7},
-      nulls_at({20})};
+      {10, 11, 12, 13, 2, 3, 4, 14, 15, 16, 5, 17, 18, 19, 20, 21, 22, 23, 24, 6, 7},
+      nulls_at({18})};
     cudf::test::strings_column_wrapper se_1{
-      {"whee",  "",       "arg",   "mno",  "ampere", "gpu",    "bananas", "",
-       "",      "",       "hhh",   "warp", "g",      "donuts", "parking", "",
-       "apply", "twelve", "mouse", "bbb",  "pom",    "xyw",    "ijk"},
-      nulls_at({1, 7, 8})};
+      {"arg",    "mno",     "ampere", "gpu",   "bananas", "",      "",    "",    "hhh", "warp", "g",
+       "donuts", "parking", "",       "apply", "twelve",  "mouse", "bbb", "pom", "xyw", "ijk"},
+      nulls_at({5, 6})};
     std::vector<std::unique_ptr<cudf::column>> se_children;
     se_children.push_back(se_0.release());
     se_children.push_back(se_1.release());
     cudf::test::structs_column_wrapper se(std::move(se_children));
-    cudf::test::fixed_width_column_wrapper<int> le_offsets{0, 2, 6, 12, 21, 23};
+    cudf::test::fixed_width_column_wrapper<int> le_offsets{0, 0, 4, 10, 19, 21};
     auto const le_size = static_cast<cudf::column_view>(le_offsets).size() - 1;
     std::vector<bool> le_validity{false, true, true, true, true};
     auto expected = cudf::make_lists_column(
@@ -738,7 +737,7 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNulls)
       1,
       cudf::test::detail::make_null_mask(le_validity.begin(), le_validity.end()));
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
   }
 
   // concatenate_policy::NULLIFY_OUTPUT_ROW
@@ -749,28 +748,25 @@ TEST_F(ListConcatenateRowsNestedTypesTest, StructWithNulls)
       cudf::lists::concatenate_rows(t, cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
 
     // expected
-    cudf::test::fixed_width_column_wrapper<int> se_0{
-      {0, 1, 10, 11, 12, 13, 2, 3, 4, 14, 15, 16, 5, 17, 18, 19, 20, 21, 22, 23, 24, 6, 7},
-      nulls_at({20})};
+    cudf::test::fixed_width_column_wrapper<int> se_0{{10, 11, 12, 13, 2, 3, 4, 14, 15, 16, 6, 7},
+                                                     nulls_at({})};
     cudf::test::strings_column_wrapper se_1{
-      {"whee",  "",       "arg",   "mno",  "ampere", "gpu",    "bananas", "",
-       "",      "",       "hhh",   "warp", "g",      "donuts", "parking", "",
-       "apply", "twelve", "mouse", "bbb",  "pom",    "xyw",    "ijk"},
-      nulls_at({1, 7, 8})};
+      {"arg", "mno", "ampere", "gpu", "bananas", "", "", "", "hhh", "warp", "xyw", "ijk"},
+      nulls_at({5, 6})};
     std::vector<std::unique_ptr<cudf::column>> se_children;
     se_children.push_back(se_0.release());
     se_children.push_back(se_1.release());
     cudf::test::structs_column_wrapper se(std::move(se_children));
-    cudf::test::fixed_width_column_wrapper<int> le_offsets{0, 2, 6, 12, 21, 23};
+    cudf::test::fixed_width_column_wrapper<int> le_offsets{0, 0, 4, 10, 10, 12};
     auto const le_size = static_cast<cudf::column_view>(le_offsets).size() - 1;
     std::vector<bool> le_validity{false, true, true, false, true};
     auto expected = cudf::make_lists_column(
       le_size,
       le_offsets.release(),
       se.release(),
-      1,
+      2,
       cudf::test::detail::make_null_mask(le_validity.begin(), le_validity.end()));
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
   }
 }
