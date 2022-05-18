@@ -183,7 +183,7 @@ class SubwordTokenizer:
 
             truncation = False
             warning_msg = (
-                "When truncation is not True, the behaviour currently differs "
+                "When truncation is not True, the behavior currently differs "
                 "from HuggingFace as cudf always returns overflowing tokens"
             )
             warnings.warn(warning_msg)
@@ -207,7 +207,7 @@ class SubwordTokenizer:
             raise NotImplementedError(error_msg)
 
         stride = max_length - stride
-        # behaviour varies from subword_tokenize but maps with huggingface
+        # behavior varies from subword_tokenize but maps with huggingface
 
         input_ids, attention_mask, metadata = cpp_subword_tokenize(
             text._column,

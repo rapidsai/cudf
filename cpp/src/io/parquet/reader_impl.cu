@@ -1108,7 +1108,8 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   std::array codecs{codec_stats{parquet::GZIP, 0, 0},
                     codec_stats{parquet::SNAPPY, 0, 0},
-                    codec_stats{parquet::BROTLI, 0, 0}};
+                    codec_stats{parquet::BROTLI, 0, 0},
+                    codec_stats{parquet::ZSTD, 0, 0}};
 
   auto is_codec_supported = [&codecs](int8_t codec) {
     if (codec == parquet::UNCOMPRESSED) return true;
@@ -1190,6 +1191,14 @@ rmm::device_buffer reader::impl::decompress_page_data(
         } else {
           gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, stream);
         }
+        break;
+      case parquet::ZSTD:
+        nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
+                                   d_comp_in,
+                                   d_comp_out,
+                                   d_comp_stats_view,
+                                   codec.max_decompressed_size,
+                                   stream);
         break;
       case parquet::BROTLI:
         gpu_debrotli(d_comp_in,

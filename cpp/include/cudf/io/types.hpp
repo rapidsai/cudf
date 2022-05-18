@@ -60,7 +60,11 @@ enum class compression_type {
   BZIP2,   ///< BZIP2 format, using Burrows-Wheeler transform
   BROTLI,  ///< BROTLI format, using LZ77 + Huffman + 2nd order context modeling
   ZIP,     ///< ZIP format, using DEFLATE algorithm
-  XZ       ///< XZ format, using LZMA(2) algorithm
+  XZ,      ///< XZ format, using LZMA(2) algorithm
+  ZLIB,    ///< ZLIB format, using DEFLATE algorithm
+  LZ4,     ///< LZ4 format, using LZ77
+  LZO,     ///< Lempel–Ziv–Oberhumer format
+  ZSTD     ///< Zstandard format
 };
 
 /**
