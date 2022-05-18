@@ -387,6 +387,212 @@ TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
+template <typename T>
+struct SegmentedReductionFixedPointTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_SUITE(SegmentedReductionFixedPointTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(SegmentedReductionFixedPointTest, MaxIncludeNulls)
+{
+  // scale: -2, 0, 5
+  // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
+  // values:    {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
+  // offsets:   {0, 3, 6, 7, 8, 10, 10}
+  // nullmask:  {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}
+  // outputs:   {3, XXX, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 0, 1, 0, 0, 0}
+
+  using RepType = device_storage_type_t<TypeParam>;
+
+  for (auto scale : {-2, 0, 5}) {
+    auto input     = fixed_point_column_wrapper<RepType>({1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
+                                                     numeric::scale_type{scale});
+    auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
+    auto d_offsets = thrust::device_vector<size_type>(offsets);
+    auto out_type  = column_view(input).type();
+    auto expect    = fixed_point_column_wrapper<RepType>(
+      {3, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}, numeric::scale_type{scale});
+
+    auto res = segmented_reduce(input,
+                                d_offsets,
+                                *make_max_aggregation<segmented_reduce_aggregation>(),
+                                out_type,
+                                null_policy::INCLUDE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+  }
+}
+
+TYPED_TEST(SegmentedReductionFixedPointTest, MaxExcludeNulls)
+{
+  // scale: -2, 0, 5
+  // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
+  // values:    {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
+  // offsets:   {0, 3, 6, 7, 8, 10, 10}
+  // nullmask:  {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}
+  // outputs:   {3, 3, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 1, 1, 0, 0, 0}
+
+  using RepType = device_storage_type_t<TypeParam>;
+
+  for (auto scale : {-2, 0, 5}) {
+    auto input     = fixed_point_column_wrapper<RepType>({1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
+                                                     numeric::scale_type{scale});
+    auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
+    auto d_offsets = thrust::device_vector<size_type>(offsets);
+    auto out_type  = column_view(input).type();
+    auto expect    = fixed_point_column_wrapper<RepType>(
+      {3, 3, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}, numeric::scale_type{scale});
+
+    auto res = segmented_reduce(input,
+                                d_offsets,
+                                *make_max_aggregation<segmented_reduce_aggregation>(),
+                                out_type,
+                                null_policy::EXCLUDE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+  }
+}
+
+TYPED_TEST(SegmentedReductionFixedPointTest, MinIncludeNulls)
+{
+  // scale: -2, 0, 5
+  // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
+  // values:    {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
+  // offsets:   {0, 3, 6, 7, 8, 10, 10}
+  // nullmask:  {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}
+  // outputs:   {1, XXX, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 0, 1, 0, 0, 0}
+
+  using RepType = device_storage_type_t<TypeParam>;
+
+  for (auto scale : {-2, 0, 5}) {
+    auto input     = fixed_point_column_wrapper<RepType>({1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
+                                                     numeric::scale_type{scale});
+    auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
+    auto d_offsets = thrust::device_vector<size_type>(offsets);
+    auto out_type  = column_view(input).type();
+    auto expect    = fixed_point_column_wrapper<RepType>(
+      {1, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}, numeric::scale_type{scale});
+
+    auto res = segmented_reduce(input,
+                                d_offsets,
+                                *make_min_aggregation<segmented_reduce_aggregation>(),
+                                out_type,
+                                null_policy::INCLUDE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+  }
+}
+
+TYPED_TEST(SegmentedReductionFixedPointTest, MinExcludeNulls)
+{
+  // scale: -2, 0, 5
+  // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
+  // values:    {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
+  // offsets:   {0, 3, 6, 7, 8, 10, 10}
+  // nullmask:  {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}
+  // outputs:   {1, 1, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 1, 1, 0, 0, 0}
+
+  using RepType = device_storage_type_t<TypeParam>;
+
+  for (auto scale : {-2, 0, 5}) {
+    auto input     = fixed_point_column_wrapper<RepType>({1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0},
+                                                     numeric::scale_type{scale});
+    auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
+    auto d_offsets = thrust::device_vector<size_type>(offsets);
+    auto out_type  = column_view(input).type();
+    auto expect    = fixed_point_column_wrapper<RepType>(
+      {1, 1, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}, numeric::scale_type{scale});
+
+    auto res = segmented_reduce(input,
+                                d_offsets,
+                                *make_min_aggregation<segmented_reduce_aggregation>(),
+                                out_type,
+                                null_policy::EXCLUDE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+  }
+}
+
+TYPED_TEST(SegmentedReductionFixedPointTest, MaxNonNullableInput)
+{
+  // scale: -2, 0, 5
+  // [1, 2, 3], [1], []
+  // values:    {1, 2, 3, 1}
+  // offsets:   {0, 3, 4}
+  // outputs:   {3, 1, XXX}
+  // output nullmask: {1, 1, 0}
+
+  using RepType = device_storage_type_t<TypeParam>;
+
+  for (auto scale : {-2, 0, 5}) {
+    auto input     = fixed_point_column_wrapper<RepType>({1, 2, 3, 1}, numeric::scale_type{scale});
+    auto offsets   = std::vector<size_type>{0, 3, 4, 4};
+    auto d_offsets = thrust::device_vector<size_type>(offsets);
+    auto out_type  = column_view(input).type();
+    auto expect =
+      fixed_point_column_wrapper<RepType>({3, 1, XXX}, {1, 1, 0}, numeric::scale_type{scale});
+
+    auto include_null_res = segmented_reduce(input,
+                                             d_offsets,
+                                             *make_max_aggregation<segmented_reduce_aggregation>(),
+                                             out_type,
+                                             null_policy::INCLUDE);
+
+    auto exclude_null_res = segmented_reduce(input,
+                                             d_offsets,
+                                             *make_max_aggregation<segmented_reduce_aggregation>(),
+                                             out_type,
+                                             null_policy::EXCLUDE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*include_null_res, expect);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*exclude_null_res, expect);
+  }
+}
+
+TYPED_TEST(SegmentedReductionFixedPointTest, MinNonNullableInput)
+{
+  // scale: -2, 0, 5
+  // [1, 2, 3], [1], []
+  // values:    {1, 2, 3, 1}
+  // offsets:   {0, 3, 4}
+  // outputs:   {1, 1, XXX}
+  // output nullmask: {1, 1, 0}
+
+  using RepType = device_storage_type_t<TypeParam>;
+
+  for (auto scale : {-2, 0, 5}) {
+    auto input     = fixed_point_column_wrapper<RepType>({1, 2, 3, 1}, numeric::scale_type{scale});
+    auto offsets   = std::vector<size_type>{0, 3, 4, 4};
+    auto d_offsets = thrust::device_vector<size_type>(offsets);
+    auto out_type  = column_view(input).type();
+    auto expect =
+      fixed_point_column_wrapper<RepType>({1, 1, XXX}, {1, 1, 0}, numeric::scale_type{scale});
+
+    auto include_null_res = segmented_reduce(input,
+                                             d_offsets,
+                                             *make_min_aggregation<segmented_reduce_aggregation>(),
+                                             out_type,
+                                             null_policy::INCLUDE);
+
+    auto exclude_null_res = segmented_reduce(input,
+                                             d_offsets,
+                                             *make_min_aggregation<segmented_reduce_aggregation>(),
+                                             out_type,
+                                             null_policy::EXCLUDE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*include_null_res, expect);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*exclude_null_res, expect);
+  }
+}
+
 // String min/max test grid
 // Segment: Length 0, length 1, length 2
 // Element nulls: No nulls, all nulls, some nulls

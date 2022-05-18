@@ -22,6 +22,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <jit/type.hpp>
 
@@ -301,6 +302,16 @@ void check_eq_compatibility(table_view const& input)
   }
 }
 
+void check_shape_compatibility(table_view const& lhs, table_view const& rhs)
+{
+  CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(),
+               "Cannot compare tables with different number of columns");
+  for (size_type i = 0; i < lhs.num_columns(); ++i) {
+    CUDF_EXPECTS(column_types_equal(lhs.column(i), rhs.column(i)),
+                 "Cannot compare tables with different column types");
+  }
+}
+
 }  // namespace
 
 namespace row {
@@ -325,6 +336,17 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(
 
   return std::shared_ptr<preprocessed_table>(new preprocessed_table(
     std::move(d_t), std::move(d_column_order), std::move(d_null_precedence), std::move(d_depths)));
+}
+
+two_table_comparator::two_table_comparator(table_view const& left,
+                                           table_view const& right,
+                                           host_span<order const> column_order,
+                                           host_span<null_order const> null_precedence,
+                                           rmm::cuda_stream_view stream)
+  : d_left_table{preprocessed_table::create(left, column_order, null_precedence, stream)},
+    d_right_table{preprocessed_table::create(right, column_order, null_precedence, stream)}
+{
+  check_shape_compatibility(left, right);
 }
 
 }  // namespace lexicographic
