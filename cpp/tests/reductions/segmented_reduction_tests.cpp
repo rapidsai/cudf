@@ -389,14 +389,10 @@ TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
 
 TEST_F(SegmentedReductionTestUntyped, EmptyInputWithOffsets)
 {
-  // values:    {}
-  // offsets:   {0, 0}
-  // outputs:   {XXX}
-  // output nullmask: {0}
   auto input     = fixed_width_column_wrapper<int32_t>{};
-  auto offsets   = std::vector<size_type>{0, 0};
+  auto offsets   = std::vector<size_type>{0, 0, 0, 0, 0, 0};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
-  auto expect    = fixed_width_column_wrapper<int32_t>{{XXX}, {0}};
+  auto expect    = fixed_width_column_wrapper<int32_t>{{XXX, XXX, XXX, XXX, XXX}, {0, 0, 0, 0, 0}};
 
   auto aggregates =
     std::vector<std::unique_ptr<cudf::segmented_reduce_aggregation,
@@ -412,7 +408,7 @@ TEST_F(SegmentedReductionTestUntyped, EmptyInputWithOffsets)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
   }
 
-  auto expect_bool = fixed_width_column_wrapper<bool>{{XXX}, {0}};
+  auto expect_bool = fixed_width_column_wrapper<bool>{{XXX, XXX, XXX, XXX, XXX}, {0, 0, 0, 0, 0}};
 
   auto result = segmented_reduce(input,
                                  d_offsets,
