@@ -107,15 +107,20 @@ cdef class Column:
 
     @property
     def data(self):
+        if self.base_data is None:
+            return None
         if self._data is None:
-            if self.base_data is None:
+            itemsize = self.dtype.itemsize
+            size = self.size * itemsize
+            offset = self.offset * itemsize if self.size else 0
+            if offset == 0 and self.base_data.size == size:
+                # `data` spans all of `base_data`
                 self._data = self.base_data
             else:
-                itemsize = self.dtype.itemsize
                 self._data = Buffer.from_buffer(
                     buffer=self.base_data,
-                    size=self.size * itemsize,
-                    offset=self.offset * itemsize if self.size else 0
+                    size=size,
+                    offset=offset
                 )
         return self._data
 
@@ -132,7 +137,6 @@ cdef class Column:
                             type(value).__name__)
 
         self._data = None
-
         self._base_data = value
 
     @property
