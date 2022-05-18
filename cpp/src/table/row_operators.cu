@@ -371,9 +371,9 @@ two_table_comparator::two_table_comparator(table_view const& left,
                                            table_view const& right,
                                            rmm::cuda_stream_view stream)
   : d_left_table{preprocessed_table::create(left, stream)},
-    d_right_table{preprocessed_table::create(rhs, stream)}
+    d_right_table{preprocessed_table::create(right, stream)}
 {
-  check_shape_compatibility(left, rhs);
+  check_shape_compatibility(left, right);
 }
 
 }  // namespace equality
