@@ -2195,22 +2195,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         tolerance=None,
     ):
         """
-        Return a new DataFrame whose axes conform to a new index
-
-        ``DataFrame.reindex`` supports two calling conventions:
-            - ``(index=index_labels, columns=column_names)``
-            - ``(labels, axis={0 or 'index', 1 or 'columns'})``
+        Conform DataFrame to new index. Places NA/NaN in locations
+        having no value in the previous index. A new object is produced
+        unless the new index is equivalent to the current one and copy=False.
 
         Parameters
         ----------
         labels : Index, Series-convertible, optional, default None
+            New labels / index to conform the axis specified by ``axis`` to.
         index : Index, Series-convertible, optional, default None
-            Shorthand for ``df.reindex(labels=index_labels, axis=0)``
+            Return a new object with rows conformed to ``index``
         columns : array-like, optional, default None
-            Shorthand for ``df.reindex(labels=column_names, axis=1)``
-        axis : {0 or 'index', 1 or 'columns'}, optional, default 0
+            Return a new object with columns conformed to ``columns``
+        axis : Axis to target. 
+            Can be either the axis name (``index``, ``columns``) or number (0, 1).
         method : Not supported
-        copy : boolean, optional, default True
+        copy : boolean, default True
+            Return a new object, even if the passed indexes are the same.
         level : Not supported
         fill_value : Value to use for missing values.
             Defaults to ``NA``, but can be any “compatible” value.
@@ -2219,29 +2220,69 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-        A DataFrame whose axes conform to the new index(es)
+        DataFrame with changed index.
 
         Examples
         --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2, 3, 4]
-        >>> df['val'] = [float(i + 10) for i in range(5)]
-        >>> df_new = df.reindex(index=[0, 3, 4, 5],
-        ...                     columns=['key', 'val', 'sum'])
+        ``DataFrame.reindex`` supports two calling conventions
+        * ``(index=index_labels, columns=column_labels, ...)``
+        * ``(labels, axis={'index', 'columns'}, ...)``
+        We _highly_ recommend using keyword arguments to clarify your intent.
+
+        Create a dataframe with some fictional data.
+        >>> index = ['Firefox', 'Chrome', 'Safari', 'IE10', 'Konqueror']
+        >>> df = cudf.DataFrame({'http_status': [200, 200, 404, 404, 301],
+        ...                      'response_time': [0.04, 0.02, 0.07, 0.08, 1.0]},
+        ...                      index=index)
         >>> df
-           key   val
-        0    0  10.0
-        1    1  11.0
-        2    2  12.0
-        3    3  13.0
-        4    4  14.0
-        >>> df_new
-           key   val   sum
-        0     0  10.0  <NA>
-        3     3  13.0  <NA>
-        4     4  14.0  <NA>
-        5  <NA>  <NA>  <NA>
+                http_status  response_time
+        Firefox            200           0.04
+        Chrome             200           0.02
+        Safari             404           0.07
+        IE10               404           0.08
+        Konqueror          301           1.00
+        >>> new_index = ['Safari', 'Iceweasel', 'Comodo Dragon', 'IE10',
+        ...              'Chrome']
+        >>> df.reindex(new_index)
+                    http_status response_time
+        Safari                404          0.07
+        Iceweasel            <NA>          <NA>
+        Comodo Dragon        <NA>          <NA>
+        IE10                  404          0.08
+        Chrome                200          0.02
+
+        Note: One difference from Pandas is that ``NA`` is used for rows
+        that do not match, rather than ``NaN``. One side effect of this is
+        that the column ``http_status`` retains an integer dtype in cuDF
+        where it is cast to float in Pandas.
+
+        We can fill in the missing values by passing a value to the keyword ``fill_value``.
+
+        >>> df.reindex(new_index, fill_value=0)
+                    http_status  response_time
+        Safari                 404           0.07
+        Iceweasel                0           0.00
+        Comodo Dragon            0           0.00
+        IE10                   404           0.08
+        Chrome
+
+        We can also reindex the columns.
+        >>> df.reindex(columns=['http_status', 'user_agent'])
+                http_status user_agent
+        Firefox            200       <NA>
+        Chrome             200       <NA>
+        Safari             404       <NA>
+        IE10               404       <NA>
+        Konqueror          301       <NA>
+
+        Or we can use “axis-style” keyword arguments
+        >>> df.reindex(columns=['http_status', 'user_agent'])
+                http_status user_agent
+        Firefox            200       <NA>
+        Chrome             200       <NA>
+        Safari             404       <NA>
+        IE10               404       <NA>
+        Konqueror          301       <NA>
         """
 
         if labels is None and index is None and columns is None:
