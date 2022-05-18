@@ -457,6 +457,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
             name=self.name,
         )
 
+    def to_numpy(self):
+        return self.to_pandas().to_numpy()
+
     @property
     def is_unique(self):
         """
@@ -803,7 +806,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int64().replace(to_replace=to_replace, value=value)
 
     def to_arrow(self):
-        return self._as_int64().to_arrow()
+        return self._values.to_arrow()
 
     def __array__(self, dtype=None):
         raise TypeError(
@@ -814,7 +817,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     def nunique(self, dropna: bool = True):
-        return self._data.values.distinct_count(dropna=dropna)
+        return self._values.distinct_count(dropna=dropna)
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
