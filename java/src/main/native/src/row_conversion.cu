@@ -1252,7 +1252,6 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
  * @param row_data jcudf row data
  * @param num_rows number of rows in data
  * @param num_string_columns number of string columns in the table
- * @return
  */
 template <typename RowOffsetIter>
 __global__ void copy_strings_from_rows(RowOffsetIter row_offsets, int32_t **string_row_offsets,
