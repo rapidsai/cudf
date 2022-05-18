@@ -489,12 +489,12 @@ class parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
-   * @brief Returns target page size, in bytes.
+   * @brief Returns maximum page size, in bytes.
    */
   auto get_max_page_size_bytes() const { return _max_page_size_bytes; }
 
   /**
-   * @brief Returns target page size, in rows.
+   * @brief Returns maximum page size, in rows.
    */
   auto get_max_page_size_rows() const { return _max_page_size_rows; }
 
@@ -887,12 +887,12 @@ class chunked_parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
-   * @brief Returns target page size, in bytes.
+   * @brief Returns maximum page size, in bytes.
    */
   auto get_max_page_size_bytes() const { return _max_page_size_bytes; }
 
   /**
-   * @brief Returns target page size, in rows.
+   * @brief Returns maximum page size, in rows.
    */
   auto get_max_page_size_rows() const { return _max_page_size_rows; }
 
