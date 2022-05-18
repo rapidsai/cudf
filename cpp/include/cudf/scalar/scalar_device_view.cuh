@@ -82,7 +82,7 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
    * @brief Returns reference to stored value.
    *
    * @tparam T The desired type
-   * @returns Reference to stored value.
+   * @returns Reference to stored value
    */
   template <typename T>
   __device__ T& value() noexcept
@@ -94,7 +94,7 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
    * @brief Returns const reference to stored value.
    *
    * @tparam T The desired type
-   * @returns Const reference to stored value.
+   * @returns Const reference to stored value
    */
   template <typename T>
   __device__ T const& value() const noexcept
@@ -169,14 +169,14 @@ class fixed_width_scalar_device_view : public detail::fixed_width_scalar_device_
   /**
    * @brief Returns reference to stored value.
    *
-   * @returns Reference to stored value.
+   * @returns Reference to stored value
    */
   __device__ T& value() noexcept { return fixed_width_scalar_device_view_base::value<T>(); }
 
   /**
    * @brief Returns const reference to stored value.
    *
-   * @returns Const reference to stored value.
+   * @returns Const reference to stored value
    */
   __device__ T const& value() const noexcept
   {
@@ -278,7 +278,7 @@ class fixed_point_scalar_device_view : public detail::scalar_device_view_base {
   /**
    * @brief Get the value of the scalar, as a `rep_type`.
    *
-   * @returns The value of the scalar, as a `rep_type`.
+   * @returns The value of the scalar, as a `rep_type`
    */
   __device__ rep_type const& rep() const noexcept { return *_data; }
 
@@ -311,7 +311,7 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
   /**
    * @brief Returns string_view of the value of this scalar.
    *
-   * @returns string_view of the value of this scalar.
+   * @returns string_view of the value of this scalar
    */
   [[nodiscard]] __device__ ValueType value() const noexcept
   {
@@ -331,7 +331,7 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
   /**
    * @brief Returns the size of the string in bytes.
    *
-   * @returns The size of the string in bytes.
+   * @returns The size of the string in bytes
    */
   [[nodiscard]] __device__ size_type size() const noexcept { return _size; }
 

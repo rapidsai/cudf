@@ -54,7 +54,7 @@ std::unique_ptr<scalar> make_numeric_scalar(
  * @param type The desired timestamp element type
  * @param stream CUDA stream used for device memory operations.
  * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
- * @return An uninitialized timestamp scalar.
+ * @return An uninitialized timestamp scalar
  */
 std::unique_ptr<scalar> make_timestamp_scalar(
   data_type type,
@@ -71,7 +71,7 @@ std::unique_ptr<scalar> make_timestamp_scalar(
  * @param type The desired duration element type
  * @param stream CUDA stream used for device memory operations.
  * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
- * @return An uninitialized duration scalar.
+ * @return An uninitialized duration scalar
  */
 std::unique_ptr<scalar> make_duration_scalar(
   data_type type,
@@ -88,7 +88,7 @@ std::unique_ptr<scalar> make_duration_scalar(
  * @param type The desired fixed-width element type
  * @param stream CUDA stream used for device memory operations.
  * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
- * @return An uninitialized fixed-width scalar.
+ * @return An uninitialized fixed-width scalar
  */
 std::unique_ptr<scalar> make_fixed_width_scalar(
   data_type type,

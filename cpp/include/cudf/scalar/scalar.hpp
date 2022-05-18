@@ -52,7 +52,7 @@ class scalar {
   /**
    * @brief Returns the scalar's logical value type.
    *
-   * @return The scalar's logical value type.
+   * @return The scalar's logical value type
    */
   [[nodiscard]] data_type type() const noexcept;
 
@@ -71,22 +71,22 @@ class scalar {
    * function does a stream synchronization.
    *
    * @param stream CUDA stream used for device memory operations.
-   * @return true Value is valid.
-   * @return false Value is invalid/null.
+   * @return true Value is valid
+   * @return false Value is invalid/null
    */
   [[nodiscard]] bool is_valid(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * @brief Returns a raw pointer to the validity bool in device memory.
    *
-   * @return Raw pointer to the validity bool in device memory.
+   * @return Raw pointer to the validity bool in device memory
    */
   bool* validity_data();
 
   /**
    * @brief Return a const raw pointer to the validity bool in device memory.
    *
-   * @return Raw pointer to the validity bool in device memory.
+   * @return Raw pointer to the validity bool in device memory
    */
   [[nodiscard]] bool const* validity_data() const;
 
@@ -182,19 +182,19 @@ class fixed_width_scalar : public scalar {
    * @brief Get the value of the scalar.
    *
    * @param stream CUDA stream used for device memory operations.
-   * @return Value of the scalar.
+   * @return Value of the scalar
    */
   T value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * @brief Returns a raw pointer to the value in device memory.
-   * @return A raw pointer to the value in device memory.
+   * @return A raw pointer to the value in device memory
    */
   T* data();
 
   /**
    * @brief Returns a const raw pointer to the value in device memory.
-   * @return A const raw pointer to the value in device memory.
+   * @return A const raw pointer to the value in device memory
    */
   T const* data() const;
 
@@ -388,7 +388,7 @@ class fixed_point_scalar : public scalar {
    * @brief Get the value of the scalar.
    *
    * @param stream CUDA stream used for device memory operations.
-   * @return The value of the scalar.
+   * @return The value of the scalar
    */
   rep_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
@@ -396,7 +396,7 @@ class fixed_point_scalar : public scalar {
    * @brief Get the decimal32, decimal64 or decimal128.
    *
    * @param stream CUDA stream used for device memory operations.
-   * @return The decimal32, decimal64 or decimal128 value.
+   * @return The decimal32, decimal64 or decimal128 value
    */
   T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
@@ -407,13 +407,13 @@ class fixed_point_scalar : public scalar {
 
   /**
    * @brief Returns a raw pointer to the value in device memory.
-   * @return A raw pointer to the value in device memory.
+   * @return A raw pointer to the value in device memory
    */
   rep_type* data();
 
   /**
    * @brief Returns a const raw pointer to the value in device memory.
-   * @return a const raw pointer to the value in device memory.
+   * @return a const raw pointer to the value in device memory
    */
   rep_type const* data() const;
 
@@ -520,7 +520,7 @@ class string_scalar : public scalar {
    * @brief Get the value of the scalar in a host std::string.
    *
    * @param stream CUDA stream used for device memory operations.
-   * @return The value of the scalar in a host std::string.
+   * @return The value of the scalar in a host std::string
    */
   [[nodiscard]] std::string to_string(
     rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
@@ -529,19 +529,19 @@ class string_scalar : public scalar {
    * @brief Get the value of the scalar as a string_view.
    *
    * @param stream CUDA stream used for device memory operations.
-   * @return The value of the scalar as a string_view.
+   * @return The value of the scalar as a string_view
    */
   [[nodiscard]] value_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * @brief Returns the size of the string in bytes.
-   * @return The size of the string in bytes.
+   * @return The size of the string in bytes
    */
   [[nodiscard]] size_type size() const;
 
   /**
    * @brief Returns a raw pointer to the string in device memory.
-   * @return a raw pointer to the string in device memory.
+   * @return a raw pointer to the string in device memory
    */
   [[nodiscard]] const char* data() const;
 
@@ -660,7 +660,7 @@ class timestamp_scalar : public chrono_scalar<T> {
 
   /**
    * @brief Returns the duration in number of ticks since the UNIX epoch.
-   * @return The duration in number of ticks since the UNIX epoch.
+   * @return The duration in number of ticks since the UNIX epoch
    */
   rep_type ticks_since_epoch();
 };
@@ -712,7 +712,7 @@ class duration_scalar : public chrono_scalar<T> {
 
   /**
    * @brief Returns the duration in number of ticks.
-   * @return The duration in number of ticks.
+   * @return The duration in number of ticks
    */
   rep_type count();
 };
@@ -775,7 +775,7 @@ class list_scalar : public scalar {
 
   /**
    * @brief Returns a non-owning, immutable view to underlying device data.
-   * @return A non-owning, immutable view to underlying device data.
+   * @return A non-owning, immutable view to underlying device data
    */
   [[nodiscard]] column_view view() const;
 
@@ -858,7 +858,7 @@ class struct_scalar : public scalar {
 
   /**
    * @brief Returns a non-owning, immutable view to underlying device data.
-   * @return A non-owning, immutable view to underlying device data.
+   * @return A non-owning, immutable view to underlying device data
    */
   [[nodiscard]] table_view view() const;
 
