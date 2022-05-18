@@ -578,12 +578,12 @@ class parquet_writer_options {
   /**
    * @brief Sets the maximum page size, in bytes.
    */
-  void set_target_page_size_bytes(size_t pgsz_bytes) { _target_page_size_bytes = pgsz_bytes; }
+  void set_target_page_size_bytes(size_t size_bytes) { _target_page_size_bytes = size_bytes; }
 
   /**
    * @brief Sets the maximum page size, in rows.
    */
-  void set_target_page_size_rows(size_type pgsz_rows) { _target_page_size_rows = pgsz_rows; }
+  void set_target_page_size_rows(size_type size_rows) { _target_page_size_rows = size_rows; }
 };
 
 class parquet_writer_options_builder {
