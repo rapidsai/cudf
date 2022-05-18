@@ -257,8 +257,8 @@ class device_row_comparator {
         }
 
         // Non-empty structs have been modified to only have 1 child when using this.
-        lcol = detail::structs_column_device_view(lcol).sliced_child(0);
-        rcol = detail::structs_column_device_view(rcol).sliced_child(0);
+        lcol = detail::structs_column_device_view(lcol).get_sliced_child(0);
+        rcol = detail::structs_column_device_view(rcol).get_sliced_child(0);
         ++depth;
       }
 
@@ -769,8 +769,8 @@ class device_row_comparator {
         if (lcol.type().id() == type_id::STRUCT) {
           if (lcol.num_child_columns() == 0) { return true; }
           // Non-empty structs are assumed to be decomposed and contain only one child
-          lcol = detail::structs_column_device_view(lcol).sliced_child(0);
-          rcol = detail::structs_column_device_view(rcol).sliced_child(0);
+          lcol = detail::structs_column_device_view(lcol).get_sliced_child(0);
+          rcol = detail::structs_column_device_view(rcol).get_sliced_child(0);
         } else if (lcol.type().id() == type_id::LIST) {
           auto l_list_col = detail::lists_column_device_view(lcol);
           auto r_list_col = detail::lists_column_device_view(rcol);
@@ -781,8 +781,8 @@ class device_row_comparator {
             return false;
           }
 
-          lcol = l_list_col.sliced_child();
-          rcol = r_list_col.sliced_child();
+          lcol = l_list_col.get_sliced_child();
+          rcol = r_list_col.get_sliced_child();
           if (lcol.size() != rcol.size()) { return false; }
         }
       }
@@ -1033,7 +1033,7 @@ class device_row_hasher {
         if (curr_col.type().id() == type_id::STRUCT) {
           if (curr_col.num_child_columns() == 0) { return hash; }
           // Non-empty structs are assumed to be decomposed and contain only one child
-          curr_col = detail::structs_column_device_view(curr_col).sliced_child(0);
+          curr_col = detail::structs_column_device_view(curr_col).get_sliced_child(0);
         } else if (curr_col.type().id() == type_id::LIST) {
           auto list_col   = detail::lists_column_device_view(curr_col);
           auto list_sizes = make_list_size_iterator(list_col);
@@ -1041,7 +1041,7 @@ class device_row_hasher {
             list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
               return cudf::detail::hash_combine(hash, hash_fn<size_type>{}(size));
             });
-          curr_col = list_col.sliced_child();
+          curr_col = list_col.get_sliced_child();
         }
       }
       for (int i = 0; i < curr_col.size(); ++i) {
