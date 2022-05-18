@@ -971,7 +971,7 @@ class two_table_comparator {
 
   /**
    * @brief Construct an owning object for performing equality comparisons between two rows from two
-   * table.
+   * tables.
    *
    * This constructor allows independently constructing a `preprocessed_table` and sharing it among
    * multiple comparators.
@@ -981,18 +981,21 @@ class two_table_comparator {
    */
   two_table_comparator(std::shared_ptr<preprocessed_table> dt_lhs,
                        std::shared_ptr<preprocessed_table> dt_rhs)
-    : dt_lhs{std::move(dt_lhs)}, dt_rhs{std::move(dt_rhs)}
+    : d_left_table{std::move(dt_lhs)}, d_right_table{std::move(dt_rhs)}
   {
   }
 
   /**
-   * @brief Get the comparison operator to use on the device.
+   * @brief Return the binary operator for comparing rows in the table.
    *
-   * Returns a binary callable, `F`, with signature `bool F(index_type1, index_type2)` where
-   * `index_type1` and `index_type2` are strong index types.
+   * Returns a binary callable, `F`, with signatures `bool F(lhs_index_type, rhs_index_type)` and
+   * `bool F(rhs_index_type, lhs_index_type)`.
    *
-   * `F(i, j)` returns true if and only if row `i` from one table compares equal to row `j` from the
-   * other table.
+   * `F(lhs_index_type i, rhs_index_type j)` returns true if and only if row `i` of the left table
+   * compares equally to row `j` of the right table.
+   *
+   * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and only if row `i` of the
+   * right table compares equally to row `j` of the left table.
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
@@ -1001,12 +1004,12 @@ class two_table_comparator {
                          null_equality nulls_are_equal = null_equality::EQUAL) const
   {
     return strong_index_comparator_adapter<device_row_comparator<Nullate>>{
-      device_row_comparator<Nullate>(nullate, *dt_lhs, *dt_rhs, nulls_are_equal)};
+      device_row_comparator<Nullate>(nullate, *d_left_table, *d_right_table, nulls_are_equal)};
   }
 
  private:
-  std::shared_ptr<preprocessed_table> dt_lhs;
-  std::shared_ptr<preprocessed_table> dt_rhs;
+  std::shared_ptr<preprocessed_table> d_left_table;
+  std::shared_ptr<preprocessed_table> d_right_table;
 };
 
 }  // namespace equality
