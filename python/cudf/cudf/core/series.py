@@ -702,7 +702,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Parameters
         ----------
         index : Index, Series-convertible, default None
-            New labels / index to conform to, should be specified using keywords.
+            New labels / index to conform to,
+            should be specified using keywords.
         method: Not Supported
         copy : boolean, default True
         level: Not Supported

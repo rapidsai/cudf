@@ -2207,8 +2207,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Return a new object with rows conformed to ``index``
         columns : array-like, optional, default None
             Return a new object with columns conformed to ``columns``
-        axis : Axis to target. 
-            Can be either the axis name (``index``, ``columns``) or number (0, 1).
+        axis : Axis to target.
+            Can be either the axis name
+            (``index``, ``columns``) or number (0, 1).
         method : Not supported
         copy : boolean, default True
             Return a new object, even if the passed indexes are the same.
@@ -2232,7 +2233,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Create a dataframe with some fictional data.
         >>> index = ['Firefox', 'Chrome', 'Safari', 'IE10', 'Konqueror']
         >>> df = cudf.DataFrame({'http_status': [200, 200, 404, 404, 301],
-        ...                      'response_time': [0.04, 0.02, 0.07, 0.08, 1.0]},
+        ...                    'response_time': [0.04, 0.02, 0.07, 0.08, 1.0]},
         ...                      index=index)
         >>> df
                 http_status  response_time
@@ -2256,7 +2257,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         that the column ``http_status`` retains an integer dtype in cuDF
         where it is cast to float in Pandas.
 
-        We can fill in the missing values by passing a value to the keyword ``fill_value``.
+        We can fill in the missing values by
+        passing a value to the keyword ``fill_value``.
 
         >>> df.reindex(new_index, fill_value=0)
                     http_status  response_time
