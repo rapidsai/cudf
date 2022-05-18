@@ -99,7 +99,7 @@ class reprog {
    * of this object
    *
    * @param pattern Regex pattern encoded as UTF-8
-   * @param flags For interpretting certain `pattern` characters
+   * @param flags For interpreting certain `pattern` characters
    * @return Instance of reprog
    */
   static reprog create_from(std::string_view pattern, regex_flags const flags);

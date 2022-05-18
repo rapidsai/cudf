@@ -18,6 +18,9 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/table/row_operators.cuh>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
 #include <cudf/table/experimental/row_operators.cuh>
@@ -64,30 +67,30 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   auto const& matched_haystack = matched.second.front();
   auto const& matched_needles  = matched.second.back();
 
-  auto const has_any_nulls = has_nested_nulls(haystack) or has_nested_nulls(needles);
-  auto const comp          = cudf::experimental::row::lexicographic::two_table_comparator(
+  auto const comparator = cudf::experimental::row::lexicographic::two_table_comparator(
     matched_haystack, matched_needles, column_order, null_precedence, stream);
-  auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
+  auto const has_nulls    = has_nested_nulls(matched_haystack) or has_nested_nulls(matched_needles);
+  auto const d_comparator = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
 
-  auto const lhs_it = cudf::experimental::row::lexicographic::make_lhs_index_counting_iterator(0);
-  auto const rhs_it = cudf::experimental::row::lexicographic::make_rhs_index_counting_iterator(0);
+  auto const haystack_it = cudf::experimental::row::lhs_iterator(0);
+  auto const needles_it  = cudf::experimental::row::rhs_iterator(0);
 
   if (find_first) {
     thrust::lower_bound(rmm::exec_policy(stream),
-                        lhs_it,
-                        lhs_it + haystack.num_rows(),
-                        rhs_it,
-                        rhs_it + needles.num_rows(),
+                        haystack_it,
+                        haystack_it + haystack.num_rows(),
+                        needles_it,
+                        needles_it + needles.num_rows(),
                         out_it,
-                        dcomp);
+                        d_comparator);
   } else {
     thrust::upper_bound(rmm::exec_policy(stream),
-                        lhs_it,
-                        lhs_it + haystack.num_rows(),
-                        rhs_it,
-                        rhs_it + needles.num_rows(),
+                        haystack_it,
+                        haystack_it + haystack.num_rows(),
+                        needles_it,
+                        needles_it + needles.num_rows(),
                         out_it,
-                        dcomp);
+                        d_comparator);
   }
   return result;
 }
