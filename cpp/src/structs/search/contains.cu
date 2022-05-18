@@ -36,17 +36,9 @@ bool contains(structs_column_view const& haystack,
               scalar const& needle,
               rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
-
-  auto const needle_tv = static_cast<struct_scalar const*>(&needle)->view();
-  CUDF_EXPECTS(haystack.num_children() == needle_tv.num_columns(),
-               "struct scalar and structs column must have the same number of children");
-  for (size_type i = 0; i < haystack.num_children(); ++i) {
-    CUDF_EXPECTS(haystack.child(i).type() == needle_tv.column(i).type(),
-                 "scalar and column children types must match");
-  }
-
+  auto const haystack_tv = table_view{{haystack}};
   // Create a (structs) column_view of one row having children given from the input scalar.
+  auto const needle_tv = static_cast<struct_scalar const*>(&needle)->view();
   auto const needle_as_col =
     column_view(data_type{type_id::STRUCT},
                 1,
@@ -56,8 +48,9 @@ bool contains(structs_column_view const& haystack,
                 0,
                 std::vector<column_view>{needle_tv.begin(), needle_tv.end()});
 
-  auto const haystack_tv = table_view{{haystack}};
-  auto const comparator  = cudf::experimental::row::equality::two_table_comparator(
+  // Checking compatability between haystack and needle will be performed when constructing table
+  // comparator.
+  auto const comparator = cudf::experimental::row::equality::two_table_comparator(
     haystack_tv, table_view{{needle_as_col}}, stream);
   auto const has_nulls = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
   auto const d_comp    = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
