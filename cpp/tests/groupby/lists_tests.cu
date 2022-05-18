@@ -89,15 +89,13 @@ inline void test_hash_based_sum_agg(column_view const& keys,
                                     column_view const& expect_keys,
                                     column_view const& expect_vals)
 {
-  auto agg                     = cudf::make_sum_aggregation<groupby_aggregation>();
   auto const include_null_keys = null_policy::INCLUDE;
   auto const keys_are_sorted   = sorted::NO;
 
   std::vector<groupby::aggregation_request> requests;
-  requests.emplace_back(groupby::aggregation_request());
-  requests[0].values = values;
-
-  requests[0].aggregations.push_back(std::move(agg));
+  auto& request  = requests.emplace_back(groupby::aggregation_request());
+  request.values = values;
+  request.aggregations.push_back(std::move(cudf::make_sum_aggregation<groupby_aggregation>()));
 
   groupby::groupby gb_obj(cudf::table_view({keys}), include_null_keys, keys_are_sorted);
 
