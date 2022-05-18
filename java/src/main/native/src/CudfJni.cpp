@@ -39,7 +39,7 @@ private:
 namespace cudf {
 namespace jni {
 
-#if defined(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+#ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
 constexpr bool is_ptds_enabled{true};
 #else
 constexpr bool is_ptds_enabled{false};

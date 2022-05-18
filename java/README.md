@@ -109,7 +109,7 @@ make install
 then build the jar:
 ```shell script
 cd src/cudf/java
-mvn clean install -DPER_THREAD_DEFAULT_STREAM=ON
+mvn clean install -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON
 ```
 
 ## GPUDirect Storage (GDS)
