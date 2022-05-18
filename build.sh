@@ -146,7 +146,7 @@ function buildLibCudfJniInDocker {
                 -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCMAKE_INSTALL_PREFIX=/usr/local/rapids \
                 -DUSE_NVTX=ON \
-                -DCMAKE_USE_PROPRIETARY_NVCOMP=ON \
+                -DCUDF_USE_PROPRIETARY_NVCOMP=ON \
                 -DCUDF_USE_ARROW_STATIC=ON \
                 -DCUDF_ENABLE_ARROW_S3=OFF \
                 -DBUILD_TESTS=OFF \
