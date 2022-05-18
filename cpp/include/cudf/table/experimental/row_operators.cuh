@@ -644,12 +644,12 @@ class row_hasher;
 namespace equality {
 
 template <typename Nullate>
-class two_table_device_row_comparator_adapter;
+class strong_index_comparator_adapter;
 
 template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
-  friend class two_table_device_row_comparator_adapter<Nullate>;
+  friend class two_table_comparator;
 
  public:
   /**
@@ -928,61 +928,37 @@ class self_comparator {
   std::shared_ptr<preprocessed_table> d_t;
 };
 
-template <typename Nullate>
-class two_table_device_row_comparator_adapter {
-  friend class two_table_comparator;
-
- public:
-  /**
-   * @brief Checks whether the row at `lhs_index` in the `lhs` table compares equal to the row at
-   * `rhs_index` in the `rhs` table.
-   *
-   * @param lhs_index The index of the row in the `lhs` table to examine.
-   * @param rhs_index The index of the row in the `rhs` table to examine.
-   * @return `true` if row from the `lhs` table compares equal to row in the `rhs` table.
-   */
+template <typename Comparator>
+struct strong_index_comparator_adapter {
   __device__ constexpr bool operator()(lhs_index_type const lhs_index,
                                        rhs_index_type const rhs_index) const noexcept
   {
-    return comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
+    return comparator(static_cast<cudf::size_type>(lhs_index),
+                      static_cast<cudf::size_type>(rhs_index));
   }
 
-  /**
-   * @brief Checks whether the row at `rhs_index` in the `rhs` table compares equal to the row at
-   * `lhs_index` in the `lhs` table.
-   *
-   * @param rhs_index The index of the row in the `rhs` table to examine.
-   * @param lhs_index The index of the row in the `lhs` table to examine.
-   * @return `true` if row from the `lhs` table compares equal to row in the `rhs` table.
-   */
   __device__ constexpr bool operator()(rhs_index_type const rhs_index,
                                        lhs_index_type const lhs_index) const noexcept
   {
-    return comp(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
+    return this->operator()(lhs_index, rhs_index);
   }
 
- private:
-  /**
-   * @brief Construct a function object for performing equality comparison between the rows of two
-   * tables with strongly typed table index types.
-   *
-   * @param check_nulls Indicates if either input table contains columns with nulls.
-   * @param lhs The first table.
-   * @param rhs The second table (may be the same table as `lhs`).
-   * @param nulls_are_equal Indicates if two null elements are treated as equal.
-   */
-  two_table_device_row_comparator_adapter(
-    Nullate check_nulls,
-    table_device_view lhs,
-    table_device_view rhs,
-    null_equality nulls_are_equal = null_equality::EQUAL) noexcept
-    : comp{check_nulls, lhs, rhs, nulls_are_equal}
-  {
-  }
-
-  device_row_comparator<Nullate> const comp;
+  Comparator const comparator;
 };
 
+/**
+ * @brief An owning object that can be used to equality compare rows of two different tables
+ *
+ * This class takes two table_views and preprocesses certain columns to allow for equality
+ * comparison. The preprocessed table and temporary data required for the comparison are created and
+ * owned by this class.
+ *
+ * Alternatively, `two_table_comparator` can be constructed from two existing
+ * `shared_ptr<preprocessed_table>`s when sharing the same tables among multiple comparators.
+ *
+ * This class can then provide a functor object that can used on the device.
+ * The object of this class must outlive the usage of the device functor.
+ */
 class two_table_comparator {
  public:
   /**
@@ -1029,8 +1005,8 @@ class two_table_comparator {
   auto device_comparator(Nullate nullate               = {},
                          null_equality nulls_are_equal = null_equality::EQUAL) const
   {
-    return two_table_device_row_comparator_adapter<Nullate>(
-      nullate, *dt_lhs, *dt_rhs, nulls_are_equal);
+    return strong_index_comparator_adapter<device_row_comparator<Nullate>>{
+      device_row_comparator<Nullate>(nullate, *dt_lhs, *dt_rhs, nulls_are_equal)};
   }
 
  private:
