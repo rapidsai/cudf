@@ -2264,7 +2264,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Iceweasel                0           0.00
         Comodo Dragon            0           0.00
         IE10                   404           0.08
-        Chrome
+        Chrome                 200           0.02
 
         We can also reindex the columns.
         >>> df.reindex(columns=['http_status', 'user_agent'])
