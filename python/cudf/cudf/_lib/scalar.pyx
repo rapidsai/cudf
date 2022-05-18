@@ -27,6 +27,7 @@ from cudf._lib.types import (
     duration_unit_map,
 )
 from cudf.core.dtypes import ListDtype, StructDtype
+from cudf.core.missing import NA
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -170,7 +171,7 @@ cdef class DeviceScalar:
         return self.get_raw_ptr()[0].is_valid()
 
     def __repr__(self):
-        if self.value is cudf.NA:
+        if self.value is NA:
             return (
                 f"{self.__class__.__name__}"
                 f"({self.value}, {repr(self.dtype)})"
@@ -356,7 +357,7 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
     else:
         pyarrow_table = pa.Table.from_arrays(
             [
-                pa.array([cudf.NA], from_pandas=True, type=f.type)
+                pa.array([NA], from_pandas=True, type=f.type)
                 for f in arrow_schema
             ],
             names=columns
@@ -371,7 +372,7 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
 
 cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
-        return cudf.NA
+        return NA
 
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
     column_names = [str(i) for i in range(struct_table_view.num_columns())]
@@ -386,7 +387,7 @@ cdef _set_list_from_pylist(unique_ptr[scalar]& s,
                            object dtype,
                            bool valid=True):
 
-    value = value if valid else [cudf.NA]
+    value = value if valid else [NA]
     cdef Column col
     if isinstance(dtype.element_type, ListDtype):
         pa_type = dtype.element_type.to_arrow()
@@ -404,7 +405,7 @@ cdef _set_list_from_pylist(unique_ptr[scalar]& s,
 cdef _get_py_list_from_list(unique_ptr[scalar]& s):
 
     if not s.get()[0].is_valid():
-        return cudf.NA
+        return NA
 
     cdef column_view list_col_view = (<list_scalar*>s.get()).view()
     cdef Column list_col = Column.from_column_view(list_col_view, None)
@@ -416,14 +417,14 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s):
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
-        return cudf.NA
+        return NA
     return (<string_scalar*>s.get())[0].to_string().decode()
 
 
 cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
     cdef scalar* s_ptr = s.get()
     if not s_ptr[0].is_valid():
-        return cudf.NA
+        return NA
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
@@ -456,7 +457,7 @@ cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
 cdef _get_py_decimal_from_fixed_point(unique_ptr[scalar]& s):
     cdef scalar* s_ptr = s.get()
     if not s_ptr[0].is_valid():
-        return cudf.NA
+        return NA
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
@@ -480,7 +481,7 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
     cdef scalar* s_ptr = s.get()
 
     if not s_ptr[0].is_valid():
-        return cudf.NA
+        return NA
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
 
@@ -571,7 +572,7 @@ def as_device_scalar(val, dtype=None):
 
 
 def _is_null_host_scalar(slr):
-    if slr is None or slr is cudf.NA:
+    if slr is None or slr is NA:
         return True
     elif isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr):
         return True
@@ -603,5 +604,5 @@ def _nested_na_replace(input_list):
         if isinstance(value, list):
             _nested_na_replace(value)
         elif value is None:
-            input_list[idx] = cudf.NA
+            input_list[idx] = NA
     return input_list

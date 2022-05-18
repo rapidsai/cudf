@@ -60,7 +60,11 @@ enum class compression_type {
   BZIP2,   ///< BZIP2 format, using Burrows-Wheeler transform
   BROTLI,  ///< BROTLI format, using LZ77 + Huffman + 2nd order context modeling
   ZIP,     ///< ZIP format, using DEFLATE algorithm
-  XZ       ///< XZ format, using LZMA(2) algorithm
+  XZ,      ///< XZ format, using LZMA(2) algorithm
+  ZLIB,    ///< ZLIB format, using DEFLATE algorithm
+  LZ4,     ///< LZ4 format, using LZ77
+  LZO,     ///< Lempel–Ziv–Oberhumer format
+  ZSTD     ///< Zstandard format
 };
 
 /**
@@ -124,7 +128,10 @@ struct table_metadata {
   std::vector<std::string> column_names;  //!< Names of columns contained in the table
   std::vector<column_name_info>
     schema_info;  //!< Detailed name information for the entire output hierarchy
-  std::map<std::string, std::string> user_data;  //!< Format-dependent metadata as key-values pairs
+  std::map<std::string, std::string> user_data;  //!< Format-dependent metadata of the first input
+                                                 //!< file as key-values pairs (deprecated)
+  std::vector<std::unordered_map<std::string, std::string>>
+    per_file_user_data;  //!< Per file format-dependent metadata as key-values pairs
 };
 
 /**

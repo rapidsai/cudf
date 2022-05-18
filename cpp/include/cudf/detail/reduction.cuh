@@ -229,37 +229,36 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  *
  * @tparam InputIterator    the input column iterator
  * @tparam OffsetIterator   the offset column iterator
+ * @tparam OutputIterator   the output column iterator
  * @tparam BinaryOp         the device binary operator used to reduce
  * @tparam OutputType       the output type of reduction
  *
  * @param[in] d_in          the begin iterator to input
- * @param[in] d_offset      the begin iterator to offset
- * @param[in] num_segments  the number of segments
+ * @param[in] d_offset_begin the begin iterator to offset
+ * @param[in] d_offset_end  the end iterator to offset. Note: This is
+ * num_segments+1 elements past `d_offset_begin`.
+ * @param[out] d_out        the begin iterator to output
  * @param[in] binary_op     the reduction operator
  * @param[in] identity      the identity element of the reduction operator
  * @param[in] stream        CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr            Device memory resource used to allocate the returned column's device
- * memory
- * @returns   Output column in device memory
  *
  */
 template <typename InputIterator,
           typename OffsetIterator,
+          typename OutputIterator,
           typename BinaryOp,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+          typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
           typename std::enable_if_t<is_fixed_width<OutputType>() &&
                                     !cudf::is_fixed_point<OutputType>()>* = nullptr>
-std::unique_ptr<column> segmented_reduce(InputIterator d_in,
-                                         OffsetIterator d_offset,
-                                         cudf::size_type num_segments,
-                                         BinaryOp binary_op,
-                                         OutputType identity,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+void segmented_reduce(InputIterator d_in,
+                      OffsetIterator d_offset_begin,
+                      OffsetIterator d_offset_end,
+                      OutputIterator d_out,
+                      BinaryOp binary_op,
+                      OutputType identity,
+                      rmm::cuda_stream_view stream)
 {
-  auto dev_result = make_fixed_width_column(
-    data_type{type_to_id<OutputType>()}, num_segments, mask_state::UNALLOCATED, stream, mr);
-  auto dev_result_mview = dev_result->mutable_view();
+  auto num_segments = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -267,10 +266,10 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
   cub::DeviceSegmentedReduce::Reduce(d_temp_storage.data(),
                                      temp_storage_bytes,
                                      d_in,
-                                     dev_result_mview.data<OutputType>(),
+                                     d_out,
                                      num_segments,
-                                     d_offset,
-                                     d_offset + 1,
+                                     d_offset_begin,
+                                     d_offset_begin + 1,
                                      binary_op,
                                      identity,
                                      stream.value());
@@ -280,30 +279,29 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
   cub::DeviceSegmentedReduce::Reduce(d_temp_storage.data(),
                                      temp_storage_bytes,
                                      d_in,
-                                     dev_result_mview.data<OutputType>(),
+                                     d_out,
                                      num_segments,
-                                     d_offset,
-                                     d_offset + 1,
+                                     d_offset_begin,
+                                     d_offset_begin + 1,
                                      binary_op,
                                      identity,
                                      stream.value());
-
-  return dev_result;
 }
 
 template <typename InputIterator,
           typename OffsetIterator,
+          typename OutputIterator,
           typename BinaryOp,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+          typename OutputType = typename thrust::iterator_value<OutputIterator>::type,
           typename std::enable_if_t<!(is_fixed_width<OutputType>() &&
                                       !cudf::is_fixed_point<OutputType>())>* = nullptr>
-std::unique_ptr<column> segmented_reduce(InputIterator,
-                                         OffsetIterator,
-                                         cudf::size_type,
-                                         BinaryOp,
-                                         OutputType,
-                                         rmm::cuda_stream_view,
-                                         rmm::mr::device_memory_resource*)
+void segmented_reduce(InputIterator,
+                      OffsetIterator,
+                      OffsetIterator,
+                      OutputIterator,
+                      BinaryOp,
+                      OutputType,
+                      rmm::cuda_stream_view)
 {
   CUDF_FAIL(
     "Unsupported data types called on segmented_reduce. Only numeric and chrono types are "
