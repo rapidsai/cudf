@@ -16,11 +16,12 @@
 
 #include <cudf_test/base_fixture.hpp>
 
+#include <cudf/binaryop.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream.hpp>
-
-#include <cstring>
 
 TEST(ExpectsTest, FalseCondition)
 {
@@ -118,11 +119,23 @@ TEST(DebugAssert, cudf_assert_true)
 
 #endif
 
+TEST(FatalCase, CudaFatalError)
+{
+  auto type = cudf::data_type{cudf::type_id::INT32};
+  auto cv   = cudf::column_view(type, 256, (void*)256);
+  cudf::binary_operation(cv, cv, cudf::binary_operator::ADD, type);
+  EXPECT_THROW(CUDF_CUDA_TRY(cudaDeviceSynchronize()), cudf::fatal_cuda_error);
+}
+
 // These tests don't use CUDF_TEST_PROGRAM_MAIN because :
 // 1.) They don't need the RMM Pool
 // 2.) The RMM Pool interferes with the death test
+// 3.) The order of test cases matters
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  ::testing::GTEST_FLAG(filter) = "-FatalCase.*";
+  int ret                       = RUN_ALL_TESTS();
+  ::testing::GTEST_FLAG(filter) = "FatalCase.*";
+  return ret + RUN_ALL_TESTS();
 }

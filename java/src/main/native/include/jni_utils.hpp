@@ -807,14 +807,12 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 
 // Throw a new exception only if one is not pending then always return with the specified value
-#define JNI_CHECK_CUDA_ERROR(env, class_name, e, ret_val)                                          \
+#define JNI_CHECK_CUDA_ERROR(env, class_name, msg, e_code, ret_val)                                \
   {                                                                                                \
     if (env->ExceptionOccurred()) {                                                                \
       return ret_val;                                                                              \
     }                                                                                              \
-    std::string n_msg = e.what() == nullptr ? "" : e.what();                                       \
-    jstring j_msg = env->NewStringUTF(n_msg.c_str());                                              \
-    jint e_code = static_cast<jint>(e.error_code());                                               \
+    jstring j_msg = env->NewStringUTF(msg);                                                        \
     jclass ex_class = env->FindClass(class_name);                                                  \
     if (ex_class != NULL) {                                                                        \
       jmethodID ctor_id = env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;I)V");          \
@@ -856,12 +854,25 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \
   }                                                                                                \
   catch (const cudf::fatal_cuda_error &e) {                                                        \
-    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, e, ret_val);                      \
+    const char *what = e.what() == nullptr ? "" : e.what();                                        \
+    auto e_code = static_cast<jint>(e.error_code());                                               \
+    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, what, e_code, ret_val);           \
   }                                                                                                \
   catch (const cudf::cuda_error &e) {                                                              \
-    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, e, ret_val);                            \
+    const char *what = e.what() == nullptr ? "" : e.what();                                        \
+    auto e_code = static_cast<jint>(e.error_code());                                               \
+    JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_ERROR_CLASS, what, e_code, ret_val);                 \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
+    /* Double check whether the thrown exception is unrecoverable CUDA error or not. */            \
+    /* Like cudf::detail::throw_cuda_error, it is nearly certain that a fatal error  */            \
+    /* occurred if the second call doesn't return with cudaSuccess. */                             \
+    auto const last = cudaDeviceSynchronize();                                                     \
+    if (cudaSuccess != last && last == cudaGetLastError()) {                                       \
+      const char *what = e.what() == nullptr ? "" : e.what();                                      \
+      auto code = static_cast<jint>(last);                                                         \
+      JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, what, code, ret_val);           \
+    }                                                                                              \
     /* If jni_exception caught then a Java exception is pending and this will not overwrite it. */ \
     JNI_CHECK_THROW_NEW(env, class_name, e.what(), ret_val);                                       \
   }
