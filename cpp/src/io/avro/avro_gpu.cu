@@ -227,7 +227,7 @@ avro_decode_row(schemadesc_s const* schema,
  * @param[in] first_row Crop all rows below first_row
  */
 // blockDim {32,num_warps,1}
-extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
+__global__ void __launch_bounds__(num_warps * 32, 2)
   gpuDecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema_g,
                           device_span<string_index_pair const> global_dictionary,

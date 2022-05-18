@@ -1521,7 +1521,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
  * to determine what subset of rows in this page we should be reading.
  */
 // blockDim {block_size,1,1}
-extern "C" __global__ void __launch_bounds__(block_size)
+__global__ void __launch_bounds__(block_size)
   gpuComputePageSizes(PageInfo* pages,
                       ColumnChunkDesc const* chunks,
                       size_t min_row,
@@ -1613,7 +1613,7 @@ extern "C" __global__ void __launch_bounds__(block_size)
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {block_size,1,1}
-extern "C" __global__ void __launch_bounds__(block_size)
+__global__ void __launch_bounds__(block_size)
   gpuDecodePageData(PageInfo* pages,
                     ColumnChunkDesc const* chunks,
                     size_t min_row,

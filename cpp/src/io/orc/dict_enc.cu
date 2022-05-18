@@ -306,7 +306,7 @@ __global__ void __launch_bounds__(block_size, 2)
  * @param[in] num_columns Number of columns
  */
 // blockDim {1024,1,1}
-extern "C" __global__ void __launch_bounds__(1024)
+__global__ void __launch_bounds__(1024)
   gpuCompactChunkDictionaries(device_2dspan<StripeDictionary> stripes,
                               device_2dspan<DictionaryChunk const> chunks)
 {
