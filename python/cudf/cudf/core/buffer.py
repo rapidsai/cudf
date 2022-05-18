@@ -33,7 +33,7 @@ class Buffer(Serializable):
         object is kept in this Buffer.
     """
 
-    size: int
+    _size: int
     _ptr: int
     _owner: object
 
@@ -41,11 +41,11 @@ class Buffer(Serializable):
         self, data: Any = None, size: int = None, owner: object = None
     ):
         if isinstance(data, Buffer):
-            self.size = data.size
+            self._size = data.size
             self._ptr = data._ptr
             self._owner = owner or data._owner
         elif isinstance(data, rmm.DeviceBuffer):
-            self.size = data.size
+            self._size = data.size
             self._ptr = data.ptr
             self._owner = data
         elif hasattr(data, "__array_interface__") or hasattr(
@@ -58,11 +58,11 @@ class Buffer(Serializable):
             if not isinstance(size, int):
                 raise TypeError("size must be integer")
             self._ptr = data
-            self.size = size
+            self._size = size
             self._owner = owner
         elif data is None:
             self._ptr = 0
-            self.size = 0
+            self._size = 0
             self._owner = None
         else:
             try:
@@ -89,16 +89,20 @@ class Buffer(Serializable):
 
         ret = cls()
         ret._ptr = buffer._ptr + offset
-        ret.size = buffer.size if size is None else size
+        ret._size = buffer.size if size is None else size
         ret._owner = buffer
         return ret
 
     def __len__(self) -> int:
-        return self.size
+        return self._size
+
+    @property
+    def size(self) -> int:
+        return self._size
 
     @property
     def nbytes(self) -> int:
-        return self.size
+        return self._size
 
     @property
     def ptr(self) -> int:
@@ -127,7 +131,7 @@ class Buffer(Serializable):
                 data.__cuda_array_interface__
             )
             self._ptr = ptr
-            self.size = size
+            self._size = size
             self._owner = owner or data
         elif hasattr(data, "__array_interface__"):
             confirm_1d_contiguous(data.__array_interface__)
