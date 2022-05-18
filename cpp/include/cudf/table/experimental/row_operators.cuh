@@ -644,9 +644,6 @@ class row_hasher;
 namespace equality {
 
 template <typename Nullate>
-class strong_index_comparator_adapter;
-
-template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
   friend class two_table_comparator;
