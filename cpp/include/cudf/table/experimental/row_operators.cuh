@@ -962,12 +962,17 @@ class two_table_comparator {
    * @brief Construct an owning object for performing equality comparisons between two rows from two
    * tables.
    *
-   * @param lhs The left table to compare.
-   * @param rhs The right table to compare.
+   * The left and right table are expected to have the same number of columns and data types for
+   * each column.
+   *
+   * @param left The left table to compare.
+   * @param right The right table to compare.
    * @param stream The stream to construct this object on. Not the stream that will be used for
    * comparisons using this object.
    */
-  two_table_comparator(table_view const& lhs, table_view const& rhs, rmm::cuda_stream_view stream);
+  two_table_comparator(table_view const& left,
+                       table_view const& right,
+                       rmm::cuda_stream_view stream);
 
   /**
    * @brief Construct an owning object for performing equality comparisons between two rows from two
@@ -976,12 +981,12 @@ class two_table_comparator {
    * This constructor allows independently constructing a `preprocessed_table` and sharing it among
    * multiple comparators.
    *
-   * @param dt_lhs The left table preprocessed for equality comparison
-   * @param dt_rhs The right table preprocessed for equality comparison
+   * @param left The left table preprocessed for equality comparison.
+   * @param right The right table preprocessed for equality comparison.
    */
-  two_table_comparator(std::shared_ptr<preprocessed_table> dt_lhs,
-                       std::shared_ptr<preprocessed_table> dt_rhs)
-    : d_left_table{std::move(dt_lhs)}, d_right_table{std::move(dt_rhs)}
+  two_table_comparator(std::shared_ptr<preprocessed_table> left,
+                       std::shared_ptr<preprocessed_table> right)
+    : d_left_table{std::move(left)}, d_right_table{std::move(right)}
   {
   }
 
@@ -992,10 +997,10 @@ class two_table_comparator {
    * `bool F(rhs_index_type, lhs_index_type)`.
    *
    * `F(lhs_index_type i, rhs_index_type j)` returns true if and only if row `i` of the left table
-   * compares equally to row `j` of the right table.
+   * compares equal to row `j` of the right table.
    *
    * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and only if row `i` of the
-   * right table compares equally to row `j` of the left table.
+   * right table compares equal to row `j` of the left table.
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */

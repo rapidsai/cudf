@@ -47,7 +47,7 @@ bool contains(structs_column_view const& haystack,
                 0,
                 std::vector<column_view>{needle_tv.begin(), needle_tv.end()});
 
-  // Checking compatability between haystack and needle will be performed when constructing table
+  // Checking compatibility between haystack and needle will be performed when constructing table
   // comparator.
   auto const comparator = cudf::experimental::row::equality::two_table_comparator(
     haystack_tv, table_view{{needle_as_col}}, stream);
