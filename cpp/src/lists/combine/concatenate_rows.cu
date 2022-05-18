@@ -88,9 +88,13 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
       auto const row_index = i / input.num_columns();
 
       // nullify the whole output row
-      if (null_policy == concatenate_null_policy::NULLIFY_OUTPUT_ROW && row_null_counts &&
-          row_null_counts[row_index] > 0) {
-        return 0;
+      if (row_null_counts) {
+        if ((null_policy == concatenate_null_policy::NULLIFY_OUTPUT_ROW &&
+             row_null_counts[row_index] > 0) ||
+            (null_policy == concatenate_null_policy::IGNORE &&
+             row_null_counts[row_index] == input.num_columns())) {
+          return 0;
+        }
       }
       auto offsets =
         input.column(col_index).child(lists_column_view::offsets_column_index).data<offset_type>() +
@@ -205,19 +209,35 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
   auto row_null_counts = build_null_mask ? generate_null_counts(*input_dv, stream)
                                          : rmm::device_uvector<size_type>{0, stream};
 
-  // if our output policy is NULLIFY_OUTPUT_ROW, overlay an appropriate null mask onto the
+  // if we have nulls, overlay an appropriate null mask onto the
   // concatenated column so that gather() sanitizes out the child data of rows that will ultimately
   // be nullified.
-  if (build_null_mask && null_policy == concatenate_null_policy::NULLIFY_OUTPUT_ROW) {
-    auto iter = thrust::make_counting_iterator(0);
-    auto [null_mask, null_count] =
-      cudf::detail::valid_if(iter,
-                             iter + (input.num_rows() * input.num_columns()),
-                             [num_rows        = input.num_rows(),
-                              row_null_counts = row_null_counts.data()] __device__(size_type i) {
-                               auto const row_index = i % num_rows;
-                               return row_null_counts[row_index] > 0 ? 0 : 1;
-                             });
+  if (build_null_mask) {
+    auto [null_mask, null_count] = [&]() {
+      auto iter = thrust::make_counting_iterator(0);
+
+      // IGNORE.  Output row is nullified if all input rows are null.
+      if (null_policy == concatenate_null_policy::IGNORE) {
+        return cudf::detail::valid_if(
+          iter,
+          iter + (input.num_rows() * input.num_columns()),
+          [num_rows        = input.num_rows(),
+           num_columns     = input.num_columns(),
+           row_null_counts = row_null_counts.data()] __device__(size_type i) {
+            auto const row_index = i % num_rows;
+            return row_null_counts[row_index] == num_columns ? 0 : 1;
+          });
+      }
+      // NULLIFY_OUTPUT_ROW.  Output row is nullfied if any input row is null
+      return cudf::detail::valid_if(
+        iter,
+        iter + (input.num_rows() * input.num_columns()),
+        [num_rows        = input.num_rows(),
+         row_null_counts = row_null_counts.data()] __device__(size_type i) {
+          auto const row_index = i % num_rows;
+          return row_null_counts[row_index] > 0 ? 0 : 1;
+        });
+    }();
     concat->set_null_mask(std::move(null_mask), null_count);
   }
 
