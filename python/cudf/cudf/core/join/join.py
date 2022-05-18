@@ -70,7 +70,7 @@ class Merge:
             Boolean flag indicating the left index column or columns
             are to be used as join keys in order.
         right_index : bool
-            Boolean flag indicating the right index column or coumns
+            Boolean flag indicating the right index column or columns
             are to be used as join keys in order.
         lhs_is_index : bool
             ``lhs`` is a ``BaseIndex``

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ namespace strings {
  * @throw cudf::logic_error if the input column is not a LIST type with a STRING child.
  *
  * @param input Lists column to format.
- * @param na_rep Replacment string for null elements.
+ * @param na_rep Replacement string for null elements.
  * @param separators Strings to use for enclosing list components and separating elements.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.

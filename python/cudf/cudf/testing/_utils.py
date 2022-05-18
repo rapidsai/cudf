@@ -311,7 +311,11 @@ def gen_rand(dtype, size, **kwargs):
             np.random.randint(low=low, high=high, size=size), unit=time_unit
         )
     elif dtype.kind in ("O", "U"):
-        return pd._testing.rands_array(10, size)
+        low = kwargs.get("low", 10)
+        high = kwargs.get("high", 11)
+        return pd._testing.rands_array(
+            np.random.randint(low=low, high=high, size=1)[0], size
+        )
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 
@@ -345,8 +349,8 @@ def assert_column_memory_eq(
     """Assert the memory location and size of `lhs` and `rhs` are equivalent.
 
     Both data pointer and mask pointer are checked. Also recursively check for
-    children to the same contarints. Also fails check if the number of children
-    mismatches at any level.
+    children to the same constraints. Also fails check if the number of
+    children mismatches at any level.
     """
     assert lhs.base_data_ptr == rhs.base_data_ptr
     assert lhs.base_mask_ptr == rhs.base_mask_ptr
