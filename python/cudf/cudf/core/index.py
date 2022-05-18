@@ -458,7 +458,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     def to_numpy(self):
-        return self.to_pandas().to_numpy()
+        return self._as_int64().to_numpy()
 
     @property
     def is_unique(self):
