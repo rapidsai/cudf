@@ -68,3 +68,10 @@ set(targets_using_numpy gpuarrow interop avro csv orc json parquet)
 foreach(target IN LISTS targets_using_numpy)
   target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
 endforeach()
+
+# PyArrow relies on the C++ Arrow library already being installed, so we can
+# just find the C++ library directly and link to the same one. We rely on
+# libcudf's exports to provide the ARROW_SHARED_LIB and ARROW_CUDA_SHARED_LIB
+# libraries. That just leaves us to find the ArrowPython library on our own.
+find_library(arrow_python_shared_library arrow_python REQUIRED)
+target_link_libraries(gpuarrow ${arrow_python_shared_library} ${ARROW_SHARED_LIB} ${ARROW_CUDA_SHARED_LIB})
