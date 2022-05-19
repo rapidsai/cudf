@@ -1454,8 +1454,8 @@ class lists_column_wrapper : public detail::column_wrapper {
       1,
       offsets.release(),
       values.release(),
-      static_cast<int>(!valid),
-      !valid ? cudf::create_null_mask(1, cudf::mask_state::ALL_NULL) : rmm::device_buffer{});
+      valid ? 0 : 1,
+      valid ? rmm::device_buffer{} : cudf::create_null_mask(1, cudf::mask_state::ALL_NULL));
   }
 
  private:
