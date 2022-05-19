@@ -1453,6 +1453,9 @@ column_info_s compute_column_information(iterator begin, iterator end) {
   std::vector<size_type> column_sizes;
   std::vector<size_type> variable_width_column_starts;
 
+  column_starts.reserve(std::distance(begin, end) + 1);
+  column_sizes.reserve(std::distance(begin, end));
+
   for (auto col_type = begin; col_type != end; ++col_type) {
     bool const compound_type = is_compound(*col_type);
 
@@ -1845,13 +1848,13 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
   auto dev_col_starts = make_device_uvector_async(column_info.column_starts, stream);
 
   // Get the pointers to the input columnar data ready
-  auto data_begin = thrust::make_transform_iterator(tbl.begin(), [](auto const &c) {
+  auto const data_begin = thrust::make_transform_iterator(tbl.begin(), [](auto const &c) {
     return is_compound(c.type()) ? nullptr : c.template data<int8_t>();
   });
   std::vector<int8_t const *> input_data(data_begin, data_begin + tbl.num_columns());
 
   // validity code handles variable and fixed-width data, so give it everything
-  auto nm_begin =
+  auto const nm_begin =
       thrust::make_transform_iterator(tbl.begin(), [](auto const &c) { return c.null_mask(); });
   std::vector<bitmask_type const *> input_nm(nm_begin, nm_begin + tbl.num_columns());
 
@@ -1930,15 +1933,15 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
 
   if (!fixed_width_only) {
     // build table view for variable-width data only
-    auto variable_width_table =
+    auto const variable_width_table =
         select_columns(tbl, [](auto col) { return is_compound(col.type()); });
 
     CUDF_EXPECTS(!variable_width_table.is_empty(), "No variable-width columns when expected!");
     CUDF_EXPECTS(variable_width_offsets.has_value(), "No variable width offset data!");
 
-    auto variable_data_begin =
+    auto const variable_data_begin =
         thrust::make_transform_iterator(variable_width_table.begin(), [](auto const &c) {
-          strings_column_view scv{c};
+          strings_column_view const scv{c};
           return is_compound(c.type()) ? scv.chars().template data<int8_t>() : nullptr;
         });
     std::vector<int8_t const *> variable_width_input_data(
@@ -1968,6 +1971,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
   // split up the output buffer into multiple buffers based on row batch sizes
   // and create list of byte columns
   std::vector<std::unique_ptr<column>> ret;
+  ret.reserve(batch_info.row_batches.size());
   auto counting_iter = thrust::make_counting_iterator(0);
   std::transform(counting_iter, counting_iter + batch_info.row_batches.size(),
                  std::back_inserter(ret), [&](auto batch) {
