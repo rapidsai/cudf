@@ -22,6 +22,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <limits>
+#include <memory>
 #include <type_traits>
 #include <vector>
 
@@ -227,6 +228,8 @@ class column_view_base {
   mutable size_type _null_count{};   ///< The number of null elements
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
+  std::shared_ptr<void> _owner;      ///< Pointer to the owner (if any) of the device
+                                     ///< memory allocation.
 
   column_view_base()                        = default;
   ~column_view_base()                       = default;
@@ -260,15 +263,19 @@ class column_view_base {
    * @param data Pointer to device memory containing the column elements
    * @param null_mask Optional, pointer to device memory containing the null
    * indicator bitmask
-   * @param null_count Optional, the number of null elements.
+   * @param null_count Optional, the number of null elements
    * @param offset optional, index of the first element
+   * @param owner optional, object to which the lifetime of the device memory
+   * allocation is tied. If provided, a reference to this object is kept until
+   * destruction
    */
   column_view_base(data_type type,
                    size_type size,
                    void const* data,
                    bitmask_type const* null_mask = nullptr,
                    size_type null_count          = UNKNOWN_NULL_COUNT,
-                   size_type offset              = 0);
+                   size_type offset              = 0,
+                   std::shared_ptr<void> owner   = nullptr);
 };
 
 class mutable_column_view_base : public column_view_base {
@@ -345,6 +352,9 @@ class column_view : public detail::column_view_base {
    * @param offset optional, index of the first element
    * @param children optional, depending on the element type, child columns may
    * contain additional data
+   * @param owner optional, object to which the lifetime of the device memory
+   * allocation is tied. If provided, a reference to this object is kept until
+   * destruction
    */
   column_view(data_type type,
               size_type size,
@@ -352,7 +362,8 @@ class column_view : public detail::column_view_base {
               bitmask_type const* null_mask            = nullptr,
               size_type null_count                     = UNKNOWN_NULL_COUNT,
               size_type offset                         = 0,
-              std::vector<column_view> const& children = {});
+              std::vector<column_view> const& children = {},
+              std::shared_ptr<void> owner              = nullptr);
 
   /**
    * @brief Returns the specified child
@@ -485,6 +496,9 @@ class mutable_column_view : public detail::column_view_base {
    * @param offset optional, index of the first element
    * @param children optional, depending on the element type, child columns may
    * contain additional data
+   * @param owner optional, object to which the lifetime of the device memory
+   * allocation is tied. If provided, a reference to this object is kept until
+   * destruction
    */
   mutable_column_view(data_type type,
                       size_type size,
@@ -492,7 +506,8 @@ class mutable_column_view : public detail::column_view_base {
                       bitmask_type* null_mask                          = nullptr,
                       size_type null_count                             = cudf::UNKNOWN_NULL_COUNT,
                       size_type offset                                 = 0,
-                      std::vector<mutable_column_view> const& children = {});
+                      std::vector<mutable_column_view> const& children = {},
+                      std::shared_ptr<void> owner                      = nullptr);
 
   /**
    * @brief Returns pointer to the base device memory allocation casted to
