@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include "io/utilities/hostdevice_vector.hpp"
 #include "io_uncomp.hpp"
+#include "nvcomp_adapter.hpp"
 #include "unbz2.hpp"  // bz2 uncompress
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <io/comp/nvcomp_adapter.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cuda_runtime.h>
 
