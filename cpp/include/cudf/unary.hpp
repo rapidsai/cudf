@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,9 @@ namespace cudf {
  * @brief Column APIs for unary ops
  */
 
+/**
+ * @brief Types of unary operations that can be performed on data.
+ */
 enum class unary_operator : int32_t {
   SIN,         ///< Trigonometric sine
   COS,         ///< Trigonometric cosine

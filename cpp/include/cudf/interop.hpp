@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,9 +90,14 @@ DLManagedTensor* to_dlpack(
  * but in future this can be updated as per requirement.
  */
 struct column_metadata {
-  std::string name;
-  std::vector<column_metadata> children_meta;
+  std::string name;                            ///< Name of the column
+  std::vector<column_metadata> children_meta;  ///< Meta data of children of the column
 
+  /**
+   * @brief Construct a new column metadata object
+   *
+   * @param _name Name of the column
+   */
   column_metadata(std::string const& _name) : name(_name) {}
   column_metadata() = default;
 };

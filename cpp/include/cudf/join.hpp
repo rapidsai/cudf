@@ -514,8 +514,8 @@ std::unique_ptr<cudf::table> cross_join(
  */
 class hash_join {
  public:
-  using impl_type =
-    typename cudf::detail::hash_join<cudf::detail::MurmurHash3_32<cudf::hash_value_type>>;
+  using impl_type = typename cudf::detail::hash_join<
+    cudf::detail::MurmurHash3_32<cudf::hash_value_type>>;  ///< Implementation type
 
   hash_join() = delete;
   ~hash_join();
@@ -1164,9 +1164,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
  * @param right_conditional The right table used for the conditional join.
  * @param binary_predicate The condition on which to join.
  * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_inner_join_size API).
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair containing the size that would result from performing the
@@ -1207,9 +1204,6 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
  * @param right_conditional The right table used for the conditional join.
  * @param binary_predicate The condition on which to join.
  * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_inner_join_size API).
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair containing the size that would result from performing the
@@ -1250,9 +1244,6 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * @param right_conditional The right table used for the conditional join.
  * @param binary_predicate The condition on which to join.
  * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_inner_join_size API).
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair containing the size that would result from performing the
@@ -1291,9 +1282,6 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * @param right_conditional The right table used for the conditional join.
  * @param binary_predicate The condition on which to join.
  * @param compare_nulls Whether or not null values join to each other or not.
- * @param output_size An optional pair of values indicating the exact output size and the number of
- * matches for each row in the larger of the two input tables, left or right (may be precomputed
- * using the corresponding mixed_inner_join_size API).
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair containing the size that would result from performing the

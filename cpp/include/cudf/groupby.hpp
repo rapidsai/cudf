@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -305,9 +305,9 @@ class groupby {
    * `offsets[i+1] - offsets[i]` gives the size of group `i`.
    */
   struct groups {
-    std::unique_ptr<table> keys;
-    std::vector<size_type> offsets;
-    std::unique_ptr<table> values;
+    std::unique_ptr<table> keys;     ///< Table of grouped keys
+    std::vector<size_type> offsets;  ///< Group Offsets
+    std::unique_ptr<table> values;   ///< Table of grouped values
   };
 
   /**

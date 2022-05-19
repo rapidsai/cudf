@@ -20,7 +20,7 @@
 
 namespace cudf {
 
-using hash_value_type = uint32_t;
+using hash_value_type = uint32_t;  ///< Type of hash value
 
 /**
  * @addtogroup column_hash

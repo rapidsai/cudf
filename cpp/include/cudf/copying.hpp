@@ -95,6 +95,7 @@ std::unique_ptr<table> gather(
  *
  * @param source_table Table that will be reversed
  * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return Reversed table
  */
 std::unique_ptr<table> reverse(
   table_view const& source_table,
@@ -111,6 +112,7 @@ std::unique_ptr<table> reverse(
  *
  * @param source_column Column that will be reversed
  * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return Reversed column
  */
 std::unique_ptr<column> reverse(
   column_view const& source_column,
@@ -376,6 +378,8 @@ std::unique_ptr<column> copy_range(
  *
  * @throw cudf::logic_error if @p input dtype is neither fixed-width nor string type
  * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
+ *
+ * @return The shifted column
  */
 std::unique_ptr<column> shift(
   column_view const& input,
@@ -555,8 +559,23 @@ struct packed_columns {
    */
   struct metadata {
     metadata() = default;
+    /**
+     * @brief Construct a new metadata object
+     *
+     * @param v Host-side buffer containing metadata
+     */
     metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
+    /**
+     * @brief Returns pointer to the host-side metadata buffer data
+     *
+     * @return Pointer to the host-side metadata buffer data
+     */
     [[nodiscard]] uint8_t const* data() const { return data_.data(); }
+    /**
+     * @brief Returns size of the metadata buffer
+     *
+     * @return Size of the metadata buffer
+     */
     [[nodiscard]] size_t size() const { return data_.size(); }
 
    private:
@@ -567,13 +586,19 @@ struct packed_columns {
     : metadata_(std::make_unique<metadata>()), gpu_data(std::make_unique<rmm::device_buffer>())
   {
   }
+  /**
+   * @brief Construct a new packed columns object
+   *
+   * @param md Host-side metadata buffer
+   * @param gd Device-side data buffer
+   */
   packed_columns(std::unique_ptr<metadata>&& md, std::unique_ptr<rmm::device_buffer>&& gd)
     : metadata_(std::move(md)), gpu_data(std::move(gd))
   {
   }
 
-  std::unique_ptr<metadata> metadata_;
-  std::unique_ptr<rmm::device_buffer> gpu_data;
+  std::unique_ptr<metadata> metadata_;           ///< Host-side metadata buffer
+  std::unique_ptr<rmm::device_buffer> gpu_data;  ///< Device-side data buffer
 };
 
 /**
@@ -591,8 +616,8 @@ struct packed_columns {
  * not outlive the memory owned by `data`
  */
 struct packed_table {
-  cudf::table_view table;
-  packed_columns data;
+  cudf::table_view table;  ///< Result table_view of a `contiguous_split`
+  packed_columns data;     ///< Column data owned
 };
 
 /**
