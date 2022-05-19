@@ -1,6 +1,7 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
+from libcpp.memory cimport shared_ptr
 from libcpp.vector cimport vector
 
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type
@@ -54,6 +55,17 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
             vector[column_view] children
         ) except +
 
+        column_view(
+            data_type type,
+            size_type size,
+            const void* data,
+            const bitmask_type* null_mask,
+            size_type null_count,
+            size_type offset,
+            vector[column_view] children,
+            shared_ptr[void] owner
+        ) except +
+
         const T* data[T]() except +
         const T* head[T]() except +
         const bitmask_type* null_mask() except +
@@ -102,9 +114,24 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         ) except +
 
         mutable_column_view(
-            data_type type, size_type size, const void* data,
-            const bitmask_type* null_mask, size_type null_count,
-            size_type offset, vector[mutable_column_view] children
+            data_type type,
+            size_type size,
+            const void* data,
+            const bitmask_type* null_mask,
+            size_type null_count,
+            size_type offset,
+            vector[mutable_column_view] children
+        ) except +
+
+        mutable_column_view(
+            data_type type,
+            size_type size,
+            const void* data,
+            const bitmask_type* null_mask,
+            size_type null_count,
+            size_type offset,
+            vector[mutable_column_view] children,
+            shared_ptr[void] owner
         ) except +
 
         T* data[T]() except +

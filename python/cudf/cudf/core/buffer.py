@@ -4,7 +4,7 @@ from __future__ import annotations
 import functools
 import operator
 import pickle
-from typing import Any, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Tuple
 
 import numpy as np
 
@@ -12,6 +12,9 @@ import rmm
 
 import cudf
 from cudf.core.abc import Serializable
+
+if TYPE_CHECKING:
+    from cudf._lib.column import AccessCounter
 
 
 class Buffer(Serializable):
@@ -35,10 +38,23 @@ class Buffer(Serializable):
     _ptr: int
     _size: int
     _owner: object
+    _sole_owner: bool
+    _access_counter: AccessCounter
+    _raw_pointer_exposed: bool
 
     def __init__(
-        self, data: Any = None, size: int = None, owner: object = None
+        self,
+        data: Any = None,
+        size: int = None,
+        owner: object = None,
+        sole_owner: bool = False,
     ):
+        from cudf._lib.column import AccessCounter
+
+        self._access_counter = AccessCounter()
+        self._sole_owner = sole_owner
+        self._raw_pointer_exposed = False
+
         if isinstance(data, Buffer):
             self._ptr = data._ptr
             self._size = data.size
@@ -97,7 +113,24 @@ class Buffer(Serializable):
 
     @property
     def ptr(self) -> int:
+        self._raw_pointer_exposed = True
         return self._ptr
+
+    def ptr_and_access_counter(self) -> Tuple[int, AccessCounter]:
+        return self._ptr, self._access_counter
+
+    @property
+    def spillable(self) -> bool:
+        print(
+            f"spillable - sole-owner: {self._sole_owner}, "
+            f"raw_pointer_exposed: {self._raw_pointer_exposed}, "
+            f"access_counter: {self._access_counter.use_count()}"
+        )
+        return (
+            self._sole_owner
+            and not self._raw_pointer_exposed
+            and self._access_counter.use_count() == 1
+        )
 
     @property
     def size(self) -> int:
@@ -109,6 +142,7 @@ class Buffer(Serializable):
 
     @property
     def __cuda_array_interface__(self) -> dict:
+        self._raw_pointer_exposed = True
         return {
             "data": (self.ptr, False),
             "shape": (self.size,),

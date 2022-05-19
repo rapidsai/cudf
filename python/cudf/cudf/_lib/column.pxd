@@ -1,13 +1,18 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport shared_ptr, unique_ptr
 
 from rmm._lib.device_buffer cimport device_buffer
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.types cimport size_type
+
+
+cdef class AccessCounter:
+    cdef shared_ptr[int] counter
+    cpdef int use_count(self)
 
 
 cdef class Column:

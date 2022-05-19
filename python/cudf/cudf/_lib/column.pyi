@@ -10,6 +10,9 @@ from cudf.core.column import ColumnBase
 
 T = TypeVar("T")
 
+class AccessCounter:
+    def use_count(self) -> int: ...
+
 class Column:
     _data: Optional[Buffer]
     _mask: Optional[Buffer]

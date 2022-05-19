@@ -12,9 +12,16 @@ from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import Buffer
 
 from cpython.buffer cimport PyObject_CheckBuffer
+from cython.operator cimport dereference as deref
 from libc.stdint cimport uintptr_t
 from libcpp cimport bool
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport (
+    make_shared,
+    make_unique,
+    shared_ptr,
+    static_pointer_cast,
+    unique_ptr,
+)
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -49,6 +56,26 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
+
+
+# TODO: move to own file or if the Buffer moves to Cython this isn't needed
+cdef class AccessCounter:
+    def __init__(self):
+        self.counter = make_shared[int](42)
+
+    cpdef int use_count(self):
+        return self.counter.use_count()
+
+ctypedef vector[shared_ptr[void]] OwnersVecT  # Type aliasing
+
+cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners):
+    if buf is None:
+        return NULL
+    cdef AccessCounter ac
+    cdef uintptr_t ptr
+    ptr, ac = buf.ptr_and_access_counter()
+    deref(owners).push_back(static_pointer_cast[void, int](ac.counter))
+    return <void*> ptr
 
 
 cdef class Column:
@@ -239,21 +266,21 @@ cdef class Column:
             if mask.size < mask_size:
                 dbuf = rmm.DeviceBuffer(size=mask_size)
                 dbuf.copy_from_device(value)
-                mask = Buffer(dbuf)
+                mask = Buffer(dbuf, sole_owner=True)
         elif hasattr(value, "__array_interface__"):
             value = np.asarray(value).view("u1")[:mask_size]
             if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host(value)
-            mask = Buffer(dbuf)
+            mask = Buffer(dbuf, sole_owner=True)
         elif PyObject_CheckBuffer(value):
             value = np.asarray(value).view("u1")[:mask_size]
             if value.size < required_num_bytes:
                 raise ValueError(error_msg.format(str(value.size)))
             dbuf = rmm.DeviceBuffer(size=mask_size)
             dbuf.copy_from_host(value)
-            mask = Buffer(dbuf)
+            mask = Buffer(dbuf, sole_owner=True)
         else:
             raise TypeError(
                 "Expected a Buffer-like object or None for mask, got "
@@ -402,9 +429,8 @@ cdef class Column:
         cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
         cdef vector[column_view] children
-        cdef void* data
-
-        data = <void*><uintptr_t>(col.base_data_ptr)
+        cdef shared_ptr[OwnersVecT] owners = make_shared[OwnersVecT]()
+        cdef void* data = get_data_ptr(col.base_data, owners)
 
         cdef Column child_column
         if col.base_children:
@@ -426,7 +452,9 @@ cdef class Column:
             mask,
             c_null_count,
             offset,
-            children)
+            children,
+            static_pointer_cast[void, OwnersVecT](owners)
+        )
 
     @staticmethod
     cdef Column from_unique_ptr(unique_ptr[column] c_col):
@@ -455,11 +483,11 @@ cdef class Column:
         cdef column_contents contents = move(c_col.get()[0].release())
 
         data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
-        data = Buffer(data)
+        data = Buffer(data, sole_owner=True)
 
         if has_nulls:
             mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
-            mask = Buffer(mask)
+            mask = Buffer(mask, sole_owner=True)
             null_count = c_col.get()[0].null_count()
         else:
             mask = None
@@ -509,18 +537,22 @@ cdef class Column:
         if data_ptr:
             if data_owner is None:
                 data = Buffer(
-                    rmm.DeviceBuffer(ptr=data_ptr,
-                                     size=(size+offset) * dtype.itemsize)
+                    rmm.DeviceBuffer(
+                        ptr=data_ptr,
+                        size=(size+offset) * dtype.itemsize
+                    ),
+                    sole_owner=True
                 )
             else:
                 data = Buffer(
                     data=data_ptr,
                     size=(base_size) * dtype.itemsize,
-                    owner=data_owner
+                    owner=data_owner,
+                    sole_owner=True
                 )
         else:
             data = Buffer(
-                rmm.DeviceBuffer(ptr=data_ptr, size=0)
+                rmm.DeviceBuffer(ptr=data_ptr, size=0), sole_owner=True
             )
 
         mask_ptr = <uintptr_t>(cv.null_mask())
@@ -533,13 +565,15 @@ cdef class Column:
                     rmm.DeviceBuffer(
                         ptr=mask_ptr,
                         size=bitmask_allocation_size_bytes(size+offset)
-                    )
+                    ),
+                    sole_owner=True
                 )
             else:
                 mask = Buffer(
                     data=mask_ptr,
                     size=bitmask_allocation_size_bytes(base_size),
-                    owner=mask_owner
+                    owner=mask_owner,
+                    sole_owner=True
                 )
 
         if cv.has_nulls():
