@@ -472,17 +472,17 @@ class regex_parser {
             auto const ch = static_cast<char>(*input++);
             // if ch not a digit or ch is a delimiter, we are done
             if (!std::isdigit(ch) || delimiters.find(ch) != delimiters.npos) { break; }
-            *output++ = ch;
+            output[count] = ch;
             ++count;
           }
-          *output = 0;  // null-terminate (for the atoi call)
+          output[count] = 0;  // null-terminate (for the atoi call)
           return count;
         };
 
-        auto const exprp_backup  = exprp;  // save in case matching '}' is not found
-        constexpr auto max_read  = 4;      // 3 digits plus the delimiter
-        constexpr auto max_value = 999;    // support only 3 digits
-        std::vector<char> buffer(max_read + 1);
+        auto const exprp_backup               = exprp;  // save in case matching '}' is not found
+        constexpr auto max_read               = 4;      // 3 digits plus the delimiter
+        constexpr auto max_value              = 999;    // support only 3 digits
+        std::array<char, max_read + 1> buffer = {0};    //(max_read + 1);
 
         // get left-side (n) value => min_count
         exprp += transform_until(exprp, exprp + max_read, buffer.data(), "},");
@@ -503,7 +503,7 @@ class regex_parser {
             break;                 // re-interpret as CHAR
           }
           // {n,m} and {n,} are both valid
-          yy_max_count = buffer.at(0) == 0 ? -1 : static_cast<int16_t>(count);
+          yy_max_count = buffer[0] == 0 ? -1 : static_cast<int16_t>(count);
           ++exprp;
         }
 
@@ -748,7 +748,7 @@ class regex_compiler {
     auto repeat_start_index = -1;
 
     for (std::size_t index = 0; index < in.size(); index++) {
-      regex_parser::Item item = in[index];
+      auto const item = in[index];
 
       if (item.t != COUNTED && item.t != COUNTED_LAZY) {
         out.push_back(item);
@@ -819,7 +819,7 @@ class regex_compiler {
       yyclass_id(0)
   {
     // Parse
-    std::vector<regex_parser::Item> items = [&] {
+    std::vector<regex_parser::Item> const items = [&] {
       regex_parser parser(pattern, is_dotall(flags) ? ANYNL : ANY, m_prog);
       return parser.m_has_counted ? expand_counted(parser.m_items) : parser.m_items;
     }();
@@ -828,8 +828,8 @@ class regex_compiler {
     pushator(START - 1);
 
     for (int i = 0; i < static_cast<int>(items.size()); i++) {
-      regex_parser::Item item = items[i];
-      int token               = item.t;
+      auto const item = items[i];
+      int token       = item.t;
       if (token == CCLASS || token == NCCLASS)
         yyclass_id = item.d.yyclass_id;
       else
