@@ -17,8 +17,8 @@
 #pragma once
 
 #include "aggregate_orc_metadata.hpp"
-#include "orc.h"
-#include "orc_gpu.h"
+#include "orc.hpp"
+#include "orc_gpu.hpp"
 
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
