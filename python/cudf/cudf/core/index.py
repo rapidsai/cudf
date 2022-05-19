@@ -457,9 +457,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
             name=self.name,
         )
 
-    def to_numpy(self):
-        return self._as_int64().to_numpy()
-
     @property
     def is_unique(self):
         """
@@ -802,6 +799,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def where(self, cond, other=None, inplace=False):
         return self._as_int64().where(cond, other, inplace)
 
+    def to_numpy(self):
+        return self._as_int64().to_numpy()
+
     def replace(self, to_replace, value):
         return self._as_int64().replace(to_replace=to_replace, value=value)
 
@@ -816,8 +816,11 @@ class RangeIndex(BaseIndex, BinaryOperand):
             "using .to_numpy()."
         )
 
-    def nunique(self, dropna: bool = True):
-        return self._values.distinct_count(dropna=dropna)
+    def nunique(self):
+        return self._stop  # or len(self)
+
+    def min(self):
+        return self._start
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
