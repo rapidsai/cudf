@@ -86,7 +86,7 @@ struct findall_fn {
 }  // namespace
 
 std::unique_ptr<table> findall(strings_column_view const& input,
-                               std::string const& pattern,
+                               std::string_view pattern,
                                regex_flags const flags,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
@@ -147,7 +147,7 @@ std::unique_ptr<table> findall(strings_column_view const& input,
 // external API
 
 std::unique_ptr<table> findall(strings_column_view const& input,
-                               std::string const& pattern,
+                               std::string_view pattern,
                                regex_flags const flags,
                                rmm::mr::device_memory_resource* mr)
 {

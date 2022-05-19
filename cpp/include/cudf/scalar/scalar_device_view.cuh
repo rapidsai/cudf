@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ class scalar_device_view_base {
 
   /**
    * @brief Returns the value type
+   * @returns The value type
    */
   [[nodiscard]] __host__ __device__ data_type type() const noexcept { return _type; }
 
@@ -59,6 +60,14 @@ class scalar_device_view_base {
   bool* _is_valid{};                ///< Pointer to device memory containing
                                     ///< boolean representing validity of the value.
 
+  /**
+   * @brief Construct a new scalar device view base object  from a device pointer
+   * and a validity boolean.
+   *
+   * @param type The data type of the scalar
+   * @param is_valid Pointer to device memory containing boolean representing
+   * validity of the scalar.
+   */
   scalar_device_view_base(data_type type, bool* is_valid) : _type(type), _is_valid(is_valid) {}
 
   scalar_device_view_base() = default;
@@ -73,6 +82,7 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
    * @brief Returns reference to stored value.
    *
    * @tparam T The desired type
+   * @returns Reference to stored value
    */
   template <typename T>
   __device__ T& value() noexcept
@@ -84,6 +94,7 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
    * @brief Returns const reference to stored value.
    *
    * @tparam T The desired type
+   * @returns Const reference to stored value
    */
   template <typename T>
   __device__ T const& value() const noexcept
@@ -107,16 +118,19 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
    * @brief Returns a raw pointer to the value in device memory
    *
    * @tparam T The desired type
+   * @returns Raw pointer to the value in device memory
    */
   template <typename T>
   __device__ T* data() noexcept
   {
     return static_cast<T*>(_data);
   }
+
   /**
    * @brief Returns a const raw pointer to the value in device memory
    *
    * @tparam T The desired type
+   * @returns Const raw pointer to the value in device memory
    */
   template <typename T>
   __device__ T const* data() const noexcept
@@ -150,15 +164,19 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
 template <typename T>
 class fixed_width_scalar_device_view : public detail::fixed_width_scalar_device_view_base {
  public:
-  using value_type = T;
+  using value_type = T;  ///< The value type of the scalar
 
   /**
    * @brief Returns reference to stored value.
+   *
+   * @returns Reference to stored value
    */
   __device__ T& value() noexcept { return fixed_width_scalar_device_view_base::value<T>(); }
 
   /**
    * @brief Returns const reference to stored value.
+   *
+   * @returns Const reference to stored value
    */
   __device__ T const& value() const noexcept
   {
@@ -174,10 +192,15 @@ class fixed_width_scalar_device_view : public detail::fixed_width_scalar_device_
 
   /**
    * @brief Returns a raw pointer to the value in device memory
+   *
+   * @returns Raw pointer to the value in device memory
    */
   __device__ T* data() noexcept { return fixed_width_scalar_device_view_base::data<T>(); }
+
   /**
    * @brief Returns a const raw pointer to the value in device memory
+   *
+   * @returns Const raw pointer to the value in device memory
    */
   __device__ T const* data() const noexcept
   {
@@ -210,6 +233,14 @@ class fixed_width_scalar_device_view : public detail::fixed_width_scalar_device_
 template <typename T>
 class numeric_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
  public:
+  /**
+   * @brief Construct a new numeric scalar device view object from data and validity pointers.
+   *
+   * @param type The data type of the value
+   * @param data The pointer to the data in device memory
+   * @param is_valid The pointer to the bool in device memory that indicates the
+   * validity of the stored value
+   */
   numeric_scalar_device_view(data_type type, T* data, bool* is_valid)
     : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
   {
@@ -222,8 +253,16 @@ class numeric_scalar_device_view : public detail::fixed_width_scalar_device_view
 template <typename T>
 class fixed_point_scalar_device_view : public detail::scalar_device_view_base {
  public:
-  using rep_type = typename T::rep;
+  using rep_type = typename T::rep;  ///< The representation type of the fixed_point value
 
+  /**
+   * @brief Construct a new fixed point scalar device view object from data and validity pointers.
+   *
+   * @param type The data type of the value
+   * @param data The pointer to the data in device memory
+   * @param is_valid The pointer to the bool in device memory that indicates the
+   * validity of the stored value
+   */
   fixed_point_scalar_device_view(data_type type, rep_type* data, bool* is_valid)
     : detail::scalar_device_view_base(type, is_valid), _data(data)
   {
@@ -238,6 +277,8 @@ class fixed_point_scalar_device_view : public detail::scalar_device_view_base {
 
   /**
    * @brief Get the value of the scalar, as a `rep_type`.
+   *
+   * @returns The value of the scalar, as a `rep_type`
    */
   __device__ rep_type const& rep() const noexcept { return *_data; }
 
@@ -250,8 +291,18 @@ class fixed_point_scalar_device_view : public detail::scalar_device_view_base {
  */
 class string_scalar_device_view : public detail::scalar_device_view_base {
  public:
-  using ValueType = cudf::string_view;
+  using ValueType = cudf::string_view;  ///< The value type of the string scalar
 
+  /**
+   * @brief Construct a new string scalar device view object from string data, size and validity
+   * pointers.
+   *
+   * @param type The data type of the value
+   * @param data The pointer to the string data in device memory
+   * @param is_valid The pointer to the bool in device memory that indicates the
+   * validity of the stored value
+   * @param size The pointer to the size of the string in device memory
+   */
   string_scalar_device_view(data_type type, const char* data, bool* is_valid, size_type size)
     : detail::scalar_device_view_base(type, is_valid), _data(data), _size(size)
   {
@@ -259,6 +310,8 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
 
   /**
    * @brief Returns string_view of the value of this scalar.
+   *
+   * @returns string_view of the value of this scalar
    */
   [[nodiscard]] __device__ ValueType value() const noexcept
   {
@@ -267,6 +320,8 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
 
   /**
    * @brief Returns a raw pointer to the value in device memory
+   *
+   * @returns Raw pointer to the value in device memory
    */
   [[nodiscard]] __device__ char const* data() const noexcept
   {
@@ -275,6 +330,8 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
 
   /**
    * @brief Returns the size of the string in bytes.
+   *
+   * @returns The size of the string in bytes
    */
   [[nodiscard]] __device__ size_type size() const noexcept { return _size; }
 
@@ -289,6 +346,14 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
 template <typename T>
 class timestamp_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
  public:
+  /**
+   * @brief Construct a new timestamp scalar device view object
+   *
+   * @param type The data type of the value
+   * @param data The pointer to the data in device memory
+   * @param is_valid The pointer to the bool in device memory that indicates the
+   * validity of the stored value
+   */
   timestamp_scalar_device_view(data_type type, T* data, bool* is_valid)
     : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
   {
@@ -301,6 +366,14 @@ class timestamp_scalar_device_view : public detail::fixed_width_scalar_device_vi
 template <typename T>
 class duration_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
  public:
+  /**
+   * @brief Construct a new duration scalar device view object from data and validity pointers.
+   *
+   * @param type The data type of the value
+   * @param data The pointer to the data in device memory
+   * @param is_valid The pointer to the bool in device memory that indicates the
+   * validity of the stored value
+   */
   duration_scalar_device_view(data_type type, T* data, bool* is_valid)
     : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
   {
@@ -309,6 +382,9 @@ class duration_scalar_device_view : public detail::fixed_width_scalar_device_vie
 
 /**
  * @brief Get the device view of a numeric_scalar
+ *
+ * @param s The numeric_scalar to get the device view of
+ * @return A device view of a numeric_scalar
  */
 template <typename T>
 auto get_scalar_device_view(numeric_scalar<T>& s)
@@ -318,6 +394,9 @@ auto get_scalar_device_view(numeric_scalar<T>& s)
 
 /**
  * @brief Get the device view of a string_scalar
+ *
+ * @param s The string_scalar to get the device view of
+ * @return A device view of a string_scalar
  */
 inline auto get_scalar_device_view(string_scalar& s)
 {
@@ -326,6 +405,9 @@ inline auto get_scalar_device_view(string_scalar& s)
 
 /**
  * @brief Get the device view of a timestamp_scalar
+ *
+ * @param s The timestamp_scalar to get the device view of
+ * @return A device view of a timestamp_scalar
  */
 template <typename T>
 auto get_scalar_device_view(timestamp_scalar<T>& s)
@@ -335,6 +417,9 @@ auto get_scalar_device_view(timestamp_scalar<T>& s)
 
 /**
  * @brief Get the device view of a duration_scalar
+ *
+ * @param s The duration_scalar to get the device view of
+ * @return A device view of a duration_scalar
  */
 template <typename T>
 auto get_scalar_device_view(duration_scalar<T>& s)
@@ -344,6 +429,9 @@ auto get_scalar_device_view(duration_scalar<T>& s)
 
 /**
  * @brief Get the device view of a fixed_point_scalar
+ *
+ * @param s The fixed_point_scalar to get the device view of
+ * @return The device view of the fixed_point_scalar
  */
 template <typename T>
 auto get_scalar_device_view(fixed_point_scalar<T>& s)

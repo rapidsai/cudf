@@ -43,14 +43,14 @@ reprog_device::reprog_device(reprog& prog)
 }
 
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
-  std::string const& pattern, rmm::cuda_stream_view stream)
+  std::string_view pattern, rmm::cuda_stream_view stream)
 {
   return reprog_device::create(pattern, regex_flags::MULTILINE, stream);
 }
 
 // Create instance of the reprog that can be passed into a device kernel
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
-  std::string const& pattern, regex_flags const flags, rmm::cuda_stream_view stream)
+  std::string_view pattern, regex_flags const flags, rmm::cuda_stream_view stream)
 {
   // compile pattern into host object
   reprog h_prog = reprog::create_from(pattern, flags);
