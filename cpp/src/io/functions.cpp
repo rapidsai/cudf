@@ -238,7 +238,8 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 
 namespace detail_orc = cudf::io::detail::orc;
 
-raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
+raw_orc_statistics read_raw_orc_statistics(source_info const& src_info,
+                                           rmm::cuda_stream_view stream)
 {
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
@@ -256,7 +257,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
     CUDF_FAIL("Unsupported source type");
   }
 
-  orc::metadata metadata(source.get());
+  orc::metadata metadata(source.get(), stream);
 
   // Initialize statistics to return
   raw_orc_statistics result;
@@ -306,7 +307,8 @@ column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
 
 parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
 {
-  auto const raw_stats = read_raw_orc_statistics(src_info);
+  auto stream          = rmm::cuda_stream_default;
+  auto const raw_stats = read_raw_orc_statistics(src_info, stream);
 
   parsed_orc_statistics result;
   result.column_names = raw_stats.column_names;

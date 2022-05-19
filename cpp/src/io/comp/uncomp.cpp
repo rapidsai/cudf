@@ -504,10 +504,10 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
 /**
  * @brief ZSTD decompressor that uses nvcomp
  */
-size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
+size_t decompress_zstd(host_span<uint8_t const> src,
+                       host_span<uint8_t> dst,
+                       rmm::cuda_stream_view stream)
 {
-  auto stream = rmm::cuda_stream_default;
-
   // Init device span of spans (source)
   auto const d_src = cudf::detail::make_device_uvector_async(src, stream);
   auto hd_srcs     = hostdevice_vector<device_span<uint8_t const>>(1, stream);
@@ -537,13 +537,14 @@ size_t decompress_zstd(host_span<uint8_t const> src, host_span<uint8_t> dst)
 
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
-                  host_span<uint8_t> dst)
+                  host_span<uint8_t> dst,
+                  rmm::cuda_stream_view stream)
 {
   switch (compression) {
     case compression_type::GZIP: return decompress_gzip(src, dst);
     case compression_type::ZLIB: return decompress_zlib(src, dst);
     case compression_type::SNAPPY: return decompress_snappy(src, dst);
-    case compression_type::ZSTD: return decompress_zstd(src, dst);
+    case compression_type::ZSTD: return decompress_zstd(src, dst, stream);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
