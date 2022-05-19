@@ -4,7 +4,7 @@ from __future__ import annotations
 import functools
 import operator
 import pickle
-from typing import TYPE_CHECKING, Any, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -35,7 +35,8 @@ class Buffer(Serializable):
         object is kept in this Buffer.
     """
 
-    _ptr: int
+    _ptr: Optional[int]
+    _ptr_desc: dict
     _size: int
     _owner: object
     _sole_owner: bool
@@ -54,9 +55,10 @@ class Buffer(Serializable):
         self._access_counter = AccessCounter()
         self._sole_owner = sole_owner
         self._raw_pointer_exposed = False
+        self._ptr_desc = {"type": "gpu"}
 
         if isinstance(data, Buffer):
-            self._ptr = data._ptr
+            self._ptr = data.ptr
             self._size = data.size
             self._owner = owner or data._owner
         elif isinstance(data, rmm.DeviceBuffer):
@@ -103,7 +105,7 @@ class Buffer(Serializable):
         """
 
         ret = cls()
-        ret._ptr = buffer._ptr + offset
+        ret._ptr = buffer.ptr + offset
         ret._size = buffer.size if size is None else size
         ret._owner = buffer
         return ret
@@ -112,20 +114,53 @@ class Buffer(Serializable):
         return self._size
 
     @property
+    def is_spilled(self) -> bool:
+        return self._ptr_desc["type"] != "gpu"
+
+    def move_inplace(self, target: str = "cpu") -> None:
+        ptr_type = self._ptr_desc["type"]
+        if ptr_type == target:
+            return
+
+        if not self.spillable:
+            raise ValueError("Cannot in-place move an unspillable buffer")
+
+        if (ptr_type, target) == ("gpu", "cpu"):
+            host_mem = memoryview(bytearray(self.size))
+            rmm._lib.device_buffer.copy_ptr_to_host(self._ptr, host_mem)
+            self._ptr_desc["memoryview"] = host_mem
+            self._ptr = None
+            self._owner = None
+        elif (ptr_type, target) == ("cpu", "gpu"):
+            dev_mem = rmm.DeviceBuffer.to_device(
+                self._ptr_desc.pop("memoryview")
+            )
+            self._ptr = dev_mem.ptr
+            self._size = dev_mem.size
+            self._owner = dev_mem
+        else:
+            # TODO: support moving to disk
+            raise ValueError(f"Unknown target: {target}")
+        self._ptr_desc["type"] = target
+
+    @property
     def ptr(self) -> int:
+        self.move_inplace(target="gpu")
         self._raw_pointer_exposed = True
+        assert self._ptr is not None
         return self._ptr
 
     def ptr_and_access_counter(self) -> Tuple[int, AccessCounter]:
+        self.move_inplace(target="gpu")
+        assert self._ptr is not None
         return self._ptr, self._access_counter
 
     @property
+    def sole_owner(self) -> bool:
+        return self._sole_owner
+
+    @property
     def spillable(self) -> bool:
-        print(
-            f"spillable - sole-owner: {self._sole_owner}, "
-            f"raw_pointer_exposed: {self._raw_pointer_exposed}, "
-            f"access_counter: {self._access_counter.use_count()}"
-        )
         return (
             self._sole_owner
             and not self._raw_pointer_exposed

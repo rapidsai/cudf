@@ -1,6 +1,8 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
 
+import pytest
+
 import rmm
 
 import cudf
@@ -37,3 +39,13 @@ def test_spillable_df_groupby():
     assert not df._data._data["x"].data.spillable
     del gb
     assert df._data._data["x"].data.spillable
+
+
+def test_spilling_buffer():
+    buf = Buffer(rmm.DeviceBuffer(size=10), sole_owner=True)
+    buf.move_inplace(target="cpu")
+    assert buf.is_spilled
+    buf.ptr  # Expose pointer and trigger unspill
+    assert not buf.is_spilled
+    with pytest.raises(ValueError, match="unspillable buffer"):
+        buf.move_inplace(target="cpu")
