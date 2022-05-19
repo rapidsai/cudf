@@ -389,7 +389,7 @@ class row_lexicographic_comparator {
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less than the row at `rhs_index` in the `rhs` table.
    *
-   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param lhs_index The index of the row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table compares less than row in the
    * `rhs` table

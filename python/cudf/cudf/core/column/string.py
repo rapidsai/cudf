@@ -34,7 +34,7 @@ from cudf.api.types import (
 )
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethods, ParentType
+from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import can_convert_to_column
 
@@ -159,7 +159,7 @@ class StringMethods(ColumnMethods):
 
     hex_to_int = htoi
 
-    def ip2int(self) -> ParentType:
+    def ip2int(self) -> SeriesOrIndex:
         """
         This converts ip strings to integers
 
@@ -4950,7 +4950,7 @@ class StringMethods(ColumnMethods):
             libstrings.edit_distance(self._column, targets_column)
         )
 
-    def edit_distance_matrix(self) -> ParentType:
+    def edit_distance_matrix(self) -> SeriesOrIndex:
         """Computes the edit distance between strings in the series.
 
         The series to compute the matrix should have more than 2 strings and

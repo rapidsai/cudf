@@ -32,7 +32,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/orc/orc.h>
+#include <io/orc/orc.hpp>
 
 namespace cudf {
 namespace io {
