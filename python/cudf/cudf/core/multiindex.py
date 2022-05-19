@@ -188,7 +188,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # we reconstruct self._data with the names as keys.
             # If they are not unique, the keys of self._data
             # and self._names will be different, which can lead
-            # to unexpected behaviour in some cases. This is
+            # to unexpected behavior in some cases. This is
             # definitely buggy, but we can't disallow non-unique
             # names either...
             self._data = self._data.__class__._create_unsafe(
@@ -343,7 +343,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         deep : Bool (default False)
             If True, `._data`, `._levels`, `._codes` will be copied. Ignored if
             `levels` or `codes` are specified.
-        name : object, optional (defulat None)
+        name : object, optional (default None)
             To keep consistent with `Index.copy`, should not be used.
 
         Returns
