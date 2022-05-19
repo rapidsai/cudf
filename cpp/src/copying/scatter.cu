@@ -25,7 +25,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/search.hpp>
-#include <cudf/lists/list_view.cuh>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>

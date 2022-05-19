@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import itertools
+import warnings
 from collections import abc
 from typing import Dict, Optional
 
@@ -42,7 +43,7 @@ def _align_objs(objs, how="outer", sort=None):
 
     if not_matching_index:
         if not all(o.index.is_unique for o in objs):
-            raise ValueError("cannot reindex from a duplicate axis")
+            raise ValueError("cannot reindex on an axis with duplicate labels")
 
         index = objs[0].index
         name = index.name
@@ -791,6 +792,24 @@ def merge_sorted(
     A new, lexicographically sorted, DataFrame/Series.
     """
 
+    warnings.warn(
+        "merge_sorted is deprecated and will be removed in a "
+        "future release.",
+        FutureWarning,
+    )
+    return _merge_sorted(
+        objs, keys, by_index, ignore_index, ascending, na_position
+    )
+
+
+def _merge_sorted(
+    objs,
+    keys=None,
+    by_index=False,
+    ignore_index=False,
+    ascending=True,
+    na_position="last",
+):
     if not pd.api.types.is_list_like(objs):
         raise TypeError("objs must be a list-like of Frame-like objects")
 

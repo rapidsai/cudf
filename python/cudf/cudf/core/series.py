@@ -266,7 +266,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If both a dict and index sequence are used, the index will
         override the keys found in the dict.
 
-    dtype : str, numpy.dtype, or ExtensionDtype, optional
+    dtype : str, :class:`numpy.dtype`, or ExtensionDtype, optional
         Data type for the output Series. If not specified,
         this will be inferred from data.
 
@@ -406,10 +406,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             else:
                 index = as_index(data.index)
         elif isinstance(data, pd.Index):
-            name = data.name
+            if name is None:
+                name = data.name
             data = data.values
         elif isinstance(data, BaseIndex):
-            name = data.name
+            if name is None:
+                name = data.name
             data = data._values
             if dtype is not None:
                 data = data.astype(dtype)
@@ -805,8 +807,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return cudf.core.dataframe.DataFrame._from_data(data, index)
         # For ``name`` behavior, see:
         # https://github.com/pandas-dev/pandas/issues/44575
+        # ``name`` has to be ignored when `drop=True`
         return self._mimic_inplace(
-            Series._from_data(data, index, name if inplace else None),
+            Series._from_data(data, index, self.name),
             inplace=inplace,
         )
 
@@ -1308,7 +1311,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Returns
         -------
         out : bool
-            If Series has atleast one null value, return True, if not
+            If Series has at least one null value, return True, if not
             return False.
 
         Examples
@@ -1444,7 +1447,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5     hippo
         Name: animal, dtype: object
 
-        With the `keep` parameter, the selection behaviour of duplicated
+        With the `keep` parameter, the selection behavior of duplicated
         values can be changed. The value 'first' keeps the first
         occurrence for each set of duplicated entries.
         The default value of keep is 'first'. Note that order of
@@ -2126,7 +2129,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Either a callable python function or a python function already
             decorated by ``numba.cuda.jit`` for call on the GPU as a device
 
-        out_dtype  : numpy.dtype; optional
+        out_dtype : :class:`numpy.dtype`; optional
             The dtype for use in the output.
             Only used for ``numba.cuda.jit`` decorated udf.
             By default, the result will have the same dtype as the source.
@@ -3931,7 +3934,7 @@ class DatetimeProperties:
         Returns
         -------
         Series
-        Booleans indicating if dates are the begining of a quarter
+        Booleans indicating if dates are the beginning of a quarter
 
         Examples
         --------
@@ -4302,7 +4305,7 @@ class DatetimeProperties:
 
 class TimedeltaProperties:
     """
-    Accessor object for timedeltalike properties of the Series values.
+    Accessor object for timedelta-like properties of the Series values.
 
     Returns
     -------
@@ -4614,13 +4617,13 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
 
 @_cudf_nvtx_annotate
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    """Returns a boolean array where two arrays are equal within a tolerance.
+    r"""Returns a boolean array where two arrays are equal within a tolerance.
 
     Two values in ``a`` and ``b`` are  considered equal when the following
     equation is satisfied.
 
     .. math::
-       |a - b| \\le \\mathrm{atol} + \\mathrm{rtol} |b|
+       |a - b| \le \mathrm{atol} + \mathrm{rtol} |b|
 
     Parameters
     ----------

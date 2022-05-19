@@ -509,7 +509,7 @@ struct path_operator {
   //    - you cannot retrieve a subscripted field (eg [5]) from an object.
   //    - you cannot retrieve a field by name (eg  .book) from an array.
   //    - you -can- use .* for both arrays and objects
-  // a value of NONE imples any type accepted
+  // a value of NONE implies any type accepted
   json_element_type expected_type{NONE};  // the expected type of the element we're working with
   string_view name;                       // name to match against (if applicable)
   int index{-1};                          // index for subscript operator
@@ -670,8 +670,8 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
 
   auto const is_empty = h_operators.size() == 1 && h_operators[0].type == path_operator_type::END;
   return is_empty
-           ? std::make_pair(thrust::nullopt, 0)
-           : std::make_pair(
+           ? std::pair(thrust::nullopt, 0)
+           : std::pair(
                thrust::make_optional(cudf::detail::make_device_uvector_sync(h_operators, stream)),
                max_stack_depth);
 }

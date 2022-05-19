@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -29,6 +30,16 @@
 #include <vector>
 
 namespace cudf {
+
+// forward declaration
+namespace detail {
+template <typename T>
+class MurmurHash3_32;
+
+template <typename T>
+class hash_join;
+}  // namespace detail
+
 /**
  * @addtogroup column_join
  * @{
@@ -503,6 +514,9 @@ std::unique_ptr<cudf::table> cross_join(
  */
 class hash_join {
  public:
+  using impl_type =
+    typename cudf::detail::hash_join<cudf::detail::MurmurHash3_32<cudf::hash_value_type>>;
+
   hash_join() = delete;
   ~hash_join();
   hash_join(hash_join const&) = delete;
@@ -634,8 +648,7 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
-  struct hash_join_impl;
-  const std::unique_ptr<const hash_join_impl> impl;
+  const std::unique_ptr<const impl_type> _impl;
 };
 
 /**
@@ -859,7 +872,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  *
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output. It is the user's
- * responsiblity to choose a suitable compare_nulls value AND use appropriate
+ * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
  * If the provided output size or per-row counts are incorrect, behavior is undefined.
@@ -919,7 +932,7 @@ mixed_inner_join(
  *
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output. It is the user's
- * responsiblity to choose a suitable compare_nulls value AND use appropriate
+ * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
  * If the provided output size or per-row counts are incorrect, behavior is undefined.
@@ -979,7 +992,7 @@ mixed_left_join(
  *
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output. It is the user's
- * responsiblity to choose a suitable compare_nulls value AND use appropriate
+ * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
  * If the provided output size or per-row counts are incorrect, behavior is undefined.
@@ -1031,7 +1044,7 @@ mixed_full_join(
  * evaluates to true on the conditional tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right), the
- * left row is not included in the output. It is the user's responsiblity to
+ * left row is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
@@ -1083,7 +1096,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
  * conditional tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right), the
- * left row is not included in the output. It is the user's responsiblity to
+ * left row is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
@@ -1135,7 +1148,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
  * conditional tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right),
- * that pair is not included in the output. It is the user's responsiblity to
+ * that pair is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
@@ -1178,7 +1191,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
  * conditional tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right),
- * that pair is not included in the output. It is the user's responsiblity to
+ * that pair is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
@@ -1221,7 +1234,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * conditional tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right),
- * that pair is not included in the output. It is the user's responsiblity to
+ * that pair is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
@@ -1262,7 +1275,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * left anti join between the specified tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right),
- * that pair is not included in the output. It is the user's responsiblity to
+ * that pair is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
