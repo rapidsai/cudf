@@ -1731,4 +1731,4 @@ def test_orc_reader_zstd_compression(list_struct_buff):
             pytest.mark.xfail(reason="nvcomp build doesn't have zstd")
         else:
             raise e
-     assert_eq(expected, got)
+    assert_eq(expected, got)
