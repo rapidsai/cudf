@@ -16,13 +16,13 @@
 
 #pragma once
 
-#include "orc_common.h"
+#include "orc_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/comp/io_uncomp.h>
+#include <io/comp/io_uncomp.hpp>
 
 #include <thrust/optional.h>
 
@@ -173,7 +173,7 @@ int constexpr encode_field_number(int field_number) noexcept
   return encode_field_number_base<T>(field_number);
 }
 
-// containters change the field number encoding
+// containers change the field number encoding
 template <typename T,
           std::enable_if_t<std::is_same_v<T, std::vector<typename T::value_type>>>* = nullptr>
 int constexpr encode_field_number(int field_number) noexcept
@@ -533,21 +533,27 @@ class ProtobufWriter {
 class OrcDecompressor {
  public:
   OrcDecompressor(CompressionKind kind, uint32_t blockSize);
-  const uint8_t* Decompress(const uint8_t* srcBytes, size_t srcLen, size_t* dstLen);
+
+  /**
+   * @brief ORC block decompression
+   *
+   * @param src compressed data
+   *
+   * @return decompressed data
+   */
+  host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src);
   [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
   [[nodiscard]] uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
-    return (block_len < (m_blockSize >> m_log2MaxRatio)) ? block_len << m_log2MaxRatio
-                                                         : m_blockSize;
+    return std::min(block_len << m_log2MaxRatio, m_blockSize);
   }
-  [[nodiscard]] CompressionKind GetKind() const { return m_kind; }
+  [[nodiscard]] compression_type compression() const { return _compression; }
   [[nodiscard]] uint32_t GetBlockSize() const { return m_blockSize; }
 
  protected:
-  CompressionKind const m_kind;
+  compression_type _compression;
   uint32_t m_log2MaxRatio = 24;  // log2 of maximum compression ratio
-  uint32_t const m_blockSize;
-  std::unique_ptr<HostDecompressor> m_decompressor;
+  uint32_t m_blockSize;
   std::vector<uint8_t> m_buf;
 };
 

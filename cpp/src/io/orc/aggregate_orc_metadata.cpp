@@ -233,10 +233,9 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
           "Invalid stripe information");
         const auto buffer =
           per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
-        size_t sf_length = 0;
-        auto sf_data     = per_file_metadata[mapping.source_idx].decompressor->Decompress(
-          buffer->data(), sf_comp_length, &sf_length);
-        ProtobufReader(sf_data, sf_length)
+        auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
+          {buffer->data(), buffer->size()});
+        ProtobufReader(sf_data.data(), sf_data.size())
           .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
         mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
         if (stripe->indexLength == 0) { row_grp_idx_present = false; }
