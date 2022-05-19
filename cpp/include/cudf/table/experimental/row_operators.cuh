@@ -76,10 +76,10 @@ enum class lhs_index_type : size_type {};
 enum class rhs_index_type : size_type {};
 
 /**
- * @brief A counting iterator that uses strongly-typed indices bound to tables.
+ * @brief A counting iterator that uses strongly typed indices bound to tables.
  *
  * Performing lexicographic or equality comparisons between values in two
- * tables requires the use of strongly-typed indices. The strong index types
+ * tables requires the use of strongly typed indices. The strong index types
  * `lhs_index_type` and `rhs_index_type` ensure that index values are bound to
  * the correct table, regardless of the order in which these indices are
  * provided to the call operator. This provides an interface similar to a
