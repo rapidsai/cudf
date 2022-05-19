@@ -15,6 +15,7 @@
  */
 
 #include <hash/unordered_multiset.cuh>
+#include <search/utilities.hpp>
 #include <stream_compaction/stream_compaction_common.cuh>
 #include <stream_compaction/stream_compaction_common.hpp>
 
@@ -92,55 +93,16 @@ struct contains_scalar_dispatch {
   }
 
   template <typename Type>
-  std::enable_if_t<std::is_same_v<Type, cudf::struct_view>, bool> operator()(
-    column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream) const
+  std::enable_if_t<is_nested<Type>(), bool> operator()(column_view const& haystack,
+                                                       scalar const& needle,
+                                                       rmm::cuda_stream_view stream) const
   {
+    // Haystack and needle structure compatibility will be checked by the table comparator
+    // constructor during calling to `contains_nested_element`.
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
-    auto const needle_tv = dynamic_cast<struct_scalar const*>(&needle)->view();
-    CUDF_EXPECTS(haystack.num_children() == needle_tv.num_columns(),
-                 "struct scalar and structs column must have the same number of children");
-    for (size_type i = 0; i < haystack.num_children(); ++i) {
-      CUDF_EXPECTS(haystack.child(i).type() == needle_tv.column(i).type(),
-                   "scalar and column children types must match");
-    }
-
-    // Create a (structs) column_view of one row having children given from the input scalar.
-    auto const needle_as_col =
-      column_view(data_type{type_id::STRUCT},
-                  1,
-                  nullptr,
-                  nullptr,
-                  0,
-                  0,
-                  std::vector<column_view>{needle_tv.begin(), needle_tv.end()});
-
-    return contains_nested_element(haystack, needle_as_col, stream);
-  }
-
-  template <typename Type>
-  std::enable_if_t<std::is_same_v<Type, cudf::list_view>, bool> operator()(
-    column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream) const
-  {
-    CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
-
-    auto const needle_cv = dynamic_cast<list_scalar const*>(&needle)->view();
-    CUDF_EXPECTS(lists_column_view{haystack}.child().type() == needle_cv.type(),
-                 "scalar and column child types must match");
-
-    // Create a (lists) column_view of one row having child given from the input scalar.
-    auto const offsets = cudf::detail::make_device_uvector_async<offset_type>(
-      std::vector<offset_type>{0, needle_cv.size()}, stream);
-    auto const offsets_cv    = column_view(data_type{type_id::INT32}, 2, offsets.data());
-    auto const needle_as_col = column_view(data_type{type_id::LIST},
-                                           1,
-                                           nullptr,
-                                           nullptr,
-                                           0,
-                                           0,
-                                           std::vector<column_view>{offsets_cv, needle_cv});
-
-    return contains_nested_element(haystack, needle_as_col, stream);
+    auto const [needle_cv, _] = nested_type_scalar_to_column_view(needle, stream);
+    return contains_nested_element(haystack, needle_cv, stream);
   }
 };
 
