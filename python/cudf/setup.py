@@ -33,7 +33,7 @@ install_requires = [
     "cachetools",
     "cuda-python>=11.5,<12.0",
     "fsspec>=0.6.0",
-    "numba>=0.53.1",
+    "numba>=0.54",
     "numpy",
     "nvtx>=0.2.1",
     "packaging",
