@@ -44,7 +44,7 @@ namespace cudf {
 namespace lists {
 
 namespace {
-auto constexpr __device__ not_found_sentinel = size_type{-1};
+auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
 
 template <typename Type>
 auto constexpr is_supported_non_nested_type()
@@ -82,114 +82,94 @@ auto __device__ element_idx_end([[maybe_unused]] size_type size)
 template <bool find_first, typename Iterator>
 size_type __device__ distance(Iterator begin, Iterator end, Iterator found_iter)
 {
-  if (found_iter == end) { return not_found_sentinel; }
+  if (found_iter == end) { return NOT_FOUND_SENTINEL; }
   return find_first ? found_iter - begin : end - found_iter - 1;
 }
 
-/**
- * @brief Functor for searching element index of the given key within a list.
- */
-template <typename Type, typename Enable = void>
-struct index_of_fn {
-  template <typename... Args>
-  void operator()(Args&&...)
-  {
-    CUDF_FAIL("Unsupported type in `index_of_fn`.");
-  }
-};
+template <typename Type, bool find_first>
+__device__ std::enable_if_t<is_supported_non_nested_type<Type>(), size_type> search_list(
+  list_device_view const& list, Type const& search_key)
+{
+  auto const begin = element_idx_begin<find_first>(list.size());
+  auto const end   = element_idx_end<find_first>(list.size());
+  auto const found_iter =
+    thrust::find_if(thrust::seq, begin, end, [&list, search_key] __device__(auto const idx) {
+      return !list.is_null(idx) &&
+             cudf::equality_compare(list.template element<Type>(idx), search_key);
+    });
+  return distance<find_first>(begin, end, found_iter);
+}
 
-/**
- * @brief The specialization of `index_of_fn` for non-nested types.
- */
-template <typename Type>
-struct index_of_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>()>> {
-  template <bool find_first>
-  static __device__ size_type search_list(list_device_view const& list, Type const& search_key)
-  {
-    auto const begin = element_idx_begin<find_first>(list.size());
-    auto const end   = element_idx_end<find_first>(list.size());
-    auto const found_iter =
-      thrust::find_if(thrust::seq, begin, end, [&list, search_key] __device__(auto const idx) {
-        return !list.is_null(idx) &&
-               cudf::equality_compare(list.template element<Type>(idx), search_key);
-      });
-    return distance<find_first>(begin, end, found_iter);
-  }
+template <typename Type, typename SearchKeyIter, typename OutputPairIter>
+std::enable_if_t<is_supported_non_nested_type<Type>(), void> search_all_lists(
+  cudf::detail::lists_column_device_view const& lists,
+  SearchKeyIter const& keys_iter,
+  duplicate_find_option find_option,
+  OutputPairIter const& out_iter,
+  rmm::cuda_stream_view stream)
+{
+  thrust::tabulate(rmm::exec_policy(stream),
+                   out_iter,
+                   out_iter + lists.size(),
+                   [lists, keys_iter, find_option] __device__(
+                     auto const list_idx) -> thrust::pair<size_type, bool> {
+                     auto const list    = list_device_view{lists, list_idx};
+                     auto const key_opt = keys_iter[list_idx];
+                     if (list.is_null() || !key_opt) { return {NOT_FOUND_SENTINEL, false}; }
 
-  template <typename SearchKeyIter, typename OutputPairIter>
-  static void search_all_lists(cudf::detail::lists_column_device_view const& lists,
-                               SearchKeyIter const& keys_iter,
-                               duplicate_find_option find_option,
-                               OutputPairIter const& out_iter,
-                               rmm::cuda_stream_view stream)
-  {
-    thrust::tabulate(rmm::exec_policy(stream),
-                     out_iter,
-                     out_iter + lists.size(),
-                     [lists, keys_iter, find_option] __device__(
-                       auto const list_idx) -> thrust::pair<size_type, bool> {
-                       auto const list    = list_device_view{lists, list_idx};
-                       auto const key_opt = keys_iter[list_idx];
-                       if (list.is_null() || !key_opt) { return {not_found_sentinel, false}; }
+                     auto const key = key_opt.value();
+                     return {find_option == duplicate_find_option::FIND_FIRST
+                               ? search_list<Type, true>(list, key)
+                               : search_list<Type, false>(list, key),
+                             true};
+                   });
+}
 
-                       auto const key = key_opt.value();
-                       return {find_option == duplicate_find_option::FIND_FIRST
-                                 ? search_list<true>(list, key)
-                                 : search_list<false>(list, key),
-                               true};
-                     });
-  }
-};
+template <typename Type, bool find_first, typename EqComparator>
+__device__ std::enable_if_t<is_nested<Type>(), size_type> search_list(list_device_view const& list,
+                                                                      EqComparator const& d_comp,
+                                                                      bool search_key_is_scalar)
+{
+  auto const begin = element_idx_begin<find_first>(list.size());
+  auto const end   = element_idx_end<find_first>(list.size());
+  using cudf::experimental::row::lhs_index_type;
+  using cudf::experimental::row::rhs_index_type;
 
-/**
- * @brief The specialization of `index_of_fn` for nested type.
- */
-template <typename Type>
-struct index_of_fn<Type, std::enable_if_t<is_nested<Type>()>> {
-  template <bool find_first, typename EqComparator>
-  static __device__ size_type search_list(list_device_view const& list,
-                                          EqComparator const& d_comp,
-                                          bool search_key_is_scalar)
-  {
-    auto const begin = element_idx_begin<find_first>(list.size());
-    auto const end   = element_idx_end<find_first>(list.size());
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
+  auto const found_iter = thrust::find_if(
+    thrust::seq, begin, end, [&list, d_comp, search_key_is_scalar] __device__(auto const idx) {
+      return !list.is_null(idx) &&
+             d_comp(static_cast<lhs_index_type>(list.element_offset(idx)),
+                    static_cast<rhs_index_type>(search_key_is_scalar ? 0 : list.row_index()));
+    });
+  return distance<find_first>(begin, end, found_iter);
+}
 
-    auto const found_iter = thrust::find_if(
-      thrust::seq, begin, end, [&list, d_comp, search_key_is_scalar] __device__(auto const idx) {
-        return !list.is_null(idx) &&
-               d_comp(static_cast<lhs_index_type>(list.element_offset(idx)),
-                      static_cast<rhs_index_type>(search_key_is_scalar ? 0 : list.row_index()));
-      });
-    return distance<find_first>(begin, end, found_iter);
-  }
+template <typename Type, typename KeyValidityIter, typename EqComparator, typename OutputPairIter>
+std::enable_if_t<is_nested<Type>(), void> search_all_lists(
+  cudf::detail::lists_column_device_view const& lists,
+  bool search_key_is_scalar,
+  KeyValidityIter const& key_validity_iter,
+  EqComparator const& d_comp,
+  duplicate_find_option find_option,
+  OutputPairIter const& out_iter,
+  rmm::cuda_stream_view stream)
+{
+  thrust::tabulate(rmm::exec_policy(stream),
+                   out_iter,
+                   out_iter + lists.size(),
+                   [lists, search_key_is_scalar, key_validity_iter, d_comp, find_option] __device__(
+                     auto const list_idx) -> thrust::pair<size_type, bool> {
+                     auto const list = list_device_view{lists, list_idx};
+                     if (list.is_null() || !key_validity_iter[list_idx]) {
+                       return {NOT_FOUND_SENTINEL, false};
+                     }
 
-  template <typename KeyValidityIter, typename EqComparator, typename OutputPairIter>
-  static void search_all_lists(cudf::detail::lists_column_device_view const& lists,
-                               bool search_key_is_scalar,
-                               KeyValidityIter const& key_validity_iter,
-                               EqComparator const& d_comp,
-                               duplicate_find_option find_option,
-                               OutputPairIter const& out_iter,
-                               rmm::cuda_stream_view stream)
-  {
-    thrust::tabulate(
-      rmm::exec_policy(stream),
-      out_iter,
-      out_iter + lists.size(),
-      [lists, search_key_is_scalar, key_validity_iter, d_comp, find_option] __device__(
-        auto const list_idx) -> thrust::pair<size_type, bool> {
-        auto const list = list_device_view{lists, list_idx};
-        if (list.is_null() || !key_validity_iter[list_idx]) { return {not_found_sentinel, false}; }
-
-        return {find_option == duplicate_find_option::FIND_FIRST
-                  ? search_list<true>(list, d_comp, search_key_is_scalar)
-                  : search_list<false>(list, d_comp, search_key_is_scalar),
-                true};
-      });
-  }
-};
+                     return {find_option == duplicate_find_option::FIND_FIRST
+                               ? search_list<Type, true>(list, d_comp, search_key_is_scalar)
+                               : search_list<Type, false>(list, d_comp, search_key_is_scalar),
+                             true};
+                   });
+}
 
 /**
  * @brief Create a device pointer to the search key(s).
@@ -297,13 +277,13 @@ struct dispatch_index_of {
         cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
       auto const d_comp = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
 
-      index_of_fn<Type>::search_all_lists(
+      search_all_lists<Type>(
         lists_cdv, search_key_is_scalar, key_validity_iter, d_comp, find_option, out_iter, stream);
     } else {  // other types that are not nested ===================================================
       auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
         *keys_dv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
 
-      index_of_fn<Type>::search_all_lists(lists_cdv, keys_iter, find_option, out_iter, stream);
+      search_all_lists<Type>(lists_cdv, keys_iter, find_option, out_iter, stream);
     }
 
     if (search_keys_have_nulls || lists.has_nulls()) {
@@ -325,7 +305,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
 {
   CUDF_EXPECTS(key_positions->type().id() == type_id::INT32,
                "Expected input column of type INT32.");
-  // If position == not_found_sentinel, the list did not contain the search key.
+  // If position == NOT_FOUND_SENTINEL, the list did not contain the search key.
   auto const num_rows        = key_positions->size();
   auto const positions_begin = key_positions->view().template begin<size_type>();
   auto result =
@@ -334,7 +314,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                     positions_begin,
                     positions_begin + num_rows,
                     result->mutable_view().template begin<bool>(),
-                    [] __device__(auto const i) { return i != not_found_sentinel; });
+                    [] __device__(auto const i) { return i != NOT_FOUND_SENTINEL; });
 
   auto const null_count                    = key_positions->null_count();
   [[maybe_unused]] auto [_, null_mask, __] = key_positions->release();
