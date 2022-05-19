@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <search/utilities.cuh>
+#include <search/utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
