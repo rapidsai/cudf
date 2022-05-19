@@ -83,6 +83,13 @@ bool contains_nested_element(column_view const& haystack,
   return found_it != end;
 }
 
+/**
+ * @brief The adapter struct for table comparator with strong index types
+ *
+ * This adapter utility converts the positive integer indices into `lhs_index_type` and negative
+ * indices into `rhs_index_type`. Before such conversion happening, it also shifts the negative
+ * indices (which are given in the range [-1, -size - 1) into the correct range [0, size).
+ */
 template <typename Comparator>
 struct table_comparator_adapter {
   table_comparator_adapter(Comparator&& comp_) : comp(std::move(comp_)) {}
