@@ -646,6 +646,7 @@ namespace equality {
 template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
+  friend class two_table_comparator;
 
  public:
   /**
@@ -855,6 +856,7 @@ struct preprocessed_table {
 
  private:
   friend class self_comparator;
+  friend class two_table_comparator;
   friend class hash::row_hasher;
 
   using table_device_view_owner =
@@ -921,6 +923,98 @@ class self_comparator {
 
  private:
   std::shared_ptr<preprocessed_table> d_t;
+};
+
+template <typename Comparator>
+struct strong_index_comparator_adapter {
+  __device__ constexpr bool operator()(lhs_index_type const lhs_index,
+                                       rhs_index_type const rhs_index) const noexcept
+  {
+    return comparator(static_cast<cudf::size_type>(lhs_index),
+                      static_cast<cudf::size_type>(rhs_index));
+  }
+
+  __device__ constexpr bool operator()(rhs_index_type const rhs_index,
+                                       lhs_index_type const lhs_index) const noexcept
+  {
+    return this->operator()(lhs_index, rhs_index);
+  }
+
+  Comparator const comparator;
+};
+
+/**
+ * @brief An owning object that can be used to equality compare rows of two different tables.
+ *
+ * This class takes two table_views and preprocesses certain columns to allow for equality
+ * comparison. The preprocessed table and temporary data required for the comparison are created and
+ * owned by this class.
+ *
+ * Alternatively, `two_table_comparator` can be constructed from two existing
+ * `shared_ptr<preprocessed_table>`s when sharing the same tables among multiple comparators.
+ *
+ * This class can then provide a functor object that can used on the device.
+ * The object of this class must outlive the usage of the device functor.
+ */
+class two_table_comparator {
+ public:
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows from two
+   * tables.
+   *
+   * The left and right table are expected to have the same number of columns and data types for
+   * each column.
+   *
+   * @param left The left table to compare.
+   * @param right The right table to compare.
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
+  two_table_comparator(table_view const& left,
+                       table_view const& right,
+                       rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows from two
+   * tables.
+   *
+   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
+   * multiple comparators.
+   *
+   * @param left The left table preprocessed for equality comparison.
+   * @param right The right table preprocessed for equality comparison.
+   */
+  two_table_comparator(std::shared_ptr<preprocessed_table> left,
+                       std::shared_ptr<preprocessed_table> right)
+    : d_left_table{std::move(left)}, d_right_table{std::move(right)}
+  {
+  }
+
+  /**
+   * @brief Return the binary operator for comparing rows in the table.
+   *
+   * Returns a binary callable, `F`, with signatures `bool F(lhs_index_type, rhs_index_type)` and
+   * `bool F(rhs_index_type, lhs_index_type)`.
+   *
+   * `F(lhs_index_type i, rhs_index_type j)` returns true if and only if row `i` of the left table
+   * compares equal to row `j` of the right table.
+   *
+   * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and only if row `i` of the
+   * right table compares equal to row `j` of the left table.
+   *
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+   */
+  template <typename Nullate>
+  auto device_comparator(Nullate nullate               = {},
+                         null_equality nulls_are_equal = null_equality::EQUAL) const
+  {
+    return strong_index_comparator_adapter<device_row_comparator<Nullate>>{
+      device_row_comparator<Nullate>(nullate, *d_left_table, *d_right_table, nulls_are_equal)};
+  }
+
+ private:
+  std::shared_ptr<preprocessed_table> d_left_table;
+  std::shared_ptr<preprocessed_table> d_right_table;
 };
 
 }  // namespace equality
