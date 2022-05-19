@@ -19,10 +19,10 @@
  * @brief cuDF-IO CSV reader class implementation
  */
 
-#include "csv_common.h"
-#include "csv_gpu.h"
+#include "csv_common.hpp"
+#include "csv_gpu.hpp"
 
-#include <io/comp/io_uncomp.h>
+#include <io/comp/io_uncomp.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <io/utilities/parsing_utils.cuh>

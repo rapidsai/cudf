@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ namespace strings {
 std::unique_ptr<column> to_durations(
   strings_column_view const& strings,
   data_type duration_type,
-  std::string const& format,
+  std::string_view format,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -121,7 +121,7 @@ std::unique_ptr<column> to_durations(
  */
 std::unique_ptr<column> from_durations(
   column_view const& durations,
-  std::string const& format           = "%D days %H:%M:%S",
+  std::string_view format             = "%D days %H:%M:%S",
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
