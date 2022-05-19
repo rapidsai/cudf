@@ -24,7 +24,6 @@ import static org.junit.jupiter.api.Assertions.*;
 public class CudaTest {
 
   @Test
-
   @Order(1)
   public void testGetCudaRuntimeInfo() {
     // The driver version is not necessarily larger than runtime version. Drivers of previous
