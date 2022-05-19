@@ -15,8 +15,8 @@
  */
 
 #include "io/utilities/hostdevice_vector.hpp"
-#include "io_uncomp.h"
-#include "unbz2.h"  // bz2 uncompress
+#include "io_uncomp.hpp"
+#include "unbz2.hpp"  // bz2 uncompress
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>

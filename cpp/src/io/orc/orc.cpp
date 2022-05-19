@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "orc.h"
+#include "orc.hpp"
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
 
