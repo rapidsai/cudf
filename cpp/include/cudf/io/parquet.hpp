@@ -495,9 +495,10 @@ class parquet_writer_options {
   auto get_max_page_size_bytes() const { return std::min(_max_page_size_bytes, get_row_group_size_bytes()); }
 
   /**
-   * @brief Returns maximum page size, in rows.
+   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this will
+   * return the row group size.
    */
-  auto get_max_page_size_rows() const { return _max_page_size_rows; }
+  auto get_max_page_size_rows() const { return std::min(_max_page_size_rows, get_row_group_size_rows()); }
 
   /**
    * @brief Sets partitions.
@@ -730,6 +731,7 @@ class parquet_writer_options_builder {
 
   /**
    * @brief Sets the maximum page size, in rows. Counts only top-level rows, ignoring any nesting.
+   * Cannot be larger than the row group size in rows, and will be adjusted to match if it is.
    *
    * @param val maximum rows per page
    * @return this for chaining.
@@ -896,9 +898,10 @@ class chunked_parquet_writer_options {
   auto get_max_page_size_bytes() const { return std::min(_max_page_size_bytes, get_row_group_size_bytes()); }
 
   /**
-   * @brief Returns maximum page size, in rows.
+   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this will
+   * return the row group size.
    */
-  auto get_max_page_size_rows() const { return _max_page_size_rows; }
+  auto get_max_page_size_rows() const { return std::min(_max_page_size_rows, get_row_group_size_rows()); }
 
   /**
    * @brief Sets metadata.
@@ -1095,6 +1098,7 @@ class chunked_parquet_writer_options_builder {
 
   /**
    * @brief Sets the maximum page size, in rows. Counts only top-level rows, ignoring any nesting.
+   * Cannot be larger than the row group size in rows, and will be adjusted to match if it is.
    *
    * @param val maximum rows per page
    * @return this for chaining.
