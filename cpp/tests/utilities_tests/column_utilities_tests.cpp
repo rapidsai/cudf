@@ -393,8 +393,7 @@ TEST_F(ColumnUtilitiesListsTest, UnsanitaryLists)
 
   // equivalent, but not equal
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*l0, l1);
-  EXPECT_EQ(cudf::test::expect_columns_equal(*l0, l1, cudf::test::debug_output_level::QUIET),
-            false);
+  EXPECT_FALSE(cudf::test::expect_columns_equal(*l0, l1, cudf::test::debug_output_level::QUIET));
 }
 
 TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
