@@ -79,7 +79,7 @@ std::unique_ptr<column> contains(
  * contains at least one null element.
  *
  * The output column has as many elements as the input `lists` column.
- * Output `column[i]` is set to null if the list row `lists[i]` is null.
+ * Output `column[i]` is set to null if the row `lists[i]` is null.
  * Otherwise, `column[i]` is set to a non-null boolean value, depending on whether that list
  * contains a null element.
  *
