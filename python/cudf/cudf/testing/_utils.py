@@ -108,20 +108,25 @@ def assert_eq(left, right, **kwargs):
     if isinstance(right, cupy.ndarray):
         right = cupy.asnumpy(right)
 
-    if isinstance(left, pd.DataFrame):
-        tm.assert_frame_equal(left, right, **kwargs)
-    elif isinstance(left, pd.Series):
+    if isinstance(left, (pd.DataFrame, pd.Series, pd.Index)):
         # TODO: A warning is emitted from the function
-        # pandas.testing.assert_series_equal for some inputs:
+        # pandas.testing.assert_[series, frame, index]_equal for some inputs:
         # "DeprecationWarning: elementwise comparison failed; this will raise
         # an error in the future."
+        # or "FutureWarning: elementwise ..."
         # This warning comes from a call from pandas to numpy. It is ignored
         # here because it cannot be fixed within cudf.
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            tm.assert_series_equal(left, right, **kwargs)
-    elif isinstance(left, pd.Index):
-        tm.assert_index_equal(left, right, **kwargs)
+            warnings.simplefilter(
+                "ignore", (DeprecationWarning, FutureWarning)
+            )
+            if isinstance(left, pd.DataFrame):
+                tm.assert_frame_equal(left, right, **kwargs)
+            elif isinstance(left, pd.Series):
+                tm.assert_series_equal(left, right, **kwargs)
+            else:
+                tm.assert_index_equal(left, right, **kwargs)
+
     elif isinstance(left, np.ndarray) and isinstance(right, np.ndarray):
         if np.issubdtype(left.dtype, np.floating) and np.issubdtype(
             right.dtype, np.floating
@@ -306,7 +311,11 @@ def gen_rand(dtype, size, **kwargs):
             np.random.randint(low=low, high=high, size=size), unit=time_unit
         )
     elif dtype.kind in ("O", "U"):
-        return pd.util.testing.rands_array(10, size)
+        low = kwargs.get("low", 10)
+        high = kwargs.get("high", 11)
+        return pd._testing.rands_array(
+            np.random.randint(low=low, high=high, size=1)[0], size
+        )
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 
@@ -340,8 +349,8 @@ def assert_column_memory_eq(
     """Assert the memory location and size of `lhs` and `rhs` are equivalent.
 
     Both data pointer and mask pointer are checked. Also recursively check for
-    children to the same contarints. Also fails check if the number of children
-    mismatches at any level.
+    children to the same constraints. Also fails check if the number of
+    children mismatches at any level.
     """
     assert lhs.base_data_ptr == rhs.base_data_ptr
     assert lhs.base_mask_ptr == rhs.base_mask_ptr

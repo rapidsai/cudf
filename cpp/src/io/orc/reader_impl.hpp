@@ -17,8 +17,8 @@
 #pragma once
 
 #include "aggregate_orc_metadata.hpp"
-#include "orc.h"
-#include "orc_gpu.h"
+#include "orc.hpp"
+#include "orc_gpu.hpp"
 
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
@@ -107,7 +107,7 @@ class reader::impl {
    *
    * @param chunks Vector of list of column chunk descriptors
    * @param stripe_data List of source stripe column data
-   * @param decompressor Originally host decompressor
+   * @param decompressor Block decompressor
    * @param stream_info List of stream to column mappings
    * @param num_stripes Number of stripes making up column chunks
    * @param row_groups Vector of list of row index descriptors
@@ -120,7 +120,7 @@ class reader::impl {
   rmm::device_buffer decompress_stripe_data(
     cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
     const std::vector<rmm::device_buffer>& stripe_data,
-    const OrcDecompressor* decompressor,
+    OrcDecompressor const& decompressor,
     std::vector<orc_stream_info>& stream_info,
     size_t num_stripes,
     cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,

@@ -89,6 +89,7 @@ outputs:
         - test -f $PREFIX/include/cudf/detail/hashing.hpp
         - test -f $PREFIX/include/cudf/detail/interop.hpp
         - test -f $PREFIX/include/cudf/detail/is_element_valid.hpp
+        - test -f $PREFIX/include/cudf/detail/join.hpp
         - test -f $PREFIX/include/cudf/detail/null_mask.hpp
         - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
         - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
@@ -168,16 +169,19 @@ outputs:
         - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
         - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
         - test -f $PREFIX/include/cudf/lists/detail/scatter_helper.cuh
+        - test -f $PREFIX/include/cudf/lists/detail/stream_compaction.hpp
         - test -f $PREFIX/include/cudf/lists/combine.hpp
+        - test -f $PREFIX/include/cudf/lists/contains.hpp
         - test -f $PREFIX/include/cudf/lists/count_elements.hpp
-        - test -f $PREFIX/include/cudf/lists/explode.hpp
         - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
+        - test -f $PREFIX/include/cudf/lists/explode.hpp
         - test -f $PREFIX/include/cudf/lists/extract.hpp
         - test -f $PREFIX/include/cudf/lists/filling.hpp
-        - test -f $PREFIX/include/cudf/lists/contains.hpp
         - test -f $PREFIX/include/cudf/lists/gather.hpp
+        - test -f $PREFIX/include/cudf/lists/list_view.hpp
         - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
         - test -f $PREFIX/include/cudf/lists/sorting.hpp
+        - test -f $PREFIX/include/cudf/lists/stream_compaction.hpp
         - test -f $PREFIX/include/cudf/merge.hpp
         - test -f $PREFIX/include/cudf/null_mask.hpp
         - test -f $PREFIX/include/cudf/partitioning.hpp
@@ -240,6 +244,7 @@ outputs:
         - test -f $PREFIX/include/cudf/structs/structs_column_view.hpp
         - test -f $PREFIX/include/cudf/structs/struct_view.hpp
         - test -f $PREFIX/include/cudf/structs/detail/concatenate.hpp
+        - test -f $PREFIX/include/cudf/structs/detail/contains.hpp
         - test -f $PREFIX/include/cudf/table/table.hpp
         - test -f $PREFIX/include/cudf/table/table_view.hpp
         - test -f $PREFIX/include/cudf/tdigest/tdigest_column_view.cuh

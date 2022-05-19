@@ -157,7 +157,7 @@ def test_series_set_equal_length_object_by_mask(replace_data):
     psr[pd_bool_col] = (
         replace_data.to_pandas(nullable=True)
         if hasattr(replace_data, "to_pandas")
-        else replace_data
+        else pd.Series(replace_data)
     )
     gsr[gd_bool_col] = replace_data
 
@@ -167,7 +167,7 @@ def test_series_set_equal_length_object_by_mask(replace_data):
     psr[psr > 1] = (
         replace_data.to_pandas()
         if hasattr(replace_data, "to_pandas")
-        else replace_data
+        else pd.Series(replace_data)
     )
     gsr[gsr > 1] = replace_data
 
@@ -220,12 +220,23 @@ def test_column_set_unequal_length_object_by_mask():
 
 
 def test_categorical_setitem_invalid():
-    ps = pd.Series([1, 2, 3], dtype="category")
+    # ps = pd.Series([1, 2, 3], dtype="category")
     gs = cudf.Series([1, 2, 3], dtype="category")
 
-    assert_exceptions_equal(
-        lfunc=ps.__setitem__,
-        rfunc=gs.__setitem__,
-        lfunc_args_and_kwargs=([0, 5], {}),
-        rfunc_args_and_kwargs=([0, 5], {}),
-    )
+    # TODO: After https://github.com/pandas-dev/pandas/issues/46646
+    # is fixed remove the following workaround and
+    # uncomment assert_exceptions_equal
+    # WORKAROUND
+    with pytest.raises(
+        ValueError,
+        match="Cannot setitem on a Categorical with a new category, set the "
+        "categories first",
+    ):
+        gs[0] = 5
+
+    # assert_exceptions_equal(
+    #     lfunc=ps.__setitem__,
+    #     rfunc=gs.__setitem__,
+    #     lfunc_args_and_kwargs=([0, 5], {}),
+    #     rfunc_args_and_kwargs=([0, 5], {}),
+    # )
