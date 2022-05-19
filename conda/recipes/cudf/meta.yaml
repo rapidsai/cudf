@@ -49,7 +49,9 @@ requirements:
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - ptxcompiler  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
     {% for r in setup_data.get("install_requires", []) %}
+    {% if r|first not in "cupy-cuda" %}
     - {{ r }}
+    {% endif %}
     {% endfor %}
 test:                                   # [linux64]
   requires:                             # [linux64]

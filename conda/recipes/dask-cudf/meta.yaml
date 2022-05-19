@@ -5,6 +5,7 @@
 {% set py_version=environ.get('CONDA_PY', 36) %}
 {% set cuda_version='.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
 {% set cuda_major=cuda_version.split('.')[0] %}
+{% set setup_data = load_setup_py_data(setup_file='../../../python/dask_cudf/setup.py', from_recipe_dir=True) %}
 
 package:
   name: dask-cudf
@@ -32,9 +33,11 @@ requirements:
     - cudatoolkit {{ cuda_version }}
   run:
     - python
-    - cudf {{ version }}
-    - dask>=2022.03.0
-    - distributed>=2022.03.0
+    {% for r in setup_data.get("install_requires", []) %}
+    {% if r|first not in "cupy-cuda" %}
+    - {{ r }}
+    {% endif %}
+    {% endfor %}
     - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
 
 test:                                   # [linux64]
