@@ -14,33 +14,19 @@
  * limitations under the License.
  */
 
-#include <hash/unordered_multiset.cuh>
 #include <stream_compaction/stream_compaction_common.cuh>
 #include <stream_compaction/stream_compaction_common.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/search.hpp>
-#include <cudf/dictionary/detail/search.hpp>
-#include <cudf/dictionary/detail/update_keys.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/search.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <cudf/table/experimental/row_operators.cuh>
-
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/fill.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
-#include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf::detail {
@@ -97,6 +83,22 @@ bool contains_nested_element(column_view const& haystack,
   return found_it != end;
 }
 
+template <typename Comparator>
+struct table_comparator_adapter {
+  table_comparator_adapter(Comparator&& comp_) : comp(std::move(comp_)) {}
+
+  __device__ bool operator()(size_type const i, size_type const j) const noexcept
+  {
+    using cudf::experimental::row::lhs_index_type;
+    using cudf::experimental::row::rhs_index_type;
+
+    auto const lhs_idx = static_cast<lhs_index_type>(i >= 0 ? i : j);
+    auto const rhs_idx = static_cast<rhs_index_type>(i < 0 ? -(i + 1) : -(j + 1));
+    return comp(lhs_idx, rhs_idx);
+  }
+  Comparator const comp;
+};
+
 /**
  * @brief Check if each row of the `needles` column is contained in the `haystack` column,
  * specialized for nested type.
@@ -117,6 +119,7 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
                                     stream,
                                     mr);
   if (needles.is_empty()) { return result; }
+  (void)haystack;
 
   auto const out_begin = result->mutable_view().template begin<bool>();
   if (haystack.is_empty()) {
@@ -125,45 +128,59 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
     return result;
   }
 
-  auto const haystack_tv = table_view{{haystack}};
-  auto const needles_tv  = table_view{{needles}};
-  auto const has_nulls   = has_nested_nulls(haystack_tv) || has_nested_nulls(needles_tv);
+  auto const haystack_tv        = table_view{{haystack}};
+  auto const needles_tv         = table_view{{needles}};
+  auto const haystack_has_nulls = has_nested_nulls(haystack_tv);
+  auto const needles_has_nulls  = has_nested_nulls(needles_tv);
 
-  using cudf::experimental::row::lhs_index_type;
-  using cudf::experimental::row::rhs_index_type;
-  using hash_map_type = cuco::static_map<lhs_index_type,
-                                         lhs_index_type,
-                                         cuda::thread_scope_device,
-                                         detail::hash_table_allocator_type>;
   auto haystack_map =
-    hash_map_type{compute_hash_table_size(haystack.size()),
-                  static_cast<lhs_index_type>(detail::COMPACTION_EMPTY_KEY_SENTINEL),
-                  static_cast<lhs_index_type>(detail::COMPACTION_EMPTY_VALUE_SENTINEL),
-                  detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-                  stream.value()};
+    detail::hash_map_type{compute_hash_table_size(haystack.size()),
+                          detail::COMPACTION_EMPTY_KEY_SENTINEL,
+                          detail::COMPACTION_EMPTY_VALUE_SENTINEL,
+                          detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                          stream.value()};
 
-  auto const hasher = cudf::experimental::row::hash::row_hasher(haystack_tv, stream);
-  auto const d_hasher =
-    detail::experimental::compaction_hash(hasher.device_hasher(nullate::DYNAMIC{has_nulls}));
-
+  // Insert all indices of the elements in the haystack column into the hash map.
+  // As such, we will use `thrust::equal_to` as key comparator.
   {
-    auto const comparator = cudf::experimental::row::equality::self_comparator(haystack_tv, stream);
-    auto const d_comp     = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
+    auto const haystack_it = cudf::detail::make_counting_transform_iterator(
+      0, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
 
-    auto const haystack_it =
-      cudf::detail::make_counting_transform_iterator(0, [] __device__(size_type i) {
-        return cuco::make_pair(static_cast<lhs_index_type>(i), static_cast<lhs_index_type>(i));
-      });
-    haystack_map.insert(
-      haystack_it, haystack_it + haystack.size(), d_hasher, d_comp, stream.value());
+    auto const hasher   = cudf::experimental::row::hash::row_hasher(haystack_tv, stream);
+    auto const d_hasher = detail::experimental::compaction_hash(
+      hasher.device_hasher(nullate::DYNAMIC{haystack_has_nulls}));
+
+    haystack_map.insert(haystack_it,
+                        haystack_it + haystack.size(),
+                        d_hasher,
+                        thrust::equal_to<size_type>{},
+                        stream.value());
   }
 
+  // Check for existence of needles in haystack.
+  // During this, we will use `table_comparator_adapter` to recognize and convert the existing
+  // indices in the hash map into `lhs_index_type`, and indices of the searching needles into
+  // `rhs_index_type` for table comparison.
   {
+    // Use negative indices so the comparator can recognize and convert them to `rhs_index_type`.
+    // Note that needle indices will be supplied in the range [-1, -1 - neeedles.size()), thus they
+    // also need to be converted back to the range [0, needles.size()).
+    auto const search_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(-1));
+
+    auto const hasher   = cudf::experimental::row::hash::row_hasher(needles_tv, stream);
+    auto const d_hasher = detail::experimental::compaction_hash(
+      hasher.device_hasher(nullate::DYNAMIC{needles_has_nulls}));
+
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack_tv, needles_tv, stream);
-    auto const d_comp     = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
-    auto const needles_it = cudf::experimental::row::rhs_iterator(0);
-    haystack_map.contains(needles_it, needles_it + needles.size(), out_begin, d_hasher);
+
+    haystack_map.contains(search_it,
+                          search_it + needles.size(),
+                          out_begin,
+                          d_hasher,
+                          table_comparator_adapter{comparator.device_comparator(
+                            nullate::DYNAMIC{haystack_has_nulls || needles_has_nulls})},
+                          stream.value());
   }
 
   return result;
