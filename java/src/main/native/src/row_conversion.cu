@@ -69,8 +69,9 @@ constexpr auto NUM_VALIDITY_TILES_PER_KERNEL_LOADED = 2;
 
 constexpr auto MAX_BATCH_SIZE = std::numeric_limits<cudf::size_type>::max();
 
-constexpr auto NUM_STRING_ROWS_PER_BLOCK_TO_ROWS = 16;
-constexpr auto NUM_STRING_ROWS_PER_BLOCK_FROM_ROWS = 32;
+// Number of rows each block processes in the two kernels. Tuned via nsight
+constexpr auto NUM_STRING_ROWS_PER_BLOCK_TO_ROWS = 1024;
+constexpr auto NUM_STRING_ROWS_PER_BLOCK_FROM_ROWS = 64;
 constexpr auto MIN_STRING_BLOCKS = 32;
 constexpr auto MAX_STRING_BLOCKS = MAX_BATCH_SIZE;
 
@@ -1899,17 +1900,18 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
       });
 
   // blast through the entire table and convert it
-  dim3 blocks(util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_TO_ROWS));
-  dim3 threads(NUM_THREADS);
+  dim3 const blocks(
+      util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_TO_ROWS));
+  dim3 const threads(NUM_THREADS);
 
   // build validity tiles for ALL columns, variable and fixed width.
   auto validity_tile_infos = detail::build_validity_tile_infos(
       tbl.num_columns(), num_rows, shmem_limit_per_tile, batch_info.row_batches);
 
   auto dev_validity_tile_infos = make_device_uvector_async(validity_tile_infos, stream);
-  dim3 validity_blocks(
+  dim3 const validity_blocks(
       util::div_rounding_up_unsafe(validity_tile_infos.size(), NUM_VALIDITY_TILES_PER_KERNEL));
-  dim3 validity_threads(
+  dim3 const validity_threads(
       std::min(validity_tile_infos.size() * NUM_VALIDITY_THREADS_PER_TILE, 128lu));
 
   auto const validity_offset = column_info.column_starts.back();
@@ -1947,12 +1949,12 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
     auto dev_variable_col_output_offsets =
         make_device_uvector_async(column_info.variable_width_column_starts, stream);
 
-    dim3 string_threads(NUM_THREADS);
+    dim3 const string_threads(NUM_THREADS);
     for (uint i = 0; i < batch_info.row_batches.size(); i++) {
       auto const batch_row_offset = batch_info.batch_row_boundaries[i];
       auto const batch_num_rows = batch_info.row_batches[i].row_count;
 
-      dim3 string_blocks(std::min(
+      dim3 const string_blocks(std::min(
           MAX_STRING_BLOCKS,
           util::div_rounding_up_unsafe(batch_num_rows, NUM_STRING_ROWS_PER_BLOCK_TO_ROWS)));
 
@@ -2256,8 +2258,9 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
             gpu_batch_row_boundaries, start_col, end_col, tile_height, num_rows, stream);
       });
 
-  dim3 blocks(util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_FROM_ROWS));
-  dim3 threads(NUM_THREADS);
+  dim3 const blocks(
+      util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_FROM_ROWS));
+  dim3 const threads(NUM_THREADS);
 
   // validity needs to be calculated based on the actual number of final table columns
   auto validity_tile_infos =
@@ -2265,10 +2268,10 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
 
   auto dev_validity_tile_infos = make_device_uvector_async(validity_tile_infos, stream);
 
-  dim3 validity_blocks(
+  dim3 const validity_blocks(
       util::div_rounding_up_unsafe(validity_tile_infos.size(), NUM_VALIDITY_TILES_PER_KERNEL));
 
-  dim3 validity_threads(
+  dim3 const validity_threads(
       std::min(validity_tile_infos.size() * NUM_VALIDITY_THREADS_PER_TILE, 128lu));
 
   if (dev_string_row_offsets.size() == 0) {
@@ -2323,10 +2326,10 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
     auto dev_string_col_offsets = make_device_uvector_async(string_col_offset_ptrs, stream);
     auto dev_string_data_cols = make_device_uvector_async(string_data_col_ptrs, stream);
 
-    dim3 string_blocks(
+    dim3 const string_blocks(
         std::min(std::max(MIN_STRING_BLOCKS, num_rows / NUM_STRING_ROWS_PER_BLOCK_FROM_ROWS),
                  MAX_STRING_BLOCKS));
-    dim3 string_threads(NUM_THREADS);
+    dim3 const string_threads(NUM_THREADS);
 
     detail::copy_strings_from_rows<<<string_blocks, string_threads, 0, stream.value()>>>(
         offset_functor, dev_string_row_offsets.data(), dev_string_lengths.data(),
