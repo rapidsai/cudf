@@ -90,10 +90,8 @@ void bench_groupby_struct_keys(nvbench::state& state)
   auto stream = rmm::cuda_stream_default;
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto const result = gb_obj.aggregate(requests);
-    cudaStreamSynchronize(stream.value());
-  });
+  state.exec(nvbench::exec_tag::sync,
+             [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
 }
 
 NVBENCH_BENCH(bench_groupby_struct_keys)
