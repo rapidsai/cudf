@@ -75,3 +75,8 @@ endforeach()
 # libraries. That just leaves us to find the ArrowPython library on our own.
 find_library(arrow_python_shared_library arrow_python REQUIRED)
 target_link_libraries(gpuarrow ${arrow_python_shared_library} ${ARROW_SHARED_LIB} ${ARROW_CUDA_SHARED_LIB})
+
+# Update the RPATHs to also look in the cpp/ directory for the library.
+foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
+  set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/cpp")
+endforeach()

@@ -55,7 +55,10 @@ if(NOT cudf_FOUND)
   set(BUILD_BENCHMARKS OFF)
   add_subdirectory(../../cpp cudf-cpp)
 
-  # TODO: Figure out where to install
+  # Since there are multiple subpackages of cudf._lib that require access to
+  # libcudf, we place the library in the _lib/cpp directory as a single source
+  # of truth and modify the other rpaths appropriately.
+  install(TARGETS cuspatial DESTINATION cuspatial/_lib/cpp)
 endif()
 
 include(rapids-cython)
