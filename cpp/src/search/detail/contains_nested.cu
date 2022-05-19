@@ -57,35 +57,39 @@ bool contains_nested_element(column_view const& haystack,
                              column_view const& needle,
                              rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(needle.size() > 0, "Input needle column does not have any row.");
+  CUDF_EXPECTS(needle.size() > 0, "Input needle column should have ONE row.");
 
-  auto const haystack_tv   = table_view{{haystack}};
-  auto const needle_tv     = table_view{{needle}};
-  auto const has_any_nulls = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
+  auto const haystack_tv = table_view{{haystack}};
+  auto const needle_tv   = table_view{{needle}};
+  auto const has_nulls   = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
 
-  auto const comp =
-    cudf::experimental::row::equality::table_comparator(haystack_tv, needle_tv, stream);
-  auto const dcomp = comp.device_comparator(nullate::DYNAMIC{has_any_nulls});
+  auto const comparator =
+    cudf::experimental::row::equality::two_table_comparator(haystack_tv, needle_tv, stream);
+  auto const d_comp = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
 
-  // TODO: Make this strong typed index
-  auto const begin    = thrust::make_counting_iterator(0);
-  auto const end      = begin + haystack.size();
+  auto const begin = cudf::experimental::row::lhs_iterator(0);
+  auto const end   = begin + haystack.size();
+  using cudf::experimental::row::rhs_index_type;
+
   auto const found_it = [&] {
     if (haystack.has_nulls()) {
       auto const haystack_cdv_ptr  = column_device_view::create(haystack, stream);
       auto const haystack_valid_it = cudf::detail::make_validity_iterator<false>(*haystack_cdv_ptr);
-      return thrust::find_if(rmm::exec_policy(stream),
-                             begin,
-                             end,
-                             [dcomp, haystack_valid_it] __device__(auto const idx) {
-                               if (!haystack_valid_it[idx]) { return false; }
-                               return dcomp(idx, 0);  // compare haystack[idx] == needle[0].
-                             });
+      return thrust::find_if(
+        rmm::exec_policy(stream),
+        begin,
+        end,
+        [d_comp, haystack_valid_it] __device__(auto const idx) {
+          if (!haystack_valid_it[static_cast<size_type>(idx)]) { return false; }
+          return d_comp(idx,
+                        static_cast<rhs_index_type>(0));  // compare haystack[idx] == needle[0].
+        });
 
     } else {
       return thrust::find_if(
-        rmm::exec_policy(stream), begin, end, [dcomp] __device__(auto const idx) {
-          return dcomp(idx, 0);  // compare haystack[idx] == needle[0].
+        rmm::exec_policy(stream), begin, end, [d_comp] __device__(auto const idx) {
+          return d_comp(idx,
+                        static_cast<rhs_index_type>(0));  // compare haystack[idx] == needle[0].
         });
     }
   }();
@@ -125,31 +129,42 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
   auto const needles_tv  = table_view{{needles}};
   auto const has_nulls   = has_nested_nulls(haystack_tv) || has_nested_nulls(needles_tv);
 
+  using cudf::experimental::row::lhs_index_type;
+  using cudf::experimental::row::rhs_index_type;
+  using hash_map_type = cuco::static_map<lhs_index_type,
+                                         lhs_index_type,
+                                         cuda::thread_scope_device,
+                                         detail::hash_table_allocator_type>;
   auto haystack_map =
-    detail::hash_map_type{compute_hash_table_size(haystack.size()),
-                          detail::COMPACTION_EMPTY_KEY_SENTINEL,
-                          detail::COMPACTION_EMPTY_VALUE_SENTINEL,
-                          detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-                          stream.value()};
+    hash_map_type{compute_hash_table_size(haystack.size()),
+                  static_cast<lhs_index_type>(detail::COMPACTION_EMPTY_KEY_SENTINEL),
+                  static_cast<lhs_index_type>(detail::COMPACTION_EMPTY_VALUE_SENTINEL),
+                  detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                  stream.value()};
 
   auto const hasher = cudf::experimental::row::hash::row_hasher(haystack_tv, stream);
   auto const d_hasher =
     detail::experimental::compaction_hash(hasher.device_hasher(nullate::DYNAMIC{has_nulls}));
 
-  auto const comparator =
-    cudf::experimental::row::equality::two_table_comparator(haystack_tv, needles_tv, stream);
-  auto const d_comp = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
+  {
+    auto const comparator = cudf::experimental::row::equality::self_comparator(haystack_tv, stream);
+    auto const d_comp     = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
 
-  using cudf::experimental::row::lhs_index_type;
-  using cudf::experimental::row::rhs_index_type;
-  auto const haystack_it =
-    cudf::detail::make_counting_transform_iterator(0, [] __device__(size_type i) {
-      return cuco::make_pair(static_cast<lhs_index_type>(i), static_cast<lhs_index_type>(i));
-    });
-  haystack_map.insert(haystack_it, haystack_it + haystack.size(), d_hasher, d_comp, stream.value());
+    auto const haystack_it =
+      cudf::detail::make_counting_transform_iterator(0, [] __device__(size_type i) {
+        return cuco::make_pair(static_cast<lhs_index_type>(i), static_cast<lhs_index_type>(i));
+      });
+    haystack_map.insert(
+      haystack_it, haystack_it + haystack.size(), d_hasher, d_comp, stream.value());
+  }
 
-  auto const needles_it = cudf::experimental::row::rhs_iterator(0);
-  haystack_map.contains(needles_it, needles_it + needles.size(), out_begin, d_hasher);
+  {
+    auto const comparator =
+      cudf::experimental::row::equality::two_table_comparator(haystack_tv, needles_tv, stream);
+    auto const d_comp     = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
+    auto const needles_it = cudf::experimental::row::rhs_iterator(0);
+    haystack_map.contains(needles_it, needles_it + needles.size(), out_begin, d_hasher);
+  }
 
   return result;
 }
