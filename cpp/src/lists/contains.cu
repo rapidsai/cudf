@@ -85,7 +85,7 @@ auto __device__ element_index_pair_iter(size_type size)
 }
 
 /**
- * @brief Functor for searching element index of a given key within each list row in a list column.
+ * @brief Functor for searching indices of the given key(s) within each list row in a list column.
  */
 template <typename Type, typename Enable = void>
 struct search_index_fn {
@@ -187,6 +187,9 @@ struct search_index_fn<Type, std::enable_if_t<is_nested<Type>()>> {
 
 /**
  * @brief Create a device pointer to the search key(s).
+ *
+ * @return Depending on the type of the input key(s), a scalar pointer or a `column_device_view`
+ *         pointer will be return.
  */
 template <typename SearchKeyType>
 auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
@@ -200,8 +203,8 @@ auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
 }
 
 /**
- * @brief Create a `table_view` having one column and one row in which the row content is the search
- * key(s).
+ * @brief Create a `table_view` from the search key(s).
+ *
  */
 template <typename SearchKeyType>
 std::pair<table_view, std::optional<rmm::device_uvector<offset_type>>> get_search_keys_table_view(
@@ -217,7 +220,7 @@ std::pair<table_view, std::optional<rmm::device_uvector<offset_type>>> get_searc
 }
 
 /**
- * @brief Dispatch to `index_of_fn` based on the input data type.
+ * @brief Dispatch functor to search for key element(s) in a lists column.
  */
 struct dispatch_index_of {
   template <typename Type, typename... Args>
@@ -235,22 +238,20 @@ struct dispatch_index_of {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const
   {
-    // Access the child column through `child()` method, not `get_sliced_child`.
-    // This is because slicing offset has already been taken into account in the row comparison
-    // operations.
+    // Access the child column through `child()` method, not `get_sliced_child()`.
+    // This is because slicing offset has already been taken into account during row comparisons.
     auto const child = lists.child();
 
     CUDF_EXPECTS(child.type() == search_keys.type(),
                  "Type of search key does not match with type of the list column element type.");
     CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
-    auto const n_lists                  = lists.size();
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
     if (search_key_is_scalar && search_keys_have_nulls) {
       return make_numeric_column(data_type(type_id::INT32),
-                                 n_lists,
-                                 cudf::create_null_mask(n_lists, mask_state::ALL_NULL, mr),
-                                 n_lists,
+                                 lists.size(),
+                                 cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
+                                 lists.size(),
                                  stream,
                                  mr);
     }
@@ -260,16 +261,15 @@ struct dispatch_index_of {
     auto const keys_dv_ptr   = get_search_keys_device_view_ptr(search_keys, stream);
 
     auto out_positions = make_numeric_column(
-      data_type{type_id::INT32}, n_lists, cudf::mask_state::UNALLOCATED, stream, mr);
-    auto out_validity   = rmm::device_uvector<bool>(n_lists, stream);
+      data_type{type_to_id<size_type>()}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
+    auto out_validity   = rmm::device_uvector<bool>(lists.size(), stream);
     auto const out_iter = thrust::make_zip_iterator(
       out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
-    if constexpr (cudf::is_nested<Type>()) {  // nested types (list + struct) ======================
+    if constexpr (cudf::is_nested<Type>()) {  // list + struct =====================================
       auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
       auto const child_tview       = table_view{{child}};
-      [[maybe_unused]] auto const [keys_tview, offsets_buff] =
-        get_search_keys_table_view(search_keys, stream);
+      [[maybe_unused]] auto const [keys_tview, _] = get_search_keys_table_view(search_keys, stream);
       auto const has_nulls = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
       auto const comparator =
         cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
@@ -277,7 +277,7 @@ struct dispatch_index_of {
 
       search_index_fn<Type>::invoke(
         lists_cdv, search_key_is_scalar, key_validity_iter, d_comp, find_option, out_iter, stream);
-    } else {  // other types that are not nested ===================================================
+    } else {  // other supported types that are not nested =========================================
       auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
         *keys_dv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
 
@@ -295,7 +295,7 @@ struct dispatch_index_of {
 
 /**
  * @brief Converts key-positions vector (from `index_of()`) to a BOOL8 vector, indicating if
- * the search key was found.
+ *        the search key was found.
  */
 std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                                     rmm::cuda_stream_view stream,
@@ -304,13 +304,12 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
   CUDF_EXPECTS(key_positions->type().id() == type_id::INT32,
                "Expected input column of type INT32.");
   // If position == NOT_FOUND_SENTINEL, the list did not contain the search key.
-  auto const num_rows        = key_positions->size();
   auto const positions_begin = key_positions->view().template begin<size_type>();
-  auto result =
-    make_numeric_column(data_type{type_id::BOOL8}, num_rows, mask_state::UNALLOCATED, stream, mr);
+  auto result                = make_numeric_column(
+    data_type{type_id::BOOL8}, key_positions->size(), mask_state::UNALLOCATED, stream, mr);
   thrust::transform(rmm::exec_policy(stream),
                     positions_begin,
-                    positions_begin + num_rows,
+                    positions_begin + key_positions->size(),
                     result->mutable_view().template begin<bool>(),
                     [] __device__(auto const i) { return i != NOT_FOUND_SENTINEL; });
 
@@ -392,15 +391,19 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const n_lists = lists.size();
-  auto output =
-    make_numeric_column(data_type{type_id::BOOL8}, n_lists, mask_state::UNALLOCATED, stream, mr);
+  auto const lists_cv      = lists.parent();
+  auto output              = make_numeric_column(data_type{type_to_id<bool>()},
+                                    lists.size(),
+                                    copy_bitmask(lists_cv),
+                                    lists_cv.null_count(),
+                                    stream,
+                                    mr);
   auto const out_begin     = output->mutable_view().template begin<bool>();
-  auto const lists_cdv_ptr = column_device_view::create(lists.parent(), stream);
+  auto const lists_cdv_ptr = column_device_view::create(lists_cv, stream);
 
   thrust::tabulate(rmm::exec_policy(stream),
                    out_begin,
-                   out_begin + n_lists,
+                   out_begin + lists.size(),
                    [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(
                      auto const list_idx) {
                      auto const list = list_device_view{lists, list_idx};
@@ -410,11 +413,6 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
                                            thrust::make_counting_iterator(list.size()),
                                            [&list](auto const idx) { return list.is_null(idx); });
                    });
-
-  auto const lists_validity_iter = cudf::detail::make_validity_iterator<true>(*lists_cdv_ptr);
-  auto [null_mask, null_count]   = cudf::detail::valid_if(
-    lists_validity_iter, lists_validity_iter + n_lists, thrust::identity<bool>{}, stream, mr);
-  output->set_null_mask(std::move(null_mask), null_count);
 
   return output;
 }
