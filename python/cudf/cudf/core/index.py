@@ -822,6 +822,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def min(self):
         return self._start
 
+    def max(self):
+        return self._stop - 1
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.
