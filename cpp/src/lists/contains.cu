@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <search/utilities.cuh>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -190,32 +192,15 @@ auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
  * key(s).
  */
 template <typename SearchKeyType>
-std::pair<rmm::device_uvector<offset_type>, table_view> get_search_keys_table_view(
+std::pair<table_view, std::optional<rmm::device_uvector<offset_type>>> get_search_keys_table_view(
   SearchKeyType const& search_keys, rmm::cuda_stream_view stream)
 {
   if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
-    auto const key_type = static_cast<scalar const*>(&search_keys)->type().id();
-    CUDF_EXPECTS(key_type == type_id::STRUCT || key_type == type_id::LIST,
-                 "This function expects to process only only nested types for scalar key.");
-
-    if (key_type == type_id::STRUCT) {
-      auto const children = static_cast<struct_scalar const*>(&search_keys)->view();
-      // Create a `column_view` of struct type that have the same children as from the input scalar.
-      auto const structs_col = column_view{
-        data_type{type_id::STRUCT}, 1, nullptr, nullptr, 0, 0, {children.begin(), children.end()}};
-      return {rmm::device_uvector<offset_type>{0, stream}, table_view{{structs_col}}};
-    } else {
-      auto const child = static_cast<list_scalar const*>(&search_keys)->view();
-      auto offsets     = cudf::detail::make_device_uvector_async<offset_type>(
-        std::vector<offset_type>{0, child.size()}, stream);
-      auto const offsets_cview = column_view(data_type{type_id::INT32}, 2, offsets.data());
-      // Create a `column_view` of list type that have the same child as from the input scalar.
-      auto const lists_col =
-        column_view{data_type{type_id::LIST}, 1, nullptr, nullptr, 0, 0, {offsets_cview, child}};
-      return {std::move(offsets), table_view{{lists_col}}};
-    }
+    auto [key_cv, offsets_buff] =
+      cudf::detail::nested_type_scalar_to_column_view(search_keys, stream);
+    return {table_view{{key_cv}}, std::move(offsets_buff)};
   } else {
-    return {rmm::device_uvector<offset_type>{0, stream}, table_view{{search_keys}}};
+    return {table_view{{search_keys}}, std::nullopt};
   }
 }
 
@@ -271,7 +256,8 @@ struct dispatch_index_of {
     if constexpr (cudf::is_nested<Type>()) {  // nested types (list + struct) ======================
       auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
       auto const child_tview       = table_view{{child}};
-      [[maybe_unused]] auto const [_, keys_tview] = get_search_keys_table_view(search_keys, stream);
+      [[maybe_unused]] auto const [keys_tview, offsets_buff] =
+        get_search_keys_table_view(search_keys, stream);
       auto const has_nulls = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
       auto const comparator =
         cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
