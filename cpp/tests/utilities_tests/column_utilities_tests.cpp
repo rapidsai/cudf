@@ -364,6 +364,38 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
   }
 }
 
+TEST_F(ColumnUtilitiesListsTest, UnsanitaryLists)
+{
+  // unsanitary
+  //
+  // List<int32_t>:
+  //  Length : 1
+  //  Offsets : 0, 3
+  //  Null count: 1
+  //  0
+  //    0, 1, 2
+  cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 3};
+  cudf::test::fixed_width_column_wrapper<int> values{0, 1, 2};
+  auto l0 = cudf::make_lists_column(1,
+                                    offsets.release(),
+                                    values.release(),
+                                    1,
+                                    cudf::create_null_mask(1, cudf::mask_state::ALL_NULL));
+
+  // sanitary
+  //
+  // List<int32_t>:
+  //  Length : 1
+  //  Offsets : 0, 0
+  //  Null count: 1
+  //    0
+  auto l1 = cudf::test::lists_column_wrapper<int>::make_one_empty_row_column(false);
+
+  // equivalent, but not equal
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*l0, l1);
+  EXPECT_FALSE(cudf::test::expect_columns_equal(*l0, l1, cudf::test::debug_output_level::QUIET));
+}
+
 TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructure)
 {
   // list<int>
