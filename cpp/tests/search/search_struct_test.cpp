@@ -33,8 +33,8 @@ using structs_col = cudf::test::structs_column_wrapper;
 using strings_col = cudf::test::strings_column_wrapper;
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
-constexpr int32_t null{0};  // Mark for null child elements
-constexpr int32_t XXX{0};   // Mark for null struct elements
+constexpr int32_t null{0};  // Mark for null child elements at the current level
+constexpr int32_t XXX{0};   // Mark for null elements at all levels
 
 using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::FloatingPointTypes,
@@ -371,45 +371,45 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, EmptyInputTest)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  auto const col = [] {
+  auto const haystack = [] {
     auto child = tdata_col{};
     return structs_col{{child}};
   }();
 
-  auto const val = [] {
+  auto const needle = [] {
     auto child = tdata_col{1};
     return make_struct_scalar(child);
   }();
 
-  EXPECT_EQ(false, cudf::contains(col, val));
+  EXPECT_EQ(false, cudf::contains(haystack, needle));
 }
 
 TYPED_TEST(TypedStructContainsTestScalarNeedle, TrivialInputTests)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  auto const col = [] {
+  auto const haystack = [] {
     auto child1 = tdata_col{1, 2, 3};
     auto child2 = tdata_col{4, 5, 6};
     auto child3 = strings_col{"x", "y", "z"};
     return structs_col{{child1, child2, child3}};
   }();
 
-  auto const val1 = [] {
+  auto const needle1 = [] {
     auto child1 = tdata_col{1};
     auto child2 = tdata_col{4};
     auto child3 = strings_col{"x"};
     return make_struct_scalar(child1, child2, child3);
   }();
-  auto const val2 = [] {
+  auto const needle2 = [] {
     auto child1 = tdata_col{1};
     auto child2 = tdata_col{4};
     auto child3 = strings_col{"a"};
     return make_struct_scalar(child1, child2, child3);
   }();
 
-  EXPECT_EQ(true, cudf::contains(col, val1));
-  EXPECT_EQ(false, cudf::contains(col, val2));
+  EXPECT_EQ(true, cudf::contains(haystack, needle1));
+  EXPECT_EQ(false, cudf::contains(haystack, needle2));
 }
 
 TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedColumnInputTests)
@@ -424,23 +424,23 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedColumnInputTests)
     auto child3 = strings_col{"dont_care", "dont_care", "x", "y", "z", "dont_care"};
     return structs_col{{child1, child2, child3}};
   }();
-  auto const col = cudf::slice(col_original, {2, 5})[0];
+  auto const haystack = cudf::slice(col_original, {2, 5})[0];
 
-  auto const val1 = [] {
+  auto const needle1 = [] {
     auto child1 = tdata_col{1};
     auto child2 = tdata_col{4};
     auto child3 = strings_col{"x"};
     return make_struct_scalar(child1, child2, child3);
   }();
-  auto const val2 = [] {
+  auto const needle2 = [] {
     auto child1 = tdata_col{dont_care};
     auto child2 = tdata_col{dont_care};
     auto child3 = strings_col{"dont_care"};
     return make_struct_scalar(child1, child2, child3);
   }();
 
-  EXPECT_EQ(true, cudf::contains(col, val1));
-  EXPECT_EQ(false, cudf::contains(col, val2));
+  EXPECT_EQ(true, cudf::contains(haystack, needle1));
+  EXPECT_EQ(false, cudf::contains(haystack, needle2));
 }
 
 TYPED_TEST(TypedStructContainsTestScalarNeedle, SimpleInputWithNullsTests)
@@ -517,28 +517,28 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SimpleInputWithNullsTests)
 
   // Test with nulls in the input scalar.
   {
-    auto const col = [] {
+    auto const haystack = [] {
       auto child1 = tdata_col{1, 2, 3};
       auto child2 = tdata_col{4, 5, 6};
       auto child3 = strings_col{"x", "y", "z"};
       return structs_col{{child1, child2, child3}};
     }();
 
-    auto const val1 = [] {
+    auto const needle1 = [] {
       auto child1 = tdata_col{1};
       auto child2 = tdata_col{4};
       auto child3 = strings_col{"x"};
       return make_struct_scalar(child1, child2, child3);
     }();
-    auto const val2 = [] {
+    auto const needle2 = [] {
       auto child1 = tdata_col{1};
       auto child2 = tdata_col{4};
       auto child3 = strings_col{{"" /*NULL*/}, null_at(0)};
       return make_struct_scalar(child1, child2, child3);
     }();
 
-    EXPECT_EQ(true, cudf::contains(col, val1));
-    EXPECT_EQ(false, cudf::contains(col, val2));
+    EXPECT_EQ(true, cudf::contains(haystack, needle1));
+    EXPECT_EQ(false, cudf::contains(haystack, needle2));
   }
 }
 
@@ -587,23 +587,23 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedInputWithNullsTests)
         {"dont_care", "dont_care" /*also NULL*/, "" /*NULL*/, "y", "z", "dont_care"}, null_at(2)};
       return structs_col{{child1, child2, child3}, null_at(1)};
     }();
-    auto const col = cudf::slice(col_original, {2, 5})[0];
+    auto const haystack = cudf::slice(col_original, {2, 5})[0];
 
-    auto const val1 = [] {
+    auto const needle1 = [] {
       auto child1 = tdata_col{1};
       auto child2 = tdata_col{4};
       auto child3 = strings_col{{"x"}, null_at(0)};
       return make_struct_scalar(child1, child2, child3);
     }();
-    auto const val2 = [] {
+    auto const needle2 = [] {
       auto child1 = tdata_col{dont_care};
       auto child2 = tdata_col{dont_care};
       auto child3 = strings_col{"dont_care"};
       return make_struct_scalar(child1, child2, child3);
     }();
 
-    EXPECT_EQ(true, cudf::contains(col, val1));
-    EXPECT_EQ(false, cudf::contains(col, val2));
+    EXPECT_EQ(true, cudf::contains(haystack, needle1));
+    EXPECT_EQ(false, cudf::contains(haystack, needle2));
   }
 }
 
@@ -720,20 +720,20 @@ TYPED_TEST(TypedStructContainsTestColumnNeedles, SlicedInputHavingNulls)
 
 TYPED_TEST(TypedStructContainsTestColumnNeedles, StructOfLists)
 {
-  using list = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
   auto const haystack = [] {
     // clang-format off
-    auto child1 = list{list{1, 2},    list{1},       list{}, list{1, 3}};
-    auto child2 = list{list{1, 3, 4}, list{2, 3, 4}, list{},     list{}};
+    auto child1 = lists_col{{1, 2},    {1},       {}, {1, 3}};
+    auto child2 = lists_col{{1, 3, 4}, {2, 3, 4}, {},     {}};
     // clang-format on
     return structs_col{{child1, child2}};
   }();
 
   auto const needles = [] {
     // clang-format off
-    auto child1 = list{list{1, 2},    list{1},    list{}, list{1, 3}, list{}};
-    auto child2 = list{list{1, 3, 4}, list{2, 3}, list{1, 2}, list{}, list{}};
+    auto child1 = lists_col{{1, 2},    {1},    {},     {1, 3}, {}};
+    auto child2 = lists_col{{1, 3, 4}, {2, 3}, {1, 2}, {},     {}};
     // clang-format on
     return structs_col{{child1, child2}};
   }();
