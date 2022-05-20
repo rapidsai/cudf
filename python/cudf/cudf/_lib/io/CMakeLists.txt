@@ -26,7 +26,6 @@ foreach(target IN LISTS targets_using_numpy)
   target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
 endforeach()
 
-# Update the RPATHs to also look in the ../cpp/ directory for the library.
 foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
   set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/../cpp")
 endforeach()

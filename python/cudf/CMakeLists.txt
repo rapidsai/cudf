@@ -58,7 +58,7 @@ if(NOT cudf_FOUND)
   # Since there are multiple subpackages of cudf._lib that require access to
   # libcudf, we place the library in the _lib/cpp directory as a single source
   # of truth and modify the other rpaths appropriately.
-  install(TARGETS cuspatial DESTINATION cuspatial/_lib/cpp)
+  install(TARGETS cudf DESTINATION cudf/_lib/cpp)
 endif()
 
 # TODO: Disable binding for now, but we probably want it back eventually.
