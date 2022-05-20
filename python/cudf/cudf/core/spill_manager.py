@@ -33,9 +33,14 @@ class SpillManager:
                 self._base_buffers[self._id_counter] = buffer
                 self._id_counter += 1
 
-    def base_buffers(self) -> Tuple[Buffer, ...]:
+    def base_buffers(
+        self, order_by_access_time: bool = False
+    ) -> Tuple[Buffer, ...]:
         with self._lock:
-            return tuple(self._base_buffers.values())
+            ret = tuple(self._base_buffers.values())
+        if order_by_access_time:
+            ret = tuple(sorted(ret, key=lambda b: b.last_accessed))
+        return ret
 
     def spilled_and_unspilled(self) -> Tuple[int, int]:
         spilled, unspilled = 0, 0
@@ -47,8 +52,7 @@ class SpillManager:
         return spilled, unspilled
 
     def spill_device_memory(self) -> int:
-        # TODO: order spilling based on access time
-        for buf in self.base_buffers():
+        for buf in self.base_buffers(order_by_access_time=True):
             if not buf.is_spilled and buf.spillable:
                 buf.move_inplace(target="cpu")
                 return buf.size

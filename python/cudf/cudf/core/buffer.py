@@ -4,6 +4,7 @@ from __future__ import annotations
 import functools
 import operator
 import pickle
+import time
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -44,6 +45,7 @@ class Buffer(Serializable):
     _access_counter: AccessCounter
     _raw_pointer_exposed: bool
     _spill_manager: Optional[SpillManager]
+    _last_accessed: float
 
     def __init__(
         self,
@@ -96,6 +98,7 @@ class Buffer(Serializable):
             self._spill_manager.add(self)
         else:
             self._spill_manager = None
+        self._last_accessed = time.monotonic()
 
     @classmethod
     def from_buffer(cls, buffer: Buffer, size: int = None, offset: int = 0):
@@ -156,11 +159,13 @@ class Buffer(Serializable):
     def ptr(self) -> int:
         self.move_inplace(target="gpu")
         self._raw_pointer_exposed = True
+        self._last_accessed = time.monotonic()
         assert self._ptr is not None
         return self._ptr
 
     def ptr_and_access_counter(self) -> Tuple[int, AccessCounter]:
         self.move_inplace(target="gpu")
+        self._last_accessed = time.monotonic()
         assert self._ptr is not None
         return self._ptr, self._access_counter
 
@@ -183,6 +188,10 @@ class Buffer(Serializable):
     @property
     def nbytes(self) -> int:
         return self._size
+
+    @property
+    def last_accessed(self) -> float:
+        return self._last_accessed
 
     @property
     def __cuda_array_interface__(self) -> dict:

@@ -17,6 +17,7 @@ def gen_df() -> cudf.DataFrame:
 
 
 gen_df.buffer_size = 24
+gen_df.is_spilled = lambda df: df._data._data["a"].data.is_spilled
 
 
 @pytest.fixture
@@ -72,13 +73,34 @@ def test_spilling_buffer():
         buf.move_inplace(target="cpu")
 
 
-def test_manager(manager: SpillManager):
+def test_spill_device_memory(manager: SpillManager):
     df = gen_df()
     assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size)
     manager.spill_device_memory()
     assert manager.spilled_and_unspilled() == (gen_df.buffer_size, 0)
     del df
     assert manager.spilled_and_unspilled() == (0, 0)
+    df1 = gen_df()
+    df2 = gen_df()
+    manager.spill_device_memory()
+    assert gen_df.is_spilled(df1)
+    assert not gen_df.is_spilled(df2)
+    manager.spill_device_memory()
+    assert gen_df.is_spilled(df1)
+    assert gen_df.is_spilled(df2)
+    df3 = df1 + df2
+    assert not gen_df.is_spilled(df1)
+    assert not gen_df.is_spilled(df2)
+    assert not gen_df.is_spilled(df3)
+    manager.spill_device_memory()
+    assert gen_df.is_spilled(df1)
+    assert not gen_df.is_spilled(df2)
+    assert not gen_df.is_spilled(df3)
+    df2.abs()  # Should change the access time
+    manager.spill_device_memory()
+    assert gen_df.is_spilled(df1)
+    assert not gen_df.is_spilled(df2)
+    assert gen_df.is_spilled(df3)
 
 
 def test_spill_to_device_limit(manager: SpillManager):
@@ -90,6 +112,6 @@ def test_spill_to_device_limit(manager: SpillManager):
     df3 = df1 + df2
     manager.spill_to_device_limit(device_limit=0)
     assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 3, 0)
-    assert df1._data._data["a"].data.is_spilled
-    assert df2._data._data["a"].data.is_spilled
-    assert df3._data._data["a"].data.is_spilled
+    assert gen_df.is_spilled(df1)
+    assert gen_df.is_spilled(df2)
+    assert gen_df.is_spilled(df3)
