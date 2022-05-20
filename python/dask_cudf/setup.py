@@ -8,10 +8,14 @@ from setuptools import find_packages, setup
 
 import versioneer
 
-install_requires = [
+cudf_versioned = (
     "cudf "
     f"{os.environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v')}"
-    f"{os.environ.get('VERSION_SUFFIX', '')}",
+    f"{os.environ.get('VERSION_SUFFIX', '')}"
+)
+
+install_requires = [
+    cudf_versioned,
     "dask>=2022.03.0",
     "distributed>=2022.03.0",
     "fsspec>=0.6.0",
