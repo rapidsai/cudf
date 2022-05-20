@@ -806,7 +806,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int64().replace(to_replace=to_replace, value=value)
 
     def to_arrow(self):
-        return self._values.to_arrow()
+        return self._column.to_arrow()
 
     def __array__(self, dtype=None):
         raise TypeError(
@@ -817,13 +817,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
         )
 
     def nunique(self):
-        return self._stop  # or len(self)
+        return len(self)
 
     def min(self):
-        return self._start
+        return self.start
 
     def max(self):
-        return self._stop - 1
+        if (self.step != 1) and (self.start % 2 != 0):
+            return self.stop - 1
+        return self.stop - self.step
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
