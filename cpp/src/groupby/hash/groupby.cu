@@ -30,6 +30,7 @@
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/replace.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
@@ -480,8 +481,15 @@ void compute_single_pass_aggs(table_view const& keys,
   auto const skip_key_rows_with_nulls =
     keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
-  auto row_bitmask =
-    skip_key_rows_with_nulls ? cudf::detail::bitmask_and(keys, stream).first : rmm::device_buffer{};
+  // TODO: This is a temporary workaround. Get rid of "flattened" logic
+  // once `bitmask_and` supports nested nulls handling.
+  auto const flattened = cudf::structs::detail::flatten_nested_columns(
+    keys, {}, {}, cudf::structs::detail::column_nullability::FORCE);
+  auto const flattened_keys = flattened.flattened_columns();
+  auto row_bitmask          = skip_key_rows_with_nulls
+                                ? cudf::detail::bitmask_and(flattened_keys, stream).first
+                                : rmm::device_buffer{};
+
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator(0),
@@ -563,7 +571,11 @@ std::unique_ptr<table> groupby(table_view const& keys,
   auto const num_keys = keys.num_rows();
   auto const null_keys_are_equal =
     include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
-  auto const has_null = nullate::DYNAMIC{keys_have_nulls};
+  // Minor optimization: safely bypass null handling in row operators
+  // which are never called on rows containing nulls
+  auto const has_null = include_null_keys == null_policy::EXCLUDE
+                          ? nullate::DYNAMIC{false}
+                          : nullate::DYNAMIC{keys_have_nulls};
 
   auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
   auto const comparator  = cudf::experimental::row::equality::self_comparator{preprocessed_keys};
