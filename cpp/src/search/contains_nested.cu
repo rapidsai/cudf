@@ -80,7 +80,8 @@ namespace {
 /**
  * @brief The adapter struct for calling a table comparator from special input parameters.
  *
- * @tparam Comparator A class of table comparator with strong index types.
+ * @tparam Comparator A class of table comparator with strong index types and supports nested
+ *         types data.
  */
 template <typename Comparator>
 struct table_comparator_adapter {
@@ -109,11 +110,36 @@ struct table_comparator_adapter {
 
     auto const lhs_idx = static_cast<lhs_index_type>(i >= 0 ? i : j);
     auto const rhs_idx = static_cast<rhs_index_type>(i < 0 ? -(i + 1) : -(j + 1));
+
     return comp(lhs_idx, rhs_idx);
   }
 
+ private:
   Comparator const comp;
 };
+
+/**
+ * @brief The adapter struct for calling a row hasher from special input parameters.
+ *
+ * @tparam RowHasher A class of row hasher that supports nested types data.
+ */
+template <typename RowHasher>
+struct row_hasher_adapter {
+  row_hasher_adapter(RowHasher&& hasher_) : hasher(std::move(hasher_)) {}
+
+  /**
+   * Given an index `i` in the range `[-1, -size-1)`, this function converts it into the correct
+   * range `[0, size)` before calling to the underlying row hasher and return the hash value.
+   *
+   * @param i Index of a row in the table to hash.
+   * @return The hash value.
+   */
+  __device__ inline auto operator()(size_type const i) const noexcept { return hasher(-(i + 1)); }
+
+ private:
+  RowHasher const hasher;
+};
+
 }  // namespace
 
 std::unique_ptr<column> multi_contains_nested_elements(column_view const& haystack,
@@ -180,11 +206,11 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
     // `rhs_index_type`.
     // Note that needle indices will be supplied in the range `[-1, -1-neeedles.size())`, thus they
     // also need to be converted back to the range `[0, needles.size())`.
-    auto const needles_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(-1));
+    auto const needles_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(0));
 
     auto const hasher   = cudf::experimental::row::hash::row_hasher(needles_tv, stream);
-    auto const d_hasher = detail::experimental::compaction_hash(
-      hasher.device_hasher(nullate::DYNAMIC{needles_has_nulls}));
+    auto const d_hasher = row_hasher_adapter{detail::experimental::compaction_hash(
+      hasher.device_hasher(nullate::DYNAMIC{needles_has_nulls}))};
 
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack_tv, needles_tv, stream);
