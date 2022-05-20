@@ -13,33 +13,32 @@
 # =============================================================================
 
 set(cython_sources
-  attributes.pyx
-  capitalize.pyx
-  case.pyx
-  char_types.pyx
-  combine.pyx
-  contains.pyx
-  extract.pyx
-  find.pyx
-  find_multiple.pyx
-  findall.pyx
-  json.pyx
-  padding.pyx
-  repeat.pyx
-  replace.pyx
-  replace_re.pyx
-  strip.pyx
-  substring.pyx
-  translate.pyx
-  wrap.pyx
+    attributes.pyx
+    capitalize.pyx
+    case.pyx
+    char_types.pyx
+    combine.pyx
+    contains.pyx
+    extract.pyx
+    find.pyx
+    find_multiple.pyx
+    findall.pyx
+    json.pyx
+    padding.pyx
+    repeat.pyx
+    replace.pyx
+    replace_re.pyx
+    strip.pyx
+    substring.pyx
+    translate.pyx
+    wrap.pyx
 )
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
-    SOURCE_FILES "${cython_sources}"
-    LINKED_LIBRARIES "${linked_libraries}"
-    MODULE_PREFIX strings_
-    CXX)
+  SOURCE_FILES "${cython_sources}" LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX strings_
+                                                    CXX
+)
 
 foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
   set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/../cpp")

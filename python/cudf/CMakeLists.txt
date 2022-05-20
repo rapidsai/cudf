@@ -25,23 +25,23 @@ project(
             # language to be enabled here. The test project that is built in scikit-build to verify
             # various linking options for the python library is hardcoded to build with C, so until
             # that is fixed we need to keep C.
-            C
-            CXX)
+            C CXX
+)
 
 option(FIND_CUDF_CPP "Search for existing CUDF C++ installations before defaulting to local files"
-       OFF)
+       OFF
+)
 
 # If the user requested it we attempt to find CUDF.
 if(FIND_CUDF_CPP)
-    find_package(cudf ${cudf_version} REQUIRED)
+  find_package(cudf ${cudf_version} REQUIRED)
 else()
   set(cudf_FOUND OFF)
 endif()
 
 if(NOT cudf_FOUND)
-  # TODO: This will not be necessary once we upgrade to CMake 3.22, which will
-  # pull in the required languages for the C++ project even if this project
-  # does not require those languges.
+  # TODO: This will not be necessary once we upgrade to CMake 3.22, which will pull in the required
+  # languages for the C++ project even if this project does not require those languges.
   include(rapids-cuda)
   rapids_cuda_init_architectures(cudf-python)
   enable_language(CUDA)
@@ -53,16 +53,15 @@ if(NOT cudf_FOUND)
   set(BUILD_BENCHMARKS OFF)
   add_subdirectory(../../cpp cudf-cpp)
 
-  # Since there are multiple subpackages of cudf._lib that require access to
-  # libcudf, we place the library in the _lib/cpp directory as a single source
-  # of truth and modify the other rpaths appropriately.
+  # Since there are multiple subpackages of cudf._lib that require access to libcudf, we place the
+  # library in the _lib/cpp directory as a single source of truth and modify the other rpaths
+  # appropriately.
   install(TARGETS cudf DESTINATION cudf/_lib/cpp)
 endif()
 
-# TODO: Disable binding for now, but we probably want it back eventually.
-# Currently this breaks the behavior of our join code because that sets a
-# Cython method as a class attribute, which gets bound and therefore passes
-# self as an extra argument.
+# TODO: Disable binding for now, but we probably want it back eventually. Currently this breaks the
+# behavior of our join code because that sets a Cython method as a class attribute, which gets bound
+# and therefore passes self as an extra argument.
 set(CYTHON_FLAGS "--directive embedsignature=True,always_allow_keywords=True")
 
 include(rapids-cython)

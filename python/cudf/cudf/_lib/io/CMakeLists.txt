@@ -15,10 +15,8 @@
 set(cython_sources datasource.pyx utils.pyx)
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
-    SOURCE_FILES "${cython_sources}"
-    LINKED_LIBRARIES "${linked_libraries}"
-    MODULE_PREFIX io_
-    CXX)
+  SOURCE_FILES "${cython_sources}" LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX io_ CXX
+)
 
 find_package(NumPy REQUIRED)
 set(targets_using_numpy io_datasource io_utils)

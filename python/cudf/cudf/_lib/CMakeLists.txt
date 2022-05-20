@@ -13,52 +13,51 @@
 # =============================================================================
 
 set(cython_sources
-  aggregation.pyx
-  avro.pyx
-  binaryop.pyx
-  column.pyx
-  concat.pyx
-  copying.pyx
-  csv.pyx
-  datetime.pyx
-  expressions.pyx
-  filling.pyx
-  gpuarrow.pyx
-  groupby.pyx
-  hash.pyx
-  interop.pyx
-  join.pyx
-  json.pyx
-  labeling.pyx
-  lists.pyx
-  merge.pyx
-  null_mask.pyx
-  orc.pyx
-  parquet.pyx
-  partitioning.pyx
-  quantiles.pyx
-  reduce.pyx
-  replace.pyx
-  reshape.pyx
-  rolling.pyx
-  round.pyx
-  scalar.pyx
-  search.pyx
-  sort.pyx
-  stream_compaction.pyx
-  string_casting.pyx
-  text.pyx
-  transform.pyx
-  transpose.pyx
-  types.pyx
-  unary.pyx
-  utils.pyx
+    aggregation.pyx
+    avro.pyx
+    binaryop.pyx
+    column.pyx
+    concat.pyx
+    copying.pyx
+    csv.pyx
+    datetime.pyx
+    expressions.pyx
+    filling.pyx
+    gpuarrow.pyx
+    groupby.pyx
+    hash.pyx
+    interop.pyx
+    join.pyx
+    json.pyx
+    labeling.pyx
+    lists.pyx
+    merge.pyx
+    null_mask.pyx
+    orc.pyx
+    parquet.pyx
+    partitioning.pyx
+    quantiles.pyx
+    reduce.pyx
+    replace.pyx
+    reshape.pyx
+    rolling.pyx
+    round.pyx
+    scalar.pyx
+    search.pyx
+    sort.pyx
+    stream_compaction.pyx
+    string_casting.pyx
+    text.pyx
+    transform.pyx
+    transpose.pyx
+    types.pyx
+    unary.pyx
+    utils.pyx
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
-    SOURCE_FILES "${cython_sources}"
-    LINKED_LIBRARIES "${linked_libraries}"
-    CXX)
+  SOURCE_FILES "${cython_sources}" LINKED_LIBRARIES "${linked_libraries}" CXX
+)
 
 add_subdirectory(io)
 add_subdirectory(nvtext)
@@ -70,10 +69,10 @@ foreach(target IN LISTS targets_using_numpy)
   target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
 endforeach()
 
-# PyArrow relies on the C++ Arrow library already being installed, so we can
-# just find the C++ library directly and link to the same one. We rely on
-# libcudf's exports to provide the arrow_shared_lib and arrow_cuda_shared_lib
-# libraries. That just leaves us to find the ArrowPython library on our own.
+# PyArrow relies on the C++ Arrow library already being installed, so we can just find the C++
+# library directly and link to the same one. We rely on libcudf's exports to provide the
+# arrow_shared_lib and arrow_cuda_shared_lib libraries. That just leaves us to find the ArrowPython
+# library on our own.
 find_library(arrow_python_shared_library arrow_python REQUIRED)
 target_link_libraries(gpuarrow ${arrow_python_shared_library})
 

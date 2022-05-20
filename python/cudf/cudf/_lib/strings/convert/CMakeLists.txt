@@ -12,20 +12,15 @@
 # the License.
 # =============================================================================
 
-set(cython_sources
-  convert_fixed_point.pyx
-  convert_floats.pyx
-  convert_integers.pyx
-  convert_lists.pyx
-  convert_urls.pyx
+set(cython_sources convert_fixed_point.pyx convert_floats.pyx convert_integers.pyx
+                   convert_lists.pyx convert_urls.pyx
 )
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
-    SOURCE_FILES "${cython_sources}"
-    LINKED_LIBRARIES "${linked_libraries}"
-    MODULE_PREFIX strings_
-    CXX)
+  SOURCE_FILES "${cython_sources}" LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX strings_
+                                                    CXX
+)
 
 foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
   set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/../../cpp")
