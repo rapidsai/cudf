@@ -63,6 +63,12 @@ auto create_scalar_search_key(typename T::rep const& value)
   return search_key;
 }
 
+template <typename... Args>
+auto make_struct_scalar(Args&&... args)
+{
+  return cudf::struct_scalar(std::vector<cudf::column_view>{std::forward<Args>(args)...});
+}
+
 template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
 auto create_null_search_key()
 {
@@ -1073,7 +1079,7 @@ TYPED_TEST(TypedStructContainsTest, EmptyInputTest)
 
   auto const scalar_key = [] {
     auto child = tdata_col{0};
-    return struct_scalar(std::vector<cudf::column_view>{child});
+    return make_struct_scalar(child);
   }();
   auto const column_key = [] {
     auto child = tdata_col{};
@@ -1120,7 +1126,7 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullLists)
   auto const key = [] {
     auto child1 = tdata_col{1};
     auto child2 = tdata_col{1};
-    return struct_scalar(std::vector<cudf::column_view>{child1, child2});
+    return make_struct_scalar(child1, child2);
   }();
 
   {
@@ -1189,7 +1195,7 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
   auto const key = [] {
     auto child1 = tdata_col{1};
     auto child2 = tdata_col{1};
-    return struct_scalar(std::vector<cudf::column_view>{child1, child2});
+    return make_struct_scalar(child1, child2);
   }();
 
   {
@@ -1254,7 +1260,7 @@ TYPED_TEST(TypedStructContainsTest, SlicedListsColumnNoNulls)
   auto const key = [] {
     auto child1 = tdata_col{1};
     auto child2 = tdata_col{1};
-    return struct_scalar(std::vector<cudf::column_view>{child1, child2});
+    return make_struct_scalar(child1, child2);
   }();
 
   {
@@ -1316,7 +1322,7 @@ TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullListsWithNullStructs)
   auto const key = [] {
     auto child1 = tdata_col{1};
     auto child2 = tdata_col{1};
-    return struct_scalar(std::vector<cudf::column_view>{child1, child2});
+    return make_struct_scalar(child1, child2);
   }();
 
   {
