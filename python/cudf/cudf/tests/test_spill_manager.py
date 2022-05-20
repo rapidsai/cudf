@@ -1,12 +1,33 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
 
+import warnings
+
 import pytest
 
 import rmm
 
 import cudf
 from cudf.core.buffer import Buffer
+from cudf.core.spill_manager import SpillManager, global_manager
+
+
+def gen_df() -> cudf.DataFrame:
+    return cudf.DataFrame({"a": [1, 2, 3]})
+
+
+gen_df.buffer_size = 24
+
+
+@pytest.fixture
+def manager(request):
+    kwargs = dict(getattr(request, "param", {}))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        try:
+            yield global_manager.reset(SpillManager(**kwargs))
+        finally:
+            global_manager.clear()
 
 
 def test_spillable_buffer():
@@ -49,3 +70,26 @@ def test_spilling_buffer():
     assert not buf.is_spilled
     with pytest.raises(ValueError, match="unspillable buffer"):
         buf.move_inplace(target="cpu")
+
+
+def test_manager(manager: SpillManager):
+    df = gen_df()
+    assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size)
+    manager.spill_device_memory()
+    assert manager.spilled_and_unspilled() == (gen_df.buffer_size, 0)
+    del df
+    assert manager.spilled_and_unspilled() == (0, 0)
+
+
+def test_spill_to_device_limit(manager: SpillManager):
+    df1 = gen_df()
+    df2 = gen_df()
+    assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size * 2)
+    manager.spill_to_device_limit(device_limit=0)
+    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 2, 0)
+    df3 = df1 + df2
+    manager.spill_to_device_limit(device_limit=0)
+    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 3, 0)
+    assert df1._data._data["a"].data.is_spilled
+    assert df2._data._data["a"].data.is_spilled
+    assert df3._data._data["a"].data.is_spilled

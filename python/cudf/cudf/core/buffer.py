@@ -15,6 +15,7 @@ from cudf.core.abc import Serializable
 
 if TYPE_CHECKING:
     from cudf._lib.column import AccessCounter
+    from cudf.core.spill_manager import SpillManager
 
 
 class Buffer(Serializable):
@@ -42,6 +43,7 @@ class Buffer(Serializable):
     _sole_owner: bool
     _access_counter: AccessCounter
     _raw_pointer_exposed: bool
+    _spill_manager: Optional[SpillManager]
 
     def __init__(
         self,
@@ -51,6 +53,7 @@ class Buffer(Serializable):
         sole_owner: bool = False,
     ):
         from cudf._lib.column import AccessCounter
+        from cudf.core.spill_manager import global_manager
 
         self._access_counter = AccessCounter()
         self._sole_owner = sole_owner
@@ -87,6 +90,12 @@ class Buffer(Serializable):
             except TypeError:
                 raise TypeError("data must be Buffer, array-like or integer")
             self._init_from_array_like(np.asarray(data), owner)
+
+        if self._sole_owner and global_manager.enabled:
+            self._spill_manager = global_manager.get()
+            self._spill_manager.add(self)
+        else:
+            self._spill_manager = None
 
     @classmethod
     def from_buffer(cls, buffer: Buffer, size: int = None, offset: int = 0):
