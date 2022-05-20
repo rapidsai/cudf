@@ -32,7 +32,7 @@ using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using structs_col = cudf::test::structs_column_wrapper;
 using strings_col = cudf::test::strings_column_wrapper;
 
-constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 constexpr int32_t null{0};  // Mark for null child elements
 constexpr int32_t XXX{0};   // Mark for null struct elements
 
@@ -659,7 +659,6 @@ TYPED_TEST(TypedStructsContainsTestColumnNeedles, TrivialInputTest)
 
   auto const expected = bools_col{1, 1, 0, 0, 1, 1, 0, 0, 1, 0};
   auto const result   = cudf::contains(haystack, needles);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
 
@@ -687,74 +686,43 @@ TYPED_TEST(TypedStructsContainsTestColumnNeedles, SlicedInputNoNulls)
 
   auto const expected = bools_col{1, 1, 0, 0, 1};
   auto const result   = cudf::contains(haystack, needles);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
-#if 0
-TYPED_TEST(TypedStructsContainsTestColumnNeedles, ColumnKeyWithSlicedListsHavingNulls)
+
+TYPED_TEST(TypedStructsContainsTestColumnNeedles, SlicedInputHavingNulls)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  auto const lists_original = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 10, 15, 18, 21, 24, 24, 28, 28};
-    // clang-format off
-    auto data1    = tdata_col{0, X, 2, 1,    //
-                              3, 4, 5,       //
-                              6, 7, 8,       //
-                              X, 0, 1, 3, 1, //
-                              X, 3, 4,       //
-                              5, 6, 6,       //
-                              8, 9, 0,       //
-                              X, 2, 1, 3     //
-    };
-    auto data2    = tdata_col{0, X, 2, 1,    //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              X, 1, 2, 2, 2, //
-                              X, 1, 2,       //
-                              0, 1, 1,       //
-                              0, 1, 2,       //
-                              X, 0, 1, 1     //
-    };
-    // clang-format on
-    auto child               = structs_col{{data1, data2}, nulls_at({1, 10, 15, 24})};
-    auto const validity_iter = nulls_at({3, 10});
-    return make_lists_column(11,
-                             offsets.release(),
-                             child.release(),
-                             2,
-                             detail::make_null_mask(validity_iter, validity_iter + 11));
+  constexpr int32_t dont_care{0};
+
+  auto const haystack_original = [] {
+    auto child1 =
+      tdata_col{{dont_care /*null*/, dont_care, 1, null, XXX, 1, 2, null, 2, 2, null, 2, dont_care},
+                nulls_at({0, 3, 7, 10})};
+    auto child2 =
+      tdata_col{{dont_care /*null*/, dont_care, 1, null, XXX, 0, null, 0, 1, 2, 1, 1, dont_care},
+                nulls_at({0, 3, 6})};
+    return structs_col{{child1, child2}, nulls_at({1, 4})};
   }();
+  auto const haystack = cudf::slice(haystack_original, {2, 12})[0];
 
-  auto const keys_original = [] {
-    auto child1 = tdata_col{{1, X, 1, 6, X, 1, 0, 0, 1, 0, 1}, null_at(4)};
-    auto child2 = tdata_col{{1, X, 1, 1, X, 1, 0, 0, 1, 0, 1}, null_at(4)};
-    return structs_col{{child1, child2}, null_at(1)};
+  auto const needles_original = [] {
+    auto child1 =
+      tdata_col{{dont_care, XXX, null, 1, 1, 2, XXX, null, 1, 1, null, dont_care, dont_care},
+                nulls_at({2, 7, 10})};
+    auto child2 =
+      tdata_col{{dont_care, XXX, null, 2, 3, 2, XXX, null, null, 1, 0, dont_care, dont_care},
+                nulls_at({2, 7, 8})};
+    return structs_col{{child1, child2}, nulls_at({1, 6})};
   }();
+  auto const needles = cudf::slice(needles_original, {1, 11})[0];
 
-  auto const lists = cudf::slice(lists_original->view(), {4, 8})[0];
-  auto const keys  = cudf::slice(keys_original, {1, 5})[0];
-
-  {
-    // CONTAINS
-    auto const result   = lists::contains(lists, keys);
-    auto const expected = bools_col{{X, 0, 1, 0}, null_at(0)};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_FIRST
-    auto const result   = lists::index_of(lists, keys, FIND_FIRST);
-    auto const expected = int32s_col{{X, ABSENT, 1, ABSENT}, null_at(0)};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_LAST
-    auto const result   = lists::index_of(lists, keys, FIND_LAST);
-    auto const expected = int32s_col{{X, ABSENT, 2, ABSENT}, null_at(0)};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
+  auto const expected = bools_col{{null, 1, 0, 0, 1, null, 1, 0, 1, 1}, nulls_at({0, 5})};
+  auto const result   = cudf::contains(haystack, needles);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
 
+#if 0
 template <typename T>
 struct TypedListContainsTest : public ContainsTest {
 };
