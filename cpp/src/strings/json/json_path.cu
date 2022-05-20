@@ -46,6 +46,11 @@ namespace detail {
 namespace {
 
 // debug accessibility
+#if defined(HOST_DEBUGGING)
+#define EXECUTION_SPECIFIER __host__ __device__
+#else
+#define EXECUTION_SPECIFIER __device__
+#endif
 
 // change to "\n" and 1 to make output more readable
 #define DEBUG_NEWLINE
@@ -61,9 +66,10 @@ constexpr int DEBUG_NEWLINE_LEN = 0;
  * or you get nothing back (parse_result::EMPTY)
  */
 enum class parse_result {
-  ERROR,    // failure
-  SUCCESS,  // success
-  EMPTY,    // success, but no data
+  ERROR,          // failure
+  SUCCESS,        // success
+  MISSING_FIELD,  // success, but the field is missing
+  EMPTY,          // success, but no data
 };
 
 /**
@@ -206,13 +212,16 @@ struct json_output {
   char* output;
   thrust::optional<size_t> output_len;
 
-  __device__ void add_output(const char* str, size_t len)
+  EXECUTION_SPECIFIER void add_output(const char* str, size_t len)
   {
     if (output != nullptr) { memcpy(output + output_len.value_or(0), str, len); }
     output_len = output_len.value_or(0) + len;
   }
 
-  __device__ void add_output(string_view const& str) { add_output(str.data(), str.size_bytes()); }
+  EXECUTION_SPECIFIER void add_output(string_view const& str)
+  {
+    add_output(str.data(), str.size_bytes());
+  }
 };
 
 enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
@@ -223,15 +232,17 @@ enum json_element_type { NONE, OBJECT, ARRAY, VALUE };
  */
 class json_state : private parser {
  public:
-  __device__ json_state() : parser() {}
-  __device__ json_state(const char* _input, int64_t _input_len, get_json_object_options _options)
+  EXECUTION_SPECIFIER json_state() : parser() {}
+  EXECUTION_SPECIFIER json_state(const char* _input,
+                                 int64_t _input_len,
+                                 get_json_object_options _options)
     : parser(_input, _input_len),
 
       options(_options)
   {
   }
 
-  __device__ json_state(json_state const& j)
+  EXECUTION_SPECIFIER json_state(json_state const& j)
     : parser(j),
       cur_el_start(j.cur_el_start),
       cur_el_type(j.cur_el_type),
@@ -241,7 +252,7 @@ class json_state : private parser {
   }
 
   // retrieve the entire current element into the output
-  __device__ parse_result extract_element(json_output* output, bool list_element)
+  EXECUTION_SPECIFIER parse_result extract_element(json_output* output, bool list_element)
   {
     char const* start = cur_el_start;
     char const* end   = start;
@@ -298,13 +309,13 @@ class json_state : private parser {
   }
 
   // skip the next element
-  __device__ parse_result skip_element() { return extract_element(nullptr, false); }
+  EXECUTION_SPECIFIER parse_result skip_element() { return extract_element(nullptr, false); }
 
   // advance to the next element
-  __device__ parse_result next_element() { return next_element_internal(false); }
+  EXECUTION_SPECIFIER parse_result next_element() { return next_element_internal(false); }
 
   // advance inside the current element
-  __device__ parse_result child_element(json_element_type expected_type)
+  EXECUTION_SPECIFIER parse_result child_element(json_element_type expected_type)
   {
     if (expected_type != NONE && cur_el_type != expected_type) { return parse_result::ERROR; }
 
@@ -314,9 +325,20 @@ class json_state : private parser {
     if (result == parse_result::SUCCESS) { parent_el_type = prev_el_type; }
     return result;
   }
-
+  EXECUTION_SPECIFIER int string_view_compare(string_view const str1, string_view const str2)
+  {
+    int idx = 0;
+    for (; (idx < str1.size_bytes()) && (idx < str2.size_bytes()); idx++) {
+      if (*(str1.data() + idx) != *(str2.data() + idx)) {
+        return *(str1.data() + idx) - *(str2.data() + idx);
+      }
+    }
+    if (idx < str1.size_bytes()) return 1;
+    if (idx < str2.size_bytes()) return -1;
+    return 0;
+  }
   // return the next element that matches the specified name.
-  __device__ parse_result next_matching_element(string_view const& name, bool inclusive)
+  EXECUTION_SPECIFIER parse_result next_matching_element(string_view const& name, bool inclusive)
   {
     // if we're not including the current element, skip it
     if (!inclusive) {
@@ -325,16 +347,20 @@ class json_state : private parser {
     }
     // loop until we find a match or there's nothing left
     do {
-      // wildcard matches anything
       if (name.size_bytes() == 1 && name.data()[0] == '*') {
         return parse_result::SUCCESS;
-      } else if (cur_el_name == name) {
+      } else if (string_view_compare(name, cur_el_name) == 0) {
         return parse_result::SUCCESS;
       }
-
       // next
       parse_result result = next_element_internal(false);
-      if (result != parse_result::SUCCESS) { return result; }
+      if (result != parse_result::SUCCESS) {
+        if (options.get_missing_fields_as_nulls() && result == parse_result::EMPTY) {
+          return parse_result::MISSING_FIELD;
+        } else {
+          return result;
+        }
+      }
     } while (true);
 
     return parse_result::ERROR;
@@ -415,7 +441,7 @@ class json_state : private parser {
   }
 
   // parse a value - either a string or a number/null/bool
-  __device__ parse_result parse_value()
+  EXECUTION_SPECIFIER parse_result parse_value()
   {
     if (!parse_whitespace()) { return parse_result::ERROR; }
 
@@ -424,7 +450,7 @@ class json_state : private parser {
     return is_quote(*pos) ? parse_string(unused, false, *pos) : parse_non_string_value(unused);
   }
 
-  __device__ parse_result next_element_internal(bool child)
+  EXECUTION_SPECIFIER parse_result next_element_internal(bool child)
   {
     // if we're not getting a child element, skip the current element.
     // this will leave pos as the first character -after- the close of
@@ -692,9 +718,9 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
  * @returns A result code indicating success/fail/empty.
  */
 template <int max_command_stack_depth>
-__device__ parse_result parse_json_path(json_state& j_state,
-                                        path_operator const* commands,
-                                        json_output& output)
+EXECUTION_SPECIFIER parse_result parse_json_path(json_state& j_state,
+                                                 path_operator const* commands,
+                                                 json_output& output)
 {
   // manually maintained context stack in lieu of calling parse_json_path recursively.
   struct context {
@@ -727,7 +753,6 @@ __device__ parse_result parse_json_path(json_state& j_state,
   int element_count = 0;
   while (pop_context(ctx)) {
     path_operator op = *ctx.commands;
-
     switch (op.type) {
       // whatever the first object is
       case path_operator_type::ROOT:
@@ -745,6 +770,12 @@ __device__ parse_result parse_json_path(json_state& j_state,
           PARSE_TRY(ctx.j_state.next_matching_element(op.name, true));
           if (last_result == parse_result::SUCCESS) {
             push_context(ctx.j_state, ctx.commands + 1, ctx.list_element);
+          } else if (last_result == parse_result::MISSING_FIELD) {
+            if (ctx.list_element && element_count > 0) {
+              output.add_output({"," DEBUG_NEWLINE, 1 + DEBUG_NEWLINE_LEN});
+            }
+            output.add_output({"null", 4});
+            element_count++;
           }
         }
       } break;
@@ -858,7 +889,7 @@ constexpr int max_command_stack_depth = 8;
  * @param options Options controlling behavior
  * @returns A pair containing the result code the output buffer.
  */
-__device__ thrust::pair<parse_result, json_output> get_json_object_single(
+EXECUTION_SPECIFIER thrust::pair<parse_result, json_output> get_json_object_single(
   char const* input,
   size_t input_len,
   path_operator const* const commands,
@@ -948,6 +979,119 @@ __launch_bounds__(block_size) __global__
     if (threadIdx.x == 0) { atomicAdd(out_valid_count.value(), block_valid_count); }
   }
 }
+#if defined(HOST_DEBUGGING)
+void get_json_object_host(strings_column_view col,
+                          path_operator const* const commands,
+                          int commands_len,
+                          offset_type* output_offsets,
+                          thrust::optional<char*> out_buf,
+                          thrust::optional<bitmask_type*> out_validity,
+                          get_json_object_options options)
+{
+  // copy inputs to host memory
+  std::vector<size_type> input_offsets(col.size() + 1);
+  cudaMemcpy(input_offsets.data(),
+             col.offsets_begin(),
+             (col.size() + 1) * sizeof(size_type),
+             cudaMemcpyDeviceToHost);
+
+  std::vector<char> input_chars(col.chars_size());
+  cudaMemcpy(input_chars.data(), col.chars_begin(), col.chars_size(), cudaMemcpyDeviceToHost);
+
+  std::vector<path_operator> h_commands(commands_len);
+  cudaMemcpy(
+    h_commands.data(), commands, commands_len * sizeof(path_operator), cudaMemcpyDeviceToHost);
+  int json_path_buffer_size = 0;
+  for (size_t idx = 0; idx < h_commands.size(); idx++) {
+    json_path_buffer_size += h_commands[idx].name.size_bytes();
+  }
+
+  std::vector<char> json_path_buffer(json_path_buffer_size);
+  int json_path_buffer_idx = 0;
+  for (int idx = 0; idx < commands_len; idx++) {
+    cudaMemcpy(json_path_buffer.data() + json_path_buffer_idx,
+               h_commands[idx].name.data(),
+               h_commands[idx].name.size_bytes(),
+               cudaMemcpyDeviceToHost);
+    h_commands[idx].name = string_view(json_path_buffer.data() + json_path_buffer_idx,
+                                       h_commands[idx].name.size_bytes());
+    json_path_buffer_idx += h_commands[idx].name.size_bytes();
+  }
+
+  std::vector<offset_type> h_offsets(col.size() + 1);
+  cudaMemcpy(h_offsets.data(),
+             output_offsets,
+             h_offsets.size() * sizeof(offset_type),
+             cudaMemcpyDeviceToHost);
+
+  std::vector<char> h_out_buf(h_offsets[col.size()]);
+  if (out_buf.has_value()) {
+    cudaMemcpy(h_out_buf.data(),
+               out_buf.value(),
+               h_offsets[col.size()] * sizeof(char),
+               cudaMemcpyDeviceToHost);
+  }
+
+  std::vector<bitmask_type> h_out_validity(col.size());
+  if (out_validity.has_value()) {
+    cudaMemcpy(h_out_validity.data(),
+               out_validity.value(),
+               col.size() * sizeof(bitmask_type),
+               cudaMemcpyDeviceToHost);
+  }
+
+  for (int idx = 0; idx < col.size(); idx++) {
+    bool is_valid = false;
+
+    int str_len = input_offsets[idx + 1] - input_offsets[idx];
+
+    size_type output_size = 0;
+    if (str_len > 0) {
+      char* dst             = out_buf.has_value() ? h_out_buf.data() + h_offsets[idx] : nullptr;
+      size_t const dst_size = out_buf.has_value() ? h_offsets[idx + 1] - h_offsets[idx] : 0;
+
+      parse_result result;
+      json_output out;
+
+      thrust::tie(result, out) = get_json_object_single((input_chars.data() + input_offsets[idx]),
+                                                        str_len,
+                                                        h_commands.data(),
+                                                        dst,
+                                                        dst_size,
+                                                        options);
+
+      output_size = out.output_len.value_or(0);
+      if (out.output_len.has_value() && result == parse_result::SUCCESS) { is_valid = true; }
+    }
+
+    // filled in only during the precompute step. during the compute step, the offsets
+    // are fed back in so we do -not- want to write them out
+    if (!out_buf.has_value()) { h_offsets[idx] = static_cast<offset_type>(output_size); }
+
+    // validity filled in only during the output step
+    if (out_validity.has_value()) { h_out_validity[idx] = is_valid; }
+  }
+
+  cudaMemcpy(output_offsets,
+             h_offsets.data(),
+             h_offsets.size() * sizeof(offset_type),
+             cudaMemcpyHostToDevice);
+
+  if (out_buf.has_value()) {
+    cudaMemcpy(out_buf.value(),
+               h_out_buf.data(),
+               h_offsets[col.size()] * sizeof(char),
+               cudaMemcpyHostToDevice);
+  }
+
+  if (out_validity.has_value()) {
+    cudaMemcpy(out_validity.value(),
+               h_out_validity.data(),
+               col.size() * sizeof(bitmask_type),
+               cudaMemcpyHostToDevice);
+  }
+}
+#endif
 
 /**
  * @copydoc cudf::strings::detail::get_json_object
@@ -978,11 +1122,20 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       col.size());  // null count
   }
 
+#if defined(HOST_DEBUGGING)
+
+  get_json_object_host(col,
+                       std::get<0>(preprocess).value().data(),
+                       std::get<0>(preprocess).value().size(),
+                       offsets_view.head<offset_type>(),
+                       thrust::nullopt,
+                       thrust::nullopt,
+                       options);
+
+#else
   constexpr int block_size = 512;
   cudf::detail::grid_1d const grid{col.size(), block_size};
-
   auto cdv = column_device_view::create(col.parent(), stream);
-
   // preprocess sizes (returned in the offsets buffer)
   get_json_object_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
@@ -993,7 +1146,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       thrust::nullopt,
       thrust::nullopt,
       options);
-
+#endif
   // convert sizes to offsets
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          offsets_view.head<offset_type>(),
@@ -1014,6 +1167,17 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   // compute results
   cudf::mutable_column_view chars_view(*chars);
   rmm::device_scalar<size_type> d_valid_count{0, stream};
+#if defined(HOST_DEBUGGING)
+
+  get_json_object_host(col,
+                       std::get<0>(preprocess).value().data(),
+                       std::get<0>(preprocess).value().size(),
+                       offsets_view.head<offset_type>(),
+                       chars_view.head<char>(),
+                       static_cast<bitmask_type*>(validity.data()),
+                       options);
+
+#else
   get_json_object_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *cdv,
@@ -1023,7 +1187,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       static_cast<bitmask_type*>(validity.data()),
       d_valid_count.data(),
       options);
-
+#endif
   return make_strings_column(col.size(),
                              std::move(offsets),
                              std::move(chars),

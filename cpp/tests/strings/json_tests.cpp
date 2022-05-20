@@ -968,3 +968,91 @@ TEST_F(JsonPathTests, EscapeSequences)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
 }
+
+TEST_F(JsonPathTests, MissingFieldsAsNulls)
+{
+  std::string input_string{
+    // clang-format off
+  "{"
+    "\"tup\":"
+    "["
+        "{\"id\":\"1\",\"array\":[1,2]},"
+        "{\"id\":\"2\"},"
+        "{\"id\":\"3\",\"array\":[3,4]},"
+        "{\"id\":\"4\", \"a\": {\"x\": \"5\", \"y\": \"6\"}}"
+    "]"
+  "}"
+    // clang-format on
+  };
+  {
+    cudf::test::strings_column_wrapper input{input_string};
+    {
+      std::string json_path("$.tup[1].array");
+
+      cudf::strings::get_json_object_options options;
+      options.set_missing_fields_as_nulls(true);
+
+      auto result =
+        cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
+
+      // expect
+      cudf::test::strings_column_wrapper expected({"null"});
+
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+    }
+  }
+
+  {
+    cudf::test::strings_column_wrapper input{input_string};
+    {
+      std::string json_path("$.tup[*].array");
+
+      cudf::strings::get_json_object_options options;
+      options.set_missing_fields_as_nulls(true);
+
+      auto result =
+        cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
+
+      // expect
+      cudf::test::strings_column_wrapper expected({"[[1,2],null,[3,4],null]"});
+
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+    }
+  }
+
+  {
+    cudf::test::strings_column_wrapper input{input_string};
+    {
+      std::string json_path("$.x[*].array");
+
+      cudf::strings::get_json_object_options options;
+      options.set_missing_fields_as_nulls(true);
+
+      auto result =
+        cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
+
+      // expect
+      cudf::test::strings_column_wrapper expected({"null"});
+
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+    }
+  }
+
+  {
+    cudf::test::strings_column_wrapper input{input_string};
+    {
+      std::string json_path("$.tup[*].a.x");
+
+      cudf::strings::get_json_object_options options;
+      options.set_missing_fields_as_nulls(true);
+
+      auto result =
+        cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
+
+      // expect
+      cudf::test::strings_column_wrapper expected({"[null,null,null,\"5\"]"});
+
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+    }
+  }
+}
