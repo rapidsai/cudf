@@ -364,11 +364,11 @@ TYPED_TEST(TypedStructSearchTest, ComplexStructTest)
 
 //==================================================================================================
 template <typename T>
-struct TypedScalarStructContainsTest : public cudf::test::BaseFixture {
+struct TypedStructsContainsTestScalarNeedle : public cudf::test::BaseFixture {
 };
-TYPED_TEST_SUITE(TypedScalarStructContainsTest, TestTypes);
+TYPED_TEST_SUITE(TypedStructsContainsTestScalarNeedle, TestTypes);
 
-TYPED_TEST(TypedScalarStructContainsTest, EmptyInputTest)
+TYPED_TEST(TypedStructsContainsTestScalarNeedle, EmptyInputTest)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -385,7 +385,7 @@ TYPED_TEST(TypedScalarStructContainsTest, EmptyInputTest)
   EXPECT_EQ(false, cudf::contains(col, val));
 }
 
-TYPED_TEST(TypedScalarStructContainsTest, TrivialInputTests)
+TYPED_TEST(TypedStructsContainsTestScalarNeedle, TrivialInputTests)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -413,7 +413,7 @@ TYPED_TEST(TypedScalarStructContainsTest, TrivialInputTests)
   EXPECT_EQ(false, cudf::contains(col, val2));
 }
 
-TYPED_TEST(TypedScalarStructContainsTest, SlicedColumnInputTests)
+TYPED_TEST(TypedStructsContainsTestScalarNeedle, SlicedColumnInputTests)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -444,7 +444,7 @@ TYPED_TEST(TypedScalarStructContainsTest, SlicedColumnInputTests)
   EXPECT_EQ(false, cudf::contains(col, val2));
 }
 
-TYPED_TEST(TypedScalarStructContainsTest, SimpleInputWithNullsTests)
+TYPED_TEST(TypedStructsContainsTestScalarNeedle, SimpleInputWithNullsTests)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -543,7 +543,7 @@ TYPED_TEST(TypedScalarStructContainsTest, SimpleInputWithNullsTests)
   }
 }
 
-TYPED_TEST(TypedScalarStructContainsTest, SlicedInputWithNullsTests)
+TYPED_TEST(TypedStructsContainsTestScalarNeedle, SlicedInputWithNullsTests)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -610,11 +610,12 @@ TYPED_TEST(TypedScalarStructContainsTest, SlicedInputWithNullsTests)
 
 //==================================================================================================
 template <typename T>
-struct TypedStructsColumnContainsTest : public cudf::test::BaseFixture {
+struct TypedStructsContainsTestColumnNeedles : public cudf::test::BaseFixture {
 };
-TYPED_TEST_SUITE(TypedStructsColumnContainsTest, TestTypes);
 
-TYPED_TEST(TypedStructsColumnContainsTest, EmptyInputTest)
+TYPED_TEST_SUITE(TypedStructsContainsTestColumnNeedles, TestTypes);
+
+TYPED_TEST(TypedStructsContainsTestColumnNeedles, EmptyInputTest)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -634,328 +635,31 @@ TYPED_TEST(TypedStructsColumnContainsTest, EmptyInputTest)
 
   auto const result   = cudf::contains(haystack, needles);
   auto const expected = bools_col{};
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
-#if 0
-TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullLists)
+
+TYPED_TEST(TypedStructsContainsTestColumnNeedles, TrivialInputTest)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  auto const lists = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
-    // clang-format off
-    auto data1    = tdata_col{0, 1, 2, 1,    //
-                              3, 4, 5,       //
-                              6, 7, 8,       //
-                              9, 0, 1, 3, 1, //
-                              2, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              1, 2, 1, 3     //
-    };
-    auto data2    = tdata_col{0, 1, 2, 3,    //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 1, 2, 2, 2, //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 0, 1, 1     //
-    };
-    // clang-format on
-    auto child = structs_col{{data1, data2}};
-    return make_lists_column(10, offsets.release(), child.release(), 0, {});
+  auto const haystack = [] {
+    auto child1 = tdata_col{1, 3, 1, 1, 2, 1, 2, 2, 1, 2};
+    auto child2 = tdata_col{1, 0, 0, 0, 1, 0, 1, 2, 1, 1};
+    return structs_col{{child1, child2}};
   }();
 
-  auto const key = [] {
-    auto child1 = tdata_col{1};
-    auto child2 = tdata_col{1};
-    return struct_scalar(std::vector<cudf::column_view>{child1, child2});
-  }();
-
-  {
-    // CONTAINS
-    auto const result   = lists::contains(lists->view(), key);
-    auto const expected = bools_col{1, 0, 0, 0, 0, 0, 0, 0, 1, 0};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // CONTAINS NULLS
-    auto const result   = lists::contains_nulls(lists->view());
-    auto const expected = bools_col{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_FIRST
-    auto const result = lists::index_of(lists->view(), key, FIND_FIRST);
-    auto const expected =
-      int32s_col{1, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_LAST
-    auto const result = lists::index_of(lists->view(), key, FIND_LAST);
-    auto const expected =
-      int32s_col{1, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-}
-
-TYPED_TEST(TypedStructContainsTest, ScalarKeyWithNullLists)
-{
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  auto const lists = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 10, 15, 18, 21, 24, 24, 28, 28};
-    // clang-format off
-    auto data1    = tdata_col{0, 1, 2, 1,    //
-                              3, 4, 5,       //
-                              6, 7, 8,       //
-                              9, 0, 1, 3, 1, //
-                              2, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              1, 2, 1, 3     //
-    };
-    auto data2    = tdata_col{0, 1, 2, 3,    //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 1, 2, 2, 2, //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 0, 1, 1     //
-    };
-    // clang-format on
-    auto child               = structs_col{{data1, data2}};
-    auto const validity_iter = nulls_at({3, 10});
-    return make_lists_column(11,
-                             offsets.release(),
-                             child.release(),
-                             2,
-                             detail::make_null_mask(validity_iter, validity_iter + 11));
-  }();
-
-  auto const key = [] {
-    auto child1 = tdata_col{1};
-    auto child2 = tdata_col{1};
-    return struct_scalar(std::vector<cudf::column_view>{child1, child2});
-  }();
-
-  {
-    // CONTAINS
-    auto const result   = lists::contains(lists->view(), key);
-    auto const expected = bools_col{{1, 0, 0, X, 0, 0, 0, 0, 0, 1, X}, nulls_at({3, 10})};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // CONTAINS NULLS
-    auto const result   = lists::contains_nulls(lists->view());
-    auto const expected = bools_col{{0, 0, 0, X, 0, 0, 0, 0, 0, 0, X}, nulls_at({3, 10})};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_FIRST
-    auto const result   = lists::index_of(lists->view(), key, FIND_FIRST);
-    auto const expected = int32s_col{
-      {1, ABSENT, ABSENT, X, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, X}, nulls_at({3, 10})};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_LAST
-    auto const result   = lists::index_of(lists->view(), key, FIND_LAST);
-    auto const expected = int32s_col{
-      {1, ABSENT, ABSENT, X, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, X}, nulls_at({3, 10})};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-}
-
-TYPED_TEST(TypedStructContainsTest, SlicedListsColumnNoNulls)
-{
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  auto const lists_original = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
-    // clang-format off
-    auto data1    = tdata_col{0, 1, 2, 1,    //
-                              3, 4, 5,       //
-                              6, 7, 8,       //
-                              9, 0, 1, 3, 1, //
-                              2, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              1, 2, 1, 3     //
-    };
-    auto data2    = tdata_col{0, 1, 2, 3,    //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 1, 2, 2, 2, //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 0, 1, 1     //
-    };
-    // clang-format on
-    auto child = structs_col{{data1, data2}};
-    return make_lists_column(10, offsets.release(), child.release(), 0, {});
-  }();
-  auto const lists = cudf::slice(lists_original->view(), {3, 10})[0];
-
-  auto const key = [] {
-    auto child1 = tdata_col{1};
-    auto child2 = tdata_col{1};
-    return struct_scalar(std::vector<cudf::column_view>{child1, child2});
-  }();
-
-  {
-    // CONTAINS
-    auto const result   = lists::contains(lists, key);
-    auto const expected = bools_col{0, 0, 0, 0, 0, 1, 0};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // CONTAINS NULLS
-    auto const result   = lists::contains_nulls(lists);
-    auto const expected = bools_col{0, 0, 0, 0, 0, 0, 0};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_FIRST
-    auto const result   = lists::index_of(lists, key, FIND_FIRST);
-    auto const expected = int32s_col{ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_LAST
-    auto const result   = lists::index_of(lists, key, FIND_LAST);
-    auto const expected = int32s_col{ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-}
-
-TYPED_TEST(TypedStructContainsTest, ScalarKeyNoNullListsWithNullStructs)
-{
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  auto const lists = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
-    // clang-format off
-    auto data1    = tdata_col{0, X, 2, 1,    //
-                              3, 4, 5,       //
-                              6, 7, 8,       //
-                              X, 0, 1, 3, 1, //
-                              X, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              X, 2, 1, 3     //
-    };
-    auto data2    = tdata_col{0, X, 2, 1,    //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              X, 1, 2, 2, 2, //
-                              X, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              X, 0, 1, 1     //
-    };
-    // clang-format on
-    auto child = structs_col{{data1, data2}, nulls_at({1, 10, 15, 24})};
-    return make_lists_column(10, offsets.release(), child.release(), 0, {});
-  }();
-
-  auto const key = [] {
-    auto child1 = tdata_col{1};
-    auto child2 = tdata_col{1};
-    return struct_scalar(std::vector<cudf::column_view>{child1, child2});
-  }();
-
-  {
-    // CONTAINS
-    auto const result   = lists::contains(lists->view(), key);
-    auto const expected = bools_col{1, 0, 0, 0, 0, 0, 0, 0, 1, 0};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // CONTAINS NULLS
-    auto const result   = lists::contains_nulls(lists->view());
-    auto const expected = bools_col{1, 0, 0, 1, 1, 0, 0, 0, 1, 0};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_FIRST
-    auto const result = lists::index_of(lists->view(), key, FIND_FIRST);
-    auto const expected =
-      int32s_col{3, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_LAST
-    auto const result = lists::index_of(lists->view(), key, FIND_LAST);
-    auto const expected =
-      int32s_col{3, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-}
-
-TYPED_TEST(TypedStructContainsTest, ColumnKeyNoNullLists)
-{
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  auto const lists = [] {
-    auto offsets = int32s_col{0, 4, 7, 10, 15, 18, 21, 24, 24, 28, 28};
-    // clang-format off
-    auto data1    = tdata_col{0, 1, 2, 1,    //
-                              3, 4, 3,       //
-                              6, 7, 8,       //
-                              9, 0, 1, 3, 1, //
-                              2, 3, 4,       //
-                              5, 6, 7,       //
-                              8, 9, 0,       //
-                              1, 2, 1, 3     //
-    };
-    auto data2    = tdata_col{0, 1, 2, 3,    //
-                              0, 0, 0,       //
-                              0, 1, 2,       //
-                              1, 1, 2, 2, 2, //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              0, 1, 2,       //
-                              1, 0, 1, 1     //
-    };
-    // clang-format on
-    auto child = structs_col{{data1, data2}};
-    return make_lists_column(10, offsets.release(), child.release(), 0, {});
-  }();
-
-  auto const keys = [] {
+  auto const needles = [] {
     auto child1 = tdata_col{1, 3, 1, 1, 2, 1, 0, 0, 1, 0};
     auto child2 = tdata_col{1, 0, 1, 1, 2, 1, 0, 0, 1, 0};
     return structs_col{{child1, child2}};
   }();
 
-  {
-    // CONTAINS
-    auto const result   = lists::contains(lists->view(), keys);
-    auto const expected = bools_col{1, 1, 0, 0, 0, 0, 0, 0, 1, 0};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_FIRST
-    auto const result = lists::index_of(lists->view(), keys, FIND_FIRST);
-    auto const expected =
-      int32s_col{1, 0, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 0, ABSENT};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
-  {
-    // FIND_LAST
-    auto const result = lists::index_of(lists->view(), keys, FIND_LAST);
-    auto const expected =
-      int32s_col{1, 2, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, ABSENT, 2, ABSENT};
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
-  }
+  auto const result   = cudf::contains(haystack, needles);
+  auto const expected = bools_col{1, 1, 0, 0, 0, 0, 0, 0, 1, 0};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
-
-TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsNoNulls)
+#if 0
+TYPED_TEST(TypedStructsContainsTestColumnNeedles, ColumnKeyWithSlicedListsNoNulls)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -1014,7 +718,7 @@ TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsNoNulls)
   }
 }
 
-TYPED_TEST(TypedStructContainsTest, ColumnKeyWithSlicedListsHavingNulls)
+TYPED_TEST(TypedStructsContainsTestColumnNeedles, ColumnKeyWithSlicedListsHavingNulls)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
