@@ -636,7 +636,7 @@ TYPED_TEST(TypedStructContainsTestColumnNeedles, EmptyInput)
     }();
     auto const expected = bools_col{};
     auto const result   = cudf::contains(haystack, needles);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
   }
 
   {
@@ -648,7 +648,7 @@ TYPED_TEST(TypedStructContainsTestColumnNeedles, EmptyInput)
     }();
     auto const result   = cudf::contains(haystack, needles);
     auto const expected = bools_col{0, 0};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
   }
 }
 
