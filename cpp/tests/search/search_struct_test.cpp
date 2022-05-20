@@ -376,12 +376,17 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, EmptyInputTest)
     return structs_col{{child}};
   }();
 
-  auto const needle = [] {
-    auto child = tdata_col{1};
+  auto const needle1 = [] {
+    auto child = tdata_col{};
+    return make_struct_scalar(child);
+  }();
+  auto const needle2 = [] {
+    auto child = tdata_col{1, 2, 3};
     return make_struct_scalar(child);
   }();
 
-  EXPECT_EQ(false, cudf::contains(haystack, needle));
+  EXPECT_EQ(false, cudf::contains(haystack, needle1));
+  EXPECT_EQ(false, cudf::contains(haystack, needle2));
 }
 
 TYPED_TEST(TypedStructContainsTestScalarNeedle, TrivialInputTests)
