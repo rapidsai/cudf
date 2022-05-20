@@ -230,14 +230,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def end(self):
-        """
-        The absolute last value of the RangeIndex.
-        """
-        return self._end
-
-    @property  # type: ignore
-    @_cudf_nvtx_annotate
     def _num_rows(self):
         return len(self)
 
