@@ -16,8 +16,6 @@
 
 #include <hash/unordered_multiset.cuh>
 #include <search/utilities.hpp>
-#include <stream_compaction/stream_compaction_common.cuh>
-#include <stream_compaction/stream_compaction_common.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -87,10 +85,10 @@ struct contains_scalar_dispatch {
                                                        scalar const& needle,
                                                        rmm::cuda_stream_view stream) const
   {
-    // Haystack and needle structure compatibility will be checked by the table comparator
-    // constructor during calling to `contains_nested_element`.
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
+    // Haystack and needle structure compatibility will be checked by the table comparator
+    // constructor during calling to `contains_nested_element`.
     auto const [needle_cv, _] = nested_type_scalar_to_column_view(needle, stream);
     return contains_nested_element(haystack, needle_cv, stream);
   }
@@ -137,28 +135,27 @@ struct multi_contains_dispatch {
 
     auto const haystack_set    = cudf::detail::unordered_multiset<Type>::create(haystack, stream);
     auto const needles_cdv_ptr = column_device_view::create(needles, stream);
-    auto const begin           = thrust::make_counting_iterator<size_type>(0);
-    auto const end             = begin + needles.size();
+    auto const needles_it      = thrust::make_counting_iterator<size_type>(0);
 
     if (needles.has_nulls()) {
-      thrust::transform(
-        rmm::exec_policy(stream),
-        begin,
-        end,
-        out_begin,
-        [haystack = haystack_set.to_device(), needles = *needles_cdv_ptr] __device__(size_t idx) {
-          return needles.is_null_nocheck(idx) ||
-                 haystack.contains(needles.template element<Type>(idx));
-        });
+      thrust::transform(rmm::exec_policy(stream),
+                        needles_it,
+                        needles_it + needles.size(),
+                        out_begin,
+                        [haystack = haystack_set.to_device(),
+                         needles  = *needles_cdv_ptr] __device__(size_type const idx) {
+                          return needles.is_null_nocheck(idx) ||
+                                 haystack.contains(needles.template element<Type>(idx));
+                        });
     } else {
-      thrust::transform(
-        rmm::exec_policy(stream),
-        begin,
-        end,
-        out_begin,
-        [haystack = haystack_set.to_device(), needles = *needles_cdv_ptr] __device__(size_t index) {
-          return haystack.contains(needles.template element<Type>(index));
-        });
+      thrust::transform(rmm::exec_policy(stream),
+                        needles_it,
+                        needles_it + needles.size(),
+                        out_begin,
+                        [haystack = haystack_set.to_device(),
+                         needles  = *needles_cdv_ptr] __device__(size_type const index) {
+                          return haystack.contains(needles.template element<Type>(index));
+                        });
     }
 
     return result;
@@ -217,6 +214,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
+
   return cudf::type_dispatcher(
     haystack.type(), multi_contains_dispatch{}, haystack, needles, stream, mr);
 }
