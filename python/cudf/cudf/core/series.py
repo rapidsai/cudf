@@ -1494,7 +1494,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             value = Series.from_pandas(value)
 
         if not (is_scalar(value) or isinstance(value, (abc.Mapping, Series))):
-            #
             raise TypeError(
                 f'"value" parameter must be a scalar, dict '
                 f"or Series, but you passed a "
