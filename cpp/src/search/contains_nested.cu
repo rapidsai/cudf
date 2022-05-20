@@ -78,7 +78,21 @@ bool contains_nested_element(column_view const& haystack,
 
 namespace {
 /**
- * @brief The adapter struct for calling a table comparator from special input parameters.
+ * @brief Convert an index `i` iterating in reverse order in the range `[-1, -size-1)` into the
+ *        valid index range `[0, size)`.
+ *
+ * This conversion is needed when we want to use two strong index types but are limited to use only
+ * one type. As such, we can use non-negative indices to denote one strong index type and negative
+ * indices to denote the other. After recognizing the corresponding type, we need to convert the
+ * negative indices into their original values.
+ */
+struct index_adapter {
+  __device__ inline auto operator()(size_type const i) const noexcept { return -(i + 1); }
+};
+
+/**
+ * @brief The adapter functor for calling a table comparator from row indices that may have negative
+ *        values.
  *
  * @tparam Comparator A class of table comparator with strong index types and supports nested
  *         types data.
@@ -88,16 +102,16 @@ struct table_comparator_adapter {
   table_comparator_adapter(Comparator&& comp_) : comp(std::move(comp_)) {}
 
   /**
-   * @brief Call the comparator with strong index types from the input indices of size_type type.
+   * @brief Call the comparator with strong index types from the row indices of size_type type.
    *
-   * Given two size_type indices `i` and `j`, this adapter `operator()` converts the non-negative
-   * index into `lhs_index_type` and the negative index into `rhs_index_type`. Before such
-   * conversion happening, it also shifts the negative index (which is given in the range
-   * `[-1, -size-1)` into the correct range `[0, size)`.
+   * Given two row indices `i` and `j`, this functor converts the non-negative value into
+   * `lhs_index_type` and the negative value into `rhs_index_type`. Before such conversion
+   * happening, it also converts the negative index into its valid range using `index_adapter`
+   * functor.
    *
    * Note that there is not any validity check to be performed in this adapter function. Caller is
    * responsible to make sure the input parameters are valid: one index must be non-negative and
-   * the other is negative.
+   * the other must be negative.
    *
    * @param i Index of a row in one table to compare.
    * @param j Index of a row in the other table to compare.
@@ -109,7 +123,7 @@ struct table_comparator_adapter {
     using cudf::experimental::row::rhs_index_type;
 
     auto const lhs_idx = static_cast<lhs_index_type>(i >= 0 ? i : j);
-    auto const rhs_idx = static_cast<rhs_index_type>(i < 0 ? -(i + 1) : -(j + 1));
+    auto const rhs_idx = static_cast<rhs_index_type>(index_adapter{}(i < 0 ? i : j));
 
     return comp(lhs_idx, rhs_idx);
   }
@@ -119,7 +133,7 @@ struct table_comparator_adapter {
 };
 
 /**
- * @brief The adapter struct for calling a row hasher from special input parameters.
+ * @brief The adapter struct for calling a row hasher from negative row indices.
  *
  * @tparam RowHasher A class of row hasher that supports nested types data.
  */
@@ -128,13 +142,16 @@ struct row_hasher_adapter {
   row_hasher_adapter(RowHasher&& hasher_) : hasher(std::move(hasher_)) {}
 
   /**
-   * Given an index `i` in the range `[-1, -size-1)`, this function converts it into the correct
-   * range `[0, size)` before calling to the underlying row hasher and return the hash value.
+   * Given a negative row index `i`, this functor converts the index into its valid range
+   * using `index_adapter` functor before calling to the underlying row hasher.
    *
-   * @param i Index of a row in the table to hash.
-   * @return The hash value.
+   * @param i A row index that is given as a negative value.
+   * @return The resulting hash value.
    */
-  __device__ inline auto operator()(size_type const i) const noexcept { return hasher(-(i + 1)); }
+  __device__ inline auto operator()(size_type const i) const noexcept
+  {
+    return hasher(index_adapter{}(i));
+  }
 
  private:
   RowHasher const hasher;
@@ -204,8 +221,10 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
   {
     // Supply negative indices so `table_comparator_adapter` can recognize and convert them to
     // `rhs_index_type`.
-    // Note that needle indices will be supplied in the range `[-1, -1-neeedles.size())`, thus they
-    // also need to be converted back to the range `[0, needles.size())`.
+    // A reverse iterator constructed from `0` value will begin from `-1`.
+    // Thus, needle indices will iterate in reverse order in the range `[-1, -1-neeedles.size())`.
+    // They need to be converted back to the range `[0, needles.size())` when calling to table
+    // comparator and row hasher.
     auto const needles_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(0));
 
     auto const hasher   = cudf::experimental::row::hash::row_hasher(needles_tv, stream);
