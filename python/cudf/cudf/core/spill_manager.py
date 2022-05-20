@@ -66,6 +66,7 @@ class SpillManager:
             if buffer.sole_owner:
                 self._base_buffers[self._id_counter] = buffer
                 self._id_counter += 1
+        self.spill_to_device_limit()
 
     def base_buffers(
         self, order_by_access_time: bool = False

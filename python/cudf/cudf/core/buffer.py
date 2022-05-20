@@ -44,8 +44,8 @@ class Buffer(Serializable):
     _sole_owner: bool
     _access_counter: AccessCounter
     _raw_pointer_exposed: bool
-    _spill_manager: Optional[SpillManager]
     _last_accessed: float
+    _spill_manager: Optional[SpillManager]
 
     def __init__(
         self,
@@ -61,6 +61,7 @@ class Buffer(Serializable):
         self._sole_owner = sole_owner
         self._raw_pointer_exposed = False
         self._ptr_desc = {"type": "gpu"}
+        self._last_accessed = time.monotonic()
 
         if isinstance(data, Buffer):
             self._ptr = data.ptr
@@ -98,7 +99,6 @@ class Buffer(Serializable):
             self._spill_manager.add(self)
         else:
             self._spill_manager = None
-        self._last_accessed = time.monotonic()
 
     @classmethod
     def from_buffer(cls, buffer: Buffer, size: int = None, offset: int = 0):
@@ -157,6 +157,9 @@ class Buffer(Serializable):
 
     @property
     def ptr(self) -> int:
+        if self._spill_manager is not None:
+            self._spill_manager.spill_to_device_limit()
+
         self.move_inplace(target="gpu")
         self._raw_pointer_exposed = True
         self._last_accessed = time.monotonic()
@@ -164,6 +167,9 @@ class Buffer(Serializable):
         return self._ptr
 
     def ptr_and_access_counter(self) -> Tuple[int, AccessCounter]:
+        if self._spill_manager is not None:
+            self._spill_manager.spill_to_device_limit()
+
         self.move_inplace(target="gpu")
         self._last_accessed = time.monotonic()
         assert self._ptr is not None

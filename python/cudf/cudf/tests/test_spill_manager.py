@@ -55,7 +55,7 @@ def test_spillable_df_creation():
 def test_spillable_df_groupby():
     df = cudf.DataFrame({"x": [1, 1, 1]})
     gb = df.groupby("x")
-    # `gd` holds a reference to the device memory, which makes
+    # `gb` holds a reference to the device memory, which makes
     # the buffer unspillable
     assert df._data._data["x"].data._access_counter.use_count() == 2
     assert not df._data._data["x"].data.spillable
@@ -136,3 +136,18 @@ def test_spill_to_device_limit(manager: SpillManager):
     assert gen_df.is_spilled(df1)
     assert gen_df.is_spilled(df2)
     assert gen_df.is_spilled(df3)
+
+
+@pytest.mark.parametrize(
+    "manager", [{"device_memory_limit": 0}], indirect=True
+)
+def test_zero_device_limit(manager: SpillManager):
+    assert manager._device_memory_limit == 0
+    df1 = gen_df()
+    df2 = gen_df()
+    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 2, 0)
+    df1 + df2
+    # Notice, while performing the addintion both df1 and df2 are unspillable
+    assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size * 2)
+    manager.spill_to_device_limit()
+    assert manager.spilled_and_unspilled() == (gen_df.buffer_size * 2, 0)
