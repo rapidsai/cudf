@@ -23,35 +23,30 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <vector>
-
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 /**
  * @copydoc cudf::lower_bound
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> lower_bound(
-  table_view const& haystack,
-  table_view const& needles,
-  std::vector<order> const& column_order,
-  std::vector<null_order> const& null_precedence,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> lower_bound(table_view const& haystack,
+                                    table_view const& needles,
+                                    std::vector<order> const& column_order,
+                                    std::vector<null_order> const& null_precedence,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::upper_bound
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> upper_bound(
-  table_view const& haystack,
-  table_view const& needles,
-  std::vector<order> const& column_order,
-  std::vector<null_order> const& null_precedence,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> upper_bound(table_view const& haystack,
+                                    table_view const& needles,
+                                    std::vector<order> const& column_order,
+                                    std::vector<null_order> const& null_precedence,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::contains(column_view const&, scalar const&, rmm::mr::device_memory_resource*)
@@ -65,11 +60,42 @@ bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_strea
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> contains(
-  column_view const& haystack,
-  column_view const& needles,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> contains(column_view const& haystack,
+                                 column_view const& needles,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 
-}  // namespace detail
-}  // namespace cudf
+/**
+ * @brief Check if the (unique) row of the `needle` column is contained in the `haystack` column.
+ *
+ * If the input `needle` column has more than one row, only the first row will be considered.
+ *
+ * This function is designed for nested types only. It can also work with non-nested types
+ * but with lower performance due to the complexity of the implementation.
+ *
+ * @param haystack The column containing search space.
+ * @param needle A scalar value to check for existence in the search space.
+ * @return true if the given `needle` value exists in the `haystack` column.
+ */
+bool contains_nested_element(column_view const& haystack,
+                             column_view const& needle,
+                             rmm::cuda_stream_view stream);
+
+/**
+ * @brief Check if each row of the `needles` column exists in the `haystack` column.
+ *
+ * This function is designed for nested types only. It can also work with non-nested types
+ * but with lower performance due to the complexity of the implementation.
+ *
+ * @param haystack The column containing search space.
+ * @param needles A column of values to check for existence in the search space.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return A BOOL column indicating if each element in `needles` exists in the search space.
+ */
+std::unique_ptr<column> multi_contains_nested_elements(column_view const& haystack,
+                                                       column_view const& needles,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::mr::device_memory_resource* mr);
+
+}  // namespace cudf::detail
