@@ -33,8 +33,9 @@ using structs_col = cudf::test::structs_column_wrapper;
 using strings_col = cudf::test::strings_column_wrapper;
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
-constexpr int32_t null{0};  // Mark for null child elements at the current level
-constexpr int32_t XXX{0};   // Mark for null elements at all levels
+constexpr int32_t null{0};       // Mark for null child elements at the current level
+constexpr int32_t XXX{0};        // Mark for null elements at all levels
+constexpr int32_t dont_care{0};  // Mark for elements that will be sliced off
 
 using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::FloatingPointTypes,
@@ -47,7 +48,7 @@ struct TypedListsContainsTestScalarNeedle : public cudf::test::BaseFixture {
 };
 TYPED_TEST_SUITE(TypedListsContainsTestScalarNeedle, TestTypes);
 
-TYPED_TEST(TypedListsContainsTestScalarNeedle, EmptyInputTest)
+TYPED_TEST(TypedListsContainsTestScalarNeedle, EmptyInput)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
@@ -63,11 +64,11 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, EmptyInputTest)
     return cudf::list_scalar(child);
   }();
 
-  EXPECT_EQ(false, cudf::contains(haystack, needle1));
-  EXPECT_EQ(false, cudf::contains(haystack, needle2));
+  EXPECT_FALSE(cudf::contains(haystack, needle1));
+  EXPECT_FALSE(cudf::contains(haystack, needle2));
 }
 
-TYPED_TEST(TypedListsContainsTestScalarNeedle, TrivialInputTests)
+TYPED_TEST(TypedListsContainsTestScalarNeedle, TrivialInput)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
@@ -83,234 +84,123 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, TrivialInputTests)
     return cudf::list_scalar(child);
   }();
 
-  EXPECT_EQ(true, cudf::contains(haystack, needle1));
-  EXPECT_EQ(false, cudf::contains(haystack, needle2));
+  EXPECT_TRUE(cudf::contains(haystack, needle1));
+  EXPECT_FALSE(cudf::contains(haystack, needle2));
 }
 
+TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedColumnInput)
+{
+  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  auto const haystack_original =
+    lists_col{{dont_care, dont_care}, {dont_care}, {1, 2}, {1}, {}, {1, 3}, {dont_care, dont_care}};
+  auto const haystack = cudf::slice(haystack_original, {2, 6})[0];
+
+  auto const needle1 = [] {
+    auto child = tdata_col{1, 2};
+    return cudf::list_scalar(child);
+  }();
+  auto const needle2 = [] {
+    auto child = tdata_col{};
+    return cudf::list_scalar(child);
+  }();
+  auto const needle3 = [] {
+    auto child = tdata_col{dont_care, dont_care};
+    return cudf::list_scalar(child);
+  }();
+
+  EXPECT_TRUE(cudf::contains(haystack, needle1));
+  EXPECT_TRUE(cudf::contains(haystack, needle2));
+  EXPECT_FALSE(cudf::contains(haystack, needle3));
+}
+
+TYPED_TEST(TypedListsContainsTestScalarNeedle, SimpleInputWithNulls)
+{
+  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  // Test with nulls at the top level.
+  {
+    auto const haystack =
+      lists_col{{{1, 2}, {1}, {} /*NULL*/, {1, 3}, {4}, {} /*NULL*/, {1, 1}}, nulls_at({2, 5})};
+
+    auto const needle1 = [] {
+      auto child = tdata_col{1, 2};
+      return cudf::list_scalar(child);
+    }();
+
+    EXPECT_TRUE(cudf::contains(haystack, needle1));
+  }
+
+  // Test with nulls at the children level.
+  {
+    auto const haystack = lists_col{{lists_col{1, 2},
+                                     lists_col{1},
+                                     lists_col{{1, null}, null_at(1)},
+                                     lists_col{} /*NULL*/,
+                                     lists_col{1, 3},
+                                     lists_col{1, 4},
+                                     lists_col{4},
+                                     lists_col{} /*NULL*/,
+                                     lists_col{1, 1}},
+                                    nulls_at({3, 7})};
+
+    auto const needle1 = [] {
+      auto child = tdata_col{{1, null}, null_at(1)};
+      return cudf::list_scalar(child);
+    }();
+    auto const needle2 = [] {
+      auto child = tdata_col{{null, 1}, null_at(0)};
+      return cudf::list_scalar(child);
+    }();
+    auto const needle3 = [] {
+      auto child = tdata_col{1, 0};
+      return cudf::list_scalar(child);
+    }();
+
+    EXPECT_TRUE(cudf::contains(haystack, needle1));
+    EXPECT_FALSE(cudf::contains(haystack, needle2));
+    EXPECT_FALSE(cudf::contains(haystack, needle3));
+  }
+}
+
+TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedInputHavingNulls)
+{
+  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  auto const haystack_original = lists_col{{{dont_care, dont_care},
+                                            {dont_care} /*NULL*/,
+                                            lists_col{{1, null}, null_at(1)},
+                                            {1},
+                                            {} /*NULL*/,
+                                            {1, 3},
+                                            {4},
+                                            {} /*NULL*/,
+                                            {1, 1},
+                                            {dont_care}},
+                                           nulls_at({1, 4, 7})};
+  auto const haystack          = cudf::slice(haystack_original, {2, 9})[0];
+
+  auto const needle1 = [] {
+    auto child = tdata_col{{1, null}, null_at(1)};
+    return cudf::list_scalar(child);
+  }();
+  auto const needle2 = [] {
+    auto child = tdata_col{};
+    return cudf::list_scalar(child);
+  }();
+  auto const needle3 = [] {
+    auto child = tdata_col{dont_care, dont_care};
+    return cudf::list_scalar(child);
+  }();
+
+  EXPECT_TRUE(cudf::contains(haystack, needle1));
+  EXPECT_FALSE(cudf::contains(haystack, needle2));
+  EXPECT_FALSE(cudf::contains(haystack, needle3));
+}
 #if 0
-
-TYPED_TEST(TypedListsContainsTestScalarNeedle, TrivialInputTests)
-{
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  auto const col = [] {
-    auto child1 = tdata_col{1, 2, 3};
-    auto child2 = tdata_col{4, 5, 6};
-    auto child3 = strings_col{"x", "y", "z"};
-    return structs_col{{child1, child2, child3}};
-  }();
-
-  auto const val1 = [] {
-    auto child1 = tdata_col{1};
-    auto child2 = tdata_col{4};
-    auto child3 = strings_col{"x"};
-    return make_struct_scalar(child1, child2, child3);
-  }();
-  auto const val2 = [] {
-    auto child1 = tdata_col{1};
-    auto child2 = tdata_col{4};
-    auto child3 = strings_col{"a"};
-    return make_struct_scalar(child1, child2, child3);
-  }();
-
-  EXPECT_EQ(true, cudf::contains(col, val1));
-  EXPECT_EQ(false, cudf::contains(col, val2));
-}
-
-TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedColumnInputTests)
-{
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  constexpr int32_t dont_care{0};
-
-  auto const col_original = [] {
-    auto child1 = tdata_col{dont_care, dont_care, 1, 2, 3, dont_care};
-    auto child2 = tdata_col{dont_care, dont_care, 4, 5, 6, dont_care};
-    auto child3 = strings_col{"dont_care", "dont_care", "x", "y", "z", "dont_care"};
-    return structs_col{{child1, child2, child3}};
-  }();
-  auto const col = cudf::slice(col_original, {2, 5})[0];
-
-  auto const val1 = [] {
-    auto child1 = tdata_col{1};
-    auto child2 = tdata_col{4};
-    auto child3 = strings_col{"x"};
-    return make_struct_scalar(child1, child2, child3);
-  }();
-  auto const val2 = [] {
-    auto child1 = tdata_col{dont_care};
-    auto child2 = tdata_col{dont_care};
-    auto child3 = strings_col{"dont_care"};
-    return make_struct_scalar(child1, child2, child3);
-  }();
-
-  EXPECT_EQ(true, cudf::contains(col, val1));
-  EXPECT_EQ(false, cudf::contains(col, val2));
-}
-
-TYPED_TEST(TypedListsContainsTestScalarNeedle, SimpleInputWithNullsTests)
-{
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  constexpr int32_t null{0};
-
-  // Test with nulls at the top level.
-  {
-    auto const col1 = [] {
-      auto child1 = tdata_col{1, null, 3};
-      auto child2 = tdata_col{4, null, 6};
-      auto child3 = strings_col{"x", "" /*NULL*/, "z"};
-      return structs_col{{child1, child2, child3}, null_at(1)};
-    }();
-
-    auto const val1 = [] {
-      auto child1 = tdata_col{1};
-      auto child2 = tdata_col{4};
-      auto child3 = strings_col{"x"};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-    auto const val2 = [] {
-      auto child1 = tdata_col{1};
-      auto child2 = tdata_col{4};
-      auto child3 = strings_col{"a"};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-    auto const val3 = [] {
-      auto child1 = tdata_col{{null}, null_at(0)};
-      auto child2 = tdata_col{{null}, null_at(0)};
-      auto child3 = strings_col{{""}, null_at(0)};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-
-    EXPECT_EQ(true, cudf::contains(col1, val1));
-    EXPECT_EQ(false, cudf::contains(col1, val2));
-    EXPECT_EQ(false, cudf::contains(col1, val3));
-  }
-
-  // Test with nulls at the children level.
-  {
-    auto const col = [] {
-      auto child1 = tdata_col{{1, null, 3}, null_at(1)};
-      auto child2 = tdata_col{{4, null, 6}, null_at(1)};
-      auto child3 = strings_col{{"" /*NULL*/, "" /*NULL*/, "z"}, nulls_at({0, 1})};
-      return structs_col{{child1, child2, child3}};
-    }();
-
-    auto const val1 = [] {
-      auto child1 = tdata_col{1};
-      auto child2 = tdata_col{4};
-      auto child3 = strings_col{{"" /*NULL*/}, null_at(0)};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-    auto const val2 = [] {
-      auto child1 = tdata_col{1};
-      auto child2 = tdata_col{4};
-      auto child3 = strings_col{""};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-    auto const val3 = [] {
-      auto child1 = tdata_col{{null}, null_at(0)};
-      auto child2 = tdata_col{{null}, null_at(0)};
-      auto child3 = strings_col{{""}, null_at(0)};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-
-    EXPECT_EQ(true, cudf::contains(col, val1));
-    EXPECT_EQ(false, cudf::contains(col, val2));
-    EXPECT_EQ(true, cudf::contains(col, val3));
-  }
-
-  // Test with nulls in the input scalar.
-  {
-    auto const col = [] {
-      auto child1 = tdata_col{1, 2, 3};
-      auto child2 = tdata_col{4, 5, 6};
-      auto child3 = strings_col{"x", "y", "z"};
-      return structs_col{{child1, child2, child3}};
-    }();
-
-    auto const val1 = [] {
-      auto child1 = tdata_col{1};
-      auto child2 = tdata_col{4};
-      auto child3 = strings_col{"x"};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-    auto const val2 = [] {
-      auto child1 = tdata_col{1};
-      auto child2 = tdata_col{4};
-      auto child3 = strings_col{{"" /*NULL*/}, null_at(0)};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-
-    EXPECT_EQ(true, cudf::contains(col, val1));
-    EXPECT_EQ(false, cudf::contains(col, val2));
-  }
-}
-
-TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedInputWithNullsTests)
-{
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  constexpr int32_t dont_care{0};
-  constexpr int32_t null{0};
-
-  // Test with nulls at the top level.
-  {
-    auto const col_original = [] {
-      auto child1 = tdata_col{dont_care, dont_care, 1, null, 3, dont_care};
-      auto child2 = tdata_col{dont_care, dont_care, 4, null, 6, dont_care};
-      auto child3 = strings_col{"dont_care", "dont_care", "x", "" /*NULL*/, "z", "dont_care"};
-      return structs_col{{child1, child2, child3}, null_at(3)};
-    }();
-    auto const col = cudf::slice(col_original, {2, 5})[0];
-
-    auto const val1 = [] {
-      auto child1 = tdata_col{1};
-      auto child2 = tdata_col{4};
-      auto child3 = strings_col{"x"};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-    auto const val2 = [] {
-      auto child1 = tdata_col{1};
-      auto child2 = tdata_col{4};
-      auto child3 = strings_col{"a"};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-
-    EXPECT_EQ(true, cudf::contains(col, val1));
-    EXPECT_EQ(false, cudf::contains(col, val2));
-  }
-
-  // Test with nulls at the children level.
-  {
-    auto const col_original = [] {
-      auto child1 =
-        tdata_col{{dont_care, dont_care /*also NULL*/, 1, null, 3, dont_care}, null_at(3)};
-      auto child2 =
-        tdata_col{{dont_care, dont_care /*also NULL*/, 4, null, 6, dont_care}, null_at(3)};
-      auto child3 = strings_col{
-        {"dont_care", "dont_care" /*also NULL*/, "" /*NULL*/, "y", "z", "dont_care"}, null_at(2)};
-      return structs_col{{child1, child2, child3}, null_at(1)};
-    }();
-    auto const col = cudf::slice(col_original, {2, 5})[0];
-
-    auto const val1 = [] {
-      auto child1 = tdata_col{1};
-      auto child2 = tdata_col{4};
-      auto child3 = strings_col{{"x"}, null_at(0)};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-    auto const val2 = [] {
-      auto child1 = tdata_col{dont_care};
-      auto child2 = tdata_col{dont_care};
-      auto child3 = strings_col{"dont_care"};
-      return make_struct_scalar(child1, child2, child3);
-    }();
-
-    EXPECT_EQ(true, cudf::contains(col, val1));
-    EXPECT_EQ(false, cudf::contains(col, val2));
-  }
-}
 
 //==================================================================================================
 template <typename T>
