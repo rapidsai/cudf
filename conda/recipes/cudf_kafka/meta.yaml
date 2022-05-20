@@ -28,16 +28,16 @@ requirements:
     - sysroot_linux-64 {{ sysroot_version }}  # [linux64]
     - sysroot_linux-aarch64 {{ sysroot_version }}  # [aarch64]
   host:
-    - cudf {{ version }}.*
-    - cython >=0.29,<0.30
-    - libcudf_kafka {{ version }}.*
     - python
+    - cython >=0.29,<0.30
+    - cudf {{ version }}
+    - libcudf_kafka {{ version }}
     - setuptools
   run:
     - python
-    - libcudf_kafka {{ version }}.*
+    - libcudf_kafka {{ version }}
     - python-confluent-kafka >=1.7.0,<1.8.0a0
-    - cudf {{ version }}.*
+    - cudf {{ version }}
 
 test:                                   # [linux64]
   requires:                             # [linux64]
