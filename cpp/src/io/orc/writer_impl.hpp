@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "orc.h"
-#include "orc_gpu.h"
+#include "orc.hpp"
+#include "orc_gpu.hpp"
 
 #include <io/utilities/hostdevice_vector.hpp>
 
