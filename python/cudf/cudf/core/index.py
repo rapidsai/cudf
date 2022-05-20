@@ -824,7 +824,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self.start
 
     def max(self):
-        return self.end
+        return self._end
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
