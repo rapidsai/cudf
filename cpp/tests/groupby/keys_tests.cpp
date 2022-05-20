@@ -257,26 +257,26 @@ TYPED_TEST(groupby_keys_test, structs)
 
   /*
     `@` indicates null
-       keys:               values:
-       /+---------------+
+       keys:                values:
+       /+----------------+
        |s1{s2{a,b},   c}|
-       +----------------+
-     0 |  { {1, 1}, "a"}|  1
-     1 |  { {1, 2}, "b"}|  2
-     2 |  {@{2, 1}, "c"}|  3
-     3 |  {@{2, 1}, "c"}|  4
-     4 | @{ {2, 2}, "d"}|  5
-     5 | @{ {2, 2}, "d"}|  6
-     6 |  { {1, 1}, "a"}|  7
-     7 |  {@{2, 1}, "c"}|  8
-     8 |  { {1, 1}, "a"}|  9
-       +----------------+
+       +-----------------+
+     0 |  { { 1, 1}, "a"}|  1
+     1 |  { { 1, 2}, "b"}|  2
+     2 |  {@{ 2, 1}, "c"}|  3
+     3 |  {@{ 2, 1}, "c"}|  4
+     4 | @{ { 2, 2}, "d"}|  5
+     5 | @{ { 2, 2}, "d"}|  6
+     6 |  { { 1, 1}, "a"}|  7
+     7 |  {@{ 2, 1}, "c"}|  8
+     8 |  { {@1, 1}, "a"}|  9
+       +-----------------+
   */
 
   // clang-format off
-  auto col_a = FWCW<V>{ 1,   1,   2,   2,   2,   2,   1,   2,   1 };
-  auto col_b = FWCW<V>{ 1,   2,   1,   1,   2,   2,   1,   1,   1 };
-  auto col_c = STRINGS{"a", "b", "c", "c", "d", "d", "a", "c", "a"};
+  auto col_a = FWCW<V>{{ 1,   1,   2,   2,   2,   2,   1,   2,   1 }, null_at(8)};
+  auto col_b = FWCW<V> { 1,   2,   1,   1,   2,   2,   1,   1,   1 };
+  auto col_c = STRINGS {"a", "b", "c", "c", "d", "d", "a", "c", "a"};
   // clang-format on
   auto s2 = STRUCTS{{col_a, col_b}, nulls_at({2, 3, 7})};
 
@@ -284,14 +284,14 @@ TYPED_TEST(groupby_keys_test, structs)
   auto vals = FWCW<int>{1, 2, 3, 4, 5, 6, 7, 8, 9};
 
   // clang-format off
-  auto expected_col_a = FWCW<V>{ 1,   1,   2,   2,   2 };
-  auto expected_col_b = FWCW<V>{ 1,   2,   1,   1,   1 };
-  auto expected_col_c = STRINGS{"a", "b", "c", "c", "c"};
+  auto expected_col_a = FWCW<V>{ 1,   1 };
+  auto expected_col_b = FWCW<V>{ 1,   2 };
+  auto expected_col_c = STRINGS{"a", "b"};
   // clang-format on
-  auto expected_s2 = STRUCTS{{expected_col_a, expected_col_b}, nulls_at({2, 3, 4})};
+  auto expected_s2 = STRUCTS{{expected_col_a, expected_col_b}};
 
   auto expect_keys = STRUCTS{{expected_s2, expected_col_c}, no_nulls()};
-  auto expect_vals = FWCW<R>{8, 1, 2, 3, 7};
+  auto expect_vals = FWCW<R>{6, 1};
 
   auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
