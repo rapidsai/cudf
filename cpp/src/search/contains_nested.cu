@@ -117,7 +117,7 @@ struct table_comparator_adapter {
    * @param j Index of a row in the other table to compare.
    * @return The row comparison result.
    */
-  __device__ bool operator()(size_type const i, size_type const j) const noexcept
+  __device__ inline auto operator()(size_type const i, size_type const j) const noexcept
   {
     using cudf::experimental::row::lhs_index_type;
     using cudf::experimental::row::rhs_index_type;
@@ -144,6 +144,8 @@ struct row_hasher_adapter {
   /**
    * Given a negative row index `i`, this functor converts the index into its valid range
    * using `index_adapter` functor before calling to the underlying row hasher.
+   *
+   * The will not be any validity check for the input value `i`, assuming that it is negative.
    *
    * @param i A row index that is given as a negative value.
    * @return The resulting hash value.
