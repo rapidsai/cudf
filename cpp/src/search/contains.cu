@@ -28,7 +28,6 @@
 #include <cudf/lists/list_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/search.hpp>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -47,15 +46,6 @@
 
 namespace cudf {
 namespace detail {
-
-// External functions, defined in `detail/contains_nested.cu`.
-bool contains_nested_element(column_view const& haystack,
-                             column_view const& needle,
-                             rmm::cuda_stream_view stream);
-std::unique_ptr<column> multi_contains_nested_elements(column_view const& haystack,
-                                                       column_view const& needles,
-                                                       rmm::cuda_stream_view stream,
-                                                       rmm::mr::device_memory_resource* mr);
 
 namespace {
 
