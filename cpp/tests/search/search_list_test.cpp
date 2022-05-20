@@ -200,7 +200,6 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SlicedInputHavingNulls)
   EXPECT_FALSE(cudf::contains(haystack, needle2));
   EXPECT_FALSE(cudf::contains(haystack, needle3));
 }
-#if 0
 
 //==================================================================================================
 template <typename T>
@@ -209,50 +208,30 @@ struct TypedListContainsTestColumnNeedles : public cudf::test::BaseFixture {
 
 TYPED_TEST_SUITE(TypedListContainsTestColumnNeedles, TestTypes);
 
-TYPED_TEST(TypedListContainsTestColumnNeedles, EmptyInputTest)
+TYPED_TEST(TypedListContainsTestColumnNeedles, EmptyInput)
 {
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  auto const haystack = [] {
-    auto child1 = tdata_col{};
-    auto child2 = tdata_col{};
-    auto child3 = strings_col{};
-    return structs_col{{child1, child2, child3}};
-  }();
-
-  auto const needles = [] {
-    auto child1 = tdata_col{};
-    auto child2 = tdata_col{};
-    auto child3 = strings_col{};
-    return structs_col{{child1, child2, child3}};
-  }();
-
-  auto const result   = cudf::contains(haystack, needles);
+  auto const haystack = lists_col{};
+  auto const needles  = lists_col{};
   auto const expected = bools_col{};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
-}
-
-TYPED_TEST(TypedListContainsTestColumnNeedles, TrivialInputTest)
-{
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  auto const haystack = [] {
-    auto child1 = tdata_col{1, 3, 1, 1, 2, 1, 2, 2, 1, 2};
-    auto child2 = tdata_col{1, 0, 0, 0, 1, 0, 1, 2, 1, 1};
-    return structs_col{{child1, child2}};
-  }();
-
-  auto const needles = [] {
-    auto child1 = tdata_col{1, 3, 1, 1, 2, 1, 0, 0, 1, 0};
-    auto child2 = tdata_col{1, 0, 2, 3, 2, 1, 0, 0, 1, 0};
-    return structs_col{{child1, child2}};
-  }();
-
-  auto const expected = bools_col{1, 1, 0, 0, 1, 1, 0, 0, 1, 0};
   auto const result   = cudf::contains(haystack, needles);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
 
+TYPED_TEST(TypedListContainsTestColumnNeedles, TrivialInput)
+{
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  auto const haystack = lists_col{{0, 1}, {2}, {3, 4, 5}, {2, 3, 4}, {}, {0, 2, 0}};
+  auto const needles  = lists_col{{0, 1}, {1}, {3, 5, 4}, {}};
+
+  auto const expected = bools_col{1, 0, 0, 1};
+  auto const result   = cudf::contains(haystack, needles);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
+}
+
+#if 0
 TYPED_TEST(TypedListContainsTestColumnNeedles, SlicedInputNoNulls)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
