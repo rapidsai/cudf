@@ -25,21 +25,23 @@ public class CudaFatalTest {
 
   @Test
   public void testCudaFatalException() {
-    try (ColumnView cv = ColumnView.fromDeviceBuffer(new BadDeviceBuffer(), 0, DType.INT8, 256);
-         ColumnView ret = cv.sub(cv);
-         HostColumnVector hcv = ret.copyToHost()) {
-    } catch (CudaException ignored) {
-    }
+    try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3, 4, 5)) {
 
-    // CUDA API invoked by libcudf failed because of previous unrecoverable fatal error
-    assertThrows(CudaFatalException.class, () -> {
-      try (ColumnView cv = ColumnView.fromDeviceBuffer(new BadDeviceBuffer(), 0, DType.INT8, 256);
-           HostColumnVector hcv = cv.copyToHost()) {
-      } catch (CudaFatalException ex) {
-        assertEquals(CudaException.CudaError.cudaErrorIllegalAddress, ex.cudaError);
-        throw ex;
+      try (ColumnView badCv = ColumnView.fromDeviceBuffer(new BadDeviceBuffer(), 0, DType.INT8, 256);
+           ColumnView ret = badCv.sub(badCv);
+           HostColumnVector hcv = ret.copyToHost()) {
+      } catch (CudaException ignored) {
       }
-    });
+
+      // CUDA API invoked by libcudf failed because of previous unrecoverable fatal error
+      assertThrows(CudaFatalException.class, () -> {
+        try (ColumnVector cv2 = cv.asLongs()) {
+        } catch (CudaFatalException ex) {
+          assertEquals(CudaException.CudaError.cudaErrorIllegalAddress, ex.cudaError);
+          throw ex;
+        }
+      });
+    }
 
     // CUDA API invoked by RMM failed because of previous unrecoverable fatal error
     assertThrows(CudaFatalException.class, () -> {
