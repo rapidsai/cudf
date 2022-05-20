@@ -18,6 +18,7 @@ set(cython_sources
   binaryop.pyx
   column.pyx
   concat.pyx
+  copying.pyx
   csv.pyx
   datetime.pyx
   expressions.pyx
