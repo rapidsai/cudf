@@ -581,7 +581,13 @@ class parquet_writer_options {
   /**
    * @brief Sets the maximum row group size, in rows.
    */
-  void set_row_group_size_rows(size_type size_rows) { _row_group_size_rows = size_rows; }
+  void set_row_group_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(
+      size_rows >= 5000,
+      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
+    _row_group_size_rows = size_rows;
+  }
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
@@ -591,7 +597,13 @@ class parquet_writer_options {
   /**
    * @brief Sets the maximum page size, in rows.
    */
-  void set_max_page_size_rows(size_type size_rows) { _max_page_size_rows = size_rows; }
+  void set_max_page_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(
+      size_rows >= 5000,
+      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
+    _max_page_size_rows = size_rows;
+  }
 };
 
 class parquet_writer_options_builder {
@@ -964,7 +976,13 @@ class chunked_parquet_writer_options {
   /**
    * @brief Sets the maximum row group size, in rows.
    */
-  void set_row_group_size_rows(size_type size_rows) { _row_group_size_rows = size_rows; }
+  void set_row_group_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(
+      size_rows >= 5000,
+      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
+    _row_group_size_rows = size_rows;
+  }
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
@@ -974,7 +992,13 @@ class chunked_parquet_writer_options {
   /**
    * @brief Sets the maximum page size, in rows.
    */
-  void set_max_page_size_rows(size_type size_rows) { _max_page_size_rows = size_rows; }
+  void set_max_page_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(
+      size_rows >= 5000,
+      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
+    _max_page_size_rows = size_rows;
+  }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
