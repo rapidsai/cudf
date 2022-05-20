@@ -627,16 +627,29 @@ TYPED_TEST(TypedStructContainsTestColumnNeedles, EmptyInput)
     return structs_col{{child1, child2, child3}};
   }();
 
-  auto const needles = [] {
-    auto child1 = tdata_col{};
-    auto child2 = tdata_col{};
-    auto child3 = strings_col{};
-    return structs_col{{child1, child2, child3}};
-  }();
+  {
+    auto const needles = [] {
+      auto child1 = tdata_col{};
+      auto child2 = tdata_col{};
+      auto child3 = strings_col{};
+      return structs_col{{child1, child2, child3}};
+    }();
+    auto const expected = bools_col{};
+    auto const result   = cudf::contains(haystack, needles);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
 
-  auto const result   = cudf::contains(haystack, needles);
-  auto const expected = bools_col{};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  {
+    auto const needles = [] {
+      auto child1 = tdata_col{1, 2};
+      auto child2 = tdata_col{0, 2};
+      auto child3 = strings_col{"x", "y"};
+      return structs_col{{child1, child2, child3}};
+    }();
+    auto const result   = cudf::contains(haystack, needles);
+    auto const expected = bools_col{0, 0};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
 }
 
 TYPED_TEST(TypedStructContainsTestColumnNeedles, TrivialInput)
