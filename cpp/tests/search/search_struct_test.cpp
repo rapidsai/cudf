@@ -69,6 +69,12 @@ auto search_bounds(std::unique_ptr<cudf::column> const& t_col,
   return search_bounds(t_col->view(), values_col, column_orders, null_precedence);
 }
 
+template <typename... Args>
+auto make_struct_scalar(Args&&... args)
+{
+  return cudf::struct_scalar(std::vector<cudf::column_view>{std::forward<Args>(args)...});
+}
+
 }  // namespace
 
 // Test case when all input columns are empty
@@ -370,7 +376,7 @@ TYPED_TEST(TypedScalarStructContainTest, EmptyInputTest)
 
   auto const val = [] {
     auto child = col_wrapper{1};
-    return cudf::struct_scalar(std::vector<cudf::column_view>{child});
+    return make_struct_scalar(child);
   }();
 
   EXPECT_EQ(false, cudf::contains(col, val));
@@ -391,13 +397,13 @@ TYPED_TEST(TypedScalarStructContainTest, TrivialInputTests)
     auto child1 = col_wrapper{1};
     auto child2 = col_wrapper{4};
     auto child3 = strings_col{"x"};
-    return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    return make_struct_scalar(child1, child2, child3);
   }();
   auto const val2 = [] {
     auto child1 = col_wrapper{1};
     auto child2 = col_wrapper{4};
     auto child3 = strings_col{"a"};
-    return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    return make_struct_scalar(child1, child2, child3);
   }();
 
   EXPECT_EQ(true, cudf::contains(col, val1));
@@ -422,13 +428,13 @@ TYPED_TEST(TypedScalarStructContainTest, SlicedColumnInputTests)
     auto child1 = col_wrapper{1};
     auto child2 = col_wrapper{4};
     auto child3 = strings_col{"x"};
-    return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    return make_struct_scalar(child1, child2, child3);
   }();
   auto const val2 = [] {
     auto child1 = col_wrapper{dont_care};
     auto child2 = col_wrapper{dont_care};
     auto child3 = strings_col{"dont_care"};
-    return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+    return make_struct_scalar(child1, child2, child3);
   }();
 
   EXPECT_EQ(true, cudf::contains(col, val1));
@@ -454,19 +460,19 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
       auto child1 = col_wrapper{1};
       auto child2 = col_wrapper{4};
       auto child3 = strings_col{"x"};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
     auto const val2 = [] {
       auto child1 = col_wrapper{1};
       auto child2 = col_wrapper{4};
       auto child3 = strings_col{"a"};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
     auto const val3 = [] {
       auto child1 = col_wrapper{{null}, null_at(0)};
       auto child2 = col_wrapper{{null}, null_at(0)};
       auto child3 = strings_col{{""}, null_at(0)};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
 
     EXPECT_EQ(true, cudf::contains(col1, val1));
@@ -487,19 +493,19 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
       auto child1 = col_wrapper{1};
       auto child2 = col_wrapper{4};
       auto child3 = strings_col{{"" /*NULL*/}, null_at(0)};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
     auto const val2 = [] {
       auto child1 = col_wrapper{1};
       auto child2 = col_wrapper{4};
       auto child3 = strings_col{""};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
     auto const val3 = [] {
       auto child1 = col_wrapper{{null}, null_at(0)};
       auto child2 = col_wrapper{{null}, null_at(0)};
       auto child3 = strings_col{{""}, null_at(0)};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
 
     EXPECT_EQ(true, cudf::contains(col, val1));
@@ -520,13 +526,13 @@ TYPED_TEST(TypedScalarStructContainTest, SimpleInputWithNullsTests)
       auto child1 = col_wrapper{1};
       auto child2 = col_wrapper{4};
       auto child3 = strings_col{"x"};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
     auto const val2 = [] {
       auto child1 = col_wrapper{1};
       auto child2 = col_wrapper{4};
       auto child3 = strings_col{{"" /*NULL*/}, null_at(0)};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
 
     EXPECT_EQ(true, cudf::contains(col, val1));
@@ -555,13 +561,13 @@ TYPED_TEST(TypedScalarStructContainTest, SlicedInputWithNullsTests)
       auto child1 = col_wrapper{1};
       auto child2 = col_wrapper{4};
       auto child3 = strings_col{"x"};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
     auto const val2 = [] {
       auto child1 = col_wrapper{1};
       auto child2 = col_wrapper{4};
       auto child3 = strings_col{"a"};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
 
     EXPECT_EQ(true, cudf::contains(col, val1));
@@ -585,13 +591,13 @@ TYPED_TEST(TypedScalarStructContainTest, SlicedInputWithNullsTests)
       auto child1 = col_wrapper{1};
       auto child2 = col_wrapper{4};
       auto child3 = strings_col{{"x"}, null_at(0)};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
     auto const val2 = [] {
       auto child1 = col_wrapper{dont_care};
       auto child2 = col_wrapper{dont_care};
       auto child3 = strings_col{"dont_care"};
-      return cudf::struct_scalar(std::vector<cudf::column_view>{child1, child2, child3});
+      return make_struct_scalar(child1, child2, child3);
     }();
 
     EXPECT_EQ(true, cudf::contains(col, val1));
