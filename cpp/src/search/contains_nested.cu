@@ -92,8 +92,8 @@ struct table_comparator_adapter {
    *
    * Given two size_type indices `i` and `j`, this adapter `operator()` converts the non-negative
    * index into `lhs_index_type` and the negative index into `rhs_index_type`. Before such
-   * conversion happening, it also shifts the negative index (which is given in the range `[-1,
-   * -size - 1)` into the correct range `[0, size)`.
+   * conversion happening, it also shifts the negative index (which is given in the range
+   * `[-1, -size-1)` into the correct range `[0, size)`.
    *
    * Note that there is not any validity check to be performed in this adapter function. Caller is
    * responsible to make sure the input parameters are valid: one index must be non-negative and
@@ -152,6 +152,11 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
 
   // Insert all indices of the elements in the haystack column into the hash map.
   // As such, we will use `thrust::equal_to` as key comparator.
+  //
+  // An alternative way to this is to use `self_comparator` for key comparisons, which would only
+  // insert unique rows of the haystack column. This would save some memory (or significant amount
+  // of memory if the haystack column contains many duplicate rows), however, will result in much
+  // more processing time due to expensive row comparisons.
   {
     auto const haystack_it = cudf::detail::make_counting_transform_iterator(
       0, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
@@ -168,14 +173,15 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
   }
 
   // Check for existence of needles in haystack.
-  // During this, we will use `table_comparator_adapter` to recognize and convert the existing
-  // indices in the hash map into `lhs_index_type`, and indices of the searching needles into
-  // `rhs_index_type` for table comparison.
+  // During this, we will use `table_comparator_adapter` to convert the existing indices in the hash
+  // map (i.e., indices of haystack elements) into `lhs_index_type`, and indices of the searching
+  // needles into `rhs_index_type` for row comparisons.
   {
-    // Use negative indices so the comparator can recognize and convert them to `rhs_index_type`.
-    // Note that needle indices will be supplied in the range [-1, -1 - neeedles.size()), thus they
-    // also need to be converted back to the range [0, needles.size()).
-    auto const search_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(-1));
+    // Supply negative indices so `table_comparator_adapter` can recognize and convert them to
+    // `rhs_index_type`.
+    // Note that needle indices will be supplied in the range `[-1, -1-neeedles.size())`, thus they
+    // also need to be converted back to the range `[0, needles.size())`.
+    auto const needles_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(-1));
 
     auto const hasher   = cudf::experimental::row::hash::row_hasher(needles_tv, stream);
     auto const d_hasher = detail::experimental::compaction_hash(
@@ -183,14 +189,11 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
 
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack_tv, needles_tv, stream);
+    auto const d_comp = table_comparator_adapter{
+      comparator.device_comparator(nullate::DYNAMIC{haystack_has_nulls || needles_has_nulls})};
 
-    haystack_map.contains(search_it,
-                          search_it + needles.size(),
-                          out_begin,
-                          d_hasher,
-                          table_comparator_adapter{comparator.device_comparator(
-                            nullate::DYNAMIC{haystack_has_nulls || needles_has_nulls})},
-                          stream.value());
+    haystack_map.contains(
+      needles_it, needles_it + needles.size(), out_begin, d_hasher, d_comp, stream.value());
   }
 
   return result;
