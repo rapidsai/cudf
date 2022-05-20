@@ -722,6 +722,31 @@ TYPED_TEST(TypedStructsContainsTestColumnNeedles, SlicedInputHavingNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
 
+TYPED_TEST(TypedStructsContainsTestColumnNeedles, StructOfLists)
+{
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  auto const haystack = [] {
+    // clang-format off
+    auto child1 = lists_col{lists_col{1, 2},    lists_col{1},       lists_col{0, 1}, lists_col{1, 3}};
+    auto child2 = lists_col{lists_col{1, 3, 4}, lists_col{2, 3, 4}, lists_col{},     lists_col{}};
+    // clang-format on
+    return structs_col{{child1, child2}};
+  }();
+
+  auto const needles = [] {
+    // clang-format off
+    auto child1 = lists_col{lists_col{1, 2},    lists_col{1},    lists_col{}, lists_col{1, 3}};
+    auto child2 = lists_col{lists_col{1, 3, 4}, lists_col{2, 3}, lists_col{},     lists_col{}};
+    // clang-format on
+    return structs_col{{child1, child2}};
+  }();
+
+  auto const expected = bools_col{1, 0, 0, 1};
+  auto const result   = cudf::contains(haystack, needles);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
+}
+
 #if 0
 template <typename T>
 struct TypedListContainsTest : public ContainsTest {
