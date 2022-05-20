@@ -576,7 +576,13 @@ class parquet_writer_options {
   /**
    * @brief Sets the maximum row group size, in bytes.
    */
-  void set_row_group_size_bytes(size_t size_bytes) { _row_group_size_bytes = size_bytes; }
+  void set_row_group_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(
+      size_bytes >= 4 * 1024,
+      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
+    _row_group_size_bytes = size_bytes;
+  }
 
   /**
    * @brief Sets the maximum row group size, in rows.
@@ -592,7 +598,11 @@ class parquet_writer_options {
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    */
-  void set_max_page_size_bytes(size_t size_bytes) { _max_page_size_bytes = size_bytes; }
+  void set_max_page_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
+    _max_page_size_bytes = size_bytes;
+  }
 
   /**
    * @brief Sets the maximum page size, in rows.
@@ -971,7 +981,13 @@ class chunked_parquet_writer_options {
   /**
    * @brief Sets the maximum row group size, in bytes.
    */
-  void set_row_group_size_bytes(size_t size_bytes) { _row_group_size_bytes = size_bytes; }
+  void set_row_group_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(
+      size_bytes >= 4 * 1024,
+      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
+    _row_group_size_bytes = size_bytes;
+  }
 
   /**
    * @brief Sets the maximum row group size, in rows.
@@ -987,7 +1003,11 @@ class chunked_parquet_writer_options {
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
    */
-  void set_max_page_size_bytes(size_t size_bytes) { _max_page_size_bytes = size_bytes; }
+  void set_max_page_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
+    _max_page_size_bytes = size_bytes;
+  }
 
   /**
    * @brief Sets the maximum page size, in rows.

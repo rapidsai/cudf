@@ -3197,12 +3197,26 @@ TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
       .max_page_size_rows(4999),
     cudf::logic_error);
+  EXPECT_THROW(
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .row_group_size_bytes(3 << 10),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .max_page_size_bytes(3 << 10),
+    cudf::logic_error);
 
   EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
                  .row_group_size_rows(4999),
                cudf::logic_error);
   EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
                  .max_page_size_rows(4999),
+               cudf::logic_error);
+  EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
+                 .row_group_size_bytes(3 << 10),
+               cudf::logic_error);
+  EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
+                 .max_page_size_bytes(3 << 10),
                cudf::logic_error);
 }
 
