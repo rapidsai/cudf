@@ -79,7 +79,7 @@ bool contains_nested_element(column_view const& haystack,
 
 namespace {
 /**
- * @brief The adapter struct for table comparator with strong index types.
+ * @brief The adapter struct for calling a table comparator from special input parameters.
  *
  * @tparam Comparator A class of table comparator with strong index types.
  */
