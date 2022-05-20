@@ -115,6 +115,51 @@ using rhs_iterator = strong_index_iterator<rhs_index_type>;
 
 namespace lexicographic {
 
+struct relational_comparator {
+  template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
+  __device__ weak_ordering relational_comparator()(Element const lhs, Element const rhs)
+  {
+    return detail::compare_elements(lhs, rhs);
+  }
+
+  template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
+  __device__ weak_ordering operator()(Element const lhs, Element const rhs)
+  {
+    if (isnan(lhs) and isnan(rhs)) {
+      return weak_ordering::EQUIVALENT;
+    } else if (isnan(rhs)) {
+      return weak_ordering::LESS;
+    } else if (isnan(lhs)) {
+      return weak_ordering::GREATER;
+    }
+
+    return detail::compare_elements(lhs, rhs);
+  }
+};
+
+template <weak_ordering nan_result>
+struct IEE740_relational_comparator : relational_comparator {
+  /**
+   * @brief A specialization for floating-point `Element` type relational comparison
+   * to derive the order of the elements with respect to `lhs`. Returns specified weak_ordering if
+   * either value is `nan`, enabling IEEE 754 compliant comparison.
+   *
+   * This specialization allows `nan` values to be evaluated as not equal to any other value, while
+   * also not evaluating as greater or less than
+   *
+   * @param lhs first element
+   * @param rhs second element
+   * @param nan_result specifies what value should be returned if either element is `nan`
+   * @return Indicates the relationship between the elements in
+   * the `lhs` and `rhs` columns.
+   */
+  template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
+  __device__ weak_ordering operator()(Element const lhs, Element const rhs)
+  {
+    return isnan(lhs) or isnan(rhs) ? nan_result : detail::compare_elements(lhs, rhs);
+  }
+};
+
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
  *
@@ -134,7 +179,9 @@ namespace lexicographic {
  * @tparam NanConfig default configuration nans are equal, if set to true triggers specialized IEEE
  * 754 compliant nan handling
  */
-template <typename Nullate, bool NanConfig = false>
+template <typename Nullate,
+          typename AscendingElementComparator  = relational_comparator,
+          typename DescendingElementComparator = relational_comparator>
 class device_row_comparator {
   friend class self_comparator;
   friend class two_table_comparator;
@@ -174,6 +221,7 @@ class device_row_comparator {
   /**
    * @brief Performs a relational comparison between two elements in two columns.
    */
+  template <typename ElementComparator2>
   class element_comparator {
    public:
     /**
@@ -194,14 +242,12 @@ class device_row_comparator {
                                   column_device_view lhs,
                                   column_device_view rhs,
                                   null_order null_precedence = null_order::BEFORE,
-                                  int depth                  = 0,
-                                  weak_ordering nan_result   = weak_ordering::EQUIVALENT)
+                                  int depth                  = 0)
       : _lhs{lhs},
         _rhs{rhs},
         _check_nulls{check_nulls},
         _null_precedence{null_precedence},
-        _depth{depth},
-        _nan_result{nan_result}
+        _depth{depth}
     {
     }
 
@@ -227,12 +273,8 @@ class device_row_comparator {
         }
       }
 
-      return cuda::std::pair(NanConfig
-                               ? relational_compare(_lhs.element<Element>(lhs_element_index),
-                                                    _rhs.element<Element>(rhs_element_index),
-                                                    _nan_result)
-                               : relational_compare(_lhs.element<Element>(lhs_element_index),
-                                                    _rhs.element<Element>(rhs_element_index)),
+      return cuda::std::pair(ElementComparator2{}(_lhs.element<Element>(lhs_element_index),
+                                                  _rhs.element<Element>(rhs_element_index)),
                              std::numeric_limits<int>::max());
     }
 
@@ -271,8 +313,7 @@ class device_row_comparator {
         ++depth;
       }
 
-      auto const comparator =
-        element_comparator{_check_nulls, lcol, rcol, _null_precedence, depth, _nan_result};
+      auto const comparator = element_comparator{_check_nulls, lcol, rcol, _null_precedence, depth};
       return cudf::type_dispatcher<dispatch_void_if_nested>(
         lcol.type(), comparator, lhs_element_index, rhs_element_index);
     }
@@ -283,7 +324,6 @@ class device_row_comparator {
     Nullate const _check_nulls;
     null_order const _null_precedence;
     int const _depth;
-    weak_ordering const _nan_result;
   };
 
  public:
@@ -310,22 +350,28 @@ class device_row_comparator {
       null_order const null_precedence =
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
-      auto const comparator =
-        NanConfig ? element_comparator{_check_nulls,
-                                       _lhs.column(i),
-                                       _rhs.column(i),
-                                       null_precedence,
-                                       depth,
-                                       ascending ? weak_ordering::GREATER : weak_ordering::LESS}
-                  : element_comparator{_check_nulls,
-                                       _lhs.column(i),
-                                       _rhs.column(i),
-                                       null_precedence,
-                                       depth,
-                                       weak_ordering::EQUIVALENT};
       weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
-        cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
+        ascending ? cudf::type_dispatcher(
+                      _lhs.column(i).type(),
+                      element_comparator<AscendingElementComparator>{// AscendingElementComparator{
+                                                                     _check_nulls,
+                                                                     _lhs.column(i),
+                                                                     _rhs.column(i),
+                                                                     null_precedence,
+                                                                     depth},
+                      lhs_index,
+                      rhs_index)
+                  : cudf::type_dispatcher(_lhs.column(i).type(),
+                                          element_comparator<DescendingElementComparator>{
+                                            // DescendingElementComparator{
+                                            _check_nulls,
+                                            _lhs.column(i),
+                                            _rhs.column(i),
+                                            null_precedence,
+                                            depth},
+                                          lhs_index,
+                                          rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 
@@ -532,11 +578,17 @@ class self_comparator {
    * @tparam NanConfig default configuration nans are equal, if set to true triggers specialized
    * IEEE 754 compliant nan handling
    */
-  template <typename Nullate, bool NanConfig = false>
-  less_comparator<device_row_comparator<Nullate, NanConfig>> device_comparator(Nullate nullate = {}) const
+  template <typename Nullate,
+            typename AscendingElementComparator  = relational_comparator,
+            typename DescendingElementComparator = relational_comparator>
+  less_comparator<
+    device_row_comparator<Nullate, AscendingElementComparator, DescendingElementComparator>>
+  device_comparator(Nullate nullate = {}) const
   {
-    return less_comparator<device_row_comparator<Nullate, NanConfig>>{device_row_comparator<Nullate, NanConfig>(
-      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
+    return less_comparator<
+      device_row_comparator<Nullate, AscendingElementComparator, DescendingElementComparator>>{
+      device_row_comparator<Nullate, AscendingElementComparator, DescendingElementComparator>(
+        nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
   }
 
  private:
