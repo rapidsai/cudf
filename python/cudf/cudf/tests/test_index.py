@@ -2530,7 +2530,7 @@ range_data = [
 
 @pytest.fixture(params=range_data)
 def rangeindex(request):
-    """Create a cudf RangeIndex of different size `nrows`"""
+    """Create a cudf RangeIndex of different `nrows`"""
     return RangeIndex(request.param)
 
 
