@@ -36,9 +36,6 @@ namespace io {
  * @file
  */
 
-/**
- * @brief Builds settings to use for `read_json()`.
- */
 class json_reader_options_builder;
 
 /**
@@ -110,11 +107,15 @@ class json_reader_options {
 
   /**
    * @brief Returns source info.
+   *
+   * @returns Source info
    */
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns data types of the columns.
+   *
+   * @returns Data types of the columns.
    */
   std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
   {
@@ -123,21 +124,29 @@ class json_reader_options {
 
   /**
    * @brief Returns compression format of the source.
+   *
+   * @return Compression format of the source
    */
   compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns number of bytes to skip from source start.
+   *
+   * @return Number of bytes to skip from source start
    */
   size_t get_byte_range_offset() const { return _byte_range_offset; }
 
   /**
    * @brief Returns number of bytes to read.
+   *
+   * @return Number of bytes to read
    */
   size_t get_byte_range_size() const { return _byte_range_size; }
 
   /**
    * @brief Returns number of bytes to read with padding.
+   *
+   * @return Number of bytes to read with padding
    */
   size_t get_byte_range_size_with_padding() const
   {
@@ -150,6 +159,8 @@ class json_reader_options {
 
   /**
    * @brief Returns number of bytes to pad when reading.
+   *
+   * @return Number of bytes to pad
    */
   size_t get_byte_range_padding() const
   {
@@ -170,11 +181,15 @@ class json_reader_options {
 
   /**
    * @brief Whether to read the file as a json object per line.
+   *
+   * @return Boolean indicating whether to read the file as a json object per line
    */
   bool is_enabled_lines() const { return _lines; }
 
   /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
+   *
+   * @returns true if dates are parsed as DD/MM, false if MM/DD.
    */
   bool is_enabled_dayfirst() const { return _dayfirst; }
 
@@ -228,6 +243,9 @@ class json_reader_options {
   void enable_dayfirst(bool val) { _dayfirst = val; }
 };
 
+/**
+ * @brief Builds settings to use for `read_json()`.
+ */
 class json_reader_options_builder {
   json_reader_options options;
 
@@ -339,6 +357,8 @@ class json_reader_options_builder {
    * @brief move json_reader_options member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `json_reader_options` object r-value reference
    */
   json_reader_options&& build() { return std::move(options); }
 };
