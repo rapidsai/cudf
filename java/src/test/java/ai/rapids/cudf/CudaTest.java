@@ -16,15 +16,14 @@
 
 package ai.rapids.cudf;
 
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class CudaTest {
 
   @Test
-  @Order(1)
   public void testGetCudaRuntimeInfo() {
     // The driver version is not necessarily larger than runtime version. Drivers of previous
     // version are also able to support runtime of later version, only if they support same
@@ -35,7 +34,6 @@ public class CudaTest {
   }
 
   @Test
-  @Order(2)
   public void testCudaException() {
     assertThrows(CudaException.class, () -> {
           try {
@@ -49,50 +47,6 @@ public class CudaTest {
     );
     // non-fatal CUDA error will not fail subsequent CUDA calls
     try (ColumnVector cv = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5)) {
-    }
-  }
-
-  @Test
-  @Order(3)
-  public void testCudaFatalException() {
-    try (ColumnView cv = ColumnView.fromDeviceBuffer(new BadDeviceBuffer(), 0, DType.INT8, 256);
-         ColumnView ret = cv.sub(cv);
-         HostColumnVector hcv = ret.copyToHost()) {
-    } catch (CudaException ignored) {
-    }
-
-    // CUDA API invoked by libcudf failed because of previous unrecoverable fatal error
-    assertThrows(CudaFatalException.class, () -> {
-      try (ColumnView cv = ColumnView.fromDeviceBuffer(new BadDeviceBuffer(), 0, DType.INT8, 256);
-           HostColumnVector hcv = cv.copyToHost()) {
-      } catch (CudaFatalException ex) {
-        assertEquals(CudaException.CudaError.cudaErrorIllegalAddress, ex.cudaError);
-        throw ex;
-      }
-    });
-  }
-
-  @Test
-  @Order(4)
-  public void testCudaFatalExceptionFromRMM() {
-    // CUDA API invoked by RMM failed because of previous unrecoverable fatal error
-    assertThrows(CudaFatalException.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5)) {
-      } catch (CudaFatalException ex) {
-        assertEquals(CudaException.CudaError.cudaErrorIllegalAddress, ex.cudaError);
-        throw ex;
-      }
-    });
-  }
-
-  private static class BadDeviceBuffer extends BaseDeviceMemoryBuffer {
-    public BadDeviceBuffer() {
-      super(256L, 256L, (MemoryBufferCleaner) null);
-    }
-
-    @Override
-    public MemoryBuffer slice(long offset, long len) {
-      return null;
     }
   }
 
