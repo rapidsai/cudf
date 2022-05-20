@@ -19,6 +19,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/search.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
@@ -31,19 +32,11 @@
 
 namespace cudf::detail {
 
-/**
- * @brief Check if the (unique) row of the `needle` column is contained in the `haystack` column.
- *
- * If the input `needle` column has more than one row, only the first row will be considered.
- *
- * This function is designed for nested types. It can also work with non-nested types
- * but with lower performance due to the complexity of the implementation.
- */
 bool contains_nested_element(column_view const& haystack,
                              column_view const& needle,
                              rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(needle.size() > 0, "Input needle column should have ONE row.");
+  CUDF_EXPECTS(needle.size() > 0, "Input needle column should have at least ONE row.");
 
   auto const haystack_tv = table_view{{haystack}};
   auto const needle_tv   = table_view{{needle}};
@@ -61,6 +54,7 @@ bool contains_nested_element(column_view const& haystack,
     if (haystack.has_nulls()) {
       auto const haystack_cdv_ptr  = column_device_view::create(haystack, stream);
       auto const haystack_valid_it = cudf::detail::make_validity_iterator<false>(*haystack_cdv_ptr);
+
       return thrust::find_if(
         rmm::exec_policy(stream),
         begin,
@@ -83,17 +77,32 @@ bool contains_nested_element(column_view const& haystack,
   return found_it != end;
 }
 
+namespace {
 /**
  * @brief The adapter struct for table comparator with strong index types.
  *
- * This adapter utility converts the positive integer indices into `lhs_index_type` and negative
- * indices into `rhs_index_type`. Before such conversion happening, it also shifts the negative
- * indices (which are given in the range `[-1, -size - 1)` into the correct range `[0, size)`.
+ * @tparam Comparator A class of table comparator with strong index types.
  */
 template <typename Comparator>
 struct table_comparator_adapter {
   table_comparator_adapter(Comparator&& comp_) : comp(std::move(comp_)) {}
 
+  /**
+   * @brief Call the comparator with strong index types from the input indices of size_type type.
+   *
+   * Given two size_type indices `i` and `j`, this adapter `operator()` converts the non-negative
+   * index into `lhs_index_type` and the negative index into `rhs_index_type`. Before such
+   * conversion happening, it also shifts the negative index (which is given in the range `[-1,
+   * -size - 1)` into the correct range `[0, size)`.
+   *
+   * Note that there is not any validity check to be performed in this adapter function. Caller is
+   * responsible to make sure the input parameters are valid: one index must be non-negative and
+   * the other is negative.
+   *
+   * @param i Index of a row in one table to compare.
+   * @param j Index of a row in the other table to compare.
+   * @return The row comparison result.
+   */
   __device__ bool operator()(size_type const i, size_type const j) const noexcept
   {
     using cudf::experimental::row::lhs_index_type;
@@ -103,17 +112,11 @@ struct table_comparator_adapter {
     auto const rhs_idx = static_cast<rhs_index_type>(i < 0 ? -(i + 1) : -(j + 1));
     return comp(lhs_idx, rhs_idx);
   }
+
   Comparator const comp;
 };
+}  // namespace
 
-/**
- * @brief Check if each row of the `needles` column is contained in the `haystack` column,
- * specialized for nested type.
- *
- * This function is designed for nested types. It can also work with non-nested types
- * but with lower performance due to the complexity of the implementation.
- *
- */
 std::unique_ptr<column> multi_contains_nested_elements(column_view const& haystack,
                                                        column_view const& needles,
                                                        rmm::cuda_stream_view stream,
