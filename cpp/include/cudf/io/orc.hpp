@@ -34,9 +34,9 @@ namespace io {
  * @file
  */
 
-constexpr size_t default_stripe_size_bytes   = 64 * 1024 * 1024;
-constexpr size_type default_stripe_size_rows = 1000000;
-constexpr size_type default_row_index_stride = 10000;
+constexpr size_t default_stripe_size_bytes   = 64 * 1024 * 1024;  ///< 64MB default orc stripe size
+constexpr size_type default_stripe_size_rows = 1000000;  ///< 1M rows default orc stripe rows
+constexpr size_type default_row_index_stride = 10000;    ///< 10K rows default orc row index stride
 
 /**
  * @brief Builds settings to use for `read_orc()`.
@@ -97,46 +97,64 @@ class orc_reader_options {
 
   /**
    * @brief Returns source info.
+   *
+   * @return Source info
    */
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns names of the columns to read.
+   *
+   * @return Names of the columns to read
    */
   [[nodiscard]] std::vector<std::string> const& get_columns() const { return _columns; }
 
   /**
    * @brief Returns vector of vectors, stripes to read for each input source
+   *
+   * @return Vector of vectors, stripes to read for each input source
    */
   std::vector<std::vector<size_type>> const& get_stripes() const { return _stripes; }
 
   /**
    * @brief Returns number of rows to skip from the start.
+   *
+   * @return Number of rows to skip from the start
    */
   size_type get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of row to read.
+   *
+   * @return Number of row to read
    */
   size_type get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Whether to use row index to speed-up reading.
+   *
+   * @return Boolean indicating whether to use row index to speed-up reading
    */
   bool is_enabled_use_index() const { return _use_index; }
 
   /**
    * @brief Whether to use numpy-compatible dtypes.
+   *
+   * @return Boolean indicating whether to use numpy-compatible dtypes
    */
   bool is_enabled_use_np_dtypes() const { return _use_np_dtypes; }
 
   /**
    * @brief Returns timestamp type to which timestamp column will be cast.
+   *
+   * @return Timestamp type to which timestamp column will be cast
    */
   data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
-   * @brief Fully qualified names of columns that should be read as 128-bit Decimal.
+   * @brief Returns fully qualified names of columns that should be read as 128-bit Decimal.
+   *
+   * @return Fully qualified names of columns that should be read as 128-bit Decimal
    */
   std::vector<std::string> const& get_decimal128_columns() const { return _decimal128_columns; }
 
@@ -215,6 +233,9 @@ class orc_reader_options {
   }
 };
 
+/**
+ * @brief Builds settings to use for `read_orc()`.
+ */
 class orc_reader_options_builder {
   orc_reader_options options;
 
@@ -338,6 +359,8 @@ class orc_reader_options_builder {
    * @brief move orc_reader_options member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `orc_reader_options` object's r-value reference
    */
   orc_reader_options&& build() { return std::move(options); }
 };
@@ -445,16 +468,22 @@ class orc_writer_options {
 
   /**
    * @brief Returns sink info.
+   *
+   * @return Sink info
    */
   [[nodiscard]] sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression type.
+   *
+   * @return Compression type
    */
   [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Whether writing column statistics is enabled/disabled.
+   *
+   * @return Boolean indicating whether writing column statistics is enabled/disabled
    */
   [[nodiscard]] bool is_enabled_statistics() const
   {
@@ -463,21 +492,29 @@ class orc_writer_options {
 
   /**
    * @brief Returns frequency of statistics collection.
+   *
+   * @return Frequency of statistics collection
    */
   [[nodiscard]] statistics_freq get_statistics_freq() const { return _stats_freq; }
 
   /**
    * @brief Returns maximum stripe size, in bytes.
+   *
+   * @return Maximum stripe size, in bytes
    */
   [[nodiscard]] auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
 
   /**
    * @brief Returns maximum stripe size, in rows.
+   *
+   * @return Maximum stripe size, in rows
    */
   [[nodiscard]] auto get_stripe_size_rows() const { return _stripe_size_rows; }
 
   /**
    * @brief Returns the row index stride.
+   *
+   * @return Row index stride
    */
   auto get_row_index_stride() const
   {
@@ -487,16 +524,22 @@ class orc_writer_options {
 
   /**
    * @brief Returns table to be written to output.
+   *
+   * @return Table to be written to output
    */
   [[nodiscard]] table_view get_table() const { return _table; }
 
   /**
    * @brief Returns associated metadata.
+   *
+   * @return Associated metadata
    */
   [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
+   *
+   * @return Key-Value footer metadata information
    */
   [[nodiscard]] std::map<std::string, std::string> const& get_key_value_metadata() const
   {
@@ -526,6 +569,8 @@ class orc_writer_options {
 
   /**
    * @brief Sets the maximum stripe size, in bytes.
+   *
+   * @param size_bytes Maximum stripe size, in bytes to be set
    */
   void set_stripe_size_bytes(size_t size_bytes)
   {
@@ -538,6 +583,8 @@ class orc_writer_options {
    *
    * If the stripe size is smaller that the row group size, row group size will be reduced to math
    * the stripe size.
+   *
+   * @param size_rows Maximum stripe size, in rows to be set
    */
   void set_stripe_size_rows(size_type size_rows)
   {
@@ -549,6 +596,8 @@ class orc_writer_options {
    * @brief Sets the row index stride.
    *
    * Rounded down to a multiple of 8.
+   *
+   * @param stride Row index stride to be set
    */
   void set_row_index_stride(size_type stride)
   {
@@ -581,6 +630,9 @@ class orc_writer_options {
   }
 };
 
+/**
+ * @brief Builds settings to use for `write_orc()`.
+ */
 class orc_writer_options_builder {
   orc_writer_options options;
 
@@ -712,6 +764,8 @@ class orc_writer_options_builder {
    * @brief move orc_writer_options member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `orc_writer_options` object's r-value reference
    */
   orc_writer_options&& build() { return std::move(options); }
 };
@@ -789,31 +843,43 @@ class chunked_orc_writer_options {
 
   /**
    * @brief Returns sink info.
+   *
+   * @return Sink info
    */
   [[nodiscard]] sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns compression type.
+   *
+   * @return Compression type
    */
   [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns granularity of statistics collection.
+   *
+   * @return Granularity of statistics collection
    */
   [[nodiscard]] statistics_freq get_statistics_freq() const { return _stats_freq; }
 
   /**
    * @brief Returns maximum stripe size, in bytes.
+   *
+   * @return Maximum stripe size, in bytes
    */
   [[nodiscard]] auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
 
   /**
    * @brief Returns maximum stripe size, in rows.
+   *
+   * @return Maximum stripe size, in rows
    */
   [[nodiscard]] auto get_stripe_size_rows() const { return _stripe_size_rows; }
 
   /**
    * @brief Returns the row index stride.
+   *
+   * @return Row index stride
    */
   auto get_row_index_stride() const
   {
@@ -823,11 +889,15 @@ class chunked_orc_writer_options {
 
   /**
    * @brief Returns associated metadata.
+   *
+   * @return Associated metadata
    */
   [[nodiscard]] table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns Key-Value footer metadata information.
+   *
+   * @return Key-Value footer metadata information
    */
   [[nodiscard]] std::map<std::string, std::string> const& get_key_value_metadata() const
   {
@@ -857,6 +927,8 @@ class chunked_orc_writer_options {
 
   /**
    * @brief Sets the maximum stripe size, in bytes.
+   *
+   * @param size_bytes Maximum stripe size, in bytes to be set
    */
   void set_stripe_size_bytes(size_t size_bytes)
   {
@@ -869,6 +941,8 @@ class chunked_orc_writer_options {
    *
    * If the stripe size is smaller that the row group size, row group size will be reduced to math
    * the stripe size.
+   *
+   * @param size_rows Maximum stripe size, in rows to be set
    */
   void set_stripe_size_rows(size_type size_rows)
   {
@@ -880,6 +954,8 @@ class chunked_orc_writer_options {
    * @brief Sets the row index stride.
    *
    * Rounded down to a multiple of 8.
+   *
+   * @param stride Row index stride to be set
    */
   void set_row_index_stride(size_type stride)
   {
@@ -905,6 +981,9 @@ class chunked_orc_writer_options {
   }
 };
 
+/**
+ * @brief Builds settings to use for `write_orc_chunked()`.
+ */
 class chunked_orc_writer_options_builder {
   chunked_orc_writer_options options;
 
@@ -1022,6 +1101,8 @@ class chunked_orc_writer_options_builder {
    * @brief move chunked_orc_writer_options member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `chunked_orc_writer_options` object's r-value reference
    */
   chunked_orc_writer_options&& build() { return std::move(options); }
 };
@@ -1077,7 +1158,7 @@ class orc_chunked_writer {
    */
   void close();
 
-  // Unique pointer to impl writer class
+  /// Unique pointer to impl writer class
   std::unique_ptr<cudf::io::detail::orc::writer> writer;
 };
 
