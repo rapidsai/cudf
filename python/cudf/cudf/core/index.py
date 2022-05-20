@@ -22,6 +22,7 @@ from typing import (
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas._config import get_option
 
 import cudf
@@ -226,6 +227,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         The value of the step parameter.
         """
         return self._step
+
+    @property  # type: ignore
+    @_cudf_nvtx_annotate
+    def end(self):
+        """
+        The absolute last value of the RangeIndex.
+        """
+        return self._end
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -806,7 +815,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int64().replace(to_replace=to_replace, value=value)
 
     def to_arrow(self):
-        return self._column.to_arrow()
+        return pa.array(self._range)
 
     def __array__(self, dtype=None):
         raise TypeError(
@@ -823,9 +832,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self.start
 
     def max(self):
-        if (self.step != 1) and (self.start % 2 != 0):
-            return self.stop - 1
-        return self.stop - self.step
+        return self.end
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
