@@ -73,6 +73,27 @@ def test_spilling_buffer():
         buf.move_inplace(target="cpu")
 
 
+def test_environment_variables(monkeypatch):
+    monkeypatch.setenv("CUDF_SPILL_ON_DEMAND", "off")
+    monkeypatch.setenv("CUDF_SPILL", "off")
+    with pytest.raises(ValueError, match="No global SpillManager"):
+        global_manager.get()
+    assert not global_manager.enabled
+    monkeypatch.setenv("CUDF_SPILL", "on")
+    assert not global_manager.enabled
+    global_manager.clear()  # Trigger re-read of environment variables
+    assert global_manager.enabled
+    manager = global_manager.get()
+    assert manager._spill_on_demand is False
+    assert manager._device_memory_limit is None
+    global_manager.clear()
+    monkeypatch.setenv("CUDF_SPILL_DEVICE_LIMIT", "1000")
+    manager = global_manager.get()
+    assert manager._spill_on_demand is False
+    assert isinstance(manager._device_memory_limit, int)
+    assert manager._device_memory_limit == 1000
+
+
 def test_spill_device_memory(manager: SpillManager):
     df = gen_df()
     assert manager.spilled_and_unspilled() == (0, gen_df.buffer_size)

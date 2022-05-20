@@ -1,31 +1,65 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+import io
 import os
 import threading
+import traceback
 import warnings
 import weakref
 from functools import cached_property
 from typing import MutableMapping, Optional, Tuple
 
+import rmm.mr
+
 from cudf.core.buffer import Buffer
 
 
 class SpillManager:
-    def __init__(self, *, device_memory_limit=None) -> None:
+    def __init__(
+        self, *, spill_on_demand=False, device_memory_limit=None
+    ) -> None:
         self._lock = threading.Lock()
         self._base_buffers: MutableMapping[
             int, Buffer
         ] = weakref.WeakValueDictionary()
         self._id_counter = 0
+        self._spill_on_demand = spill_on_demand
         self._device_memory_limit = device_memory_limit
+        if self._spill_on_demand:
+            self.register_spill_on_demand()
 
-    def __repr__(self) -> str:
-        spilled, unspilled = self.spilled_and_unspilled()
-        return (
-            f"<SpillManager "
-            f"device_memory_limit={self._device_memory_limit} "
-            f"spilled: {spilled} unspilled: {unspilled}>"
-        )
+    def register_spill_on_demand(self):
+        # TODO: check if a `FailureCallbackResourceAdaptor` has been
+        #       registered already
+        def oom(nbytes: int) -> bool:
+            """Try to handle an out-of-memory error by spilling"""
+
+            # Keep spilling until `nbytes` been spilled
+            total_spilled = 0
+            while total_spilled < nbytes:
+                spilled = self.spill_device_memory()
+                if spilled == 0:
+                    break  # No more to spill!
+                total_spilled += spilled
+
+            if total_spilled > 0:
+                return True  # Ask RMM to retry the allocation
+
+            with io.StringIO() as f:
+                traceback.print_stack(file=f)
+                f.seek(0)
+                tb = f.read()
+            # TODO: write to log instead of stdout
+            print(
+                f"[WARNING] RMM allocation of {nbytes} bytes failed, "
+                "spill-on-demand couldn't find any device memory to "
+                f"spill:\n{repr(self)}\ntraceback:\n{tb}\n"
+            )
+            return False  # Since we didn't find anything to spill, we give up
+
+        current_mr = rmm.mr.get_current_device_resource()
+        mr = rmm.mr.FailureCallbackResourceAdaptor(current_mr, oom)
+        rmm.mr.set_current_device_resource(mr)
 
     def add(self, buffer: Buffer) -> None:
         with self._lock:
@@ -75,6 +109,14 @@ class SpillManager:
             ret += nbytes
         return ret
 
+    def __repr__(self) -> str:
+        spilled, unspilled = self.spilled_and_unspilled()
+        return (
+            f"<SpillManager spill_on_demand={self._spill_on_demand} "
+            f"device_memory_limit={self._device_memory_limit} "
+            f"spilled: {spilled} unspilled: {unspilled}>"
+        )
+
 
 # TODO: do we have a common "get-value-from-env" in cuDF?
 def _env_get_int(name, default):
@@ -105,6 +147,7 @@ class GlobalSpillManager:
         if not _env_get_bool("CUDF_SPILL", False):
             return None
         return SpillManager(
+            spill_on_demand=_env_get_bool("CUDF_SPILL_ON_DEMAND", True),
             device_memory_limit=_env_get_int("CUDF_SPILL_DEVICE_LIMIT", None),
         )
 
