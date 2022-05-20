@@ -82,7 +82,12 @@ std::unique_ptr<table> distinct(table_view const& input,
   auto counting_iter = thrust::make_counting_iterator<size_type>(0);
   rmm::device_uvector<bool> index_exists_in_map(num_rows, stream, mr);
   // enumerate all indices to check if they are present in the map.
-  key_map.contains(counting_iter, counting_iter + num_rows, index_exists_in_map.begin(), hash_key);
+  key_map.contains(counting_iter,
+                   counting_iter + num_rows,
+                   index_exists_in_map.begin(),
+                   hash_key,
+                   key_equal,
+                   stream.value());
 
   auto const output_size{key_map.get_size()};
 
