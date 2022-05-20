@@ -231,67 +231,59 @@ TYPED_TEST(TypedListContainsTestColumnNeedles, TrivialInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
 
-#if 0
 TYPED_TEST(TypedListContainsTestColumnNeedles, SlicedInputNoNulls)
 {
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  constexpr int32_t dont_care{0};
+  auto const haystack_original = lists_col{
+    {dont_care, dont_care}, {dont_care}, {0, 1}, {2}, {3, 4, 5}, {2, 3, 4}, {}, {0, 2, 0}};
+  auto const haystack = cudf::slice(haystack_original, {2, 8})[0];
 
-  auto const haystack_original = [] {
-    auto child1 = tdata_col{dont_care, dont_care, 1, 3, 1, 1, 2, dont_care};
-    auto child2 = tdata_col{dont_care, dont_care, 1, 0, 0, 0, 1, dont_care};
-    auto child3 = strings_col{"dont_care", "dont_care", "x", "y", "z", "a", "b", "dont_care"};
-    return structs_col{{child1, child2, child3}};
-  }();
-  auto const haystack = cudf::slice(haystack_original, {2, 7})[0];
+  auto const needles_original =
+    lists_col{{dont_care}, {0, 1}, {0, 0}, {3, 5, 4}, {}, {dont_care, dont_care}, {} /*dont_care*/};
+  auto const needles = cudf::slice(needles_original, {1, 5})[0];
 
-  auto const needles_original = [] {
-    auto child1 = tdata_col{dont_care, 1, 1, 1, 1, 2, dont_care, dont_care};
-    auto child2 = tdata_col{dont_care, 0, 1, 2, 3, 1, dont_care, dont_care};
-    auto child3 = strings_col{"dont_care", "z", "x", "z", "a", "b", "dont_care", "dont_care"};
-    return structs_col{{child1, child2, child3}};
-  }();
-  auto const needles = cudf::slice(needles_original, {1, 6})[0];
-
-  auto const expected = bools_col{1, 1, 0, 0, 1};
+  auto const expected = bools_col{1, 0, 0, 1};
   auto const result   = cudf::contains(haystack, needles);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
 
 TYPED_TEST(TypedListContainsTestColumnNeedles, SlicedInputHavingNulls)
 {
-  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  constexpr int32_t dont_care{0};
+  auto const haystack_original = lists_col{{{dont_care, dont_care},
+                                            {dont_care} /*NULL*/,
+                                            lists_col{{1, null}, null_at(1)},
+                                            {1},
+                                            {} /*NULL*/,
+                                            {1, 3},
+                                            {4},
+                                            {} /*NULL*/,
+                                            {1, 1},
+                                            {dont_care}},
+                                           nulls_at({1, 4, 7})};
+  auto const haystack          = cudf::slice(haystack_original, {2, 9})[0];
 
-  auto const haystack_original = [] {
-    auto child1 =
-      tdata_col{{dont_care /*null*/, dont_care, 1, null, XXX, 1, 2, null, 2, 2, null, 2, dont_care},
-                nulls_at({0, 3, 7, 10})};
-    auto child2 =
-      tdata_col{{dont_care /*null*/, dont_care, 1, null, XXX, 0, null, 0, 1, 2, 1, 1, dont_care},
-                nulls_at({0, 3, 6})};
-    return structs_col{{child1, child2}, nulls_at({1, 4})};
-  }();
-  auto const haystack = cudf::slice(haystack_original, {2, 12})[0];
+  auto const needles_original = lists_col{{{dont_care, dont_care},
+                                           {dont_care} /*NULL*/,
+                                           lists_col{{1, null}, null_at(1)},
+                                           {1},
+                                           {} /*NULL*/,
+                                           {1, 3, 1},
+                                           {4},
+                                           {} /*NULL*/,
+                                           {},
+                                           {dont_care}},
+                                          nulls_at({1, 4, 7})};
+  auto const needles          = cudf::slice(needles_original, {2, 9})[0];
 
-  auto const needles_original = [] {
-    auto child1 =
-      tdata_col{{dont_care, XXX, null, 1, 1, 2, XXX, null, 1, 1, null, dont_care, dont_care},
-                nulls_at({2, 7, 10})};
-    auto child2 =
-      tdata_col{{dont_care, XXX, null, 2, 3, 2, XXX, null, null, 1, 0, dont_care, dont_care},
-                nulls_at({2, 7, 8})};
-    return structs_col{{child1, child2}, nulls_at({1, 6})};
-  }();
-  auto const needles = cudf::slice(needles_original, {1, 11})[0];
-
-  auto const expected = bools_col{{null, 1, 0, 0, 1, null, 1, 0, 1, 1}, nulls_at({0, 5})};
+  auto const expected = bools_col{{1, 1, null, 0, 1, null, 0}, nulls_at({2, 5})};
   auto const result   = cudf::contains(haystack, needles);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result, verbosity);
 }
 
+#if 0
 TYPED_TEST(TypedListContainsTestColumnNeedles, StructOfLists)
 {
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
