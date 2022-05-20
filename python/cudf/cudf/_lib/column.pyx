@@ -548,7 +548,7 @@ cdef class Column:
                     data=data_ptr,
                     size=(base_size) * dtype.itemsize,
                     owner=data_owner,
-                    sole_owner=True
+                    sole_owner=False
                 )
         else:
             data = Buffer(
@@ -573,7 +573,7 @@ cdef class Column:
                     data=mask_ptr,
                     size=bitmask_allocation_size_bytes(base_size),
                     owner=mask_owner,
-                    sole_owner=True
+                    sole_owner=False
                 )
 
         if cv.has_nulls():

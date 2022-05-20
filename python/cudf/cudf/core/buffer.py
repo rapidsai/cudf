@@ -19,6 +19,14 @@ if TYPE_CHECKING:
     from cudf.core.spill_manager import SpillManager
 
 
+def get_buffer(obj: Any) -> Optional[Buffer]:
+    if isinstance(obj, Buffer):
+        return obj
+    if hasattr(obj, "base_data"):
+        return obj.base_data
+    return None
+
+
 class Buffer(Serializable):
     """
     A Buffer represents a device memory allocation.
@@ -93,6 +101,11 @@ class Buffer(Serializable):
             except TypeError:
                 raise TypeError("data must be Buffer, array-like or integer")
             self._init_from_array_like(np.asarray(data), owner)
+
+        if not self._sole_owner and self._owner is not None:
+            base_buffer = get_buffer(self._owner)
+            if base_buffer is not None:
+                base_buffer._raw_pointer_exposed = True
 
         if self._sole_owner and global_manager.enabled:
             self._spill_manager = global_manager.get()

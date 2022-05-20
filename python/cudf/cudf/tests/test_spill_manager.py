@@ -18,6 +18,7 @@ def gen_df() -> cudf.DataFrame:
 
 gen_df.buffer_size = 24
 gen_df.is_spilled = lambda df: df._data._data["a"].data.is_spilled
+gen_df.is_spillable = lambda df: df._data._data["a"].data.spillable
 
 
 @pytest.fixture
@@ -61,6 +62,16 @@ def test_spillable_df_groupby():
     assert not df._data._data["x"].data.spillable
     del gb
     assert df._data._data["x"].data.spillable
+
+
+def test_spillable_df_views():
+    df = gen_df()
+    assert gen_df.is_spillable(df)
+    df_view = df.loc[1:]
+    # TODO: support spillable views, for now we mark the view
+    #       and its base as unspillable
+    assert not gen_df.is_spillable(df)
+    assert not gen_df.is_spillable(df_view)
 
 
 def test_spilling_buffer():
