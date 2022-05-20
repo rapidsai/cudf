@@ -823,7 +823,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self.start
 
     def max(self):
-        # max
         if (self.step != 1) and (self.start % 2 != 0):
             return self.stop - 1
         return self.stop - self.step
