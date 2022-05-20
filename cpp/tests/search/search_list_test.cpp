@@ -47,6 +47,26 @@ struct TypedListsContainsTestScalarNeedle : public cudf::test::BaseFixture {
 };
 TYPED_TEST_SUITE(TypedListsContainsTestScalarNeedle, TestTypes);
 
+TYPED_TEST(TypedListsContainsTestScalarNeedle, EmptyInputTest)
+{
+  using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  auto const haystack = lists_col{};
+
+  auto const needle1 = [] {
+    auto child = tdata_col{};
+    return cudf::list_scalar(child);
+  }();
+  auto const needle2 = [] {
+    auto child = tdata_col{1, 2, 3};
+    return cudf::list_scalar(child);
+  }();
+
+  EXPECT_EQ(false, cudf::contains(haystack, needle1));
+  EXPECT_EQ(false, cudf::contains(haystack, needle2));
+}
+
 TYPED_TEST(TypedListsContainsTestScalarNeedle, TrivialInputTests)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
