@@ -377,12 +377,13 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, EmptyInputTest)
   }();
 
   auto const needle1 = [] {
-    auto child = tdata_col{};
+    auto child = tdata_col{1};
     return make_struct_scalar(child);
   }();
   auto const needle2 = [] {
-    auto child = tdata_col{1, 2, 3};
-    return make_struct_scalar(child);
+    auto child1 = tdata_col{1};
+    auto child2 = tdata_col{1};
+    return make_struct_scalar(child1, child2);
   }();
 
   EXPECT_EQ(false, cudf::contains(haystack, needle1));
