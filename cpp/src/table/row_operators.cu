@@ -367,6 +367,15 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
     new preprocessed_table(std::move(d_t), std::move(std::get<1>(null_pushed_table))));
 }
 
+two_table_comparator::two_table_comparator(table_view const& left,
+                                           table_view const& right,
+                                           rmm::cuda_stream_view stream)
+  : d_left_table{preprocessed_table::create(left, stream)},
+    d_right_table{preprocessed_table::create(right, stream)}
+{
+  check_shape_compatibility(left, right);
+}
+
 }  // namespace equality
 
 }  // namespace row

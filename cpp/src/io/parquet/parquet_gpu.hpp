@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "io/comp/gpuinflate.h"
+#include "io/comp/gpuinflate.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_common.hpp"
 #include "io/statistics/statistics.cuh"
