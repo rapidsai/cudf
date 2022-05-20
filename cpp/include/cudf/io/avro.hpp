@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,9 +35,6 @@ namespace io {
  * @file
  */
 
-/**
- * @brief Builder to build options for `read_avro()`.
- */
 class avro_reader_options_builder;
 
 /**
@@ -73,21 +70,29 @@ class avro_reader_options {
 
   /**
    * @brief Returns source info.
+   *
+   * @return Source info
    */
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns names of the columns to be read.
+   *
+   * @return Names of the columns to be read
    */
   [[nodiscard]] std::vector<std::string> get_columns() const { return _columns; }
 
   /**
    * @brief Returns number of rows to skip from the start.
+   *
+   * @return Number of rows to skip from the start
    */
   [[nodiscard]] size_type get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of rows to read.
+   *
+   * @return Number of rows to read
    */
   [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
 
@@ -121,6 +126,9 @@ class avro_reader_options {
   static avro_reader_options_builder builder(source_info const& src);
 };
 
+/**
+ * @brief Builder to build options for `read_avro()`.
+ */
 class avro_reader_options_builder {
   avro_reader_options options;
 
@@ -184,6 +192,8 @@ class avro_reader_options_builder {
    * @brief move avro_reader_options member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `avro_reader_options` object's r-value reference
    */
   avro_reader_options&& build() { return std::move(options); }
 };
