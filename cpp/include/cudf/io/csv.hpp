@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -158,26 +158,36 @@ class csv_reader_options {
 
   /**
    * @brief Returns source info.
+   *
+   * @return Source info
    */
   [[nodiscard]] source_info const& get_source() const { return _source; }
 
   /**
    * @brief Returns compression format of the source.
+   *
+   * @return Compression format of the source
    */
   [[nodiscard]] compression_type get_compression() const { return _compression; }
 
   /**
    * @brief Returns number of bytes to skip from source start.
+   *
+   * @return Number of bytes to skip from source start
    */
   [[nodiscard]] std::size_t get_byte_range_offset() const { return _byte_range_offset; }
 
   /**
    * @brief Returns number of bytes to read.
+   *
+   * @return Number of bytes to read
    */
   [[nodiscard]] std::size_t get_byte_range_size() const { return _byte_range_size; }
 
   /**
    * @brief Returns number of bytes to read with padding.
+   *
+   * @return Number of bytes to read with padding
    */
   [[nodiscard]] std::size_t get_byte_range_size_with_padding() const
   {
@@ -190,6 +200,8 @@ class csv_reader_options {
 
   /**
    * @brief Returns number of bytes to pad when reading.
+   *
+   * @return Number of bytes to pad when reading
    */
   [[nodiscard]] std::size_t get_byte_range_padding() const
   {
@@ -212,21 +224,29 @@ class csv_reader_options {
 
   /**
    * @brief Returns names of the columns.
+   *
+   * @return Names of the columns
    */
   [[nodiscard]] std::vector<std::string> const& get_names() const { return _names; }
 
   /**
    * @brief Returns prefix to be used for column ID.
+   *
+   * @return Prefix to be used for column ID
    */
   [[nodiscard]] std::string get_prefix() const { return _prefix; }
 
   /**
    * @brief Whether to rename duplicate column names.
+   *
+   * @return Boolean indicating whether to rename duplicate column names
    */
   [[nodiscard]] bool is_enabled_mangle_dupe_cols() const { return _mangle_dupe_cols; }
 
   /**
    * @brief Returns names of the columns to be read.
+   *
+   * @return Names of the columns to be read
    */
   [[nodiscard]] std::vector<std::string> const& get_use_cols_names() const
   {
@@ -235,91 +255,127 @@ class csv_reader_options {
 
   /**
    * @brief Returns indexes of columns to read.
+   *
+   * @return Indexes of columns to read
    */
   [[nodiscard]] std::vector<int> const& get_use_cols_indexes() const { return _use_cols_indexes; }
 
   /**
    * @brief Returns number of rows to read.
+   *
+   * @return Number of rows to read
    */
   [[nodiscard]] size_type get_nrows() const { return _nrows; }
 
   /**
    * @brief Returns number of rows to skip from start.
+   *
+   * @return Number of rows to skip from start
    */
   [[nodiscard]] size_type get_skiprows() const { return _skiprows; }
 
   /**
    * @brief Returns number of rows to skip from end.
+   *
+   * @return Number of rows to skip from end
    */
   [[nodiscard]] size_type get_skipfooter() const { return _skipfooter; }
 
   /**
    * @brief Returns header row index.
+   *
+   * @return Header row index
    */
   [[nodiscard]] size_type get_header() const { return _header; }
 
   /**
    * @brief Returns line terminator.
+   *
+   * @return Line terminator
    */
   [[nodiscard]] char get_lineterminator() const { return _lineterminator; }
 
   /**
    * @brief Returns field delimiter.
+   *
+   * @return Field delimiter
    */
   [[nodiscard]] char get_delimiter() const { return _delimiter; }
 
   /**
    * @brief Returns numeric data thousands separator.
+   *
+   * @return Numeric data thousands separator
    */
   [[nodiscard]] char get_thousands() const { return _thousands; }
 
   /**
    * @brief Returns decimal point character.
+   *
+   * @return Decimal point character
    */
   [[nodiscard]] char get_decimal() const { return _decimal; }
 
   /**
    * @brief Returns comment line start character.
+   *
+   * @return Comment line start character
    */
   [[nodiscard]] char get_comment() const { return _comment; }
 
   /**
    * @brief Whether to treat `\r\n` as line terminator.
+   *
+   * @return Boolean indicating whether to treat `\r\n` as line terminator
    */
   [[nodiscard]] bool is_enabled_windowslinetermination() const { return _windowslinetermination; }
 
   /**
    * @brief Whether to treat whitespace as field delimiter.
+   *
+   * @return Boolean indicating whether to treat whitespace as field delimiter
    */
   [[nodiscard]] bool is_enabled_delim_whitespace() const { return _delim_whitespace; }
 
   /**
    * @brief Whether to skip whitespace after the delimiter.
+   *
+   * @return Boolean indicating whether to skip whitespace after the delimiter
    */
   [[nodiscard]] bool is_enabled_skipinitialspace() const { return _skipinitialspace; }
 
   /**
    * @brief Whether to ignore empty lines or parse line values as invalid.
+   *
+   * @return Boolean indicating whether to ignore empty lines or parse line values as invalid
    */
   [[nodiscard]] bool is_enabled_skip_blank_lines() const { return _skip_blank_lines; }
 
   /**
    * @brief Returns quoting style.
+   *
+   * @return Quoting style
    */
   [[nodiscard]] quote_style get_quoting() const { return _quoting; }
 
   /**
    * @brief Returns quoting character.
+   *
+   * @return Quoting character
    */
   [[nodiscard]] char get_quotechar() const { return _quotechar; }
 
   /**
    * @brief Whether a quote inside a value is double-quoted.
+   *
+   * @return Boolean indicating whether a quote inside a value is double-quoted
    */
   [[nodiscard]] bool is_enabled_doublequote() const { return _doublequote; }
 
   /**
    * @brief Returns names of columns to read as datetime.
+   *
+   * @return Names of columns to read as datetime
    */
   [[nodiscard]] std::vector<std::string> const& get_parse_dates_names() const
   {
@@ -328,6 +384,8 @@ class csv_reader_options {
 
   /**
    * @brief Returns indexes of columns to read as datetime.
+   *
+   * @return Indexes of columns to read as datetime
    */
   [[nodiscard]] std::vector<int> const& get_parse_dates_indexes() const
   {
@@ -336,6 +394,8 @@ class csv_reader_options {
 
   /**
    * @brief Returns names of columns to read as hexadecimal.
+   *
+   * @return Names of columns to read as hexadecimal
    */
   [[nodiscard]] std::vector<std::string> const& get_parse_hex_names() const
   {
@@ -344,11 +404,15 @@ class csv_reader_options {
 
   /**
    * @brief Returns indexes of columns to read as hexadecimal.
+   *
+   * @return Indexes of columns to read as hexadecimal
    */
   [[nodiscard]] std::vector<int> const& get_parse_hex_indexes() const { return _parse_hex_indexes; }
 
   /**
    * @brief Returns per-column types.
+   *
+   * @return Per-column types
    */
   std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
   {
@@ -357,36 +421,50 @@ class csv_reader_options {
 
   /**
    * @brief Returns additional values to recognize as boolean true values.
+   *
+   * @return Additional values to recognize as boolean true values
    */
   std::vector<std::string> const& get_true_values() const { return _true_values; }
 
   /**
    * @brief Returns additional values to recognize as boolean false values.
+   *
+   * @return Additional values to recognize as boolean false values
    */
   std::vector<std::string> const& get_false_values() const { return _false_values; }
 
   /**
    * @brief Returns additional values to recognize as null values.
+   *
+   * @return Additional values to recognize as null values
    */
   std::vector<std::string> const& get_na_values() const { return _na_values; }
 
   /**
    * @brief Whether to keep the built-in default NA values.
+   *
+   * @return Boolean indicating whether to keep the built-in default NA values
    */
   bool is_enabled_keep_default_na() const { return _keep_default_na; }
 
   /**
    * @brief Whether to disable null filter.
+   *
+   * @return Boolean indicating whether to disable null filter
    */
   bool is_enabled_na_filter() const { return _na_filter; }
 
   /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
+   *
+   * @return True if dates are parsed as DD/MM, false if MM/DD.
    */
   bool is_enabled_dayfirst() const { return _dayfirst; }
 
   /**
    * @brief Returns timestamp_type to which all timestamp columns will be cast.
+   *
+   * @return timestamp_type to which all timestamp columns will be cast
    */
   data_type get_timestamp_type() const { return _timestamp_type; }
 
@@ -723,8 +801,12 @@ class csv_reader_options {
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
 };
 
+/**
+ * @brief Builder to build options for `read_csv()`.
+ *
+ */
 class csv_reader_options_builder {
-  csv_reader_options options;
+  csv_reader_options options;  ///< Options to be built.
 
  public:
   /**
@@ -1194,6 +1276,8 @@ class csv_reader_options_builder {
    * @brief move csv_reader_options member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `csv_reader_options` object's r-value reference
    */
   csv_reader_options&& build() { return std::move(options); }
 };
@@ -1288,51 +1372,71 @@ class csv_writer_options {
 
   /**
    * @brief Returns sink used for writer output.
+   *
+   * @return sink used for writer output
    */
   [[nodiscard]] sink_info const& get_sink() const { return _sink; }
 
   /**
    * @brief Returns table that would be written to output.
+   *
+   * @return Table that would be written to output
    */
   [[nodiscard]] table_view const& get_table() const { return _table; }
 
   /**
    * @brief Returns optional associated metadata.
+   *
+   * @return Optional associated metadata
    */
   [[nodiscard]] table_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns string to used for null entries.
+   *
+   * @return string to used for null entries
    */
   [[nodiscard]] std::string get_na_rep() const { return _na_rep; }
 
   /**
    * @brief Whether to write headers to csv.
+   *
+   * @return Boolean value indicating whether to write headers to csv.
    */
   [[nodiscard]] bool is_enabled_include_header() const { return _include_header; }
 
   /**
    * @brief Returns maximum number of rows to process for each file write.
+   *
+   * @return Maximum number of rows to process for each file write.
    */
   [[nodiscard]] size_type get_rows_per_chunk() const { return _rows_per_chunk; }
 
   /**
    * @brief Returns character used for separating lines.
+   *
+   * @return Character used for separating lines.
    */
   [[nodiscard]] std::string get_line_terminator() const { return _line_terminator; }
 
   /**
    * @brief Returns character used for separating lines.
+   *
+   * @return Character used for separating lines.
    */
   [[nodiscard]] char get_inter_column_delimiter() const { return _inter_column_delimiter; }
 
   /**
    * @brief Returns string used for values != 0 in INT8 types.
+   *
+   * @return string used for values != 0 in INT8 types
    */
   [[nodiscard]] std::string get_true_value() const { return _true_value; }
 
   /**
    * @brief Returns string used for values == 0 in INT8 types.
+   *
+   * @return string used for values == 0 in INT8 types
    */
   [[nodiscard]] std::string get_false_value() const { return _false_value; }
 
@@ -1394,8 +1498,11 @@ class csv_writer_options {
   void set_false_value(std::string val) { _false_value = val; }
 };
 
+/**
+ * @brief Builder to build options for `writer_csv()`
+ */
 class csv_writer_options_builder {
-  csv_writer_options options;
+  csv_writer_options options;  ///< Options to be built.
 
  public:
   /**
@@ -1521,6 +1628,8 @@ class csv_writer_options_builder {
    * @brief move `csv_writer_options` member once it's built.
    *
    * This has been added since Cython does not support overloading of conversion operators.
+   *
+   * @return Built `csv_writer_options` object's r-value reference
    */
   csv_writer_options&& build() { return std::move(options); }
 };
