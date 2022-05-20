@@ -1726,9 +1726,9 @@ def test_orc_reader_zstd_compression(list_struct_buff):
     writer.close()
     try:
         got = cudf.read_orc(buffer)
+        assert_eq(expected, got)
     except RuntimeError as e:
         if "Unsupported compression type" in str(e):
             pytest.mark.xfail(reason="nvcomp build doesn't have zstd")
         else:
             raise e
-    assert_eq(expected, got)
