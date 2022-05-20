@@ -79,7 +79,7 @@ auto make_struct_scalar(Args&&... args)
 
 //==================================================================================================
 // Test case when all input columns are empty
-TYPED_TEST(TypedStructSearchTest, EmptyInputTest)
+TYPED_TEST(TypedStructSearchTest, EmptyInput)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -367,7 +367,7 @@ struct TypedStructContainsTestScalarNeedle : public cudf::test::BaseFixture {
 };
 TYPED_TEST_SUITE(TypedStructContainsTestScalarNeedle, TestTypes);
 
-TYPED_TEST(TypedStructContainsTestScalarNeedle, EmptyInputTest)
+TYPED_TEST(TypedStructContainsTestScalarNeedle, EmptyInput)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -386,11 +386,11 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, EmptyInputTest)
     return make_struct_scalar(child1, child2);
   }();
 
-  EXPECT_EQ(false, cudf::contains(haystack, needle1));
-  EXPECT_EQ(false, cudf::contains(haystack, needle2));
+  EXPECT_FALSE(cudf::contains(haystack, needle1));
+  EXPECT_FALSE(cudf::contains(haystack, needle2));
 }
 
-TYPED_TEST(TypedStructContainsTestScalarNeedle, TrivialInputTests)
+TYPED_TEST(TypedStructContainsTestScalarNeedle, TrivialInput)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -414,11 +414,11 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, TrivialInputTests)
     return make_struct_scalar(child1, child2, child3);
   }();
 
-  EXPECT_EQ(true, cudf::contains(haystack, needle1));
-  EXPECT_EQ(false, cudf::contains(haystack, needle2));
+  EXPECT_TRUE(cudf::contains(haystack, needle1));
+  EXPECT_FALSE(cudf::contains(haystack, needle2));
 }
 
-TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedColumnInputTests)
+TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedColumnInput)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -445,11 +445,11 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedColumnInputTests)
     return make_struct_scalar(child1, child2, child3);
   }();
 
-  EXPECT_EQ(true, cudf::contains(haystack, needle1));
-  EXPECT_EQ(false, cudf::contains(haystack, needle2));
+  EXPECT_TRUE(cudf::contains(haystack, needle1));
+  EXPECT_FALSE(cudf::contains(haystack, needle2));
 }
 
-TYPED_TEST(TypedStructContainsTestScalarNeedle, SimpleInputWithNullsTests)
+TYPED_TEST(TypedStructContainsTestScalarNeedle, SimpleInputWithNulls)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -483,9 +483,9 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SimpleInputWithNullsTests)
       return make_struct_scalar(child1, child2, child3);
     }();
 
-    EXPECT_EQ(true, cudf::contains(col1, needle1));
-    EXPECT_EQ(false, cudf::contains(col1, needle2));
-    EXPECT_EQ(false, cudf::contains(col1, needle3));
+    EXPECT_TRUE(cudf::contains(col1, needle1));
+    EXPECT_FALSE(cudf::contains(col1, needle2));
+    EXPECT_FALSE(cudf::contains(col1, needle3));
   }
 
   // Test with nulls at the children level.
@@ -516,9 +516,9 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SimpleInputWithNullsTests)
       return make_struct_scalar(child1, child2, child3);
     }();
 
-    EXPECT_EQ(true, cudf::contains(col, needle1));
-    EXPECT_EQ(false, cudf::contains(col, needle2));
-    EXPECT_EQ(true, cudf::contains(col, needle3));
+    EXPECT_TRUE(cudf::contains(col, needle1));
+    EXPECT_FALSE(cudf::contains(col, needle2));
+    EXPECT_TRUE(cudf::contains(col, needle3));
   }
 
   // Test with nulls in the input scalar.
@@ -543,12 +543,12 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SimpleInputWithNullsTests)
       return make_struct_scalar(child1, child2, child3);
     }();
 
-    EXPECT_EQ(true, cudf::contains(haystack, needle1));
-    EXPECT_EQ(false, cudf::contains(haystack, needle2));
+    EXPECT_TRUE(cudf::contains(haystack, needle1));
+    EXPECT_FALSE(cudf::contains(haystack, needle2));
   }
 }
 
-TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedInputWithNullsTests)
+TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedInputWithNulls)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -578,8 +578,8 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedInputWithNullsTests)
       return make_struct_scalar(child1, child2, child3);
     }();
 
-    EXPECT_EQ(true, cudf::contains(col, needle1));
-    EXPECT_EQ(false, cudf::contains(col, needle2));
+    EXPECT_TRUE(cudf::contains(col, needle1));
+    EXPECT_FALSE(cudf::contains(col, needle2));
   }
 
   // Test with nulls at the children level.
@@ -608,8 +608,8 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedInputWithNullsTests)
       return make_struct_scalar(child1, child2, child3);
     }();
 
-    EXPECT_EQ(true, cudf::contains(haystack, needle1));
-    EXPECT_EQ(false, cudf::contains(haystack, needle2));
+    EXPECT_TRUE(cudf::contains(haystack, needle1));
+    EXPECT_FALSE(cudf::contains(haystack, needle2));
   }
 }
 
@@ -620,7 +620,7 @@ struct TypedStructContainsTestColumnNeedles : public cudf::test::BaseFixture {
 
 TYPED_TEST_SUITE(TypedStructContainsTestColumnNeedles, TestTypes);
 
-TYPED_TEST(TypedStructContainsTestColumnNeedles, EmptyInputTest)
+TYPED_TEST(TypedStructContainsTestColumnNeedles, EmptyInput)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
@@ -643,7 +643,7 @@ TYPED_TEST(TypedStructContainsTestColumnNeedles, EmptyInputTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
-TYPED_TEST(TypedStructContainsTestColumnNeedles, TrivialInputTest)
+TYPED_TEST(TypedStructContainsTestColumnNeedles, TrivialInput)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
