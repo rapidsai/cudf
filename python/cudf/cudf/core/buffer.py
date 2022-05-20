@@ -9,7 +9,6 @@ from typing import Any, Dict, Tuple
 import numpy as np
 
 import rmm
-from rmm import DeviceBuffer
 
 import cudf
 from cudf.core.abc import Serializable
@@ -138,7 +137,7 @@ class Buffer(Serializable):
             ptr, size = _buffer_data_from_array_interface(
                 data.__array_interface__
             )
-            dbuf = DeviceBuffer(ptr=ptr, size=size)
+            dbuf = rmm.DeviceBuffer(ptr=ptr, size=size)
             self._init_from_array_like(dbuf, owner)
         else:
             raise TypeError(
@@ -173,17 +172,16 @@ class Buffer(Serializable):
 
     @classmethod
     def empty(cls, size: int) -> Buffer:
-        dbuf = DeviceBuffer(size=size)
-        return Buffer(dbuf)
+        return Buffer(rmm.DeviceBuffer(size=size))
 
-    def copy(self):
+    def copy(self) -> Buffer:
         """
         Create a new Buffer containing a copy of the data contained
         in this Buffer.
         """
         from rmm._lib.device_buffer import copy_device_to_ptr
 
-        out = Buffer(DeviceBuffer(size=self.size))
+        out = Buffer.empty(size=self.size)
         copy_device_to_ptr(self.ptr, out.ptr, self.size)
         return out
 
