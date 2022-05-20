@@ -86,7 +86,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                    counting_iter + num_rows,
                    index_exists_in_map.begin(),
                    hash_key,
-                   key_equal,
+                   thrust::equal_to<size_type>{},
                    stream.value());
 
   auto const output_size{key_map.get_size()};
