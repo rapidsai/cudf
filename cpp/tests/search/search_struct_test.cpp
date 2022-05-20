@@ -33,8 +33,9 @@ using structs_col = cudf::test::structs_column_wrapper;
 using strings_col = cudf::test::strings_column_wrapper;
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
-constexpr int32_t null{0};  // Mark for null child elements at the current level
-constexpr int32_t XXX{0};   // Mark for null elements at all levels
+constexpr int32_t null{0};       // Mark for null child elements at the current level
+constexpr int32_t XXX{0};        // Mark for null elements at all levels
+constexpr int32_t dont_care{0};  // Mark for elements that will be sliced off
 
 using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::FloatingPointTypes,
@@ -422,8 +423,6 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedColumnInput)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  constexpr int32_t dont_care{0};
-
   auto const haystack_original = [] {
     auto child1 = tdata_col{dont_care, dont_care, 1, 2, 3, dont_care};
     auto child2 = tdata_col{dont_care, dont_care, 4, 5, 6, dont_care};
@@ -552,9 +551,6 @@ TYPED_TEST(TypedStructContainsTestScalarNeedle, SlicedInputWithNulls)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  constexpr int32_t dont_care{0};
-  constexpr int32_t null{0};
-
   // Test with nulls at the top level.
   {
     auto const haystack_original = [] {
@@ -668,8 +664,6 @@ TYPED_TEST(TypedStructContainsTestColumnNeedles, SlicedInputNoNulls)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  constexpr int32_t dont_care{0};
-
   auto const haystack_original = [] {
     auto child1 = tdata_col{dont_care, dont_care, 1, 3, 1, 1, 2, dont_care};
     auto child2 = tdata_col{dont_care, dont_care, 1, 0, 0, 0, 1, dont_care};
@@ -694,8 +688,6 @@ TYPED_TEST(TypedStructContainsTestColumnNeedles, SlicedInputNoNulls)
 TYPED_TEST(TypedStructContainsTestColumnNeedles, SlicedInputHavingNulls)
 {
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  constexpr int32_t dont_care{0};
 
   auto const haystack_original = [] {
     auto child1 =
