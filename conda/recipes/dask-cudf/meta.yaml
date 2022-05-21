@@ -21,11 +21,6 @@ build:
     - PARALLEL_LEVEL
 
 requirements:
-  build:
-    - {{ compiler('c') }}
-    - {{ compiler('cxx') }}
-    - sysroot_linux-64 {{ sysroot_version }}  # [linux64]
-    - sysroot_linux-aarch64 {{ sysroot_version }}  # [aarch64]
   host:
     - python
     - cudf {{ version }}

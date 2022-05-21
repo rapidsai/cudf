@@ -31,8 +31,7 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - {{ compiler('cuda') }} {{ cuda_version }}
-    - sysroot_linux-64 {{ sysroot_version }}  # [linux64]
-    - sysroot_linux-aarch64 {{ sysroot_version }}  # [aarch64]
+    - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
@@ -51,8 +50,7 @@ outputs:
       run_exports:
         - {{ pin_subpackage("libcudf", max_pin="x.x") }}
       ignore_run_exports_from:
-        - nvcc_linux-64 # [linux64]
-        - nvcc_linux-aarch64 # [aarch64]
+        - {{ compiler('cuda') }}
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -293,8 +291,7 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        - nvcc_linux-64 # [linux64]
-        - nvcc_linux-aarch64 # [aarch64]
+        - {{ compiler('cuda') }}
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -317,15 +314,13 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        - nvcc_linux-64 # [linux64]
-        - nvcc_linux-aarch64 # [aarch64]
+        - {{ compiler('cuda') }}
     requirements:
       build:
         - cmake {{ cmake_version }}
         - {{ compiler('c') }}
         - {{ compiler('cxx') }}
-        - sysroot_linux-64 {{ sysroot_version }}  # [linux64]
-        - sysroot_linux-aarch64 {{ sysroot_version }}  # [aarch64]
+        - sysroot_{{ target_platform }} {{ sysroot_version }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
       run:
@@ -343,8 +338,7 @@ outputs:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: cuda{{ cuda_major }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       ignore_run_exports_from:
-        - nvcc_linux-64 # [linux64]
-        - nvcc_linux-aarch64 # [aarch64]
+        - {{ compiler('cuda') }}
     requirements:
       build:
         - cmake {{ cmake_version }}
