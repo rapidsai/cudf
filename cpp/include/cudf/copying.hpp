@@ -559,18 +559,21 @@ struct packed_columns {
    */
   struct metadata {
     metadata() = default;
+
     /**
      * @brief Construct a new metadata object
      *
      * @param v Host-side buffer containing metadata
      */
     metadata(std::vector<uint8_t>&& v) : data_(std::move(v)) {}
+
     /**
      * @brief Returns pointer to the host-side metadata buffer data
      *
-     * @return Pointer to the host-side metadata buffer data
+     * @return Pointer to the host-side metadata buffer
      */
     [[nodiscard]] uint8_t const* data() const { return data_.data(); }
+
     /**
      * @brief Returns size of the metadata buffer
      *
@@ -586,6 +589,7 @@ struct packed_columns {
     : metadata_(std::make_unique<metadata>()), gpu_data(std::make_unique<rmm::device_buffer>())
   {
   }
+
   /**
    * @brief Construct a new packed columns object
    *
@@ -602,7 +606,7 @@ struct packed_columns {
 };
 
 /**
- * @brief The result(s) of a `contiguous_split`
+ * @brief The result(s) of a cudf::contiguous_split
  *
  * @ingroup copy_split
  *
@@ -616,7 +620,7 @@ struct packed_columns {
  * not outlive the memory owned by `data`
  */
 struct packed_table {
-  cudf::table_view table;  ///< Result table_view of a `contiguous_split`
+  cudf::table_view table;  ///< Result table_view of a cudf::contiguous_split
   packed_columns data;     ///< Column data owned
 };
 

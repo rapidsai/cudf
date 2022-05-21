@@ -84,14 +84,14 @@ DLManagedTensor* to_dlpack(
  */
 
 /**
- * @brief Detailed meta data information for arrow array.
+ * @brief Detailed metadata information for arrow array.
  *
  * As of now this contains only name in the hierarchy of children of cudf column,
  * but in future this can be updated as per requirement.
  */
 struct column_metadata {
   std::string name;                            ///< Name of the column
-  std::vector<column_metadata> children_meta;  ///< Meta data of children of the column
+  std::vector<column_metadata> children_meta;  ///< Metadata of children of the column
 
   /**
    * @brief Construct a new column metadata object
