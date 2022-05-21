@@ -182,7 +182,7 @@ class json_reader_options {
   /**
    * @brief Whether to read the file as a json object per line.
    *
-   * @return Boolean indicating whether to read the file as a json object per line
+   * @return `true` if reading the file as a json object per line
    */
   bool is_enabled_lines() const { return _lines; }
 

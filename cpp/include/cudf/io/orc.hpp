@@ -133,14 +133,14 @@ class orc_reader_options {
   /**
    * @brief Whether to use row index to speed-up reading.
    *
-   * @return Boolean indicating whether to use row index to speed-up reading
+   * @return `true` if row index is used to speed-up reading
    */
   bool is_enabled_use_index() const { return _use_index; }
 
   /**
    * @brief Whether to use numpy-compatible dtypes.
    *
-   * @return Boolean indicating whether to use numpy-compatible dtypes
+   * @return `true` if numpy-compatible dtypes are used
    */
   bool is_enabled_use_np_dtypes() const { return _use_np_dtypes; }
 
@@ -483,7 +483,7 @@ class orc_writer_options {
   /**
    * @brief Whether writing column statistics is enabled/disabled.
    *
-   * @return Boolean indicating whether writing column statistics is enabled/disabled
+   * @return `true` if writing column statistics is enabled
    */
   [[nodiscard]] bool is_enabled_statistics() const
   {

@@ -101,7 +101,7 @@ class parquet_reader_options {
    * @brief Returns true/false depending on whether strings should be converted to categories or
    * not.
    *
-   * @return True/false depending on whether strings should be converted to categories or not.
+   * @return `true` if strings should be converted to categories
    */
   [[nodiscard]] bool is_enabled_convert_strings_to_categories() const
   {
@@ -111,7 +111,7 @@ class parquet_reader_options {
   /**
    * @brief Returns true/false depending whether to use pandas metadata or not while reading.
    *
-   * @return True/false depending whether to use pandas metadata or not while reading.
+   * @return `true` if pandas metadata is used while reading.
    */
   [[nodiscard]] bool is_enabled_use_pandas_metadata() const { return _use_pandas_metadata; }
 
@@ -491,7 +491,7 @@ class parquet_writer_options {
   /**
    * @brief Returns `true` if timestamps will be written as INT96
    *
-   * @return True if timestamps will be written as INT96
+   * @return `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
@@ -885,7 +885,7 @@ class chunked_parquet_writer_options {
   /**
    * @brief Returns `true` if timestamps will be written as INT96
    *
-   * @return True if timestamps will be written as INT96
+   * @return `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 

@@ -239,7 +239,7 @@ class csv_reader_options {
   /**
    * @brief Whether to rename duplicate column names.
    *
-   * @return Boolean indicating whether to rename duplicate column names
+   * @return `true` if  duplicate column names are renamed.
    */
   [[nodiscard]] bool is_enabled_mangle_dupe_cols() const { return _mangle_dupe_cols; }
 
@@ -326,28 +326,28 @@ class csv_reader_options {
   /**
    * @brief Whether to treat `\r\n` as line terminator.
    *
-   * @return Boolean indicating whether to treat `\r\n` as line terminator
+   * @return `true` if `\r\n` is treated as line terminator
    */
   [[nodiscard]] bool is_enabled_windowslinetermination() const { return _windowslinetermination; }
 
   /**
    * @brief Whether to treat whitespace as field delimiter.
    *
-   * @return Boolean indicating whether to treat whitespace as field delimiter
+   * @return `true` if whitespace is treated as field delimiter
    */
   [[nodiscard]] bool is_enabled_delim_whitespace() const { return _delim_whitespace; }
 
   /**
    * @brief Whether to skip whitespace after the delimiter.
    *
-   * @return Boolean indicating whether to skip whitespace after the delimiter
+   * @return `true` if whitespace is skipped after the delimiter
    */
   [[nodiscard]] bool is_enabled_skipinitialspace() const { return _skipinitialspace; }
 
   /**
    * @brief Whether to ignore empty lines or parse line values as invalid.
    *
-   * @return Boolean indicating whether to ignore empty lines or parse line values as invalid
+   * @return `true` if empty lines or parse line values are ignored as invalid
    */
   [[nodiscard]] bool is_enabled_skip_blank_lines() const { return _skip_blank_lines; }
 
@@ -368,7 +368,7 @@ class csv_reader_options {
   /**
    * @brief Whether a quote inside a value is double-quoted.
    *
-   * @return Boolean indicating whether a quote inside a value is double-quoted
+   * @return `true` if a quote inside a value is double-quoted
    */
   [[nodiscard]] bool is_enabled_doublequote() const { return _doublequote; }
 
@@ -443,14 +443,14 @@ class csv_reader_options {
   /**
    * @brief Whether to keep the built-in default NA values.
    *
-   * @return Boolean indicating whether to keep the built-in default NA values
+   * @return `true` if the built-in default NA values are kept
    */
   bool is_enabled_keep_default_na() const { return _keep_default_na; }
 
   /**
    * @brief Whether to disable null filter.
    *
-   * @return Boolean indicating whether to disable null filter
+   * @return `true` if null filter is enabled
    */
   bool is_enabled_na_filter() const { return _na_filter; }
 
@@ -1401,7 +1401,7 @@ class csv_writer_options {
   /**
    * @brief Whether to write headers to csv.
    *
-   * @return Boolean value indicating whether to write headers to csv.
+   * @return `true` if writing headers to csv.
    */
   [[nodiscard]] bool is_enabled_include_header() const { return _include_header; }
 
