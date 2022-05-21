@@ -69,11 +69,11 @@ class datasource {
     virtual ~buffer() {}
 
     /**
-     * @brief Factory to construct a datasource object from a container.
+     * @brief Factory to construct a datasource buffer object from a container.
      *
-     * @tparam Container Type of the container to construct the datasource from
-     * @param data_owner The container to construct the datasource from (ownership is transferred)
-     * @return Constructed datasource object
+     * @tparam Container Type of the container to construct the buffer from
+     * @param data_owner The container to construct the buffer from (ownership is transferred)
+     * @return Constructed buffer object
      */
     template <typename Container>
     static std::unique_ptr<buffer> create(Container&& data_owner);
@@ -318,7 +318,7 @@ class datasource {
     /**
      * @brief Moves the input container into the newly created object.
      *
-     * @param data_owner The container to move
+     * @param data_owner The container to construct the buffer from (ownership is transferred)
      */
     owning_buffer(Container&& data_owner)
       : _data(std::move(data_owner)), _data_ptr(_data.data()), _size(_data.size())
@@ -329,7 +329,7 @@ class datasource {
      * @brief Moves the input container into the newly created object, and exposes a subspan of the
      * buffer.
      *
-     * @param data_owner The container to move
+     * @param data_owner The container to construct the buffer from (ownership is transferred)
      * @param data_ptr Pointer to the start of the subspan
      * @param size The size of the subspan
      */
@@ -346,9 +346,9 @@ class datasource {
     [[nodiscard]] size_t size() const override { return _size; }
 
     /**
-     * @brief Returns the pointer to the buffer.
+     * @brief Returns the pointer to the data in the buffer.
      *
-     * @return Pointer to the buffer
+     * @return Pointer to the data in the buffer
      */
     [[nodiscard]] uint8_t const* data() const override
     {
@@ -363,11 +363,11 @@ class datasource {
 };
 
 /**
- * @brief Factory to construct a datasource object from a container.
+ * @brief Factory to construct a datasource buffer object from a container.
  *
- * @tparam Container Type of the container to construct the datasource from
- * @param data_owner The container to construct the datasource from (ownership is transferred)
- * @return Constructed datasource object
+ * @tparam Container Type of the container to construct the buffer from
+ * @param data_owner The container to construct the buffer from (ownership is transferred)
+ * @return Constructed buffer object
  */
 template <typename Container>
 std::unique_ptr<datasource::buffer> datasource::buffer::create(Container&& data_owner)

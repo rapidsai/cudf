@@ -174,32 +174,55 @@ struct source_info {
   source_info() = default;
 
   /**
-   * @brief Construct a new source info object
+   * @brief Construct a new source info object for mutiple files
    *
    * @param file_paths Input files paths
    */
   explicit source_info(std::vector<std::string> const& file_paths) : _filepaths(file_paths) {}
 
   /**
-   * @brief Construct a new source info object
+   * @brief Construct a new source info object for a single file
    *
    * @param file_path Single input file
    */
   explicit source_info(std::string const& file_path) : _filepaths({file_path}) {}
 
+  /**
+   * @brief Construct a new source info object for multiple buffers in host memory
+   *
+   * @param host_buffers Input buffers in host memory
+   */
   explicit source_info(std::vector<host_buffer> const& host_buffers)
     : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
   {
   }
+
+  /**
+   * @brief Construct a new source info object for a single buffer
+   *
+   * @param host_data Input buffer in host memory
+   * @param size Size of the buffer
+   */
   explicit source_info(const char* host_data, size_t size)
     : _type(io_type::HOST_BUFFER), _buffers({{host_data, size}})
   {
   }
 
+  /**
+   * @brief Construct a new source info object for multiple user-implemented sources
+   *
+   * @param sources  User-implemented input sources
+   */
   explicit source_info(std::vector<cudf::io::datasource*> const& sources)
     : _type(io_type::USER_IMPLEMENTED), _user_sources(sources)
   {
   }
+
+  /**
+   * @brief Construct a new source info object for a single user-implemented source
+   *
+   * @param source Single user-implemented Input source
+   */
   explicit source_info(cudf::io::datasource* source)
     : _type(io_type::USER_IMPLEMENTED), _user_sources({source})
   {
@@ -255,25 +278,57 @@ struct sink_info {
    */
   sink_info(size_t num_sinks) : _num_sinks(num_sinks) {}
 
+  /**
+   * @brief Construct a new sink info object for multiple files
+   *
+   * @param file_paths Output files paths
+   */
   explicit sink_info(std::vector<std::string> const& file_paths)
     : _type(io_type::FILEPATH), _num_sinks(file_paths.size()), _filepaths(file_paths)
   {
   }
+
+  /**
+   * @brief Construct a new sink info object for a single file
+   *
+   * @param file_path Single output file path
+   */
   explicit sink_info(std::string const& file_path)
     : _type(io_type::FILEPATH), _filepaths({file_path})
   {
   }
 
+  /**
+   * @brief Construct a new sink info object for multiple host buffers
+   *
+   * @param buffers Output host buffers
+   */
   explicit sink_info(std::vector<std::vector<char>*> const& buffers)
     : _type(io_type::HOST_BUFFER), _num_sinks(buffers.size()), _buffers(buffers)
   {
   }
+  /**
+   * @brief Construct a new sink info object for a single host buffer
+   *
+   * @param buffer Single output host buffer
+   */
   explicit sink_info(std::vector<char>* buffer) : _type(io_type::HOST_BUFFER), _buffers({buffer}) {}
 
+  /**
+   * @brief Construct a new sink info object for multiple user-implemented sinks
+   *
+   * @param user_sinks Output user-implemented sinks
+   */
   explicit sink_info(std::vector<cudf::io::data_sink*> const& user_sinks)
     : _type(io_type::USER_IMPLEMENTED), _num_sinks(user_sinks.size()), _user_sinks(user_sinks)
   {
   }
+
+  /**
+   * @brief Construct a new sink info object for a single user-implemented sink
+   *
+   * @param user_sink Single output user-implemented sink
+   */
   explicit sink_info(class cudf::io::data_sink* user_sink)
     : _type(io_type::USER_IMPLEMENTED), _user_sinks({user_sink})
   {
