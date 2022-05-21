@@ -32,13 +32,8 @@
  * @brief Type declarations for libcudf.
  */
 
-// FIXME: where is this used? TODO: remove if unused.
-namespace bit_mask {
-using bit_mask_t = uint32_t;
-}
-
 // Forward declarations
-/// @cond FORWARD_DECLARATIONS
+/// @cond
 namespace rmm {
 class device_buffer;
 namespace mr {
@@ -247,7 +242,7 @@ class data_type {
   data_type()                 = default;
   ~data_type()                = default;
   data_type(data_type const&) = default;  ///< Copy constructor
-  data_type(data_type&&)      = default;  ///<  Move constructor
+  data_type(data_type&&)      = default;  ///< Move constructor
 
   /**
    * @brief Copy assignment operator for data_type
