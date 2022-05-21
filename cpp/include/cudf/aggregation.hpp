@@ -250,22 +250,22 @@ enum class udf_type : bool { CUDA, PTX };
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
 
 /// Factory to create a SUM aggregation
-/// @return A pointer to a new SUM aggregation
+/// @return A SUM aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_sum_aggregation();
 
 /// Factory to create a PRODUCT aggregation
-/// @return A pointer to a new PRODUCT aggregation
+/// @return A PRODUCT aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_product_aggregation();
 
 /// Factory to create a MIN aggregation
-/// @return A pointer to a new MIN aggregation
+/// @return A MIN aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_min_aggregation();
 
 /// Factory to create a MAX aggregation
-/// @return A pointer to a new MAX aggregation
+/// @return A MAX aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_max_aggregation();
 
@@ -273,28 +273,28 @@ std::unique_ptr<Base> make_max_aggregation();
  * @brief Factory to create a COUNT aggregation
  *
  * @param null_handling Indicates if null values will be counted.
- * @return A pointer to a new COUNT aggregation
+ * @return A COUNT aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_count_aggregation(null_policy null_handling = null_policy::EXCLUDE);
 
 /// Factory to create an ANY aggregation
-/// @return A pointer to a new ANY aggregation
+/// @return A ANY aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_any_aggregation();
 
 /// Factory to create a ALL aggregation
-/// @return A pointer to a new ALL aggregation
+/// @return A ALL aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_all_aggregation();
 
 /// Factory to create a SUM_OF_SQUARES aggregation
-/// @return A pointer to a new SUM_OF_SQUARES aggregation
+/// @return A SUM_OF_SQUARES aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_sum_of_squares_aggregation();
 
 /// Factory to create a MEAN aggregation
-/// @return A pointer to a new MEAN aggregation
+/// @return A MEAN aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_mean_aggregation();
 
@@ -308,7 +308,7 @@ std::unique_ptr<Base> make_mean_aggregation();
  * deviation across multiple discrete sets. See
  * `https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm` for more
  * detail.
- * @return A pointer to a new M2 aggregation
+ * @return A M2 aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_m2_aggregation();
@@ -320,7 +320,7 @@ std::unique_ptr<Base> make_m2_aggregation();
  *             `variance` is `N - ddof`, where `N` is the population size.
  *
  * @throw cudf::logic_error if input type is chrono or compound types.
- * @return A pointer to a new VARIANCE aggregation
+ * @return A VARIANCE aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
@@ -332,13 +332,13 @@ std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
  *             `std` is `N - ddof`, where `N` is the population size.
  *
  * @throw cudf::logic_error if input type is chrono or compound types.
- * @return A pointer to a new STD aggregation
+ * @return A STD aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_std_aggregation(size_type ddof = 1);
 
 /// Factory to create a MEDIAN aggregation
-/// @return A pointer to a new MEDIAN aggregation
+/// @return A MEDIAN aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_median_aggregation();
 
@@ -347,7 +347,7 @@ std::unique_ptr<Base> make_median_aggregation();
  *
  * @param quantiles The desired quantiles
  * @param interp The desired interpolation
- * @return A pointer to a new QUANTILE aggregation
+ * @return A QUANTILE aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& quantiles,
@@ -357,7 +357,7 @@ std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& quant
  * @brief Factory to create an ARGMAX aggregation
  *
  * ARGMAX returns the index of the maximum element.
- * @return A pointer to a new ARGMAX aggregation
+ * @return A ARGMAX aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_argmax_aggregation();
@@ -366,25 +366,25 @@ std::unique_ptr<Base> make_argmax_aggregation();
  * @brief Factory to create an ARGMIN aggregation
  *
  * `argmin` returns the index of the minimum element.
- * @return A pointer to a new ARGMIN aggregation
+ * @return A ARGMIN aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_argmin_aggregation();
 
 /**
- * @brief Factory to create a `nunique` aggregation
+ * @brief Factory to create a NUNIQUE aggregation
  *
- * `nunique` returns the number of unique elements.
+ * NUNIQUE returns the number of unique elements.
  * @param null_handling Indicates if null values will be counted.
- * @return A pointer to a new `nunique` aggregation
+ * @return A NUNIQUE aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_policy::EXCLUDE);
 
 /**
- * @brief Factory to create a `nth_element` aggregation
+ * @brief Factory to create a NTH_ELEMENT aggregation
  *
- * `nth_element` returns the n'th element of the group/series.
+ * NTH_ELEMENT returns the n'th element of the group/series.
  *
  * If @p n is not within the range `[-group_size, group_size)`, the result of
  * the respective group will be null. Negative indices `[-group_size, -1]`
@@ -393,14 +393,14 @@ std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_
  *
  * @param n index of nth element in each group.
  * @param null_handling Indicates to include/exclude nulls during indexing.
- * @return A pointer to a new `nth_element` aggregation
+ * @return A NTH_ELEMENT aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_nth_element_aggregation(
   size_type n, null_policy null_handling = null_policy::INCLUDE);
 
 /// Factory to create a ROW_NUMBER aggregation
-/// @return A pointer to a new ROW_NUMBER aggregation
+/// @return A ROW_NUMBER aggregation object
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_row_number_aggregation();
 
@@ -474,7 +474,7 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * the corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements for column
  * @param percentage enum to denote the type of conversion of ranks to percentage in range (0,1]
- * @return A pointer to a new RANK aggregation
+ * @return A RANK aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_rank_aggregation(rank_method method,
@@ -492,7 +492,7 @@ std::unique_ptr<Base> make_rank_aggregation(rank_method method,
  * of the list rows.
  *
  * @param null_handling Indicates whether to include/exclude nulls in list elements.
- * @return A pointer to a new COLLECT_LIST aggregation
+ * @return A COLLECT_LIST aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_collect_list_aggregation(
@@ -512,7 +512,7 @@ std::unique_ptr<Base> make_collect_list_aggregation(
  *        equal.
  * @param nans_equal Flag to specify whether NaN values in floating point column should be
  *        considered equal.
- * @return A pointer to a new COLLECT_SET aggregation
+ * @return A COLLECT_SET aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
@@ -523,7 +523,7 @@ std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling = n
  * @brief Factory to create a LAG aggregation
  *
  * @param offset The number of rows to lag the input
- * @return A pointer to a new LAG aggregation
+ * @return A LAG aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_lag_aggregation(size_type offset);
@@ -532,7 +532,7 @@ std::unique_ptr<Base> make_lag_aggregation(size_type offset);
  * @brief Factory to create a LEAD aggregation
  *
  * @param offset The number of rows to lead the input
- * @return A pointer to a new LEAD aggregation
+ * @return A LEAD aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_lead_aggregation(size_type offset);
@@ -544,7 +544,7 @@ std::unique_ptr<Base> make_lead_aggregation(size_type offset);
  * @param[in] user_defined_aggregator A string containing the aggregator code
  * @param[in] output_type expected output type
  *
- * @return Aggregation unique pointer housing user_defined_aggregator string.
+ * @return An aggregation containing a user-defined aggregator string
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_udf_aggregation(udf_type type,
@@ -560,7 +560,7 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
  * input lists column to be non-nullable (the child column containing list entries is not subjected
  * to this requirement).
  *
- * @return A pointer to a new MERGE_LISTS aggregation
+ * @return A MERGE_LISTS aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_lists_aggregation();
@@ -585,7 +585,7 @@ std::unique_ptr<Base> make_merge_lists_aggregation();
  *        during dropping duplicate list entries.
  * @param nans_equal Flag to specify whether NaN values in floating point column should be
  *        considered equal during dropping duplicate list entries.
- * @return A pointer to a new MERGE_SETS aggregation
+ * @return A MERGE_SETS aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = null_equality::EQUAL,
@@ -603,7 +603,7 @@ std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = nu
  * The input `M2` aggregation values are expected to be all non-negative numbers, since they
  * were output from `M2` aggregation.
  *
- * @return A pointer to a new MERGE_M2 aggregation
+ * @return A MERGE_M2 aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
@@ -616,7 +616,7 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  * @param min_periods Minimum number of non-null observations required to produce a result.
  * @param ddof Delta Degrees of Freedom. The divisor used in calculations is N - ddof, where N is
  *        the number of non-null observations.
- * @return A pointer to a new COVARIANCE aggregation
+ * @return A COVARIANCE aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods = 1, size_type ddof = 1);
@@ -629,7 +629,7 @@ std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods = 1, siz
  *
  * @param type correlation_type
  * @param min_periods Minimum number of non-null observations required to produce a result.
- * @return A pointer to a new CORRELATION aggregation
+ * @return A CORRELATION aggregation object
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_correlation_aggregation(correlation_type type,
@@ -667,7 +667,7 @@ std::unique_ptr<Base> make_correlation_aggregation(correlation_type type,
  * the computed tdigests: A value of 1000 will result in a tdigest containing no
  * more than 1000 centroids (32 bytes each). Higher result in more accurate tdigest information.
  *
- * @return A pointer to a new TDIGEST aggregation
+ * @return A TDIGEST aggregation object
  */
 template <typename Base>
 std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
@@ -705,7 +705,7 @@ std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
  * the computed tdigests: A value of 1000 will result in a tdigest containing no
  * more than 1000 centroids (32 bytes each). Higher result in more accurate tdigest information.
  *
- * @return A MERGE_TDIGEST aggregation object.
+ * @return A MERGE_TDIGEST aggregation object
  */
 template <typename Base>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);
