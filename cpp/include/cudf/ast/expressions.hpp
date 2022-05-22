@@ -38,13 +38,34 @@ class expression_parser;
  * Expressions inheriting from this class can accept parsers as visitors.
  */
 struct expression {
+  /**
+   * @pure @brief Accepts a visitor class.
+   *
+   * @param visitor Visitor
+   * @return Index of device data reference for this instance
+   */
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
 
+  /**
+   * @brief Returns true if the expression may evaluate to null.
+   *
+   * @param left The left operand of the expression (The same is used as right operand)
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return `true` if the expression may evaluate to null
+   */
   [[nodiscard]] bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
   {
     return may_evaluate_null(left, left, stream);
   }
 
+  /**
+   * @pure @brief Returns true if the expression may evaluate to null.
+   *
+   * @param left The left operand of the expression
+   * @param right The right operand of the expression
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return `true` if the expression may evaluate to null
+   */
   [[nodiscard]] virtual bool may_evaluate_null(table_view const& left,
                                                table_view const& right,
                                                rmm::cuda_stream_view stream) const = 0;
@@ -190,8 +211,8 @@ class literal : public expression {
   /**
    * @brief Accepts a visitor class.
    *
-   * @param visitor Visitor.
-   * @return cudf::size_type Index of device data reference for this instance.
+   * @param visitor Visitor
+   * @return Index of device data reference for this instance
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
@@ -205,7 +226,8 @@ class literal : public expression {
   /**
    * @brief Check if the underlying scalar is valid.
    *
-   * @return bool
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return true if the underlying scalar is valid.
    */
   [[nodiscard]] bool is_valid(rmm::cuda_stream_view stream) const
   {
