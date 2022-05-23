@@ -435,7 +435,7 @@ def read_parquet(
             fs=fs,
         )
     for i, source in enumerate(filepath_or_buffer):
-        tmp_source, compression = ioutils.get_filepath_or_buffer(
+        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,

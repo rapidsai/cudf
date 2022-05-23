@@ -171,7 +171,10 @@ def read_orc_statistics(
     files_statistics = []
     stripes_statistics = []
     for source in filepaths_or_buffers:
-        filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
+        (
+            filepath_or_buffer,
+            compression,
+        ) = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source, compression=None, **kwargs
         )
         if compression is not None:
@@ -323,7 +326,7 @@ def read_orc(
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
 
-        tmp_source, compression = ioutils.get_filepath_or_buffer(
+        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             use_python_file_object=use_python_file_object,
