@@ -349,8 +349,8 @@ outputs:
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
     about:
-      home: http://rapids.ai/
+      home: https://rapids.ai/
       license: Apache-2.0
-      license_family: Apache
+      license_family: APACHE
       license_file: LICENSE
       summary: libcudf test & benchmark executables

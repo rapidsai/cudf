@@ -41,8 +41,8 @@ test:                                   # [linux64]
     - custreamz                         # [linux64]
 
 about:
-  home: http://rapids.ai/
+  home: https://rapids.ai/
   license: Apache-2.0
-  license_family: Apache
+  license_family: APACHE
   license_file: LICENSE
   summary: cuStreamz library
