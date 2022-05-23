@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import pickle
 import re
 import warnings
 from functools import cached_property
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
     Optional,
     Sequence,
     Tuple,
@@ -36,7 +34,7 @@ from cudf.api.types import (
 )
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethods, ParentType
+from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import can_convert_to_column
 
@@ -137,7 +135,7 @@ class StringMethods(ColumnMethods):
     def htoi(self) -> SeriesOrIndex:
         """
         Returns integer value represented by each hex string.
-        String is interpretted to have hex (base-16) characters.
+        String is interpreted to have hex (base-16) characters.
 
         Returns
         -------
@@ -161,7 +159,7 @@ class StringMethods(ColumnMethods):
 
     hex_to_int = htoi
 
-    def ip2int(self) -> ParentType:
+    def ip2int(self) -> SeriesOrIndex:
         """
         This converts ip strings to integers
 
@@ -4521,7 +4519,6 @@ class StringMethods(ColumnMethods):
         --------
         >>> import cudf
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
-        >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> str_series.str.ngrams(2, "_")
         0    this is my_favorite book
         dtype: object
@@ -4953,7 +4950,7 @@ class StringMethods(ColumnMethods):
             libstrings.edit_distance(self._column, targets_column)
         )
 
-    def edit_distance_matrix(self) -> ParentType:
+    def edit_distance_matrix(self) -> SeriesOrIndex:
         """Computes the edit distance between strings in the series.
 
         The series to compute the matrix should have more than 2 strings and
@@ -5336,56 +5333,6 @@ class StringColumn(column.ColumnBase):
             pd_series.index = index
         return pd_series
 
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[Any, Any] = {"null_count": self.null_count}
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["size"] = self.size
-
-        frames = []
-        sub_headers = []
-
-        for item in self.children:
-            sheader, sframes = item.serialize()
-            sub_headers.append(sheader)
-            frames.extend(sframes)
-
-        if self.null_count > 0:
-            frames.append(self.mask)
-
-        header["subheaders"] = sub_headers
-        header["frame_count"] = len(frames)
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header: dict, frames: list) -> StringColumn:
-        size = header["size"]
-        if not isinstance(size, int):
-            size = pickle.loads(size)
-
-        # Deserialize the mask, value, and offset frames
-        buffers = [Buffer(each_frame) for each_frame in frames]
-
-        nbuf = None
-        if header["null_count"] > 0:
-            nbuf = buffers[2]
-
-        children = []
-        for h, b in zip(header["subheaders"], buffers[:2]):
-            column_type = pickle.loads(h["type-serialized"])
-            children.append(column_type.deserialize(h, [b]))
-
-        col = cast(
-            StringColumn,
-            column.build_column(
-                data=None,
-                dtype="str",
-                mask=nbuf,
-                children=tuple(children),
-                size=size,
-            ),
-        )
-        return col
-
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = cudf.dtype(to_dtype)
 
@@ -5459,7 +5406,7 @@ class StringColumn(column.ColumnBase):
 
     def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
         found_indices = libcudf.search.contains(
-            self, column.as_column([value], dtype=self.dtype)
+            column.as_column([value], dtype=self.dtype), self
         )
         found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(np.int32(1))

@@ -10,6 +10,7 @@ from cudf.api.types import is_struct_dtype
 from cudf.core.column import ColumnBase, build_struct_column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
+from cudf.core.missing import NA
 
 
 class StructColumn(ColumnBase):
@@ -102,7 +103,7 @@ class StructColumn(ColumnBase):
         if isinstance(value, dict):
             # filling in fields not in dict
             for field in self.dtype.fields:
-                value[field] = value.get(field, cudf.NA)
+                value[field] = value.get(field, NA)
 
             value = cudf.Scalar(value, self.dtype)
         super().__setitem__(key, value)

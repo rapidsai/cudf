@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -245,6 +245,20 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
   table_view const& table,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Checks if a column or any of its children is a struct column with structs that are null.
+ *
+ * This function searches for structs that are null -- differentiating between structs that are null
+ * and structs containing null values. Null structs add a column to the result of the flatten column
+ * utility and necessitates column_nullability::FORCE when flattening the column for comparison
+ * operations.
+ *
+ * @param col Column to check for null structs
+ * @return A boolean indicating if the column is or contains a struct column that contains a null
+ * struct.
+ */
+bool contains_null_structs(column_view const& col);
 }  // namespace detail
 }  // namespace structs
 }  // namespace cudf

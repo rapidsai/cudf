@@ -81,17 +81,26 @@ class hostdevice_vector {
   [[nodiscard]] size_t size() const noexcept { return num_elements; }
   [[nodiscard]] size_t memory_size() const noexcept { return sizeof(T) * num_elements; }
 
-  T& operator[](size_t i) const { return h_data[i]; }
-  T* host_ptr(size_t offset = 0) const { return h_data + offset; }
+  T& operator[](size_t i) { return h_data[i]; }
+  T const& operator[](size_t i) const { return h_data[i]; }
+
+  T* host_ptr(size_t offset = 0) { return h_data + offset; }
+  T const* host_ptr(size_t offset = 0) const { return h_data + offset; }
+
   T* begin() { return h_data; }
+  T const* begin() const { return h_data; }
+
   T* end() { return h_data + num_elements; }
-  T* d_begin() { return static_cast<T*>(d_data.data()); }
-  T* d_end() { return static_cast<T*>(d_data.data()) + num_elements; }
-  T* device_ptr(size_t offset = 0) { return reinterpret_cast<T*>(d_data.data()) + offset; }
-  T const* device_ptr(size_t offset = 0) const
-  {
-    return reinterpret_cast<T const*>(d_data.data()) + offset;
-  }
+  T const* end() const { return h_data + num_elements; }
+
+  auto d_begin() { return static_cast<T*>(d_data.data()); }
+  auto d_begin() const { return static_cast<T const*>(d_data.data()); }
+
+  auto d_end() { return static_cast<T*>(d_data.data()) + num_elements; }
+  auto d_end() const { return static_cast<T const*>(d_data.data()) + num_elements; }
+
+  auto device_ptr(size_t offset = 0) { return static_cast<T*>(d_data.data()) + offset; }
+  auto device_ptr(size_t offset = 0) const { return static_cast<T const*>(d_data.data()) + offset; }
 
   /**
    * @brief Returns the specified element from device memory

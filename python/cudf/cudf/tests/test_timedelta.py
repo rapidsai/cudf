@@ -78,7 +78,7 @@ _TIMEDELTA_DATA_NON_OVERFLOW = [
 def test_timedelta_series_create(data, dtype):
     if dtype not in ("timedelta64[ns]"):
         pytest.skip(
-            "Bug in pandas" "https://github.com/pandas-dev/pandas/issues/35465"
+            "Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465"
         )
     psr = pd.Series(
         cp.asnumpy(data) if isinstance(data, cp.ndarray) else data, dtype=dtype
@@ -102,7 +102,7 @@ def test_timedelta_series_create(data, dtype):
 def test_timedelta_from_typecast(data, dtype, cast_dtype):
     if dtype not in ("timedelta64[ns]"):
         pytest.skip(
-            "Bug in pandas" "https://github.com/pandas-dev/pandas/issues/35465"
+            "Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465"
         )
     psr = pd.Series(
         cp.asnumpy(data) if isinstance(data, cp.ndarray) else data, dtype=dtype
@@ -1177,6 +1177,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.mod,
         lfunc_args_and_kwargs=([psr, "a"],),
         rfunc_args_and_kwargs=([sr, "a"],),
+        check_exception_type=False,
         compare_error_message=False,
     )
 
