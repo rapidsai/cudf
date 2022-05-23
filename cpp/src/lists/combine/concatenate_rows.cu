@@ -44,7 +44,7 @@ namespace {
  * s2 = [{8},    {9},       {},  {10, 11, 12}, {13, 14, 15, 16}]
  *
  * We can rearrange the child data using a normal concatenate and a gather such that
- * the resulting values are in the correct order.  For the above example, the
+ * the resulting values are in the correct order. For the above example, the
  * child column would look like:
  *
  * {0, 1, 8, 2, 3, 4, 9, 5, 10, 11, 12, 6, 7, 13, 14, 15}
@@ -67,7 +67,7 @@ std::tuple<std::unique_ptr<column>, rmm::device_buffer, size_type>
 generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                          bool build_null_mask,
                                          concatenate_null_policy null_policy,
-                                         device_span<size_type> row_null_counts,
+                                         device_span<size_type const> row_null_counts,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
@@ -78,12 +78,15 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
                                                stream,
                                                mr);
 
-  auto keys = cudf::detail::make_counting_transform_iterator(
-    0, [num_columns = input.num_columns()] __device__(size_type i) { return i / num_columns; });
+  auto keys = thrust::make_transform_iterator(thrust::make_counting_iterator(size_t{0}),
+                                              [num_columns = input.num_columns()] __device__(
+                                                size_t i) -> size_type { return i / num_columns; });
 
   // generate sizes for the regrouped rows
-  auto values = cudf::detail::make_counting_transform_iterator(
-    0, [input, row_null_counts = row_null_counts.data(), null_policy] __device__(size_type i) {
+  auto values = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(size_t{0}),
+    [input, row_null_counts = row_null_counts.data(), null_policy] __device__(
+      size_t i) -> offset_type {
       auto const col_index = i % input.num_columns();
       auto const row_index = i / input.num_columns();
 
@@ -101,6 +104,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
         input.column(col_index).offset();
       return offsets[row_index + 1] - offsets[row_index];
     });
+
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         keys,
                         keys + (input.num_rows() * input.num_columns()),
@@ -124,17 +128,23 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
 
     // row is null if -all- input rows are null
     if (null_policy == concatenate_null_policy::IGNORE) {
-      auto is_valid = [num_columns = input.num_columns()] __device__(size_type null_count) {
-        return null_count == num_columns ? 0 : 1;
-      };
       return cudf::detail::valid_if(
-        row_null_counts.begin(), row_null_counts.begin() + input.num_rows(), is_valid, stream, mr);
+        row_null_counts.begin(),
+        row_null_counts.begin() + input.num_rows(),
+        [num_columns = input.num_columns()] __device__(size_type null_count) {
+          return null_count != num_columns;
+        },
+        stream,
+        mr);
     }
 
     // row is null if -any- input rows are null
-    auto is_valid = [] __device__(size_type null_count) { return null_count > 0 ? 0 : 1; };
     return cudf::detail::valid_if(
-      row_null_counts.begin(), row_null_counts.begin() + input.num_rows(), is_valid, stream, mr);
+      row_null_counts.begin(),
+      row_null_counts.begin() + input.num_rows(),
+      [] __device__(size_type null_count) { return null_count == 0; },
+      stream,
+      mr);
   }();
 
   return {std::move(offsets), std::move(null_mask), null_count};
@@ -144,15 +154,19 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
                                                     rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<size_type> null_counts(input.num_rows(), stream);
-  auto null_values =
-    cudf::detail::make_counting_transform_iterator(0, [input] __device__(size_type i) {
+
+  auto keys = thrust::make_transform_iterator(thrust::make_counting_iterator(size_t{0}),
+                                              [num_columns = input.num_columns()] __device__(
+                                                size_t i) -> size_type { return i / num_columns; });
+
+  auto null_values = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(size_t{0}), [input] __device__(size_t i) -> size_type {
       auto const col_index = i % input.num_columns();
       auto const row_index = i / input.num_columns();
       auto const& col      = input.column(col_index);
       return col.null_mask() ? (bit_is_set(col.null_mask(), row_index + col.offset()) ? 0 : 1) : 0;
     });
-  auto keys = cudf::detail::make_counting_transform_iterator(
-    0, [num_columns = input.num_columns()] __device__(size_type i) { return i / num_columns; });
+
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         keys,
                         keys + (input.num_rows() * input.num_columns()),
@@ -214,7 +228,7 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
   // be nullified.
   if (build_null_mask) {
     auto [null_mask, null_count] = [&]() {
-      auto iter = thrust::make_counting_iterator(0);
+      auto iter = thrust::make_counting_iterator(size_t{0});
 
       // IGNORE.  Output row is nullified if all input rows are null.
       if (null_policy == concatenate_null_policy::IGNORE) {
@@ -223,9 +237,9 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
           iter + (input.num_rows() * input.num_columns()),
           [num_rows        = input.num_rows(),
            num_columns     = input.num_columns(),
-           row_null_counts = row_null_counts.data()] __device__(size_type i) {
+           row_null_counts = row_null_counts.data()] __device__(size_t i) -> size_type {
             auto const row_index = i % num_rows;
-            return row_null_counts[row_index] == num_columns ? 0 : 1;
+            return row_null_counts[row_index] != num_columns;
           });
       }
       // NULLIFY_OUTPUT_ROW.  Output row is nullfied if any input row is null
@@ -233,9 +247,9 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
         iter,
         iter + (input.num_rows() * input.num_columns()),
         [num_rows        = input.num_rows(),
-         row_null_counts = row_null_counts.data()] __device__(size_type i) {
+         row_null_counts = row_null_counts.data()] __device__(size_t i) -> size_type {
           auto const row_index = i % num_rows;
-          return row_null_counts[row_index] > 0 ? 0 : 1;
+          return row_null_counts[row_index] == 0;
         });
     }();
     concat->set_null_mask(std::move(null_mask), null_count);
@@ -243,10 +257,12 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
 
   // perform the gather to rearrange the rows in desired child order. this will produce -almost-
   // what we want. the data of the children will be exactly what we want, but will be grouped as if
-  // we had concatenated all the rows together instead of concatenating within the rows.  to fix
-  // this we can simply swap in a new set of offsets that re-groups them.
-  auto iter = cudf::detail::make_counting_transform_iterator(
-    0, [num_columns = input.num_columns(), num_rows = input.num_rows()] __device__(size_type i) {
+  // we had concatenated all the rows together instead of concatenating within the rows.  To fix
+  // this we can simply swap in a new set of offsets that re-groups them.  bmo
+  auto iter = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(size_t{0}),
+    [num_columns = input.num_columns(),
+     num_rows    = input.num_rows()] __device__(size_t i) -> size_type {
       auto const src_col_index    = i % num_columns;
       auto const src_row_index    = i / num_columns;
       auto const concat_row_index = (src_col_index * num_rows) + src_row_index;

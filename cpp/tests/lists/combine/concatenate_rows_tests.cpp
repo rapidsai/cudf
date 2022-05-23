@@ -560,7 +560,7 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNulls)
                   {{{"whee", "yay", "bananas"}, nulls_at({1})}, {}, {}},
                   {{}, {"arg"}, {"mno", "ampere"}, {"gpu"}, {"def"}},
                   {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"}, 
-                  {{"", "hhh"}, nulls_at({0})}, {"www"}},                           nulls_at({0, 2, 4}) },
+                    {{"", "hhh"}, nulls_at({0})}, {"www"}},                           nulls_at({0, 2, 4}) },
                   {{"warp", "donuts", "parking"}, { "", "apply", "twelve", "mouse", "bbb"}, {"bbb", "pom"}, {}},
                   {{}}
                 }, nulls_at({4}) };
@@ -581,7 +581,7 @@ TEST_F(ListConcatenateRowsNestedTypesTest, ListWithNulls)
                   {{}, {"arg"}, {"mno", "ampere"}, {"gpu"}, {"def"}},
                   {{{"abc"}, {"def", "g", "xyw", "ijk"}, {"x", "y", "", "column"}, 
                   {{"", "hhh"}, nulls_at({0})}, {"www"}},                           nulls_at({0, 2, 4}) },
-                  {{"warp", "donuts", "parking"}, { "", "apply", "twelve", "mouse", "bbb"}, {"bbb", "pom"}, {}},
+                  {{}},
                   {{}} 
                 }, nulls_at({3, 4}) };    
         
