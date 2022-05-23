@@ -1390,7 +1390,7 @@ def get_reader_path_or_buf(
                     )
 
         else:
-            if len(paths):
+            if len(paths) == 0:
                 raise FileNotFoundError(
                     f"{path_or_data} could not be resolved to any files"
                 )
