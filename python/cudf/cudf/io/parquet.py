@@ -71,7 +71,7 @@ def _write_parquet(
             ValueError("paths must be list-like when partitions_info provided")
 
     paths_or_bufs = [
-        ioutils.get_writer_path_or_buf(path, mode="wb", **kwargs)
+        ioutils.get_writer_filepath_or_buffer(path, mode="wb", **kwargs)
         for path in paths
     ]
     common_args = {
@@ -435,7 +435,7 @@ def read_parquet(
             fs=fs,
         )
     for i, source in enumerate(filepath_or_buffer):
-        tmp_source, compression = ioutils.get_reader_path_or_buf(
+        tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,
