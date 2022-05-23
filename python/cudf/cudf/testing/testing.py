@@ -20,6 +20,7 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core._compat import PANDAS_GE_110
+from cudf.core.missing import NA
 
 
 def dtype_can_compare_equal_to_other(dtype):
@@ -215,7 +216,7 @@ def assert_column_equal(
                 msg1 = f"{left.ordered}"
                 msg2 = f"{right.ordered}"
                 raise_assert_detail(
-                    "{obj} category", "Orders are different", msg1, msg2
+                    f"{obj} category", "Orders are different", msg1, msg2
                 )
 
     if (
@@ -247,8 +248,12 @@ def assert_column_equal(
             if columns_equal and not check_exact and is_numeric_dtype(left):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
-                    left[left.isnull().unary_operator("not")].values,
-                    right[right.isnull().unary_operator("not")].values,
+                    left.apply_boolean_mask(
+                        left.isnull().unary_operator("not")
+                    ).values,
+                    right.apply_boolean_mask(
+                        right.isnull().unary_operator("not")
+                    ).values,
                 )
                 if columns_equal and (
                     left.dtype.kind == right.dtype.kind == "f"
@@ -286,7 +291,7 @@ def assert_column_equal(
 
 
 def null_safe_scalar_equals(left, right):
-    if left in {cudf.NA, np.nan} or right in {cudf.NA, np.nan}:
+    if left in {NA, np.nan} or right in {NA, np.nan}:
         return left is right
     return left == right
 

@@ -233,8 +233,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get a ColumnView that is the offsets for this list.
+   * Please note that it is the responsibility of the caller to close this view, and the parent
+   * column must out live this view.
    */
-  ColumnView getListOffsetsView() {
+  public ColumnView getListOffsetsView() {
     assert(getType().equals(DType.LIST));
     return new ColumnView(getListOffsetCvPointer(viewHandle));
   }
@@ -1547,6 +1549,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Segmented gather of the elements within a list element in each row of a list column.
+   * For each list, assuming the size is N, valid indices of gather map ranges in [-N, N).
+   * Out of bound indices refer to null.
+   * @param gatherMap ListColumnView carrying lists of integral indices which maps the
+   * element in list of each row in the source columns to rows of lists in the result columns.
+   * @return the result.
+   */
+  public ColumnVector segmentedGather(ColumnView gatherMap) {
+    return segmentedGather(gatherMap, OutOfBoundsPolicy.NULLIFY);
+  }
+
+  /**
+   * Segmented gather of the elements within a list element in each row of a list column.
+   * @param gatherMap ListColumnView carrying lists of integral indices which maps the
+   * element in list of each row in the source columns to rows of lists in the result columns.
+   * @param policy OutOfBoundsPolicy, `DONT_CHECK` leads to undefined behaviour; `NULLIFY`
+   * replaces out of bounds with null.
+   * @return the result.
+   */
+  public ColumnVector segmentedGather(ColumnView gatherMap, OutOfBoundsPolicy policy) {
+    return new ColumnVector(segmentedGather(getNativeView(), gatherMap.getNativeView(),
+        policy.equals(OutOfBoundsPolicy.NULLIFY)));
+  }
+
+  /**
    * Do a reduction on the values in a list. The output type will be the type of the data column
    * of this list.
    * @param aggregation the aggregation to perform
@@ -1742,22 +1769,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a new ColumnVector of {@link DType#BOOL8} elements containing true if the corresponding
-   * entry in haystack is contained in needles and false if it is not. The caller will be responsible
-   * for the lifecycle of the new vector.
+   * Returns a new column of {@link DType#BOOL8} elements having the same size as this column,
+   * each row value is true if the corresponding entry in this column is contained in the
+   * given searchSpace column and false if it is not.
+   * The caller will be responsible for the lifecycle of the new vector.
    *
    * example:
    *
-   *   haystack = { 10, 20, 30, 40, 50 }
-   *   needles  = { 20, 40, 60, 80 }
+   *   col         = { 10, 20, 30, 40, 50 }
+   *   searchSpace = { 20, 40, 60, 80 }
    *
    *   result = { false, true, false, true, false }
    *
-   * @param needles
+   * @param searchSpace
    * @return A new ColumnVector of type {@link DType#BOOL8}
    */
-  public final ColumnVector contains(ColumnView needles) {
-    return new ColumnVector(containsVector(getNativeView(), needles.getNativeView()));
+  public final ColumnVector contains(ColumnView searchSpace) {
+    return new ColumnVector(containsVector(getNativeView(), searchSpace.getNativeView()));
   }
 
   /**
@@ -3449,6 +3477,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Generate list offsets from sizes of each list.
+   * NOTICE: This API only works for INT32. Otherwise, the behavior is undefined. And no null and negative value is allowed.
+   *
+   * @return a column of list offsets whose size is N + 1
+   */
+  public final ColumnVector generateListOffsets() {
+    return new ColumnVector(generateListOffsets(getNativeView()));
+  }
+
+  /**
    * Get a single item from the column at the specified index as a Scalar.
    *
    * Be careful. This is expensive and may involve running a kernel to copy the data out.
@@ -3459,6 +3497,37 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final Scalar getScalarElement(int index) {
     return new Scalar(getType(), getElement(getNativeView(), index));
+  }
+
+  /**
+   * Filters elements in each row of this LIST column using `booleanMaskView`
+   * LIST of booleans as a mask.
+   * <p>
+   * Given a list-of-bools column, the function produces
+   * a new `LIST` column of the same type as this column, where each element is copied
+   * from the row *only* if the corresponding `boolean_mask` is non-null and `true`.
+   * <p>
+   * E.g.
+   * column       = { {0,1,2}, {3,4}, {5,6,7}, {8,9} };
+   * boolean_mask = { {0,1,1}, {1,0}, {1,1,1}, {0,0} };
+   * results      = { {1,2},   {3},   {5,6,7}, {} };
+   * <p>
+   * This column and `boolean_mask` must have the same number of rows.
+   * The output column has the same number of rows as this column.
+   * An element is copied to an output row *only*
+   * if the corresponding boolean_mask element is `true`.
+   * An output row is invalid only if the row is invalid.
+   *
+   * @param booleanMaskView A nullable list of bools column used to filter elements in this column
+   * @return List column of the same type as this column, containing filtered list rows
+   * @throws CudfException if `boolean_mask` is not a "lists of bools" column
+   * @throws CudfException if this column and `boolean_mask` have different number of rows
+   */
+  public final ColumnVector applyBooleanMask(ColumnView booleanMaskView) {
+    assert (getType().equals(DType.LIST));
+    assert (booleanMaskView.getType().equals(DType.LIST));
+    assert (getRowCount() == booleanMaskView.getRowCount());
+    return new ColumnVector(applyBooleanMask(getNativeView(), booleanMaskView.getNativeView()));
   }
 
   /**
@@ -3998,6 +4067,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long segmentedReduce(long dataViewHandle, long offsetsViewHandle,
       long aggregation, boolean includeNulls, int dtype, int scale) throws CudfException;
 
+  private static native long segmentedGather(long sourceColumnHandle, long gatherMapListHandle,
+      boolean isNullifyOutBounds) throws CudfException;
+
   private static native long isNullNative(long viewHandle);
 
   private static native long isNanNative(long viewHandle);
@@ -4040,7 +4112,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
-  private static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
+  private static native long containsVector(long valuesHandle, long searchSpaceHandle) throws CudfException;
 
   private static native long transform(long viewHandle, String udf, boolean isPtx);
 
@@ -4133,6 +4205,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native long getDeviceMemorySize(long viewHandle) throws CudfException;
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
+
+  static native long generateListOffsets(long handle) throws CudfException;
+
+  static native long applyBooleanMask(long arrayColumnView, long booleanMaskHandle) throws CudfException;
 
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when

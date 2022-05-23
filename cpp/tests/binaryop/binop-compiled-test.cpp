@@ -30,6 +30,8 @@
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <type_traits>
 
 namespace cudf::test::binop {

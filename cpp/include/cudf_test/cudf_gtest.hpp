@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,6 +119,9 @@ struct TypeList<Types<TYPES...>> {
 
 #define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
   EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
+
+#define FATAL_CUDA_EXPECT_THROW_MESSAGE(x, msg) \
+  EXPECT_THROW_MESSAGE(x, cudf::fatal_cuda_error, "Fatal CUDA error encountered at:", msg)
 
 /**
  * @brief test macro to be expected as no exception.

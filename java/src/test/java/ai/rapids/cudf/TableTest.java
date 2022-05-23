@@ -36,6 +36,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.junit.jupiter.api.Test;
@@ -4149,6 +4150,97 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testCreateTDigestReduction() {
+    try (Table t1 = new Table.TestBuilder()
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+         Scalar tdigest = t1.getColumn(0)
+            .reduce(ReductionAggregation.createTDigest(1000), DType.STRUCT)) {
+      assertEquals(DType.STRUCT, tdigest.getType());
+
+      try (CloseableArray columns = CloseableArray.wrap(tdigest.getChildrenFromStructScalar())) {
+        assertEquals(3, columns.size());
+        try (HostColumnVector centroids = ((ColumnView) columns.get(0)).copyToHost();
+           HostColumnVector min = ((ColumnView) columns.get(1)).copyToHost();
+           HostColumnVector max = ((ColumnView) columns.get(2)).copyToHost()) {
+          assertEquals(DType.LIST, centroids.getType());
+          assertEquals(DType.FLOAT64, min.getType());
+          assertEquals(DType.FLOAT64, max.getType());
+          assertEquals(1, min.getRowCount());
+          assertEquals(1, max.getRowCount());
+          assertEquals(70, min.getDouble(0));
+          assertEquals(160, max.getDouble(0));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMergeTDigestReduction() {
+    StructType centroidStruct = new StructType(false,
+            new BasicType(false, DType.FLOAT64), // mean
+            new BasicType(false, DType.FLOAT64)); // weight
+
+    ListType centroidList = new ListType(false, centroidStruct);
+
+    StructType tdigestType = new StructType(false,
+            centroidList,
+            new BasicType(false, DType.FLOAT64), // min
+            new BasicType(false, DType.FLOAT64)); // max
+
+    try (ColumnVector tdigests = ColumnVector.fromStructs(tdigestType,
+            new StructData(Arrays.asList(
+                    new StructData(1.0, 100.0),
+                    new StructData(2.0, 50.0)),
+                    1.0, // min
+                    2.0), // max
+            new StructData(Arrays.asList(
+                    new StructData(3.0, 200.0),
+                    new StructData(4.0, 99.0)),
+                    3.0, // min
+                    4.0)); // max
+      Scalar merged = tdigests.reduce(ReductionAggregation.mergeTDigest(1000), DType.STRUCT)) {
+
+      assertEquals(DType.STRUCT, merged.getType());
+      try (CloseableArray columns = CloseableArray.wrap(merged.getChildrenFromStructScalar())) {
+        assertEquals(3, columns.size());
+        try (HostColumnVector centroids = ((ColumnView) columns.get(0)).copyToHost();
+             HostColumnVector min = ((ColumnView) columns.get(1)).copyToHost();
+             HostColumnVector max = ((ColumnView) columns.get(2)).copyToHost()) {
+          assertEquals(3, columns.size());
+          assertEquals(DType.LIST, centroids.getType());
+          assertEquals(DType.FLOAT64, min.getType());
+          assertEquals(DType.FLOAT64, max.getType());
+          assertEquals(1, min.getRowCount());
+          assertEquals(1, max.getRowCount());
+          assertEquals(1.0, min.getDouble(0));
+          assertEquals(4.0, max.getDouble(0));
+          assertEquals(1, centroids.rows);
+
+          List list = centroids.getList(0);
+          assertEquals(4, list.size());
+
+          StructData data = (StructData) list.get(0);
+          assertEquals(1.0, data.dataRecord.get(0));
+          assertEquals(100.0, data.dataRecord.get(1));
+
+          data = (StructData) list.get(1);
+          assertEquals(2.0, data.dataRecord.get(0));
+          assertEquals(50.0, data.dataRecord.get(1));
+
+          data = (StructData) list.get(2);
+          assertEquals(3.0, data.dataRecord.get(0));
+          assertEquals(200.0, data.dataRecord.get(1));
+
+          data = (StructData) list.get(3);
+          assertEquals(4.0, data.dataRecord.get(0));
+          assertEquals(99.0, data.dataRecord.get(1));
+        }
+      }
+    }
+  }
+
+  @Test
   void testGroupByMinMaxDecimal() {
     try (Table t1 = new Table.TestBuilder()
         .column( "1",  "1", "1", "1", "2")
@@ -7808,6 +7900,126 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testParquetWriteWithFieldId() throws IOException {
+    // field IDs are:
+    // c1: -1, c2: 2, c3: 3, c31: 31, c32: 32, c4: -4, c5: not specified
+    ColumnWriterOptions.StructBuilder sBuilder =
+        structBuilder("c3", true, 3)
+            .withColumn(true, "c31", 31)
+            .withColumn(true, "c32", 32);
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withColumn(true, "c1", -1)
+        .withDecimalColumn("c2", 9, true, 2)
+        .withStructColumn(sBuilder.build())
+        .withTimestampColumn("c4", true, true, -4)
+        .withColumns( true, "c5")
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id", ".parquet");
+    try {
+      HostColumnVector.StructType structType = new HostColumnVector.StructType(
+          true,
+          new HostColumnVector.BasicType(true, DType.STRING),
+          new HostColumnVector.BasicType(true, DType.STRING));
+
+      try (Table table0 = new Table.TestBuilder()
+          .column(true, false) // c1
+          .decimal32Column(0, 298, 2473) // c2
+          .column(structType, // c3
+              new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
+          .timestampMicrosecondsColumn(1000L, 2000L) // c4
+          .column("a", "b") // c5
+          .build()) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(table0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()),
+          new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        assert (schema.getFields().get(0).getId().intValue() == -1);
+        assert (schema.getFields().get(1).getId().intValue() == 2);
+        assert (schema.getFields().get(2).getId().intValue() == 3);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(0).getId().intValue() == 31);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(1).getId().intValue() == 32);
+        assert (schema.getFields().get(3).getId().intValue() == -4);
+        assert (schema.getFields().get(4).getId() == null);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testParquetWriteWithFieldIdNestNotSpecified() throws IOException {
+    // field IDs are:
+    // c0: no field ID
+    // c1: 1
+    // c2: no field ID
+    //   c21: 21
+    //   c22: no field ID
+    // c3: 3
+    //   c31: 31
+    //   c32: no field ID
+    // c4: 0
+    ColumnWriterOptions.StructBuilder c2Builder =
+        structBuilder("c2", true)
+            .withColumn(true, "c21", 21)
+            .withColumns(true, "c22");
+    ColumnWriterOptions.StructBuilder c3Builder =
+        structBuilder("c3", true, 3)
+            .withColumn(true, "c31", 31)
+            .withColumns(true, "c32");
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withColumns(true, "c0")
+        .withDecimalColumn("c1", 9, true, 1)
+        .withStructColumn(c2Builder.build())
+        .withStructColumn(c3Builder.build())
+        .withColumn(true, "c4", 0)
+        .build();
+
+    File tempFile = File.createTempFile("test-field-id", ".parquet");
+    try {
+      HostColumnVector.StructType structType = new HostColumnVector.StructType(
+          true,
+          new HostColumnVector.BasicType(true, DType.STRING),
+          new HostColumnVector.BasicType(true, DType.STRING));
+
+      try (Table table0 = new Table.TestBuilder()
+          .column(true, false) // c0
+          .decimal32Column(0, 298, 2473) // c1
+          .column(structType, // c2
+              new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
+          .column(structType, // c3
+              new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
+          .column("a", "b") // c4
+          .build()) {
+        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+          writer.write(table0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(tempFile.getAbsolutePath()),
+          new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        assert (schema.getFields().get(0).getId() == null);
+        assert (schema.getFields().get(1).getId().intValue() == 1);
+        assert (schema.getFields().get(2).getId() == null);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(0).getId().intValue() == 21);
+        assert (((GroupType) schema.getFields().get(2)).getFields().get(1).getId() == null);
+        assert (((GroupType) schema.getFields().get(3)).getFields().get(0).getId().intValue() == 31);
+        assert (((GroupType) schema.getFields().get(3)).getFields().get(1).getId() == null);
+        assert (schema.getFields().get(4).getId().intValue() == 0);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
   /** Return a column where DECIMAL64 has been up-casted to DECIMAL128 */
   private ColumnVector castDecimal64To128(ColumnView c) {
     DType dtype = c.getType();
@@ -8466,20 +8678,16 @@ public class TableTest extends CudfTestBase {
   @Test
   void testSample() {
     try (Table t = new Table.TestBuilder().column("s1", "s2", "s3", "s4", "s5").build()) {
-      try (Table ret = t.sample(3, false, 0);
-           Table expected = new Table.TestBuilder().column("s3", "s4", "s5").build()) {
-        assertTablesAreEqual(expected, ret);
+      try (Table ret = t.sample(3, false, 0)) {
+        assertEquals(ret.getRowCount(), 3);
       }
 
-      try (Table ret = t.sample(5, false, 0);
-           Table expected = new Table.TestBuilder().column("s3", "s4", "s5", "s2", "s1").build()) {
-        assertTablesAreEqual(expected, ret);
+      try (Table ret = t.sample(5, false, 0)) {
+        assertEquals(ret.getRowCount(), 5);
       }
 
-      try (Table ret = t.sample(8, true, 0);
-           Table expected = new Table.TestBuilder()
-               .column("s1", "s1", "s4", "s5", "s5", "s1", "s3", "s2").build()) {
-        assertTablesAreEqual(expected, ret);
+      try (Table ret = t.sample(8, true, 0)) {
+        assertEquals(ret.getRowCount(), 8);
       }
     }
   }

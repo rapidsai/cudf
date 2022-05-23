@@ -23,6 +23,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
@@ -45,6 +46,28 @@ class compaction_hash {
  private:
   row_hash _hash;
 };
+
+namespace experimental {
+
+/**
+ * @brief Device callable to hash a given row.
+ */
+template <typename RowHash>
+class compaction_hash {
+ public:
+  compaction_hash(RowHash row_hasher) : _hash{row_hasher} {}
+
+  __device__ inline auto operator()(size_type i) const noexcept
+  {
+    auto hash = _hash(i);
+    return (hash == COMPACTION_EMPTY_KEY_SENTINEL) ? (hash - 1) : hash;
+  }
+
+ private:
+  RowHash _hash;
+};
+
+}  // namespace experimental
 
 /**
 ￼ * @brief Device functor to determine if a row is valid.

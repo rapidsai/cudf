@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,17 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
+#include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/copying.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/table_utilities.hpp>
-
 #include <cudf/types.hpp>
 
-#include <algorithm>
-#include <random>
-
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
+#include <thrust/execution_policy.h>
+#include <thrust/random.h>
+#include <thrust/reverse.h>
+#include <thrust/shuffle.h>
 
 class Gather : public cudf::benchmark {
 };
@@ -41,38 +35,28 @@ void BM_gather(benchmark::State& state)
   const cudf::size_type source_size{(cudf::size_type)state.range(0)};
   const auto n_cols = (cudf::size_type)state.range(1);
 
-  // Every element is valid
-  auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-
   // Gather indices
-  std::vector<cudf::size_type> host_map_data(source_size);
-  std::iota(host_map_data.begin(), host_map_data.end(), 0);
+  auto gather_map_table =
+    create_sequence_table({cudf::type_to_id<cudf::size_type>()}, row_count{source_size});
+  auto gather_map = gather_map_table->get_column(0).mutable_view();
 
   if (coalesce) {
-    std::reverse(host_map_data.begin(), host_map_data.end());
+    thrust::reverse(
+      thrust::device, gather_map.begin<cudf::size_type>(), gather_map.end<cudf::size_type>());
   } else {
-    std::random_shuffle(host_map_data.begin(), host_map_data.end());
+    thrust::shuffle(thrust::device,
+                    gather_map.begin<cudf::size_type>(),
+                    gather_map.end<cudf::size_type>(),
+                    thrust::default_random_engine());
   }
 
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> gather_map(host_map_data.begin(),
-                                                                     host_map_data.end());
-
-  std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
-  std::vector<cudf::column_view> source_columns(n_cols);
-
-  std::generate_n(std::back_inserter(source_column_wrappers), n_cols, [=]() {
-    return cudf::test::fixed_width_column_wrapper<TypeParam>(data, data + source_size);
-  });
-  std::transform(source_column_wrappers.begin(),
-                 source_column_wrappers.end(),
-                 source_columns.begin(),
-                 [](auto const& col) { return static_cast<cudf::column_view>(col); });
-
-  cudf::table_view source_table{source_columns};
+  // Every element is valid
+  auto source_table = create_sequence_table(cycle_dtypes({cudf::type_to_id<TypeParam>()}, n_cols),
+                                            row_count{source_size});
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::gather(source_table, gather_map);
+    cudf::gather(*source_table, gather_map);
   }
 
   state.SetBytesProcessed(state.iterations() * state.range(0) * n_cols * 2 * sizeof(TypeParam));

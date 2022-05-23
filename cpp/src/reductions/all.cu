@@ -19,6 +19,11 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
 
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/reduce.h>
+
 namespace cudf {
 namespace reduction {
 namespace detail {
@@ -88,11 +93,12 @@ std::unique_ptr<cudf::scalar> all(column_view const& col,
       dictionary_column_view(col).keys().type(), detail::all_fn{}, col, stream, mr);
   }
   // dispatch for non-dictionary types
-  return cudf::type_dispatcher(col.type(),
-                               simple::bool_result_element_dispatcher<cudf::reduction::op::min>{},
-                               col,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    col.type(),
+    simple::detail::bool_result_element_dispatcher<cudf::reduction::op::min>{},
+    col,
+    stream,
+    mr);
 }
 
 }  // namespace reduction

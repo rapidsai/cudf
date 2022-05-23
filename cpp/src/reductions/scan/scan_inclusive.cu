@@ -29,6 +29,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/find.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 
 #include <type_traits>
@@ -117,7 +120,7 @@ struct scan_functor {
     thrust::inclusive_scan(
       rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), Op{});
 
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
     return output_column;
   }
 };
@@ -156,7 +159,7 @@ struct scan_functor<Op, cudf::struct_view> {
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
-    // Create a gather map contaning indices of the prefix min/max elements.
+    // Create a gather map containing indices of the prefix min/max elements.
     auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
     auto const binop_generator =
       cudf::reduction::detail::comparison_binop_generator::create<Op>(input, stream);

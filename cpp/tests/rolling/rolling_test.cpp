@@ -33,6 +33,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <src/rolling/rolling_detail.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -551,10 +552,8 @@ class RollingTest : public cudf::test::BaseFixture {
     thrust::host_vector<bool> ref_valid(num_rows);
 
     // input data and mask
-    thrust::host_vector<T> in_col;
-    std::vector<bitmask_type> in_valid;
-    std::tie(in_col, in_valid) = cudf::test::to_host<T>(input);
-    bitmask_type* valid_mask   = in_valid.data();
+    auto [in_col, in_valid]  = cudf::test::to_host<T>(input);
+    bitmask_type* valid_mask = in_valid.data();
 
     agg_op op;
     for (size_type i = 0; i < num_rows; i++) {

@@ -1,14 +1,14 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import os
 from io import BytesIO
 
-import fastavro as fa
+import fastavro
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from pyarrow import orc as orc
+from pyarrow import orc
 
 import cudf
 from cudf.testing._utils import assert_eq
@@ -253,7 +253,7 @@ def test_read_avro(datadir, hdfs, test_url):
 
     got = cudf.read_avro(hd_fpath)
     with open(fname, mode="rb") as f:
-        expect = pd.DataFrame.from_records(fa.reader(f))
+        expect = pd.DataFrame.from_records(fastavro.reader(f))
 
     for col in expect.columns:
         expect[col] = expect[col].astype(got[col].dtype)

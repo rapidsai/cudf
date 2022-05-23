@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+  Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>22.04.0-SNAPSHOT</version>
+    <version>22.06.0-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -147,7 +147,7 @@
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
-            <version>3.1.4</version>
+            <version>3.2.3</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -165,14 +165,15 @@
         <CMAKE_EXPORT_COMPILE_COMMANDS>OFF</CMAKE_EXPORT_COMPILE_COMMANDS>
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
-        <RMM_LOGGING_LEVEL>INFO</RMM_LOGGING_LEVEL>
         <USE_GDS>OFF</USE_GDS>
         <GPU_ARCHS>ALL</GPU_ARCHS>
-        <CUDF_JNI_ARROW_STATIC>ON</CUDF_JNI_ARROW_STATIC>
         <CUDF_JNI_LIBCUDF_STATIC>OFF</CUDF_JNI_LIBCUDF_STATIC>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
         <arrow.version>0.15.1</arrow.version>
+        <parallel.level>4</parallel.level>
+        <CUDF_CPP_BUILD_DIR/>
+        <cmake.ccache.opts/>
     </properties>
 
     <profiles>
@@ -382,21 +383,24 @@
                                       failonerror="true"
                                       executable="cmake">
                                     <arg value="${basedir}/src/main/native"/>
+                                    <arg line="${cmake.ccache.opts}"/>
                                     <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
                                     <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
-                                    <arg value="-DRMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL}" />
                                     <arg value="-DUSE_GDS=${USE_GDS}" />
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
                                     <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
                                     <arg value="-DGPU_ARCHS=${GPU_ARCHS}"/>
-                                    <arg value="-DCUDF_JNI_ARROW_STATIC=${CUDF_JNI_ARROW_STATIC}"/>
                                     <arg value="-DCUDF_JNI_LIBCUDF_STATIC=${CUDF_JNI_LIBCUDF_STATIC}"/>
+                                    <arg value="-DBUILD_SHARED_LIBS=ON"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
-                                      executable="make">
-                                    <arg value="-j"/>
+                                      executable="cmake">
+                                    <arg value="--build"/>
+                                    <arg value="."/>
+                                    <arg value="--parallel"/>
+                                    <arg value="${parallel.level}"/>
                                 </exec>
                                 <mkdir dir="${project.build.directory}/extra-resources"/>
                                 <exec executable="bash" output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">

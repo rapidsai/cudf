@@ -2,13 +2,18 @@
 
 from concurrent.futures import ThreadPoolExecutor
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
 from cudf.datasets import randomdata
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import (
+    _create_pandas_series,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -80,7 +85,7 @@ def test_series_std(ddof):
 
 
 def test_series_unique():
-    for size in [10 ** x for x in range(5)]:
+    for size in [10**x for x in range(5)]:
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
         sr = cudf.Series(arr)
@@ -201,13 +206,25 @@ def test_approx_quantiles_int():
 
 
 @pytest.mark.parametrize("data", [[], [1, 2, 3, 10, 326497]])
-@pytest.mark.parametrize("q", [[], 0.5, 1, 0.234, [0.345], [0.243, 0.5, 1]])
+@pytest.mark.parametrize(
+    "q",
+    [
+        [],
+        0.5,
+        1,
+        0.234,
+        [0.345],
+        [0.243, 0.5, 1],
+        np.array([0.5, 1]),
+        cp.array([0.5, 1]),
+    ],
+)
 def test_misc_quantiles(data, q):
 
-    pdf_series = cudf.utils.utils._create_pandas_series(data=data)
+    pdf_series = _create_pandas_series(data)
     gdf_series = cudf.Series(data)
 
-    expected = pdf_series.quantile(q)
+    expected = pdf_series.quantile(q.get() if isinstance(q, cp.ndarray) else q)
     actual = gdf_series.quantile(q)
     assert_eq(expected, actual)
 
@@ -226,13 +243,10 @@ def test_misc_quantiles(data, q):
         cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
         cudf.Series([]),
         cudf.Series([-3]),
-        randomdata(
-            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
-        ),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_kurtosis(data, null_flag):
+def test_kurtosis_series(data, null_flag):
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
@@ -249,8 +263,13 @@ def test_kurtosis(data, null_flag):
     expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
+    got = data.kurt(numeric_only=False)
+    got = got if np.isscalar(got) else got.to_numpy()
+    expected = pdata.kurt(numeric_only=False)
+    np.testing.assert_array_almost_equal(got, expected)
+
     with pytest.raises(NotImplementedError):
-        data.kurt(numeric_only=False)
+        data.kurt(numeric_only=True)
 
 
 @pytest.mark.parametrize(
@@ -267,13 +286,10 @@ def test_kurtosis(data, null_flag):
         cudf.Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
         cudf.Series([]),
         cudf.Series([-3]),
-        randomdata(
-            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
-        ),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
-def test_skew(data, null_flag):
+def test_skew_series(data, null_flag):
     pdata = data.to_pandas()
 
     if null_flag and len(data) > 2:
@@ -285,8 +301,13 @@ def test_skew(data, null_flag):
     got = got if np.isscalar(got) else got.to_numpy()
     np.testing.assert_array_almost_equal(got, expected)
 
+    got = data.skew(numeric_only=False)
+    expected = pdata.skew(numeric_only=False)
+    got = got if np.isscalar(got) else got.to_numpy()
+    np.testing.assert_array_almost_equal(got, expected)
+
     with pytest.raises(NotImplementedError):
-        data.skew(numeric_only=False)
+        data.skew(numeric_only=True)
 
 
 @pytest.mark.parametrize("dtype", params_dtypes)
@@ -408,24 +429,30 @@ def test_cov1d(data1, data2):
         cudf.Series([5]),
     ],
 )
-def test_corr1d(data1, data2):
+@pytest.mark.parametrize("method", ["spearman", "pearson"])
+def test_corr1d(data1, data2, method):
+    if method == "spearman":
+        # Pandas uses scipy.stats.spearmanr code-path
+        pytest.importorskip("scipy")
+
     gs1 = cudf.Series(data1)
     gs2 = cudf.Series(data2)
 
     ps1 = gs1.to_pandas()
     ps2 = gs2.to_pandas()
 
-    got = gs1.corr(gs2)
-    expected = ps1.corr(ps2)
+    got = gs1.corr(gs2, method)
+    expected = ps1.corr(ps2, method)
     np.testing.assert_approx_equal(got, expected, significant=8)
 
 
-def test_df_corr():
+@pytest.mark.parametrize("method", ["spearman", "pearson"])
+def test_df_corr(method):
 
     gdf = randomdata(100, {str(x): float for x in range(50)})
     pdf = gdf.to_pandas()
-    got = gdf.corr()
-    expected = pdf.corr()
+    got = gdf.corr(method)
+    expected = pdf.corr(method)
     assert_eq(got, expected)
 
 
@@ -459,16 +486,16 @@ def test_df_corr():
         "cumprod",
     ],
 )
-@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("skipna", [True, False])
 def test_nans_stats(data, ops, skipna):
-    psr = cudf.utils.utils._create_pandas_series(data=data)
+    psr = _create_pandas_series(data)
     gsr = cudf.Series(data, nan_as_null=False)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
 
-    psr = cudf.utils.utils._create_pandas_series(data=data)
+    psr = _create_pandas_series(data)
     gsr = cudf.Series(data, nan_as_null=False)
     # Since there is no concept of `nan_as_null` in pandas,
     # nulls will be returned in the operations. So only
@@ -485,7 +512,7 @@ def test_nans_stats(data, ops, skipna):
     ],
 )
 @pytest.mark.parametrize("ops", ["sum", "product", "prod"])
-@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("skipna", [True, False])
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 5, 10])
 def test_min_count_ops(data, ops, skipna, min_count):
     psr = pd.Series(data)
@@ -522,3 +549,62 @@ def test_cov_corr_invalid_dtypes(gsr):
         rfunc_args_and_kwargs=([gsr],),
         compare_error_message=False,
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        randomdata(
+            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
+        ),
+    ],
+)
+@pytest.mark.parametrize("null_flag", [False, True])
+def test_kurtosis_df(data, null_flag):
+    pdata = data.to_pandas()
+
+    if null_flag and len(data) > 2:
+        data.iloc[[0, 2]] = None
+        pdata.iloc[[0, 2]] = None
+
+    got = data.kurtosis()
+    got = got if np.isscalar(got) else got.to_numpy()
+    expected = pdata.kurtosis()
+    np.testing.assert_array_almost_equal(got, expected)
+
+    got = data.kurt()
+    got = got if np.isscalar(got) else got.to_numpy()
+    expected = pdata.kurt()
+    np.testing.assert_array_almost_equal(got, expected)
+
+    got = data.kurt(numeric_only=True)
+    got = got if np.isscalar(got) else got.to_numpy()
+    expected = pdata.kurt(numeric_only=True)
+    np.testing.assert_array_almost_equal(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        randomdata(
+            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
+        ),
+    ],
+)
+@pytest.mark.parametrize("null_flag", [False, True])
+def test_skew_df(data, null_flag):
+    pdata = data.to_pandas()
+
+    if null_flag and len(data) > 2:
+        data.iloc[[0, 2]] = None
+        pdata.iloc[[0, 2]] = None
+
+    got = data.skew()
+    expected = pdata.skew()
+    got = got if np.isscalar(got) else got.to_numpy()
+    np.testing.assert_array_almost_equal(got, expected)
+
+    got = data.skew(numeric_only=True)
+    expected = pdata.skew(numeric_only=True)
+    got = got if np.isscalar(got) else got.to_numpy()
+    np.testing.assert_array_almost_equal(got, expected)

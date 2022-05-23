@@ -1,5 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-from warnings import warn
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+import warnings
 
 import cupy as cp
 import numpy as np
@@ -21,7 +21,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
         Value to indicate missing category.
 
     Returns
-    --------
+    -------
     (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
         - *labels* contains the encoded values
         - *cats* contains the categories in order that the N-th
@@ -50,7 +50,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
         raise NotImplementedError("na_sentinel can not be None.")
 
     if size_hint:
-        warn("size_hint is not applicable for cudf.factorize")
+        warnings.warn("size_hint is not applicable for cudf.factorize")
 
     return_cupy_array = isinstance(values, cp.ndarray)
 

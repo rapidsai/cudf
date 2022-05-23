@@ -138,7 +138,7 @@ ConfigureTest(
 
 # ##################################################################################################
 # * hash_map tests --------------------------------------------------------------------------------
-ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu hash_map/multimap_test.cu)
+ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu)
 
 # ##################################################################################################
 # * quantiles tests -------------------------------------------------------------------------------
@@ -150,8 +150,14 @@ ConfigureTest(
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
-  REDUCTION_TEST reductions/collect_ops_tests.cpp reductions/rank_tests.cpp
-  reductions/reduction_tests.cpp reductions/scan_tests.cpp reductions/segmented_reduction_tests.cpp
+  REDUCTION_TEST
+  reductions/collect_ops_tests.cpp
+  reductions/rank_tests.cpp
+  reductions/reduction_tests.cpp
+  reductions/scan_tests.cpp
+  reductions/segmented_reduction_tests.cpp
+  reductions/list_rank_test.cpp
+  reductions/tdigest_tests.cu
 )
 
 # ##################################################################################################
@@ -244,6 +250,7 @@ ConfigureTest(
   copying/gather_tests.cpp
   copying/get_value_tests.cpp
   copying/pack_tests.cpp
+  copying/purge_nonempty_nulls_tests.cpp
   copying/sample_tests.cpp
   copying/scatter_tests.cpp
   copying/scatter_list_tests.cpp
@@ -416,6 +423,7 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 # * nvtext test -----------------------------------------------------------------------------------
 ConfigureTest(
   TEXT_TEST
+  text/bpe_tests.cpp
   text/edit_distance_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
@@ -462,6 +470,7 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 # * lists tests ----------------------------------------------------------------------------------
 ConfigureTest(
   LISTS_TEST
+  lists/apply_boolean_mask_test.cpp
   lists/combine/concatenate_list_elements_tests.cpp
   lists/combine/concatenate_rows_tests.cpp
   lists/contains_tests.cpp

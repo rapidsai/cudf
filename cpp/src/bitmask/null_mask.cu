@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ rmm::device_buffer create_null_mask(size_type size,
 
   if (state != mask_state::UNINITIALIZED) {
     uint8_t fill_value = (state == mask_state::ALL_VALID) ? 0xff : 0x00;
-    CUDA_TRY(cudaMemsetAsync(
+    CUDF_CUDA_TRY(cudaMemsetAsync(
       static_cast<bitmask_type*>(mask.data()), fill_value, mask_size, stream.value()));
   }
 
@@ -146,7 +146,7 @@ void set_null_mask(bitmask_type* bitmask,
     cudf::detail::grid_1d config(number_of_mask_words, 256);
     set_null_mask_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
       static_cast<bitmask_type*>(bitmask), begin_bit, end_bit, valid, number_of_mask_words);
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
   }
 }
 
@@ -220,7 +220,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const* mask,
     cudf::detail::grid_1d config(number_of_mask_words, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
       static_cast<bitmask_type*>(dest_mask.data()), mask, begin_bit, end_bit, number_of_mask_words);
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
   }
   return dest_mask;
 }
@@ -445,7 +445,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
   CUDF_FUNC_RANGE();
   rmm::device_buffer null_mask{0, stream, mr};
   if (view.num_rows() == 0 or view.num_columns() == 0) {
-    return std::make_pair(std::move(null_mask), 0);
+    return std::pair(std::move(null_mask), 0);
   }
 
   std::vector<bitmask_type const*> masks;
@@ -467,7 +467,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
       mr);
   }
 
-  return std::make_pair(std::move(null_mask), 0);
+  return std::pair(std::move(null_mask), 0);
 }
 
 // Returns the bitwise OR of the null masks of all columns in the table view
@@ -478,7 +478,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
   CUDF_FUNC_RANGE();
   rmm::device_buffer null_mask{0, stream, mr};
   if (view.num_rows() == 0 or view.num_columns() == 0) {
-    return std::make_pair(std::move(null_mask), 0);
+    return std::pair(std::move(null_mask), 0);
   }
 
   std::vector<bitmask_type const*> masks;
@@ -500,7 +500,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
       mr);
   }
 
-  return std::make_pair(std::move(null_mask), 0);
+  return std::pair(std::move(null_mask), 0);
 }
 
 }  // namespace detail

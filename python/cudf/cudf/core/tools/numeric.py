@@ -57,7 +57,7 @@ def to_numeric(arg, errors="raise", downcast=None):
         otherwise ndarray
 
     Notes
-    -------
+    -----
     An important difference from pandas is that this function does not accept
     mixed numeric/non-numeric type sequences. For example ``[1, 'a']``.
     A ``TypeError`` will be raised when such input is received, regardless of
@@ -247,6 +247,8 @@ def _proc_inf_strings(col):
     # TODO: This can be handled by libcudf in
     # future see StringColumn.as_numerical_column
     col = libstrings.replace_multi(
-        col, as_column(["+", "inf", "inity"]), as_column(["", "Inf", ""]),
+        col,
+        as_column(["+", "inf", "inity"]),
+        as_column(["", "Inf", ""]),
     )
     return col

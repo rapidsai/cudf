@@ -1,11 +1,11 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
+from cudf.testing._utils import _create_pandas_series, assert_eq
 
 
 @pytest.mark.parametrize(
@@ -22,7 +22,7 @@ from cudf.testing._utils import assert_eq
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dropna_series(data, nulls, inplace):
 
-    psr = cudf.utils.utils._create_pandas_series(data=data)
+    psr = _create_pandas_series(data)
 
     if len(data) > 0:
         if nulls == "one":
@@ -199,7 +199,8 @@ def test_dropna_thresh_cols(thresh, subset, inplace):
         actual = gdf
 
     assert_eq(
-        expected, actual,
+        expected,
+        actual,
     )
 
 

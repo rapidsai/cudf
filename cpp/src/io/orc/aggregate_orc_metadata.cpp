@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
                                              per_file_metadata[src_file_idx].ff.stripes.size()),
           "Invalid stripe index");
         stripe_infos.push_back(
-          std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+          std::pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
         row_count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
       }
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
@@ -206,7 +206,7 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
         count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
         if (count > row_start || count == 0) {
           stripe_infos.push_back(
-            std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+            std::pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
         } else {
           stripe_skip_rows = count;
         }
@@ -233,10 +233,9 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
           "Invalid stripe information");
         const auto buffer =
           per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
-        size_t sf_length = 0;
-        auto sf_data     = per_file_metadata[mapping.source_idx].decompressor->Decompress(
-          buffer->data(), sf_comp_length, &sf_length);
-        ProtobufReader(sf_data, sf_length)
+        auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
+          {buffer->data(), buffer->size()});
+        ProtobufReader(sf_data.data(), sf_data.size())
           .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
         mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
         if (stripe->indexLength == 0) { row_grp_idx_present = false; }

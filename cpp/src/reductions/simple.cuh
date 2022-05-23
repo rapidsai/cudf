@@ -33,11 +33,14 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
 namespace cudf {
 namespace reduction {
 namespace simple {
+namespace detail {
 /**
  * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
  * which directly compute the reduction by a single step reduction call
@@ -64,11 +67,11 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
     if (col.has_nulls()) {
       auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
       auto it = thrust::make_transform_iterator(dcol->pair_begin<ElementType, true>(), f);
-      return detail::reduce(it, col.size(), simple_op, stream, mr);
+      return cudf::reduction::detail::reduce(it, col.size(), simple_op, stream, mr);
     } else {
       auto f  = simple_op.template get_element_transformer<ResultType>();
       auto it = thrust::make_transform_iterator(dcol->begin<ElementType>(), f);
-      return detail::reduce(it, col.size(), simple_op, stream, mr);
+      return cudf::reduction::detail::reduce(it, col.size(), simple_op, stream, mr);
     }
   }();
 
@@ -102,11 +105,11 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
     if (col.has_nulls()) {
       auto f  = simple_op.template get_null_replacing_element_transformer<Type>();
       auto it = thrust::make_transform_iterator(dcol->pair_begin<Type, true>(), f);
-      return detail::reduce(it, col.size(), simple_op, stream, mr);
+      return cudf::reduction::detail::reduce(it, col.size(), simple_op, stream, mr);
     } else {
       auto f  = simple_op.template get_element_transformer<Type>();
       auto it = thrust::make_transform_iterator(dcol->begin<Type>(), f);
-      return detail::reduce(it, col.size(), simple_op, stream, mr);
+      return cudf::reduction::detail::reduce(it, col.size(), simple_op, stream, mr);
     }
   }();
 
@@ -149,7 +152,7 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
     auto p =
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls());
     auto it = thrust::make_transform_iterator(p, f);
-    return detail::reduce(it, col.size(), simple_op, stream, mr);
+    return cudf::reduction::detail::reduce(it, col.size(), simple_op, stream, mr);
   }();
 
   // set scalar is valid
@@ -310,9 +313,9 @@ struct same_element_type_dispatcher {
                                      rmm::mr::device_memory_resource* mr)
   {
     if (!cudf::is_dictionary(col.type())) {
-      return simple::simple_reduction<ElementType, ElementType, Op>(col, stream, mr);
+      return simple_reduction<ElementType, ElementType, Op>(col, stream, mr);
     }
-    auto index = simple::simple_reduction<ElementType, ElementType, Op>(
+    auto index = simple_reduction<ElementType, ElementType, Op>(
       dictionary_column_view(col).get_indices_annotated(),
       stream,
       rmm::mr::get_current_device_resource());
@@ -442,6 +445,7 @@ struct element_type_dispatcher {
   }
 };
 
+}  // namespace detail
 }  // namespace simple
 }  // namespace reduction
 }  // namespace cudf

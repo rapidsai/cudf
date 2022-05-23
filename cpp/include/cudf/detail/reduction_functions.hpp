@@ -17,9 +17,9 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
-#include "cudf/lists/lists_column_view.hpp"
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -192,6 +192,8 @@ std::unique_ptr<scalar> mean(
  *
  * @param col input column to compute variance.
  * @param output_dtype data type of return type and typecast elements of input column.
+ * @param ddof Delta degrees of freedom. The divisor used is N - ddof, where N represents the number
+ * of elements.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Variance as scalar of type `output_dtype`.
@@ -213,6 +215,8 @@ std::unique_ptr<scalar> variance(
  *
  * @param col input column to compute standard deviation.
  * @param output_dtype data type of return type and typecast elements of input column.
+ * @param ddof Delta degrees of freedom. The divisor used is N - ddof, where N represents the number
+ * of elements.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Standard deviation as scalar of type `output_dtype`.

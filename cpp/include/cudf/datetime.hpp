@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -272,7 +272,7 @@ std::unique_ptr<cudf::column> days_in_month(
 /**
  * @brief  Returns the quarter of the date
  *
- * `output[i]` will be a value from {1, 2, 3, 4} corresponding to the quater of month given by
+ * `output[i]` will be a value from {1, 2, 3, 4} corresponding to the quarter of month given by
  * `column[i]`. It will be null if the input row at `column[i]` is null.
  *
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP

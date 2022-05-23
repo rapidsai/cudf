@@ -36,6 +36,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace datetime {
@@ -105,9 +107,8 @@ struct RoundFunctor {
       case rounding_function::CEIL: return cuda::std::chrono::ceil<DurationType>(dt);
       case rounding_function::FLOOR: return cuda::std::chrono::floor<DurationType>(dt);
       case rounding_function::ROUND: return cuda::std::chrono::round<DurationType>(dt);
-      default: cudf_assert(false && "Unsupported rounding kind.");
+      default: CUDF_UNREACHABLE("Unsupported rounding kind.");
     }
-    __builtin_unreachable();
   }
 };
 
@@ -145,9 +146,8 @@ struct RoundingDispatcher {
       case rounding_frequency::NANOSECOND:
         return time_point_cast<typename Timestamp::duration>(
           RoundFunctor<duration_ns>{}(round_kind, ts));
-      default: cudf_assert(false && "Unsupported datetime rounding resolution.");
+      default: CUDF_UNREACHABLE("Unsupported datetime rounding resolution.");
     }
-    __builtin_unreachable();
   }
 };
 
