@@ -297,7 +297,7 @@ def is_categorical_dtype_cudf(obj):
     return cudf.api.types.is_categorical_dtype(obj)
 
 
-@grouper_dispatch.register((cudf.core.dataframe.DataFrame,))
+@grouper_dispatch.register((cudf.Series, cudf.DataFrame))
 def get_grouper_cudf(obj):
     return cudf.core.groupby.Grouper
 
