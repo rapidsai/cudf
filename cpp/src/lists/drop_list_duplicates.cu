@@ -451,23 +451,10 @@ std::unique_ptr<column> generate_output_offsets(size_type num_lists,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::mr::device_memory_resource* mr)
 {
-  // Let consider an example:
-  // Given the original offsets of the input lists column is [0, 4, 5, 6, 7, 10, 11, 13].
-  // The original entries_list_indices is [1, 1, 1, 1, 2, 3, 4, 5, 5, 5, 6, 7, 7], and after
-  // extracting unique entries we have the entries_list_indices becomes [1, 1, 1, 4, 5, 5, 5, 7, 7]
-  // and num_lists is 7. These are the input to this function.
-  //
-  // Through extracting unique list entries, one entry in the list index 1 has been removed (first
-  // list, as we are using 1-based list index), and entries in the lists with indices {3, 3, 6} have
-  // been removed completely.
-
-  // This variable stores the (1-based) list indices of the unique entries but only one index value
-  // per non-empty list. Given the example above, we will have this array hold the values
-  // [1, 4, 5, 7].
+  // Stores the unique list indices of unique entries (i.e., at max one list index per list).
   auto list_indices = rmm::device_uvector<size_type>(num_lists, stream);
 
   // Stores the non-zero numbers of unique entries per list.
-  // Given the example above, we will have this array contains the values [3, 1, 3, 2]
   auto list_sizes = rmm::device_uvector<size_type>(num_lists, stream);
 
   // Count the numbers of unique entries for each non-empty list.
@@ -487,7 +474,6 @@ std::unique_ptr<column> generate_output_offsets(size_type num_lists,
     rmm::exec_policy(stream), new_offsets.begin(), num_lists + 1, offset_type{0});
 
   // Scatter non-zero sizes of the output lists into the correct positions.
-  // Given the example above, we will have new_offsets = [0, 3, 0, 0, 1, 3, 0, 2]
   thrust::scatter(rmm::exec_policy(stream),
                   list_sizes.begin(),
                   list_sizes.begin() + num_non_empty_lists,
@@ -495,11 +481,9 @@ std::unique_ptr<column> generate_output_offsets(size_type num_lists,
                   new_offsets.begin());
 
   // Generate offsets from sizes.
-  // Given the example above, we will have new_offsets = [0, 3, 3, 3, 4, 7, 7, 9]
   thrust::inclusive_scan(
     rmm::exec_policy(stream), new_offsets.begin(), new_offsets.end(), new_offsets.begin());
 
-  // Done. Hope that your head didn't explode after reading till this point.
   return std::make_unique<column>(
     data_type{type_to_id<offset_type>()}, num_lists + 1, new_offsets.release());
 }
