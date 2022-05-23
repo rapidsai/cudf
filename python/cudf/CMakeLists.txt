@@ -18,8 +18,11 @@ set(cudf_version 22.06.00)
 
 # TODO: Once the rapids-cmake PR is merged, we can use the same fetch_rapids.cmake script here.
 # include(../../fetch_rapids.cmake)
-file(DOWNLOAD https://raw.githubusercontent.com/vyasr/rapids-cmake/feature/rapids_cython_prefix/RAPIDS.cmake
-        ${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+file(
+  DOWNLOAD
+  https://raw.githubusercontent.com/vyasr/rapids-cmake/feature/rapids_cython_prefix/RAPIDS.cmake
+  ${CMAKE_BINARY_DIR}/RAPIDS.cmake
+)
 include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 
 project(
