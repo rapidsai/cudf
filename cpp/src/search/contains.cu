@@ -15,7 +15,6 @@
  */
 
 #include <hash/unordered_multiset.cuh>
-#include <search/utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -86,11 +85,11 @@ struct contains_scalar_dispatch {
                                                        rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
-
     // Haystack and needle structure compatibility will be checked by the table comparator
     // constructor during calling to `contains_nested_element`.
-    auto const [needle_cv, _] = nested_type_scalar_to_column_view(needle, stream);
-    return contains_nested_element(haystack, needle_cv, stream);
+
+    auto const needle_as_col = make_column_from_scalar(needle, 1, stream);
+    return contains_nested_element(haystack, needle_as_col->view(), stream);
   }
 };
 

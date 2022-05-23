@@ -430,7 +430,6 @@ add_library(
   src/search/contains.cu
   src/search/contains_nested.cu
   src/search/search_ordered.cu
-  src/search/utilities.cpp
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
