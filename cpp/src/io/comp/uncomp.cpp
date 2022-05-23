@@ -525,12 +525,13 @@ size_t decompress_zstd(host_span<uint8_t const> src,
   nvcomp::batched_decompress(
     nvcomp::compression_type::ZSTD, hd_srcs, hd_dsts, hd_stats, max_uncomp_page_size, stream);
 
-  // Copy temporary output to `dst`
-  CUDF_CUDA_TRY(
-    cudaMemcpyAsync(dst.data(), d_dst.data(), dst.size(), cudaMemcpyDeviceToHost, stream.value()));
-
   hd_stats.device_to_host(stream, true);
   CUDF_EXPECTS(hd_stats[0].status == 0, "ZSTD decompression failed");
+
+  // Copy temporary output to `dst`
+  CUDF_CUDA_TRY(
+    cudaMemcpyAsync(dst.data(), d_dst.data(), hd_stats[0].bytes_written, cudaMemcpyDeviceToHost, stream.value()));
+
 
   return hd_stats[0].bytes_written;
 }
