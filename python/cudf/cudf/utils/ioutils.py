@@ -1319,7 +1319,7 @@ def _open_remote_files(
     ]
 
 
-def get_reader_filepath_or_buffer(
+def get_reader_path_or_buf(
     path_or_data,
     compression,
     mode="rb",
@@ -1328,7 +1328,7 @@ def get_reader_filepath_or_buffer(
     byte_ranges=None,
     use_python_file_object=False,
     open_file_options=None,
-    is_raw_text_like_input=False,
+    allow_raw_text_input=False,
     **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
@@ -1390,6 +1390,10 @@ def get_reader_filepath_or_buffer(
                     )
 
         else:
+            if len(paths):
+                raise FileNotFoundError(
+                    f"{path_or_data} could not be resolved to any files"
+                )
             if use_python_file_object:
                 path_or_data = _open_remote_files(
                     paths,
@@ -1424,7 +1428,7 @@ def get_reader_filepath_or_buffer(
     return path_or_data, compression
 
 
-def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
+def get_writer_path_or_buf(path_or_data, mode, **kwargs):
     """
     Return either a filepath string to data,
     or a open file object to the output filesystem

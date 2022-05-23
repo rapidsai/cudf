@@ -60,7 +60,7 @@ def read_csv(
             "`read_csv` does not yet support reading multiple files"
         )
 
-    filepath_or_buffer, compression = ioutils.get_reader_filepath_or_buffer(
+    filepath_or_buffer, compression = ioutils.get_reader_path_or_buf(
         path_or_data=filepath_or_buffer,
         compression=compression,
         iotypes=(BytesIO, StringIO, NativeFile),
@@ -146,7 +146,7 @@ def to_csv(
         path_or_buf = StringIO()
         return_as_string = True
 
-    path_or_buf = ioutils.get_writer_filepath_or_buffer(
+    path_or_buf = ioutils.get_writer_path_or_buf(
         path_or_data=path_or_buf, mode="w", **kwargs
     )
 
