@@ -10,7 +10,6 @@ from . import (
     datetime,
     expressions,
     filling,
-    gpuarrow,
     groupby,
     hash,
     interop,
