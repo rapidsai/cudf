@@ -19,11 +19,13 @@ if TYPE_CHECKING:
     from cudf.core.spill_manager import SpillManager
 
 
-def get_buffer(obj: Any) -> Optional[Buffer]:
+def get_base_buffer(obj: Any) -> Optional[Buffer]:
     if isinstance(obj, Buffer):
-        return obj
+        if obj._sole_owner:
+            return obj
+        return get_base_buffer(obj._owner)
     if hasattr(obj, "base_data"):
-        return obj.base_data
+        return get_base_buffer(obj.base_data)
     return None
 
 
@@ -103,7 +105,7 @@ class Buffer(Serializable):
             self._init_from_array_like(np.asarray(data), owner)
 
         if not self._sole_owner and self._owner is not None:
-            base_buffer = get_buffer(self._owner)
+            base_buffer = get_base_buffer(self._owner)
             if base_buffer is not None:
                 base_buffer._raw_pointer_exposed = True
 
@@ -214,7 +216,6 @@ class Buffer(Serializable):
 
     @property
     def __cuda_array_interface__(self) -> dict:
-        self._raw_pointer_exposed = True
         return {
             "data": (self.ptr, False),
             "shape": (self.size,),
