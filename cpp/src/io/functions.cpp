@@ -240,6 +240,7 @@ namespace detail_orc = cudf::io::detail::orc;
 
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
+  auto stream = rmm::cuda_stream_default;
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
   if (src_info.type() == io_type::FILEPATH) {
@@ -256,7 +257,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
     CUDF_FAIL("Unsupported source type");
   }
 
-  orc::metadata metadata(source.get());
+  orc::metadata metadata(source.get(), stream);
 
   // Initialize statistics to return
   raw_orc_statistics result;
