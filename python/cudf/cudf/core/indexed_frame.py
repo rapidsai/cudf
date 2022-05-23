@@ -2326,8 +2326,8 @@ class IndexedFrame(Frame):
         self, other, ignore_index=False, verify_integrity=False, sort=None
     ):
         warnings.warn(
-            "append is deprecated and will be removed in a future version. "
-            "Use concat instead.",
+            "The append method is deprecated and will be removed in a future "
+            "version. Use cudf.concat instead.",
             FutureWarning,
         )
         if verify_integrity not in (None, False):
