@@ -1353,10 +1353,11 @@ def get_reader_filepath_or_buffer(
     open_file_options : dict, optional
         Optional dictionary of key-word arguments to pass to
         `_open_remote_files` (used for remote storage only).
-    is_raw_text_like_input : boolean, default False
-        If True, this determines the input `path_or_data` could be
-        a JSON string, hence will not check for it's existence in file-system.
-        If False, will check for it's existence and raise error.
+    allow_raw_text_input : boolean, default False
+        If True, this indicates the input `path_or_data` could be a raw text
+        input and will not check for its existence in the filesystem. If False,
+        the input must be a path and an error will be raised if it does not
+        exist.
 
     Returns
     -------
@@ -1383,7 +1384,7 @@ def get_reader_filepath_or_buffer(
             if len(paths):
                 if fs.exists(paths[0]):
                     path_or_data = paths if len(paths) > 1 else paths[0]
-                elif not is_raw_text_like_input:
+                elif not allow_raw_text_input:
                     raise FileNotFoundError(
                         f"{path_or_data} could not be resolved to any files"
                     )

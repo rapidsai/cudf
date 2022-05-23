@@ -46,7 +46,7 @@ def read_json(
                 path_or_data=source,
                 compression=compression,
                 iotypes=(BytesIO, StringIO),
-                is_raw_text_like_input=True,
+                allow_raw_text_input=True,
                 **kwargs,
             )
             if isinstance(tmp_source, list):
@@ -78,7 +78,7 @@ def read_json(
             path_or_data=path_or_buf,
             compression=compression,
             iotypes=(BytesIO, StringIO),
-            is_raw_text_like_input=True,
+            allow_raw_text_input=True,
             **kwargs,
         )
 
