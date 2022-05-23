@@ -102,7 +102,6 @@ Almost all indexes are subclasses of `GenericIndex`, a single-columned index wit
 ```python
 class GenericIndex(SingleColumnFrame, BaseIndex)
 ```
-`Frame`->`SingleColumnFrame`->`GenericIndex`<-`BaseIndex`.
 Integer, float, or string indexes are all composed of a single column of data.
 Most `GenericIndex` methods are inherited from `Frame`, saving us the trouble of rewriting them.
 
@@ -213,8 +212,9 @@ For instance, all numerical types (floats and ints of different widths) are all 
 
 ### Buffer
 
-Although a `Column` represents an Arrow-compliant data structure, it does not directly handle memory mangaement.
-That job is delegated to the `Buffer` class, which represents a device memory allocation owned by another object.
+
+`Column`s are in turn composed of one or more `Buffer`s.
+A `Buffer` represents a single, contiguous, device memory allocation owned by another object.
 A `Buffer` constructed from a preexisting device memory allocation (such as a CuPy array) will view that memory.
 Conversely, when constructed from a host object,
 `Buffer` uses [`rmm.DeviceBuffer`](https://github.com/rapidsai/rmm#devicebuffers) to allocate new memory.
@@ -235,15 +235,10 @@ They also handle translating cuDF objects into their `libcudf` equivalents and i
 Working with this layer of cuDF requires some familiarity with `libcudf`'s APIs.
 `libcudf` is built around two principal objects whose names are largely self-explanatory: `column` and `table`.
 `libcudf` also defines corresponding non-owning "view" types `column_view` and `table_view`.
-`libcudf` APIs typically accept views while returning owning types.
+`libcudf` APIs typically accept views and return owning types.
 
 Most cuDF Cython wrappers involve converting `cudf.Column` objects into `column_view` or `table_view` objects,
 calling a `libcudf` API with these arguments, then constructing new `cudf.Column`s from the result.
-In the context of cuDF, `libcudf`'s ownership of memory is always transient.
-cuDF's Cython wrappers immediately transfer ownership from returned owning objects to an `rmm.DeviceBuffer`.
-This behavior contrasts with how `cudf.Buffer`s work when constructed from memory allocated by other Python libraries.
-
-We endeavor to make these wrappers as thin as possible.
 By the time code reaches this layer, all questions of pandas compatibility should already have been addressed.
 These functions should be as close to trivial wrappers around `libcudf` APIs as possible.
 
