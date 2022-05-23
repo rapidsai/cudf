@@ -111,11 +111,11 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
-template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
-__device__ weak_ordering relational_compare(Element lhs, Element rhs, weak_ordering nan_result)
-{
-  return isnan(lhs) or isnan(rhs) ? nan_result : detail::compare_elements(lhs, rhs);
-}
+// template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+// __device__ weak_ordering relational_compare(Element lhs, Element rhs, weak_ordering nan_result)
+// {
+//   return isnan(lhs) or isnan(rhs) ? nan_result : detail::compare_elements(lhs, rhs);
+// }
 
 /**
  * @brief Compare the nulls according to null order.
@@ -148,9 +148,7 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  * the `lhs` and `rhs` columns.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
-__device__ weak_ordering relational_compare(Element lhs,
-                                            Element rhs,
-                                            weak_ordering const nan_result = weak_ordering::GREATER)
+__device__ weak_ordering relational_compare(Element lhs, Element rhs)
 {
   return detail::compare_elements(lhs, rhs);
 }
