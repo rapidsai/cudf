@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <search/utilities.hpp>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -205,17 +203,19 @@ auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
 /**
  * @brief Create a `table_view` from the search key(s).
  *
+ * If the input search key is a (nested type) scalar, a new column is materialized from that scalar
+ * before a `table_view` is generated from it. As such, the new created column will also be
+ * returned.
  */
 template <typename SearchKeyType>
-std::pair<table_view, std::optional<rmm::device_uvector<offset_type>>> get_search_keys_table_view(
+std::pair<table_view, std::unique_ptr<column>> get_table_view_from_nested_keys(
   SearchKeyType const& search_keys, rmm::cuda_stream_view stream)
 {
   if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
-    auto [key_cv, offsets_buff] =
-      cudf::detail::nested_type_scalar_to_column_view(search_keys, stream);
-    return {table_view{{key_cv}}, std::move(offsets_buff)};
+    auto tmp_column = make_column_from_scalar(search_keys, 1, stream);
+    return {table_view{{tmp_column->view()}}, std::move(tmp_column)};
   } else {
-    return {table_view{{search_keys}}, std::nullopt};
+    return {table_view{{search_keys}}, nullptr};
   }
 }
 
@@ -269,7 +269,8 @@ struct dispatch_index_of {
     if constexpr (cudf::is_nested<Type>()) {  // list + struct =====================================
       auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
       auto const child_tview       = table_view{{child}};
-      [[maybe_unused]] auto const [keys_tview, _] = get_search_keys_table_view(search_keys, stream);
+      [[maybe_unused]] auto const [keys_tview, _] =
+        get_table_view_from_nested_keys(search_keys, stream);
       auto const has_nulls = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
       auto const comparator =
         cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
