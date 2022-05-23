@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include "avro.h"
-#include "avro_gpu.h"
-#include "thrust/iterator/transform_output_iterator.h"
+#include "avro.hpp"
+#include "avro_gpu.hpp"
 
-#include <io/comp/gpuinflate.h>
+#include <io/comp/gpuinflate.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -31,15 +30,21 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <numeric>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/equal.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/tabulate.h>
+
 #include <nvcomp/snappy.h>
 
 #include <memory>
+#include <numeric>
 #include <string>
 #include <utility>
 #include <vector>
@@ -157,62 +162,66 @@ rmm::device_buffer decompress_data(datasource& source,
                                    rmm::cuda_stream_view stream)
 {
   if (meta.codec == "deflate") {
-    size_t uncompressed_data_size = 0;
+    auto inflate_in = hostdevice_vector<device_span<uint8_t const>>(meta.block_list.size(), stream);
+    auto inflate_out   = hostdevice_vector<device_span<uint8_t>>(meta.block_list.size(), stream);
+    auto inflate_stats = hostdevice_vector<decompress_status>(meta.block_list.size(), stream);
 
-    auto inflate_in  = hostdevice_vector<gpu_inflate_input_s>(meta.block_list.size(), stream);
-    auto inflate_out = hostdevice_vector<gpu_inflate_status_s>(meta.block_list.size(), stream);
+    // Guess an initial maximum uncompressed block size. We estimate the compression factor is two
+    // and round up to the next multiple of 4096 bytes.
+    uint32_t const initial_blk_len = meta.max_block_size * 2 + (meta.max_block_size * 2) % 4096;
+    size_t const uncomp_size       = initial_blk_len * meta.block_list.size();
 
-    // Guess an initial maximum uncompressed block size
-    uint32_t initial_blk_len = (meta.max_block_size * 2 + 0xfff) & ~0xfff;
-    uncompressed_data_size   = initial_blk_len * meta.block_list.size();
-    for (size_t i = 0; i < inflate_in.size(); ++i) {
-      inflate_in[i].dstSize = initial_blk_len;
-    }
-
-    rmm::device_buffer decomp_block_data(uncompressed_data_size, stream);
+    rmm::device_buffer decomp_block_data(uncomp_size, stream);
 
     auto const base_offset = meta.block_list[0].offset;
     for (size_t i = 0, dst_pos = 0; i < meta.block_list.size(); i++) {
       auto const src_pos = meta.block_list[i].offset - base_offset;
 
-      inflate_in[i].srcDevice = static_cast<uint8_t const*>(comp_block_data.data()) + src_pos;
-      inflate_in[i].srcSize   = meta.block_list[i].size;
-      inflate_in[i].dstDevice = static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos;
+      inflate_in[i]  = {static_cast<uint8_t const*>(comp_block_data.data()) + src_pos,
+                       meta.block_list[i].size};
+      inflate_out[i] = {static_cast<uint8_t*>(decomp_block_data.data()) + dst_pos, initial_blk_len};
 
       // Update blocks offsets & sizes to refer to uncompressed data
       meta.block_list[i].offset = dst_pos;
-      meta.block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dstSize);
+      meta.block_list[i].size   = static_cast<uint32_t>(inflate_out[i].size());
       dst_pos += meta.block_list[i].size;
     }
+    inflate_in.host_to_device(stream);
 
     for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
-      inflate_in.host_to_device(stream);
-      CUDA_TRY(
-        cudaMemsetAsync(inflate_out.device_ptr(), 0, inflate_out.memory_size(), stream.value()));
-      CUDA_TRY(gpuinflate(
-        inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), 0, stream));
-      inflate_out.device_to_host(stream, true);
+      inflate_out.host_to_device(stream);
+      CUDF_CUDA_TRY(cudaMemsetAsync(
+        inflate_stats.device_ptr(), 0, inflate_stats.memory_size(), stream.value()));
+      gpuinflate(inflate_in, inflate_out, inflate_stats, gzip_header_included::NO, stream);
+      inflate_stats.device_to_host(stream, true);
 
       // Check if larger output is required, as it's not known ahead of time
       if (loop_cnt == 0) {
-        size_t actual_uncompressed_size = 0;
-        for (size_t i = 0; i < meta.block_list.size(); i++) {
-          // If error status is 1 (buffer too small), the `bytes_written` field
-          // is actually contains the uncompressed data size
-          if (inflate_out[i].status == 1 && inflate_out[i].bytes_written > inflate_in[i].dstSize) {
-            inflate_in[i].dstSize = inflate_out[i].bytes_written;
-          }
-          actual_uncompressed_size += inflate_in[i].dstSize;
-        }
-        if (actual_uncompressed_size > uncompressed_data_size) {
-          decomp_block_data.resize(actual_uncompressed_size, stream);
-          for (size_t i = 0, dst_pos = 0; i < meta.block_list.size(); i++) {
-            auto dst_base           = static_cast<uint8_t*>(decomp_block_data.data());
-            inflate_in[i].dstDevice = dst_base + dst_pos;
+        std::vector<size_t> actual_uncomp_sizes;
+        actual_uncomp_sizes.reserve(inflate_out.size());
+        std::transform(inflate_out.begin(),
+                       inflate_out.end(),
+                       inflate_stats.begin(),
+                       std::back_inserter(actual_uncomp_sizes),
+                       [](auto const& inf_out, auto const& inf_stats) {
+                         // If error status is 1 (buffer too small), the `bytes_written` field
+                         // actually contains the uncompressed data size
+                         return inf_stats.status == 1
+                                  ? std::max(inf_out.size(), inf_stats.bytes_written)
+                                  : inf_out.size();
+                       });
+        auto const total_actual_uncomp_size =
+          std::accumulate(actual_uncomp_sizes.cbegin(), actual_uncomp_sizes.cend(), 0ul);
+        if (total_actual_uncomp_size > uncomp_size) {
+          decomp_block_data.resize(total_actual_uncomp_size, stream);
+          for (size_t i = 0; i < meta.block_list.size(); ++i) {
+            meta.block_list[i].offset =
+              i > 0 ? (meta.block_list[i - 1].size + meta.block_list[i - 1].offset) : 0;
+            meta.block_list[i].size = static_cast<uint32_t>(actual_uncomp_sizes[i]);
 
-            meta.block_list[i].offset = dst_pos;
-            meta.block_list[i].size   = static_cast<uint32_t>(inflate_in[i].dstSize);
-            dst_pos += meta.block_list[i].size;
+            inflate_out[i] = {
+              static_cast<uint8_t*>(decomp_block_data.data()) + meta.block_list[i].offset,
+              meta.block_list[i].size};
           }
         } else {
           break;
@@ -419,11 +428,11 @@ std::vector<column_buffer> decode_data(metadata& meta,
   // Copy valid bits that are shared between columns
   for (size_t i = 0; i < out_buffers.size(); i++) {
     if (valid_alias[i] != nullptr) {
-      CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
-                               valid_alias[i],
-                               out_buffers[i].null_mask_size(),
-                               cudaMemcpyHostToDevice,
-                               stream.value()));
+      CUDF_CUDA_TRY(cudaMemcpyAsync(out_buffers[i].null_mask(),
+                                    valid_alias[i],
+                                    out_buffers[i].null_mask_size(),
+                                    cudaMemcpyHostToDevice,
+                                    stream.value()));
     }
   }
   schema_desc.device_to_host(stream, true);
@@ -565,7 +574,8 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
     metadata_out.column_names[i] = selected_columns[i].second;
   }
   // Return user metadata
-  metadata_out.user_data = meta.user_data;
+  metadata_out.user_data          = meta.user_data;
+  metadata_out.per_file_user_data = {{meta.user_data.begin(), meta.user_data.end()}};
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata_out)};
 }

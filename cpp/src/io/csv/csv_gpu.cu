@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "csv_common.h"
-#include "csv_gpu.h"
+#include "csv_common.hpp"
+#include "csv_gpu.hpp"
 #include "datetime.cuh"
 
 #include <io/utilities/block_utils.cuh>
@@ -23,7 +23,7 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/lists/list_view.cuh>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/convert/fixed_point.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -38,7 +38,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
 #include <thrust/detail/copy.h>
+#include <thrust/remove.h>
 #include <thrust/transform.h>
 
 #include <type_traits>
@@ -197,7 +199,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
     auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
 
     // Checking if this is a column that the user wants --- user can filter columns
-    if (column_flags[col] & column_parse::enabled) {
+    if (column_flags[col] & column_parse::inferred) {
       // points to last character in the field
       auto const field_len = static_cast<size_t>(next_delimiter - field_start);
       if (serialized_trie_contains(opts.trie_na, {field_start, field_len})) {

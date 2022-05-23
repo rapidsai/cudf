@@ -19,6 +19,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <algorithm>
 #include <cassert>
 #include <vector>
@@ -97,15 +99,6 @@ table_view scatter_columns(table_view const& source,
 }
 
 namespace detail {
-namespace {
-struct is_relationally_comparable_functor {
-  template <typename T>
-  constexpr bool operator()()
-  {
-    return cudf::is_relationally_comparable<T, T>();
-  }
-};
-}  // namespace
 
 template <typename TableView>
 bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
@@ -114,8 +107,7 @@ bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
                      thrust::counting_iterator<size_type>(lhs.num_columns()),
                      [lhs, rhs](auto const i) {
                        return lhs.column(i).type() == rhs.column(i).type() and
-                              type_dispatcher(lhs.column(i).type(),
-                                              is_relationally_comparable_functor{});
+                              cudf::is_relationally_comparable(lhs.column(i).type());
                      });
 }
 

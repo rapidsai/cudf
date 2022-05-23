@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,7 +107,8 @@ struct statistics_group {
 };
 
 struct statistics_merge_group {
-  const stats_column_desc* col;  //!< Column information
+  data_type col_dtype;           //!< Column data type
+  statistics_dtype stats_dtype;  //!< Statistics data type for this column
   uint32_t start_chunk;          //!< Start chunk of this group
   uint32_t num_chunks;           //!< Number of chunks in group
 };

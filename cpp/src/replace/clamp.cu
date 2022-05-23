@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
+
 namespace cudf {
 namespace detail {
 namespace {
@@ -70,7 +76,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
-  return std::make_pair(std::move(offsets_column), std::move(chars_column));
+  return std::pair(std::move(offsets_column), std::move(chars_column));
 }
 
 template <typename OptionalScalarIterator, typename ReplaceScalarIterator>

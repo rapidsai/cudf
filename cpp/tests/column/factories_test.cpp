@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
@@ -643,7 +645,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNonNested)
                                           0,
                                           cudf::create_null_mask(2, cudf::mask_state::UNALLOCATED));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, *expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *expected);
 }
 
 TYPED_TEST(ListsStructsLeafTest, FromNested)

@@ -1,10 +1,12 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from setuptools import find_packages, setup
 
 import versioneer
 
 install_requires = ["cudf_kafka", "cudf"]
+
+extras_require = {"test": ["pytest", "pytest-xdist"]}
 
 setup(
     name="custreamz",
@@ -20,12 +22,12 @@ setup(
         "Topic :: Apache Kafka",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     packages=find_packages(include=["custreamz", "custreamz.*"]),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
+    extras_require=extras_require,
     zip_safe=False,
-    extras_require={"test": ["pytest", "pytest-xdist"]},
 )

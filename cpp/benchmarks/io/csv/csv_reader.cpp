@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_common.hpp>
@@ -52,6 +50,7 @@ void BM_csv_read_varying_input(benchmark::State& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
+    try_drop_l3_cache();
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::read_csv(read_options);
   }
@@ -98,6 +97,7 @@ void BM_csv_read_varying_options(benchmark::State& state)
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   auto mem_stats_logger               = cudf::memory_stats_logger();
   for (auto _ : state) {
+    try_drop_l3_cache();
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
       // only read the header in the first chunk

@@ -26,6 +26,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
@@ -72,7 +74,7 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
  * @brief A specialization for floating-point `Element` type relational comparison
  * to derive the order of the elements with respect to `lhs`.
  *
- * This Specialization handles `nan` in the following order:
+ * This specialization handles `nan` in the following order:
  * `[-Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN, null] (for null_order::AFTER)`
  * `[null, -Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN] (for null_order::BEFORE)`
  *
@@ -217,8 +219,7 @@ class element_equality_comparator {
             std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
-    cudf_assert(false && "Attempted to compare elements of uncomparable types.");
-    return false;
+    CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
   }
 
  private:
@@ -323,8 +324,7 @@ class element_relational_comparator {
             std::enable_if_t<not cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
   __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
   {
-    cudf_assert(false && "Attempted to compare elements of uncomparable types.");
-    return weak_ordering::LESS;
+    CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
   }
 
  private:
@@ -389,7 +389,7 @@ class row_lexicographic_comparator {
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less than the row at `rhs_index` in the `rhs` table.
    *
-   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param lhs_index The index of the row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table compares less than row in the
    * `rhs` table
@@ -442,8 +442,7 @@ class element_hasher {
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    cudf_assert(false && "Unsupported type in hash.");
-    return {};
+    CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
   Nullate has_nulls;
@@ -472,8 +471,7 @@ class element_hasher_with_seed {
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    cudf_assert(false && "Unsupported type in hash.");
-    return {};
+    CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
  private:

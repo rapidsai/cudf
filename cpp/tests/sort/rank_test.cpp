@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+
 #include <tuple>
 #include <vector>
 
@@ -88,8 +91,7 @@ struct Rank : public BaseFixture {
            test_case_t{table_view{{col1, col2, col3}},
                        table_view{{col1_rank, col2_rank, col3_rank}}},
          }) {
-      table_view input, output;
-      std::tie(input, output) = test_case;
+      auto [input, output] = test_case;
 
       run_rank_test(input,
                     output,

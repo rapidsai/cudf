@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.04.00
+  VERSION 22.08.00
   LANGUAGES C CXX CUDA
 )
 
@@ -154,7 +154,29 @@ include(cmake/thirdparty/get_gtest.cmake)
 # preprocess jitify-able kernels
 include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
-include(cmake/Modules/FindcuFile.cmake)
+include(cmake/thirdparty/get_cufile.cmake)
+# find KvikIO
+include(cmake/thirdparty/get_kvikio.cmake)
+
+# Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
+if(NOT BUILD_SHARED_LIBS)
+  include("${rapids-cmake-dir}/export/find_package_file.cmake")
+  list(APPEND METADATA_KINDS BUILD INSTALL)
+  list(APPEND dependencies cuco KvikIO ZLIB nvcomp)
+  if(TARGET cufile::cuFile_interface)
+    list(APPEND dependencies cuFile)
+  endif()
+
+  foreach(METADATA_KIND IN LISTS METADATA_KINDS)
+    foreach(dep IN LISTS dependencies)
+      rapids_export_package(${METADATA_KIND} ${dep} cudf-exports)
+    endforeach()
+  endforeach()
+
+  if(TARGET conda_env)
+    install(TARGETS conda_env EXPORT cudf-exports)
+  endif()
+endif()
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -167,7 +189,6 @@ add_library(
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
   src/binaryop/binaryop.cpp
-  src/binaryop/compiled/binary_ops.cu
   src/binaryop/compiled/Add.cu
   src/binaryop/compiled/ATan2.cu
   src/binaryop/compiled/BitwiseAnd.cu
@@ -198,6 +219,7 @@ add_library(
   src/binaryop/compiled/ShiftRightUnsigned.cu
   src/binaryop/compiled/Sub.cu
   src/binaryop/compiled/TrueDiv.cu
+  src/binaryop/compiled/binary_ops.cu
   src/binaryop/compiled/util.cpp
   src/labeling/label_bins.cu
   src/bitmask/null_mask.cu
@@ -216,6 +238,7 @@ add_library(
   src/copying/gather.cu
   src/copying/get_element.cu
   src/copying/pack.cpp
+  src/copying/purge_nonempty_nulls.cu
   src/copying/reverse.cu
   src/copying/sample.cu
   src/copying/scatter.cu
@@ -281,6 +304,8 @@ add_library(
   src/io/comp/cpu_unbz2.cpp
   src/io/comp/debrotli.cu
   src/io/comp/gpuinflate.cu
+  src/io/comp/nvcomp_adapter.cpp
+  src/io/comp/nvcomp_adapter.cu
   src/io/comp/snap.cu
   src/io/comp/uncomp.cpp
   src/io/comp/unsnap.cu
@@ -301,12 +326,12 @@ add_library(
   src/io/orc/stripe_init.cu
   src/io/orc/timezone.cpp
   src/io/orc/writer_impl.cu
+  src/io/parquet/compact_protocol_reader.cpp
   src/io/parquet/compact_protocol_writer.cpp
   src/io/parquet/page_data.cu
   src/io/parquet/chunk_dict.cu
   src/io/parquet/page_enc.cu
   src/io/parquet/page_hdr.cu
-  src/io/parquet/parquet.cpp
   src/io/parquet/reader_impl.cu
   src/io/parquet/writer_impl.cu
   src/io/statistics/orc_column_statistics.cu
@@ -330,12 +355,15 @@ add_library(
   src/join/join.cu
   src/join/join_utils.cu
   src/join/mixed_join.cu
-  src/join/mixed_join_kernels.cu
+  src/join/mixed_join_kernel.cu
+  src/join/mixed_join_kernel_nulls.cu
   src/join/mixed_join_kernels_semi.cu
   src/join/mixed_join_semi.cu
-  src/join/mixed_join_size_kernels.cu
+  src/join/mixed_join_size_kernel.cu
+  src/join/mixed_join_size_kernel_nulls.cu
   src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
+  src/lists/apply_boolean_mask.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
   src/lists/combine/concatenate_rows.cu
@@ -400,7 +428,8 @@ add_library(
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
-  src/search/search.cu
+  src/search/contains.cu
+  src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
@@ -468,9 +497,11 @@ add_library(
   src/strings/utilities.cu
   src/strings/wrap.cu
   src/structs/copying/concatenate.cu
+  src/structs/search/contains.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
+  src/table/row_operators.cu
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp
@@ -571,17 +602,13 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} libcudacxx::libcudacxx cudf::Thrust rmm::rmm
-  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
+  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
+          $<TARGET_NAME_IF_EXISTS:cuFile_interface>
 )
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
-endif()
-
-# Add cuFile interface if available
-if(TARGET cuFile::cuFile_interface)
-  target_link_libraries(cudf PRIVATE cuFile::cuFile_interface)
 endif()
 
 if(CUDA_STATIC_RUNTIME)
@@ -629,8 +656,12 @@ add_library(cudf::cudf ALIAS cudf)
 
 add_library(
   cudftestutil STATIC
-  tests/utilities/base_fixture.cpp tests/utilities/column_utilities.cu
-  tests/utilities/table_utilities.cu tests/io/metadata_utilities.cpp tests/strings/utilities.cpp
+  tests/io/metadata_utilities.cpp
+  tests/quantiles/tdigest_utilities.cu
+  tests/utilities/base_fixture.cpp
+  tests/utilities/column_utilities.cu
+  tests/utilities/table_utilities.cu
+  tests/strings/utilities.cpp
 )
 
 set_target_properties(

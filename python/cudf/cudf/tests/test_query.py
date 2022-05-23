@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 
 import datetime
@@ -58,7 +58,7 @@ def test_query(data, fn, nulls):
 params_query_env_fn = [
     (lambda a, b, c, d: a * c > b + d, "a * @c > b + @d"),
     (
-        lambda a, b, c, d: ((a / c) < d) | ((b ** c) > d),
+        lambda a, b, c, d: ((a / c) < d) | ((b**c) > d),
         "((a / @c) < @d) | ((b ** @c) > @d)",
     ),
 ]

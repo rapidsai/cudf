@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ struct one_hot_encode_launcher {
     auto views = cudf::split(all_encodings->view(), split_indices);
     table_view encodings_view{views};
 
-    return std::make_pair(std::move(all_encodings), encodings_view);
+    return std::pair(std::move(all_encodings), encodings_view);
   }
 
   template <typename InputType,
@@ -108,14 +108,12 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
 {
   CUDF_EXPECTS(input.type() == categories.type(), "Mismatch type between input and categories.");
 
-  if (categories.is_empty()) {
-    return std::make_pair(make_empty_column(type_id::BOOL8), table_view{});
-  }
+  if (categories.is_empty()) { return std::pair(make_empty_column(type_id::BOOL8), table_view{}); }
 
   if (input.is_empty()) {
     auto empty_data = make_empty_column(type_id::BOOL8);
     std::vector<column_view> views(categories.size(), empty_data->view());
-    return std::make_pair(std::move(empty_data), table_view{views});
+    return std::pair(std::move(empty_data), table_view{views});
   }
 
   return type_dispatcher(input.type(), one_hot_encode_launcher{}, input, categories, stream, mr);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,11 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {
@@ -69,9 +72,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
 {
   CUDF_FUNC_RANGE();
   // Assemble contiguous array of device views
-  std::unique_ptr<rmm::device_buffer> device_view_owners;
-  column_device_view* device_views_ptr;
-  std::tie(device_view_owners, device_views_ptr) =
+  auto [device_view_owners, device_views_ptr] =
     contiguous_copy_column_device_views<column_device_view>(views, stream);
 
   // Compute the partition offsets and size of offset column
@@ -294,7 +295,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
           cudf::detail::get_value<offset_type>(offsets_child, column_size + column_offset, stream) -
           bytes_offset;
 
-        CUDA_TRY(
+        CUDF_CUDA_TRY(
           cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream.value()));
 
         // get ready for the next column

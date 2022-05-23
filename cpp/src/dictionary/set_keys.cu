@@ -32,9 +32,15 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
+
 #include <algorithm>
 #include <iterator>
-#include <thrust/binary_search.h>
 
 namespace cudf {
 namespace dictionary {
@@ -132,7 +138,7 @@ std::unique_ptr<column> set_keys(
   std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
 
   // compute the new nulls
-  auto matches   = cudf::detail::contains(keys, keys_column->view(), stream, mr);
+  auto matches   = cudf::detail::contains(keys_column->view(), keys, stream, mr);
   auto d_matches = matches->view().data<bool>();
   auto indices_itr =
     cudf::detail::indexalator_factory::make_input_iterator(dictionary_column.indices());

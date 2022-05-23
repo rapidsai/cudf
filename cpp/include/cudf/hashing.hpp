@@ -19,6 +19,9 @@
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {
+
+using hash_value_type = uint32_t;
+
 /**
  * @addtogroup column_hash
  * @{

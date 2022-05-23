@@ -8,10 +8,11 @@ import random
 import re
 import string
 import textwrap
+import warnings
+from contextlib import contextmanager
 from copy import copy
 
 import cupy
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -19,7 +20,12 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_120
+from cudf.core._compat import (
+    PANDAS_GE_110,
+    PANDAS_GE_120,
+    PANDAS_GE_134,
+    PANDAS_LT_140,
+)
 from cudf.core.column import column
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
@@ -322,7 +328,8 @@ def test_dataframe_basic():
     ],
 )
 @pytest.mark.parametrize(
-    "columns", [["a"], ["b"], "a", "b", ["a", "b"]],
+    "columns",
+    [["a"], ["b"], "a", "b", ["a", "b"]],
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dataframe_drop_columns(pdf, columns, inplace):
@@ -423,8 +430,14 @@ def test_dataframe_drop_index(pdf, index, inplace):
         ("weight", 1),
         ("length", 1),
         ("cow", None),
-        ("lama", None,),
-        ("falcon", None,),
+        (
+            "lama",
+            None,
+        ),
+        (
+            "falcon",
+            None,
+        ),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
@@ -452,7 +465,8 @@ def test_dataframe_drop_multiindex(pdf, index, level, inplace):
     ],
 )
 @pytest.mark.parametrize(
-    "labels", [["a"], ["b"], "a", "b", ["a", "b"]],
+    "labels",
+    [["a"], ["b"], "a", "b", ["a", "b"]],
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dataframe_drop_labels_axis_1(pdf, labels, inplace):
@@ -1142,7 +1156,7 @@ def test_dataframe_hash_values(nrows, method):
     out = gdf.hash_values()
     assert isinstance(out, cudf.Series)
     assert len(out) == nrows
-    assert out.dtype == np.int32
+    assert out.dtype == np.uint32
 
     # Check single column
     out_one = gdf[["a"]].hash_values(method=method)
@@ -1568,18 +1582,10 @@ def test_dataframe_cupy_wrong_dimensions():
 def test_dataframe_cupy_array_wrong_index():
     d_ary = cupy.empty((2, 3), dtype=np.int32)
 
-    with pytest.raises(
-        ValueError,
-        match="Length mismatch: Expected axis has 2 elements, "
-        "new values have 1 elements",
-    ):
+    with pytest.raises(ValueError):
         cudf.DataFrame(d_ary, index=["a"])
 
-    with pytest.raises(
-        ValueError,
-        match="Length mismatch: Expected axis has 2 elements, "
-        "new values have 1 elements",
-    ):
+    with pytest.raises(ValueError):
         cudf.DataFrame(d_ary, index="a")
 
 
@@ -1839,7 +1845,8 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     for i in range(num_cols):
         colname = string.ascii_lowercase[i]
         data = pd.Series(
-            np.random.randint(0, 26, num_rows).astype(np_dtype), dtype=dtype,
+            np.random.randint(0, 26, num_rows).astype(np_dtype),
+            dtype=dtype,
         )
         if nulls == "some":
             idx = np.random.choice(
@@ -1942,7 +1949,7 @@ def gdf(pdf):
         "any",
     ],
 )
-@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("skipna", [True, False])
 def test_dataframe_reductions(data, axis, func, skipna):
     pdf = pd.DataFrame(data=data)
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -2006,7 +2013,7 @@ def test_dataframe_count_reduction(data, func):
     ],
 )
 @pytest.mark.parametrize("ops", ["sum", "product", "prod"])
-@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("skipna", [True, False])
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 10])
 def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     psr = pd.DataFrame(data)
@@ -2017,6 +2024,15 @@ def test_dataframe_min_count_ops(data, ops, skipna, min_count):
         getattr(gsr, ops)(skipna=skipna, min_count=min_count),
         check_dtype=False,
     )
+
+
+@contextmanager
+def _hide_host_other_warning(other):
+    if isinstance(other, (dict, list)):
+        with pytest.warns(FutureWarning):
+            yield
+    else:
+        yield
 
 
 @pytest.mark.parametrize(
@@ -2036,12 +2052,70 @@ def test_dataframe_min_count_ops(data, ops, skipna, min_count):
         operator.ne,
     ],
 )
-def test_binops_df(pdf, gdf, binop):
-    pdf = pdf + 1.0
-    gdf = gdf + 1.0
-    d = binop(pdf, pdf)
-    g = binop(gdf, gdf)
-    assert_eq(d, g)
+@pytest.mark.parametrize(
+    "other",
+    [
+        1.0,
+        [1.0],
+        [1.0, 2.0],
+        [1.0, 2.0, 3.0],
+        {"x": 1.0},
+        {"x": 1.0, "y": 2.0},
+        {"x": 1.0, "y": 2.0, "z": 3.0},
+        {"x": 1.0, "z": 3.0},
+        pd.Series([1.0]),
+        pd.Series([1.0, 2.0]),
+        pd.Series([1.0, 2.0, 3.0]),
+        pd.Series([1.0], index=["x"]),
+        pd.Series([1.0, 2.0], index=["x", "y"]),
+        pd.Series([1.0, 2.0, 3.0], index=["x", "y", "z"]),
+        pd.DataFrame({"x": [1.0]}),
+        pd.DataFrame({"x": [1.0], "y": [2.0]}),
+        pd.DataFrame({"x": [1.0], "y": [2.0], "z": [3.0]}),
+    ],
+)
+def test_binops_df(pdf, gdf, binop, other):
+    # Avoid 1**NA cases: https://github.com/pandas-dev/pandas/issues/29997
+    pdf[pdf == 1.0] = 2
+    gdf[gdf == 1.0] = 2
+    try:
+        with warnings.catch_warnings(record=True) as w:
+            d = binop(pdf, other)
+    except Exception:
+        if isinstance(other, (pd.Series, pd.DataFrame)):
+            other = cudf.from_pandas(other)
+
+        # TODO: When we remove support for binary operations with lists and
+        # dicts, those cases should all be checked in a `pytest.raises` block
+        # that returns before we enter this try-except.
+        with _hide_host_other_warning(other):
+            assert_exceptions_equal(
+                lfunc=binop,
+                rfunc=binop,
+                lfunc_args_and_kwargs=([pdf, other], {}),
+                rfunc_args_and_kwargs=([gdf, other], {}),
+                compare_error_message=False,
+            )
+    else:
+        if isinstance(other, (pd.Series, pd.DataFrame)):
+            other = cudf.from_pandas(other)
+        with _hide_host_other_warning(other):
+            g = binop(gdf, other)
+        try:
+            assert_eq(d, g)
+        except AssertionError:
+            # Currently we will not match pandas for equality/inequality
+            # operators when there are columns that exist in a Series but not
+            # the DataFrame because pandas returns True/False values whereas we
+            # return NA. However, this reindexing is deprecated in pandas so we
+            # opt not to add support.
+            if w and "DataFrame vs Series comparisons is deprecated" in str(w):
+                pass
+
+
+def test_binops_df_invalid(gdf):
+    with pytest.raises(TypeError):
+        gdf + np.array([1, 2])
 
 
 @pytest.mark.parametrize("binop", [operator.and_, operator.or_, operator.xor])
@@ -2090,13 +2164,12 @@ def test_unaryops_df(pdf, gdf, unaryop):
     assert_eq(d, g)
 
 
-@pytest.mark.parametrize("unary_func", ["abs", "floor", "ceil"])
-def test_unary_func_df(pdf, unary_func):
+def test_df_abs(pdf):
     np.random.seed(0)
     disturbance = pd.Series(np.random.rand(10))
     pdf = pdf - 5 + disturbance
-    d = pdf.apply(getattr(np, unary_func))
-    g = getattr(cudf.from_pandas(pdf), unary_func)()
+    d = pdf.apply(np.abs)
+    g = cudf.from_pandas(pdf).abs()
     assert_eq(d, g)
 
 
@@ -2400,35 +2473,6 @@ def test_arrow_handle_no_index_name(pdf, gdf):
     got = cudf.DataFrame.from_arrow(gdf_arrow)
     expect = pdf_arrow.to_pandas()
     assert_eq(expect, got)
-
-
-@pytest.mark.parametrize("num_rows", [1, 3, 10, 100])
-@pytest.mark.parametrize("num_bins", [1, 2, 4, 20])
-@pytest.mark.parametrize("right", [True, False])
-@pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
-@pytest.mark.parametrize("series_bins", [True, False])
-def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
-    data = np.random.randint(0, 100, num_rows).astype(dtype)
-    bins = np.unique(np.sort(np.random.randint(2, 95, num_bins).astype(dtype)))
-    s = cudf.Series(data)
-    if series_bins:
-        s_bins = cudf.Series(bins)
-        indices = s.digitize(s_bins, right)
-    else:
-        indices = s.digitize(bins, right)
-    np.testing.assert_array_equal(
-        np.digitize(data, bins, right), indices.to_numpy()
-    )
-
-
-def test_series_digitize_invalid_bins():
-    s = cudf.Series(np.random.randint(0, 30, 80), dtype="int32")
-    bins = cudf.Series([2, None, None, 50, 90], dtype="int32")
-
-    with pytest.raises(
-        ValueError, match="`bins` cannot contain null entries."
-    ):
-        _ = s.digitize(bins)
 
 
 def test_pandas_non_contiguious():
@@ -3036,7 +3080,8 @@ def test_dataframe_empty_sort_index():
             pd.RangeIndex(2, -1, -1),
             marks=[
                 pytest.mark.xfail(
-                    reason="https://github.com/pandas-dev/pandas/issues/43591"
+                    condition=PANDAS_LT_140,
+                    reason="https://github.com/pandas-dev/pandas/issues/43591",
                 )
             ],
         ),
@@ -3051,7 +3096,8 @@ def test_dataframe_sort_index(
     index, axis, ascending, inplace, ignore_index, na_position
 ):
     pdf = pd.DataFrame(
-        {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]}, index=index,
+        {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
+        index=index,
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
 
@@ -3288,7 +3334,8 @@ def test_select_dtype():
     )
 
     assert_exceptions_equal(
-        lfunc=pdf.select_dtypes, rfunc=gdf.select_dtypes,
+        lfunc=pdf.select_dtypes,
+        rfunc=gdf.select_dtypes,
     )
 
     gdf = cudf.DataFrame(
@@ -3309,7 +3356,8 @@ def test_select_dtype():
     )
     pdf = gdf.to_pandas()
     assert_eq(
-        pdf.select_dtypes("int64"), gdf.select_dtypes("int64"),
+        pdf.select_dtypes("int64"),
+        gdf.select_dtypes("int64"),
     )
 
 
@@ -3623,9 +3671,7 @@ def test_all(data):
     # Pandas treats `None` in object type columns as True for some reason, so
     # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = cudf.utils.utils._create_pandas_series(data=data).replace(
-            [None], False
-        )
+        pdata = pd.Series(data=data).replace([None], False)
         gdata = cudf.Series.from_pandas(pdata)
     else:
         pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
@@ -3676,7 +3722,7 @@ def test_all(data):
 @pytest.mark.parametrize("axis", [0, 1])
 def test_any(data, axis):
     if np.array(data).ndim <= 1:
-        pdata = cudf.utils.utils._create_pandas_series(data=data)
+        pdata = pd.Series(data=data)
         gdata = cudf.Series.from_pandas(pdata)
 
         if axis == 1:
@@ -4146,7 +4192,7 @@ def test_create_dataframe_column():
     ],
 )
 def test_series_values_host_property(data):
-    pds = cudf.utils.utils._create_pandas_series(data=data)
+    pds = pd.Series(data=data)
     gds = cudf.Series(data)
 
     np.testing.assert_array_equal(pds.values, gds.values_host)
@@ -4163,12 +4209,13 @@ def test_series_values_host_property(data):
             marks=pytest.mark.xfail(raises=NotImplementedError),
         ),
         pytest.param(
-            ["m", "a", "d", "v"], marks=pytest.mark.xfail(raises=TypeError),
+            ["m", "a", "d", "v"],
+            marks=pytest.mark.xfail(raises=TypeError),
         ),
     ],
 )
 def test_series_values_property(data):
-    pds = cudf.utils.utils._create_pandas_series(data=data)
+    pds = pd.Series(data=data)
     gds = cudf.Series(data)
     gds_vals = gds.values
     assert isinstance(gds_vals, cupy.ndarray)
@@ -4543,9 +4590,6 @@ def test_empty_df_astype(dtype, args):
         ),
         pytest.param("other", marks=pytest.mark.xfail(raises=ValueError)),
         "ignore",
-        pytest.param(
-            "warn", marks=pytest.mark.filterwarnings("ignore:Traceback")
-        ),
     ],
 )
 def test_series_astype_error_handling(errors):
@@ -4721,7 +4765,8 @@ def test_rowwise_ops_nullable_dtypes_partial_null(op, expected):
         {
             "a": [10, 11, 12, 13, 14, 15],
             "b": cudf.Series(
-                [10, None, np.NaN, 2234, None, np.NaN], nan_as_null=False,
+                [10, None, np.NaN, 2234, None, np.NaN],
+                nan_as_null=False,
             ),
         }
     )
@@ -4740,33 +4785,51 @@ def test_rowwise_ops_nullable_dtypes_partial_null(op, expected):
     [
         (
             "max",
-            cudf.Series([10, None, None, 2234, None, 453], dtype="int64",),
+            cudf.Series(
+                [10, None, None, 2234, None, 453],
+                dtype="int64",
+            ),
         ),
-        ("min", cudf.Series([10, None, None, 13, None, 15], dtype="int64",),),
+        (
+            "min",
+            cudf.Series(
+                [10, None, None, 13, None, 15],
+                dtype="int64",
+            ),
+        ),
         (
             "sum",
-            cudf.Series([20, None, None, 2247, None, 468], dtype="int64",),
+            cudf.Series(
+                [20, None, None, 2247, None, 468],
+                dtype="int64",
+            ),
         ),
         (
             "product",
-            cudf.Series([100, None, None, 29042, None, 6795], dtype="int64",),
+            cudf.Series(
+                [100, None, None, 29042, None, 6795],
+                dtype="int64",
+            ),
         ),
         (
             "mean",
             cudf.Series(
-                [10.0, None, None, 1123.5, None, 234.0], dtype="float32",
+                [10.0, None, None, 1123.5, None, 234.0],
+                dtype="float32",
             ),
         ),
         (
             "var",
             cudf.Series(
-                [0.0, None, None, 1233210.25, None, 47961.0], dtype="float32",
+                [0.0, None, None, 1233210.25, None, 47961.0],
+                dtype="float32",
             ),
         ),
         (
             "std",
             cudf.Series(
-                [0.0, None, None, 1110.5, None, 219.0], dtype="float32",
+                [0.0, None, None, 1110.5, None, 219.0],
+                dtype="float32",
             ),
         ),
     ],
@@ -4776,7 +4839,8 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
         {
             "a": [10, 11, None, 13, None, 15],
             "b": cudf.Series(
-                [10, None, 323, 2234, None, 453], nan_as_null=False,
+                [10, None, 323, 2234, None, 453],
+                nan_as_null=False,
             ),
         }
     )
@@ -4992,7 +5056,8 @@ def test_insert(data):
 
 
 @pytest.mark.parametrize(
-    "data", [{"A": [1, 2, 3], "B": ["a", "b", "c"]}],
+    "data",
+    [{"A": [1, 2, 3], "B": ["a", "b", "c"]}],
 )
 def test_insert_NA(data):
     pdf = pd.DataFrame.from_dict(data)
@@ -6881,7 +6946,16 @@ def test_dataframe_append_series_dict(df, other, sort):
     actual = gdf.append(other_gd, ignore_index=True, sort=sort)
 
     if expected.shape != df.shape:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        # Ignore the column type comparison because pandas incorrectly
+        # returns pd.Index([1, 2, 3], dtype="object") instead
+        # of pd.Index([1, 2, 3], dtype="int64")
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=False,
+            check_index_type=True,
+        )
     else:
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
@@ -7100,7 +7174,12 @@ def test_dataframe_append_lists(df, other, sort, ignore_index):
     actual = gdf.append(other_gd, sort=sort, ignore_index=ignore_index)
 
     if expected.shape != df.shape:
-        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+        assert_eq(
+            expected.fillna(-1),
+            actual.fillna(-1),
+            check_dtype=False,
+            check_column_type=False if gdf.empty else True,
+        )
     else:
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
@@ -7244,7 +7323,7 @@ def test_sample_axis_0(
 
 @pytest.mark.parametrize("replace", [True, False])
 @pytest.mark.parametrize(
-    "random_state_lib", [cp.random.RandomState, np.random.RandomState]
+    "random_state_lib", [cupy.random.RandomState, np.random.RandomState]
 )
 def test_sample_reproducibility(replace, random_state_lib):
     df = cudf.DataFrame({"a": cupy.arange(0, 1024)})
@@ -7296,7 +7375,7 @@ def test_oversample_without_replace(n, frac, axis):
     )
 
 
-@pytest.mark.parametrize("random_state", [None, cp.random.RandomState(42)])
+@pytest.mark.parametrize("random_state", [None, cupy.random.RandomState(42)])
 def test_sample_unsupported_arguments(random_state):
     df = cudf.DataFrame({"float": [0.05, 0.2, 0.3, 0.2, 0.25]})
     with pytest.raises(
@@ -7454,6 +7533,12 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
     actual = cudf.DataFrame(gd_data, columns=columns)
 
     if ignore_dtype:
+        # When a union is performed to generate columns,
+        # the order is never guaranteed. Hence sort by
+        # columns before comparison.
+        if not expected.columns.equals(actual.columns):
+            expected = expected.sort_index(axis=1)
+            actual = actual.sort_index(axis=1)
         assert_eq(
             expected.fillna(-1),
             actual.fillna(-1),
@@ -7543,6 +7628,12 @@ def test_dataframe_init_from_series_list_with_index(
     actual = cudf.DataFrame(gd_data, columns=columns, index=index)
 
     if ignore_dtype:
+        # When a union is performed to generate columns,
+        # the order is never guaranteed. Hence sort by
+        # columns before comparison.
+        if not expected.columns.equals(actual.columns):
+            expected = expected.sort_index(axis=1)
+            actual = actual.sort_index(axis=1)
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
         assert_eq(expected, actual)
@@ -8105,7 +8196,8 @@ def test_dataframe_pipe_error():
 
 
 @pytest.mark.parametrize(
-    "op", ["count", "kurt", "kurtosis", "skew"],
+    "op",
+    ["count", "kurt", "kurtosis", "skew"],
 )
 def test_dataframe_axis1_unsupported_ops(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
@@ -8288,13 +8380,16 @@ def test_agg_for_dataframe_with_string_columns(aggs):
 
 
 @pytest.mark.parametrize(
-    "join", ["left"],
+    "join",
+    ["left"],
 )
 @pytest.mark.parametrize(
-    "overwrite", [True, False],
+    "overwrite",
+    [True, False],
 )
 @pytest.mark.parametrize(
-    "errors", ["ignore"],
+    "errors",
+    ["ignore"],
 )
 @pytest.mark.parametrize(
     "data",
@@ -8351,7 +8446,8 @@ def test_update_for_dataframes(data, data2, join, overwrite, errors):
 
 
 @pytest.mark.parametrize(
-    "join", ["right"],
+    "join",
+    ["right"],
 )
 def test_update_for_right_join(join):
     gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
@@ -8364,7 +8460,8 @@ def test_update_for_right_join(join):
 
 
 @pytest.mark.parametrize(
-    "errors", ["raise"],
+    "errors",
+    ["raise"],
 )
 def test_update_for_data_overlap(errors):
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
@@ -8455,10 +8552,12 @@ def test_dataframe_setitem_cupy_array():
     "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
 )
 @pytest.mark.parametrize(
-    "index", [{0: 123, 1: 4, 2: 6}],
+    "index",
+    [{0: 123, 1: 4, 2: 6}],
 )
 @pytest.mark.parametrize(
-    "level", ["x", 0],
+    "level",
+    ["x", 0],
 )
 def test_rename_for_level_MultiIndex_dataframe(data, index, level):
     pdf = pd.DataFrame(
@@ -8478,10 +8577,12 @@ def test_rename_for_level_MultiIndex_dataframe(data, index, level):
     "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
 )
 @pytest.mark.parametrize(
-    "columns", [{"a": "f", "b": "g"}, {1: 3, 2: 4}, lambda s: 2 * s],
+    "columns",
+    [{"a": "f", "b": "g"}, {1: 3, 2: 4}, lambda s: 2 * s],
 )
 @pytest.mark.parametrize(
-    "level", [0, 1],
+    "level",
+    [0, 1],
 )
 def test_rename_for_level_MultiColumn_dataframe(data, columns, level):
     gdf = cudf.DataFrame(data)
@@ -8564,14 +8665,16 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
     pdf = pd.DataFrame(data, index=p_index, columns=labels)
     gdf = cudf.from_pandas(pdf)
 
-    # TODO: Remove this workaround after
-    #  following issue is fixed:
-    # https://github.com/pandas-dev/pandas/issues/43314
-    if isinstance(label_to_explode, int):
-        pdlabel_to_explode = [label_to_explode]
+    if PANDAS_GE_134:
+        expect = pdf.explode(label_to_explode, ignore_index)
     else:
-        pdlabel_to_explode = label_to_explode
-    expect = pdf.explode(pdlabel_to_explode, ignore_index)
+        # https://github.com/pandas-dev/pandas/issues/43314
+        if isinstance(label_to_explode, int):
+            pdlabel_to_explode = [label_to_explode]
+        else:
+            pdlabel_to_explode = label_to_explode
+        expect = pdf.explode(pdlabel_to_explode, ignore_index)
+
     got = gdf.explode(label_to_explode, ignore_index)
 
     assert_eq(expect, got, check_dtype=False)
@@ -8632,44 +8735,8 @@ def test_frame_series_where():
 
 
 @pytest.mark.parametrize(
-    "array,is_error",
-    [
-        (cupy.arange(20, 40).reshape(-1, 2), False),
-        (cupy.arange(20, 50).reshape(-1, 3), True),
-        (np.arange(20, 40).reshape(-1, 2), False),
-        (np.arange(20, 30).reshape(-1, 1), False),
-        (cupy.arange(20, 30).reshape(-1, 1), False),
-    ],
-)
-def test_dataframe_indexing_setitem_np_cp_array(array, is_error):
-    gdf = cudf.DataFrame({"a": range(10), "b": range(10)})
-    pdf = gdf.to_pandas()
-    if not is_error:
-        gdf.loc[:, ["a", "b"]] = array
-        pdf.loc[:, ["a", "b"]] = cupy.asnumpy(array)
-
-        assert_eq(gdf, pdf)
-    else:
-        assert_exceptions_equal(
-            lfunc=pdf.loc.__setitem__,
-            rfunc=gdf.loc.__setitem__,
-            lfunc_args_and_kwargs=(
-                [(slice(None, None, None), ["a", "b"]), cupy.asnumpy(array)],
-                {},
-            ),
-            rfunc_args_and_kwargs=(
-                [(slice(None, None, None), ["a", "b"]), array],
-                {},
-            ),
-            compare_error_message=False,
-            expected_error_message="shape mismatch: value array of shape "
-            "(10, 3) could not be broadcast to indexing "
-            "result of shape (10, 2)",
-        )
-
-
-@pytest.mark.parametrize(
-    "data", [{"a": [1, 2, 3], "b": [1, 1, 0]}],
+    "data",
+    [{"a": [1, 2, 3], "b": [1, 1, 0]}],
 )
 def test_frame_series_where_other(data):
     gdf = cudf.DataFrame(data)
@@ -8729,7 +8796,8 @@ def test_frame_series_where_other(data):
     ],
 )
 @pytest.mark.parametrize(
-    "min_per", [0, 1, 2, 3, 4],
+    "min_per",
+    [0, 1, 2, 3, 4],
 )
 def test_pearson_corr_passing(data, gkey, min_per):
     gdf = cudf.DataFrame(data)
@@ -8767,7 +8835,10 @@ def test_pearson_corr_empty_columns():
     expected = pdf.groupby("id").corr("pearson")
 
     assert_eq(
-        expected, actual, check_dtype=False, check_index_type=False,
+        expected,
+        actual,
+        check_dtype=False,
+        check_index_type=False,
     )
 
 
@@ -8789,7 +8860,8 @@ def test_pearson_corr_empty_columns():
 @pytest.mark.parametrize("gkey", ["id", "val1", "val2"])
 def test_pearson_corr_invalid_column_types(data, gkey):
     with pytest.raises(
-        TypeError, match="Correlation accepts only numerical column-pairs",
+        TypeError,
+        match="Correlation accepts only numerical column-pairs",
     ):
         cudf.DataFrame(data).groupby(gkey).corr("pearson")
 
@@ -8880,10 +8952,12 @@ def test_dataframe_add_suffix():
     ],
 )
 @pytest.mark.parametrize(
-    "min_periods", [0, 3],
+    "min_periods",
+    [0, 3],
 )
 @pytest.mark.parametrize(
-    "ddof", [1, 2],
+    "ddof",
+    [1, 2],
 )
 def test_groupby_covariance(data, gkey, min_periods, ddof):
     gdf = cudf.DataFrame(data)
@@ -8919,7 +8993,10 @@ def test_groupby_covariance_empty_columns():
     expected = pdf.groupby("id").cov()
 
     assert_eq(
-        expected, actual, check_dtype=False, check_index_type=False,
+        expected,
+        actual,
+        check_dtype=False,
+        check_index_type=False,
     )
 
 
@@ -8932,7 +9009,8 @@ def test_groupby_cov_invalid_column_types():
         },
     )
     with pytest.raises(
-        TypeError, match="Covariance accepts only numerical column-pairs",
+        TypeError,
+        match="Covariance accepts only numerical column-pairs",
     ):
         gdf.groupby("id").cov()
 
@@ -8955,7 +9033,9 @@ def test_groupby_cov_positive_semidefinite_matrix():
     expected.reset_index(drop=True, inplace=True)
 
     assert_eq(
-        expected, actual, check_dtype=False,
+        expected,
+        actual,
+        check_dtype=False,
     )
 
 
@@ -8986,7 +9066,7 @@ def test_groupby_cov_for_pandas_bug_case():
     ],
 )
 @pytest.mark.parametrize("periods", (-5, -1, 0, 1, 5))
-def test_diff_dataframe_numeric_dtypes(data, periods):
+def test_diff_numeric_dtypes(data, periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
@@ -8994,15 +9074,19 @@ def test_diff_dataframe_numeric_dtypes(data, periods):
     expected = pdf.diff(periods=periods, axis=0)
 
     assert_eq(
-        expected, actual, check_dtype=False,
+        expected,
+        actual,
+        check_dtype=False,
     )
 
 
 @pytest.mark.parametrize(
-    ("precision", "scale"), [(5, 2), (8, 5)],
+    ("precision", "scale"),
+    [(5, 2), (8, 5)],
 )
 @pytest.mark.parametrize(
-    "dtype", [cudf.Decimal32Dtype, cudf.Decimal64Dtype],
+    "dtype",
+    [cudf.Decimal32Dtype, cudf.Decimal64Dtype],
 )
 def test_diff_decimal_dtypes(precision, scale, dtype):
     gdf = cudf.DataFrame(
@@ -9015,11 +9099,13 @@ def test_diff_decimal_dtypes(precision, scale, dtype):
     expected = pdf.diff()
 
     assert_eq(
-        expected, actual, check_dtype=False,
+        expected,
+        actual,
+        check_dtype=False,
     )
 
 
-def test_diff_dataframe_invalid_axis():
+def test_diff_invalid_axis():
     gdf = cudf.DataFrame(np.array([1.123, 2.343, 5.890, 0.0]))
     with pytest.raises(NotImplementedError, match="Only axis=0 is supported."):
         gdf.diff(periods=1, axis=1)
@@ -9034,16 +9120,30 @@ def test_diff_dataframe_invalid_axis():
             "string_col": ["a", "b", "c", "d", "e"],
         },
         ["a", "b", "c", "d", "e"],
-        [np.nan, None, np.nan, None],
     ],
 )
-def test_diff_dataframe_non_numeric_dypes(data):
+def test_diff_unsupported_dtypes(data):
     gdf = cudf.DataFrame(data)
     with pytest.raises(
-        NotImplementedError,
-        match="DataFrame.diff only supports numeric dtypes",
+        TypeError,
+        match=r"unsupported operand type\(s\)",
     ):
-        gdf.diff(periods=2, axis=0)
+        gdf.diff()
+
+
+def test_diff_many_dtypes():
+    pdf = pd.DataFrame(
+        {
+            "dates": pd.date_range("2020-01-01", "2020-01-06", freq="D"),
+            "bools": [True, True, True, False, True, True],
+            "floats": [1.0, 2.0, 3.5, np.nan, 5.0, -1.7],
+            "ints": [1, 2, 3, 3, 4, 5],
+            "nans_nulls": [np.nan, None, None, np.nan, np.nan, None],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.diff(), gdf.diff())
+    assert_eq(pdf.diff(periods=2), gdf.diff(periods=2))
 
 
 def test_dataframe_assign_cp_np_array():
@@ -9058,7 +9158,8 @@ def test_dataframe_assign_cp_np_array():
 
 
 @pytest.mark.parametrize(
-    "data", [{"a": [1, 2, 3], "b": [1, 1, 0]}],
+    "data",
+    [{"a": [1, 2, 3], "b": [1, 1, 0]}],
 )
 def test_dataframe_nunique(data):
     gdf = cudf.DataFrame(data)
@@ -9071,7 +9172,8 @@ def test_dataframe_nunique(data):
 
 
 @pytest.mark.parametrize(
-    "data", [{"key": [0, 1, 1, 0, 0, 1], "val": [1, 8, 3, 9, -3, 8]}],
+    "data",
+    [{"key": [0, 1, 1, 0, 0, 1], "val": [1, 8, 3, 9, -3, 8]}],
 )
 def test_dataframe_nunique_index(data):
     gdf = cudf.DataFrame(data)
@@ -9110,3 +9212,144 @@ def test_dataframe_pct_change(data, periods, fill_method):
     expected = pdf.pct_change(periods=periods, fill_method=fill_method)
 
     assert_eq(expected, actual)
+
+
+def test_mean_timeseries():
+    gdf = cudf.datasets.timeseries()
+    pdf = gdf.to_pandas()
+
+    expected = pdf.mean(numeric_only=True)
+    actual = gdf.mean(numeric_only=True)
+
+    assert_eq(expected, actual)
+
+    with pytest.raises(TypeError):
+        gdf.mean()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+def test_std_different_dtypes(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = pdf.std(numeric_only=True)
+    actual = gdf.std(numeric_only=True)
+
+    assert_eq(expected, actual)
+
+    with pytest.raises(TypeError):
+        gdf.std()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+            "val1": ["v", "n", "k", "l", "m", "i", "y", "r", "w"],
+            "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
+        }
+    ],
+)
+def test_empty_numeric_only(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+    expected = pdf.prod(numeric_only=True)
+    actual = gdf.prod(numeric_only=True)
+    assert_eq(expected, actual)
+
+
+@pytest.fixture
+def df_eval():
+    N = 10
+    int_max = 10
+    rng = cupy.random.default_rng(0)
+    return cudf.DataFrame(
+        {
+            "a": rng.integers(N, size=int_max),
+            "b": rng.integers(N, size=int_max),
+            "c": rng.integers(N, size=int_max),
+            "d": rng.integers(N, size=int_max),
+        }
+    )
+
+
+# Note that for now expressions do not automatically handle casting, so inputs
+# need to be casted appropriately
+@pytest.mark.parametrize(
+    "expr, dtype",
+    [
+        ("a", int),
+        ("+a", int),
+        ("a + b", int),
+        ("a == b", int),
+        ("a / b", float),
+        ("a * b", int),
+        ("a > b", int),
+        ("a > b > c", int),
+        ("a > b < c", int),
+        ("a & b", int),
+        ("a & b | c", int),
+        ("sin(a)", float),
+        ("exp(sin(abs(a)))", float),
+        ("sqrt(floor(a))", float),
+        ("ceil(arctanh(a))", float),
+        ("(a + b) - (c * d)", int),
+        ("~a", int),
+        ("(a > b) and (c > d)", int),
+        ("(a > b) or (c > d)", int),
+        ("not (a > b)", int),
+        ("a + 1", int),
+        ("a + 1.0", float),
+        ("-a + 1", int),
+        ("+a + 1", int),
+        ("e = a + 1", int),
+        (
+            """
+            e = log(cos(a)) + 1.0
+            f = abs(c) - exp(d)
+            """,
+            float,
+        ),
+        ("a_b_are_equal = (a == b)", int),
+    ],
+)
+def test_dataframe_eval(df_eval, expr, dtype):
+    df_eval = df_eval.astype(dtype)
+    expect = df_eval.to_pandas().eval(expr)
+    got = df_eval.eval(expr)
+    # In the specific case where the evaluated expression is a unary function
+    # of a single column with no nesting, pandas will retain the name. This
+    # level of compatibility is out of scope for now.
+    assert_eq(expect, got, check_names=False)
+
+    # Test inplace
+    if re.search("[^=]=[^=]", expr) is not None:
+        pdf_eval = df_eval.to_pandas()
+        pdf_eval.eval(expr, inplace=True)
+        df_eval.eval(expr, inplace=True)
+        assert_eq(pdf_eval, df_eval)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        """
+        e = a + b
+        a == b
+        """,
+        "a_b_are_equal = (a == b) = c",
+    ],
+)
+def test_dataframe_eval_errors(df_eval, expr):
+    with pytest.raises(ValueError):
+        df_eval.eval(expr)
