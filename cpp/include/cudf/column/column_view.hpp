@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,13 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
+#include <limits>
+#include <type_traits>
 #include <vector>
 
 /**
@@ -374,6 +379,44 @@ class column_view : public detail::column_view_base {
    * @brief Returns iterator to the end of the ordered sequence of child column-views.
    */
   auto child_end() const noexcept { return _children.cend(); }
+
+  /**
+   * @brief Construct a column view from a device_span<T>.
+   *
+   * Only numeric and chrono types are supported.
+   *
+   * @tparam T The device span type. Must be const and match the column view's type.
+   * @param data A typed device span containing the column view's data.
+   */
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
+  column_view(device_span<T const> data)
+    : column_view(
+        cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
+  {
+    CUDF_EXPECTS(
+      data.size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Data exceeds the maximum size of a column view.");
+  }
+
+  /**
+   * @brief Converts a column view into a device span.
+   *
+   * Only numeric and chrono data types are supported. The column view must not
+   * be nullable.
+   *
+   * @tparam T The device span type. Must be const and match the column view's type.
+   * @throws cudf::logic_error if the column view type does not match the span type.
+   * @throws cudf::logic_error if the column view is nullable.
+   * @return A typed device span of the column view's data.
+   */
+  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
+  [[nodiscard]] operator device_span<T const>() const
+  {
+    CUDF_EXPECTS(type() == cudf::data_type{cudf::type_to_id<T>()},
+                 "Device span type must match column view type.");
+    CUDF_EXPECTS(!nullable(), "A nullable column view cannot be converted to a device span.");
+    return device_span<T const>(data<T>(), size());
+  }
 
  private:
   friend column_view bit_cast(column_view const& input, data_type type);

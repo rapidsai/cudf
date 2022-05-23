@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/string/string_bench_args.hpp>
@@ -22,7 +21,6 @@
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf_test/base_fixture.hpp>
 
 #include <nvtext/generate_ngrams.hpp>
 
@@ -38,8 +36,7 @@ static void BM_ngrams(benchmark::State& state, ngrams_type nt)
   data_profile table_profile;
   table_profile.set_distribution_params(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const table =
-    create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
+  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
 
   for (auto _ : state) {

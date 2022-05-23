@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,14 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
-#include <cudf/column/column.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-
-#include <cudf/merge.hpp>
-
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/merge.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -59,7 +56,7 @@ void BM_merge(benchmark::State& state)
   for (int i = 0; i < num_tables; ++i) {
     cudf::size_type const rows = std::round(table_size_dist(rand_gen));
     // Ensure size in range [0, avg_rows*2]
-    auto const clamped_rows = std::max(std::min(rows, avg_rows * 2), 0);
+    auto const clamped_rows = std::clamp(rows, 0, avg_rows * 2);
 
     int32_t prev_key  = 0;
     auto key_sequence = cudf::detail::make_counting_transform_iterator(0, [&](auto row) {

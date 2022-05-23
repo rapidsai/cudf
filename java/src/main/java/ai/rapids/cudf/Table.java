@@ -252,6 +252,17 @@ public final class Table implements AutoCloseable {
                                            long address, long length, int timeUnit) throws CudfException;
 
   /**
+   * Read in Avro formatted data.
+   * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
+   *                           all of them
+   * @param filePath           the path of the file to read, or null if no path should be read.
+   * @param address            the address of the buffer to read from or 0 if we should not.
+   * @param length             the length of the buffer to read from.
+   */
+  private static native long[] readAvro(String[] filterColumnNames, String filePath,
+                                        long address, long length) throws CudfException;
+
+  /**
    * Setup everything to write parquet formatted data to a file.
    * @param columnNames     names that correspond to the table columns
    * @param numChildren     Children of the top level
@@ -278,7 +289,10 @@ public final class Table implements AutoCloseable {
                                                    int statsFreq,
                                                    boolean[] isInt96,
                                                    int[] precisions,
-                                                   boolean[] isMapValues, String filename) throws CudfException;
+                                                   boolean[] isMapValues,
+                                                   boolean[] hasParquetFieldIds,
+                                                   int[] parquetFieldIds,
+                                                   String filename) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
@@ -308,6 +322,8 @@ public final class Table implements AutoCloseable {
                                                      boolean[] isInt96,
                                                      int[] precisions,
                                                      boolean[] isMapValues,
+                                                     boolean[] hasParquetFieldIds,
+                                                     int[] parquetFieldIds,
                                                      HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -539,14 +555,11 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
-  private static native long leftJoinRowCount(long leftTable, long rightHashJoin,
-                                              boolean nullsEqual) throws CudfException;
+  private static native long leftJoinRowCount(long leftTable, long rightHashJoin) throws CudfException;
 
-  private static native long[] leftHashJoinGatherMaps(long leftTable, long rightHashJoin,
-                                                      boolean nullsEqual) throws CudfException;
+  private static native long[] leftHashJoinGatherMaps(long leftTable, long rightHashJoin) throws CudfException;
 
   private static native long[] leftHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
-                                                               boolean nullsEqual,
                                                                long outputRowCount) throws CudfException;
 
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
@@ -555,14 +568,11 @@ public final class Table implements AutoCloseable {
   private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
                                                    boolean compareNullsEqual) throws CudfException;
 
-  private static native long innerJoinRowCount(long table, long hashJoin,
-                                               boolean nullsEqual) throws CudfException;
+  private static native long innerJoinRowCount(long table, long hashJoin) throws CudfException;
 
-  private static native long[] innerHashJoinGatherMaps(long table, long hashJoin,
-                                                       boolean nullsEqual) throws CudfException;
+  private static native long[] innerHashJoinGatherMaps(long table, long hashJoin) throws CudfException;
 
   private static native long[] innerHashJoinGatherMapsWithCount(long table, long hashJoin,
-                                                                boolean nullsEqual,
                                                                 long outputRowCount) throws CudfException;
 
   private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
@@ -571,14 +581,11 @@ public final class Table implements AutoCloseable {
   private static native long[] fullJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
-  private static native long fullJoinRowCount(long leftTable, long rightHashJoin,
-                                              boolean nullsEqual) throws CudfException;
+  private static native long fullJoinRowCount(long leftTable, long rightHashJoin) throws CudfException;
 
-  private static native long[] fullHashJoinGatherMaps(long leftTable, long rightHashJoin,
-                                                      boolean nullsEqual) throws CudfException;
+  private static native long[] fullHashJoinGatherMaps(long leftTable, long rightHashJoin) throws CudfException;
 
   private static native long[] fullHashJoinGatherMapsWithCount(long leftTable, long rightHashJoin,
-                                                               boolean nullsEqual,
                                                                long outputRowCount) throws CudfException;
 
   private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
@@ -1030,6 +1037,82 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Read an Avro file using the default AvroOptions.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readAvro(File path) {
+    return readAvro(AvroOptions.DEFAULT, path);
+  }
+
+  /**
+   * Read an Avro file.
+   * @param opts various Avro parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readAvro(AvroOptions opts, File path) {
+    return new Table(readAvro(opts.getIncludeColumnNames(),
+        path.getAbsolutePath(), 0, 0));
+  }
+
+  /**
+   * Read Avro formatted data.
+   * @param buffer raw Avro formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readAvro(byte[] buffer) {
+    return readAvro(AvroOptions.DEFAULT, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read Avro formatted data.
+   * @param opts various Avro parsing options.
+   * @param buffer raw Avro formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readAvro(AvroOptions opts, byte[] buffer) {
+    return readAvro(opts, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read Avro formatted data.
+   * @param opts various Avro parsing options.
+   * @param buffer raw Avro formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len) {
+    assert offset >= 0 && offset < buffer.length;
+    assert len <= buffer.length - offset;
+    len = len > 0 ? len : buffer.length - offset;
+
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, offset, len);
+      return readAvro(opts, newBuf, 0, len);
+    }
+  }
+
+  /**
+   * Read Avro formatted data.
+   * @param opts various Avro parsing options.
+   * @param buffer raw Avro formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readAvro(AvroOptions opts, HostMemoryBuffer buffer,
+                               long offset, long len) {
+    assert offset >= 0 && offset < buffer.length;
+    assert len <= buffer.length - offset;
+    len = len > 0 ? len : buffer.length - offset;
+
+    return new Table(readAvro(opts.getIncludeColumnNames(),
+        null, buffer.getAddress() + offset, len));
+  }
+
+  /**
    * Read a ORC file using the default ORCOptions.
    * @param path the local file to read.
    * @return the file parsed as a table on the GPU.
@@ -1123,6 +1206,8 @@ public final class Table implements AutoCloseable {
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
       boolean[] isMapValues = options.getFlatIsMap();
       int[] precisions = options.getFlatPrecision();
+      boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
+      int[] parquetFieldIds = options.getFlatParquetFieldId();
       int[] flatNumChildren = options.getFlatNumChildren();
 
       this.consumer = null;
@@ -1137,6 +1222,8 @@ public final class Table implements AutoCloseable {
           timeInt96Values,
           precisions,
           isMapValues,
+          hasParquetFieldIds,
+          parquetFieldIds,
           outputFile.getAbsolutePath());
     }
 
@@ -1146,6 +1233,8 @@ public final class Table implements AutoCloseable {
       boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
       boolean[] isMapValues = options.getFlatIsMap();
       int[] precisions = options.getFlatPrecision();
+      boolean[] hasParquetFieldIds = options.getFlatHasParquetFieldId();
+      int[] parquetFieldIds = options.getFlatParquetFieldId();
       int[] flatNumChildren = options.getFlatNumChildren();
 
       this.consumer = consumer;
@@ -1160,6 +1249,8 @@ public final class Table implements AutoCloseable {
           timeInt96Values,
           precisions,
           isMapValues,
+          hasParquetFieldIds,
+          parquetFieldIds,
           consumer);
     }
 
@@ -2318,8 +2409,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    return leftJoinRowCount(getNativeView(), rightHash.getNativeView(),
-        rightHash.getCompareNulls());
+    return leftJoinRowCount(getNativeView(), rightHash.getNativeView());
   }
 
   /**
@@ -2337,9 +2427,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        leftHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls());
+    long[] gatherMapData = leftHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2363,9 +2451,8 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        leftHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls(), outputRowCount);
+    long[] gatherMapData = leftHashJoinGatherMapsWithCount(getNativeView(),
+        rightHash.getNativeView(), outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2545,8 +2632,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "otherKeys: " + otherHash.getNumberOfColumns());
     }
-    return innerJoinRowCount(getNativeView(), otherHash.getNativeView(),
-        otherHash.getCompareNulls());
+    return innerJoinRowCount(getNativeView(), otherHash.getNativeView());
   }
 
   /**
@@ -2564,9 +2650,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        innerHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls());
+    long[] gatherMapData = innerHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2590,9 +2674,8 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        innerHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls(), outputRowCount);
+    long[] gatherMapData = innerHashJoinGatherMapsWithCount(getNativeView(),
+        rightHash.getNativeView(), outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2778,8 +2861,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    return fullJoinRowCount(getNativeView(), rightHash.getNativeView(),
-        rightHash.getCompareNulls());
+    return fullJoinRowCount(getNativeView(), rightHash.getNativeView());
   }
 
   /**
@@ -2797,9 +2879,7 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        fullHashJoinGatherMaps(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls());
+    long[] gatherMapData = fullHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2823,9 +2903,8 @@ public final class Table implements AutoCloseable {
       throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
-    long[] gatherMapData =
-        fullHashJoinGatherMapsWithCount(getNativeView(), rightHash.getNativeView(),
-            rightHash.getCompareNulls(), outputRowCount);
+    long[] gatherMapData = fullHashJoinGatherMapsWithCount(getNativeView(),
+        rightHash.getNativeView(), outputRowCount);
     return buildJoinGatherMaps(gatherMapData);
   }
 

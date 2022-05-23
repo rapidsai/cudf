@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import os
 import re
@@ -30,16 +30,16 @@ from setuptools.extension import Extension
 import versioneer
 
 install_requires = [
-    "numba>=0.53.1",
-    "Cython>=0.29,<0.30",
-    "fsspec>=0.6.0",
-    "numpy",
-    "pandas>=1.0,<1.4.0dev0",
-    "typing_extensions",
-    "protobuf",
-    "nvtx>=0.2.1",
     "cachetools",
+    "cuda-python>=11.5,<12.0",
+    "fsspec>=0.6.0",
+    "numba>=0.53.1",
+    "numpy",
+    "nvtx>=0.2.1",
     "packaging",
+    "pandas>=1.0,<1.5.0dev0",
+    "protobuf",
+    "typing_extensions",
 ]
 
 extras_require = {
@@ -47,7 +47,8 @@ extras_require = {
         "pytest",
         "pytest-benchmark",
         "pytest-xdist",
-        "hypothesis" "mimesis",
+        "hypothesis",
+        "mimesis",
         "fastavro>=0.22.9",
         "python-snappy>=0.6.0",
         "pyorc",
@@ -63,9 +64,7 @@ def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
 
     cuda_version = None
 
-    with open(
-        os.path.join(cuda_include_dir, "cuda.h"), "r", encoding="utf-8"
-    ) as f:
+    with open(os.path.join(cuda_include_dir, "cuda.h"), encoding="utf-8") as f:
         for line in f.readlines():
             if re.search(r"#define CUDA_VERSION ", line) is not None:
                 cuda_version = line
@@ -247,18 +246,19 @@ setup(
         "Topic :: Scientific/Engineering",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     # Include the separately-compiled shared library
     setup_requires=["cython", "protobuf"],
     ext_modules=extensions,
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf._lib*"]), ["*.pxd"],
+        find_packages(include=["cudf._lib*"]),
+        ["*.pxd"],
     ),
     cmdclass=cmdclass,
     install_requires=install_requires,
-    zip_safe=False,
     extras_require=extras_require,
+    zip_safe=False,
 )

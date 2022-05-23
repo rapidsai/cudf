@@ -1,6 +1,6 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import itertools as it
+import itertools
 import random
 
 import numpy as np
@@ -9,7 +9,11 @@ from pandas import DataFrame, MultiIndex, Series, date_range
 
 import cudf
 from cudf import concat
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import (
+    _create_pandas_series,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 # TODO: PANDAS 1.0 support
 # Revisit drop_duplicates() tests to update parameters like ignore_index.
@@ -59,7 +63,7 @@ def test_duplicated_with_misspelled_column_name(subset):
     ],
 )
 def test_drop_duplicates_series(data, keep):
-    pds = cudf.utils.utils._create_pandas_series(data)
+    pds = _create_pandas_series(data)
     gds = cudf.from_pandas(pds)
 
     assert_df(pds.drop_duplicates(keep=keep), gds.drop_duplicates(keep=keep))
@@ -280,7 +284,7 @@ def test_drop_duplicates_empty(df):
 
 @pytest.mark.parametrize("num_columns", [3, 4, 5])
 def test_dataframe_drop_duplicates_numeric_method(num_columns):
-    comb = list(it.permutations(range(num_columns), num_columns))
+    comb = list(itertools.permutations(range(num_columns), num_columns))
     shuf = list(comb)
     random.Random(num_columns).shuffle(shuf)
 
@@ -615,5 +619,6 @@ def test_drop_duplicates_multi_index():
 
     for col in gdf.columns:
         assert_df(
-            gdf[col].drop_duplicates().to_pandas(), pdf[col].drop_duplicates(),
+            gdf[col].drop_duplicates().to_pandas(),
+            pdf[col].drop_duplicates(),
         )

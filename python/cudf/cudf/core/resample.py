@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021 NVIDIA CORPORATION &
+# SPDX-FileCopyrightText: Copyright (c) 2021-2022, NVIDIA CORPORATION &
 # AFFILIATES. All rights reserved.  SPDX-License-Identifier:
 # Apache-2.0
 #
@@ -157,7 +157,11 @@ class _ResampleGrouping(_Grouping):
         end += offset
 
         # generate the labels for binning the key column:
-        bin_labels = cudf.date_range(start=start, end=end, freq=freq,)
+        bin_labels = cudf.date_range(
+            start=start,
+            end=end,
+            freq=freq,
+        )
 
         # We want the (resampled) column of timestamps in the result
         # to have a resolution closest to the resampling

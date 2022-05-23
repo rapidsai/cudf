@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,32 @@ namespace detail {
 class simple_aggregations_collector;
 class aggregation_finalizer;
 }  // namespace detail
+
+/**
+ * @brief Tie-breaker method to use for ranking the column.
+ *
+ * @see cudf::make_rank_aggregation for more details.
+ * @ingroup column_sort
+ */
+enum class rank_method : int32_t {
+  FIRST,    ///< stable sort order ranking (no ties)
+  AVERAGE,  ///< mean of first in the group
+  MIN,      ///< min of first in the group
+  MAX,      ///< max of first in the group
+  DENSE     ///< rank always increases by 1 between groups
+};
+
+/**
+ * @brief Whether returned rank should be percentage or not and
+ *  mention the type of percentage normalization.
+ *
+ */
+enum class rank_percentage : int32_t {
+  NONE,             ///< rank
+  ZERO_NORMALIZED,  ///< rank / count
+  ONE_NORMALIZED    ///< (rank - 1) / (count - 1)
+};
+
 /**
  * @brief Abstract base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -77,8 +103,7 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
-    RANK,            ///< get rank       of current index
-    DENSE_RANK,      ///< get dense rank of current index
+    RANK,            ///< get rank of current index
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
@@ -145,6 +170,39 @@ class groupby_scan_aggregation : public virtual aggregation {
 
  protected:
   groupby_scan_aggregation() {}
+};
+
+/**
+ * @brief Derived class intended for reduction usage.
+ */
+class reduce_aggregation : public virtual aggregation {
+ public:
+  ~reduce_aggregation() override = default;
+
+ protected:
+  reduce_aggregation() {}
+};
+
+/**
+ * @brief Derived class intended for scan usage.
+ */
+class scan_aggregation : public virtual aggregation {
+ public:
+  ~scan_aggregation() override = default;
+
+ protected:
+  scan_aggregation() {}
+};
+
+/**
+ * @brief Derived class intended for segmented reduction usage.
+ */
+class segmented_reduce_aggregation : public virtual aggregation {
+ public:
+  ~segmented_reduce_aggregation() override = default;
+
+ protected:
+  segmented_reduce_aggregation() {}
 };
 
 enum class udf_type : bool { CUDA, PTX };
@@ -289,9 +347,11 @@ std::unique_ptr<Base> make_row_number_aggregation();
 /**
  * @brief Factory to create a RANK aggregation
  *
- * `RANK` returns a non-nullable column of size_type "ranks": the number of rows preceding or
- * equal to the current row plus one. As a result, ranks are not unique and gaps will appear in
- * the ranking sequence.
+ * `RANK` returns a column of size_type or double "ranks" (see note 3 below for how the
+ * data type is determined) for a given rank method and column order.
+ * If nulls are excluded, the rank will be null for those rows, otherwise a non-nullable column is
+ * returned. Double precision column is returned only when percentage!=NONE and when rank method is
+ * average.
  *
  * This aggregation only works with "scan" algorithms. The input column into the group or
  * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
@@ -299,96 +359,68 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * column containing the ordering columns.
  *
  * Note:
- *  1. This method requires that the rows are presorted by the group keys and order_by columns.
- *  2. `RANK` aggregations will return a fully valid column regardless of null_handling policy
- *     specified in the scan.
- *  3. `RANK` aggregations are not compatible with exclusive scans.
+ *  1. This method could work faster with the rows that are presorted by the group keys and order_by
+ *     columns. Though groupby object does not require order_by column to be sorted, groupby rank
+ *     scan aggregation does require the order_by column to be sorted if the keys are sorted.
+ *  2. `RANK` aggregations are not compatible with exclusive scans.
+ *  3. All rank methods except AVERAGE method and percentage!=NONE returns size_type column.
+ *     For AVERAGE method and percentage!=NONE, the return type is double column.
  *
  * @code{.pseudo}
- * Example: Consider an motor-racing statistics dataset, containing the following columns:
- *   1. driver_name:   (STRING) Name of the car driver
- *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
- *   3. lap_number:    (INT32)  The number of the lap
+ * Example: Consider a motor-racing statistics dataset, containing the following columns:
+ *   1. venue:  (STRING) Location of the race event
+ *   2. driver: (STRING) Name of the car driver (abbreviated to 3 characters)
+ *   3. time:   (INT32)  Time taken to complete the circuit
  *
  * For the following presorted data:
  *
- *  [ // driver_name,  num_overtakes,  lap_number
- *    {   "bottas",        2,            3        },
- *    {   "bottas",        2,            7        },
- *    {   "bottas",        2,            7        },
- *    {   "bottas",        1,            1        },
- *    {   "bottas",        1,            2        },
- *    {   "hamilton",      4,            1        },
- *    {   "hamilton",      4,            1        },
- *    {   "hamilton",      3,            4        },
- *    {   "hamilton",      2,            4        }
+ *  [ //      venue,           driver,           time
+ *    {   "silverstone",  "HAM" ("hamilton"),   15823},
+ *    {   "silverstone",  "LEC" ("leclerc"),    15827},
+ *    {   "silverstone",  "BOT" ("bottas"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "NOR" ("norris"),     15834},  // <-- Tied for 3rd place.
+ *    {   "silverstone",  "RIC" ("ricciardo"),  15905},
+ *    {      "monza",     "RIC" ("ricciardo"),  12154},
+ *    {      "monza",     "NOR" ("norris"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "BOT" ("bottas"),     12156},  // <-- Tied for 2nd place.
+ *    {      "monza",     "LEC" ("leclerc"),    12201},
+ *    {      "monza",     "PER" ("perez"),      12203}
  *  ]
  *
  * A grouped rank aggregation scan with:
- *   groupby column      : driver_name
- *   input orderby column: struct_column{num_overtakes, lap_number}
- *  result: column<size_type>{1, 2, 2, 4, 5, 1, 1, 3, 4}
+ *   groupby column      : venue
+ *   input orderby column: time
+ * Produces the following rank column for each methods:
+ * first:   {   1,     2,     3,     4,     5,      1,     2,     3,     4,     5}
+ * average: {   1,     2,   3.5,   3.5,     5,      1,   2.5,   2.5,     4,     5}
+ * min:     {   1,     2,     3,     3,     5,      1,     2,     2,     4,     5}
+ * max:     {   1,     2,     4,     4,     5,      1,     3,     3,     4,     5}
+ * dense:   {   1,     2,     3,     3,     4,      1,     2,     2,     3,     4}
+ * This corresponds to the following grouping and `driver` rows:
+ *          { "HAM", "LEC", "BOT", "NOR", "RIC",  "RIC", "NOR", "BOT", "LEC", "PER" }
+ *            <----------silverstone----------->|<-------------monza-------------->
  *
- * A grouped rank aggregation scan with:
- *   groupby column      : driver_name
- *   input orderby column: num_overtakes
- *  result: column<size_type>{1, 1, 1, 4, 4, 1, 1, 3, 4}
+ * min rank for each percentage types:
+ * NONE:             {   1,      2,     3,     3,     5,      1,     2,     2,     4,     5 }
+ * ZERO_NORMALIZED : { 0.16,  0.33,  0.50,  0.50,  0.83,   0.16,  0.33,  0.33,  0.66,  0.83 }
+ * ONE_NORMALIZED:   { 0.00,  0.25,  0.50,  0.50,  1.00,   0.00,  0.25,  0.25,  0.75,  1.00 }
+ * where count corresponds to the number of rows in the group. @see cudf::rank_percentage
+ *
  * @endcode
+ *
+ * @param method The ranking method used for tie breaking (same values).
+ * @param column_order The desired sort order for ranking
+ * @param null_handling  flag to include nulls during ranking. If nulls are not included,
+ * the corresponding rank will be null.
+ * @param null_precedence The desired order of null compared to other elements for column
+ * @param percentage enum to denote the type of conversion of ranks to percentage in range (0,1]
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_rank_aggregation();
-
-/**
- * @brief Factory to create a DENSE_RANK aggregation
- *
- * `DENSE_RANK` returns a non-nullable column of size_type "dense ranks": the preceding unique
- * value's rank plus one. As a result, ranks are not unique but there are no gaps in the ranking
- * sequence (unlike RANK aggregations).
- *
- * This aggregation only works with "scan" algorithms. The input column into the group or
- * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
- * If rows are ordered by more than one column, the orderby input column should be a struct
- * column containing the ordering columns.
- *
- * Note:
- *  1. This method requires that the rows are presorted by the group keys and order_by columns.
- *  2. `DENSE_RANK` aggregations will return a fully valid column regardless of null_handling
- *     policy specified in the scan.
- *  3. `DENSE_RANK` aggregations are not compatible with exclusive scans.
- *
- * @code{.pseudo}
- * Example: Consider an motor-racing statistics dataset, containing the following columns:
- *   1. driver_name:   (STRING) Name of the car driver
- *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
- *   3. lap_number:    (INT32)  The number of the lap
- *
- * For the following presorted data:
- *
- *  [ // driver_name,  num_overtakes,  lap_number
- *    {   "bottas",        2,            3        },
- *    {   "bottas",        2,            7        },
- *    {   "bottas",        2,            7        },
- *    {   "bottas",        1,            1        },
- *    {   "bottas",        1,            2        },
- *    {   "hamilton",      4,            1        },
- *    {   "hamilton",      4,            1        },
- *    {   "hamilton",      3,            4        },
- *    {   "hamilton",      2,            4        }
- *  ]
- *
- * A grouped dense rank aggregation scan with:
- *   groupby column      : driver_name
- *   input orderby column: struct_column{num_overtakes, lap_number}
- *  result: column<size_type>{1, 2, 2, 3, 4, 1, 1, 2, 3}
- *
- * A grouped dense rank aggregation scan with:
- *   groupby column      : driver_name
- *   input orderby column: num_overtakes
- *  result: column<size_type>{1, 1, 1, 2, 2, 1, 1, 2, 3}
- * @endcode
- */
-template <typename Base = aggregation>
-std::unique_ptr<Base> make_dense_rank_aggregation();
+std::unique_ptr<Base> make_rank_aggregation(rank_method method,
+                                            order column_order         = order::ASCENDING,
+                                            null_policy null_handling  = null_policy::EXCLUDE,
+                                            null_order null_precedence = null_order::AFTER,
+                                            rank_percentage percentage = rank_percentage::NONE);
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation

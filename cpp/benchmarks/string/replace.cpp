@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
+#include "string_bench_args.hpp"
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <limits>
-
-#include "string_bench_args.hpp"
 
 class StringReplace : public cudf::benchmark {
 };
@@ -40,8 +40,7 @@ static void BM_replace(benchmark::State& state, replace_type rt)
   data_profile table_profile;
   table_profile.set_distribution_params(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const table =
-    create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
+  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
   cudf::string_scalar target("+");
   cudf::string_scalar repl("");

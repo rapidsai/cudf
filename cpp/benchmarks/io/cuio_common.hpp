@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 #pragma once
 
+#include <cudf_test/file_utilities.hpp>
+
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/types.hpp>
-
-#include <cudf_test/file_utilities.hpp>
 
 using cudf::io::io_type;
 
@@ -39,6 +39,15 @@ std::string random_file_in_dir(std::string const& dir_path);
  * @brief Class to create a coupled `source_info` and `sink_info` of given type.
  */
 class cuio_source_sink_pair {
+  class bytes_written_only_sink : public cudf::io::data_sink {
+    size_t _bytes_written = 0;
+
+   public:
+    void host_write(void const* data, size_t size) override { _bytes_written += size; }
+    void flush() override {}
+    size_t bytes_written() override { return _bytes_written; }
+  };
+
  public:
   cuio_source_sink_pair(io_type type);
   ~cuio_source_sink_pair()
@@ -66,12 +75,15 @@ class cuio_source_sink_pair {
    */
   cudf::io::sink_info make_sink_info();
 
+  [[nodiscard]] size_t size();
+
  private:
   static temp_directory const tmpdir;
 
   io_type const type;
   std::vector<char> buffer;
   std::string const file_name;
+  bytes_written_only_sink void_sink;
 };
 
 /**
@@ -120,3 +132,13 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
  * The segments could be Parquet row groups or ORC stripes.
  */
 std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk);
+
+/**
+ * @brief Drops L3 cache if `CUDF_BENCHMARK_DROP_CACHE` environment variable is set.
+ *
+ * Has no effect if the environment variable is not set.
+ * May require sudo access ro run successfully.
+ *
+ * @throw cudf::logic_error if the environment variable is set and the command fails
+ */
+void try_drop_l3_cache();

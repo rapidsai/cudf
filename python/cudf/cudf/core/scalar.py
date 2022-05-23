@@ -4,20 +4,19 @@ import decimal
 
 import numpy as np
 import pyarrow as pa
-from pandas._libs.missing import NAType as pd_NAType
 
 import cudf
-from cudf.core.column.column import ColumnBase
+from cudf.api.types import is_scalar
 from cudf.core.dtypes import ListDtype, StructDtype
-from cudf.core.index import BaseIndex
-from cudf.core.series import Series
+from cudf.core.missing import NA
+from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
 
 
-class Scalar(object):
+class Scalar(BinaryOperand):
     """
     A GPU-backed scalar object with NumPy scalar like properties
     May be used in binary operations against other scalars, cuDF
@@ -56,6 +55,8 @@ class Scalar(object):
     dtype : np.dtype or string specifier
         The data type
     """
+
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def __init__(self, value, dtype=None):
 
@@ -211,69 +212,8 @@ class Scalar(object):
     def __bool__(self):
         return bool(self.value)
 
-    # Scalar Binary Operations
-    def __add__(self, other):
-        return self._scalar_binop(other, "__add__")
-
-    def __radd__(self, other):
-        return self._scalar_binop(other, "__radd__")
-
-    def __sub__(self, other):
-        return self._scalar_binop(other, "__sub__")
-
-    def __rsub__(self, other):
-        return self._scalar_binop(other, "__rsub__")
-
-    def __mul__(self, other):
-        return self._scalar_binop(other, "__mul__")
-
-    def __rmul__(self, other):
-        return self._scalar_binop(other, "__rmul__")
-
-    def __truediv__(self, other):
-        return self._scalar_binop(other, "__truediv__")
-
-    def __floordiv__(self, other):
-        return self._scalar_binop(other, "__floordiv__")
-
-    def __rtruediv__(self, other):
-        return self._scalar_binop(other, "__rtruediv__")
-
-    def __mod__(self, other):
-        return self._scalar_binop(other, "__mod__")
-
-    def __divmod__(self, other):
-        return self._scalar_binop(other, "__divmod__")
-
-    def __and__(self, other):
-        return self._scalar_binop(other, "__and__")
-
-    def __xor__(self, other):
-        return self._scalar_binop(other, "__or__")
-
-    def __pow__(self, other):
-        return self._scalar_binop(other, "__pow__")
-
-    def __gt__(self, other):
-        return self._scalar_binop(other, "__gt__")
-
-    def __lt__(self, other):
-        return self._scalar_binop(other, "__lt__")
-
-    def __ge__(self, other):
-        return self._scalar_binop(other, "__ge__")
-
-    def __le__(self, other):
-        return self._scalar_binop(other, "__le__")
-
-    def __eq__(self, other):
-        return self._scalar_binop(other, "__eq__")
-
-    def __ne__(self, other):
-        return self._scalar_binop(other, "__ne__")
-
     def __round__(self, n):
-        return self._scalar_binop(n, "__round__")
+        return self._binaryop(n, "__round__")
 
     # Scalar Unary Operations
     def __abs__(self):
@@ -330,20 +270,20 @@ class Scalar(object):
 
         return cudf.dtype(out_dtype)
 
-    def _scalar_binop(self, other, op):
-        if isinstance(other, (ColumnBase, Series, BaseIndex, np.ndarray)):
-            # dispatch to column implementation
-            return NotImplemented
-        other = to_cudf_compatible_scalar(other)
-        out_dtype = self._binop_result_dtype_or_error(other, op)
-        valid = self.is_valid and (
-            isinstance(other, np.generic) or other.is_valid
-        )
-        if not valid:
-            return Scalar(None, dtype=out_dtype)
+    def _binaryop(self, other, op: str):
+        if is_scalar(other):
+            other = to_cudf_compatible_scalar(other)
+            out_dtype = self._binop_result_dtype_or_error(other, op)
+            valid = self.is_valid and (
+                isinstance(other, np.generic) or other.is_valid
+            )
+            if not valid:
+                return Scalar(None, dtype=out_dtype)
+            else:
+                result = self._dispatch_scalar_binop(other, op)
+                return Scalar(result, dtype=out_dtype)
         else:
-            result = self._dispatch_scalar_binop(other, op)
-            return Scalar(result, dtype=out_dtype)
+            return NotImplemented
 
     def _dispatch_scalar_binop(self, other, op):
         if isinstance(other, Scalar):
@@ -381,13 +321,3 @@ class Scalar(object):
 
     def astype(self, dtype):
         return Scalar(self.value, dtype)
-
-
-class _NAType(pd_NAType):
-    # Pandas NAType enforces a single instance exists at a time
-    # instantiating this class will yield the existing instance
-    # of pandas._libs.missing.NAType, id(cudf.NA) == id(pd.NA).
-    pass
-
-
-NA = _NAType()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+#include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -29,6 +28,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/fill.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/pair.h>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -40,28 +45,26 @@ using string_index_pair = thrust::pair<const char*, size_type>;
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.
- *
- * @tparam stack_size Correlates to the regex instructions state to maintain for each string.
- *         Each instruction requires a fixed amount of overhead data.
  */
-template <int stack_size>
 struct extract_fn {
-  reprog_device prog;
   column_device_view const d_strings;
   cudf::detail::device_2dspan<string_index_pair> d_indices;
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type const idx,
+                             reprog_device const d_prog,
+                             int32_t const prog_idx)
   {
-    auto const groups = prog.group_counts();
+    auto const groups = d_prog.group_counts();
     auto d_output     = d_indices[idx];
 
     if (d_strings.is_valid(idx)) {
       auto const d_str = d_strings.element<string_view>(idx);
-      int32_t begin    = 0;
-      int32_t end      = -1;  // handles empty strings automatically
-      if (prog.find<stack_size>(idx, d_str, begin, end) > 0) {
+
+      size_type begin = 0;
+      size_type end   = -1;  // handles empty strings automatically
+      if (d_prog.find(prog_idx, d_str, begin, end) > 0) {
         for (auto col_idx = 0; col_idx < groups; ++col_idx) {
-          auto const extracted = prog.extract<stack_size>(idx, d_str, begin, end, col_idx);
+          auto const extracted = d_prog.extract(prog_idx, d_str, begin, end, col_idx);
           d_output[col_idx]    = [&] {
             if (!extracted) return string_index_pair{nullptr, 0};
             auto const offset = d_str.byte_offset((*extracted).first);
@@ -77,51 +80,29 @@ struct extract_fn {
     thrust::fill(thrust::seq, d_output.begin(), d_output.end(), string_index_pair{nullptr, 0});
   }
 };
+
 }  // namespace
 
 //
-std::unique_ptr<table> extract(
-  strings_column_view const& strings,
-  std::string const& pattern,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> extract(strings_column_view const& input,
+                               std::string_view pattern,
+                               regex_flags const flags,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
-  auto const strings_count  = strings.size();
-  auto const strings_column = column_device_view::create(strings.parent(), stream);
-  auto const d_strings      = *strings_column;
-
   // compile regex into device object
-  auto prog   = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
-  auto d_prog = *prog;
-  // extract should include groups
-  auto const groups = d_prog.group_counts();
+  auto d_prog = reprog_device::create(pattern, flags, stream);
+
+  auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern");
 
-  rmm::device_uvector<string_index_pair> indices(strings_count * groups, stream);
-  cudf::detail::device_2dspan<string_index_pair> d_indices(indices.data(), strings_count, groups);
+  auto indices = rmm::device_uvector<string_index_pair>(input.size() * groups, stream);
+  auto d_indices =
+    cudf::detail::device_2dspan<string_index_pair>(indices.data(), input.size(), groups);
 
-  auto const regex_insts = d_prog.insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_SMALL>{d_prog, d_strings, d_indices});
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, d_indices});
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_LARGE>{d_prog, d_strings, d_indices});
-  } else {
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
-                       extract_fn<RX_STACK_ANY>{d_prog, d_strings, d_indices});
-  }
+  auto const d_strings = column_device_view::create(input.parent(), stream);
+
+  launch_for_each_kernel(extract_fn{*d_strings, d_indices}, *d_prog, input.size(), stream);
 
   // build a result column for each group
   std::vector<std::unique_ptr<column>> results(groups);
@@ -133,7 +114,7 @@ std::unique_ptr<table> extract(
                                           0, [column_index, groups] __device__(size_type idx) {
                                             return (idx * groups) + column_index;
                                           }));
-    return make_strings_column(indices_itr, indices_itr + strings_count, stream, mr);
+    return make_strings_column(indices_itr, indices_itr + input.size(), stream, mr);
   };
 
   std::transform(thrust::make_counting_iterator<size_type>(0),
@@ -149,11 +130,12 @@ std::unique_ptr<table> extract(
 // external API
 
 std::unique_ptr<table> extract(strings_column_view const& strings,
-                               std::string const& pattern,
+                               std::string_view pattern,
+                               regex_flags const flags,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract(strings, pattern, rmm::cuda_stream_default, mr);
+  return detail::extract(strings, pattern, flags, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

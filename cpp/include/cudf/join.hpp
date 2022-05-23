@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -29,6 +30,16 @@
 #include <vector>
 
 namespace cudf {
+
+// forward declaration
+namespace detail {
+template <typename T>
+class MurmurHash3_32;
+
+template <typename T>
+class hash_join;
+}  // namespace detail
+
 /**
  * @addtogroup column_join
  * @{
@@ -503,6 +514,9 @@ std::unique_ptr<cudf::table> cross_join(
  */
 class hash_join {
  public:
+  using impl_type =
+    typename cudf::detail::hash_join<cudf::detail::MurmurHash3_32<cudf::hash_value_type>>;
+
   hash_join() = delete;
   ~hash_join();
   hash_join(hash_join const&) = delete;
@@ -530,7 +544,6 @@ class hash_join {
    * provided `output_size` is smaller than the actual output size.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param output_size Optional value which allows users to specify the exact output size.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
@@ -543,7 +556,6 @@ class hash_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
-             null_equality compare_nulls            = null_equality::EQUAL,
              std::optional<std::size_t> output_size = {},
              rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
              rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
@@ -554,7 +566,6 @@ class hash_join {
    * provided `output_size` is smaller than the actual output size.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param output_size Optional value which allows users to specify the exact output size.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
@@ -567,7 +578,6 @@ class hash_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
-            null_equality compare_nulls            = null_equality::EQUAL,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
@@ -578,7 +588,6 @@ class hash_join {
    * provided `output_size` is smaller than the actual output size.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param output_size Optional value which allows users to specify the exact output size.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
@@ -591,7 +600,6 @@ class hash_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
-            null_equality compare_nulls            = null_equality::EQUAL,
             std::optional<std::size_t> output_size = {},
             rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
@@ -601,39 +609,32 @@ class hash_join {
    * probe table.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The exact number of output when performing an inner join between two tables with
    * `build` and `probe` as the the join keys .
    */
   [[nodiscard]] std::size_t inner_join_size(
-    cudf::table_view const& probe,
-    null_equality compare_nulls  = null_equality::EQUAL,
-    rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+    cudf::table_view const& probe, rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * Returns the exact number of matches (rows) when performing a left join with the specified probe
    * table.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return The exact number of output when performing a left join between two tables with `build`
    * and `probe` as the the join keys .
    */
   [[nodiscard]] std::size_t left_join_size(
-    cudf::table_view const& probe,
-    null_equality compare_nulls  = null_equality::EQUAL,
-    rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+    cudf::table_view const& probe, rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
    * Returns the exact number of matches (rows) when performing a full join with the specified probe
    * table.
    *
    * @param probe The probe table, from which the tuples are probed.
-   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the intermediate table and columns' device
    * memory.
@@ -643,13 +644,11 @@ class hash_join {
    */
   std::size_t full_join_size(
     cudf::table_view const& probe,
-    null_equality compare_nulls         = null_equality::EQUAL,
     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
-  struct hash_join_impl;
-  const std::unique_ptr<const hash_join_impl> impl;
+  const std::unique_ptr<const impl_type> _impl;
 };
 
 /**
@@ -873,7 +872,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  *
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output. It is the user's
- * responsiblity to choose a suitable compare_nulls value AND use appropriate
+ * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
  * If the provided output size or per-row counts are incorrect, behavior is undefined.
@@ -933,7 +932,7 @@ mixed_inner_join(
  *
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output. It is the user's
- * responsiblity to choose a suitable compare_nulls value AND use appropriate
+ * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
  * If the provided output size or per-row counts are incorrect, behavior is undefined.
@@ -993,7 +992,7 @@ mixed_left_join(
  *
  * If the provided predicate returns NULL for a pair of rows
  * (left, right), that pair is not included in the output. It is the user's
- * responsiblity to choose a suitable compare_nulls value AND use appropriate
+ * responsibility to choose a suitable compare_nulls value AND use appropriate
  * null-safe operators in the expression.
  *
  * If the provided output size or per-row counts are incorrect, behavior is undefined.
@@ -1045,7 +1044,7 @@ mixed_full_join(
  * evaluates to true on the conditional tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right), the
- * left row is not included in the output. It is the user's responsiblity to
+ * left row is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
@@ -1097,7 +1096,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
  * conditional tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right), the
- * left row is not included in the output. It is the user's responsiblity to
+ * left row is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
@@ -1149,7 +1148,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
  * conditional tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right),
- * that pair is not included in the output. It is the user's responsiblity to
+ * that pair is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
@@ -1192,7 +1191,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
  * conditional tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right),
- * that pair is not included in the output. It is the user's responsiblity to
+ * that pair is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
@@ -1235,7 +1234,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * conditional tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right),
- * that pair is not included in the output. It is the user's responsiblity to
+ * that pair is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *
@@ -1276,7 +1275,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * left anti join between the specified tables.
  *
  * If the provided predicate returns NULL for a pair of rows (left, right),
- * that pair is not included in the output. It is the user's responsiblity to
+ * that pair is not included in the output. It is the user's responsibility to
  * choose a suitable compare_nulls value AND use appropriate null-safe
  * operators in the expression.
  *

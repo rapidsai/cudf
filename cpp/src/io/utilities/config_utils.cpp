@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,17 +35,18 @@ namespace {
 /**
  * @brief Defines which cuFile usage to enable.
  */
-enum class usage_policy : uint8_t { OFF, GDS, ALWAYS };
+enum class usage_policy : uint8_t { OFF, GDS, ALWAYS, KVIKIO };
 
 /**
  * @brief Get the current usage policy.
  */
 usage_policy get_env_policy()
 {
-  static auto const env_val = getenv_or("LIBCUDF_CUFILE_POLICY", "GDS");
+  static auto const env_val = getenv_or<std::string>("LIBCUDF_CUFILE_POLICY", "GDS");
   if (env_val == "OFF") return usage_policy::OFF;
   if (env_val == "GDS") return usage_policy::GDS;
   if (env_val == "ALWAYS") return usage_policy::ALWAYS;
+  if (env_val == "KVIKIO") return usage_policy::KVIKIO;
   CUDF_FAIL("Invalid LIBCUDF_CUFILE_POLICY value: " + env_val);
 }
 }  // namespace
@@ -53,6 +54,8 @@ usage_policy get_env_policy()
 bool is_always_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
 bool is_gds_enabled() { return is_always_enabled() or get_env_policy() == usage_policy::GDS; }
+
+bool is_kvikio_enabled() { return get_env_policy() == usage_policy::KVIKIO; }
 
 }  // namespace cufile_integration
 
@@ -69,7 +72,7 @@ enum class usage_policy : uint8_t { OFF, STABLE, ALWAYS };
  */
 usage_policy get_env_policy()
 {
-  static auto const env_val = getenv_or("LIBCUDF_NVCOMP_POLICY", "STABLE");
+  static auto const env_val = getenv_or<std::string>("LIBCUDF_NVCOMP_POLICY", "STABLE");
   if (env_val == "OFF") return usage_policy::OFF;
   if (env_val == "STABLE") return usage_policy::STABLE;
   if (env_val == "ALWAYS") return usage_policy::ALWAYS;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2017-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,8 +73,8 @@ template <typename pair_type,
           typename value_type = typename pair_type::second_type>
 constexpr bool is_packable()
 {
-  return std::is_integral<key_type>::value and std::is_integral<value_type>::value and
-         not std::is_void<packed_t<pair_type>>::value and
+  return std::is_integral_v<key_type> and std::is_integral_v<value_type> and
+         not std::is_void_v<packed_t<pair_type>> and
          std::has_unique_object_representations_v<pair_type>;
 }
 
@@ -113,7 +113,7 @@ union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
  */
 template <typename Key,
           typename Element,
-          typename Hasher    = default_hash<Key>,
+          typename Hasher    = cudf::detail::default_hash<Key>,
           typename Equality  = equal_to<Key>,
           typename Allocator = default_allocator<thrust::pair<Key, Element>>>
 class concurrent_unordered_map {
@@ -432,11 +432,11 @@ class concurrent_unordered_map {
 
       m_hashtbl_values = m_allocator.allocate(m_capacity, stream);
     }
-    CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values,
-                             other.m_hashtbl_values,
-                             m_capacity * sizeof(value_type),
-                             cudaMemcpyDefault,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values,
+                                  other.m_hashtbl_values,
+                                  m_capacity * sizeof(value_type),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
   }
 
   void clear_async(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
@@ -460,10 +460,10 @@ class concurrent_unordered_map {
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
 
     if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
-      CUDA_TRY(cudaMemPrefetchAsync(
+      CUDF_CUDA_TRY(cudaMemPrefetchAsync(
         m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream.value()));
     }
-    CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream.value()));
+    CUDF_CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream.value()));
   }
 
   /**
@@ -532,8 +532,8 @@ class concurrent_unordered_map {
 
       if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
         int dev_id = 0;
-        CUDA_TRY(cudaGetDevice(&dev_id));
-        CUDA_TRY(cudaMemPrefetchAsync(
+        CUDF_CUDA_TRY(cudaGetDevice(&dev_id));
+        CUDF_CUDA_TRY(cudaMemPrefetchAsync(
           m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream.value()));
       }
     }
@@ -543,6 +543,6 @@ class concurrent_unordered_map {
         m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
     }
 
-    CUDA_TRY(cudaGetLastError());
+    CUDF_CHECK_CUDA(stream.value());
   }
 };

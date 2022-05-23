@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <vector>
 
 struct StringsFindMultipleTest : public cudf::test::BaseFixture {
@@ -41,13 +43,16 @@ TEST_F(StringsFindMultipleTest, FindMultiple)
   cudf::test::strings_column_wrapper targets(h_targets.begin(), h_targets.end());
   auto targets_view = cudf::strings_column_view(targets);
 
-  auto results                = cudf::strings::find_multiple(strings_view, targets_view);
-  cudf::size_type total_count = static_cast<cudf::size_type>(h_strings.size() * h_targets.size());
-  EXPECT_EQ(total_count, results->size());
+  auto results = cudf::strings::find_multiple(strings_view, targets_view);
 
-  cudf::test::fixed_width_column_wrapper<int32_t> expected(
-    {1,  -1, -1, -1, 4,  -1, -1, 4,  -1, 2, -1, -1, -1, 2, -1, -1, -1, -1, -1, -1, -1,
-     -1, 2,  1,  -1, -1, -1, -1, -1, -1, 1, 8,  -1, -1, 1, -1, -1, -1, -1, -1, -1, -1});
+  using LCW = cudf::test::lists_column_wrapper<int32_t>;
+  LCW expected({LCW{1, -1, -1, -1, 4, -1, -1},
+                LCW{4, -1, 2, -1, -1, -1, 2},
+                LCW{-1, -1, -1, -1, -1, -1, -1},
+                LCW{-1, 2, 1, -1, -1, -1, -1},
+                LCW{-1, -1, 1, 8, -1, -1, 1},
+                LCW{-1, -1, -1, -1, -1, -1, -1}});
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

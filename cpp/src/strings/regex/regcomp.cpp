@@ -16,11 +16,14 @@
 
 #include <strings/regex/regcomp.h>
 
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
 #include <array>
-#include <cstring>
+#include <numeric>
+#include <stack>
+#include <string>
 
 namespace cudf {
 namespace strings {
@@ -43,20 +46,51 @@ enum OperatorType {
   NOP          = 0302,  // No operation, internal use only
 };
 
-static reclass ccls_w(1);   // [a-z], [A-Z], [0-9], and '_'
-static reclass ccls_W(8);   // now ccls_w plus '\n'
-static reclass ccls_s(2);   // all spaces or ctrl characters
-static reclass ccls_S(16);  // not ccls_s
-static reclass ccls_d(4);   // digits [0-9]
-static reclass ccls_D(32);  // not ccls_d plus '\n'
+static reclass ccls_w(CCLASS_W);   // \w
+static reclass ccls_s(CCLASS_S);   // \s
+static reclass ccls_d(CCLASS_D);   // \d
+static reclass ccls_W(NCCLASS_W);  // \W
+static reclass ccls_S(NCCLASS_S);  // \S
+static reclass ccls_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
 const std::array<int, 6> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL, RBRA}};
 const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
-// Valid regex characters that can be escaping to be used as literals
+// Valid regex characters that can be escaped and used as literals
 const std::array<char, 33> escapable_chars{
   {'.', '-', '+',  '*', '\\', '?', '^', '$', '|', '{', '}', '(', ')', '[', ']', '<', '>',
    '"', '~', '\'', '`', '_',  '@', '=', ';', ':', '!', '#', '%', '&', ',', '/', ' '}};
+
+/**
+ * @brief Converts UTF-8 string into fixed-width 32-bit character vector.
+ *
+ * No character conversion occurs.
+ * Each UTF-8 character is promoted into a 32-bit value.
+ * The last entry in the returned vector will be a 0 value.
+ * The fixed-width vector makes it easier to compile and faster to execute.
+ *
+ * @param pattern Regular expression encoded with UTF-8.
+ * @return Fixed-width 32-bit character vector.
+ */
+std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
+{
+  size_type size  = static_cast<size_type>(pattern.size());
+  size_type count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
+    return is_begin_utf8_char(static_cast<uint8_t>(ch));
+  });
+  std::vector<char32_t> result(count + 1);
+  char32_t* output_ptr  = result.data();
+  const char* input_ptr = pattern.data();
+  for (size_type idx = 0; idx < size; ++idx) {
+    char_utf8 output_character = 0;
+    size_type ch_width         = to_char_utf8(input_ptr, output_character);
+    input_ptr += ch_width;
+    idx += ch_width - 1;
+    *output_ptr++ = output_character;
+  }
+  result[count] = 0;  // last entry set to 0
+  return result;
+}
 
 }  // namespace
 
@@ -257,11 +291,13 @@ class regex_parser {
     if (quoted) {
       // treating all quoted numbers as Octal, since we are not supporting backreferences
       if (yy >= '0' && yy <= '7') {
-        yy         = yy - '0';
-        char32_t c = *exprp;
-        while (c >= '0' && c <= '7') {
+        yy          = yy - '0';
+        auto c      = *exprp;
+        auto digits = 1;
+        while (c >= '0' && c <= '7' && digits < 3) {
           yy = (yy << 3) | (c - '0');
           c  = *(++exprp);
+          ++digits;
         }
         return CHAR;
       } else {
@@ -278,15 +314,15 @@ class regex_parser {
             yy         = 0;
             if (a >= '0' && a <= '9')
               yy += (a - '0') << 4;
-            else if (a > 'a' && a <= 'f')
+            else if (a >= 'a' && a <= 'f')
               yy += (a - 'a' + 10) << 4;
-            else if (a > 'A' && a <= 'F')
+            else if (a >= 'A' && a <= 'F')
               yy += (a - 'A' + 10) << 4;
             if (b >= '0' && b <= '9')
               yy += b - '0';
-            else if (b > 'a' && b <= 'f')
+            else if (b >= 'a' && b <= 'f')
               yy += b - 'a' + 10;
-            else if (b > 'A' && b <= 'F')
+            else if (b >= 'A' && b <= 'F')
               yy += b - 'A' + 10;
             break;
           }
@@ -828,102 +864,162 @@ class regex_compiler {
       ;  // "unmatched left paren";
     /* points to first and only operand */
     m_prog.set_start_inst(andstack[andstack.size() - 1].id_first);
-    m_prog.optimize1();
-    m_prog.optimize2();
+    m_prog.finalize();
+    m_prog.check_for_errors();
     m_prog.set_groups_count(cursubid);
   }
 };
 
 // Convert pattern into program
-reprog reprog::create_from(const char32_t* pattern, regex_flags const flags)
+reprog reprog::create_from(std::string_view pattern, regex_flags const flags)
 {
   reprog rtn;
-  regex_compiler compiler(pattern, flags, rtn);
+  auto pattern32 = string_to_char32_vector(pattern);
+  regex_compiler compiler(pattern32.data(), flags, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
 }
 
-//
-void reprog::optimize1()
+void reprog::finalize()
 {
-  // Treat non-capturing LBRAs/RBRAs as NOOP
-  for (int i = 0; i < static_cast<int>(_insts.size()); i++) {
-    if (_insts[i].type == LBRA || _insts[i].type == RBRA) {
-      if (_insts[i].u1.subid < 1) { _insts[i].type = NOP; }
-    }
-  }
+  collapse_nops();
+  build_start_ids();
+}
 
-  // get rid of NOP chains
-  for (int i = 0; i < insts_count(); i++) {
-    if (_insts[i].type != NOP) {
-      {
-        int target_id = _insts[i].u2.next_id;
-        while (_insts[target_id].type == NOP)
-          target_id = _insts[target_id].u2.next_id;
-        _insts[i].u2.next_id = target_id;
-      }
-      if (_insts[i].type == OR) {
-        int target_id = _insts[i].u1.right_id;
-        while (_insts[target_id].type == NOP)
-          target_id = _insts[target_id].u2.next_id;
-        _insts[i].u1.right_id = target_id;
-      }
+void reprog::collapse_nops()
+{
+  // treat non-capturing LBRAs/RBRAs as NOP
+  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [](auto inst) {
+    if ((inst.type == LBRA || inst.type == RBRA) && (inst.u1.subid < 1)) { inst.type = NOP; }
+    return inst;
+  });
+
+  // functor for finding the next valid op
+  auto find_next_op = [insts = _insts](int id) {
+    while (insts[id].type == NOP) {
+      id = insts[id].u2.next_id;
     }
-  }
-  // skip NOPs from the beginning
-  {
-    int target_id = _startinst_id;
-    while (_insts[target_id].type == NOP)
-      target_id = _insts[target_id].u2.next_id;
-    _startinst_id = target_id;
-  }
-  // actually remove the no-ops
+    return id;
+  };
+
+  // create new routes around NOP chains
+  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [find_next_op](auto inst) {
+    if (inst.type != NOP) {
+      inst.u2.next_id = find_next_op(inst.u2.next_id);
+      if (inst.type == OR) { inst.u1.right_id = find_next_op(inst.u1.right_id); }
+    }
+    return inst;
+  });
+
+  // find starting op
+  _startinst_id = find_next_op(_startinst_id);
+
+  // build a map of op ids
+  // these are used to fix up the ids after the NOPs are removed
   std::vector<int> id_map(insts_count());
-  int j = 0;  // compact the ops (non no-ops)
-  for (int i = 0; i < insts_count(); i++) {
-    id_map[i] = j;
-    if (_insts[i].type != NOP) {
-      _insts[j] = _insts[i];
-      j++;
-    }
-  }
-  _insts.resize(j);
-  // fix up the ORs
-  for (int i = 0; i < insts_count(); i++) {
-    {
-      int target_id        = _insts[i].u2.next_id;
-      _insts[i].u2.next_id = id_map[target_id];
-    }
-    if (_insts[i].type == OR) {
-      int target_id         = _insts[i].u1.right_id;
-      _insts[i].u1.right_id = id_map[target_id];
-    }
-  }
-  // set the new start id
+  std::transform_exclusive_scan(
+    _insts.begin(), _insts.end(), id_map.begin(), 0, std::plus<int>{}, [](auto inst) {
+      return static_cast<int>(inst.type != NOP);
+    });
+
+  // remove the NOP instructions
+  auto end = std::remove_if(_insts.begin(), _insts.end(), [](auto i) { return i.type == NOP; });
+  _insts.resize(std::distance(_insts.begin(), end));
+
+  // fix up the ids on the remaining instructions using the id_map
+  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [id_map](auto inst) {
+    inst.u2.next_id = id_map[inst.u2.next_id];
+    if (inst.type == OR) { inst.u1.right_id = id_map[inst.u1.right_id]; }
+    return inst;
+  });
+
+  // fix up the start instruction id too
   _startinst_id = id_map[_startinst_id];
 }
 
 // expand leading ORs to multiple startinst_ids
-void reprog::optimize2()
+void reprog::build_start_ids()
 {
   _startinst_ids.clear();
-  std::vector<int> stack;
-  stack.push_back(_startinst_id);
-  while (!stack.empty()) {
-    int id = stack.back();
-    stack.pop_back();
+  std::stack<int> ids;
+  ids.push(_startinst_id);
+  while (!ids.empty()) {
+    int id = ids.top();
+    ids.pop();
     const reinst& inst = _insts[id];
     if (inst.type == OR) {
       if (inst.u2.left_id != id)  // prevents infinite while-loop here
-        stack.push_back(inst.u2.left_id);
+        ids.push(inst.u2.left_id);
       if (inst.u1.right_id != id)  // prevents infinite while-loop here
-        stack.push_back(inst.u1.right_id);
+        ids.push(inst.u1.right_id);
     } else {
       _startinst_ids.push_back(id);
     }
   }
   _startinst_ids.push_back(-1);  // terminator mark
+}
+
+/**
+ * @brief Check a specific instruction for errors.
+ *
+ * Currently this is checking for an infinite-loop condition as documented in this issue:
+ * https://github.com/rapidsai/cudf/issues/10006
+ *
+ * Example instructions list created from pattern `(A?)+`
+ * ```
+ *   0:    CHAR c='A', next=2
+ *   1:      OR right=0, left=2, next=2
+ *   2:    RBRA id=1, next=4
+ *   3:    LBRA id=1, next=1
+ *   4:      OR right=3, left=5, next=5
+ *   5:     END
+ * ```
+ *
+ * Following the example above, the instruction at `id==1` (OR)
+ * is being checked. If the instruction path returns to `id==1`
+ * without including the `0==CHAR` or `5==END` as in this example,
+ * then this would cause the runtime to go into an infinite-loop.
+ *
+ * It appears this example pattern is not valid. But Python interprets
+ * its behavior similarly to pattern `(A*)`. Handling this in the same
+ * way does not look feasible with the current implementation.
+ *
+ * @throw cudf::logic_error if instruction logic error is found
+ *
+ * @param id Instruction to check if repeated.
+ * @param next_id Next instruction to process.
+ */
+void reprog::check_for_errors(int32_t id, int32_t next_id)
+{
+  auto inst = inst_at(next_id);
+  while (inst.type == LBRA || inst.type == RBRA) {
+    next_id = inst.u2.next_id;
+    inst    = inst_at(next_id);
+  }
+  if (inst.type == OR) {
+    CUDF_EXPECTS(next_id != id, "Unsupported regex pattern");
+    check_for_errors(id, inst.u2.left_id);
+    check_for_errors(id, inst.u1.right_id);
+  }
+}
+
+/**
+ * @brief Check regex instruction set for any errors.
+ *
+ * Currently, this checks for OR instructions that eventually point back to themselves with only
+ * intervening capture group instructions between causing an infinite-loop during runtime
+ * evaluation.
+ */
+void reprog::check_for_errors()
+{
+  for (auto id = 0; id < insts_count(); ++id) {
+    auto const inst = inst_at(id);
+    if (inst.type == OR) {
+      check_for_errors(id, inst.u2.left_id);
+      check_for_errors(id, inst.u1.right_id);
+    }
+  }
 }
 
 #ifndef NDEBUG
@@ -933,83 +1029,81 @@ void reprog::print(regex_flags const flags)
   printf("Instructions:\n");
   for (std::size_t i = 0; i < _insts.size(); i++) {
     const reinst& inst = _insts[i];
-    printf("%zu :", i);
+    printf("%3zu: ", i);
     switch (inst.type) {
-      default: printf("Unknown instruction: %d, nextid= %d", inst.type, inst.u2.next_id); break;
+      default: printf("Unknown instruction: %d, next=%d", inst.type, inst.u2.next_id); break;
       case CHAR:
-        if (inst.u1.c <= 32 || inst.u1.c >= 127)
-          printf(
-            "CHAR, c = '0x%02x', nextid= %d", static_cast<unsigned>(inst.u1.c), inst.u2.next_id);
-        else
-          printf("CHAR, c = '%c', nextid= %d", inst.u1.c, inst.u2.next_id);
+        if (inst.u1.c <= 32 || inst.u1.c >= 127) {
+          printf("   CHAR c='0x%02x', next=%d", static_cast<unsigned>(inst.u1.c), inst.u2.next_id);
+        } else {
+          printf("   CHAR c='%c', next=%d", inst.u1.c, inst.u2.next_id);
+        }
         break;
-      case RBRA: printf("RBRA, subid= %d, nextid= %d", inst.u1.subid, inst.u2.next_id); break;
-      case LBRA: printf("LBRA, subid= %d, nextid= %d", inst.u1.subid, inst.u2.next_id); break;
+      case RBRA: printf("   RBRA id=%d, next=%d", inst.u1.subid, inst.u2.next_id); break;
+      case LBRA: printf("   LBRA id=%d, next=%d", inst.u1.subid, inst.u2.next_id); break;
       case OR:
-        printf("OR, rightid=%d, leftid=%d, nextid=%d",
-               inst.u1.right_id,
-               inst.u2.left_id,
-               inst.u2.next_id);
+        printf(
+          "     OR right=%d, left=%d, next=%d", inst.u1.right_id, inst.u2.left_id, inst.u2.next_id);
         break;
-      case STAR: printf("STAR, nextid= %d", inst.u2.next_id); break;
-      case PLUS: printf("PLUS, nextid= %d", inst.u2.next_id); break;
-      case QUEST: printf("QUEST, nextid= %d", inst.u2.next_id); break;
-      case ANY: printf("ANY, nextid= %d", inst.u2.next_id); break;
-      case ANYNL: printf("ANYNL, nextid= %d", inst.u2.next_id); break;
-      case NOP: printf("NOP, nextid= %d", inst.u2.next_id); break;
+      case STAR: printf("   STAR next=%d", inst.u2.next_id); break;
+      case PLUS: printf("   PLUS next=%d", inst.u2.next_id); break;
+      case QUEST: printf("  QUEST next=%d", inst.u2.next_id); break;
+      case ANY: printf("    ANY next=%d", inst.u2.next_id); break;
+      case ANYNL: printf("  ANYNL next=%d", inst.u2.next_id); break;
+      case NOP: printf("    NOP next=%d", inst.u2.next_id); break;
       case BOL: {
-        printf("BOL, c = ");
+        printf("    BOL c=");
         if (inst.u1.c == '\n') {
           printf("'\\n'");
         } else {
           printf("'%c'", inst.u1.c);
         }
-        printf(", nextid= %d", inst.u2.next_id);
+        printf(", next=%d", inst.u2.next_id);
         break;
       }
       case EOL: {
-        printf("EOL, c = ");
+        printf("    EOL c=");
         if (inst.u1.c == '\n') {
           printf("'\\n'");
         } else {
           printf("'%c'", inst.u1.c);
         }
-        printf(", nextid= %d", inst.u2.next_id);
+        printf(", next=%d", inst.u2.next_id);
         break;
       }
-      case CCLASS: printf("CCLASS, cls_id=%d , nextid= %d", inst.u1.cls_id, inst.u2.next_id); break;
-      case NCCLASS:
-        printf("NCCLASS, cls_id=%d , nextid= %d", inst.u1.cls_id, inst.u2.next_id);
-        break;
-      case BOW: printf("BOW, nextid= %d", inst.u2.next_id); break;
-      case NBOW: printf("NBOW, nextid= %d", inst.u2.next_id); break;
-      case END: printf("END"); break;
+      case CCLASS: printf(" CCLASS cls=%d , next=%d", inst.u1.cls_id, inst.u2.next_id); break;
+      case NCCLASS: printf("NCCLASS cls=%d, next=%d", inst.u1.cls_id, inst.u2.next_id); break;
+      case BOW: printf("    BOW next=%d", inst.u2.next_id); break;
+      case NBOW: printf("   NBOW next=%d", inst.u2.next_id); break;
+      case END: printf("    END"); break;
     }
     printf("\n");
   }
 
   printf("startinst_id=%d\n", _startinst_id);
   if (_startinst_ids.size() > 0) {
-    printf("startinst_ids:");
-    for (size_t i = 0; i < _startinst_ids.size(); i++)
+    printf("startinst_ids: [");
+    for (size_t i = 0; i < _startinst_ids.size(); i++) {
       printf(" %d", _startinst_ids[i]);
-    printf("\n");
+    }
+    printf("]\n");
   }
 
   int count = static_cast<int>(_classes.size());
   printf("\nClasses %d\n", count);
   for (int i = 0; i < count; i++) {
     const reclass& cls = _classes[i];
-    int len            = static_cast<int>(cls.literals.size());
+    auto const size    = static_cast<int>(cls.literals.size());
     printf("%2d: ", i);
-    for (int j = 0; j < len; j += 2) {
+    for (int j = 0; j < size; j += 2) {
       char32_t c1 = cls.literals[j];
       char32_t c2 = cls.literals[j + 1];
-      if (c1 <= 32 || c1 >= 127 || c2 <= 32 || c2 >= 127)
+      if (c1 <= 32 || c1 >= 127 || c2 <= 32 || c2 >= 127) {
         printf("0x%02x-0x%02x", static_cast<unsigned>(c1), static_cast<unsigned>(c2));
-      else
+      } else {
         printf("%c-%c", static_cast<char>(c1), static_cast<char>(c2));
-      if ((j + 2) < len) printf(", ");
+      }
+      if ((j + 2) < size) { printf(", "); }
     }
     printf("\n");
     if (cls.builtins) {
@@ -1024,7 +1118,7 @@ void reprog::print(regex_flags const flags)
     }
     printf("\n");
   }
-  if (_num_capturing_groups) printf("Number of capturing groups: %d\n", _num_capturing_groups);
+  if (_num_capturing_groups) { printf("Number of capturing groups: %d\n", _num_capturing_groups); }
 }
 #endif
 

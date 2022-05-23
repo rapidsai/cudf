@@ -3,10 +3,10 @@
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.api import types as ptypes
+from pandas.api import types as pd_types
 
 import cudf
-from cudf.api import types as types
+from cudf.api import types
 
 
 @pytest.mark.parametrize(
@@ -17,9 +17,7 @@ from cudf.api import types as types
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -128,9 +126,7 @@ def test_is_categorical_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, True),
@@ -235,9 +231,7 @@ def test_is_numeric_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -342,9 +336,7 @@ def test_is_integer_dtype(obj, expect):
         (int(), True),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -450,9 +442,7 @@ def test_is_integer(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -557,9 +547,7 @@ def test_is_string_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -664,9 +652,7 @@ def test_is_datetime_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -771,9 +757,7 @@ def test_is_list_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -881,9 +865,7 @@ def test_is_struct_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -988,9 +970,7 @@ def test_is_decimal_dtype(obj, expect):
         int(),
         float(),
         complex(),
-        str(),
         "",
-        r"",
         object(),
         # Base Python types.
         bool,
@@ -1055,11 +1035,13 @@ def test_is_decimal_dtype(obj, expect):
     ),
 )
 def test_pandas_agreement(obj):
-    assert types.is_categorical_dtype(obj) == ptypes.is_categorical_dtype(obj)
-    assert types.is_numeric_dtype(obj) == ptypes.is_numeric_dtype(obj)
-    assert types.is_integer_dtype(obj) == ptypes.is_integer_dtype(obj)
-    assert types.is_integer(obj) == ptypes.is_integer(obj)
-    assert types.is_string_dtype(obj) == ptypes.is_string_dtype(obj)
+    assert types.is_categorical_dtype(obj) == pd_types.is_categorical_dtype(
+        obj
+    )
+    assert types.is_numeric_dtype(obj) == pd_types.is_numeric_dtype(obj)
+    assert types.is_integer_dtype(obj) == pd_types.is_integer_dtype(obj)
+    assert types.is_integer(obj) == pd_types.is_integer(obj)
+    assert types.is_string_dtype(obj) == pd_types.is_string_dtype(obj)
 
 
 @pytest.mark.parametrize(
@@ -1070,9 +1052,7 @@ def test_pandas_agreement(obj):
         int(),
         float(),
         complex(),
-        str(),
         "",
-        r"",
         object(),
         # Base Python types.
         bool,
@@ -1137,7 +1117,7 @@ def test_pandas_agreement(obj):
     ),
 )
 def test_pandas_agreement_scalar(obj):
-    assert types.is_scalar(obj) == ptypes.is_scalar(obj)
+    assert types.is_scalar(obj) == pd_types.is_scalar(obj)
 
 
 # TODO: Add test of interval.

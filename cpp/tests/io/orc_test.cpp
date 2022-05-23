@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,7 +149,7 @@ inline auto random_values(size_t size)
   using uniform_distribution =
     typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point<T1>::value,
+                                std::conditional_t<std::is_floating_point_v<T1>,
                                                    std::uniform_real_distribution<T1>,
                                                    std::uniform_int_distribution<T1>>>;
 
@@ -1421,17 +1421,9 @@ TEST_F(OrcReaderTest, DecimalOptions)
 
   cudf_io::orc_reader_options valid_opts =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
-      .decimal128_columns({"dec", "fake_name"})
-      .decimal_cols_as_float({"decc", "fake_name"});
-  // Should not throw, even with "fake name" in both options
+      .decimal128_columns({"dec", "fake_name"});
+  // Should not throw, even with "fake name"
   EXPECT_NO_THROW(cudf_io::read_orc(valid_opts));
-
-  cudf_io::orc_reader_options invalid_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
-      .decimal128_columns({"dec", "fake_name"})
-      .decimal_cols_as_float({"dec", "fake_name"});
-  // Should throw, options overlap
-  EXPECT_THROW(cudf_io::read_orc(invalid_opts), cudf::logic_error);
 }
 
 TEST_F(OrcWriterTest, DecimalOptionsNested)

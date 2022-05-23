@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,9 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf_test/file_utilities.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -31,13 +30,12 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/transform.h>
 
 #include <cstdio>
 #include <fstream>
 #include <memory>
-
-using cudf::test::fixed_width_column_wrapper;
 
 temp_directory const temp_dir("cudf_gbench");
 
@@ -70,7 +68,6 @@ static cudf::string_scalar create_random_input(int32_t num_chars,
 
   auto const values_table = create_random_table(  //
     {cudf::type_id::STRING},
-    1,
     row_count{num_rows},
     table_profile);
 
@@ -135,12 +132,15 @@ static void BM_multibyte_split(benchmark::State& state)
     default: CUDF_FAIL();
   }
 
+  auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
+    try_drop_l3_cache();
     cuda_event_timer raii(state, true);
     auto output = cudf::io::text::multibyte_split(*source, delim);
   }
 
   state.SetBytesProcessed(state.iterations() * device_input.size());
+  state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
 }
 
 class MultibyteSplitBenchmark : public cudf::benchmark {

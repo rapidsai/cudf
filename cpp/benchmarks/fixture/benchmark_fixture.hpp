@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,9 @@ inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>
 inline auto make_pool_instance()
 {
   static rmm::mr::cuda_memory_resource cuda_mr;
-  static rmm::mr::pool_memory_resource pool_mr{&cuda_mr};
-  return std::shared_ptr<rmm::mr::device_memory_resource>(&pool_mr);
+  static auto pool_mr =
+    std::make_shared<rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>>(&cuda_mr);
+  return pool_mr;
 }
 }  // namespace
 

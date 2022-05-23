@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include "string_bench_args.hpp"
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -45,7 +44,7 @@ static std::unique_ptr<cudf::table> create_data_table(cudf::size_type n_cols,
       cudf::type_id::INT32, distribution_id::NORMAL, min_repeat_times, max_repeat_times);
   }
 
-  return create_random_table(dtype_ids, n_cols, row_count{n_rows}, table_profile);
+  return create_random_table(dtype_ids, row_count{n_rows}, table_profile);
 }
 
 static void BM_repeat_strings_scalar_times(benchmark::State& state)

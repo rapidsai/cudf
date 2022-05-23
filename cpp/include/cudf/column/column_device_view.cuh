@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/lists/list_view.cuh>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/structs/struct_view.hpp>
@@ -33,6 +33,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/optional.h>
+#include <thrust/pair.h>
 
 #include <algorithm>
 
@@ -110,7 +111,7 @@ class alignas(16) column_device_view_base {
    */
   template <typename T = void,
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
-  __host__ __device__ T const* head() const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE T const* head() const noexcept
   {
     return static_cast<T const*>(_data);
   }
@@ -131,7 +132,7 @@ class alignas(16) column_device_view_base {
    * @return T const* Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  __host__ __device__ T const* data() const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE T const* data() const noexcept
   {
     return head<T>() + _offset;
   }
@@ -139,12 +140,12 @@ class alignas(16) column_device_view_base {
   /**
    * @brief Returns the number of elements in the column.
    */
-  [[nodiscard]] __host__ __device__ size_type size() const noexcept { return _size; }
+  [[nodiscard]] CUDF_HOST_DEVICE size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns the element type
    */
-  [[nodiscard]] __host__ __device__ data_type type() const noexcept { return _type; }
+  [[nodiscard]] CUDF_HOST_DEVICE data_type type() const noexcept { return _type; }
 
   /**
    * @brief Indicates whether the column can contain null elements, i.e., if it
@@ -155,7 +156,7 @@ class alignas(16) column_device_view_base {
    * @return true The bitmask is allocated
    * @return false The bitmask is not allocated
    */
-  [[nodiscard]] __host__ __device__ bool nullable() const noexcept { return nullptr != _null_mask; }
+  [[nodiscard]] CUDF_HOST_DEVICE bool nullable() const noexcept { return nullptr != _null_mask; }
 
   /**
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -164,7 +165,7 @@ class alignas(16) column_device_view_base {
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  [[nodiscard]] __host__ __device__ bitmask_type const* null_mask() const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE bitmask_type const* null_mask() const noexcept
   {
     return _null_mask;
   }
@@ -173,7 +174,7 @@ class alignas(16) column_device_view_base {
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
    */
-  [[nodiscard]] __host__ __device__ size_type offset() const noexcept { return _offset; }
+  [[nodiscard]] CUDF_HOST_DEVICE size_type offset() const noexcept { return _offset; }
 
   /**
    * @brief Returns whether the specified element holds a valid value (i.e., not
@@ -268,11 +269,11 @@ class alignas(16) column_device_view_base {
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
 
-  column_device_view_base(data_type type,
-                          size_type size,
-                          void const* data,
-                          bitmask_type const* null_mask,
-                          size_type offset)
+  CUDF_HOST_DEVICE column_device_view_base(data_type type,
+                                           size_type size,
+                                           void const* data,
+                                           bitmask_type const* null_mask,
+                                           size_type offset)
     : _type{type}, _size{size}, _data{data}, _null_mask{null_mask}, _offset{offset}
   {
   }
@@ -329,6 +330,33 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   column_device_view(column_view column, void* h_ptr, void* d_ptr);
 
   /**
+   * @brief Get a new column_device_view which is a slice of this column.
+   *
+   * Example:
+   * @code{.cpp}
+   * // column = column_device_view([1, 2, 3, 4, 5, 6, 7])
+   * auto c = column.slice(1, 3);
+   * // c = column_device_view([2, 3, 4])
+   * auto c1 = column.slice(2, 3);
+   * // c1 = column_device_view([3, 4, 5])
+   * @endcode
+   *
+   * @param offset The index of the first element in the slice
+   * @param size The number of elements in the slice
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE column_device_view slice(size_type offset,
+                                                          size_type size) const noexcept
+  {
+    return column_device_view{this->type(),
+                              size,
+                              this->head(),
+                              this->null_mask(),
+                              this->offset() + offset,
+                              d_children,
+                              this->num_child_columns()};
+  }
+
+  /**
    * @brief Returns reference to element at the specified index.
    *
    * If the element at the specified index is NULL, i.e.,
@@ -345,7 +373,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @param element_index Position of the desired element
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  __device__ T element(size_type element_index) const noexcept
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
     return data<T>()[element_index];
   }
@@ -364,9 +392,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
   __device__ T element(size_type element_index) const noexcept
   {
-    size_type index = element_index + offset();  // account for this view's _offset
-    const int32_t* d_offsets =
-      d_children[strings_column_view::offsets_column_index].data<int32_t>();
+    size_type index       = element_index + offset();  // account for this view's _offset
+    const auto* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
     const char* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
     size_type offset      = d_offsets[index];
     return string_view{d_strings + offset, d_offsets[index + 1] - offset};
@@ -380,7 +407,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    */
   struct index_element_fn {
     template <typename IndexType,
-              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_unsigned<IndexType>::value)>
+              CUDF_ENABLE_IF(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>)>
     __device__ size_type operator()(column_device_view const& indices, size_type index)
     {
       return static_cast<size_type>(indices.element<IndexType>(index));
@@ -388,12 +415,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
     template <typename IndexType,
               typename... Args,
-              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and
-                                 std::is_unsigned<IndexType>::value))>
+              CUDF_ENABLE_IF(not(is_index_type<IndexType>() and std::is_unsigned_v<IndexType>))>
     __device__ size_type operator()(Args&&... args)
     {
-      cudf_assert(false and "dictionary indices must be an unsigned integral type");
-      return 0;
+      CUDF_UNREACHABLE("dictionary indices must be an unsigned integral type");
     }
   };
 
@@ -764,9 +789,35 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * @return The number of child columns
    */
-  [[nodiscard]] __host__ __device__ size_type num_child_columns() const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE size_type num_child_columns() const noexcept
   {
     return _num_children;
+  }
+
+ private:
+  /**
+   * @brief Creates an instance of this class using pre-existing device memory pointers to data,
+   * nullmask, and offset.
+   *
+   * @param type The type of the column
+   * @param size The number of elements in the column
+   * @param data Pointer to the device memory containing the data
+   * @param null_mask Pointer to the device memory containing the null bitmask
+   * @param offset The index of the first element in the column
+   * @param children Pointer to the device memory containing child data
+   * @param num_children The number of child columns
+   */
+  CUDF_HOST_DEVICE column_device_view(data_type type,
+                                      size_type size,
+                                      void const* data,
+                                      bitmask_type const* null_mask,
+                                      size_type offset,
+                                      column_device_view* children,
+                                      size_type num_children)
+    : column_device_view_base(type, size, data, null_mask, offset),
+      d_children(children),
+      _num_children(num_children)
+  {
   }
 
  protected:
@@ -853,7 +904,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    */
   template <typename T = void,
             CUDF_ENABLE_IF(std::is_same_v<T, void> or is_rep_layout_compatible<T>())>
-  __host__ __device__ T* head() const noexcept
+  CUDF_HOST_DEVICE T* head() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::head<T>());
   }
@@ -871,7 +922,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @return T* Typed pointer to underlying data, including the offset
    */
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  __host__ __device__ T* data() const noexcept
+  CUDF_HOST_DEVICE T* data() const noexcept
   {
     return const_cast<T*>(detail::column_device_view_base::data<T>());
   }
@@ -913,7 +964,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    */
-  [[nodiscard]] __host__ __device__ bitmask_type* null_mask() const noexcept
+  [[nodiscard]] CUDF_HOST_DEVICE bitmask_type* null_mask() const noexcept
   {
     return const_cast<bitmask_type*>(detail::column_device_view_base::null_mask());
   }
@@ -1147,7 +1198,7 @@ struct optional_accessor {
   /**
    * @brief Constructor
    *
-   * @param col Column on which to iterator over its elements.
+   * @param _col Column on which to iterator over its elements.
    * @param with_nulls Indicates if the `col` should be checked for nulls.
    */
   optional_accessor(column_device_view const& _col, Nullate with_nulls)

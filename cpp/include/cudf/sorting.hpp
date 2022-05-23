@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +16,13 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/types.hpp>
 
 #include <memory>
 #include <vector>
 
 namespace cudf {
-
-/**
- * @brief Tie-breaker method to use for ranking the column.
- *
- * @ingroup column_sort
- */
-enum class rank_method {
-  FIRST,    ///< stable sort order ranking (no ties)
-  AVERAGE,  ///< mean of first in the group
-  MIN,      ///< min of first in the group
-  MAX,      ///< max of first in the group
-  DENSE     ///< rank always increases by 1 between groups
-};
 
 /**
  * @addtogroup column_sort
@@ -146,6 +134,36 @@ std::unique_ptr<table> sort_by_key(
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Performs a key-value stable sort.
+ *
+ * Creates a new table that reorders the rows of `values` according to the
+ * lexicographic ordering of the rows of `keys`.
+ *
+ * The order of equivalent elements is guaranteed to be preserved.
+ *
+ * @throws cudf::logic_error if `values.num_rows() != keys.num_rows()`.
+ *
+ * @param values The table to reorder
+ * @param keys The table that determines the ordering
+ * @param column_order The desired order for each column in `keys`. Size must be
+ * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
+ * ascending order.
+ * @param null_precedence The desired order of a null element compared to other
+ * elements for each column in `keys`. Size must be equal to
+ * `keys.num_columns()` or empty. If empty, all columns will be sorted with
+ * `null_order::BEFORE`.
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return The reordering of `values` determined by the lexicographic order of
+ * the rows of `keys`.
+ */
+std::unique_ptr<table> stable_sort_by_key(
+  table_view const& values,
+  table_view const& keys,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Computes the ranks of input column in sorted order.
  *
  * Rank indicate the position of each element in the sorted column and rank
@@ -168,7 +186,7 @@ std::unique_ptr<table> sort_by_key(
  * included, corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements
  * for column
- * @param percentage flag to convert ranks to percentage in range (0,1}
+ * @param percentage flag to convert ranks to percentage in range (0,1]
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> A column of containing the rank of the each
  * element of the column of `input`. The output column type will be `size_type`

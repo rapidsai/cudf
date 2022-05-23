@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/count_matches.cuh>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+#include <strings/count_matches.hpp>
+#include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -29,7 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/for_each.h>
+#include <thrust/functional.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {
@@ -46,14 +45,14 @@ namespace {
  * The `d_offsets` are pre-computed to identify the location of where each
  * string's output groups are to be written.
  */
-template <int stack_size>
 struct extract_fn {
   column_device_view const d_strings;
-  reprog_device d_prog;
   offset_type const* d_offsets;
   string_index_pair* d_indices;
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type const idx,
+                             reprog_device const d_prog,
+                             int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) { return; }
 
@@ -61,16 +60,17 @@ struct extract_fn {
     auto d_output        = d_indices + d_offsets[idx];
     size_type output_idx = 0;
 
-    auto const d_str = d_strings.element<string_view>(idx);
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
 
-    int32_t begin = 0;
-    int32_t end   = d_str.length();
+    size_type begin = 0;
+    size_type end   = nchars;
     // match the regex
-    while ((begin < end) && d_prog.find<stack_size>(idx, d_str, begin, end) > 0) {
+    while ((begin < end) && d_prog.find(prog_idx, d_str, begin, end) > 0) {
       // extract each group into the output
       for (auto group_idx = 0; group_idx < groups; ++group_idx) {
         // result is an optional containing the bounds of the extracted string at group_idx
-        auto const extracted = d_prog.extract<stack_size>(idx, d_str, begin, end, group_idx);
+        auto const extracted = d_prog.extract(prog_idx, d_str, begin, end, group_idx);
 
         d_output[group_idx + output_idx] = [&] {
           if (!extracted) { return string_index_pair{nullptr, 0}; }
@@ -81,36 +81,38 @@ struct extract_fn {
       }
       // continue to next match
       begin = end;
-      end   = d_str.length();
+      end   = nchars;
       output_idx += groups;
     }
   }
 };
+
 }  // namespace
 
 /**
- * @copydoc cudf::strings::extract_all
+ * @copydoc cudf::strings::extract_all_record
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> extract_all(
-  strings_column_view const& strings,
-  std::string const& pattern,
+std::unique_ptr<column> extract_all_record(
+  strings_column_view const& input,
+  std::string_view pattern,
+  regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto const strings_count = strings.size();
-  auto const d_strings     = column_device_view::create(strings.parent(), stream);
+  auto const strings_count = input.size();
+  auto const d_strings     = column_device_view::create(input.parent(), stream);
 
   // Compile regex into device object.
-  auto d_prog = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
+  auto d_prog = reprog_device::create(pattern, flags, stream);
   // The extract pattern should always include groups.
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "extract_all requires group indicators in the regex pattern.");
 
   // Get the match counts for each string.
   // This column will become the output lists child offsets column.
-  auto offsets   = count_matches(*d_strings, *d_prog, stream, mr);
+  auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
   auto d_offsets = offsets->mutable_view().data<offset_type>();
 
   // Compute null output rows
@@ -141,28 +143,11 @@ std::unique_ptr<column> extract_all(
   auto const total_groups =
     cudf::detail::get_value<offset_type>(offsets->view(), strings_count, stream);
 
-  // Create an indices vector with the total number of groups that will be extracted.
   rmm::device_uvector<string_index_pair> indices(total_groups, stream);
-  auto d_indices = indices.data();
-  auto begin     = thrust::make_counting_iterator<size_type>(0);
 
-  // Call the extract functor to fill in the indices vector.
-  auto const regex_insts = d_prog->insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    extract_fn<RX_STACK_SMALL> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    extract_fn<RX_STACK_MEDIUM> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    extract_fn<RX_STACK_LARGE> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  } else {
-    extract_fn<RX_STACK_ANY> fn{*d_strings, *d_prog, d_offsets, d_indices};
-    thrust::for_each_n(rmm::exec_policy(stream), begin, strings_count, fn);
-  }
+  launch_for_each_kernel(
+    extract_fn{*d_strings, d_offsets, indices.data()}, *d_prog, strings_count, stream);
 
-  // Build the child strings column from the indices.
   auto strings_output = make_strings_column(indices.begin(), indices.end(), stream, mr);
 
   // Build the lists column from the offsets and the strings.
@@ -179,12 +164,13 @@ std::unique_ptr<column> extract_all(
 
 // external API
 
-std::unique_ptr<column> extract_all(strings_column_view const& strings,
-                                    std::string const& pattern,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
+                                           std::string_view pattern,
+                                           regex_flags const flags,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_all(strings, pattern, rmm::cuda_stream_default, mr);
+  return detail::extract_all_record(strings, pattern, flags, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

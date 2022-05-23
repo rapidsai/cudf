@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,10 +35,10 @@ namespace detail {
 
 // Traits for valid operator / type combinations
 template <typename Op, typename LHS, typename RHS>
-constexpr bool is_valid_binary_op = cuda::std::is_invocable<Op, LHS, RHS>::value;
+constexpr bool is_valid_binary_op = cuda::std::is_invocable_v<Op, LHS, RHS>;
 
 template <typename Op, typename T>
-constexpr bool is_valid_unary_op = cuda::std::is_invocable<Op, T>::value;
+constexpr bool is_valid_unary_op = cuda::std::is_invocable_v<Op, T>;
 
 /**
  * @brief Operator dispatcher
@@ -199,13 +199,13 @@ CUDF_HOST_DEVICE inline constexpr void ast_operator_dispatcher(ast_operator op, 
     case ast_operator::CAST_TO_FLOAT64:
       f.template operator()<ast_operator::CAST_TO_FLOAT64>(std::forward<Ts>(args)...);
       break;
-    default:
+    default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Invalid operator.");
 #else
-      cudf_assert(false && "Invalid operator.");
+      CUDF_UNREACHABLE("Invalid operator.");
 #endif
-      break;
+    }
   }
 }
 
@@ -301,8 +301,8 @@ struct operator_functor<ast_operator::MOD, false> {
 
   template <typename LHS,
             typename RHS,
-            typename CommonType                                    = std::common_type_t<LHS, RHS>,
-            std::enable_if_t<std::is_integral<CommonType>::value>* = nullptr>
+            typename CommonType                               = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_integral_v<CommonType>>* = nullptr>
   __device__ inline auto operator()(LHS lhs, RHS rhs)
     -> decltype(static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs))
   {
@@ -336,8 +336,8 @@ struct operator_functor<ast_operator::PYMOD, false> {
 
   template <typename LHS,
             typename RHS,
-            typename CommonType                                    = std::common_type_t<LHS, RHS>,
-            std::enable_if_t<std::is_integral<CommonType>::value>* = nullptr>
+            typename CommonType                               = std::common_type_t<LHS, RHS>,
+            std::enable_if_t<std::is_integral_v<CommonType>>* = nullptr>
   __device__ inline auto operator()(LHS lhs, RHS rhs)
     -> decltype(((static_cast<CommonType>(lhs) % static_cast<CommonType>(rhs)) +
                  static_cast<CommonType>(rhs)) %
@@ -542,7 +542,7 @@ template <>
 struct operator_functor<ast_operator::SIN, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::sin(input))
   {
     return std::sin(input);
@@ -553,7 +553,7 @@ template <>
 struct operator_functor<ast_operator::COS, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::cos(input))
   {
     return std::cos(input);
@@ -564,7 +564,7 @@ template <>
 struct operator_functor<ast_operator::TAN, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::tan(input))
   {
     return std::tan(input);
@@ -575,7 +575,7 @@ template <>
 struct operator_functor<ast_operator::ARCSIN, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::asin(input))
   {
     return std::asin(input);
@@ -586,7 +586,7 @@ template <>
 struct operator_functor<ast_operator::ARCCOS, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::acos(input))
   {
     return std::acos(input);
@@ -597,7 +597,7 @@ template <>
 struct operator_functor<ast_operator::ARCTAN, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::atan(input))
   {
     return std::atan(input);
@@ -608,7 +608,7 @@ template <>
 struct operator_functor<ast_operator::SINH, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::sinh(input))
   {
     return std::sinh(input);
@@ -619,7 +619,7 @@ template <>
 struct operator_functor<ast_operator::COSH, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::cosh(input))
   {
     return std::cosh(input);
@@ -630,7 +630,7 @@ template <>
 struct operator_functor<ast_operator::TANH, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::tanh(input))
   {
     return std::tanh(input);
@@ -641,7 +641,7 @@ template <>
 struct operator_functor<ast_operator::ARCSINH, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::asinh(input))
   {
     return std::asinh(input);
@@ -652,7 +652,7 @@ template <>
 struct operator_functor<ast_operator::ARCCOSH, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::acosh(input))
   {
     return std::acosh(input);
@@ -663,7 +663,7 @@ template <>
 struct operator_functor<ast_operator::ARCTANH, false> {
   static constexpr auto arity{1};
 
-  template <typename InputT, std::enable_if_t<std::is_floating_point<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_floating_point_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::atanh(input))
   {
     return std::atanh(input);
@@ -741,13 +741,13 @@ struct operator_functor<ast_operator::ABS, false> {
   static constexpr auto arity{1};
 
   // Only accept signed or unsigned types (both require is_arithmetic<T> to be true)
-  template <typename InputT, std::enable_if_t<std::is_signed<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_signed_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(std::abs(input))
   {
     return std::abs(input);
   }
 
-  template <typename InputT, std::enable_if_t<std::is_unsigned<InputT>::value>* = nullptr>
+  template <typename InputT, std::enable_if_t<std::is_unsigned_v<InputT>>* = nullptr>
   __device__ inline auto operator()(InputT input) -> decltype(input)
   {
     return input;
@@ -934,7 +934,7 @@ struct single_dispatch_binary_operator_types {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation.");
 #else
-    cudf_assert(false && "Invalid binary operation.");
+    CUDF_UNREACHABLE("Invalid binary operation.");
 #endif
   }
 };
@@ -1023,7 +1023,7 @@ struct dispatch_unary_operator_types {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation.");
 #else
-    cudf_assert(false && "Invalid unary operation.");
+    CUDF_UNREACHABLE("Invalid unary operation.");
 #endif
   }
 };
@@ -1097,7 +1097,7 @@ struct return_type_functor {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation. Return type cannot be determined.");
 #else
-    cudf_assert(false && "Invalid binary operation. Return type cannot be determined.");
+    CUDF_UNREACHABLE("Invalid binary operation. Return type cannot be determined.");
 #endif
   }
 
@@ -1125,7 +1125,7 @@ struct return_type_functor {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation. Return type cannot be determined.");
 #else
-    cudf_assert(false && "Invalid unary operation. Return type cannot be determined.");
+    CUDF_UNREACHABLE("Invalid unary operation. Return type cannot be determined.");
 #endif
   }
 };

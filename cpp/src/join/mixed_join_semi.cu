@@ -14,8 +14,14 @@
  * limitations under the License.
  */
 
+#include "join_common_utils.cuh"
+#include "join_common_utils.hpp"
+#include "mixed_join_kernels_semi.cuh"
+
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
@@ -23,12 +29,13 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
-#include <join/hash_join.cuh>
-#include <join/join_common_utils.cuh>
-#include <join/join_common_utils.hpp>
-#include <join/mixed_join_kernels_semi.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/fill.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
 
 #include <optional>
 #include <utility>
@@ -45,7 +52,7 @@ struct make_pair_function_semi {
   {
     // The value is irrelevant since we only ever use the hash map to check for
     // membership of a particular row index.
-    return cuco::make_pair<hash_value_type, size_type>(i, 0);
+    return cuco::make_pair(static_cast<hash_value_type>(i), 0);
   }
 };
 

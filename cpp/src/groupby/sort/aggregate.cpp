@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
@@ -700,7 +701,7 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 
   cache.add_result(values,
                    agg,
-                   detail::group_tdigest(
+                   cudf::detail::tdigest::group_tdigest(
                      get_sorted_values(),
                      helper.group_offsets(stream),
                      helper.group_labels(stream),
@@ -744,13 +745,13 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
     dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
   cache.add_result(values,
                    agg,
-                   detail::group_merge_tdigest(get_grouped_values(),
-                                               helper.group_offsets(stream),
-                                               helper.group_labels(stream),
-                                               helper.num_groups(stream),
-                                               max_centroids,
-                                               stream,
-                                               mr));
+                   cudf::detail::tdigest::group_merge_tdigest(get_grouped_values(),
+                                                              helper.group_offsets(stream),
+                                                              helper.group_labels(stream),
+                                                              helper.num_groups(stream),
+                                                              max_centroids,
+                                                              stream,
+                                                              mr));
 };
 
 }  // namespace detail
@@ -777,7 +778,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
 
   auto results = detail::extract_results(requests, cache, stream, mr);
 
-  return std::make_pair(helper().unique_keys(stream, mr), std::move(results));
+  return std::pair(helper().unique_keys(stream, mr), std::move(results));
 }
 }  // namespace groupby
 }  // namespace cudf

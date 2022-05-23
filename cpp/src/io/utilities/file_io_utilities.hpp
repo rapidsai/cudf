@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,35 +81,6 @@ class cufile_io_base {
 class cufile_input : public cufile_io_base {
  public:
   /**
-   * @brief Reads into a new device buffer.
-   *
-   *  @throws cudf::logic_error on cuFile error
-   *
-   * @param offset Number of bytes from the start
-   * @param size Number of bytes to read
-   * @param stream CUDA stream to use
-   *
-   * @return The data buffer in the device memory
-   */
-  virtual std::unique_ptr<datasource::buffer> read(size_t offset,
-                                                   size_t size,
-                                                   rmm::cuda_stream_view stream) = 0;
-
-  /**
-   * @brief Reads into existing device memory.
-   *
-   *  @throws cudf::logic_error on cuFile error
-   *
-   * @param offset Number of bytes from the start
-   * @param size Number of bytes to read
-   * @param dst Address of the existing device memory
-   * @param stream CUDA stream to use
-   *
-   * @return The number of bytes read
-   */
-  virtual size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) = 0;
-
-  /**
    * @brief Asynchronously reads into existing device memory.
    *
    *  @throws cudf::logic_error on cuFile error
@@ -132,17 +103,6 @@ class cufile_input : public cufile_io_base {
  */
 class cufile_output : public cufile_io_base {
  public:
-  /**
-   * @brief Writes the data from a device buffer into a file.
-   *
-   *  @throws cudf::logic_error on cuFile error
-   *
-   * @param data Pointer to the buffer to be written into the output file
-   * @param offset Number of bytes from the start
-   * @param size Number of bytes to write
-   */
-  virtual void write(void const* data, size_t offset, size_t size) = 0;
-
   /**
    * @brief Asynchronously writes the data from a device buffer into a file.
    *
@@ -203,12 +163,6 @@ class cufile_input_impl final : public cufile_input {
  public:
   cufile_input_impl(std::string const& filepath);
 
-  std::unique_ptr<datasource::buffer> read(size_t offset,
-                                           size_t size,
-                                           rmm::cuda_stream_view stream) override;
-
-  size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override;
-
   std::future<size_t> read_async(size_t offset,
                                  size_t size,
                                  uint8_t* dst,
@@ -229,7 +183,6 @@ class cufile_output_impl final : public cufile_output {
  public:
   cufile_output_impl(std::string const& filepath);
 
-  void write(void const* data, size_t offset, size_t size) override;
   std::future<void> write_async(void const* data, size_t offset, size_t size) override;
 
  private:
@@ -241,18 +194,6 @@ class cufile_output_impl final : public cufile_output {
 
 class cufile_input_impl final : public cufile_input {
  public:
-  std::unique_ptr<datasource::buffer> read(size_t offset,
-                                           size_t size,
-                                           rmm::cuda_stream_view stream) override
-  {
-    CUDF_FAIL("Only used to compile without cufile library, should not be called");
-  }
-
-  size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override
-  {
-    CUDF_FAIL("Only used to compile without cufile library, should not be called");
-  }
-
   std::future<size_t> read_async(size_t offset,
                                  size_t size,
                                  uint8_t* dst,
@@ -264,10 +205,6 @@ class cufile_input_impl final : public cufile_input {
 
 class cufile_output_impl final : public cufile_output {
  public:
-  void write(void const* data, size_t offset, size_t size) override
-  {
-    CUDF_FAIL("Only used to compile without cufile library, should not be called");
-  }
   std::future<void> write_async(void const* data, size_t offset, size_t size) override
   {
     CUDF_FAIL("Only used to compile without cufile library, should not be called");
@@ -290,6 +227,21 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
  * cuFile library is not installed.
  */
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath);
+
+/**
+ * @brief Byte range to be read/written in a single operation.
+ */
+struct file_io_slice {
+  size_t offset;
+  size_t size;
+};
+
+/**
+ * @brief Split the total number of bytes to read/write into slices to enable parallel IO.
+ *
+ * If `max_slice_size` is below 1024, 1024 will be used instead to prevent potential misuse.
+ */
+std::vector<file_io_slice> make_file_io_slices(size_t size, size_t max_slice_size);
 
 }  // namespace detail
 }  // namespace io

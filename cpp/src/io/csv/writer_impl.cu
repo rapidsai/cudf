@@ -21,8 +21,8 @@
 
 #include "durations.hpp"
 
-#include "csv_common.h"
-#include "csv_gpu.h"
+#include "csv_common.hpp"
+#include "csv_gpu.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/copy.hpp>
@@ -44,8 +44,10 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/execution_policy.h>
+#include <thrust/host_vector.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
+#include <thrust/tabulate.h>
 
 #include <algorithm>
 #include <memory>
@@ -131,10 +133,10 @@ struct column_to_strings_fn {
     // Note: the case (not std::is_same_v<column_type, bool>)
     // is already covered by is_integral)
     //
-    return not(
-      (std::is_same_v<column_type, cudf::string_view>) || (std::is_integral<column_type>::value) ||
-      (std::is_floating_point<column_type>::value) || (cudf::is_fixed_point<column_type>()) ||
-      (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
+    return not((std::is_same_v<column_type, cudf::string_view>) ||
+               (std::is_integral_v<column_type>) || (std::is_floating_point_v<column_type>) ||
+               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
+               (cudf::is_duration<column_type>()));
   }
 
   explicit column_to_strings_fn(csv_writer_options const& options,
@@ -185,7 +187,7 @@ struct column_to_strings_fn {
   // ints:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_integral<column_type>::value && !std::is_same_v<column_type, bool>,
+  std::enable_if_t<std::is_integral_v<column_type> && !std::is_same_v<column_type, bool>,
                    std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
@@ -195,7 +197,7 @@ struct column_to_strings_fn {
   // floats:
   //
   template <typename column_type>
-  std::enable_if_t<std::is_floating_point<column_type>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_floating_point_v<column_type>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
     return cudf::strings::detail::from_floats(column, stream_, mr_);
@@ -376,11 +378,11 @@ void write_chunked(data_sink* out_sink,
   } else {
     // copy the bytes to host to write them out
     thrust::host_vector<char> h_bytes(total_num_bytes);
-    CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
-                             ptr_all_bytes,
-                             total_num_bytes * sizeof(char),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
+    CUDF_CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
+                                  ptr_all_bytes,
+                                  total_num_bytes * sizeof(char),
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
     stream.synchronize();
 
     out_sink->host_write(h_bytes.data(), total_num_bytes);

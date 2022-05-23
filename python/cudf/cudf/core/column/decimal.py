@@ -1,8 +1,8 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
+import warnings
 from decimal import Decimal
-from typing import Any, Sequence, Tuple, Union, cast
-from warnings import warn
+from typing import Any, Sequence, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -14,7 +14,7 @@ from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf._typing import Dtype
+from cudf._typing import ColumnBinaryOperand, Dtype
 from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column
@@ -24,6 +24,7 @@ from cudf.core.dtypes import (
     Decimal128Dtype,
     DecimalDtype,
 )
+from cudf.core.mixins import BinaryOperand
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
@@ -33,6 +34,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
     """Base column for decimal32, decimal64 or decimal128 columns"""
 
     dtype: DecimalDtype
+    _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
@@ -41,7 +43,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
             isinstance(dtype, cudf.core.dtypes.DecimalDtype)
             and dtype.scale < self.dtype.scale
         ):
-            warn(
+            warnings.warn(
                 "cuDF truncates when downcasting decimals to a lower scale. "
                 "To round, use Series.round() or DataFrame.round()."
             )
@@ -60,49 +62,40 @@ class DecimalBaseColumn(NumericalBaseColumn):
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
             )
 
-    def binary_operator(self, op, other, reflect=False):
-        if reflect:
-            self, other = other, self
+    # Decimals in libcudf don't support truediv, see
+    # https://github.com/rapidsai/cudf/pull/7435 for explanation.
+    def __truediv__(self, other):
+        return self._binaryop(other, "__div__")
 
-        if not isinstance(
-            other,
-            (
-                DecimalBaseColumn,
-                cudf.core.column.NumericalColumn,
-                cudf.Scalar,
-            ),
-        ):
-            raise TypeError(
-                f"Operator {op} not supported between"
-                f"{str(type(self))} and {str(type(other))}"
-            )
-        elif isinstance(
-            other, cudf.core.column.NumericalColumn
-        ) and not is_integer_dtype(other.dtype):
-            raise TypeError(
-                f"Only decimal and integer column is supported for {op}."
-            )
-        if isinstance(other, cudf.core.column.NumericalColumn):
-            other = other.as_decimal_column(
-                self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
-            )
-        if not isinstance(self.dtype, other.dtype.__class__):
-            if (
-                self.dtype.precision == other.dtype.precision
-                and self.dtype.scale == other.dtype.scale
-            ):
-                other = other.astype(self.dtype)
+    def __rtruediv__(self, other):
+        return self._binaryop(other, "__rdiv__")
+
+    def _binaryop(self, other: ColumnBinaryOperand, op: str):
+        reflect, op = self._check_reflected_op(op)
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
+            return NotImplemented
+        lhs, rhs = (other, self) if reflect else (self, other)
 
         # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
         try:
-            if op in ("add", "sub", "mul", "div"):
+            if op in {"__add__", "__sub__", "__mul__", "__div__"}:
                 output_type = _get_decimal_type(self.dtype, other.dtype, op)
                 result = libcudf.binaryop.binaryop(
                     self, other, op, output_type
                 )
+                # TODO:  Why is this necessary? Why isn't the result's
+                # precision already set correctly based on output_type?
                 result.dtype.precision = output_type.precision
-            elif op in ("eq", "ne", "lt", "gt", "le", "ge"):
+            elif op in {
+                "__eq__",
+                "__ne__",
+                "__lt__",
+                "__gt__",
+                "__le__",
+                "__ge__",
+            }:
                 result = libcudf.binaryop.binaryop(self, other, op, bool)
         except RuntimeError as e:
             if "Unsupported operator for these types" in str(e):
@@ -140,14 +133,38 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return result._with_type_metadata(self.dtype)
 
     def normalize_binop_value(self, other):
-        if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
-            return cudf.Scalar(Decimal(other))
-        elif isinstance(other, cudf.Scalar) and isinstance(
-            other.dtype, cudf.core.dtypes.DecimalDtype
+        if isinstance(other, ColumnBase):
+            if isinstance(other, cudf.core.column.NumericalColumn):
+                if not is_integer_dtype(other.dtype):
+                    raise TypeError(
+                        "Decimal columns only support binary operations with "
+                        "integer numerical columns."
+                    )
+                other = other.as_decimal_column(
+                    self.dtype.__class__(self.dtype.__class__.MAX_PRECISION, 0)
+                )
+            elif not isinstance(other, DecimalBaseColumn):
+                return NotImplemented
+            elif not isinstance(self.dtype, other.dtype.__class__):
+                # This branch occurs if we have a DecimalBaseColumn of a
+                # different size (e.g. 64 instead of 32).
+                if (
+                    self.dtype.precision == other.dtype.precision
+                    and self.dtype.scale == other.dtype.scale
+                ):
+                    other = other.astype(self.dtype)
+
+            return other
+        if isinstance(other, cudf.Scalar) and isinstance(
+            # TODO: Should it be possible to cast scalars of other numerical
+            # types to decimal?
+            other.dtype,
+            cudf.core.dtypes.DecimalDtype,
         ):
             return other
-        else:
-            raise TypeError(f"cannot normalize {type(other)}")
+        elif is_scalar(other) and isinstance(other, (int, Decimal)):
+            return cudf.Scalar(Decimal(other))
+        return NotImplemented
 
     def _decimal_quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
@@ -256,12 +273,6 @@ class Decimal128Column(DecimalBaseColumn):
 class Decimal64Column(DecimalBaseColumn):
     dtype: Decimal64Dtype
 
-    def __truediv__(self, other):
-        # TODO: This override is not sufficient. While it will change the
-        # behavior of x / y for two decimal columns, it will not affect
-        # col1.binary_operator(col2), which is how Series/Index will call this.
-        return self.binary_operator("div", other)
-
     def __setitem__(self, key, value):
         if isinstance(value, np.integer):
             value = int(value)
@@ -310,18 +321,6 @@ class Decimal64Column(DecimalBaseColumn):
             buffers=[mask_buf, data_buf],
         )
 
-    def serialize(self) -> Tuple[dict, list]:
-        header, frames = super().serialize()
-        header["dtype"] = self.dtype.serialize()
-        header["size"] = self.size
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header: dict, frames: list) -> ColumnBase:
-        dtype = cudf.Decimal64Dtype.deserialize(*header["dtype"])
-        header["dtype"] = dtype
-        return super().deserialize(header, frames)
-
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
@@ -352,30 +351,52 @@ def _get_decimal_type(lhs_dtype, rhs_dtype, op):
     p1, p2 = lhs_dtype.precision, rhs_dtype.precision
     s1, s2 = lhs_dtype.scale, rhs_dtype.scale
 
-    if op in ("add", "sub"):
+    if op in {"__add__", "__sub__"}:
         scale = max(s1, s2)
         precision = scale + max(p1 - s1, p2 - s2) + 1
-    elif op == "mul":
+    elif op == "__mul__":
         scale = s1 + s2
         precision = p1 + p2 + 1
-    elif op == "div":
+    elif op == "__div__":
         scale = max(6, s1 + p2 + 1)
         precision = p1 - s1 + s2 + scale
     else:
         raise NotImplementedError()
 
+    try:
+        if isinstance(lhs_dtype, type(rhs_dtype)):
+            # SCENARIO 1: If `lhs_dtype` & `rhs_dtype` are same, then try to
+            # see if `precision` & `scale` can be fit into this type.
+            return lhs_dtype.__class__(precision=precision, scale=scale)
+        else:
+            # SCENARIO 2: If `lhs_dtype` & `rhs_dtype` are of different dtypes,
+            # then try to see if `precision` & `scale` can be fit into the type
+            # with greater MAX_PRECISION (i.e., the bigger dtype).
+            if lhs_dtype.MAX_PRECISION >= rhs_dtype.MAX_PRECISION:
+                return lhs_dtype.__class__(precision=precision, scale=scale)
+            else:
+                return rhs_dtype.__class__(precision=precision, scale=scale)
+    except ValueError:
+        # Call to _validate fails, which means we need
+        # to goto SCENARIO 3.
+        pass
+
+    # SCENARIO 3: If either of the above two scenarios fail, then get the
+    # MAX_PRECISION of `lhs_dtype` & `rhs_dtype` so that we can only check
+    # and return a dtype that is greater than or equal to input dtype that
+    # can fit `precision` & `scale`.
+    max_precision = max(lhs_dtype.MAX_PRECISION, rhs_dtype.MAX_PRECISION)
     for decimal_type in (
         cudf.Decimal32Dtype,
         cudf.Decimal64Dtype,
         cudf.Decimal128Dtype,
     ):
-        try:
-            min_decimal_type = decimal_type(precision=precision, scale=scale)
-        except ValueError:
-            # Call to _validate fails, which means we need
-            # to try the next dtype
-            pass
-        else:
-            return min_decimal_type
+        if decimal_type.MAX_PRECISION >= max_precision:
+            try:
+                return decimal_type(precision=precision, scale=scale)
+            except ValueError:
+                # Call to _validate fails, which means we need
+                # to try the next dtype
+                continue
 
     raise OverflowError("Maximum supported decimal type is Decimal128")

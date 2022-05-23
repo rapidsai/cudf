@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/functional.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -93,21 +95,21 @@ class column_wrapper {
 template <typename From, typename To>
 struct fixed_width_type_converter {
   // Are the types same - simply copy elements from [begin, end) to out
-  template <typename FromT                                                   = From,
-            typename ToT                                                     = To,
-            typename std::enable_if<std::is_same_v<FromT, ToT>, void>::type* = nullptr>
+  template <typename FromT                                      = From,
+            typename ToT                                        = To,
+            std::enable_if_t<std::is_same_v<FromT, ToT>, void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return element;
   }
 
   // Are the types convertible or can target be constructed from source?
-  template <typename FromT                       = From,
-            typename ToT                         = To,
-            typename std::enable_if<!std::is_same_v<FromT, ToT> &&
-                                      (cudf::is_convertible<FromT, ToT>::value ||
-                                       std::is_constructible<ToT, FromT>::value),
-                                    void>::type* = nullptr>
+  template <
+    typename FromT          = From,
+    typename ToT            = To,
+    std::enable_if_t<!std::is_same_v<FromT, ToT> && (cudf::is_convertible<FromT, ToT>::value ||
+                                                     std::is_constructible_v<ToT, FromT>),
+                     void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return static_cast<ToT>(element);
@@ -115,10 +117,9 @@ struct fixed_width_type_converter {
 
   // Convert integral values to timestamps
   template <
-    typename FromT                       = From,
-    typename ToT                         = To,
-    typename std::enable_if<std::is_integral<FromT>::value && cudf::is_timestamp_t<ToT>::value,
-                            void>::type* = nullptr>
+    typename FromT                                                                  = From,
+    typename ToT                                                                    = To,
+    std::enable_if_t<std::is_integral_v<FromT> && cudf::is_timestamp<ToT>(), void>* = nullptr>
   constexpr ToT operator()(FromT element) const
   {
     return ToT{typename ToT::duration{element}};
@@ -138,7 +139,7 @@ struct fixed_width_type_converter {
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
-          typename std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
+          std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
@@ -163,8 +164,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
-          typename std::enable_if_t<not cudf::is_fixed_point<ElementFrom>() and
-                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
+          std::enable_if_t<not cudf::is_fixed_point<ElementFrom>() and
+                           cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using RepType        = typename ElementTo::rep;
@@ -188,8 +189,8 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
-          typename std::enable_if_t<cudf::is_fixed_point<ElementFrom>() and
-                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
+          std::enable_if_t<cudf::is_fixed_point<ElementFrom>() and
+                           cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using namespace numeric;
@@ -274,7 +275,7 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, Validity
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
     offsets.push_back(offsets.back() + tmp.length());
   }
-  return std::make_pair(std::move(chars), std::move(offsets));
+  return std::pair(std::move(chars), std::move(offsets));
 };
 }  // namespace detail
 
@@ -701,13 +702,11 @@ class strings_column_wrapper : public detail::column_wrapper {
   template <typename StringsIterator>
   strings_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
-    std::vector<char> chars;
-    std::vector<cudf::size_type> offsets;
-    auto all_valid           = thrust::make_constant_iterator(true);
-    std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, all_valid);
-    auto d_chars             = cudf::detail::make_device_uvector_sync(chars);
-    auto d_offsets           = cudf::detail::make_device_uvector_sync(offsets);
-    wrapped                  = cudf::make_strings_column(d_chars, d_offsets);
+    auto all_valid        = thrust::make_constant_iterator(true);
+    auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
+    auto d_chars          = cudf::detail::make_device_uvector_sync(chars);
+    auto d_offsets        = cudf::detail::make_device_uvector_sync(offsets);
+    wrapped               = cudf::make_strings_column(d_chars, d_offsets);
   }
 
   /**
@@ -743,14 +742,12 @@ class strings_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     size_type num_strings = std::distance(begin, end);
-    std::vector<char> chars;
-    std::vector<size_type> offsets;
-    std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, v);
-    auto null_mask           = detail::make_null_mask_vector(v, v + num_strings);
-    auto d_chars             = cudf::detail::make_device_uvector_sync(chars);
-    auto d_offsets           = cudf::detail::make_device_uvector_sync(offsets);
-    auto d_bitmask           = cudf::detail::make_device_uvector_sync(null_mask);
-    wrapped                  = cudf::make_strings_column(d_chars, d_offsets, d_bitmask);
+    auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, v);
+    auto null_mask        = detail::make_null_mask_vector(v, v + num_strings);
+    auto d_chars          = cudf::detail::make_device_uvector_sync(chars);
+    auto d_offsets        = cudf::detail::make_device_uvector_sync(offsets);
+    auto d_bitmask        = cudf::detail::make_device_uvector_sync(null_mask);
+    wrapped               = cudf::make_strings_column(d_chars, d_offsets, d_bitmask);
   }
 
   /**
@@ -1444,7 +1441,44 @@ class lists_column_wrapper : public detail::column_wrapper {
     build_from_nested(elements, validity);
   }
 
+  /**
+   * @brief Construct a list column containing a single empty, optionally null row.
+   *
+   * @param valid Whether or not the empty row is also null
+   */
+  static lists_column_wrapper<T> make_one_empty_row_column(bool valid = true)
+  {
+    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0};
+    cudf::test::fixed_width_column_wrapper<int> values{};
+    return lists_column_wrapper<T>(
+      1,
+      offsets.release(),
+      values.release(),
+      valid ? 0 : 1,
+      valid ? rmm::device_buffer{} : cudf::create_null_mask(1, cudf::mask_state::ALL_NULL));
+  }
+
  private:
+  /**
+   * @brief Construct a list column from constituent parts.
+   *
+   * @param num_rows The number of lists the column represents
+   * @param offsets The column of offset values for this column
+   * @param values The column of values bounded by the offsets
+   * @param null_count The number of null list entries
+   * @param null_mask The bits specifying the null lists in device memory
+   */
+  lists_column_wrapper(size_type num_rows,
+                       std::unique_ptr<cudf::column>&& offsets,
+                       std::unique_ptr<cudf::column>&& values,
+                       size_type null_count,
+                       rmm::device_buffer&& null_mask)
+  {
+    // construct the list column
+    wrapped = make_lists_column(
+      num_rows, std::move(offsets), std::move(values), null_count, std::move(null_mask));
+  }
+
   /**
    * @brief Initialize as a nested list column composed of other list columns.
    *
@@ -1467,20 +1501,18 @@ class lists_column_wrapper : public detail::column_wrapper {
       0, [&v](auto i) { return v.empty() ? true : v[i]; });
 
     // compute the expected hierarchy and depth
-    auto const hierarchy_and_depth = std::accumulate(
-      elements.begin(),
-      elements.end(),
-      std::pair<column_view, int32_t>{{}, -1},
-      [](auto acc, lists_column_wrapper const& lcw) {
-        return lcw.depth > acc.second ? std::make_pair(lcw.get_view(), lcw.depth) : acc;
-      });
+    auto const hierarchy_and_depth =
+      std::accumulate(elements.begin(),
+                      elements.end(),
+                      std::pair<column_view, int32_t>{{}, -1},
+                      [](auto acc, lists_column_wrapper const& lcw) {
+                        return lcw.depth > acc.second ? std::pair(lcw.get_view(), lcw.depth) : acc;
+                      });
     column_view expected_hierarchy = hierarchy_and_depth.first;
     int32_t const expected_depth   = hierarchy_and_depth.second;
 
     // preprocess columns so that every column_view in 'cols' is an equivalent hierarchy
-    std::vector<std::unique_ptr<column>> stubs;
-    std::vector<column_view> cols;
-    std::tie(cols, stubs) = preprocess_columns(elements, expected_hierarchy, expected_depth);
+    auto [cols, stubs] = preprocess_columns(elements, expected_hierarchy, expected_depth);
 
     // generate offsets
     size_type count = 0;

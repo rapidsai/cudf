@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <tests/strings/utilities.h>
 
+#include <thrust/iterator/transform_iterator.h>
+
 #include <vector>
 
 struct StringsTranslateTest : public cudf::test::BaseFixture {
@@ -36,7 +38,7 @@ std::pair<cudf::char_utf8, cudf::char_utf8> make_entry(const char* from, const c
   cudf::char_utf8 out = 0;
   cudf::strings::detail::to_char_utf8(from, in);
   if (to) cudf::strings::detail::to_char_utf8(to, out);
-  return std::make_pair(in, out);
+  return std::pair(in, out);
 }
 
 TEST_F(StringsTranslateTest, Translate)

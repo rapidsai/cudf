@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <benchmark/benchmark.h>
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
@@ -45,8 +43,8 @@ void BM_orc_read_varying_input(benchmark::State& state)
   data_profile table_data_profile;
   table_data_profile.set_cardinality(cardinality);
   table_data_profile.set_avg_run_length(run_length);
-  auto const tbl =
-    create_random_table(data_types, num_cols, table_size_bytes{data_size}, table_data_profile);
+  auto const tbl = create_random_table(
+    cycle_dtypes(data_types, num_cols), table_size_bytes{data_size}, table_data_profile);
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(source_type);
@@ -60,19 +58,20 @@ void BM_orc_read_varying_input(benchmark::State& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   for (auto _ : state) {
+    try_drop_l3_cache();
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::read_orc(read_opts);
   }
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
-std::vector<std::string> get_col_names(std::vector<char> const& orc_data)
+std::vector<std::string> get_col_names(cudf_io::source_info const& source)
 {
   cudf_io::orc_reader_options const read_options =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{orc_data.data(), orc_data.size()})
-      .num_rows(1);
+    cudf_io::orc_reader_options::builder(source).num_rows(1);
   return cudf_io::read_orc(read_options).metadata.column_names;
 }
 
@@ -88,25 +87,26 @@ void BM_orc_read_varying_options(benchmark::State& state)
   auto const use_np_dtypes = (flags & 2) != 0;
   auto const ts_type       = cudf::data_type{static_cast<cudf::type_id>(state.range(state_idx++))};
 
+  // skip_rows is not supported on nested types
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
                                                    int32_t(type_group_id::FLOATING_POINT),
                                                    int32_t(type_group_id::FIXED_POINT),
                                                    int32_t(type_group_id::TIMESTAMP),
-                                                   int32_t(cudf::type_id::STRING),
-                                                   int32_t(cudf::type_id::LIST)}),
+                                                   int32_t(cudf::type_id::STRING)}),
                                 col_sel);
-  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
+  auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
 
-  std::vector<char> orc_data;
+  cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
   cudf_io::orc_writer_options options =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{&orc_data}, view);
+    cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view);
   cudf_io::write_orc(options);
 
-  auto const cols_to_read = select_column_names(get_col_names(orc_data), col_sel);
+  auto const cols_to_read =
+    select_column_names(get_col_names(source_sink.make_source_info()), col_sel);
   cudf_io::orc_reader_options read_options =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{orc_data.data(), orc_data.size()})
+    cudf_io::orc_reader_options::builder(source_sink.make_source_info())
       .columns(cols_to_read)
       .use_index(use_index)
       .use_np_dtypes(use_np_dtypes)
@@ -116,6 +116,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   auto mem_stats_logger               = cudf::memory_stats_logger();
   for (auto _ : state) {
+    try_drop_l3_cache();
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
 
     cudf::size_type rows_read = 0;
@@ -148,6 +149,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 #define ORC_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)                               \
@@ -164,6 +166,7 @@ RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, decimal, type_group_id:
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, struct, cudf::type_id::STRUCT);
 
 BENCHMARK_DEFINE_F(OrcRead, column_selection)
 (::benchmark::State& state) { BM_orc_read_varying_options(state); }
@@ -179,11 +182,12 @@ BENCHMARK_REGISTER_F(OrcRead, column_selection)
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
 
+// Need an API to get the number of stripes to enable row_selection::STRIPES here
 BENCHMARK_DEFINE_F(OrcRead, row_selection)
 (::benchmark::State& state) { BM_orc_read_varying_options(state); }
 BENCHMARK_REGISTER_F(OrcRead, row_selection)
   ->ArgsProduct({{int32_t(column_selection::ALL)},
-                 {int32_t(row_selection::STRIPES), int32_t(row_selection::NROWS)},
+                 {int32_t(row_selection::NROWS)},
                  {1, 8},
                  {0b11},  // defaults
                  {int32_t(cudf::type_id::EMPTY)}})

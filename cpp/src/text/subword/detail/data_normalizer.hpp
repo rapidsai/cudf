@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,14 +48,17 @@ namespace detail {
 class data_normalizer {
  public:
   /**
-   * @brief Transfer to the GPU the metadata needed to normalize characters.
+   * @brief Create instance of the normalizer.
    *
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param cp_metadata The code point metadata table to use for normalization.
+   * @param aux_table The auxiliary code point table.
    * @param do_lower_case If true, the normalizer will convert uppercase characters in the
    *        input stream to lower case and strip accents from those characters.
    *        If false, accented and uppercase characters are not transformed.
    */
-  data_normalizer(rmm::cuda_stream_view stream, bool do_lower_case = true);
+  data_normalizer(codepoint_metadata_type const* cp_metadata,
+                  aux_codepoint_data_type const* aux_table,
+                  bool do_lower_case = true);
 
   /**
    * @brief Normalize a vector of strings.
@@ -84,7 +87,7 @@ class data_normalizer {
   uvector_pair normalize(char const* d_strings,
                          uint32_t const* d_offsets,
                          uint32_t num_strings,
-                         rmm::cuda_stream_view stream);
+                         rmm::cuda_stream_view stream) const;
 
  private:
   bool const do_lower_case;

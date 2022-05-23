@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 namespace cudf {
 
 std::unique_ptr<column> scan(column_view const& input,
-                             std::unique_ptr<aggregation> const& agg,
+                             std::unique_ptr<scan_aggregation> const& agg,
                              scan_type inclusive,
                              null_policy null_handling,
                              rmm::mr::device_memory_resource* mr)
@@ -34,13 +34,18 @@ std::unique_ptr<column> scan(column_view const& input,
 
   if (agg->kind == aggregation::RANK) {
     CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
-                 "Unsupported rank aggregation operator for exclusive scan");
-    return inclusive_rank_scan(input, rmm::cuda_stream_default, mr);
-  }
-  if (agg->kind == aggregation::DENSE_RANK) {
-    CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
-                 "Unsupported dense rank aggregation operator for exclusive scan");
-    return inclusive_dense_rank_scan(input, rmm::cuda_stream_default, mr);
+                 "Rank aggregation operator requires an inclusive scan");
+    auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(*agg);
+    if (rank_agg._method == rank_method::MIN) {
+      if (rank_agg._percentage == rank_percentage::NONE) {
+        return inclusive_rank_scan(input, rmm::cuda_stream_default, mr);
+      } else if (rank_agg._percentage == rank_percentage::ONE_NORMALIZED) {
+        return inclusive_one_normalized_percent_rank_scan(input, rmm::cuda_stream_default, mr);
+      }
+    } else if (rank_agg._method == rank_method::DENSE) {
+      return inclusive_dense_rank_scan(input, rmm::cuda_stream_default, mr);
+    }
+    CUDF_FAIL("Unsupported rank aggregation method for inclusive scan");
   }
 
   return inclusive == scan_type::EXCLUSIVE

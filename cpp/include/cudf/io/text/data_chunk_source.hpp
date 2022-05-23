@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ namespace text {
  */
 class device_data_chunk {
  public:
+  virtual ~device_data_chunk()                     = default;
   [[nodiscard]] virtual char const* data() const   = 0;
   [[nodiscard]] virtual std::size_t size() const   = 0;
   virtual operator device_span<char const>() const = 0;
@@ -46,12 +47,15 @@ class device_data_chunk {
  *
  * The data chunk reader API encapsulates the idea of statefully traversing and loading a data
  * source. A data source may be a file, a region of device memory, or a region of host memory.
- * Reading data from these data sources efficiently requires different strategies dependings on the
+ * Reading data from these data sources efficiently requires different strategies depending on the
  * type of data source, type of compression, capabilities of the host and device, the data's
  * destination. Whole-file decompression should be hidden behind this interface.
  */
 class data_chunk_reader {
  public:
+  virtual ~data_chunk_reader()              = default;
+  virtual void skip_bytes(std::size_t size) = 0;
+
   /**
    * @brief Get the next chunk of bytes from the data source
    *
@@ -76,6 +80,7 @@ class data_chunk_reader {
  */
 class data_chunk_source {
  public:
+  virtual ~data_chunk_source()                                                   = default;
   [[nodiscard]] virtual std::unique_ptr<data_chunk_reader> create_reader() const = 0;
 };
 

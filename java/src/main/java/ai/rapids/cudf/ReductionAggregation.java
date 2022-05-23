@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -209,4 +209,81 @@ public final class ReductionAggregation {
   public static ReductionAggregation nth(int offset, NullPolicy nullPolicy) {
     return new ReductionAggregation(Aggregation.nth(offset, nullPolicy));
   }
+
+  /**
+   * tDigest reduction.
+   */
+  public static ReductionAggregation createTDigest(int delta) {
+    return new ReductionAggregation(Aggregation.createTDigest(delta));
+  }
+
+  /**
+   * tDigest merge reduction.
+   */
+  public static ReductionAggregation mergeTDigest(int delta) {
+    return new ReductionAggregation(Aggregation.mergeTDigest(delta));
+  }
+
+  /*
+   * Collect the values into a list. Nulls will be skipped.
+   */
+  public static ReductionAggregation collectList() {
+    return new ReductionAggregation(Aggregation.collectList());
+  }
+
+  /**
+   * Collect the values into a list.
+   *
+   * @param nullPolicy Indicates whether to include/exclude nulls during collection.
+   */
+  public static ReductionAggregation collectList(NullPolicy nullPolicy) {
+    return new ReductionAggregation(Aggregation.collectList(nullPolicy));
+  }
+
+  /**
+   * Collect the values into a set. All null values will be excluded, and all NaN values are regarded as
+   * unique instances.
+   */
+  public static ReductionAggregation collectSet() {
+    return new ReductionAggregation(Aggregation.collectSet());
+  }
+
+  /**
+   * Collect the values into a set.
+   *
+   * @param nullPolicy   Indicates whether to include/exclude nulls during collection.
+   * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
+   * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
+   */
+  public static ReductionAggregation collectSet(NullPolicy nullPolicy,
+      NullEquality nullEquality, NaNEquality nanEquality) {
+    return new ReductionAggregation(Aggregation.collectSet(nullPolicy, nullEquality, nanEquality));
+  }
+
+  /**
+   * Merge the partial lists produced by multiple CollectListAggregations.
+   * NOTICE: The partial lists to be merged should NOT include any null list element (but can include null list entries).
+   */
+  public static ReductionAggregation mergeLists() {
+    return new ReductionAggregation(Aggregation.mergeLists());
+  }
+
+  /**
+   * Merge the partial sets produced by multiple CollectSetAggregations. Each null/NaN value will be regarded as
+   * a unique instance.
+   */
+  public static ReductionAggregation mergeSets() {
+    return new ReductionAggregation(Aggregation.mergeSets());
+  }
+
+  /**
+   * Merge the partial sets produced by multiple CollectSetAggregations.
+   *
+   * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
+   * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
+   */
+  public static ReductionAggregation mergeSets(NullEquality nullEquality, NaNEquality nanEquality) {
+    return new ReductionAggregation(Aggregation.mergeSets(nullEquality, nanEquality));
+  }
+
 }

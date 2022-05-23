@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-#include "cudf/io/types.hpp"
-#include <benchmark/benchmark.h>
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/orc.hpp>
+#include <cudf/io/types.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
@@ -46,8 +44,8 @@ void BM_orc_write_varying_inout(benchmark::State& state)
   data_profile table_data_profile;
   table_data_profile.set_cardinality(cardinality);
   table_data_profile.set_avg_run_length(run_length);
-  auto const tbl =
-    create_random_table(data_types, num_cols, table_size_bytes{data_size}, table_data_profile);
+  auto const tbl = create_random_table(
+    cycle_dtypes(data_types, num_cols), table_size_bytes{data_size}, table_data_profile);
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(sink_type);
@@ -62,6 +60,7 @@ void BM_orc_write_varying_inout(benchmark::State& state)
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 void BM_orc_write_varying_options(benchmark::State& state)
@@ -82,7 +81,7 @@ void BM_orc_write_varying_options(benchmark::State& state)
                                              int32_t(cudf::type_id::STRING),
                                              int32_t(cudf::type_id::LIST)});
 
-  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
+  auto const tbl  = create_random_table(data_types, table_size_bytes{data_size});
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(io_type::FILEPATH);
@@ -98,6 +97,7 @@ void BM_orc_write_varying_options(benchmark::State& state)
 
   state.SetBytesProcessed(data_size * state.iterations());
   state.counters["peak_memory_usage"] = mem_stats_logger.peak_memory_usage();
+  state.counters["encoded_file_size"] = source_sink.size();
 }
 
 #define ORC_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                               \
@@ -114,6 +114,7 @@ WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, decimal, type_group_id::F
 WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
 WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, list, cudf::type_id::LIST);
+WR_BENCHMARK_DEFINE_ALL_SINKS(ORC_WR_BM_INOUTS_DEFINE, struct, cudf::type_id::STRUCT);
 
 BENCHMARK_DEFINE_F(OrcWrite, writer_options)
 (::benchmark::State& state) { BM_orc_write_varying_options(state); }

@@ -1,7 +1,7 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable, List, cast
 
 import cudf
 from cudf import _lib as libcudf
@@ -70,7 +70,7 @@ class Merge:
             Boolean flag indicating the left index column or columns
             are to be used as join keys in order.
         right_index : bool
-            Boolean flag indicating the right index column or coumns
+            Boolean flag indicating the right index column or columns
             are to be used as join keys in order.
         lhs_is_index : bool
             ``lhs`` is a ``BaseIndex``
@@ -169,25 +169,23 @@ class Merge:
             if on
             else set()
             if (self._using_left_index or self._using_right_index)
-            else set(
-                [
-                    lkey.name
-                    for lkey, rkey in zip(self._left_keys, self._right_keys)
-                    if lkey.name == rkey.name
-                ]
-            )
+            else {
+                lkey.name
+                for lkey, rkey in zip(self._left_keys, self._right_keys)
+                if lkey.name == rkey.name
+            }
         )
 
     def perform_merge(self) -> Frame:
-        left_join_cols = {}
-        right_join_cols = {}
+        left_join_cols = []
+        right_join_cols = []
 
         for left_key, right_key in zip(self._left_keys, self._right_keys):
             lcol = left_key.get(self.lhs)
             rcol = right_key.get(self.rhs)
             lcol_casted, rcol_casted = _match_join_keys(lcol, rcol, self.how)
-            left_join_cols[left_key.name] = lcol_casted
-            right_join_cols[left_key.name] = rcol_casted
+            left_join_cols.append(lcol_casted)
+            right_join_cols.append(rcol_casted)
 
             # Categorical dtypes must be cast back from the underlying codes
             # type that was returned by _match_join_keys.
@@ -203,8 +201,8 @@ class Merge:
             right_key.set(self.rhs, rcol_casted, validate=False)
 
         left_rows, right_rows = self._joiner(
-            cudf.core.frame.Frame(left_join_cols),
-            cudf.core.frame.Frame(right_join_cols),
+            left_join_cols,
+            right_join_cols,
             how=self.how,
         )
 
@@ -322,7 +320,7 @@ class Merge:
         # same order as given in 'on'. If the indices are used as
         # keys, the index will be sorted. If one index is specified,
         # the key columns on the other side will be used to sort.
-        by = []
+        by: List[Any] = []
         if self._using_left_index and self._using_right_index:
             if result._index is not None:
                 by.extend(result._index._data.columns)
