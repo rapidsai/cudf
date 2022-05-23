@@ -171,7 +171,7 @@ def read_orc_statistics(
     files_statistics = []
     stripes_statistics = []
     for source in filepaths_or_buffers:
-        (path_or_buff, compression,) = ioutils.get_reader_filepath_or_buffer(
+        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=source, compression=None, **kwargs
         )
         if compression is not None:
@@ -182,7 +182,7 @@ def read_orc_statistics(
             column_names,
             raw_file_statistics,
             raw_stripes_statistics,
-        ) = liborc.read_raw_orc_statistics(path_or_buff)
+        ) = liborc.read_raw_orc_statistics(path_or_buf)
 
         # Parse column names
         column_names = [
