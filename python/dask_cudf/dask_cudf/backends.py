@@ -13,7 +13,6 @@ from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat_dispatch,
     group_split_dispatch,
-    grouper_dispatch,
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
@@ -297,10 +296,15 @@ def is_categorical_dtype_cudf(obj):
     return cudf.api.types.is_categorical_dtype(obj)
 
 
-@grouper_dispatch.register((cudf.Series, cudf.DataFrame))
-def get_grouper_cudf(obj):
-    return cudf.core.groupby.Grouper
+try:
+    from dask.dataframe.dispatch import grouper_dispatch
 
+    @grouper_dispatch.register((cudf.Series, cudf.DataFrame))
+    def get_grouper_cudf(obj):
+        return cudf.core.groupby.Grouper
+
+except ImportError:
+    pass
 
 try:
     try:
