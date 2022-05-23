@@ -891,6 +891,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # explicitly _do not_ use isinstance here: we want only boolean
         # GenericIndexes, not dtype-specific subclasses.
         if type(ret) is GenericIndex and ret.dtype.kind == "b":
+            # In pandas nan != anything, so we must replace the null results of
+            # our operators with the operator-appropriate value.
+            ret._column[ret._column.isnull()] = op == "__ne__"
             return ret.values
         return ret
 

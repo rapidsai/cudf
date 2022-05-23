@@ -2962,3 +2962,24 @@ def test_binops_dot(df, other):
     got = df @ other
 
     utils.assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("binop", _binops_compare)
+def test_index_nulls(binop):
+    gidx = cudf.Index([1.0, 2.0, None, 4.0])
+    pidx = gidx.to_pandas()
+
+    # We have to copy the index here because the following returns True:
+    # idx = pd.Index([np.nan], dtype='float64')
+    # idx > idx  # [ True]
+    # pandas seems to be treating this case specially because lhs[0] is rhs[0]
+    expected = binop(pidx, pidx.copy())
+    got = binop(gidx, gidx)
+    utils.assert_eq(got, expected)
+
+    gidx2 = cudf.Index([1, 2, 3, 4])
+    pidx2 = gidx2.to_pandas()
+
+    expected = binop(pidx, pidx2)
+    got = binop(gidx, gidx2)
+    utils.assert_eq(got, expected)
