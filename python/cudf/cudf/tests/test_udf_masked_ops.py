@@ -840,9 +840,9 @@ def test_string_udf_indexing(data, idx):
 ])
 @pytest.mark.parametrize("slc", [
     slice(0, 1),
-    slice(0, -1)
+    slice(0, -1),
     slice(None, 2),
-    slice(2, None)
+    slice(2, None),
     slice(0, 0)
 ])
 def test_string_udf_substring(data, slc):

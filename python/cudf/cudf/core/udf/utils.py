@@ -22,7 +22,8 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
 )
 from cudf.api.types import is_string_dtype
-from cudf_jit_udf import to_string_view_array, from_dstring_array
+from stringudfs._lib.cudf_jit_udf import to_string_view_array, from_dstring_array
+from stringudfs import ptxpath
 
 from cudf.utils.utils import _cudf_nvtx_annotate
 
@@ -125,7 +126,7 @@ def _masked_array_type_from_col(col):
     """
     if is_string_dtype(col.dtype):
         # strings_udf library provides a pointer directly to the data
-        col_type = CPointer(dstring)
+        col_type = CPointer(string_view)
     else:
         nb_scalar_ty = numpy_support.from_dtype(col.dtype)
         col_type = nb_scalar_ty[::1]
@@ -231,7 +232,7 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(sig, link=['/home/nfs/brmiller/ipynb/strings_udf/len.ptx'], extensions=[str_view_arg_handler])(_kernel)
+    kernel = cuda.jit(sig, link=[ptxpath], extensions=[str_view_arg_handler])(_kernel)
 
     return kernel
 
