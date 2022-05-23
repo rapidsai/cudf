@@ -19,15 +19,16 @@ build:
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
-    - CC
-    - CXX
-    - CUDAHOSTCXX
   # libcudf's run_exports pinning is looser than we would like
   ignore_run_exports:
     - libcudf
 
 requirements:
   build:
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - sysroot_{{ target_platform }} {{ sysroot_version }}
+  host:
     - protobuf
     - python
     - cython >=0.29,<0.30
