@@ -481,7 +481,7 @@ std::unique_ptr<column> generate_output_offsets(size_type num_lists,
                   new_offsets.begin());
 
   // Generate offsets from sizes.
-  thrust::inclusive_scan(
+  thrust::exclusive_scan(
     rmm::exec_policy(stream), new_offsets.begin(), new_offsets.end(), new_offsets.begin());
 
   return std::make_unique<column>(
@@ -520,8 +520,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   // Generate a mapping from list entries to their list indices for the keys column.
   auto const entries_list_indices = [&] {
     auto labels = rmm::device_uvector<size_type>(keys_child.size(), stream);
-    cudf::lists::detail::generate_list_labels(
-      keys.offsets_begin(), keys.offsets_end(), labels.begin(), keys_child.size(), stream);
+    cudf::lists::detail::fill_segmented_labels(
+      keys.offsets_begin(), keys.offsets_end(), labels.begin(), labels.end(), stream);
     return labels;
   }();
 
