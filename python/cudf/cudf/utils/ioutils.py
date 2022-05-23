@@ -1372,15 +1372,10 @@ def get_filepath_or_buffer(
             if fs is None:
                 return path_or_data, compression
 
-        if len(paths) == 0:
-            raise FileNotFoundError(
-                f"{path_or_data} could not be resolved to any files"
-            )
-
         if _is_local_filesystem(fs):
             # Doing this as `read_json` accepts a json string
             # path_or_data need not be a filepath like string
-            if os.path.exists(paths[0]):
+            if len(paths) and os.path.exists(paths[0]):
                 path_or_data = paths if len(paths) > 1 else paths[0]
 
         else:
