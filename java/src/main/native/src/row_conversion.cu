@@ -940,7 +940,14 @@ __global__ void copy_strings_to_rows(size_type const num_rows, size_type const n
       }
       auto string_output_dest = &output_data[base_row_offset + offset];
       auto string_output_src = &variable_input_data[col][string_start_offset];
-      MEMCPY(string_output_dest, string_output_src, string_length, block_barrier);
+#ifdef ASYNC_MEMCPY_SUPPORTED
+      cuda::memcpy_async(my_tile, string_output_dest, string_output_src, string_length,
+                         block_barrier);
+#else
+      for (int c = my_tile.thread_rank(); c < string_length; c += my_tile.size()) {
+        string_output_dest[c] = string_output_src[c];
+      }
+#endif
       offset += string_length;
     }
   }
@@ -1260,8 +1267,9 @@ __global__ void copy_strings_from_rows(RowOffsetIter row_offsets, int32_t **stri
                                        char **string_col_data, int8_t const *row_data,
                                        size_type const num_rows,
                                        size_type const num_string_columns) {
-  // each warp takes an element striding on grid dimension. It will copy that string to the final
-  // destination. Traversing in row-major order to coalesce the offsets and size reads.
+  // Each warp takes a tile, which is a single column and up to ROWS_PER_BLOCK rows. A tile
+  // will not wrap around the bottom of the table. The warp will copy the strings for each row
+  // in the tile. Traversing in row-major order to coalesce the offsets and size reads.
   auto my_block = cooperative_groups::this_thread_block();
   auto my_partition = cooperative_groups::tiled_partition<32>(my_block);
 #ifdef ASYNC_MEMCPY_SUPPORTED
@@ -1275,6 +1283,8 @@ __global__ void copy_strings_from_rows(RowOffsetIter row_offsets, int32_t **stri
       blockIdx.x * my_partition.meta_group_size() + my_partition.meta_group_rank();
   auto const num_tiles = tiles_per_col * num_string_columns;
   auto const tile_stride = my_partition.meta_group_size() * gridDim.x;
+  // Each warp will copy strings in its tile. This is handled by all the threads of a warp passing
+  // the same parameters to async_memcpy and all threads in the warp participating in the copy.
   for (auto my_tile = starting_tile; my_tile < num_tiles; my_tile += tile_stride) {
     auto const starting_row = (my_tile % tiles_per_col) * ROWS_PER_BLOCK;
     auto const col = my_tile / tiles_per_col;
@@ -1286,7 +1296,13 @@ __global__ void copy_strings_from_rows(RowOffsetIter row_offsets, int32_t **stri
       auto const src = &row_data[row_offsets(row, 0) + str_row_off[row]];
       auto dst = &str_col_data[str_col_off[row]];
 
-      MEMCPY(dst, src, str_len[row], block_barrier);
+#ifdef ASYNC_MEMCPY_SUPPORTED
+      cuda::memcpy_async(my_partition, dst, src, str_len[row], block_barrier);
+#else
+      for (int c = my_partition.thread_rank(); c < str_len[row]; c += my_partition.size()) {
+        dst[c] = src[c];
+      }
+#endif
     }
   }
 }
