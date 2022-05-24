@@ -53,10 +53,10 @@ enum class concatenate_null_policy { IGNORE, NULLIFY_OUTPUT_ROW };
  * @throws cudf::logic_error if any lists column contains nested typed entry.
  * @throws cudf::logic_error if all lists columns do not have the same entry type.
  *
- * @param input Table of lists to be concatenated.
+ * @param input Table of lists to be concatenated
  * @param null_policy The parameter to specify whether a null list element will be ignored from
  *        concatenation, or any concatenation involving a null element will result in a null list.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A new column in which each row is a list resulted from concatenating all list elements in
  *         the corresponding row of the input table.
  */
@@ -84,10 +84,10 @@ std::unique_ptr<column> concatenate_rows(
  * @throws cudf::logic_error if the input lists column contains nested typed entries that are not
  *         lists.
  *
- * @param input The lists column containing lists of list elements to concatenate.
+ * @param input The lists column containing lists of list elements to concatenate
  * @param null_policy The parameter to specify whether a null list element will be ignored from
  *        concatenation, or any concatenation involving a null element will result in a null list.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A new column in which each row is a list resulted from concatenating all list elements in
  *         the corresponding row of the input lists column.
  */

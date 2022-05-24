@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ namespace detail {
  * use, use `cudf::make_column_from_scalar`.
  *
  * @param[in] value The `list_scalar` to construct from
- * @param[in] size The number of rows for the output column.
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Device memory resource used to allocate the returned column's device memory.
+ * @param[in] size The number of rows for the output column
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<cudf::column> make_lists_column_from_scalar(
   list_scalar const& value,

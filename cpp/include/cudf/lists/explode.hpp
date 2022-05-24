@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,11 +60,11 @@ namespace cudf {
  * Note that null lists are not included in the resulting table, but nulls inside
  * lists and empty lists will be represented with a null entry for that column in that row.
  *
- * @param input_table Table to explode.
- * @param explode_column_idx Column index to explode inside the table.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input_table Table to explode
+ * @param explode_column_idx Column index to explode inside the table
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @return A new table with explode_col exploded.
+ * @return A new table with explode_col exploded
  */
 std::unique_ptr<table> explode(
   table_view const& input_table,
@@ -103,11 +103,11 @@ std::unique_ptr<table> explode(
  * Note that null lists are not included in the resulting table, but nulls inside
  * lists and empty lists will be represented with a null entry for that column in that row.
  *
- * @param input_table Table to explode.
- * @param explode_column_idx Column index to explode inside the table.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input_table Table to explode
+ * @param explode_column_idx Column index to explode inside the table
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @return A new table with exploded value and position. The column order of return table is
+ * @return A new table with exploded value and position The column order of return table is
  *         [cols before explode_input, explode_position, explode_value, cols after explode_input].
  */
 std::unique_ptr<table> explode_position(
@@ -146,11 +146,11 @@ std::unique_ptr<table> explode_position(
  * [null,        300],
  * ```
  *
- * @param input_table Table to explode.
- * @param explode_column_idx Column index to explode inside the table.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input_table Table to explode
+ * @param explode_column_idx Column index to explode inside the table
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @return A new table with explode_col exploded.
+ * @return A new table with explode_col exploded
  */
 std::unique_ptr<table> explode_outer(
   table_view const& input_table,
@@ -190,11 +190,11 @@ std::unique_ptr<table> explode_outer(
  * [0,  null,    300],
  * ```
  *
- * @param input_table Table to explode.
- * @param explode_column_idx Column index to explode inside the table.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input_table Table to explode
+ * @param explode_column_idx Column index to explode inside the table
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @return A new table with explode_col exploded.
+ * @return A new table with explode_col exploded
  */
 std::unique_ptr<table> explode_outer_position(
   table_view const& input_table,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,10 +52,10 @@ namespace cudf::lists {
  * @throws cudf::logic_error if any input column has nulls.
  * @throws cudf::logic_error if @p starts and @p sizes columns do not have the same size.
  *
- * @param starts First values in the result sequences.
- * @param sizes Numbers of values in the result sequences.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return The result column containing generated sequences.
+ * @param starts First values in the result sequences
+ * @param sizes Numbers of values in the result sequences
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The result column containing generated sequences
  */
 std::unique_ptr<column> sequences(
   column_view const& starts,
@@ -89,11 +89,11 @@ std::unique_ptr<column> sequences(
  * @throws cudf::logic_error if @p starts and @p steps columns have different types.
  * @throws cudf::logic_error if @p starts, @p steps, and @p sizes columns do not have the same size.
  *
- * @param starts First values in the result sequences.
- * @param steps Increment values for the result sequences.
- * @param sizes Numbers of values in the result sequences.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return The result column containing generated sequences.
+ * @param starts First values in the result sequences
+ * @param steps Increment values for the result sequences
+ * @param sizes Numbers of values in the result sequences
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The result column containing generated sequences
  */
 std::unique_ptr<column> sequences(
   column_view const& starts,

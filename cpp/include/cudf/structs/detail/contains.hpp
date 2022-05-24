@@ -29,7 +29,7 @@ namespace detail {
  *
  * @param haystack Column to search against
  * @param needle Scalar to search for
- * @param stream  CUDA stream used for device memory operations and kernel launches.
+ * @param stream  CUDA stream used for device memory operations and kernel launches
  * @return True if the `needle` is found in `haystack`
  */
 bool contains(structs_column_view const& haystack,

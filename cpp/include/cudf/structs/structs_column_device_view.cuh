@@ -73,8 +73,8 @@ class structs_column_device_view : private column_device_view {
   /**
    * @brief Fetches the child column of the underlying struct column.
    *
-   * @param idx The index of the child column to fetch.
-   * @return The sliced child column
+   * @param idx The index of the child column to fetch
+   * @return The child column sliced relative to the parent's offset and size
    */
   [[nodiscard]] __device__ inline column_device_view get_sliced_child(size_type idx) const
   {
