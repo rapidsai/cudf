@@ -114,7 +114,7 @@ class SpillManager:
         end = ptr + size
         hit: Optional[Buffer] = None
         for buf in self.base_buffers():
-            if not buf.is_spilled:
+            if not buf.is_spilled and buf._ptr and buf.size:
                 buf_end = buf._ptr + buf.size
                 if end >= buf._ptr and buf_end >= ptr:
                     if hit is not None:
