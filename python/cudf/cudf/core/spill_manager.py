@@ -63,7 +63,7 @@ class SpillManager:
 
     def add(self, buffer: Buffer) -> None:
         with self._lock:
-            if buffer.sole_owner:
+            if buffer.sole_owner and buffer.size > 0:
                 self._base_buffers[self._id_counter] = buffer
                 self._id_counter += 1
         self.spill_to_device_limit()
@@ -109,6 +109,21 @@ class SpillManager:
                 break  # No more to spill
             ret += nbytes
         return ret
+
+    def lookup_address_range(self, ptr: int, size: int) -> Optional[Buffer]:
+        end = ptr + size
+        hit: Optional[Buffer] = None
+        for buf in self.base_buffers():
+            if not buf.is_spilled:
+                p, _ = buf.ptr_and_access_counter()
+                e = p + buf.size
+                if end >= p and e >= ptr:
+                    if hit is not None:
+                        raise RuntimeError(
+                            f"Two base buffers overlap: {hit} and {buf}"
+                        )
+                    hit = buf
+        return hit
 
     def __repr__(self) -> str:
         spilled, unspilled = self.spilled_and_unspilled()
