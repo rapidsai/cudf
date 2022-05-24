@@ -297,6 +297,26 @@ TYPED_TEST(groupby_keys_test, structs)
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
+template <typename T>
+using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
+
+TYPED_TEST(groupby_keys_test, lists)
+{
+  using R = cudf::detail::target_type_t<int32_t, aggregation::SUM>;
+
+  // clang-format off
+  auto keys   = LCW<TypeParam> { {1,1}, {2,2}, {3,3}, {1,1}, {2,2} };
+  auto values = FWCW<int32_t>  {    0,     1,     2,     3,     4  };
+
+  auto expected_keys   = LCW<TypeParam> { {1,1}, {2,2}, {3,3} };
+  auto expected_values = FWCW<R>        {    3,     5,     2  };
+  // clang-format on
+
+  auto agg = cudf::make_sum_aggregation<groupby_aggregation>();
+  EXPECT_THROW(test_single_agg(keys, values, expected_keys, expected_values, std::move(agg)),
+               cudf::logic_error);
+}
+
 struct groupby_string_keys_test : public cudf::test::BaseFixture {
 };
 
