@@ -3195,15 +3195,59 @@ TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
     cudf::logic_error);
   EXPECT_THROW(
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
-      .row_group_size_bytes(511 << 10),
+      .max_page_size_rows(4999),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .row_group_size_bytes(3 << 10),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .max_page_size_bytes(3 << 10),
     cudf::logic_error);
 
   EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
                  .row_group_size_rows(4999),
                cudf::logic_error);
   EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
-                 .row_group_size_bytes(511 << 10),
+                 .max_page_size_rows(4999),
                cudf::logic_error);
+  EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
+                 .row_group_size_bytes(3 << 10),
+               cudf::logic_error);
+  EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
+                 .max_page_size_bytes(3 << 10),
+               cudf::logic_error);
+}
+
+TEST_F(ParquetWriterTest, RowGroupPageSizeMatch)
+{
+  const auto unused_table = std::make_unique<table>();
+  std::vector<char> out_buffer;
+
+  auto options =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .row_group_size_bytes(128 * 1024)
+      .max_page_size_bytes(512 * 1024)
+      .row_group_size_rows(10000)
+      .max_page_size_rows(20000)
+      .build();
+  EXPECT_EQ(options.get_row_group_size_bytes(), options.get_max_page_size_bytes());
+  EXPECT_EQ(options.get_row_group_size_rows(), options.get_max_page_size_rows());
+}
+
+TEST_F(ParquetChunkedWriterTest, RowGroupPageSizeMatch)
+{
+  std::vector<char> out_buffer;
+
+  auto options = cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
+                   .row_group_size_bytes(128 * 1024)
+                   .max_page_size_bytes(512 * 1024)
+                   .row_group_size_rows(10000)
+                   .max_page_size_rows(20000)
+                   .build();
+  EXPECT_EQ(options.get_row_group_size_bytes(), options.get_max_page_size_bytes());
+  EXPECT_EQ(options.get_row_group_size_rows(), options.get_max_page_size_rows());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
