@@ -5,6 +5,7 @@ import functools
 import operator
 import pickle
 import time
+from threading import RLock
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -68,6 +69,7 @@ class Buffer(Serializable):
         from cudf._lib.column import AccessCounter
         from cudf.core.spill_manager import global_manager
 
+        self._lock = RLock()
         self._access_counter = AccessCounter()
         self._sole_owner = sole_owner
         self._ptr_exposed = ptr_exposed
@@ -158,50 +160,51 @@ class Buffer(Serializable):
         return self._ptr_desc["type"] != "gpu"
 
     def move_inplace(self, target: str = "cpu") -> None:
-        ptr_type = self._ptr_desc["type"]
-        if ptr_type == target:
-            return
+        with self._lock:
+            ptr_type = self._ptr_desc["type"]
+            if ptr_type == target:
+                return
 
-        if not self.spillable:
-            raise ValueError("Cannot in-place move an unspillable buffer")
+            if not self.spillable:
+                raise ValueError("Cannot in-place move an unspillable buffer")
 
-        if (ptr_type, target) == ("gpu", "cpu"):
-            host_mem = memoryview(bytearray(self.size))
-            rmm._lib.device_buffer.copy_ptr_to_host(self._ptr, host_mem)
-            self._ptr_desc["memoryview"] = host_mem
-            self._ptr = None
-            self._owner = None
-        elif (ptr_type, target) == ("cpu", "gpu"):
-            dev_mem = rmm.DeviceBuffer.to_device(
-                self._ptr_desc.pop("memoryview")
-            )
-            self._ptr = dev_mem.ptr
-            self._size = dev_mem.size
-            self._owner = dev_mem
-        else:
-            # TODO: support moving to disk
-            raise ValueError(f"Unknown target: {target}")
-        self._ptr_desc["type"] = target
+            if (ptr_type, target) == ("gpu", "cpu"):
+                host_mem = memoryview(bytearray(self.size))
+                rmm._lib.device_buffer.copy_ptr_to_host(self._ptr, host_mem)
+                self._ptr_desc["memoryview"] = host_mem
+                self._ptr = None
+                self._owner = None
+            elif (ptr_type, target) == ("cpu", "gpu"):
+                dev_mem = rmm.DeviceBuffer.to_device(
+                    self._ptr_desc.pop("memoryview")
+                )
+                self._ptr = dev_mem.ptr
+                self._size = dev_mem.size
+                self._owner = dev_mem
+            else:
+                # TODO: support moving to disk
+                raise ValueError(f"Unknown target: {target}")
+            self._ptr_desc["type"] = target
 
     @property
     def ptr(self) -> int:
         if self._spill_manager is not None:
             self._spill_manager.spill_to_device_limit()
-
-        self.move_inplace(target="gpu")
-        self._ptr_exposed = True
-        self._last_accessed = time.monotonic()
-        assert self._ptr is not None
-        return self._ptr
+        with self._lock:
+            self.move_inplace(target="gpu")
+            self._ptr_exposed = True
+            self._last_accessed = time.monotonic()
+            assert self._ptr is not None
+            return self._ptr
 
     def ptr_and_access_counter(self) -> Tuple[int, AccessCounter]:
         if self._spill_manager is not None:
             self._spill_manager.spill_to_device_limit()
-
-        self.move_inplace(target="gpu")
-        self._last_accessed = time.monotonic()
-        assert self._ptr is not None
-        return self._ptr, self._access_counter
+        with self._lock:
+            self.move_inplace(target="gpu")
+            self._last_accessed = time.monotonic()
+            assert self._ptr is not None
+            return self._ptr, self._access_counter
 
     @property
     def sole_owner(self) -> bool:
