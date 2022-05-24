@@ -481,14 +481,17 @@ void compute_single_pass_aggs(table_view const& keys,
   auto const skip_key_rows_with_nulls =
     keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
-  // TODO: This is a temporary workaround. Get rid of "flattened" logic
-  // once `bitmask_and` supports nested nulls handling.
-  auto const flattened = cudf::structs::detail::flatten_nested_columns(
-    keys, {}, {}, cudf::structs::detail::column_nullability::FORCE);
-  auto const flattened_keys = flattened.flattened_columns();
-  auto row_bitmask          = skip_key_rows_with_nulls
-                                ? cudf::detail::bitmask_and(flattened_keys, stream).first
-                                : rmm::device_buffer{};
+  auto row_bitmask = [&] {
+    if (skip_key_rows_with_nulls) {
+      // TODO: This is a temporary workaround. Get rid of "flattened" logic
+      // once `bitmask_and` supports nested nulls handling.
+      auto const flattened = cudf::structs::detail::flatten_nested_columns(
+        keys, {}, {}, cudf::structs::detail::column_nullability::FORCE);
+      auto const flattened_keys = flattened.flattened_columns();
+      return cudf::detail::bitmask_and(flattened_keys, stream).first;
+    }
+    return rmm::device_buffer{};
+  }();
 
   thrust::for_each_n(
     rmm::exec_policy(stream),
