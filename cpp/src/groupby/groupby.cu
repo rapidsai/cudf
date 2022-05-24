@@ -65,8 +65,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  using namespace cudf::structs::detail;
-
   // If sort groupby has been called once on this groupby object, then
   // always use sort groupby from now on. Because once keys are sorted,
   // all the aggs that can be done by hash groupby are efficiently done by
