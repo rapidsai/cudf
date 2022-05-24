@@ -272,7 +272,7 @@ std::unique_ptr<Base> make_max_aggregation();
 /**
  * @brief Factory to create a COUNT aggregation
  *
- * @param null_handling Indicates if null values will be counted.
+ * @param null_handling Indicates if null values will be counted
  * @return A COUNT aggregation object
  */
 template <typename Base = aggregation>
@@ -375,7 +375,7 @@ std::unique_ptr<Base> make_argmin_aggregation();
  * @brief Factory to create a NUNIQUE aggregation
  *
  * NUNIQUE returns the number of unique elements.
- * @param null_handling Indicates if null values will be counted.
+ * @param null_handling Indicates if null values will be counted
  * @return A NUNIQUE aggregation object
  */
 template <typename Base = aggregation>
@@ -391,8 +391,8 @@ std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_
  * corresponds to `[0, group_size-1]` indices respectively where `group_size` is
  * the size of each group.
  *
- * @param n index of nth element in each group.
- * @param null_handling Indicates to include/exclude nulls during indexing.
+ * @param n index of nth element in each group
+ * @param null_handling Indicates to include/exclude nulls during indexing
  * @return A NTH_ELEMENT aggregation object
  */
 template <typename Base = aggregation>
@@ -468,9 +468,9 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *
  * @endcode
  *
- * @param method The ranking method used for tie breaking (same values).
+ * @param method The ranking method used for tie breaking (same values)
  * @param column_order The desired sort order for ranking
- * @param null_handling  flag to include nulls during ranking. If nulls are not included,
+ * @param null_handling  flag to include nulls during ranking If nulls are not included,
  * the corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements for column
  * @param percentage enum to denote the type of conversion of ranks to percentage in range (0,1]
@@ -491,7 +491,7 @@ std::unique_ptr<Base> make_rank_aggregation(rank_method method,
  * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
  * of the list rows.
  *
- * @param null_handling Indicates whether to include/exclude nulls in list elements.
+ * @param null_handling Indicates whether to include/exclude nulls in list elements
  * @return A COLLECT_LIST aggregation object
  */
 template <typename Base = aggregation>
@@ -613,7 +613,7 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  *
  * Compute covariance between two columns.
  * The input columns are child columns of a non-nullable struct columns.
- * @param min_periods Minimum number of non-null observations required to produce a result.
+ * @param min_periods Minimum number of non-null observations required to produce a result
  * @param ddof Delta Degrees of Freedom. The divisor used in calculations is N - ddof, where N is
  *        the number of non-null observations.
  * @return A COVARIANCE aggregation object
@@ -628,7 +628,7 @@ std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods = 1, siz
  * The input columns are child columns of a non-nullable struct columns.
  *
  * @param type correlation_type
- * @param min_periods Minimum number of non-null observations required to produce a result.
+ * @param min_periods Minimum number of non-null observations required to produce a result
  * @return A CORRELATION aggregation object
  */
 template <typename Base = aggregation>
