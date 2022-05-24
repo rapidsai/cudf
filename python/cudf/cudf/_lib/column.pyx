@@ -457,7 +457,9 @@ cdef class Column:
         )
 
     @staticmethod
-    cdef Column from_unique_ptr(unique_ptr[column] c_col):
+    cdef Column from_unique_ptr(
+        unique_ptr[column] c_col, bool data_ptr_exposed=False
+    ):
         cdef column_view view = c_col.get()[0].view()
         cdef libcudf_types.type_id tid = view.type().id()
         cdef libcudf_types.data_type c_dtype
@@ -483,11 +485,11 @@ cdef class Column:
         cdef column_contents contents = move(c_col.get()[0].release())
 
         data = DeviceBuffer.c_from_unique_ptr(move(contents.data))
-        data = Buffer(data, sole_owner=True)
+        data = Buffer(data, sole_owner=True, ptr_exposed=data_ptr_exposed)
 
         if has_nulls:
             mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
-            mask = Buffer(mask, sole_owner=True)
+            mask = Buffer(mask, sole_owner=True, ptr_exposed=data_ptr_exposed)
             null_count = c_col.get()[0].null_count()
         else:
             mask = None

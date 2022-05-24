@@ -36,11 +36,11 @@ def test_spillable_buffer():
     buf = Buffer(rmm.DeviceBuffer(size=10), sole_owner=True)
     assert buf.spillable
     buf.ptr  # Expose pointer
-    assert buf._raw_pointer_exposed
+    assert buf.ptr_exposed
     assert not buf.spillable
     buf = Buffer(rmm.DeviceBuffer(size=10), sole_owner=True)
     buf.__cuda_array_interface__  # Expose pointer
-    assert buf._raw_pointer_exposed
+    assert buf.ptr_exposed
     assert not buf.spillable
 
 

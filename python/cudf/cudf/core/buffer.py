@@ -108,7 +108,7 @@ class Buffer(Serializable):
         if not self._sole_owner and self._owner is not None:
             base_buffer = get_base_buffer(self._owner)
             if base_buffer is not None:
-                base_buffer._raw_pointer_exposed = True
+                base_buffer._ptr_exposed = True
 
         if self._sole_owner and global_manager.enabled:
             self._spill_manager = global_manager.get()
@@ -194,6 +194,10 @@ class Buffer(Serializable):
     @property
     def sole_owner(self) -> bool:
         return self._sole_owner
+
+    @property
+    def ptr_exposed(self) -> bool:
+        return self._ptr_exposed
 
     @property
     def spillable(self) -> bool:

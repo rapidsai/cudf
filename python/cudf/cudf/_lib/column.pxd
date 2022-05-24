@@ -33,7 +33,9 @@ cdef class Column:
     cdef mutable_column_view mutable_view(self) except *
 
     @staticmethod
-    cdef Column from_unique_ptr(unique_ptr[column] c_col)
+    cdef Column from_unique_ptr(
+        unique_ptr[column] c_col, bool data_ptr_exposed=*
+    )
 
     @staticmethod
     cdef Column from_column_view(column_view, object)
