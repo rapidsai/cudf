@@ -496,10 +496,14 @@ cdef class Column:
             null_count = 0
 
         cdef vector[unique_ptr[column]] c_children = move(contents.children)
-        children = ()
+        children = []
         if c_children.size() != 0:
-            children = tuple(Column.from_unique_ptr(move(c_children[i]))
-                             for i in range(c_children.size()))
+            for i in range(c_children.size()):
+                child = Column.from_unique_ptr(
+                    move(c_children[i]),
+                    data_ptr_exposed=data_ptr_exposed
+                )
+                children.append(child)
 
         return cudf.core.column.build_column(
             data,
@@ -507,7 +511,7 @@ cdef class Column:
             mask=mask,
             size=size,
             null_count=null_count,
-            children=children
+            children=tuple(children)
         )
 
     @staticmethod

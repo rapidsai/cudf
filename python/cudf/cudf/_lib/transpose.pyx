@@ -20,6 +20,8 @@ def transpose(list source_columns):
     with nogil:
         c_result = move(cpp_transpose(c_input))
 
+    # Notice, the data pointer of `result_owner` has been exposed
+    # through `c_result.second` at this point.
     result_owner = Column.from_unique_ptr(
         move(c_result.first), data_ptr_exposed=True
     )
