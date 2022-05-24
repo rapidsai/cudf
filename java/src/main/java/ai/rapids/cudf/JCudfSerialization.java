@@ -108,7 +108,7 @@ public class JCudfSerialization {
     }
 
     /** Constructor for a row-count only table (no columns) */
-    SerializedTableHeader(int numRows) {
+    public SerializedTableHeader(int numRows) {
       this(new SerializedColumnHeader[0], numRows, 0);
     }
 
