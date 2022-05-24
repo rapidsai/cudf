@@ -147,7 +147,7 @@ function buildLibCudfJniInDocker {
                 -DCUDF_USE_ARROW_STATIC=ON \
                 -DCUDF_ENABLE_ARROW_S3=OFF \
                 -DBUILD_TESTS=OFF \
-                -DPER_THREAD_DEFAULT_STREAM=ON \
+                -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
                 -DRMM_LOGGING_LEVEL=OFF \
                 -DBUILD_SHARED_LIBS=OFF && \
              cmake --build . --parallel ${PARALLEL_LEVEL} && \
@@ -274,7 +274,7 @@ if buildAll || hasArg libcudf; then
           -DBUILD_TESTS=${BUILD_TESTS} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
-          -DPER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
+          -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
           ${CMAKE_ARGS}
 
