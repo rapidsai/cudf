@@ -110,11 +110,23 @@ class Buffer(Serializable):
             if base_buffer is not None:
                 base_buffer._ptr_exposed = True
 
-        if self._sole_owner and global_manager.enabled:
+        self._spill_manager = None
+        if global_manager.enabled:
             self._spill_manager = global_manager.get()
-            self._spill_manager.add(self)
-        else:
-            self._spill_manager = None
+            if self._ptr and self._size:
+                base = self._spill_manager.lookup_address_range(
+                    self._ptr, self._size
+                )
+                if self._sole_owner:
+                    if base is not None:
+                        raise RuntimeError(
+                            "Creating sole owning buffer of already "
+                            f"known memory {self} {base}"
+                        )
+                elif base:
+                    base._ptr_exposed = True
+
+                self._spill_manager.add(self)
 
     @classmethod
     def from_buffer(cls, buffer: Buffer, size: int = None, offset: int = 0):
