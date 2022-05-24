@@ -75,6 +75,19 @@ namespace row {
 enum class lhs_index_type : size_type {};
 enum class rhs_index_type : size_type {};
 
+/**
+ * @brief A counting iterator that uses strongly typed indices bound to tables.
+ *
+ * Performing lexicographic or equality comparisons between values in two
+ * tables requires the use of strongly typed indices. The strong index types
+ * `lhs_index_type` and `rhs_index_type` ensure that index values are bound to
+ * the correct table, regardless of the order in which these indices are
+ * provided to the call operator. This struct and its type aliases
+ * `lhs_iterator` and `rhs_iterator` provide an interface similar to a counting
+ * iterator, with strongly typed values to represent the table indices.
+ *
+ * @tparam Index The strong index type
+ */
 template <typename Index, typename Underlying = std::underlying_type_t<Index>>
 struct strong_index_iterator : public thrust::iterator_facade<strong_index_iterator<Index>,
                                                               Index,
@@ -110,7 +123,14 @@ struct strong_index_iterator : public thrust::iterator_facade<strong_index_itera
   Underlying begin{};
 };
 
+/**
+ * @brief Iterator representing indices into a left-side table.
+ */
 using lhs_iterator = strong_index_iterator<lhs_index_type>;
+
+/**
+ * @brief Iterator representing indices into a right-side table.
+ */
 using rhs_iterator = strong_index_iterator<rhs_index_type>;
 
 namespace lexicographic {

@@ -384,6 +384,14 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
           gpu_unsnap(inflate_in_view, inflate_out_view, inflate_stats, stream);
         }
         break;
+      case compression_type::ZSTD:
+        nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
+                                   inflate_in_view,
+                                   inflate_out_view,
+                                   inflate_stats,
+                                   max_uncomp_block_size,
+                                   stream);
+        break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
     decompress_check(inflate_stats, any_block_failure.device_ptr(), stream);
@@ -859,10 +867,11 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    orc_reader_options const& options,
+                   rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     _sources(std::move(sources)),
-    _metadata{_sources},
+    _metadata{_sources, stream},
     selected_columns{_metadata.select_columns(options.get_columns())}
 {
   // Override output timestamp resolution if requested
@@ -921,7 +930,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     return {std::make_unique<table>(), std::move(out_metadata)};
 
   // Select only stripes required (aka row groups)
-  const auto selected_stripes = _metadata.select_stripes(stripes, skip_rows, num_rows);
+  const auto selected_stripes = _metadata.select_stripes(stripes, skip_rows, num_rows, stream);
 
   auto const tz_table = compute_timezone_table(selected_stripes, stream);
 
@@ -1287,7 +1296,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
 {
-  _impl = std::make_unique<impl>(std::move(sources), options, mr);
+  _impl = std::make_unique<impl>(std::move(sources), options, stream, mr);
 }
 
 // Destructor within this translation unit
