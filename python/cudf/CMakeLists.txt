@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
-set(cudf_version 22.06.00)
+set(cudf_version 22.08.00)
 
 # TODO: Once the rapids-cmake PR is merged, we can use the same fetch_rapids.cmake script here.
 # include(../../fetch_rapids.cmake)
