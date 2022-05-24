@@ -192,7 +192,7 @@ std::unique_ptr<column> find_and_replace_all(
  * @param[in] lo Minimum clamp value. All elements less than `lo` will be replaced by `lo_replace`
  * Ignored if null.
  * @param[in] lo_replace All elements less than `lo` will be replaced by `lo_replace`
- * @param[in] hi Maximum clamp value All elements greater than `hi` will be replaced by
+ * @param[in] hi Maximum clamp value. All elements greater than `hi` will be replaced by
  * `hi_replace`. Ignored if null.
  * @param[in] hi_replace All elements greater than `hi` will be replaced by `hi_replace`
  * @param[in] mr Device memory resource used to allocate device memory of the returned column

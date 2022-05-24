@@ -173,7 +173,7 @@ std::unique_ptr<column> binary_operation(
  * @param lhs         The left operand column
  * @param rhs         The right operand column
  * @param ptx         String containing the PTX of a binary function
- * @param output_type The desired data type of the output column It is assumed
+ * @param output_type The desired data type of the output column. It is assumed
  *                    that output_type is compatible with the output data type
  *                    of the function in the PTX code
  * @param mr          Device memory resource used to allocate the returned column's device memory

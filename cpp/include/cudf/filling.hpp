@@ -71,7 +71,7 @@ void fill_in_place(mutable_column_view& destination,
  * @throws cudf::logic_error if @p destination and @p value have different
  * types.
  *
- * @param input The input column used to create a new column The new column
+ * @param input The input column used to create a new column. The new column
  * is created by replacing the values of @p input in the specified range with
  * @p value.
  * @param begin The starting index of the fill range (inclusive)

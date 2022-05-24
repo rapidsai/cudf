@@ -60,7 +60,7 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
  * ```
  *
  * @param input          Column of values to be rounded
- * @param decimal_places Number of decimal places to round to (default 0) If negative, this
+ * @param decimal_places Number of decimal places to round to (default 0). If negative, this
  * specifies the number of positions to the left of the decimal point.
  * @param method         Rounding method
  * @param mr             Device memory resource used to allocate the returned column's device memory

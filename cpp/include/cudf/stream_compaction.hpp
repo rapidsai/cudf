@@ -340,7 +340,7 @@ cudf::size_type distinct_count(column_view const& input,
  * @brief Count the distinct rows in a table.
  *
  * @param[in] input Table whose distinct rows will be counted
- * @param[in] nulls_equal flag to denote if null elements should be considered equal
+ * @param[in] nulls_equal flag to denote if null elements should be considered equal.
  *            nulls are not equal if null_equality::UNEQUAL.
  *
  * @return number of distinct rows in the table

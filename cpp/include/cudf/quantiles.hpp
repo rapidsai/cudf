@@ -38,13 +38,13 @@ namespace cudf {
  * @param[in] q               Specified quantiles in range [0, 1]
  * @param[in] interp          Strategy used to select between values adjacent to
  *                            a specified quantile.
- * @param[in] ordered_indices Column containing the sorted order of `input`
+ * @param[in] ordered_indices Column containing the sorted order of `input`.
  *                            If the column is empty, all `input` values are
  *                            used in existing order. Indices must be in range
  *                            [0, `input.size()`), but are not required to be
  *                            unique. Values not indexed by this column will be
  *                            ignored.
- * @param[in] exact           If true, returns doubles
+ * @param[in] exact           If true, returns doubles.
  *                            If false, returns same type as input.
  * @param[in] mr              Device memory resource used to allocate the returned column's device
  memory

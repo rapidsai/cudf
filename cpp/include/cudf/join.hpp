@@ -109,10 +109,10 @@ inner_join(cudf::table_view const& left_keys,
  *
  * @param[in] left The left table
  * @param[in] right The right table
- * @param[in] left_on The column indices from `left` to join on
+ * @param[in] left_on The column indices from `left` to join on.
  * The column from `left` indicated by `left_on[i]` will be compared against the column
  * from `right` indicated by `right_on[i]`.
- * @param[in] right_on The column indices from `right` to join on
+ * @param[in] right_on The column indices from `right` to join on.
  * The column from `right` indicated by `right_on[i]` will be compared against the column
  * from `left` indicated by `left_on[i]`.
  * @param[in] compare_nulls controls whether null join-key values
@@ -202,10 +202,10 @@ left_join(cudf::table_view const& left_keys,
  *
  * @param[in] left The left table
  * @param[in] right The right table
- * @param[in] left_on The column indices from `left` to join on
+ * @param[in] left_on The column indices from `left` to join on.
  * The column from `left` indicated by `left_on[i]` will be compared against the column
  * from `right` indicated by `right_on[i]`.
- * @param[in] right_on The column indices from `right` to join on
+ * @param[in] right_on The column indices from `right` to join on.
  * The column from `right` indicated by `right_on[i]` will be compared against the column
  * from `left` indicated by `left_on[i]`.
  * @param[in] compare_nulls controls whether null join-key values
@@ -294,10 +294,10 @@ full_join(cudf::table_view const& left_keys,
  *
  * @param[in] left The left table
  * @param[in] right The right table
- * @param[in] left_on The column indices from `left` to join on
+ * @param[in] left_on The column indices from `left` to join on.
  * The column from `left` indicated by `left_on[i]` will be compared against the column
  * from `right` indicated by `right_on[i]`.
- * @param[in] right_on The column indices from `right` to join on
+ * @param[in] right_on The column indices from `right` to join on.
  * The column from `right` indicated by `right_on[i]` will be compared against the column
  * from `left` indicated by `left_on[i]`.
  * @param[in] compare_nulls controls whether null join-key values
@@ -373,11 +373,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
  *
  * @param[in] left             The left table
  * @param[in] right            The right table
- * @param[in] left_on          The column indices from `left` to join on
+ * @param[in] left_on          The column indices from `left` to join on.
  *                             The column from `left` indicated by `left_on[i]`
  *                             will be compared against the column from `right`
  *                             indicated by `right_on[i]`.
- * @param[in] right_on         The column indices from `right` to join on
+ * @param[in] right_on         The column indices from `right` to join on.
  *                             The column from `right` indicated by `right_on[i]`
  *                             will be compared against the column from `left`
  *                             indicated by `left_on[i]`.
@@ -455,11 +455,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
  *
  * @param[in] left             The left table
  * @param[in] right            The right table
- * @param[in] left_on          The column indices from `left` to join on
+ * @param[in] left_on          The column indices from `left` to join on.
  *                             The column from `left` indicated by `left_on[i]`
  *                             will be compared against the column from `right`
  *                             indicated by `right_on[i]`.
- * @param[in] right_on         The column indices from `right` to join on
+ * @param[in] right_on         The column indices from `right` to join on.
  *                             The column from `right` indicated by `right_on[i]`
  *                             will be compared against the column from `left`
  *                             indicated by `left_on[i]`.

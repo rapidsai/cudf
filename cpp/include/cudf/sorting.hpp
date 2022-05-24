@@ -35,11 +35,11 @@ namespace cudf {
  * @brief Computes the row indices that would produce `input` in a lexicographical sorted order.
  *
  * @param input The table to sort
- * @param column_order The desired sort order for each column Size must be
+ * @param column_order The desired sort order for each column. Size must be
  * equal to `input.num_columns()` or empty. If empty, all columns will be sorted
  * in ascending order.
  * @param null_precedence The desired order of null compared to other elements
- * for each column.  Size must be equal to `input.num_columns()` or empty.
+ * for each column. Size must be equal to `input.num_columns()` or empty.
  * If empty, all columns will be sorted in `null_order::BEFORE`.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A non-nullable column of `size_type` elements containing the permuted row indices of
@@ -70,7 +70,7 @@ std::unique_ptr<column> stable_sorted_order(
  *        order.
  *
  * @param[in] table             Table whose rows need to be compared for ordering
- * @param[in] column_order      The expected sort order for each column Size
+ * @param[in] column_order      The expected sort order for each column. Size
  *                              must be equal to `in.num_columns()` or empty. If
  *                              empty, it is expected all columns are in
  *                              ascending order.
@@ -89,7 +89,7 @@ bool is_sorted(cudf::table_view const& table,
  * @brief Performs a lexicographic sort of the rows of a table
  *
  * @param input The table to sort
- * @param column_order The desired order for each column Size must be
+ * @param column_order The desired order for each column. Size must be
  * equal to `input.num_columns()` or empty. If empty, all columns are sorted in
  * ascending order.
  * @param null_precedence The desired order of a null element compared to other
@@ -115,7 +115,7 @@ std::unique_ptr<table> sort(
  *
  * @param values The table to reorder
  * @param keys The table that determines the ordering
- * @param column_order The desired order for each column in `keys` Size must be
+ * @param column_order The desired order for each column in `keys`. Size must be
  * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
  * ascending order.
  * @param null_precedence The desired order of a null element compared to other
@@ -145,7 +145,7 @@ std::unique_ptr<table> sort_by_key(
  *
  * @param values The table to reorder
  * @param keys The table that determines the ordering
- * @param column_order The desired order for each column in `keys` Size must be
+ * @param column_order The desired order for each column in `keys`. Size must be
  * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
  * ascending order.
  * @param null_precedence The desired order of a null element compared to other
@@ -182,7 +182,7 @@ std::unique_ptr<table> stable_sort_by_key(
  * @param input The column to rank
  * @param method The ranking method used for tie breaking (same values)
  * @param column_order The desired sort order for ranking
- * @param null_handling  flag to include nulls during ranking If nulls are not
+ * @param null_handling  flag to include nulls during ranking. If nulls are not
  * included, corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements
  * for column
@@ -211,7 +211,7 @@ std::unique_ptr<column> rank(
  * @param keys The table that determines the ordering of elements in each segment
  * @param segment_offsets The column of `size_type` type containing start offset index for each
  * contiguous segment.
- * @param column_order The desired order for each column in `keys` Size must be
+ * @param column_order The desired order for each column in `keys`. Size must be
  * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
  * ascending order.
  * @param null_precedence The desired order of a null element compared to other
@@ -252,7 +252,7 @@ std::unique_ptr<column> stable_segmented_sorted_order(
  * @param keys The table that determines the ordering of elements in each segment
  * @param segment_offsets The column of `size_type` type containing start offset index for each
  * contiguous segment.
- * @param column_order The desired order for each column in `keys` Size must be
+ * @param column_order The desired order for each column in `keys`. Size must be
  * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
  * ascending order.
  * @param null_precedence The desired order of a null element compared to other

@@ -103,7 +103,7 @@ std::unique_ptr<scalar> reduce(
  * output type is not bool8.
  *
  * @param segmented_values Column view of segmented inputs
- * @param offsets Each segment's offset of @p segmented_values A list of offsets
+ * @param offsets Each segment's offset of @p segmented_values. A list of offsets
  * with size `num_segments + 1`. The size of `i`th segment is `offsets[i+1] -
  * offsets[i]`.
  * @param agg Aggregation operator applied by the reduction

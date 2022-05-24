@@ -53,7 +53,7 @@ namespace cudf {
  * @param[in] following_window The static rolling window size in the forward direction
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
- * @param[in] agg The rolling window aggregation type (SUM, MAX, MIN, etc)
+ * @param[in] agg The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
@@ -193,7 +193,7 @@ struct window_bounds {
  * @param[in] following_window The static rolling window size in the forward direction
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
- * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc)
+ * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
@@ -353,7 +353,7 @@ std::unique_ptr<column> grouped_rolling_window(
  * @param[in] following_window_in_days The rolling window time-interval in the forward direction
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
- * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc)
+ * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
@@ -502,7 +502,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  * @param[in] following The interval value in the forward direction
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
- * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc)
+ * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
@@ -540,7 +540,7 @@ std::unique_ptr<column> grouped_range_rolling_window(
  * @throws cudf::logic_error if window column type is not INT32
  *
  * @param[in] input The input column
- * @param[in] preceding_window A non-nullable column of INT32 window sizes in the forward direction
+ * @param[in] preceding_window A non-nullable column of INT32 window sizes in the forward direction.
  *                             `preceding_window[i]` specifies preceding window size for
  *                             element `i`.
  * @param[in] following_window A non-nullable column of INT32 window sizes in the backward
@@ -548,7 +548,7 @@ std::unique_ptr<column> grouped_range_rolling_window(
  *                             for element `i`.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
- * @param[in] agg The rolling window aggregation type (sum, max, min, etc)
+ * @param[in] agg The rolling window aggregation type (sum, max, min, etc.)
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
