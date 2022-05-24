@@ -78,8 +78,8 @@ dependencies:
       - git+https://github.com/python-streamz/streamz.git@master
       - pyorc
   - ptxcompiler  # [linux64]
-  - gcc_linux-64=9.3.0 # [linux64]
+  - gcc_linux-64=9.* # [linux64]
   - sysroot_linux-64==2.17 # [linux64]
   # Un-comment following lines for ARM specific packages.
-  # - gcc_linux-aarch64=9.3.0 # [aarch64]
+  # - gcc_linux-aarch64=9.* # [aarch64]
   # - sysroot_linux-aarch64==2.17 # [aarch64]
