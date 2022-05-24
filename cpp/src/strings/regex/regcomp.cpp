@@ -479,32 +479,39 @@ class regex_parser {
           return count;
         };
 
-        auto const exprp_backup               = exprp;  // save in case matching '}' is not found
-        constexpr auto max_read               = 4;      // 3 digits plus the delimiter
-        constexpr auto max_value              = 999;    // support only 3 digits
-        std::array<char, max_read + 1> buffer = {0};    //(max_read + 1);
+        constexpr auto max_read               = 4;    // 3 digits plus the delimiter
+        constexpr auto max_value              = 999;  // support only 3 digits
+        std::array<char, max_read + 1> buffer = {0};  //(max_read + 1);
 
         // get left-side (n) value => min_count
-        exprp += transform_until(exprp, exprp + max_read, buffer.data(), "},");
-        auto count = std::atoi(buffer.data());
-        if ((*exprp != '}' && *exprp != ',') || (count > max_value)) {
-          exprp = exprp_backup;  // abort, rollback and
-          break;                 // re-interpret as CHAR
+        auto bytes_read = transform_until(exprp, exprp + max_read, buffer.data(), "},");
+        if (exprp[bytes_read] != '}' && exprp[bytes_read] != ',') {
+          break;  // re-interpret as CHAR
         }
+        auto count = std::atoi(buffer.data());
+        CUDF_EXPECTS(count <= max_value,
+                     "unsupported repeat value at " + std::to_string(exprp - pattern - 1));
         yy_min_count = static_cast<int16_t>(count);
+
+        auto const exprp_backup = exprp;  // save in case ending '}' is not found
+        exprp += bytes_read;
 
         // get optional right-side (m) value => max_count
         yy_max_count = yy_min_count;
         if (*exprp++ == ',') {
-          exprp += transform_until(exprp, exprp + max_read, buffer.data(), "}");
-          count = std::atoi(buffer.data());
-          if ((*exprp != '}') || (count > max_value)) {
+          bytes_read = transform_until(exprp, exprp + max_read, buffer.data(), "}");
+          if (exprp[bytes_read] != '}') {
             exprp = exprp_backup;  // abort, rollback and
             break;                 // re-interpret as CHAR
           }
+
+          count = std::atoi(buffer.data());
+          CUDF_EXPECTS(count <= max_value,
+                       "unsupported repeat value at " + std::to_string(exprp - pattern - 1));
+
           // {n,m} and {n,} are both valid
           yy_max_count = buffer[0] == 0 ? -1 : static_cast<int16_t>(count);
-          ++exprp;
+          exprp += bytes_read + 1;
         }
 
         // {n,m}? pattern is lazy counted quantifier

@@ -401,8 +401,8 @@ TEST_F(StringsContainsTests, FixedQuantifier)
     auto results = cudf::strings::count_re(sv, "aaaa{n,m}");
     cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 0, 0, 0, 0});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-    results = cudf::strings::count_re(sv, "aaaa{1234,5678}");
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    EXPECT_THROW(cudf::strings::count_re(sv, "aaaa{1234,5678}"), cudf::logic_error);
+    // CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
