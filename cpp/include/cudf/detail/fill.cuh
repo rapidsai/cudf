@@ -25,7 +25,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 
-namespace cudf::lists::detail {
+namespace cudf::detail {
 
 /**
  * @brief Fill label values for segments defined by a given offsets array.
@@ -77,4 +77,4 @@ void fill_segmented_labels(InputIterator offsets_begin,
                       output);
 }
 
-}  // namespace cudf::lists::detail
+}  // namespace cudf::detail
