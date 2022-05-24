@@ -2515,5 +2515,5 @@ def test_parquet_reader_zstd_compression(datadir):
         df = cudf.read_parquet(fname)
         pdf = pd.read_parquet(fname)
         assert_eq(df, pdf)
-    except RuntimeError as e:
+    except RuntimeError:
         pytest.mark.xfail(reason="zstd support is not enabled")

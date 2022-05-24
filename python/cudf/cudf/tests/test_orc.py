@@ -1727,5 +1727,5 @@ def test_orc_reader_zstd_compression(list_struct_buff):
     try:
         got = cudf.read_orc(buffer)
         assert_eq(expected, got)
-    except RuntimeError as e:
+    except RuntimeError:
         pytest.mark.xfail(reason="zstd support is not enabled")
