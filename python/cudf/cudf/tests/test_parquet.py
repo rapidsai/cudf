@@ -2516,7 +2516,4 @@ def test_parquet_reader_zstd_compression(datadir):
         pdf = pd.read_parquet(fname)
         assert_eq(df, pdf)
     except RuntimeError as e:
-        if "Unsupported compression type" in str(e):
-            pytest.mark.xfail(reason="nvcomp build doesn't have zstd")
-        else:
-            raise e
+        pytest.mark.xfail(reason="zstd support is not enabled")

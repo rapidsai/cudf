@@ -31,8 +31,6 @@
 
 namespace cudf::io::nvcomp {
 
-[[noreturn]] void fail_unsupported() { CUDF_FAIL("Unsupported compression type"); }
-
 template <typename... Args>
 auto batched_decompress_get_temp_size(compression_type compression, Args&&... args)
 {
@@ -43,7 +41,7 @@ auto batched_decompress_get_temp_size(compression_type compression, Args&&... ar
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressGetTempSize(std::forward<Args>(args)...);
 #endif
-    default: fail_unsupported();
+    default: CUDF_FAIL("Unsupported compression type");
   }
 };
 
@@ -57,7 +55,7 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressAsync(std::forward<Args>(args)...);
 #endif
-    default: fail_unsupported();
+    default: CUDF_FAIL("Unsupported compression type");
   }
 };
 
@@ -80,10 +78,16 @@ void batched_decompress(compression_type compression,
                         rmm::cuda_stream_view stream)
 {
   // TODO Consolidate config use to a common location
-  if (compression == compression_type::ZSTD and
-      not cudf::io::detail::nvcomp_integration::is_all_enabled()) {
-    fail_unsupported();
+  if (compression == compression_type::ZSTD) {
+#if NVCOMP_HAS_ZSTD
+    CUDF_EXPECTS(cudf::io::detail::nvcomp_integration::is_all_enabled(),
+                 "Zstandard compression is experimental, you can enable it through "
+                 "`LIBCUDF_NVCOMP_POLICY` environment variable.");
+#else
+    CUDF_FAIL("nvCOMP 2.3 or newer is required for Zstandard compression");
+#endif
   }
+
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
