@@ -194,5 +194,19 @@ TYPED_TEST(groupby_lists_test, lists_with_nulls)
   test_sum_agg(keys, values, expected_keys, expected_values);
 }
 
+TYPED_TEST(groupby_lists_test, lists_with_null_elements)
+{
+  auto keys   = lcw<TypeParam>{{{{1, 2, 3}, {}, {4, 5}, {}, {6, 0}},
+                              {{1, 2, 3}, {}, {4, 5}, {}, {6, 0}},
+                              {{1, 2, 3}, {}, {4, 5}, {}, {6, 0}},
+                              {{1, 2, 3}, {}, {4, 5}, {}, {6, 0}}},
+                             nulls_at({2, 3})};
+  auto values = fwcw<int32_t>{1, 2, 4, 5};
+
+  auto expected_keys   = lcw<TypeParam>{{{{1, 2, 3}, {}, {4, 5}, {}, {6, 0}}, {}}, null_at(1)};
+  auto expected_values = fwcw<R>{3, 9};
+
+  test_sum_agg(keys, values, expected_keys, expected_values);
+}
 }  // namespace test
 }  // namespace cudf
