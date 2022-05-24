@@ -54,14 +54,14 @@ class datasource {
     /**
      * @pure @brief Returns the buffer size in bytes.
      *
-     * @return Buffer size in bytes.
+     * @return Buffer size in bytes
      */
     [[nodiscard]] virtual size_t size() const = 0;
 
     /**
      * @pure @brief Returns the address of the data in the buffer.
      *
-     * @return Address of the data in the buffer.
+     * @return Address of the data in the buffer
      */
     [[nodiscard]] virtual uint8_t const* data() const = 0;
 

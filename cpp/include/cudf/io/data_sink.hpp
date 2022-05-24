@@ -123,7 +123,7 @@ class data_sink {
    * instead of write() when possible.  However, it is still possible to receive
    * write() calls as well.
    *
-   * @return bool If this writer supports device_write() calls.
+   * @return bool If this writer supports device_write() calls
    */
   [[nodiscard]] virtual bool supports_device_write() const { return false; }
 
