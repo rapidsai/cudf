@@ -353,10 +353,10 @@ class groupby {
    *          {"x" "x" "x" @ "tt" "tt" @}
    * @endcode
    *
-   * @param[in] values A table whose column null values will be replaced.
+   * @param[in] values A table whose column null values will be replaced
    * @param[in] replace_policies Specify the position of replacement values relative to null values,
    * one for each column
-   * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+   * @param[in] mr Device memory resource used to allocate device memory of the returned column
    *
    * @return Pair that contains a table with the sorted keys and the result column
    */

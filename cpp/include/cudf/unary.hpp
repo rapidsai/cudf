@@ -124,7 +124,7 @@ std::unique_ptr<column> cast(
  * @throws cudf::logic_error if `input` is a non-floating point type
  *
  * @param input A column of floating-point elements
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A non-nullable column of `type_id::BOOL8` elements with `true` representing `NAN` values
  */
@@ -140,7 +140,7 @@ std::unique_ptr<column> is_nan(
  * @throws cudf::logic_error if `input` is a non-floating point type
  *
  * @param input A column of floating-point elements
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A non-nullable column of `type_id::BOOL8` elements with `false` representing `NAN`
  * values

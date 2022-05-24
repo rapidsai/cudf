@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
  * ```
  *
  * @param input          Column of values to be rounded
- * @param decimal_places Number of decimal places to round to (default 0). If negative, this
+ * @param decimal_places Number of decimal places to round to (default 0) If negative, this
  * specifies the number of positions to the left of the decimal point.
  * @param method         Rounding method
  * @param mr             Device memory resource used to allocate the returned column's device memory

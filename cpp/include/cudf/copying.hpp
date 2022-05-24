@@ -152,7 +152,7 @@ std::unique_ptr<column> reverse(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
@@ -192,7 +192,7 @@ std::unique_ptr<table> scatter(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
@@ -232,7 +232,7 @@ std::unique_ptr<column> empty_like(scalar const& input);
  * Supports only fixed-width types.
  *
  * @param[in] input Immutable view of input column to emulate
- * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
+ * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return A column with sufficient uninitialized capacity to hold the same
  * number of elements as `input` of the same type as `input.type()`
@@ -248,7 +248,7 @@ std::unique_ptr<column> allocate_like(
  *
  * @param[in] input Immutable view of input column to emulate
  * @param[in] size The desired number of elements that the new column should have capacity for
- * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
+ * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  * @return A column with sufficient uninitialized capacity to hold the specified number of elements
  * as `input` of the same type as `input.type()`
@@ -328,13 +328,13 @@ void copy_range_in_place(column_view const& source,
  * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
  * @throws cudf::logic_error if @p target and @p source have different types.
  *
- * @param source The column to copy from inside the range.
- * @param target The column to copy from outside the range.
+ * @param source The column to copy from inside the range
+ * @param target The column to copy from outside the range
  * @param source_begin The starting index of the source range (inclusive)
  * @param source_end The index of the last element in the source range
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> The result target column
  */
 std::unique_ptr<column> copy_range(
@@ -371,9 +371,9 @@ std::unique_ptr<column> copy_range(
  * @note if the input is nullable, the output will be nullable.
  * @note if the fill value is null, the output will be nullable.
  *
- * @param input      Column to be shifted.
- * @param offset     The offset by which to shift the input.
- * @param fill_value Fill value for indeterminable outputs.
+ * @param input      Column to be shifted
+ * @param offset     The offset by which to shift the input
+ * @param fill_value Fill value for indeterminable outputs
  * @param mr         Device memory resource used to allocate the returned result's device memory
  *
  * @throw cudf::logic_error if @p input dtype is neither fixed-width nor string type
@@ -414,8 +414,8 @@ std::unique_ptr<column> shift(
  * the range [0, input.size()).
  *
  * @param input View of column to slice
- * @param indices Indices used to take slices of `input`.
- * @return Vector of views of `input` indicated by the ranges in `indices`.
+ * @param indices Indices used to take slices of `input`
+ * @return Vector of views of `input` indicated by the ranges in `indices`
  */
 std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices);
 /**
@@ -453,8 +453,8 @@ std::vector<column_view> slice(column_view const& input, std::initializer_list<s
  * the range [0, input.size()).
  *
  * @param input View of table to slice
- * @param indices Indices used to take slices of `input`.
- * @return Vector of views of `input` indicated by the ranges in `indices`.
+ * @param indices Indices used to take slices of `input`
+ * @return Vector of views of `input` indicated by the ranges in `indices`
  */
 std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices);
 /**
@@ -493,7 +493,7 @@ std::vector<table_view> slice(table_view const& input, std::initializer_list<siz
  *
  * @param input View of column to split
  * @param splits Indices where the view will be split
- * @return The set of requested views of `input` indicated by the `splits`.
+ * @return The set of requested views of `input` indicated by the `splits`
  */
 std::vector<column_view> split(column_view const& input, host_span<size_type const> splits);
 /**
@@ -534,7 +534,7 @@ std::vector<column_view> split(column_view const& input, std::initializer_list<s
  *
  * @param input View of a table to split
  * @param splits Indices where the view will be split
- * @return The set of requested views of `input` indicated by the `splits`.
+ * @return The set of requested views of `input` indicated by the `splits`
  */
 std::vector<table_view> split(table_view const& input, host_span<size_type const> splits);
 /**
@@ -695,8 +695,8 @@ packed_columns pack(cudf::table_view const& input,
  * @param table View of the table to pack
  * @param contiguous_buffer A contiguous buffer of device memory which contains the data referenced
  * by the columns in `table`
- * @param buffer_size The size of `contiguous_buffer`.
- * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct.
+ * @param buffer_size The size of `contiguous_buffer`
+ * @return Vector of bytes representing the metadata used to `unpack` a packed_columns struct
  */
 packed_columns::metadata pack_metadata(table_view const& table,
                                        uint8_t const* contiguous_buffer,
@@ -863,10 +863,10 @@ std::unique_ptr<column> copy_if_else(
  *
  * @param[in] input table_view (set of dense columns) to scatter
  * @param[in] target table_view to modify with scattered values from `input`
- * @param[in] boolean_mask column_view which acts as boolean mask.
- * @param[in] mr Device memory resource used to allocate device memory of the returned table.
+ * @param[in] boolean_mask column_view which acts as boolean mask
+ * @param[in] mr Device memory resource used to allocate device memory of the returned table
  *
- * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
+ * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`
  */
 std::unique_ptr<table> boolean_mask_scatter(
   table_view const& input,
@@ -900,10 +900,10 @@ std::unique_ptr<table> boolean_mask_scatter(
  *
  * @param[in] input scalars to scatter
  * @param[in] target table_view to modify with scattered values from `input`
- * @param[in] boolean_mask column_view which acts as boolean mask.
- * @param[in] mr Device memory resource used to allocate device memory of the returned table.
+ * @param[in] boolean_mask column_view which acts as boolean mask
+ * @param[in] mr Device memory resource used to allocate device memory of the returned table
  *
- * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
+ * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`
  */
 std::unique_ptr<table> boolean_mask_scatter(
   std::vector<std::reference_wrapper<const scalar>> const& input,
@@ -921,7 +921,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  *
  * @param input Column view to get the element from
  * @param index Index into `input` to get the element at
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return std::unique_ptr<scalar> Scalar containing the single value
  */
 std::unique_ptr<scalar> get_element(
@@ -956,10 +956,10 @@ enum class sample_with_replacement : bool {
  * @throws cudf::logic_error if `n` > `input.num_rows()` and `replacement` == FALSE.
  * @throws cudf::logic_error if `n` < 0.
  *
- * @param input View of a table to sample.
- * @param n non-negative number of samples expected from `input`.
- * @param replacement Allow or disallow sampling of the same row more than once.
- * @param seed Seed value to initiate random number generator.
+ * @param input View of a table to sample
+ * @param n non-negative number of samples expected from `input`
+ * @param replacement Allow or disallow sampling of the same row more than once
+ * @param seed Seed value to initiate random number generator
  * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @return std::unique_ptr<table> Table containing samples from `input`
@@ -984,8 +984,8 @@ std::unique_ptr<table> sample(
  *
  * @param input The column which is (and whose descendants are) to be checked for
  * non-empty null rows.
- * @return true If either the column or its descendants have non-empty null rows.
- * @return false If neither the column or its descendants have non-empty null rows.
+ * @return true If either the column or its descendants have non-empty null rows
+ * @return false If neither the column or its descendants have non-empty null rows
  */
 bool has_nonempty_nulls(column_view const& input);
 
