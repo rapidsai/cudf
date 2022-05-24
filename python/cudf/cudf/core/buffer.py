@@ -53,7 +53,7 @@ class Buffer(Serializable):
     _owner: object
     _sole_owner: bool
     _access_counter: AccessCounter
-    _raw_pointer_exposed: bool
+    _ptr_exposed: bool
     _last_accessed: float
     _spill_manager: Optional[SpillManager]
 
@@ -63,13 +63,14 @@ class Buffer(Serializable):
         size: int = None,
         owner: object = None,
         sole_owner: bool = False,
+        ptr_exposed: bool = False,
     ):
         from cudf._lib.column import AccessCounter
         from cudf.core.spill_manager import global_manager
 
         self._access_counter = AccessCounter()
         self._sole_owner = sole_owner
-        self._raw_pointer_exposed = False
+        self._ptr_exposed = ptr_exposed
         self._ptr_desc = {"type": "gpu"}
         self._last_accessed = time.monotonic()
 
@@ -176,7 +177,7 @@ class Buffer(Serializable):
             self._spill_manager.spill_to_device_limit()
 
         self.move_inplace(target="gpu")
-        self._raw_pointer_exposed = True
+        self._ptr_exposed = True
         self._last_accessed = time.monotonic()
         assert self._ptr is not None
         return self._ptr
@@ -198,7 +199,7 @@ class Buffer(Serializable):
     def spillable(self) -> bool:
         return (
             self._sole_owner
-            and not self._raw_pointer_exposed
+            and not self._ptr_exposed
             and self._access_counter.use_count() == 1
         )
 
