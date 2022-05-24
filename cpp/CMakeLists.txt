@@ -751,8 +751,8 @@ install(
   EXPORT cudf-exports
 )
 
-install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test ${CUDF_SOURCE_DIR}/include/nvtext
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
+                  ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 install(
