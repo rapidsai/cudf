@@ -30,7 +30,7 @@
 #include <cmath>
 #include <string>
 
-//! `fixed_point` and supporting types
+/// `fixed_point` and supporting types
 namespace numeric {
 
 /// The scale type for fixed_point
@@ -188,8 +188,8 @@ CUDF_HOST_DEVICE inline constexpr T shift(T const& val, scale_type const& scale)
 template <typename Rep,
           typename cuda::std::enable_if_t<is_supported_representation_type<Rep>()>* = nullptr>
 struct scaled_integer {
-  Rep value;         //!< The value of the fixed point number
-  scale_type scale;  //!< The scale of the value
+  Rep value;         ///< The value of the fixed point number
+  scale_type scale;  ///< The scale of the value
   /**
    * @brief Constructor for `scaled_integer`
    *
@@ -214,7 +214,7 @@ class fixed_point {
   scale_type _scale;
 
  public:
-  using rep = Rep;  //!< The representation type
+  using rep = Rep;  ///< The representation type
 
   /**
    * @brief Constructor that will perform shifting to store value appropriately (from floating point
