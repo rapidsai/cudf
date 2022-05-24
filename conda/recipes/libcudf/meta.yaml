@@ -183,6 +183,7 @@ outputs:
         - test -f $PREFIX/include/cudf/lists/gather.hpp
         - test -f $PREFIX/include/cudf/lists/list_view.hpp
         - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
+        - test -f $PREFIX/include/cudf/lists/list_view.hpp
         - test -f $PREFIX/include/cudf/lists/sorting.hpp
         - test -f $PREFIX/include/cudf/lists/stream_compaction.hpp
         - test -f $PREFIX/include/cudf/merge.hpp
