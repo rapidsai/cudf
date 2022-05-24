@@ -481,17 +481,8 @@ void compute_single_pass_aggs(table_view const& keys,
   auto const skip_key_rows_with_nulls =
     keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
-  auto row_bitmask = [&] {
-    if (skip_key_rows_with_nulls) {
-      // TODO: This is a temporary workaround. Get rid of "flattened" logic
-      // once `bitmask_and` supports nested nulls handling.
-      auto const flattened = cudf::structs::detail::flatten_nested_columns(
-        keys, {}, {}, cudf::structs::detail::column_nullability::FORCE);
-      auto const flattened_keys = flattened.flattened_columns();
-      return cudf::detail::bitmask_and(flattened_keys, stream).first;
-    }
-    return rmm::device_buffer{};
-  }();
+  auto row_bitmask =
+    skip_key_rows_with_nulls ? cudf::detail::bitmask_and(keys, stream).first : rmm::device_buffer{};
 
   thrust::for_each_n(
     rmm::exec_policy(stream),
@@ -571,14 +562,9 @@ std::unique_ptr<table> groupby(table_view const& keys,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto const num_keys = keys.num_rows();
-  auto const null_keys_are_equal =
-    include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
-  // Minor optimization: safely bypass null handling in row operators
-  // which are never called on rows containing nulls
-  auto const has_null = include_null_keys == null_policy::EXCLUDE
-                          ? nullate::DYNAMIC{false}
-                          : nullate::DYNAMIC{keys_have_nulls};
+  auto const num_keys            = keys.num_rows();
+  auto const null_keys_are_equal = null_equality::EQUAL;
+  auto const has_null            = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
 
   auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
   auto const comparator  = cudf::experimental::row::equality::self_comparator{preprocessed_keys};
@@ -679,7 +665,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   cudf::detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys =
-    groupby(keys, requests, &cache, cudf::has_nested_nulls(keys), include_null_keys, stream, mr);
+    groupby(keys, requests, &cache, cudf::has_nulls(keys), include_null_keys, stream, mr);
 
   return std::pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
 }

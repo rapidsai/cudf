@@ -284,14 +284,14 @@ TYPED_TEST(groupby_keys_test, structs)
   auto vals = FWCW<int>{1, 2, 3, 4, 5, 6, 7, 8, 9};
 
   // clang-format off
-  auto expected_col_a = FWCW<V>{ 1,   1 };
-  auto expected_col_b = FWCW<V>{ 1,   2 };
-  auto expected_col_c = STRINGS{"a", "b"};
+  auto expected_col_a = FWCW<V>{{1,   1,   1,   2 }, null_at(2)};
+  auto expected_col_b = FWCW<V>{ 1,   2,   1,   1 };
+  auto expected_col_c = STRINGS{"a", "b", "a", "c"};
   // clang-format on
-  auto expected_s2 = STRUCTS{{expected_col_a, expected_col_b}};
+  auto expected_s2 = STRUCTS{{expected_col_a, expected_col_b}, null_at(3)};
 
   auto expect_keys = STRUCTS{{expected_s2, expected_col_c}, no_nulls()};
-  auto expect_vals = FWCW<R>{6, 1};
+  auto expect_vals = FWCW<R>{6, 1, 8, 7};
 
   auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
