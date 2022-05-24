@@ -97,8 +97,7 @@ setup(
     ],
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={
-        key: ["*.pxd"]
-        for key in find_packages(include=["cudf._lib"])
+        key: ["*.pxd"] for key in find_packages(include=["cudf._lib"])
     },
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
