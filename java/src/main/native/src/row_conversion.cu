@@ -2334,8 +2334,8 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
                              output_string_offsets.begin());
 
       // allocate destination string column
-      rmm::device_uvector<char> string_data(output_string_offsets.element(num_rows, stream),
-                                            stream);
+      rmm::device_uvector<char> string_data(output_string_offsets.element(num_rows, stream), stream,
+                                            mr);
 
       string_col_offset_ptrs.push_back(output_string_offsets.data());
       string_data_col_ptrs.push_back(string_data.data());
