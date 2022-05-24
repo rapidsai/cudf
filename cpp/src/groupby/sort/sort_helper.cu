@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/fill.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
@@ -226,19 +227,11 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
 
   if (num_keys(stream) == 0) return group_labels;
 
-  thrust::uninitialized_fill(rmm::exec_policy(stream),
-                             group_labels.begin(),
-                             group_labels.end(),
-                             index_vector::value_type{0});
-  thrust::scatter(rmm::exec_policy(stream),
-                  thrust::make_constant_iterator(1, decltype(num_groups(stream))(1)),
-                  thrust::make_constant_iterator(1, num_groups(stream)),
-                  group_offsets(stream).begin() + 1,
-                  group_labels.begin());
-
-  thrust::inclusive_scan(
-    rmm::exec_policy(stream), group_labels.begin(), group_labels.end(), group_labels.begin());
-
+  cudf::detail::fill_segmented_labels(group_offsets(stream).begin(),
+                                      group_offsets(stream).end(),
+                                      group_labels.begin(),
+                                      group_labels.end(),
+                                      stream);
   return group_labels;
 }
 
