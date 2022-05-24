@@ -30,7 +30,6 @@
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/replace.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
