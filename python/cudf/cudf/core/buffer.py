@@ -147,7 +147,7 @@ class Buffer(Serializable):
         ret = cls()
         ret._ptr = buffer.ptr + offset
         ret._size = buffer.size if size is None else size
-        ret._owner = buffer
+        ret._owner = get_base_buffer(buffer)
         return ret
 
     def __len__(self) -> int:
