@@ -17,15 +17,15 @@ build:
   number: {{ GIT_DESCRIBE_NUMBER }}
   string: py{{ py_version_numeric }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
-    - CC
-    - CXX
-    - CUDAHOSTCXX
     - PARALLEL_LEVEL
     - VERSION_SUFFIX
 
 requirements:
   build:
     - cmake >=3.20.1,!=3.23.0
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - python
     - cython >=0.29,<0.30

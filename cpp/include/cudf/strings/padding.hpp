@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ std::unique_ptr<column> pad(
   strings_column_view const& strings,
   size_type width,
   pad_side side                       = cudf::strings::pad_side::RIGHT,
-  std::string const& fill_char        = " ",
+  std::string_view fill_char          = " ",
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
