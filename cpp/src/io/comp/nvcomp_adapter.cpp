@@ -17,6 +17,7 @@
 #include "nvcomp_adapter.cuh"
 
 #include <cudf/utilities/error.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <nvcomp/snappy.h>
 
@@ -30,6 +31,8 @@
 
 namespace cudf::io::nvcomp {
 
+[[noreturn]] void fail_unsupported() { CUDF_FAIL("Unsupported compression type"); }
+
 template <typename... Args>
 auto batched_decompress_get_temp_size(compression_type compression, Args&&... args)
 {
@@ -40,7 +43,7 @@ auto batched_decompress_get_temp_size(compression_type compression, Args&&... ar
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressGetTempSize(std::forward<Args>(args)...);
 #endif
-    default: CUDF_FAIL("Unsupported compression type");
+    default: fail_unsupported();
   }
 };
 
@@ -54,7 +57,7 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressAsync(std::forward<Args>(args)...);
 #endif
-    default: CUDF_FAIL("Unsupported compression type");
+    default: fail_unsupported();
   }
 };
 
@@ -76,6 +79,11 @@ void batched_decompress(compression_type compression,
                         size_t max_uncomp_chunk_size,
                         rmm::cuda_stream_view stream)
 {
+  // TODO Consolidate config use to a common location
+  if (compression == compression_type::ZSTD and
+      not cudf::io::detail::nvcomp_integration::is_all_enabled()) {
+    fail_unsupported();
+  }
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
