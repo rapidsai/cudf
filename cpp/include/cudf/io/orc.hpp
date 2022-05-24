@@ -75,7 +75,7 @@ class orc_reader_options {
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read orc file.
+   * @param src source information used to read orc file
    */
   explicit orc_reader_options(source_info const& src) : _source(src) {}
 
@@ -90,8 +90,8 @@ class orc_reader_options {
   /**
    * @brief Creates `orc_reader_options_builder` which will build `orc_reader_options`.
    *
-   * @param src Source information to read orc file.
-   * @return Builder to build reader options.
+   * @param src Source information to read orc file
+   * @return Builder to build reader options
    */
   static orc_reader_options_builder builder(source_info const& src);
 
@@ -163,7 +163,7 @@ class orc_reader_options {
   /**
    * @brief Sets names of the column to read.
    *
-   * @param col_names Vector of column names.
+   * @param col_names Vector of column names
    */
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
@@ -182,7 +182,7 @@ class orc_reader_options {
   /**
    * @brief Sets number of rows to skip from the start.
    *
-   * @param rows Number of rows.
+   * @param rows Number of rows
    */
   void set_skip_rows(size_type rows)
   {
@@ -193,7 +193,7 @@ class orc_reader_options {
   /**
    * @brief Sets number of row to read.
    *
-   * @param nrows Number of rows.
+   * @param nrows Number of rows
    */
   void set_num_rows(size_type nrows)
   {
@@ -204,28 +204,28 @@ class orc_reader_options {
   /**
    * @brief Enable/Disable use of row index to speed-up reading.
    *
-   * @param use Boolean value to enable/disable row index use.
+   * @param use Boolean value to enable/disable row index use
    */
   void enable_use_index(bool use) { _use_index = use; }
 
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes
    *
-   * @param use Boolean value to enable/disable.
+   * @param use Boolean value to enable/disable
    */
   void enable_use_np_dtypes(bool use) { _use_np_dtypes = use; }
 
   /**
    * @brief Sets timestamp type to which timestamp column will be cast.
    *
-   * @param type Type of timestamp.
+   * @param type Type of timestamp
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
 
   /**
    * @brief Set columns that should be read as 128-bit Decimal
    *
-   * @param val Vector of fully qualified column names.
+   * @param val Vector of fully qualified column names
    */
   void set_decimal128_columns(std::vector<std::string> val)
   {
@@ -250,15 +250,15 @@ class orc_reader_options_builder {
   /**
    * @brief Constructor from source info.
    *
-   * @param src The source information used to read orc file.
+   * @param src The source information used to read orc file
    */
   explicit orc_reader_options_builder(source_info const& src) : options{src} {};
 
   /**
    * @brief Sets names of the column to read.
    *
-   * @param col_names Vector of column names.
-   * @return this for chaining.
+   * @param col_names Vector of column names
+   * @return this for chaining
    */
   orc_reader_options_builder& columns(std::vector<std::string> col_names)
   {
@@ -270,7 +270,7 @@ class orc_reader_options_builder {
    * @brief Sets list of individual stripes to read per source
    *
    * @param stripes Vector of vectors, mapping stripes to read to input sources
-   * @return this for chaining.
+   * @return this for chaining
    */
   orc_reader_options_builder& stripes(std::vector<std::vector<size_type>> stripes)
   {
@@ -281,8 +281,8 @@ class orc_reader_options_builder {
   /**
    * @brief Sets number of rows to skip from the start.
    *
-   * @param rows Number of rows.
-   * @return this for chaining.
+   * @param rows Number of rows
+   * @return this for chaining
    */
   orc_reader_options_builder& skip_rows(size_type rows)
   {
@@ -293,8 +293,8 @@ class orc_reader_options_builder {
   /**
    * @brief Sets number of row to read.
    *
-   * @param nrows Number of rows.
-   * @return this for chaining.
+   * @param nrows Number of rows
+   * @return this for chaining
    */
   orc_reader_options_builder& num_rows(size_type nrows)
   {
@@ -305,8 +305,8 @@ class orc_reader_options_builder {
   /**
    * @brief Enable/Disable use of row index to speed-up reading.
    *
-   * @param use Boolean value to enable/disable row index use.
-   * @return this for chaining.
+   * @param use Boolean value to enable/disable row index use
+   * @return this for chaining
    */
   orc_reader_options_builder& use_index(bool use)
   {
@@ -317,8 +317,8 @@ class orc_reader_options_builder {
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes.
    *
-   * @param use Boolean value to enable/disable.
-   * @return this for chaining.
+   * @param use Boolean value to enable/disable
+   * @return this for chaining
    */
   orc_reader_options_builder& use_np_dtypes(bool use)
   {
@@ -329,8 +329,8 @@ class orc_reader_options_builder {
   /**
    * @brief Sets timestamp type to which timestamp column will be cast.
    *
-   * @param type Type of timestamp.
-   * @return this for chaining.
+   * @param type Type of timestamp
+   * @return this for chaining
    */
   orc_reader_options_builder& timestamp_type(data_type type)
   {
@@ -341,8 +341,8 @@ class orc_reader_options_builder {
   /**
    * @brief Columns that should be read as 128-bit Decimal
    *
-   * @param val Vector of column names.
-   * @return this for chaining.
+   * @param val Vector of column names
+   * @return this for chaining
    */
   orc_reader_options_builder& decimal128_columns(std::vector<std::string> val)
   {
@@ -378,11 +378,11 @@ class orc_reader_options_builder {
  * Note: Support for reading files with struct columns is currently experimental, the output may not
  * be as reliable as reading for other datatypes.
  *
- * @param options Settings for controlling reading behavior.
+ * @param options Settings for controlling reading behavior
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
- * @return The set of columns.
+ * @return The set of columns
  */
 table_with_metadata read_orc(
   orc_reader_options const& options,
@@ -440,8 +440,8 @@ class orc_writer_options {
   /**
    * @brief Constructor from sink and table.
    *
-   * @param sink The sink used for writer output.
-   * @param table Table to be written to output.
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
    */
   explicit orc_writer_options(sink_info const& sink, table_view const& table)
     : _sink(sink), _table(table)
@@ -459,10 +459,10 @@ class orc_writer_options {
   /**
    * @brief Create builder to create `orc_writer_options`.
    *
-   * @param sink The sink used for writer output.
-   * @param table Table to be written to output.
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
    *
-   * @return Builder to build `orc_writer_options`.
+   * @return Builder to build `orc_writer_options`
    */
   static orc_writer_options_builder builder(sink_info const& sink, table_view const& table);
 
@@ -551,7 +551,7 @@ class orc_writer_options {
   /**
    * @brief Sets compression type.
    *
-   * @param comp Compression type.
+   * @param comp Compression type
    */
   void set_compression(compression_type comp) { _compression = comp; }
 
@@ -563,7 +563,7 @@ class orc_writer_options {
    * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
    * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
    *
-   * @param val Frequency of statistics collection.
+   * @param val Frequency of statistics collection
    */
   void enable_statistics(statistics_freq val) { _stats_freq = val; }
 
@@ -608,14 +608,14 @@ class orc_writer_options {
   /**
    * @brief Sets table to be written to output.
    *
-   * @param tbl Table for the output.
+   * @param tbl Table for the output
    */
   void set_table(table_view tbl) { _table = tbl; }
 
   /**
    * @brief Sets associated metadata
    *
-   * @param meta Associated metadata.
+   * @param meta Associated metadata
    */
   void set_metadata(table_input_metadata const* meta) { _metadata = meta; }
 
@@ -647,8 +647,8 @@ class orc_writer_options_builder {
   /**
    * @brief Constructor from sink and table.
    *
-   * @param sink The sink used for writer output.
-   * @param table Table to be written to output.
+   * @param sink The sink used for writer output
+   * @param table Table to be written to output
    */
   orc_writer_options_builder(sink_info const& sink, table_view const& table) : options{sink, table}
   {
@@ -657,8 +657,8 @@ class orc_writer_options_builder {
   /**
    * @brief Sets compression type.
    *
-   * @param comp The compression type to use.
-   * @return this for chaining.
+   * @param comp The compression type to use
+   * @return this for chaining
    */
   orc_writer_options_builder& compression(compression_type comp)
   {
@@ -674,8 +674,8 @@ class orc_writer_options_builder {
    * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
    * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
    *
-   * @param val Level of statistics collection.
-   * @return this for chaining.
+   * @param val Level of statistics collection
+   * @return this for chaining
    */
   orc_writer_options_builder& enable_statistics(statistics_freq val)
   {
@@ -687,7 +687,7 @@ class orc_writer_options_builder {
    * @brief Sets the maximum stripe size, in bytes.
    *
    * @param val maximum stripe size
-   * @return this for chaining.
+   * @return this for chaining
    */
   orc_writer_options_builder& stripe_size_bytes(size_t val)
   {
@@ -699,7 +699,7 @@ class orc_writer_options_builder {
    * @brief Sets the maximum number of rows in output stripes.
    *
    * @param val maximum number or rows
-   * @return this for chaining.
+   * @return this for chaining
    */
   orc_writer_options_builder& stripe_size_rows(size_type val)
   {
@@ -711,7 +711,7 @@ class orc_writer_options_builder {
    * @brief Sets the row index stride.
    *
    * @param val new row index stride
-   * @return this for chaining.
+   * @return this for chaining
    */
   orc_writer_options_builder& row_index_stride(size_type val)
   {
@@ -722,8 +722,8 @@ class orc_writer_options_builder {
   /**
    * @brief Sets table to be written to output.
    *
-   * @param tbl Table for the output.
-   * @return this for chaining.
+   * @param tbl Table for the output
+   * @return this for chaining
    */
   orc_writer_options_builder& table(table_view tbl)
   {
@@ -734,8 +734,8 @@ class orc_writer_options_builder {
   /**
    * @brief Sets associated metadata.
    *
-   * @param meta Associated metadata.
-   * @return this for chaining.
+   * @param meta Associated metadata
+   * @return this for chaining
    */
   orc_writer_options_builder& metadata(table_input_metadata const* meta)
   {
@@ -747,7 +747,7 @@ class orc_writer_options_builder {
    * @brief Sets Key-Value footer metadata.
    *
    * @param metadata Key-Value footer metadata
-   * @return this for chaining.
+   * @return this for chaining
    */
   orc_writer_options_builder& key_value_metadata(std::map<std::string, std::string> metadata)
   {
@@ -783,8 +783,8 @@ class orc_writer_options_builder {
  * Note: Support for writing tables with struct columns is currently experimental, the output may
  * not be as reliable as writing for other datatypes.
  *
- * @param options Settings for controlling reading behavior.
- * @param mr Device memory resource to use for device memory allocation.
+ * @param options Settings for controlling reading behavior
+ * @param mr Device memory resource to use for device memory allocation
  */
 void write_orc(orc_writer_options const& options,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -820,7 +820,7 @@ class chunked_orc_writer_options {
   /**
    * @brief Constructor from sink and table.
    *
-   * @param sink The sink used for writer output.
+   * @param sink The sink used for writer output
    */
   chunked_orc_writer_options(sink_info const& sink) : _sink(sink) {}
 
@@ -835,9 +835,9 @@ class chunked_orc_writer_options {
   /**
    * @brief Create builder to create `chunked_orc_writer_options`.
    *
-   * @param sink The sink used for writer output.
+   * @param sink The sink used for writer output
    *
-   * @return Builder to build chunked_orc_writer_options.
+   * @return Builder to build chunked_orc_writer_options
    */
   static chunked_orc_writer_options_builder builder(sink_info const& sink);
 
@@ -909,7 +909,7 @@ class chunked_orc_writer_options {
   /**
    * @brief Sets compression type.
    *
-   * @param comp The compression type to use.
+   * @param comp The compression type to use
    */
   void set_compression(compression_type comp) { _compression = comp; }
 
@@ -921,7 +921,7 @@ class chunked_orc_writer_options {
    * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
    * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
    *
-   * @param val Frequency of statistics collection.
+   * @param val Frequency of statistics collection
    */
   void enable_statistics(statistics_freq val) { _stats_freq = val; }
 
@@ -966,7 +966,7 @@ class chunked_orc_writer_options {
   /**
    * @brief Sets associated metadata.
    *
-   * @param meta Associated metadata.
+   * @param meta Associated metadata
    */
   void metadata(table_input_metadata const* meta) { _metadata = meta; }
 
@@ -998,15 +998,15 @@ class chunked_orc_writer_options_builder {
   /**
    * @brief Constructor from sink and table.
    *
-   * @param sink The sink used for writer output.
+   * @param sink The sink used for writer output
    */
   explicit chunked_orc_writer_options_builder(sink_info const& sink) : options{sink} {}
 
   /**
    * @brief Sets compression type.
    *
-   * @param comp The compression type to use.
-   * @return this for chaining.
+   * @param comp The compression type to use
+   * @return this for chaining
    */
   chunked_orc_writer_options_builder& compression(compression_type comp)
   {
@@ -1022,8 +1022,8 @@ class chunked_orc_writer_options_builder {
    * - cudf::io::ORC_STATISTICS_STRIPE: Statistics are collected for each ORC stripe.
    * - cudf::io::ORC_STATISTICS_ROWGROUP: Statistics are collected for each ORC row group.
    *
-   * @param val Frequency of statistics collection.
-   * @return this for chaining.
+   * @param val Frequency of statistics collection
+   * @return this for chaining
    */
   chunked_orc_writer_options_builder& enable_statistics(statistics_freq val)
   {
@@ -1035,7 +1035,7 @@ class chunked_orc_writer_options_builder {
    * @brief Sets the maximum stripe size, in bytes.
    *
    * @param val maximum stripe size
-   * @return this for chaining.
+   * @return this for chaining
    */
   chunked_orc_writer_options_builder& stripe_size_bytes(size_t val)
   {
@@ -1047,7 +1047,7 @@ class chunked_orc_writer_options_builder {
    * @brief Sets the maximum number of rows in output stripes.
    *
    * @param val maximum number or rows
-   * @return this for chaining.
+   * @return this for chaining
    */
   chunked_orc_writer_options_builder& stripe_size_rows(size_type val)
   {
@@ -1059,7 +1059,7 @@ class chunked_orc_writer_options_builder {
    * @brief Sets the row index stride.
    *
    * @param val new row index stride
-   * @return this for chaining.
+   * @return this for chaining
    */
   chunked_orc_writer_options_builder& row_index_stride(size_type val)
   {
@@ -1070,8 +1070,8 @@ class chunked_orc_writer_options_builder {
   /**
    * @brief Sets associated metadata.
    *
-   * @param meta Associated metadata.
-   * @return this for chaining.
+   * @param meta Associated metadata
+   * @return this for chaining
    */
   chunked_orc_writer_options_builder& metadata(table_input_metadata const* meta)
   {
@@ -1083,7 +1083,7 @@ class chunked_orc_writer_options_builder {
    * @brief Sets Key-Value footer metadata.
    *
    * @param metadata Key-Value footer metadata
-   * @return this for chaining.
+   * @return this for chaining
    */
   chunked_orc_writer_options_builder& key_value_metadata(
     std::map<std::string, std::string> metadata)

@@ -54,7 +54,7 @@ class avro_reader_options {
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read avro file.
+   * @param src source information used to read avro file
    */
   explicit avro_reader_options(source_info const& src) : _source(src) {}
 
@@ -99,29 +99,29 @@ class avro_reader_options {
   /**
    * @brief Set names of the column to be read.
    *
-   * @param col_names Vector of column names.
+   * @param col_names Vector of column names
    */
   void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
    * @brief Sets number of rows to skip.
    *
-   * @param val Number of rows to skip from start.
+   * @param val Number of rows to skip from start
    */
   void set_skip_rows(size_type val) { _skip_rows = val; }
 
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read after skip.
+   * @param val Number of rows to read after skip
    */
   void set_num_rows(size_type val) { _num_rows = val; }
 
   /**
    * @brief create avro_reader_options_builder which will build avro_reader_options.
    *
-   * @param src source information used to read avro file.
-   * @returns builder to build reader options.
+   * @param src source information used to read avro file
+   * @returns builder to build reader options
    */
   static avro_reader_options_builder builder(source_info const& src);
 };
@@ -143,15 +143,15 @@ class avro_reader_options_builder {
   /**
    * @brief Constructor from source info.
    *
-   * @param src The source information used to read avro file.
+   * @param src The source information used to read avro file
    */
   explicit avro_reader_options_builder(source_info const& src) : options(src) {}
 
   /**
    * @brief Set names of the column to be read.
    *
-   * @param col_names Vector of column names.
-   * @return this for chaining.
+   * @param col_names Vector of column names
+   * @return this for chaining
    */
   avro_reader_options_builder& columns(std::vector<std::string> col_names)
   {
@@ -162,8 +162,8 @@ class avro_reader_options_builder {
   /**
    * @brief Sets number of rows to skip.
    *
-   * @param val Number of rows to skip from start.
-   * @return this for chaining.
+   * @param val Number of rows to skip from start
+   * @return this for chaining
    */
   avro_reader_options_builder& skip_rows(size_type val)
   {
@@ -174,8 +174,8 @@ class avro_reader_options_builder {
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read after skip.
-   * @return this for chaining.
+   * @param val Number of rows to read after skip
+   * @return this for chaining
    */
   avro_reader_options_builder& num_rows(size_type val)
   {
@@ -208,11 +208,11 @@ class avro_reader_options_builder {
  *  auto result  = cudf::io::read_avro(options);
  * @endcode
  *
- * @param options Settings for controlling reading behavior.
- * @param mr Device memory resource used to allocate device memory of the table in the returned.
+ * @param options Settings for controlling reading behavior
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata
  *
- * @return The set of columns along with metadata.
+ * @return The set of columns along with metadata
  */
 table_with_metadata read_avro(
   avro_reader_options const& options,

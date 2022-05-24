@@ -83,7 +83,7 @@ class json_reader_options {
   /**
    * @brief Constructor from source info.
    *
-   * @param src source information used to read parquet file.
+   * @param src source information used to read parquet file
    */
   explicit json_reader_options(const source_info& src) : _source(src) {}
 
@@ -100,8 +100,8 @@ class json_reader_options {
   /**
    * @brief create json_reader_options_builder which will build json_reader_options.
    *
-   * @param src source information used to read json file.
-   * @returns builder to build the options.
+   * @param src source information used to read json file
+   * @returns builder to build the options
    */
   static json_reader_options_builder builder(source_info const& src);
 
@@ -115,7 +115,7 @@ class json_reader_options {
   /**
    * @brief Returns data types of the columns.
    *
-   * @returns Data types of the columns.
+   * @returns Data types of the columns
    */
   std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
   {
@@ -189,7 +189,7 @@ class json_reader_options {
   /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
    *
-   * @returns true if dates are parsed as DD/MM, false if MM/DD.
+   * @returns true if dates are parsed as DD/MM, false if MM/DD
    */
   bool is_enabled_dayfirst() const { return _dayfirst; }
 
@@ -203,42 +203,42 @@ class json_reader_options {
   /**
    * @brief Set data types for columns to be read.
    *
-   * @param types Vector dtypes in string format.
+   * @param types Vector dtypes in string format
    */
   void set_dtypes(std::map<std::string, data_type> types) { _dtypes = std::move(types); }
 
   /**
    * @brief Set the compression type.
    *
-   * @param comp_type The compression type used.
+   * @param comp_type The compression type used
    */
   void set_compression(compression_type comp_type) { _compression = comp_type; }
 
   /**
    * @brief Set number of bytes to skip from source start.
    *
-   * @param offset Number of bytes of offset.
+   * @param offset Number of bytes of offset
    */
   void set_byte_range_offset(size_type offset) { _byte_range_offset = offset; }
 
   /**
    * @brief Set number of bytes to read.
    *
-   * @param size Number of bytes to read.
+   * @param size Number of bytes to read
    */
   void set_byte_range_size(size_type size) { _byte_range_size = size; }
 
   /**
    * @brief Set whether to read the file as a json object per line.
    *
-   * @param val Boolean value to enable/disable the option to read each line as a json object.
+   * @param val Boolean value to enable/disable the option to read each line as a json object
    */
   void enable_lines(bool val) { _lines = val; }
 
   /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
-   * @param val Boolean value to enable/disable day first parsing format.
+   * @param val Boolean value to enable/disable day first parsing format
    */
   void enable_dayfirst(bool val) { _dayfirst = val; }
 };
@@ -260,7 +260,7 @@ class json_reader_options_builder {
   /**
    * @brief Constructor from source info.
    *
-   * @param src The source information used to read avro file.
+   * @param src The source information used to read avro file
    */
   explicit json_reader_options_builder(source_info const& src) : options(src) {}
 
@@ -279,7 +279,7 @@ class json_reader_options_builder {
   /**
    * @brief Set data types for columns to be read.
    *
-   * @param types Column name -> dtype map.
+   * @param types Column name -> dtype map
    * @return this for chaining
    */
   json_reader_options_builder& dtypes(std::map<std::string, data_type> types)
@@ -291,8 +291,8 @@ class json_reader_options_builder {
   /**
    * @brief Set the compression type.
    *
-   * @param comp_type The compression type used.
-   * @return this for chaining.
+   * @param comp_type The compression type used
+   * @return this for chaining
    */
   json_reader_options_builder& compression(compression_type comp_type)
   {
@@ -303,8 +303,8 @@ class json_reader_options_builder {
   /**
    * @brief Set number of bytes to skip from source start.
    *
-   * @param offset Number of bytes of offset.
-   * @return this for chaining.
+   * @param offset Number of bytes of offset
+   * @return this for chaining
    */
   json_reader_options_builder& byte_range_offset(size_type offset)
   {
@@ -315,7 +315,7 @@ class json_reader_options_builder {
   /**
    * @brief Set number of bytes to read.
    *
-   * @param size Number of bytes to read.
+   * @param size Number of bytes to read
    * @return this for chaining
    */
   json_reader_options_builder& byte_range_size(size_type size)
@@ -327,8 +327,8 @@ class json_reader_options_builder {
   /**
    * @brief Set whether to read the file as a json object per line.
    *
-   * @param val Boolean value to enable/disable the option to read each line as a json object.
-   * @return this for chaining.
+   * @param val Boolean value to enable/disable the option to read each line as a json object
+   * @return this for chaining
    */
   json_reader_options_builder& lines(bool val)
   {
@@ -339,8 +339,8 @@ class json_reader_options_builder {
   /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
-   * @param val Boolean value to enable/disable day first parsing format.
-   * @return this for chaining.
+   * @param val Boolean value to enable/disable day first parsing format
+   * @return this for chaining
    */
   json_reader_options_builder& dayfirst(bool val)
   {
@@ -373,11 +373,11 @@ class json_reader_options_builder {
  *  auto result  = cudf::io::read_json(options);
  * @endcode
  *
- * @param options Settings for controlling reading behavior.
+ * @param options Settings for controlling reading behavior
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
- * @return The set of columns along with metadata.
+ * @return The set of columns along with metadata
  */
 table_with_metadata read_json(
   json_reader_options options,
