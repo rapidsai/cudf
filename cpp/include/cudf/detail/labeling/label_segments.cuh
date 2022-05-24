@@ -54,11 +54,11 @@ namespace cudf::detail {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 template <typename InputIterator, typename OutputIterator>
-void fill_segmented_labels(InputIterator offsets_begin,
-                           InputIterator offsets_end,
-                           OutputIterator out_begin,
-                           OutputIterator out_end,
-                           rmm::cuda_stream_view stream)
+void label_segments(InputIterator offsets_begin,
+                    InputIterator offsets_end,
+                    OutputIterator out_begin,
+                    OutputIterator out_end,
+                    rmm::cuda_stream_view stream)
 {
   // Make the offset values starting from `0`.
   auto const input = thrust::make_transform_iterator(

@@ -17,11 +17,11 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/fill.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
@@ -224,14 +224,13 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
   _group_labels = std::make_unique<index_vector>(num_keys(stream), stream);
 
   auto& group_labels = *_group_labels;
-
   if (num_keys(stream) == 0) return group_labels;
 
-  cudf::detail::fill_segmented_labels(group_offsets(stream).begin(),
-                                      group_offsets(stream).end(),
-                                      group_labels.begin(),
-                                      group_labels.end(),
-                                      stream);
+  cudf::detail::label_segments(group_offsets(stream).begin(),
+                               group_offsets(stream).end(),
+                               group_labels.begin(),
+                               group_labels.end(),
+                               stream);
   return group_labels;
 }
 

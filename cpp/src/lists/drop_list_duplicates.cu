@@ -18,9 +18,9 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/fill.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
@@ -531,7 +531,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   // Generate a mapping from list entries to their list indices for the keys column.
   auto const entries_list_indices = [&] {
     auto labels = rmm::device_uvector<size_type>(keys_child.size(), stream);
-    cudf::detail::fill_segmented_labels(
+    cudf::detail::label_segments(
       keys.offsets_begin(), keys.offsets_end(), labels.begin(), labels.end(), stream);
     return labels;
   }();
