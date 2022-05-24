@@ -42,6 +42,7 @@ namespace io {
  */
 class datasource {
  public:
+  template <typename Container>
   class owning_buffer;  // forward declaration
   /**
    * @brief Interface class for buffers that the datasource returns to the caller.
