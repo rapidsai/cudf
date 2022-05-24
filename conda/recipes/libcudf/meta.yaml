@@ -14,9 +14,6 @@ source:
 
 build:
   script_env:
-    - CC
-    - CXX
-    - CUDAHOSTCXX
     - PARALLEL_LEVEL
     - CMAKE_GENERATOR
     - CMAKE_C_COMPILER_LAUNCHER
@@ -31,6 +28,10 @@ build:
 requirements:
   build:
     - cmake {{ cmake_version }}
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - {{ compiler('cuda') }} {{ cuda_version }}
+    - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
@@ -48,6 +49,8 @@ outputs:
       string: cuda{{ cuda_major }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
       run_exports:
         - {{ pin_subpackage("libcudf", max_pin="x.x") }}
+      ignore_run_exports_from:
+        - {{ compiler('cuda') }}
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -171,13 +174,14 @@ outputs:
         - test -f $PREFIX/include/cudf/lists/detail/scatter_helper.cuh
         - test -f $PREFIX/include/cudf/lists/detail/stream_compaction.hpp
         - test -f $PREFIX/include/cudf/lists/combine.hpp
+        - test -f $PREFIX/include/cudf/lists/contains.hpp
         - test -f $PREFIX/include/cudf/lists/count_elements.hpp
-        - test -f $PREFIX/include/cudf/lists/explode.hpp
         - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
+        - test -f $PREFIX/include/cudf/lists/explode.hpp
         - test -f $PREFIX/include/cudf/lists/extract.hpp
         - test -f $PREFIX/include/cudf/lists/filling.hpp
-        - test -f $PREFIX/include/cudf/lists/contains.hpp
         - test -f $PREFIX/include/cudf/lists/gather.hpp
+        - test -f $PREFIX/include/cudf/lists/list_view.hpp
         - test -f $PREFIX/include/cudf/lists/lists_column_view.hpp
         - test -f $PREFIX/include/cudf/lists/sorting.hpp
         - test -f $PREFIX/include/cudf/lists/stream_compaction.hpp
@@ -286,6 +290,8 @@ outputs:
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      ignore_run_exports_from:
+        - {{ compiler('cuda') }}
     requirements:
       build:
         - cmake {{ cmake_version }}
@@ -307,9 +313,14 @@ outputs:
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: {{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      ignore_run_exports_from:
+        - {{ compiler('cuda') }}
     requirements:
       build:
         - cmake {{ cmake_version }}
+        - {{ compiler('c') }}
+        - {{ compiler('cxx') }}
+        - sysroot_{{ target_platform }} {{ sysroot_version }}
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
       run:
@@ -326,6 +337,8 @@ outputs:
     build:
       number: {{ GIT_DESCRIBE_NUMBER }}
       string: cuda{{ cuda_major }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+      ignore_run_exports_from:
+        - {{ compiler('cuda') }}
     requirements:
       build:
         - cmake {{ cmake_version }}

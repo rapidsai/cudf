@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "gpuinflate.h"
+#include "gpuinflate.hpp"
 
 #include <cudf/utilities/span.hpp>
 

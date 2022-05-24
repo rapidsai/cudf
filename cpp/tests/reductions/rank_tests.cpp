@@ -55,8 +55,6 @@ struct TypedRankScanTest : BaseScanTest<T> {
                                        std::unique_ptr<scan_aggregation> const& agg)
   {
     auto col_out = cudf::scan(input, agg, INCLUSIVE_SCAN, INCLUDE_NULLS);
-    std::cout << "expect type: " << static_cast<int>(expect_vals.type().id()) << std::endl;
-    std::cout << "out type: " << static_cast<int>(col_out->type().id()) << std::endl;
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view());
   }
 };
