@@ -22,8 +22,8 @@ function(find_and_configure_nvcomp)
     USE_PROPRIETARY_BINARY ${CUDF_USE_PROPRIETARY_NVCOMP}
   )
 
-  # If we are building nvcomp use enable per-thread default stream
-  if(TARGET nvcomp AND PER_THREAD_DEFAULT_STREAM)
+  # Per-thread default stream
+  if(TARGET nvcomp AND CUDF_USE_PER_THREAD_DEFAULT_STREAM)
     target_compile_definitions(nvcomp PRIVATE CUDA_API_PER_THREAD_DEFAULT_STREAM)
   endif()
 endfunction()

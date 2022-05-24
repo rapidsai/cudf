@@ -165,6 +165,7 @@
         <CMAKE_EXPORT_COMPILE_COMMANDS>OFF</CMAKE_EXPORT_COMPILE_COMMANDS>
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
+        <CUDF_USE_PER_THREAD_DEFAULT_STREAM>${PER_THREAD_DEFAULT_STREAM}</CUDF_USE_PER_THREAD_DEFAULT_STREAM>
         <USE_GDS>OFF</USE_GDS>
         <GPU_ARCHS>ALL</GPU_ARCHS>
         <CUDF_JNI_LIBCUDF_STATIC>OFF</CUDF_JNI_LIBCUDF_STATIC>
@@ -385,7 +386,7 @@
                                     <arg value="${basedir}/src/main/native"/>
                                     <arg line="${cmake.ccache.opts}"/>
                                     <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
-                                    <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
+                                    <arg value="-DCUDF_USE_PER_THREAD_DEFAULT_STREAM=${CUDF_USE_PER_THREAD_DEFAULT_STREAM}" />
                                     <arg value="-DUSE_GDS=${USE_GDS}" />
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
