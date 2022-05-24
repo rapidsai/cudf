@@ -60,8 +60,7 @@ void label_segments(InputIterator offsets_begin,
                     OutputIterator out_end,
                     rmm::cuda_stream_view stream)
 {
-  // Make the offset values starting from `0`.
-  auto const input = thrust::make_transform_iterator(
+  auto const zero_normalized_offsets = thrust::make_transform_iterator(
     offsets_begin, [offsets_begin] __device__(auto const idx) { return idx - *offsets_begin; });
 
   // The output labels from `upper_bound` will start from `1`.
@@ -71,8 +70,8 @@ void label_segments(InputIterator offsets_begin,
     out_begin, [] __device__(auto const idx) { return idx - OutputType{1}; });
 
   thrust::upper_bound(rmm::exec_policy(stream),
-                      input,
-                      input + thrust::distance(offsets_begin, offsets_end),
+                      zero_normalized_offsets,
+                      zero_normalized_offsets + thrust::distance(offsets_begin, offsets_end),
                       thrust::make_counting_iterator<OutputType>(0),
                       thrust::make_counting_iterator<OutputType>(
                         static_cast<OutputType>(thrust::distance(out_begin, out_end))),
