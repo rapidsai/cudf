@@ -53,7 +53,8 @@ option(
          stream to external libraries."
   OFF
 )
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+option(PER_THREAD_DEFAULT_STREAM "[DEPRECATED] Build with per-thread default stream" OFF)
+mark_as_advanced(FORCE, PER_THREAD_DEFAULT_STREAM)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
