@@ -64,6 +64,8 @@ void fill_segmented_labels(InputIterator offsets_begin,
   auto const input = thrust::make_transform_iterator(
     offsets_begin, [offsets_begin] __device__(auto const idx) { return idx - *offsets_begin; });
 
+  // The output labels from `upper_bound` will start from `1`.
+  // This will shift the result values back to start from `0`.
   using OutputType  = typename thrust::iterator_value<OutputIterator>::type;
   auto const output = thrust::make_transform_output_iterator(
     out_begin, [] __device__(auto const idx) { return idx - OutputType{1}; });
