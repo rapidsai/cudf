@@ -42,6 +42,7 @@ namespace io {
  */
 class datasource {
  public:
+  class owning_buffer;  // forward declaration
   /**
    * @brief Interface class for buffers that the datasource returns to the caller.
    *
@@ -76,7 +77,10 @@ class datasource {
      * @return Constructed buffer object
      */
     template <typename Container>
-    static std::unique_ptr<buffer> create(Container&& data_owner);
+    static std::unique_ptr<buffer> create(Container&& data_owner)
+    {
+      return std::make_unique<owning_buffer<Container>>(std::move(data_owner));
+    }
   };
 
   /**
@@ -361,19 +365,6 @@ class datasource {
     size_t _size;
   };
 };
-
-/**
- * @brief Factory to construct a datasource buffer object from a container.
- *
- * @tparam Container Type of the container to construct the buffer from
- * @param data_owner The container to construct the buffer from (ownership is transferred)
- * @return Constructed buffer object
- */
-template <typename Container>
-std::unique_ptr<datasource::buffer> datasource::buffer::create(Container&& data_owner)
-{
-  return std::make_unique<owning_buffer<Container>>(std::move(data_owner));
-}
 
 /**
  * @brief Implementation class for reading from an Apache Arrow file. The file
