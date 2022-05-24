@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ enum class replace_algorithm {
  * string_scalar const&, int32_t, rmm::mr::device_memory_resource*)
  *
  * @tparam    alg    Replacement algorithm to use
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 template <replace_algorithm alg = replace_algorithm::AUTO>
 std::unique_ptr<column> replace(
@@ -54,7 +54,7 @@ std::unique_ptr<column> replace(
  * @copydoc cudf::strings::replace_slice(strings_column_view const&, string_scalar const&,
  * size_type. size_type, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 std::unique_ptr<column> replace_slice(
   strings_column_view const& strings,
@@ -68,7 +68,7 @@ std::unique_ptr<column> replace_slice(
  * @copydoc cudf::strings::replace(strings_column_view const&, strings_column_view const&,
  * strings_column_view const&, rmm::mr::device_memory_resource*)
  *
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 std::unique_ptr<column> replace(
   strings_column_view const& strings,
@@ -89,10 +89,10 @@ std::unique_ptr<column> replace(
  * r is now ["hello", "**", "goodbye"]
  * @endcode
  *
- * @param strings Strings column for this operation.
- * @param repl Replacement string for null entries. Default is empty string.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings column for this operation
+ * @param repl Replacement string for null entries. Default is empty string
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 std::unique_ptr<column> replace_nulls(

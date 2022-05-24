@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,8 +50,8 @@ namespace strings {
  *
  * @throw cudf::logic_error if `delimiter.is_valid()` is  `false`.
  *
- * @param input String column.
- * @param delimiters Characters for identifying words to capitalize.
+ * @param input String column
+ * @param delimiters Characters for identifying words to capitalize
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of strings capitalized from the input column.
  */
@@ -81,8 +81,8 @@ std::unique_ptr<column> capitalize(
  *
  * Any null string entries return corresponding null output column entries.
  *
- * @param input String column.
- * @param sequence_type The character type that is used when identifying words.
+ * @param input String column
+ * @param sequence_type The character type that is used when identifying words
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of titled strings.
  */
@@ -110,7 +110,7 @@ std::unique_ptr<column> title(
  *
  * Any null string entries result in corresponding null output column entries.
  *
- * @param input String column.
+ * @param input String column
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Column of type BOOL8.
  */

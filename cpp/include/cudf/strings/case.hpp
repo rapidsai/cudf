@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,8 @@ namespace strings {
  *
  * Any null entries create null entries in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of strings with characters converted.
  */
 std::unique_ptr<column> to_lower(
@@ -52,8 +52,8 @@ std::unique_ptr<column> to_lower(
  *
  * Any null entries create null entries in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of strings with characters converted.
  */
 std::unique_ptr<column> to_upper(
@@ -70,8 +70,8 @@ std::unique_ptr<column> to_upper(
  *
  * Any null entries create null entries in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of strings with characters converted.
  */
 std::unique_ptr<column> swapcase(

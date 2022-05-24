@@ -90,12 +90,12 @@ namespace detail {
  * @tparam SourceValidityIterator Iterator for retrieving source validities
  * @param source_value_begin Start of source value iterator
  * @param source_validity_begin Start of source validity iterator
- * @param target The strings column to copy from outside the range.
+ * @param target The strings column to copy from outside the range
  * @param target_begin The starting index of the target range (inclusive)
  * @param target_end The index of the last element in the target range
  * (exclusive)
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> The result target column
  */
 template <typename SourceValueIterator, typename SourceValidityIterator>

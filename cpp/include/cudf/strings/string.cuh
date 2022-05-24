@@ -40,7 +40,7 @@ namespace strings {
  * No bounds checking is performed to verify if the integer will fit
  * within a specific integer type.
  *
- * @param d_str String to check.
+ * @param d_str String to check
  * @return true if string has valid integer characters
  */
 inline __device__ bool is_integer(string_view const& d_str)
@@ -107,7 +107,7 @@ inline __device__ bool is_inf_str(string_view const& d_str)
  * The following strings are also allowed and will return true:
  *  "NaN", "NAN", "Inf", "INF", "INFINITY"
  *
- * @param d_str String to check.
+ * @param d_str String to check
  * @return true if string has valid float characters
  */
 inline __device__ bool is_float(string_view const& d_str)

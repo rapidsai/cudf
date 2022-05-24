@@ -47,10 +47,10 @@ namespace strings {
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param strings Strings instance for this operation.
- * @param pattern The regular expression pattern with group indicators.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param strings Strings instance for this operation
+ * @param pattern The regular expression pattern with group indicators
+ * @param flags Regex flags for interpreting special characters in the pattern
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Columns of strings extracted from the input column.
  */
 std::unique_ptr<table> extract(
@@ -82,10 +82,10 @@ std::unique_ptr<table> extract(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param strings Strings instance for this operation.
- * @param pattern The regular expression pattern with group indicators.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate any returned device memory.
+ * @param strings Strings instance for this operation
+ * @param pattern The regular expression pattern with group indicators
+ * @param flags Regex flags for interpreting special characters in the pattern
+ * @param mr Device memory resource used to allocate any returned device memory
  * @return Lists column containing strings extracted from the input column.
  */
 std::unique_ptr<column> extract_all_record(

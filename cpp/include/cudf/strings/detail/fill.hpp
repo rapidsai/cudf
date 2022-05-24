@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,12 +33,12 @@ namespace detail {
  *
  * @throw cudf::logic_error if [begin,end) is outside the range of the input column.
  *
- * @param strings Strings column to fill.
- * @param begin First row index to include the new string.
- * @param end Last row index (exclusive).
- * @param value String to use when filling the range.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings column to fill
+ * @param begin First row index to include the new string
+ * @param end Last row index (exclusive)
+ * @param value String to use when filling the range
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 std::unique_ptr<column> fill(

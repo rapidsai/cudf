@@ -38,14 +38,14 @@ namespace strings {
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param strings Strings instance for this operation.
- * @param pattern The regular expression pattern to search within each string.
- * @param replacement The string used to replace the matched sequence in each string.
+ * @param strings Strings instance for this operation
+ * @param pattern The regular expression pattern to search within each string
+ * @param replacement The string used to replace the matched sequence in each string
  *        Default is an empty string.
  * @param max_replace_count The maximum number of times to replace the matched pattern
  *        within each string. Default replaces every substring that is matched.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param flags Regex flags for interpreting special characters in the pattern
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 std::unique_ptr<column> replace_re(
@@ -64,11 +64,11 @@ std::unique_ptr<column> replace_re(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param strings Strings instance for this operation.
- * @param patterns The regular expression patterns to search within each string.
- * @param replacements The strings used for replacement.
- * @param flags Regex flags for interpreting special characters in the patterns.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param patterns The regular expression patterns to search within each string
+ * @param replacements The strings used for replacement
+ * @param flags Regex flags for interpreting special characters in the patterns
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 std::unique_ptr<column> replace_re(
@@ -89,11 +89,11 @@ std::unique_ptr<column> replace_re(
  * @throw cudf::logic_error if capture index values in `replacement` are not in range 0-99, and also
  * if the index exceeds the group count specified in the pattern
  *
- * @param strings Strings instance for this operation.
- * @param pattern The regular expression patterns to search within each string.
- * @param replacement The replacement template for creating the output string.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param pattern The regular expression patterns to search within each string
+ * @param replacement The replacement template for creating the output string
+ * @param flags Regex flags for interpreting special characters in the pattern
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 std::unique_ptr<column> replace_with_backrefs(

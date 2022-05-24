@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,9 +51,9 @@ namespace strings {
  *
  * @throw cudf::logic_error if `output_type` is not a fixed-point decimal type.
  *
- * @param input Strings instance for this operation.
- * @param output_type Type of fixed-point column to return including the scale value.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input Strings instance for this operation
+ * @param output_type Type of fixed-point column to return including the scale value
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of `output_type`.
  */
 std::unique_ptr<column> to_fixed_point(
@@ -81,8 +81,8 @@ std::unique_ptr<column> to_fixed_point(
  *
  * @throw cudf::logic_error if the `input` column is not a fixed-point decimal type.
  *
- * @param input Fixed-point column to convert.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input Fixed-point column to convert
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 std::unique_ptr<column> from_fixed_point(
@@ -109,9 +109,9 @@ std::unique_ptr<column> from_fixed_point(
  *
  * @throw cudf::logic_error if the `decimal_type` is not a fixed-point decimal type.
  *
- * @param input Strings instance for this operation.
- * @param decimal_type Fixed-point type (with scale) used only for checking overflow.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input Strings instance for this operation
+ * @param decimal_type Fixed-point type (with scale) used only for checking overflow
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> is_fixed_point(

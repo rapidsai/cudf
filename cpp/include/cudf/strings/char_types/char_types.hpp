@@ -90,12 +90,12 @@ string_character_types& operator|=(string_character_types& lhs, string_character
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param types The character types to check in each string.
- * @param verify_types Only verify against these character types.
+ * @param strings Strings instance for this operation
+ * @param types The character types to check in each string
+ * @param verify_types Only verify against these character types
  *                     Default `ALL_TYPES` means return `true`
  *                     iff all characters match `types`.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> all_characters_of_type(
@@ -133,13 +133,13 @@ std::unique_ptr<column> all_characters_of_type(
  * @throw cudf::logic_error if neither or both `types_to_remove` and
  *        `types_to_keep` are set to `ALL_TYPES`.
  *
- * @param strings Strings instance for this operation.
- * @param types_to_remove The character types to check in each string.
+ * @param strings Strings instance for this operation
+ * @param types_to_remove The character types to check in each string
  *        Use `ALL_TYPES` here to specify `types_to_keep` instead.
- * @param replacement The replacement character to use when removing characters.
+ * @param replacement The replacement character to use when removing characters
  * @param types_to_keep Default `ALL_TYPES` means all characters of
  *        `types_to_remove` will be filtered.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> filter_characters_of_type(

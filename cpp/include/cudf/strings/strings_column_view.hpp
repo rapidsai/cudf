@@ -36,9 +36,9 @@ namespace cudf {
 class strings_column_view : private column_view {
  public:
   /**
-   * @brief Construct a new strings column view object from a column view.s
+   * @brief Construct a new strings_column_view object from a column_view
    *
-   * @param strings_column The column view to wrap.
+   * @param strings_column The column_view to wrap
    */
   strings_column_view(column_view strings_column);
   strings_column_view(strings_column_view&&)      = default;  ///< Move constructor

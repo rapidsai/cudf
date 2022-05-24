@@ -87,7 +87,7 @@ class get_json_object_options {
   /**
    * @brief Set whether single-quotes for strings are allowed.
    *
-   * @param _allow_single_quotes bool indicating desired behavior.
+   * @param _allow_single_quotes bool indicating desired behavior
    */
   void set_allow_single_quotes(bool _allow_single_quotes)
   {
@@ -97,7 +97,7 @@ class get_json_object_options {
   /**
    * @brief Set whether individually returned string values have their quotes stripped.
    *
-   * @param _strip_quotes_from_single_strings bool indicating desired behavior.
+   * @param _strip_quotes_from_single_strings bool indicating desired behavior
    */
   void set_strip_quotes_from_single_strings(bool _strip_quotes_from_single_strings)
   {
@@ -114,10 +114,10 @@ class get_json_object_options {
  * https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
  * Implements only the operators: $ . [] *
  *
- * @param col The input strings column. Each row must contain a valid json string
+ * @param col The input strings column Each row must contain a valid json string
  * @param json_path The JSONPath string to be applied to each row
  * @param options Options for controlling the behavior of the function
- * @param mr Resource for allocating device memory.
+ * @param mr Resource for allocating device memory
  * @return New strings column containing the retrieved json object strings
  */
 std::unique_ptr<cudf::column> get_json_object(

@@ -48,10 +48,10 @@ namespace strings {
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param input Strings instance for this operation.
- * @param pattern Regex pattern to match within each string.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param input Strings instance for this operation
+ * @param pattern Regex pattern to match within each string
+ * @param flags Regex flags for interpreting special characters in the pattern
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return New table of strings columns.
  */
 std::unique_ptr<table> findall(
@@ -82,10 +82,10 @@ std::unique_ptr<table> findall(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param input Strings instance for this operation.
- * @param pattern Regex pattern to match within each string.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input Strings instance for this operation
+ * @param pattern Regex pattern to match within each string
+ * @param flags Regex flags for interpreting special characters in the pattern
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New lists column of strings.
  */
 std::unique_ptr<column> findall_record(

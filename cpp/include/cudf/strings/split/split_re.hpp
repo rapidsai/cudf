@@ -62,11 +62,11 @@ namespace strings {
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
- * @param maxsplit Maximum number of splits to perform.
+ * @param input A column of string elements to be split
+ * @param pattern The regex pattern for delimiting characters within each string
+ * @param maxsplit Maximum number of splits to perform
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
+ * @param mr Device memory resource used to allocate the returned result's device memory
  * @return A table of columns of strings.
  */
 std::unique_ptr<table> split_re(
@@ -112,11 +112,11 @@ std::unique_ptr<table> split_re(
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
- * @param maxsplit Maximum number of splits to perform.
+ * @param input A column of string elements to be split
+ * @param pattern The regex pattern for delimiting characters within each string
+ * @param maxsplit Maximum number of splits to perform
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
+ * @param mr Device memory resource used to allocate the returned result's device memory
  * @return A table of columns of strings.
  */
 std::unique_ptr<table> rsplit_re(
@@ -164,11 +164,11 @@ std::unique_ptr<table> rsplit_re(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
- * @param maxsplit Maximum number of splits to perform.
+ * @param input A column of string elements to be split
+ * @param pattern The regex pattern for delimiting characters within each string
+ * @param maxsplit Maximum number of splits to perform
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
+ * @param mr Device memory resource used to allocate the returned result's device memory
  * @return Lists column of strings.
  */
 std::unique_ptr<column> split_record_re(
@@ -218,11 +218,11 @@ std::unique_ptr<column> split_record_re(
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *
- * @param input A column of string elements to be split.
- * @param pattern The regex pattern for delimiting characters within each string.
- * @param maxsplit Maximum number of splits to perform.
+ * @param input A column of string elements to be split
+ * @param pattern The regex pattern for delimiting characters within each string
+ * @param maxsplit Maximum number of splits to perform
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
+ * @param mr Device memory resource used to allocate the returned result's device memory
  * @return Lists column of strings.
  */
 std::unique_ptr<column> rsplit_record_re(

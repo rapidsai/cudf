@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,12 +58,12 @@ enum class strip_type {
  *
  * @throw cudf::logic_error if `to_strip` is invalid.
  *
- * @param strings Strings column for this operation.
+ * @param strings Strings column for this operation
  * @param stype Indicates characters are to be stripped from the beginning, end, or both of each
  * string. Default is both.
- * @param to_strip UTF-8 encoded characters to strip from each string.
+ * @param to_strip UTF-8 encoded characters to strip from each string
  *        Default is empty string which indicates strip whitespace characters.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 std::unique_ptr<column> strip(

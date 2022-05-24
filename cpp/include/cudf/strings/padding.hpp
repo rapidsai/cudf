@@ -52,13 +52,13 @@ enum class pad_side {
  * r is now ['aa  ','bbb ','cccc','ddddd']
  * @endcode
  *
- * @param strings Strings instance for this operation.
- * @param width The minimum number of characters for each string.
- * @param side Where to place the padding characters.
+ * @param strings Strings instance for this operation
+ * @param width The minimum number of characters for each string
+ * @param side Where to place the padding characters
  *        Default is pad right (left justify).
- * @param fill_char Single UTF-8 character to use for padding.
+ * @param fill_char Single UTF-8 character to use for padding
  *        Default is the space character.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column with padded strings.
  */
 std::unique_ptr<column> pad(
@@ -85,9 +85,9 @@ std::unique_ptr<column> pad(
  * r is now ['001234','0-9876','0+0.34','-342567']
  * @endcode
  *
- * @param strings Strings instance for this operation.
- * @param width The minimum number of characters for each string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param width The minimum number of characters for each string
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of strings.
  */
 std::unique_ptr<column> zfill(

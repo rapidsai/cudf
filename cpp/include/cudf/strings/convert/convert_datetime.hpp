@@ -65,10 +65,10 @@ namespace strings {
  *
  * @throw cudf::logic_error if timestamp_type is not a timestamp type.
  *
- * @param strings Strings instance for this operation.
- * @param timestamp_type The timestamp type used for creating the output column.
- * @param format String specifying the timestamp format in strings.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param timestamp_type The timestamp type used for creating the output column
+ * @param format String specifying the timestamp format in strings
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New datetime column.
  */
 std::unique_ptr<column> to_timestamps(
@@ -108,9 +108,9 @@ std::unique_ptr<column> to_timestamps(
  * This will return a column of type BOOL8 where a `true` row indicates the corresponding
  * input string can be parsed correctly with the given format.
  *
- * @param strings Strings instance for this operation.
- * @param format String specifying the timestamp format in strings.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param format String specifying the timestamp format in strings
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New BOOL8 column.
  */
 std::unique_ptr<column> is_timestamp(
@@ -215,12 +215,12 @@ std::unique_ptr<column> is_timestamp(
  * @throw cudf::logic_error if the `format` string is empty
  * @throw cudf::logic_error if `names.size()` is an invalid size. Must be 0 or 40 strings.
  *
- * @param timestamps Timestamp values to convert.
- * @param format The string specifying output format.
+ * @param timestamps Timestamp values to convert
+ * @param format The string specifying output format
  *        Default format is "%Y-%m-%dT%H:%M:%SZ".
  * @param names The string names to use for weekdays ("%a", "%A") and months ("%b", "%B")
  *        Default is an empty `strings_column_view`.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with formatted timestamps.
  */
 std::unique_ptr<column> from_timestamps(

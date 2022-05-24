@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,9 +44,9 @@ namespace strings {
  *
  * @throw cudf::logic_error if output_type is not integral type.
  *
- * @param strings Strings instance for this operation.
- * @param output_type Type of integer numeric column to return.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param output_type Type of integer numeric column to return
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column with integers converted from strings.
  */
 std::unique_ptr<column> to_integers(
@@ -65,8 +65,8 @@ std::unique_ptr<column> to_integers(
  *
  * @throw cudf::logic_error if integers column is not integral type.
  *
- * @param integers Numeric column to convert.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param integers Numeric column to convert
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with integers as strings.
  */
 std::unique_ptr<column> from_integers(
@@ -92,8 +92,8 @@ std::unique_ptr<column> from_integers(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings  Strings instance for this operation.
- * @param mr       Device memory resource used to allocate the returned column's device memory.
+ * @param strings  Strings instance for this operation
+ * @param mr       Device memory resource used to allocate the returned column's device memory
  * @return         New column of boolean results for each string.
  */
 std::unique_ptr<column> is_integer(
@@ -122,9 +122,9 @@ std::unique_ptr<column> is_integer(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings  Strings instance for this operation.
- * @param int_type Integer type used for checking underflow and overflow.
- * @param mr       Device memory resource used to allocate the returned column's device memory.
+ * @param strings  Strings instance for this operation
+ * @param int_type Integer type used for checking underflow and overflow
+ * @param mr       Device memory resource used to allocate the returned column's device memory
  * @return         New column of boolean results for each string.
  */
 std::unique_ptr<column> is_integer(
@@ -150,9 +150,9 @@ std::unique_ptr<column> is_integer(
  *
  * @throw cudf::logic_error if output_type is not integral type.
  *
- * @param strings Strings instance for this operation.
- * @param output_type Type of integer numeric column to return.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param output_type Type of integer numeric column to return
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column with integers converted from strings.
  */
 std::unique_ptr<column> hex_to_integers(
@@ -177,8 +177,8 @@ std::unique_ptr<column> hex_to_integers(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> is_hex(
@@ -208,8 +208,8 @@ std::unique_ptr<column> is_hex(
  *
  * @throw cudf::logic_error if the input column is not integral type.
  *
- * @param input Integer column to convert to hex.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input Integer column to convert to hex
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with hexadecimal characters.
  */
 std::unique_ptr<column> integers_to_hex(

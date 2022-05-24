@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,12 +40,12 @@ namespace detail {
  * s2 is ["b", "c"]
  * @endcode
  *
- * @param strings Strings instance for this operation.
- * @param start Index to first string to select in the column (inclusive).
- * @param end Index to last string to select in the column (exclusive).
+ * @param strings Strings instance for this operation
+ * @param start Index to first string to select in the column (inclusive)
+ * @param end Index to last string to select in the column (exclusive)
  *            Default -1 indicates the last element.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column of size (end-start)/step.
  */
 std::unique_ptr<cudf::column> copy_slice(
@@ -69,11 +69,11 @@ std::unique_ptr<cudf::column> copy_slice(
  *
  * The caller should set the validity mask in the output column.
  *
- * @param input Strings instance for this operation.
- * @param offset The offset by which to shift the input.
- * @param fill_value Fill value for indeterminable outputs.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input Strings instance for this operation
+ * @param offset The offset by which to shift the input
+ * @param fill_value Fill value for indeterminable outputs
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 std::unique_ptr<column> shift(strings_column_view const& input,

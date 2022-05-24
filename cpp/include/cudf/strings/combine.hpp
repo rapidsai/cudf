@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,12 +64,12 @@ enum class output_if_empty_list {
  *
  * @throw cudf::logic_error if separator is not valid.
  *
- * @param strings Strings for this operation.
- * @param separator String that should inserted between each string.
+ * @param strings Strings for this operation
+ * @param separator String that should inserted between each string
  *        Default is an empty string.
- * @param narep String that should represent any null strings found.
+ * @param narep String that should represent any null strings found
  *        Default of invalid-scalar will ignore any null entries.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column containing one string.
  */
 std::unique_ptr<column> join_strings(
@@ -125,7 +125,7 @@ std::unique_ptr<column> join_strings(
  * @throw cudf::logic_error if the number of rows from @p separators and @p strings_columns
  *                          do not match
  *
- * @param strings_columns List of strings columns to concatenate.
+ * @param strings_columns List of strings columns to concatenate
  * @param separators Strings column that provides the separator for a given row
  * @param separator_narep String that should be used in place of a null separator for a given
  *        row. Default of invalid-scalar means no row separator value replacements.
@@ -135,7 +135,7 @@ std::unique_ptr<column> join_strings(
  *        Default is an invalid string.
  * @param separate_nulls If YES, then the separator is included for null rows
  *        if `col_narep` is valid.
- * @param mr Resource for allocating device memory.
+ * @param mr Resource for allocating device memory
  * @return New column with concatenated results.
  */
 std::unique_ptr<column> concatenate(
@@ -182,14 +182,14 @@ std::unique_ptr<column> concatenate(
  * @throw cudf::logic_error if separator is not valid.
  * @throw cudf::logic_error if only one column is specified
  *
- * @param strings_columns List of string columns to concatenate.
- * @param separator String that should inserted between each string from each row.
+ * @param strings_columns List of string columns to concatenate
+ * @param separator String that should inserted between each string from each row
  *        Default is an empty string.
  * @param narep String that should be used in place of any null strings
  *        found in any column. Default of invalid-scalar means any null entry in any column will
  *        produces a null result for that row.
- * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column with concatenated results.
  */
 std::unique_ptr<column> concatenate(
@@ -241,18 +241,18 @@ std::unique_ptr<column> concatenate(
  * @throw cudf::logic_error if the number of rows from `separators` and `lists_strings_column` do
  *        not match
  *
- * @param lists_strings_column Column containing lists of strings to concatenate.
- * @param separators Strings column that provides separators for concatenation.
+ * @param lists_strings_column Column containing lists of strings to concatenate
+ * @param separators Strings column that provides separators for concatenation
  * @param separator_narep String that should be used to replace null separator, default is an
  *        invalid-scalar denoting that rows containing null separator will result in null string in
  *        the corresponding output rows.
  * @param string_narep String that should be used to replace null strings in any non-null list row,
  *        default is an invalid-scalar denoting that list rows containing null strings will result
  *        in null string in the corresponding output rows.
- * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
+ * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid
  * @param empty_list_policy if set to EMPTY_STRING, any input row that is an empty list will
  *        result in an empty string. Otherwise, it will result in a null.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with concatenated results.
  */
 std::unique_ptr<column> join_list_elements(
@@ -301,16 +301,16 @@ std::unique_ptr<column> join_list_elements(
  * @throw cudf::logic_error if input column is not lists of strings column.
  * @throw cudf::logic_error if separator is not valid.
  *
- * @param lists_strings_column Column containing lists of strings to concatenate.
+ * @param lists_strings_column Column containing lists of strings to concatenate
  * @param separator String that should inserted between strings of each list row, default is an
  *        empty string.
  * @param narep String that should be used to replace null strings in any non-null list row, default
  *        is an invalid-scalar denoting that list rows containing null strings will result in null
  *        string in the corresponding output rows.
- * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
+ * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid
  * @param empty_list_policy if set to EMPTY_STRING, any input row that is an empty list will result
  *        in an empty string. Otherwise, it will result in a null.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with concatenated results.
  */
 std::unique_ptr<column> join_list_elements(

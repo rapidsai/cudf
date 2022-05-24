@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,9 +37,9 @@ namespace strings {
  *
  * @throw cudf::logic_error if output_type is not float type.
  *
- * @param strings Strings instance for this operation.
- * @param output_type Type of float numeric column to return.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param output_type Type of float numeric column to return
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column with floats converted from strings.
  */
 std::unique_ptr<column> to_floats(
@@ -60,8 +60,8 @@ std::unique_ptr<column> to_floats(
  *
  * @throw cudf::logic_error if floats column is not float type.
  *
- * @param floats Numeric column to convert.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param floats Numeric column to convert
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with floats as strings.
  */
 std::unique_ptr<column> from_floats(
@@ -84,8 +84,8 @@ std::unique_ptr<column> from_floats(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param strings Strings instance for this operation
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> is_float(
