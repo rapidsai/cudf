@@ -309,6 +309,11 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  if (child.type().id() == cudf::type_id::EMPTY) {
+    // EMPTY columns should not have a null mask,
+    // so don't superimpose null mask on empty columns.
+    return;
+  }
   if (!child.nullable()) {
     // Child currently has no null mask. Copy parent's null mask.
     child.set_null_mask(cudf::detail::copy_bitmask(parent_null_mask, 0, child.size(), stream, mr));
