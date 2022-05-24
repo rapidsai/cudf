@@ -294,7 +294,8 @@ TYPED_TEST(groupby_keys_test, structs)
   auto expect_vals = FWCW<R>{6, 1, 8, 7};
 
   auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
-  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  EXPECT_THROW(test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg)),
+               cudf::logic_error);
 }
 
 template <typename T>
