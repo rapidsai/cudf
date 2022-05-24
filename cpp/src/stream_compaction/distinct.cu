@@ -83,10 +83,10 @@ std::unique_ptr<table> distinct(table_view const& input,
   auto const output_size{key_map.get_size()};
   auto distinct_indices = cudf::make_numeric_column(
     data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
-  auto mutable_view = mutable_column_device_view::create(*distinct_indices, stream);
   // write distinct indices to a numeric column
-  key_map.retrieve_all(
-    mutable_view->begin<size_type>(), thrust::make_discard_iterator(), stream.value());
+  key_map.retrieve_all(distinct_indices->mutable_view().begin<cudf::size_type>(),
+                       thrust::make_discard_iterator(),
+                       stream.value());
 
   // run gather operation to establish new order
   return detail::gather(input,
