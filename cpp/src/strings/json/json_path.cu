@@ -39,6 +39,9 @@
 #include <thrust/scan.h>
 #include <thrust/tuple.h>
 
+#include <algorithm>
+#include <numeric>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -46,6 +49,7 @@ namespace detail {
 namespace {
 
 // debug accessibility
+#define HOST_DEBUGGING
 #if defined(HOST_DEBUGGING)
 #define EXECUTION_SPECIFIER __host__ __device__
 #else
@@ -325,8 +329,10 @@ class json_state : private parser {
     if (result == parse_result::SUCCESS) { parent_el_type = prev_el_type; }
     return result;
   }
+  // required since we are using string_view with host data rather than device data
   EXECUTION_SPECIFIER int string_view_compare(string_view const str1, string_view const str2)
   {
+#if defined(HOST_DEBUGGING)
     int idx = 0;
     for (; (idx < str1.size_bytes()) && (idx < str2.size_bytes()); idx++) {
       if (*(str1.data() + idx) != *(str2.data() + idx)) {
@@ -336,6 +342,9 @@ class json_state : private parser {
     if (idx < str1.size_bytes()) return 1;
     if (idx < str2.size_bytes()) return -1;
     return 0;
+#else
+    return str1.compare(str2);
+#endif
   }
   // return the next element that matches the specified name.
   EXECUTION_SPECIFIER parse_result next_matching_element(string_view const& name, bool inclusive)
@@ -989,8 +998,8 @@ void get_json_object_host(strings_column_view col,
                           get_json_object_options options)
 {
   // copy inputs to host memory
-  std::vector<size_type> input_offsets(col.size() + 1);
-  cudaMemcpy(input_offsets.data(),
+  std::vector<size_type> h_input_offsets(col.size() + 1);
+  cudaMemcpy(h_input_offsets.data(),
              col.offsets_begin(),
              (col.size() + 1) * sizeof(size_type),
              cudaMemcpyDeviceToHost);
@@ -1001,59 +1010,51 @@ void get_json_object_host(strings_column_view col,
   std::vector<path_operator> h_commands(commands_len);
   cudaMemcpy(
     h_commands.data(), commands, commands_len * sizeof(path_operator), cudaMemcpyDeviceToHost);
-  int json_path_buffer_size = 0;
-  for (size_t idx = 0; idx < h_commands.size(); idx++) {
-    json_path_buffer_size += h_commands[idx].name.size_bytes();
-  }
+  int json_path_buffer_size =
+    std::accumulate(h_commands.begin(), h_commands.end(), 0, [](int sum, path_operator& op) {
+      return sum + op.name.size_bytes();
+    });
 
   std::vector<char> json_path_buffer(json_path_buffer_size);
   int json_path_buffer_idx = 0;
-  for (int idx = 0; idx < commands_len; idx++) {
-    cudaMemcpy(json_path_buffer.data() + json_path_buffer_idx,
-               h_commands[idx].name.data(),
-               h_commands[idx].name.size_bytes(),
-               cudaMemcpyDeviceToHost);
-    h_commands[idx].name = string_view(json_path_buffer.data() + json_path_buffer_idx,
-                                       h_commands[idx].name.size_bytes());
-    json_path_buffer_idx += h_commands[idx].name.size_bytes();
-  }
+  std::for_each(h_commands.begin(),
+                h_commands.end(),
+                [&json_path_buffer, &json_path_buffer_idx](path_operator& op) {
+                  cudaMemcpy(json_path_buffer.data() + json_path_buffer_idx,
+                             op.name.data(),
+                             op.name.size_bytes(),
+                             cudaMemcpyDeviceToHost);
+                  op.name = string_view(json_path_buffer.data() + json_path_buffer_idx,
+                                        op.name.size_bytes());
+                  json_path_buffer_idx += op.name.size_bytes();
+                });
 
-  std::vector<offset_type> h_offsets(col.size() + 1);
-  cudaMemcpy(h_offsets.data(),
+  std::vector<offset_type> h_output_offsets(col.size() + 1);
+  cudaMemcpy(h_output_offsets.data(),
              output_offsets,
-             h_offsets.size() * sizeof(offset_type),
+             h_output_offsets.size() * sizeof(offset_type),
              cudaMemcpyDeviceToHost);
 
-  std::vector<char> h_out_buf(h_offsets[col.size()]);
-  if (out_buf.has_value()) {
-    cudaMemcpy(h_out_buf.data(),
-               out_buf.value(),
-               h_offsets[col.size()] * sizeof(char),
-               cudaMemcpyDeviceToHost);
-  }
-
+  std::vector<char> h_out_buf(h_output_offsets[col.size()]);
   std::vector<bitmask_type> h_out_validity(col.size());
-  if (out_validity.has_value()) {
-    cudaMemcpy(h_out_validity.data(),
-               out_validity.value(),
-               col.size() * sizeof(bitmask_type),
-               cudaMemcpyDeviceToHost);
-  }
 
-  for (int idx = 0; idx < col.size(); idx++) {
+  auto const iter = thrust::make_counting_iterator<size_type>(0);
+
+  std::for_each(iter, iter + col.size(), [&](size_type idx) {
     bool is_valid = false;
 
-    int str_len = input_offsets[idx + 1] - input_offsets[idx];
+    int str_len = h_input_offsets[idx + 1] - h_input_offsets[idx];
 
     size_type output_size = 0;
     if (str_len > 0) {
-      char* dst             = out_buf.has_value() ? h_out_buf.data() + h_offsets[idx] : nullptr;
-      size_t const dst_size = out_buf.has_value() ? h_offsets[idx + 1] - h_offsets[idx] : 0;
+      char* dst = out_buf.has_value() ? h_out_buf.data() + h_output_offsets[idx] : nullptr;
+      size_t const dst_size =
+        out_buf.has_value() ? h_output_offsets[idx + 1] - h_output_offsets[idx] : 0;
 
       parse_result result;
       json_output out;
 
-      thrust::tie(result, out) = get_json_object_single((input_chars.data() + input_offsets[idx]),
+      thrust::tie(result, out) = get_json_object_single((input_chars.data() + h_input_offsets[idx]),
                                                         str_len,
                                                         h_commands.data(),
                                                         dst,
@@ -1066,21 +1067,21 @@ void get_json_object_host(strings_column_view col,
 
     // filled in only during the precompute step. during the compute step, the offsets
     // are fed back in so we do -not- want to write them out
-    if (!out_buf.has_value()) { h_offsets[idx] = static_cast<offset_type>(output_size); }
+    if (!out_buf.has_value()) { h_output_offsets[idx] = static_cast<offset_type>(output_size); }
 
     // validity filled in only during the output step
     if (out_validity.has_value()) { h_out_validity[idx] = is_valid; }
-  }
+  });
 
   cudaMemcpy(output_offsets,
-             h_offsets.data(),
-             h_offsets.size() * sizeof(offset_type),
+             h_output_offsets.data(),
+             h_output_offsets.size() * sizeof(offset_type),
              cudaMemcpyHostToDevice);
 
   if (out_buf.has_value()) {
     cudaMemcpy(out_buf.value(),
                h_out_buf.data(),
-               h_offsets[col.size()] * sizeof(char),
+               h_output_offsets[col.size()] * sizeof(char),
                cudaMemcpyHostToDevice);
   }
 

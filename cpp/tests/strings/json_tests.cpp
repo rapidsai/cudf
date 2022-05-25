@@ -996,9 +996,10 @@ TEST_F(JsonPathTests, MissingFieldsAsNulls)
         cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
 
       // expect
-      cudf::test::strings_column_wrapper expected({"null"});
+      result->set_null_count(cudf::UNKNOWN_NULL_COUNT);
+      cudf::test::strings_column_wrapper expected({"null"}, {1});
 
-      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
     }
   }
 
@@ -1014,9 +1015,10 @@ TEST_F(JsonPathTests, MissingFieldsAsNulls)
         cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
 
       // expect
-      cudf::test::strings_column_wrapper expected({"[[1,2],null,[3,4],null]"});
+      result->set_null_count(cudf::UNKNOWN_NULL_COUNT);
+      cudf::test::strings_column_wrapper expected({"[[1,2],null,[3,4],null]"}, {1});
 
-      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
     }
   }
 
@@ -1032,9 +1034,10 @@ TEST_F(JsonPathTests, MissingFieldsAsNulls)
         cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
 
       // expect
-      cudf::test::strings_column_wrapper expected({"null"});
+      result->set_null_count(cudf::UNKNOWN_NULL_COUNT);
+      cudf::test::strings_column_wrapper expected({"null"}, {1});
 
-      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
     }
   }
 
@@ -1050,9 +1053,10 @@ TEST_F(JsonPathTests, MissingFieldsAsNulls)
         cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
 
       // expect
-      cudf::test::strings_column_wrapper expected({"[null,null,null,\"5\"]"});
+      result->set_null_count(cudf::UNKNOWN_NULL_COUNT);
+      cudf::test::strings_column_wrapper expected({"[null,null,null,\"5\"]"}, {1});
 
-      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
     }
   }
 }
