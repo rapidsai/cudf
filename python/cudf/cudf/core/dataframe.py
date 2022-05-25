@@ -2498,7 +2498,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if len(columns_to_add) == 0:
             raise ValueError("No valid columns to be added to index.")
-        elif len(columns_to_add) == 1:
+        elif (
+            len(columns_to_add) == 1
+            and len(keys) == 1
+            and not isinstance(keys[0], (cudf.MultiIndex, pd.MultiIndex))
+        ):
             idx = cudf.Index(columns_to_add[0], name=names[0])
         else:
             idx = MultiIndex._from_data(
