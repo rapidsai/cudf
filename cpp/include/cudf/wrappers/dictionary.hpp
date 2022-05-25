@@ -91,7 +91,7 @@ struct dictionary_wrapper {
   /**
    * @brief Returns the maximum value of the value type.
    *
-   * @return The maximum value of the value type.
+   * @return The maximum value of the value type
    */
   static CUDF_HOST_DEVICE inline constexpr value_type max_value()
   {
@@ -101,7 +101,7 @@ struct dictionary_wrapper {
   /**
    * @brief Returns the minimum value of the value type.
    *
-   * @return The minimum value of the value type.
+   * @return The minimum value of the value type
    */
   static CUDF_HOST_DEVICE inline constexpr value_type min_value()
   {
@@ -111,7 +111,7 @@ struct dictionary_wrapper {
   /**
    * @brief Returns the lowest value of the value type.
    *
-   * @return The lowest value of the value type.
+   * @return The lowest value of the value type
    */
   static CUDF_HOST_DEVICE inline constexpr value_type lowest_value()
   {

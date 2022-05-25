@@ -158,8 +158,8 @@ class literal : public expression {
   /**
    * @brief Construct a new literal object.
    *
-   * @tparam T Numeric scalar template type.
-   * @param value A numeric scalar value.
+   * @tparam T Numeric scalar template type
+   * @param value A numeric scalar value
    */
   template <typename T>
   literal(cudf::numeric_scalar<T>& value)
@@ -170,8 +170,8 @@ class literal : public expression {
   /**
    * @brief Construct a new literal object.
    *
-   * @tparam T Timestamp scalar template type.
-   * @param value A timestamp scalar value.
+   * @tparam T Timestamp scalar template type
+   * @param value A timestamp scalar value
    */
   template <typename T>
   literal(cudf::timestamp_scalar<T>& value)
@@ -182,8 +182,8 @@ class literal : public expression {
   /**
    * @brief Construct a new literal object.
    *
-   * @tparam T Duration scalar template type.
-   * @param value A duration scalar value.
+   * @tparam T Duration scalar template type
+   * @param value A duration scalar value
    */
   template <typename T>
   literal(cudf::duration_scalar<T>& value)
@@ -194,14 +194,14 @@ class literal : public expression {
   /**
    * @brief Get the data type.
    *
-   * @return cudf::data_type
+   * @return The data type of the literal
    */
   [[nodiscard]] cudf::data_type get_data_type() const { return get_value().type(); }
 
   /**
    * @brief Get the value object.
    *
-   * @return cudf::detail::fixed_width_scalar_device_view_base
+   * @return The device scalar object
    */
   [[nodiscard]] cudf::detail::fixed_width_scalar_device_view_base get_value() const
   {
@@ -227,7 +227,7 @@ class literal : public expression {
    * @brief Check if the underlying scalar is valid.
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return true if the underlying scalar is valid.
+   * @return true if the underlying scalar is valid
    */
   [[nodiscard]] bool is_valid(rmm::cuda_stream_view stream) const
   {
@@ -249,7 +249,7 @@ class column_reference : public expression {
    *
    * @param column_index Index of this column in the table (provided when the expression is
    * evaluated).
-   * @param table_source Which table to use in cases with two tables (e.g. joins).
+   * @param table_source Which table to use in cases with two tables (e.g. joins)
    */
   column_reference(cudf::size_type column_index,
                    table_reference table_source = table_reference::LEFT)
@@ -260,22 +260,22 @@ class column_reference : public expression {
   /**
    * @brief Get the column index.
    *
-   * @return cudf::size_type
+   * @return The column index of the column reference
    */
   [[nodiscard]] cudf::size_type get_column_index() const { return column_index; }
 
   /**
    * @brief Get the table source.
    *
-   * @return table_reference
+   * @return table_reference enum value
    */
   [[nodiscard]] table_reference get_table_source() const { return table_source; }
 
   /**
    * @brief Get the data type.
    *
-   * @param table Table used to determine types.
-   * @return cudf::data_type
+   * @param table Table used to determine types
+   * @return The data type of the column
    */
   [[nodiscard]] cudf::data_type get_data_type(table_view const& table) const
   {
@@ -285,9 +285,9 @@ class column_reference : public expression {
   /**
    * @brief Get the data type.
    *
-   * @param left_table Left table used to determine types.
-   * @param right_table Right table used to determine types.
-   * @return cudf::data_type
+   * @param left_table Left table used to determine types
+   * @param right_table Right table used to determine types
+   * @return The data type of the column
    */
   [[nodiscard]] cudf::data_type get_data_type(table_view const& left_table,
                                               table_view const& right_table) const
@@ -307,8 +307,8 @@ class column_reference : public expression {
   /**
    * @brief Accepts a visitor class.
    *
-   * @param visitor Visitor.
-   * @return cudf::size_type Index of device data reference for this instance.
+   * @param visitor Visitor
+   * @return Index of device data reference for this instance
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
@@ -356,22 +356,22 @@ class operation : public expression {
   /**
    * @brief Get the operator.
    *
-   * @return ast_operator
+   * @return The operator
    */
   [[nodiscard]] ast_operator get_operator() const { return op; }
 
   /**
    * @brief Get the operands.
    *
-   * @return std::vector<std::reference_wrapper<const expression>>
+   * @return Vector of operands
    */
   std::vector<std::reference_wrapper<expression const>> get_operands() const { return operands; }
 
   /**
    * @brief Accepts a visitor class.
    *
-   * @param visitor Visitor.
-   * @return cudf::size_type Index of device data reference for this instance.
+   * @param visitor Visitor
+   * @return Index of device data reference for this instance
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 

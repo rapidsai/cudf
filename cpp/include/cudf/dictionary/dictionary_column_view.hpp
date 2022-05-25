@@ -78,7 +78,7 @@ class dictionary_column_view : private column_view {
   /**
    * @brief Returns the parent column.
    *
-   * @return The parent column.
+   * @return The parent column
    */
   [[nodiscard]] column_view parent() const noexcept;
 
@@ -105,16 +105,16 @@ class dictionary_column_view : private column_view {
   [[nodiscard]] column_view keys() const noexcept;
 
   /**
-   * @brief Returns the `data_type` of the keys child column.
+   * @brief Returns the cudf::data_type of the keys child column.
    *
-   * @return The `data_type` of the keys child column.
+   * @return The cudf::data_type of the keys child column
    */
   [[nodiscard]] data_type keys_type() const noexcept;
 
   /**
    * @brief Returns the number of rows in the keys column.
    *
-   * @return The number of rows in the keys column.
+   * @return The number of rows in the keys column
    */
   [[nodiscard]] size_type keys_size() const noexcept;
 };
