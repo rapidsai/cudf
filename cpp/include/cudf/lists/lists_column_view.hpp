@@ -78,7 +78,7 @@ class lists_column_view : private column_view {
   /**
    * @brief Returns the parent column.
    *
-   * @return The parent column.
+   * @return The parent column
    */
   [[nodiscard]] column_view parent() const;
 
