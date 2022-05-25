@@ -105,16 +105,18 @@ endif()
 rapids_cmake_build_type("Release")
 
 # ##################################################################################################
-# * nvcomp------------------------------------------------------------------------------------------
-
-set(nvcomp_DIR "${CUDF_CPP_BUILD_DIR}/_deps/nvcomp-build")
-rapids_find_package(nvcomp REQUIRED)
-
-# ##################################################################################################
 # * CUDF ------------------------------------------------------------------------------------------
 
 set(cudf_ROOT "${CUDF_CPP_BUILD_DIR}")
 rapids_find_package(cudf REQUIRED)
+
+# ##################################################################################################
+# * nvcomp------------------------------------------------------------------------------------------
+
+if(NOT DEFINED nvcomp_DIR)
+  set(nvcomp_DIR "${CUDF_CPP_BUILD_DIR}/_deps/nvcomp-build")
+endif()
+rapids_find_package(nvcomp REQUIRED)
 
 # ##################################################################################################
 # * find JNI -------------------------------------------------------------------------------------
@@ -253,4 +255,17 @@ if(CUDA_STATIC_RUNTIME)
 else()
   # Tell CMake what CUDA language runtime to use
   set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
+endif()
+
+# ##################################################################################################
+# * install shared libraries ----------------------------------------------------------------------
+if(TARGET nvcomp::nvcomp)
+  add_custom_command(
+    TARGET cudfjni
+    PRE_LINK
+    COMMAND
+      ${CMAKE_COMMAND} -E copy $<TARGET_FILE:nvcomp::nvcomp> $<TARGET_FILE:nvcomp::nvcomp_gdeflate>
+      $<TARGET_FILE:nvcomp::nvcomp_bitcomp> "${PROJECT_BINARY_DIR}"
+    COMMENT "Copying nvcomp libraries to ${PROJECT_BINARY_DIR}"
+  )
 endif()

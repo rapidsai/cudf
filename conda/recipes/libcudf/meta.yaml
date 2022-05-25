@@ -285,6 +285,8 @@ outputs:
       license_family: Apache
       license_file: LICENSE
       summary: libcudf library
+      prelink_message:
+        - nvcomp.txt
   - name: libcudf_kafka
     version: {{ version }}
     script: install_libcudf_kafka.sh
