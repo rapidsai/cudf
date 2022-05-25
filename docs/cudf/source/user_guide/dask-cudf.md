@@ -63,7 +63,7 @@ The following is tested and expected to work:
 - Converting to and from other forms
 
   - Dask + Pandas to Dask + cuDF
-    `df.map_partitions(cudf.from_pandas)`
+    `df.map_partitions(cudf.DataFrame.from_pandas)`
   - Dask + cuDF to Dask + Pandas
     `df.map_partitions(lambda df: df.to_pandas())`
   - cuDF to Dask + cuDF:
