@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,13 +31,12 @@ namespace hash {
  * @brief Indicates if a set of aggregation requests can be satisfied with a
  * hash-based groupby implementation.
  *
- * @param keys The table of keys
  * @param requests The set of columns to aggregate and the aggregations to
  * perform
  * @return true A hash-based groupby can be used
  * @return false A hash-based groupby cannot be used
  */
-bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests);
+bool can_use_hash_groupby(host_span<aggregation_request const> requests);
 
 // Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
