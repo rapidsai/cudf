@@ -197,15 +197,6 @@ class Buffer(Serializable):
             assert self._ptr is not None
             return self._ptr
 
-    def ptr_and_access_counter(self) -> Tuple[int, AccessCounter]:
-        if self._spill_manager is not None:
-            self._spill_manager.spill_to_device_limit()
-        with self._lock:
-            self.move_inplace(target="gpu")
-            self._last_accessed = time.monotonic()
-            assert self._ptr is not None
-            return self._ptr, self._access_counter
-
     @property
     def sole_owner(self) -> bool:
         return self._sole_owner
