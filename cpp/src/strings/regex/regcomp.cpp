@@ -570,56 +570,52 @@ class regex_parser {
  * @brief The compiler converts class list into instructions.
  */
 class regex_compiler {
-  reprog& m_prog;
-
   struct and_node {
     int id_first;
     int id_last;
   };
-
-  std::stack<and_node> and_stack;
 
   struct re_operator {
     int t;
     int subid;
   };
 
-  std::stack<re_operator> operator_stack;
+  reprog& _prog;
+  std::stack<and_node> _and_stack;
+  std::stack<re_operator> _operator_stack;
+  bool _last_was_and;
+  int _bracket_count;
+  regex_flags _flags;
 
-  bool last_was_and;
-  int bracket_count;
-
-  regex_flags flags;
-
-  inline void push_and(int first, int last) { and_stack.push({first, last}); }
+  inline void push_and(int first, int last) { _and_stack.push({first, last}); }
 
   inline and_node pop_and(int op)
   {
-    if (and_stack.empty()) {
+    if (_and_stack.empty()) {
       // missing operand for op
-      auto const inst_id = m_prog.add_inst(NOP);
+      auto const inst_id = _prog.add_inst(NOP);
       push_and(inst_id, inst_id);
     }
-    auto const node = and_stack.top();
-    and_stack.pop();
+    auto const node = _and_stack.top();
+    _and_stack.pop();
     return node;
   }
 
   inline void push_operator(int token, int subid = 0)
   {
-    operator_stack.push(re_operator{token, subid});
+    _operator_stack.push(re_operator{token, subid});
   }
 
   inline re_operator const pop_operator()
   {
-    auto const ator = operator_stack.top();
-    operator_stack.pop();
+    auto const ator = _operator_stack.top();
+    _operator_stack.pop();
     return ator;
   }
 
   void eval_until(int min_token)
   {
-    while (min_token == RBRA || operator_stack.top().t >= min_token) {
+    while (min_token == RBRA || _operator_stack.top().t >= min_token) {
       auto const ator = pop_operator();
       switch (ator.t) {
         default:
@@ -627,88 +623,88 @@ class regex_compiler {
           break;
         case LBRA:  // expects matching RBRA
         {
-          auto const op                         = pop_and('(');
-          auto const id_inst2                   = m_prog.add_inst(RBRA);
-          m_prog.inst_at(id_inst2).u1.subid     = ator.subid;
-          m_prog.inst_at(op.id_last).u2.next_id = id_inst2;
-          auto const id_inst1                   = m_prog.add_inst(LBRA);
-          m_prog.inst_at(id_inst1).u1.subid     = ator.subid;
-          m_prog.inst_at(id_inst1).u2.next_id   = op.id_first;
+          auto const op                        = pop_and('(');
+          auto const id_inst2                  = _prog.add_inst(RBRA);
+          _prog.inst_at(id_inst2).u1.subid     = ator.subid;
+          _prog.inst_at(op.id_last).u2.next_id = id_inst2;
+          auto const id_inst1                  = _prog.add_inst(LBRA);
+          _prog.inst_at(id_inst1).u1.subid     = ator.subid;
+          _prog.inst_at(id_inst1).u2.next_id   = op.id_first;
           push_and(id_inst1, id_inst2);
           return;
         }
         case OR: {
-          auto const op2                         = pop_and('|');
-          auto const op1                         = pop_and('|');
-          auto const id_inst2                    = m_prog.add_inst(NOP);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst2;
-          m_prog.inst_at(op1.id_last).u2.next_id = id_inst2;
-          auto const id_inst1                    = m_prog.add_inst(OR);
-          m_prog.inst_at(id_inst1).u1.right_id   = op1.id_first;
-          m_prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
+          auto const op2                        = pop_and('|');
+          auto const op1                        = pop_and('|');
+          auto const id_inst2                   = _prog.add_inst(NOP);
+          _prog.inst_at(op2.id_last).u2.next_id = id_inst2;
+          _prog.inst_at(op1.id_last).u2.next_id = id_inst2;
+          auto const id_inst1                   = _prog.add_inst(OR);
+          _prog.inst_at(id_inst1).u1.right_id   = op1.id_first;
+          _prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
           push_and(id_inst1, id_inst2);
           break;
         }
         case CAT: {
-          auto const op2                         = pop_and(0);
-          auto const op1                         = pop_and(0);
-          m_prog.inst_at(op1.id_last).u2.next_id = op2.id_first;
+          auto const op2                        = pop_and(0);
+          auto const op1                        = pop_and(0);
+          _prog.inst_at(op1.id_last).u2.next_id = op2.id_first;
           push_and(op1.id_first, op2.id_last);
           break;
         }
         case STAR: {
-          auto const op                         = pop_and('*');
-          auto const id_inst1                   = m_prog.add_inst(OR);
-          m_prog.inst_at(op.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u1.right_id  = op.id_first;
+          auto const op                        = pop_and('*');
+          auto const id_inst1                  = _prog.add_inst(OR);
+          _prog.inst_at(op.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u1.right_id  = op.id_first;
           push_and(id_inst1, id_inst1);
           break;
         }
         case STAR_LAZY: {
-          auto const op                         = pop_and('*');
-          auto const id_inst1                   = m_prog.add_inst(OR);
-          auto const id_inst2                   = m_prog.add_inst(NOP);
-          m_prog.inst_at(op.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u2.left_id   = op.id_first;
-          m_prog.inst_at(id_inst1).u1.right_id  = id_inst2;
+          auto const op                        = pop_and('*');
+          auto const id_inst1                  = _prog.add_inst(OR);
+          auto const id_inst2                  = _prog.add_inst(NOP);
+          _prog.inst_at(op.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u2.left_id   = op.id_first;
+          _prog.inst_at(id_inst1).u1.right_id  = id_inst2;
           push_and(id_inst1, id_inst2);
           break;
         }
         case PLUS: {
-          auto const op                         = pop_and('+');
-          auto const id_inst1                   = m_prog.add_inst(OR);
-          m_prog.inst_at(op.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u1.right_id  = op.id_first;
+          auto const op                        = pop_and('+');
+          auto const id_inst1                  = _prog.add_inst(OR);
+          _prog.inst_at(op.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u1.right_id  = op.id_first;
           push_and(op.id_first, id_inst1);
           break;
         }
         case PLUS_LAZY: {
-          auto const op                         = pop_and('+');
-          auto const id_inst1                   = m_prog.add_inst(OR);
-          auto const id_inst2                   = m_prog.add_inst(NOP);
-          m_prog.inst_at(op.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u2.left_id   = op.id_first;
-          m_prog.inst_at(id_inst1).u1.right_id  = id_inst2;
+          auto const op                        = pop_and('+');
+          auto const id_inst1                  = _prog.add_inst(OR);
+          auto const id_inst2                  = _prog.add_inst(NOP);
+          _prog.inst_at(op.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u2.left_id   = op.id_first;
+          _prog.inst_at(id_inst1).u1.right_id  = id_inst2;
           push_and(op.id_first, id_inst2);
           break;
         }
         case QUEST: {
-          auto const op                         = pop_and('?');
-          auto const id_inst1                   = m_prog.add_inst(OR);
-          auto const id_inst2                   = m_prog.add_inst(NOP);
-          m_prog.inst_at(id_inst1).u2.left_id   = id_inst2;
-          m_prog.inst_at(id_inst1).u1.right_id  = op.id_first;
-          m_prog.inst_at(op.id_last).u2.next_id = id_inst2;
+          auto const op                        = pop_and('?');
+          auto const id_inst1                  = _prog.add_inst(OR);
+          auto const id_inst2                  = _prog.add_inst(NOP);
+          _prog.inst_at(id_inst1).u2.left_id   = id_inst2;
+          _prog.inst_at(id_inst1).u1.right_id  = op.id_first;
+          _prog.inst_at(op.id_last).u2.next_id = id_inst2;
           push_and(id_inst1, id_inst2);
           break;
         }
         case QUEST_LAZY: {
-          auto const op                         = pop_and('?');
-          auto const id_inst1                   = m_prog.add_inst(OR);
-          auto const id_inst2                   = m_prog.add_inst(NOP);
-          m_prog.inst_at(id_inst1).u2.left_id   = op.id_first;
-          m_prog.inst_at(id_inst1).u1.right_id  = id_inst2;
-          m_prog.inst_at(op.id_last).u2.next_id = id_inst2;
+          auto const op                        = pop_and('?');
+          auto const id_inst1                  = _prog.add_inst(OR);
+          auto const id_inst2                  = _prog.add_inst(NOP);
+          _prog.inst_at(id_inst1).u2.left_id   = op.id_first;
+          _prog.inst_at(id_inst1).u1.right_id  = id_inst2;
+          _prog.inst_at(op.id_last).u2.next_id = id_inst2;
           push_and(id_inst1, id_inst2);
           break;
         }
@@ -718,37 +714,37 @@ class regex_compiler {
 
   void handle_operator(int token, int subid = 0)
   {
-    if (token == RBRA && --bracket_count < 0) {
+    if (token == RBRA && --_bracket_count < 0) {
       // unmatched right paren
       return;
     }
     if (token == LBRA) {
-      bracket_count++;
-      if (last_was_and) { handle_operator(CAT, subid); }
+      _bracket_count++;
+      if (_last_was_and) { handle_operator(CAT, subid); }
     } else {
       eval_until(token);
     }
     if (token != RBRA) { push_operator(token, subid); }
 
     static std::vector<int> tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
-    last_was_and =
+    _last_was_and =
       std::any_of(tokens.begin(), tokens.end(), [token](auto t) { return t == token; });
   }
 
   void handle_operand(int token, int subid = 0, char32_t yy = 0, int class_id = 0)
   {
-    if (last_was_and) { handle_operator(CAT, subid); }  // catenate is implicit
+    if (_last_was_and) { handle_operator(CAT, subid); }  // catenate is implicit
 
-    auto const inst_id = m_prog.add_inst(token);
+    auto const inst_id = _prog.add_inst(token);
     if (token == CCLASS || token == NCCLASS) {
-      m_prog.inst_at(inst_id).u1.cls_id = class_id;
+      _prog.inst_at(inst_id).u1.cls_id = class_id;
     } else if (token == CHAR) {
-      m_prog.inst_at(inst_id).u1.c = yy;
+      _prog.inst_at(inst_id).u1.c = yy;
     } else if (token == BOL || token == EOL) {
-      m_prog.inst_at(inst_id).u1.c = is_multiline(flags) ? yy : '\n';
+      _prog.inst_at(inst_id).u1.c = is_multiline(_flags) ? yy : '\n';
     }
     push_and(inst_id, inst_id);
-    last_was_and = true;
+    _last_was_and = true;
   }
 
   std::vector<regex_parser::Item> expand_counted(std::vector<regex_parser::Item> const& in)
@@ -819,11 +815,11 @@ class regex_compiler {
 
  public:
   regex_compiler(const char32_t* pattern, regex_flags const flags, reprog& prog)
-    : m_prog(prog), last_was_and(false), bracket_count(0), flags(flags)
+    : _prog(prog), _last_was_and(false), _bracket_count(0), _flags(flags)
   {
     // Parse
     std::vector<regex_parser::Item> const items = [&] {
-      regex_parser parser(pattern, is_dotall(flags) ? ANYNL : ANY, m_prog);
+      regex_parser parser(pattern, is_dotall(flags) ? ANYNL : ANY, _prog);
       return parser.m_has_counted ? expand_counted(parser.m_items) : parser.m_items;
     }();
 
@@ -857,12 +853,12 @@ class regex_compiler {
     handle_operand(END, push_subid);
     eval_until(START);
 
-    CUDF_EXPECTS(bracket_count == 0, "unmatched left parenthesis");
+    CUDF_EXPECTS(_bracket_count == 0, "unmatched left parenthesis");
 
-    m_prog.set_start_inst(and_stack.top().id_first);
-    m_prog.finalize();
-    m_prog.check_for_errors();
-    m_prog.set_groups_count(cur_subid);
+    _prog.set_start_inst(_and_stack.top().id_first);
+    _prog.finalize();
+    _prog.check_for_errors();
+    _prog.set_groups_count(cur_subid);
   }
 };
 
