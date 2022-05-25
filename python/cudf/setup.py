@@ -5,11 +5,11 @@ import re
 import shutil
 import subprocess
 import sys
+from distutils.spawn import find_executable
 
 from setuptools import find_packages
 from skbuild import setup
 from skbuild.command.build_ext import build_ext
-from distutils.spawn import find_executable
 
 import versioneer
 
