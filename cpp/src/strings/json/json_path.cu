@@ -49,7 +49,6 @@ namespace detail {
 namespace {
 
 // debug accessibility
-#define HOST_DEBUGGING
 #if defined(HOST_DEBUGGING)
 #define EXECUTION_SPECIFIER __host__ __device__
 #else
