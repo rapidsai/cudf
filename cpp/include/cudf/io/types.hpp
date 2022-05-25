@@ -579,7 +579,7 @@ class column_in_metadata {
 };
 
 /**
- * @brief Meta data for a table
+ * @brief Metadata for a table
  */
 class table_input_metadata {
  public:
