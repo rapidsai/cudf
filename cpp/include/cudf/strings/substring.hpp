@@ -187,7 +187,7 @@ std::unique_ptr<column> slice_strings(
  *
  * @param strings Strings instance for this operation
  * @param delimiter_strings UTF-8 encoded string for each row
- * @param count Number of times to search for delimiter in each string If the value is positive,
+ * @param count Number of times to search for delimiter in each string. If the value is positive,
  *              delimiter is searched from left to right; else, it is searched from right to left.
  * @param mr Resource for allocating device memory
  * @return New strings column containing the substrings.

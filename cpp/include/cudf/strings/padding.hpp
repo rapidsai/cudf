@@ -54,9 +54,9 @@ enum class pad_side {
  *
  * @param strings Strings instance for this operation
  * @param width The minimum number of characters for each string
- * @param side Where to place the padding characters
+ * @param side Where to place the padding characters;
  *        Default is pad right (left justify).
- * @param fill_char Single UTF-8 character to use for padding
+ * @param fill_char Single UTF-8 character to use for padding;
  *        Default is the space character.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column with padded strings.

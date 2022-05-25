@@ -42,7 +42,7 @@ namespace detail {
  *
  * @param strings Strings instance for this operation
  * @param start Index to first string to select in the column (inclusive)
- * @param end Index to last string to select in the column (exclusive)
+ * @param end Index to last string to select in the column (exclusive);
  *            Default -1 indicates the last element.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory

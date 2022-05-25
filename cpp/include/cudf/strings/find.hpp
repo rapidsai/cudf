@@ -44,7 +44,7 @@ namespace strings {
  * @param strings Strings instance for this operation
  * @param target UTF-8 encoded string to search for in each string
  * @param start First character position to include in the search
- * @param stop Last position (exclusive) to include in the search
+ * @param stop Last position (exclusive) to include in the search;
  *             Default of -1 will search to the end of the string.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New integer column with character position values.
@@ -73,7 +73,7 @@ std::unique_ptr<column> find(
  * @param strings Strings instance for this operation
  * @param target UTF-8 encoded string to search for in each string
  * @param start First position to include in the search
- * @param stop Last position (exclusive) to include in the search
+ * @param stop Last position (exclusive) to include in the search;
  *             Default of -1 will search starting at the end of the string.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New integer column with character position values.

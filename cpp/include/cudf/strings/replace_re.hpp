@@ -40,7 +40,7 @@ namespace strings {
  *
  * @param strings Strings instance for this operation
  * @param pattern The regular expression pattern to search within each string
- * @param replacement The string used to replace the matched sequence in each string
+ * @param replacement The string used to replace the matched sequence in each string;
  *        Default is an empty string.
  * @param max_replace_count The maximum number of times to replace the matched pattern
  *        within each string. Default replaces every substring that is matched.

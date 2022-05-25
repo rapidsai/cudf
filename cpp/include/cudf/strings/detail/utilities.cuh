@@ -107,7 +107,7 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  *         It must also have members d_offsets and d_chars which are set to
  *         memory containing the offsets and chars columns during write.
  *
- * @param size_and_exec_fn This is called twice. Once for the output size of each string
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string;
  *        After that, the d_offsets and d_chars are set and this is called again to fill in the
  *        chars memory.
  * @param exec_size Number of rows for executing the `size_and_exec_fn` function
@@ -167,7 +167,7 @@ auto make_strings_children(
  *         It must also have members d_offsets and d_chars which are set to
  *         memory containing the offsets and chars columns during write.
  *
- * @param size_and_exec_fn This is called twice. Once for the output size of each string
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string;
  *        After that, the d_offsets and d_chars are set and this is called again to fill in the
  *        chars memory.
  * @param strings_count Number of strings

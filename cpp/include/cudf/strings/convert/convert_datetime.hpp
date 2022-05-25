@@ -216,7 +216,7 @@ std::unique_ptr<column> is_timestamp(
  * @throw cudf::logic_error if `names.size()` is an invalid size. Must be 0 or 40 strings.
  *
  * @param timestamps Timestamp values to convert
- * @param format The string specifying output format
+ * @param format The string specifying output format;
  *        Default format is "%Y-%m-%dT%H:%M:%SZ".
  * @param names The string names to use for weekdays ("%a", "%A") and months ("%b", "%B")
  *        Default is an empty `strings_column_view`.

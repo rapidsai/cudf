@@ -114,7 +114,7 @@ std::unique_ptr<column> to_durations(
  * @throw cudf::logic_error if `durations` column parameter is not a duration type.
  *
  * @param durations Duration values to convert
- * @param format The string specifying output format
+ * @param format The string specifying output format;
  *        Default format is ""%d days %H:%M:%S".
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column with formatted durations.

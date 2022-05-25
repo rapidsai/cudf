@@ -223,7 +223,7 @@ class string_view {
    *
    * @param str Target string to search within this string
    * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search
+   * @param count Number of characters from pos to include in the search;
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if str is not found in this string.
    */
@@ -237,7 +237,7 @@ class string_view {
    * @param str Target array to search within this string
    * @param bytes Number of bytes in str
    * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search
+   * @param count Number of characters from pos to include in the search;
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
@@ -251,7 +251,7 @@ class string_view {
    *
    * @param character Single encoded character
    * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search
+   * @param count Number of characters from pos to include in the search;
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
@@ -264,7 +264,7 @@ class string_view {
    *
    * @param str Target string to search within this string
    * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search
+   * @param count Number of characters from pos to include in the search;
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
@@ -278,7 +278,7 @@ class string_view {
    * @param str Target string to search with this string
    * @param bytes Number of bytes in str
    * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search
+   * @param count Number of characters from pos to include in the search;
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
@@ -292,7 +292,7 @@ class string_view {
    *
    * @param character Single encoded character
    * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search
+   * @param count Number of characters from pos to include in the search;
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
