@@ -56,7 +56,7 @@ struct contains_fn {
 };
 
 std::unique_ptr<column> contains_impl(strings_column_view const& input,
-                                      std::string const& pattern,
+                                      std::string_view pattern,
                                       regex_flags const flags,
                                       bool const beginning_only,
                                       rmm::cuda_stream_view stream,
@@ -85,7 +85,7 @@ std::unique_ptr<column> contains_impl(strings_column_view const& input,
 
 std::unique_ptr<column> contains_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -95,7 +95,7 @@ std::unique_ptr<column> contains_re(
 
 std::unique_ptr<column> matches_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -105,7 +105,7 @@ std::unique_ptr<column> matches_re(
 
 std::unique_ptr<column> count_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -128,7 +128,7 @@ std::unique_ptr<column> count_re(
 // external APIs
 
 std::unique_ptr<column> contains_re(strings_column_view const& strings,
-                                    std::string const& pattern,
+                                    std::string_view pattern,
                                     regex_flags const flags,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -137,7 +137,7 @@ std::unique_ptr<column> contains_re(strings_column_view const& strings,
 }
 
 std::unique_ptr<column> matches_re(strings_column_view const& strings,
-                                   std::string const& pattern,
+                                   std::string_view pattern,
                                    regex_flags const flags,
                                    rmm::mr::device_memory_resource* mr)
 {
@@ -146,7 +146,7 @@ std::unique_ptr<column> matches_re(strings_column_view const& strings,
 }
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,
-                                 std::string const& pattern,
+                                 std::string_view pattern,
                                  regex_flags const flags,
                                  rmm::mr::device_memory_resource* mr)
 {

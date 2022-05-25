@@ -240,7 +240,9 @@ __global__ void __launch_bounds__(128)
                statistics_merge_group* page_grstats,
                statistics_merge_group* chunk_grstats,
                size_t max_page_comp_data_size,
-               int32_t num_columns)
+               int32_t num_columns,
+               size_t max_page_size_bytes,
+               size_type max_page_size_rows)
 {
   // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -334,11 +336,16 @@ __global__ void __launch_bounds__(128)
           ? frag_g.num_leaf_values * 2  // Assume worst-case of 2-bytes per dictionary index
           : frag_g.fragment_data_size;
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      uint32_t max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
-                               : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
-                                                                         : 512 * 1024;
+      size_t this_max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
+                                  : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
+                                                                            : 512 * 1024;
+
+      // override this_max_page_size if the requested size is smaller
+      this_max_page_size = min(this_max_page_size, max_page_size_bytes);
+
       if (num_rows >= ck_g.num_rows ||
-          (values_in_page > 0 && (page_size + fragment_data_size > max_page_size))) {
+          (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
+          rows_in_page > max_page_size_rows) {
         if (ck_g.use_dictionary) {
           page_size =
             1 + 5 + ((values_in_page * ck_g.dict_rle_bits + 7) >> 3) + (values_in_page >> 8);
@@ -1927,6 +1934,8 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
+                      size_t max_page_size_bytes,
+                      size_type max_page_size_rows,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       size_t max_page_comp_data_size,
@@ -1934,8 +1943,15 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
 {
   auto num_rowgroups = chunks.size().first;
   dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
-  gpuInitPages<<<dim_grid, 128, 0, stream.value()>>>(
-    chunks, pages, col_desc, page_grstats, chunk_grstats, max_page_comp_data_size, num_columns);
+  gpuInitPages<<<dim_grid, 128, 0, stream.value()>>>(chunks,
+                                                     pages,
+                                                     col_desc,
+                                                     page_grstats,
+                                                     chunk_grstats,
+                                                     max_page_comp_data_size,
+                                                     num_columns,
+                                                     max_page_size_bytes,
+                                                     max_page_size_rows);
 }
 
 void EncodePages(device_span<gpu::EncPage> pages,

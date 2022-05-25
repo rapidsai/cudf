@@ -537,7 +537,7 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-        dtype : str or numpy.dtype, optional
+        dtype : str or :class:`numpy.dtype`, optional
             The dtype to pass to :func:`numpy.asarray`.
         copy : bool, default False
             Whether to ensure that the returned value is not a view on
@@ -572,7 +572,7 @@ class Frame(BinaryOperand, Scannable):
 
         Parameters
         ----------
-        dtype : str or numpy.dtype, optional
+        dtype : str or :class:`numpy.dtype`, optional
             The dtype to pass to :func:`numpy.asarray`.
         copy : bool, default True
             Whether to ensure that the returned value is not a view on
@@ -1615,9 +1615,9 @@ class Frame(BinaryOperand, Scannable):
         4    <NA>
         dtype: object
 
-        If there is a mimatch in types of the values in
+        If there is a mismatch in types of the values in
         ``to_replace`` & ``value`` with the actual series, then
-        cudf exhibits different behaviour with respect to pandas
+        cudf exhibits different behavior with respect to pandas
         and the pairs are ignored silently:
 
         >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
@@ -1788,7 +1788,12 @@ class Frame(BinaryOperand, Scannable):
                         )._column,
                         name=self._index.name,
                     )
-
+                elif isinstance(
+                    other._index, cudf.MultiIndex
+                ) and not isinstance(self._index, cudf.MultiIndex):
+                    self._index = cudf.MultiIndex._from_data(
+                        self._index._data, name=self._index.name
+                    )
         return self
 
     @_cudf_nvtx_annotate
@@ -2044,7 +2049,7 @@ class Frame(BinaryOperand, Scannable):
             na_position=na_position,
         )
 
-        # Retrun result as cupy array if the values is non-scalar
+        # Return result as cupy array if the values is non-scalar
         # If values is scalar, result is expected to be scalar.
         result = cupy.asarray(outcol.data_array_view)
         if scalar_flag:

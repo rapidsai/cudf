@@ -18,12 +18,13 @@
 
 #include "timezone.cuh"
 
-#include "orc.h"
-#include "orc_common.h"
+#include "orc.hpp"
+#include "orc_common.hpp"
+
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
-#include <io/comp/gpuinflate.h>
+#include <io/comp/gpuinflate.hpp>
 #include <io/statistics/statistics.cuh>
 #include <io/utilities/column_buffer.hpp>
 

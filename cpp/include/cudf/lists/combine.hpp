@@ -49,9 +49,8 @@ enum class concatenate_null_policy { IGNORE, NULLIFY_OUTPUT_ROW };
  * r is now [{0, 1, 8}, {2, 3, 4, 9}, {5}, {10, 11, 12}, {6, 7, 13, 14, 15, 16}]
  * @endcode
  *
- * @throws cudf::logic_error if any column of the input table is not a lists columns.
- * @throws cudf::logic_error if any lists column contains nested typed entry.
- * @throws cudf::logic_error if all lists columns do not have the same entry type.
+ * @throws cudf::logic_error if any column of the input table is not a lists column.
+ * @throws cudf::logic_error if all lists columns do not have the same type.
  *
  * @param input Table of lists to be concatenated.
  * @param null_policy The parameter to specify whether a null list element will be ignored from

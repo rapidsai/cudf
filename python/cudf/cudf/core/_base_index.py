@@ -41,8 +41,8 @@ impossible, a ValueError exception is raised.
 
 Parameters
 ----------
-dtype : numpy dtype
-    Use a numpy.dtype to cast entire Index object to.
+dtype : :class:`numpy.dtype`
+    Use a :class:`numpy.dtype` to cast entire Index object to.
 copy : bool, default False
     By default, astype always returns a newly allocated object.
     If copy is set to False and internal requirements on dtype are
