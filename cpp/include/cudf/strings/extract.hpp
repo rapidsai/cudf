@@ -55,7 +55,7 @@ namespace strings {
  */
 std::unique_ptr<table> extract(
   strings_column_view const& strings,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -90,7 +90,7 @@ std::unique_ptr<table> extract(
  */
 std::unique_ptr<column> extract_all_record(
   strings_column_view const& strings,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

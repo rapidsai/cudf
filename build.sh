@@ -17,7 +17,7 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
+VALIDARGS="clean libcudf cudf cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
 HELP="$0 [clean] [libcudf] [cudf] [cudfjar] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
@@ -35,6 +35,7 @@ HELP="$0 [clean] [libcudf] [cudf] [cudfjar] [dask_cudf] [benchmarks] [tests] [li
    -n                            - no install step
    --allgpuarch                  - build for all supported GPU architectures
    --disable_nvtx                - disable inserting NVTX profiling ranges
+   --opensource_nvcomp           - disable use of proprietary nvcomp extensions
    --show_depr_warn              - show cmake deprecation warnings
    --ptds                        - enable per-thread default stream
    --build_metrics               - generate build metrics report for libcudf
@@ -67,6 +68,7 @@ BUILD_DISABLE_DEPRECATION_WARNING=ON
 BUILD_PER_THREAD_DEFAULT_STREAM=OFF
 BUILD_REPORT_METRICS=OFF
 BUILD_REPORT_INCL_CACHE_STATS=OFF
+USE_PROPRIETARY_NVCOMP=ON
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -112,16 +114,22 @@ function buildLibCudfJniInDocker {
     local localMavenRepo=${LOCAL_MAVEN_REPO:-"$HOME/.m2/repository"}
     local workspaceRepoDir="$workspaceDir/cudf"
     local workspaceMavenRepoDir="$workspaceDir/.m2/repository"
+    local workspaceCcacheDir="$workspaceDir/.ccache"
     mkdir -p "$CUDF_JAR_JAVA_BUILD_DIR/libcudf-cmake-build"
+    mkdir -p "$HOME/.ccache" "$HOME/.m2"
     nvidia-docker build \
         -f java/ci/Dockerfile.centos7 \
         --build-arg CUDA_VERSION=${cudaVersion} \
         -t $imageName .
     nvidia-docker run -it -u $(id -u):$(id -g) --rm \
+        -e PARALLEL_LEVEL \
+        -e CCACHE_DISABLE \
+        -e CCACHE_DIR="$workspaceCcacheDir" \
         -v "/etc/group:/etc/group:ro" \
         -v "/etc/passwd:/etc/passwd:ro" \
         -v "/etc/shadow:/etc/shadow:ro" \
         -v "/etc/sudoers.d:/etc/sudoers.d:ro" \
+        -v "$HOME/.ccache:$workspaceCcacheDir:rw" \
         -v "$REPODIR:$workspaceRepoDir:rw" \
         -v "$localMavenRepo:$workspaceMavenRepoDir:rw" \
         --workdir "$workspaceRepoDir/java/target/libcudf-cmake-build" \
@@ -129,14 +137,20 @@ function buildLibCudfJniInDocker {
         scl enable devtoolset-9 \
             "cmake $workspaceRepoDir/cpp \
                 -G${CMAKE_GENERATOR} \
+                -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_CXX_LINKER_LAUNCHER=ccache \
                 -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
-                -DCMAKE_INSTALL_PREFIX==/usr/local/rapids \
-                -DUSE_NVTX=ON -DCUDF_USE_ARROW_STATIC=ON \
+                -DCMAKE_INSTALL_PREFIX=/usr/local/rapids \
+                -DUSE_NVTX=ON \
+                -DCUDF_USE_PROPRIETARY_NVCOMP=ON \
+                -DCUDF_USE_ARROW_STATIC=ON \
                 -DCUDF_ENABLE_ARROW_S3=OFF \
                 -DBUILD_TESTS=OFF \
-                -DPER_THREAD_DEFAULT_STREAM=ON \
+                -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON \
                 -DRMM_LOGGING_LEVEL=OFF \
                 -DBUILD_SHARED_LIBS=OFF && \
              cmake --build . --parallel ${PARALLEL_LEVEL} && \
@@ -145,6 +159,10 @@ function buildLibCudfJniInDocker {
                 -Dmaven.repo.local=$workspaceMavenRepoDir \
                 -DskipTests=${SKIP_TESTS:-false} \
                 -Dparallel.level=${PARALLEL_LEVEL} \
+                -Dcmake.ccache.opts='-DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                                     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                                     -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
+                                     -DCMAKE_CXX_LINKER_LAUNCHER=ccache' \
                 -DCUDF_CPP_BUILD_DIR=$workspaceRepoDir/java/target/libcudf-cmake-build \
                 -DCUDA_STATIC_RUNTIME=ON \
                 -DPER_THREAD_DEFAULT_STREAM=ON \
@@ -193,6 +211,9 @@ if hasArg tests; then
 fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
+fi
+if hasArg --opensource_nvcomp; then
+    USE_PROPRIETARY_NVCOMP="OFF"
 fi
 if hasArg --show_depr_warn; then
     BUILD_DISABLE_DEPRECATION_WARNING=OFF
@@ -256,10 +277,11 @@ if buildAll || hasArg libcudf; then
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
           -DUSE_NVTX=${BUILD_NVTX} \
+          -DCUDF_USE_PROPRIETARY_NVCOMP=${USE_PROPRIETARY_NVCOMP} \
           -DBUILD_TESTS=${BUILD_TESTS} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
-          -DPER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
+          -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
           ${CMAKE_ARGS}
 

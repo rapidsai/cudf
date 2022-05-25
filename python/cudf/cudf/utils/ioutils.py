@@ -1319,7 +1319,7 @@ def _open_remote_files(
     ]
 
 
-def get_filepath_or_buffer(
+def get_reader_filepath_or_buffer(
     path_or_data,
     compression,
     mode="rb",
@@ -1328,6 +1328,7 @@ def get_filepath_or_buffer(
     byte_ranges=None,
     use_python_file_object=False,
     open_file_options=None,
+    allow_raw_text_input=False,
     **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
@@ -1352,6 +1353,11 @@ def get_filepath_or_buffer(
     open_file_options : dict, optional
         Optional dictionary of key-word arguments to pass to
         `_open_remote_files` (used for remote storage only).
+    allow_raw_text_input : boolean, default False
+        If True, this indicates the input `path_or_data` could be a raw text
+        input and will not check for its existence in the filesystem. If False,
+        the input must be a path and an error will be raised if it does not
+        exist.
 
     Returns
     -------
@@ -1372,18 +1378,22 @@ def get_filepath_or_buffer(
             if fs is None:
                 return path_or_data, compression
 
-        if len(paths) == 0:
-            raise FileNotFoundError(
-                f"{path_or_data} could not be resolved to any files"
-            )
-
         if _is_local_filesystem(fs):
             # Doing this as `read_json` accepts a json string
             # path_or_data need not be a filepath like string
-            if os.path.exists(paths[0]):
-                path_or_data = paths if len(paths) > 1 else paths[0]
+            if len(paths):
+                if fs.exists(paths[0]):
+                    path_or_data = paths if len(paths) > 1 else paths[0]
+                elif not allow_raw_text_input:
+                    raise FileNotFoundError(
+                        f"{path_or_data} could not be resolved to any files"
+                    )
 
         else:
+            if len(paths) == 0:
+                raise FileNotFoundError(
+                    f"{path_or_data} could not be resolved to any files"
+                )
             if use_python_file_object:
                 path_or_data = _open_remote_files(
                     paths,

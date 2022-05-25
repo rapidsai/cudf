@@ -83,7 +83,7 @@ ConfigureTest(
   groupby/covariance_tests.cpp
   groupby/groups_tests.cpp
   groupby/keys_tests.cpp
-  groupby/lists_tests.cpp
+  groupby/lists_tests.cu
   groupby/m2_tests.cpp
   groupby/min_tests.cpp
   groupby/max_scan_tests.cpp
@@ -470,6 +470,7 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 # * lists tests ----------------------------------------------------------------------------------
 ConfigureTest(
   LISTS_TEST
+  lists/apply_boolean_mask_test.cpp
   lists/combine/concatenate_list_elements_tests.cpp
   lists/combine/concatenate_rows_tests.cpp
   lists/contains_tests.cpp

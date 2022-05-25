@@ -144,7 +144,6 @@ def _drop_columns(f: Frame, columns: abc.Iterable, errors: str):
 
 
 def _indices_from_labels(obj, labels):
-
     if not isinstance(labels, cudf.MultiIndex):
         labels = cudf.core.column.as_column(labels)
 
@@ -1890,7 +1889,7 @@ class IndexedFrame(Frame):
         Parameters
         ----------
         offset: str
-            The offset length of the data that will be selected. For intance,
+            The offset length of the data that will be selected. For instance,
             '1M' will display all rows having their index within the first
             month.
 
@@ -2327,8 +2326,8 @@ class IndexedFrame(Frame):
         self, other, ignore_index=False, verify_integrity=False, sort=None
     ):
         warnings.warn(
-            "append is deprecated and will be removed in a future version. "
-            "Use concat instead.",
+            "The append method is deprecated and will be removed in a future "
+            "version. Use cudf.concat instead.",
             FutureWarning,
         )
         if verify_integrity not in (None, False):
@@ -2349,10 +2348,10 @@ class IndexedFrame(Frame):
         Parameters
         ----------
         dtype : data type, or dict of column name -> data type
-            Use a numpy.dtype or Python type to cast entire DataFrame object to
-            the same type. Alternatively, use ``{col: dtype, ...}``, where col
-            is a column label and dtype is a numpy.dtype or Python type
-            to cast one or more of the DataFrame's columns to
+            Use a :class:`numpy.dtype` or Python type to cast entire DataFrame
+            object to the same type. Alternatively, use ``{col: dtype, ...}``,
+            where col is a column label and dtype is a :class:`numpy.dtype`
+            or Python type to cast one or more of the DataFrame's columns to
             column-specific types.
         copy : bool, default False
             Return a deep-copy when ``copy=True``. Note by default

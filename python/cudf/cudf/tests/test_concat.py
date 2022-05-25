@@ -9,6 +9,7 @@ import pytest
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
+from cudf.core._compat import PANDAS_LT_140
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
@@ -341,8 +342,8 @@ def test_pandas_concat_compatibility_axis1():
     got = gd.concat([d1, d2, d3, d4, d5], axis=1)
 
     assert_eq(
-        got,
-        expect,
+        got.sort_index(),
+        expect.sort_index(),
         check_index_type=True,
     )
 
@@ -659,9 +660,12 @@ def test_concat_dataframe_with_multiindex(df1, df2):
     actual = gd.concat([gdf1, gdf2], axis=1)
     expected = pd.concat([pdf1, pdf2], axis=1)
 
+    # Will need to sort_index before comparing as
+    # ordering is not deterministic in case of pandas
+    # multiIndex with concat.
     assert_eq(
-        expected,
-        actual,
+        expected.sort_index(),
+        actual.sort_index(),
         check_index_type=True,
     )
 
@@ -798,18 +802,8 @@ def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
         ignore_index=ignore_index,
         axis=axis,
     )
-    # TODO: Remove special handling below
-    # after following bug from pandas is fixed:
-    # https://github.com/pandas-dev/pandas/issues/43584
-    assert_eq(
-        expected,
-        actual,
-        check_index_type=False
-        if sort
-        and isinstance(expected.index, pd.Int64Index)
-        and isinstance(actual.index, gd.RangeIndex)
-        else True,
-    )
+
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -875,18 +869,8 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
     actual = gd.concat(
         [gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
     )
-    # TODO: Remove special handling below
-    # after following bug from pandas is fixed:
-    # https://github.com/pandas-dev/pandas/issues/43584
-    assert_eq(
-        expected,
-        actual,
-        check_index_type=False
-        if sort
-        and isinstance(expected.index, pd.Int64Index)
-        and isinstance(actual.index, gd.RangeIndex)
-        else True,
-    )
+
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -910,6 +894,10 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
 @pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.xfail(
+    condition=PANDAS_LT_140,
+    reason="https://github.com/pandas-dev/pandas/issues/43584",
+)
 def test_concat_join_no_overlapping_columns(
     pdf1, pdf2, ignore_index, sort, join, axis
 ):
@@ -931,19 +919,7 @@ def test_concat_join_no_overlapping_columns(
         axis=axis,
     )
 
-    # TODO: Remove special handling below
-    # after following bug from pandas is fixed:
-    # https://github.com/pandas-dev/pandas/issues/43584
-    assert_eq(
-        expected,
-        actual,
-        check_index_type=False
-        if sort
-        and axis == 1
-        and isinstance(expected.index, pd.Int64Index)
-        and isinstance(actual.index, gd.RangeIndex)
-        else True,
-    )
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("ignore_index", [False, True])
@@ -1097,7 +1073,7 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
     )
     # TODO: change `check_index_type` to `True`
     # after following bug from pandas is fixed:
-    # https://github.com/pandas-dev/pandas/issues/43584
+    # https://github.com/pandas-dev/pandas/issues/46675
     assert_eq(expected, actual, check_index_type=False)
 
 
@@ -1133,15 +1109,11 @@ def test_concat_join_series(ignore_index, sort, join, axis):
 
     # TODO: Remove special handling below
     # after following bug from pandas is fixed:
-    # https://github.com/pandas-dev/pandas/issues/43584
+    # https://github.com/pandas-dev/pandas/issues/46675
     assert_eq(
         expected,
         actual,
-        check_index_type=False
-        if sort
-        and isinstance(expected.index, pd.Int64Index)
-        and isinstance(actual.index, gd.RangeIndex)
-        else True,
+        check_index_type=False if axis == 1 and join == "outer" else True,
     )
 
 

@@ -809,7 +809,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         See also
         --------
-        cudf.core.groupby.GroupBy.agg
+        agg
         """
         try:
             result = self.agg(function)
