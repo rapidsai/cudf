@@ -102,10 +102,10 @@ class list_device_view {
   }
 
   /**
-   * @brief Checks whether element is null at specified index in the list row.
+   * @brief Checks whether the element is null at the specified index in the list row.
    *
    * @param idx The index into the list row
-   * @return `true` if element is null at specified index in the list row.
+   * @return `true` if the element is null at the specified index in the list row
    */
   [[nodiscard]] __device__ inline bool is_null(size_type idx) const
   {
@@ -117,21 +117,21 @@ class list_device_view {
   /**
    * @brief Checks whether this list row is null.
    *
-   * @return `true` if this list row is null.
+   * @return `true` if this list row is null
    */
   [[nodiscard]] __device__ inline bool is_null() const { return lists_column.is_null(_row_index); }
 
   /**
    * @brief Fetches the number of elements in this list row.
    *
-   * @return The number of elements in this list row.
+   * @return The number of elements in this list row
    */
   [[nodiscard]] __device__ inline size_type size() const { return _size; }
 
   /**
    * @brief Fetches the lists_column_device_view that contains this list.
    *
-   * @return The lists_column_device_view that contains this list.
+   * @return The lists_column_device_view that contains this list
    */
   [[nodiscard]] __device__ inline lists_column_device_view const& get_column() const
   {
@@ -149,7 +149,7 @@ class list_device_view {
   using const_pair_iterator =
     thrust::transform_iterator<pair_accessor<T>, thrust::counting_iterator<cudf::size_type>>;
 
-  /// Const pair iterator type for the list
+  /// const pair iterator type for the list
   template <typename T>
   using const_pair_rep_iterator =
     thrust::transform_iterator<pair_rep_accessor<T>, thrust::counting_iterator<cudf::size_type>>;
@@ -167,7 +167,7 @@ class list_device_view {
    *   1. `p.first` is undefined
    *   2. `p.second == false`
    *
-   * @return A pair iterator to the first element in the list_device_view.
+   * @return A pair iterator positioned to the first element in the list_device_view
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_begin() const
@@ -179,7 +179,7 @@ class list_device_view {
    * @brief Fetcher for a pair iterator to one position past the last element in the
    * list_device_view.
    *
-   * @return A pair iterator to one position past the last element in the list_device_view.
+   * @return A pair iterator positioned one past the last element in the list_device_view
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_end() const
@@ -203,7 +203,7 @@ class list_device_view {
    *   1. `p.first` is undefined
    *   2. `p.second == false`
    *
-   * @return A pair iterator to the first element in the list_device_view.
+   * @return A pair iterator positioned to the first element in the list_device_view
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_begin() const
@@ -216,7 +216,7 @@ class list_device_view {
    * @brief Fetcher for a pair iterator to one position past the last element in the
    * list_device_view.
    *
-   * @return A pair iterator to one position past the last element in the list_device_view.
+   * @return A pair iterator positioned one past the last element in the list_device_view
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_end() const
@@ -318,7 +318,7 @@ class list_device_view {
 };
 
 /**
- * @brief Returns size of the list by row index
+ * @brief Returns the size of the list by row index
  *
  */
 struct list_size_functor {
@@ -326,7 +326,7 @@ struct list_size_functor {
   /**
    * @brief Constructor
    *
-   * @param d_col The `lists_column_device_view` whose rows are being accessed.
+   * @param d_col The cudf::lists_column_device_view whose rows are being accessed
    */
   CUDF_HOST_DEVICE inline list_size_functor(detail::lists_column_device_view const& d_col)
     : d_column(d_col)

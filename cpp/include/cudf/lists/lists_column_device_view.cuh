@@ -73,7 +73,7 @@ class lists_column_device_view : private column_device_view {
   /**
    * @brief Fetches the offsets column of the underlying list column.
    *
-   * @return The offsets column of the underlying list column.
+   * @return The offsets column of the underlying list column
    */
   [[nodiscard]] __device__ inline column_device_view offsets() const
   {
@@ -95,7 +95,7 @@ class lists_column_device_view : private column_device_view {
   /**
    * @brief Fetches the child column of the underlying list column.
    *
-   * @return The child column of the underlying list column.
+   * @return The child column of the underlying list column
    */
   [[nodiscard]] __device__ inline column_device_view child() const
   {
@@ -105,7 +105,7 @@ class lists_column_device_view : private column_device_view {
   /**
    * @brief Fetches the child column of the underlying list column with offset and size applied
    *
-   * @return The sliced child column of the underlying list column.
+   * @return The child column sliced relative to the parent's offset and size
    */
   [[nodiscard]] __device__ inline column_device_view get_sliced_child() const
   {
