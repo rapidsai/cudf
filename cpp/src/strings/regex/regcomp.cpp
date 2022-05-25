@@ -589,10 +589,9 @@ class regex_compiler {
 
   inline void push_and(int first, int last) { _and_stack.push({first, last}); }
 
-  inline and_node pop_and(int op)
+  inline and_node pop_and()
   {
     if (_and_stack.empty()) {
-      // missing operand for op
       auto const inst_id = _prog.add_inst(NOP);
       push_and(inst_id, inst_id);
     }
@@ -623,7 +622,7 @@ class regex_compiler {
           break;
         case LBRA:  // expects matching RBRA
         {
-          auto const op                        = pop_and('(');
+          auto const op                        = pop_and();
           auto const id_inst2                  = _prog.add_inst(RBRA);
           _prog.inst_at(id_inst2).u1.subid     = ator.subid;
           _prog.inst_at(op.id_last).u2.next_id = id_inst2;
@@ -634,8 +633,8 @@ class regex_compiler {
           return;
         }
         case OR: {
-          auto const op2                        = pop_and('|');
-          auto const op1                        = pop_and('|');
+          auto const op2                        = pop_and();
+          auto const op1                        = pop_and();
           auto const id_inst2                   = _prog.add_inst(NOP);
           _prog.inst_at(op2.id_last).u2.next_id = id_inst2;
           _prog.inst_at(op1.id_last).u2.next_id = id_inst2;
@@ -646,14 +645,14 @@ class regex_compiler {
           break;
         }
         case CAT: {
-          auto const op2                        = pop_and(0);
-          auto const op1                        = pop_and(0);
+          auto const op2                        = pop_and();
+          auto const op1                        = pop_and();
           _prog.inst_at(op1.id_last).u2.next_id = op2.id_first;
           push_and(op1.id_first, op2.id_last);
           break;
         }
         case STAR: {
-          auto const op                        = pop_and('*');
+          auto const op                        = pop_and();
           auto const id_inst1                  = _prog.add_inst(OR);
           _prog.inst_at(op.id_last).u2.next_id = id_inst1;
           _prog.inst_at(id_inst1).u1.right_id  = op.id_first;
@@ -661,7 +660,7 @@ class regex_compiler {
           break;
         }
         case STAR_LAZY: {
-          auto const op                        = pop_and('*');
+          auto const op                        = pop_and();
           auto const id_inst1                  = _prog.add_inst(OR);
           auto const id_inst2                  = _prog.add_inst(NOP);
           _prog.inst_at(op.id_last).u2.next_id = id_inst1;
@@ -671,7 +670,7 @@ class regex_compiler {
           break;
         }
         case PLUS: {
-          auto const op                        = pop_and('+');
+          auto const op                        = pop_and();
           auto const id_inst1                  = _prog.add_inst(OR);
           _prog.inst_at(op.id_last).u2.next_id = id_inst1;
           _prog.inst_at(id_inst1).u1.right_id  = op.id_first;
@@ -679,7 +678,7 @@ class regex_compiler {
           break;
         }
         case PLUS_LAZY: {
-          auto const op                        = pop_and('+');
+          auto const op                        = pop_and();
           auto const id_inst1                  = _prog.add_inst(OR);
           auto const id_inst2                  = _prog.add_inst(NOP);
           _prog.inst_at(op.id_last).u2.next_id = id_inst1;
@@ -689,7 +688,7 @@ class regex_compiler {
           break;
         }
         case QUEST: {
-          auto const op                        = pop_and('?');
+          auto const op                        = pop_and();
           auto const id_inst1                  = _prog.add_inst(OR);
           auto const id_inst2                  = _prog.add_inst(NOP);
           _prog.inst_at(id_inst1).u2.left_id   = id_inst2;
@@ -699,7 +698,7 @@ class regex_compiler {
           break;
         }
         case QUEST_LAZY: {
-          auto const op                        = pop_and('?');
+          auto const op                        = pop_and();
           auto const id_inst1                  = _prog.add_inst(OR);
           auto const id_inst2                  = _prog.add_inst(NOP);
           _prog.inst_at(id_inst1).u2.left_id   = op.id_first;
