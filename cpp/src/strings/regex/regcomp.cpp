@@ -727,7 +727,7 @@ class regex_compiler {
 
     static std::vector<int> tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
     _last_was_and =
-      std::any_of(tokens.begin(), tokens.end(), [token](auto t) { return t == token; });
+      std::any_of(tokens.cbegin(), tokens.cend(), [token](auto t) { return t == token; });
   }
 
   void handle_operand(int token, int subid = 0, char32_t yy = 0, int class_id = 0)
