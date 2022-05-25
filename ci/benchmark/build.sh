@@ -37,7 +37,7 @@ export GBENCH_BENCHMARKS_DIR="$WORKSPACE/cpp/build/gbenchmarks/"
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
-export INSTALL_DASK_MAIN=1
+export INSTALL_DASK_MAIN=0
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?
