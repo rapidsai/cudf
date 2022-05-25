@@ -66,11 +66,6 @@ if(NOT cudf_FOUND)
   install(TARGETS cudf DESTINATION cudf/_lib/cpp)
 endif()
 
-# TODO: Disable binding for now, but we probably want it back eventually. Currently this breaks the
-# behavior of our join code because that sets a Cython method as a class attribute, which gets bound
-# and therefore passes self as an extra argument.
-set(CYTHON_FLAGS "--directive embedsignature=True,always_allow_keywords=True")
-
 include(rapids-cython)
 rapids_cython_init()
 
