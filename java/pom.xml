@@ -508,6 +508,9 @@
                                     <includes>
                                         <include>libcudfjni.so</include>
                                         <include>libcufilejni.so</include>
+                                        <include>libnvcomp.so</include>
+                                        <include>libnvcomp_gdeflate.so</include>
+                                        <include>libnvcomp_bitcomp.so</include>
                                     </includes>
                                 </resource>
                                 <resource>
