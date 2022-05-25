@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ namespace detail {
 /**
  * @copydoc cudf::lists::sort_lists
  *
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> sort_lists(
   lists_column_view const& input,
@@ -38,7 +38,7 @@ std::unique_ptr<column> sort_lists(
 /**
  * @copydoc cudf::lists::stable_sort_lists
  *
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> stable_sort_lists(
   lists_column_view const& input,

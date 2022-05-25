@@ -63,7 +63,7 @@ class structs_column_view : public column_view {
   /**
    * @brief Returns the parent column.
    *
-   * @return The parent column
+   * @return The parent column.
    */
   [[nodiscard]] column_view parent() const;
 
@@ -87,7 +87,7 @@ class structs_column_view : public column_view {
    * @throw cudf::logic error if this is an empty column
    *
    * @param index The index of the child column to return
-   * @return The child column sliced relative to the parent's offset and size
+   * @return The internal sliced child column
    */
   [[nodiscard]] column_view get_sliced_child(int index) const;
 };         // class structs_column_view;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ namespace detail {
  *                                            null_equality,
  *                                            nan_equality,
  *                                            rmm::mr::device_memory_resource*)
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> drop_list_duplicates(
   lists_column_view const& keys,
@@ -45,7 +45,7 @@ std::unique_ptr<column> drop_list_duplicates(
  *                                            null_equality,
  *                                            nan_equality,
  *                                            rmm::mr::device_memory_resource*)
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> drop_list_duplicates(
   lists_column_view const& input,

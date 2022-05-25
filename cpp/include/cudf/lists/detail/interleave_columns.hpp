@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,11 +38,11 @@ namespace detail {
  * @throws cudf::logic_error if any lists column contains nested typed entry.
  * @throws cudf::logic_error if all lists columns do not have the same entry type.
  *
- * @param input Table containing lists columns to interleave
- * @param has_null_mask A boolean flag indicating that the input columns have a null mask
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
- * @return The interleaved columns as a single column
+ * @param input Table containing lists columns to interleave.
+ * @param has_null_mask A boolean flag indicating that the input columns have a null mask.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return The interleaved columns as a single column.
  */
 std::unique_ptr<column> interleave_columns(
   table_view const& input,

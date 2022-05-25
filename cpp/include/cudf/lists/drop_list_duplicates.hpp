@@ -43,14 +43,14 @@ namespace lists {
  *        than STRUCT.
  * @throw cudf::logic_error If `keys.size() != values.size()`.
  *
- * @param keys The input keys lists column to check for uniqueness and copy unique elements
+ * @param keys The input keys lists column to check for uniqueness and copy unique elements.
  * @param values The values lists column in which the elements are mapped to elements in the key
  *        column.
- * @param nulls_equal Flag to specify whether null key elements should be considered as equal
+ * @param nulls_equal Flag to specify whether null key elements should be considered as equal.
  * @param nans_equal Flag to specify whether NaN key elements should be considered as equal
  *        (only applicable for floating point keys elements).
- * @param keep_option Flag to specify which elements will be copied from the input to the output
- * @param mr Device resource used to allocate memory
+ * @param keep_option Flag to specify which elements will be copied from the input to the output.
+ * @param mr Device resource used to allocate memory.
  *
  * @code{.pseudo}
  * keys   = { {1,   1,   2,   3},   {4},   NULL, {}, {NULL, NULL, NULL, 5,   6,   6,   6,   5} }
@@ -93,18 +93,18 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
  * @throw cudf::logic_error If the child column of the input lists column contains nested type other
  *        than STRUCT.
  *
- * @param input The input lists column to check and copy unique elements
- * @param nulls_equal Flag to specify whether null key elements should be considered as equal
+ * @param input The input lists column to check and copy unique elements.
+ * @param nulls_equal Flag to specify whether null key elements should be considered as equal.
  * @param nans_equal Flag to specify whether NaN key elements should be considered as equal
  *        (only applicable for floating point keys column).
- * @param mr Device resource used to allocate memory
+ * @param mr Device resource used to allocate memory.
  *
  * @code{.pseudo}
  * input  = { {1, 1, 2, 3}, {4}, NULL, {}, {NULL, NULL, NULL, 5, 6, 6, 6, 5} }
  * drop_list_duplicates(input) = { {1, 2, 3}, {4}, NULL, {}, {5, 6, NULL} }
  * @endcode
  *
- * @return A lists column storing the results from extracting unique list elements from the input
+ * @return A lists column storing the results from extracting unique list elements from the input.
  */
 std::unique_ptr<column> drop_list_duplicates(
   lists_column_view const& input,

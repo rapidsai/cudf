@@ -83,9 +83,9 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
  * @param scatter_map_end End iterator of scatter map
  * @param source Source column view
  * @param target Target column view
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New lists column
+ * @return New lists column.
  */
 template <typename MapIterator>
 std::unique_ptr<column> scatter_impl(
@@ -158,9 +158,9 @@ std::unique_ptr<column> scatter_impl(
  * @param scatter_map_begin Start iterator of scatter map
  * @param scatter_map_end End iterator of scatter map
  * @param target Target column view
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New lists column
+ * @return New lists column.
  */
 template <typename MapIterator>
 std::unique_ptr<column> scatter(
@@ -215,9 +215,9 @@ std::unique_ptr<column> scatter(
  * @param scatter_map_begin Start iterator of scatter map
  * @param scatter_map_end End iterator of scatter map
  * @param target Target column view
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New lists column
+ * @return New lists column.
  */
 template <typename MapIterator>
 std::unique_ptr<column> scatter(

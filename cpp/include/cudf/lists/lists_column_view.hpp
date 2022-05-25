@@ -78,7 +78,7 @@ class lists_column_view : private column_view {
   /**
    * @brief Returns the parent column.
    *
-   * @return The parent column
+   * @return The parent column.
    */
   [[nodiscard]] column_view parent() const;
 
@@ -107,7 +107,7 @@ class lists_column_view : private column_view {
    * on lists columns should be using `get_sliced_child()` instead of `child()`.
    *
    * @throw cudf::logic error if this is an empty column
-   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return A sliced child column view
    */
   [[nodiscard]] column_view get_sliced_child(rmm::cuda_stream_view stream) const;

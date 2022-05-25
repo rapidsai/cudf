@@ -59,7 +59,7 @@ struct gather_data {
  *                                 rmm::cuda_stream_view stream,
  *                                 rmm::mr::device_memory_resource* mr)
  *
- * @param prev_base_offsets The buffer backing the base offsets used in the gather map We can
+ * @param prev_base_offsets The buffer backing the base offsets used in the gather map. We can
  *                          free this buffer before allocating the new one to keep peak memory
  *                          usage down.
  */
@@ -249,7 +249,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
  * @tparam NullifyOutOfBounds Nullify values in `gather_map` that are out of bounds
  * @param source_column View into the column to gather from
  * @param gather_map Iterator access to the gather map for `source_column` map
- * @param gather_map_size Size of the gather map
+ * @param gather_map_size Size of the gather map.
  * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource to use for all allocations
  *

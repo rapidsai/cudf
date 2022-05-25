@@ -27,7 +27,7 @@ namespace detail {
  *                                cudf::scalar const&,
  *                                duplicate_find_option,
  *                                rmm::mr::device_memory_resource*)
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
@@ -41,7 +41,7 @@ std::unique_ptr<column> index_of(
  *                                cudf::column_view const&,
  *                                duplicate_find_option,
  *                                rmm::mr::device_memory_resource*)
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
@@ -54,7 +54,7 @@ std::unique_ptr<column> index_of(
  * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
  *                                cudf::scalar const&,
  *                                rmm::mr::device_memory_resource*)
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
@@ -66,7 +66,7 @@ std::unique_ptr<column> contains(
  * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
  *                                cudf::column_view const&,
  *                                rmm::mr::device_memory_resource*)
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,

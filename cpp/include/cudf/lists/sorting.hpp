@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ namespace lists {
  * @param column_order The desired sort order
  * @param null_precedence The desired order of null compared to other elements in the list
  * @param mr Device memory resource to allocate any returned objects
- * @return list column with elements in each list sorted
+ * @return list column with elements in each list sorted.
  *
  */
 std::unique_ptr<column> sort_lists(

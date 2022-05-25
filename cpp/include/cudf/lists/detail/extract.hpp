@@ -25,7 +25,7 @@ namespace detail {
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view, size_type,
  * rmm::mr::device_memory_resource*)
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> extract_list_element(
   lists_column_view lists_column,
@@ -36,7 +36,7 @@ std::unique_ptr<column> extract_list_element(
 /**
  * @copydoc cudf::lists::extract_list_element(lists_column_view, column_view const&,
  * rmm::mr::device_memory_resource*)
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> extract_list_element(
   lists_column_view lists_column,

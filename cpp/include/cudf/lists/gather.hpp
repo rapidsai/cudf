@@ -60,7 +60,7 @@ namespace lists {
  * @param source_column View into the list column to gather from
  * @param gather_map_list View into a non-nullable list column of integral indices that maps the
  * element in list of each row in the source columns to rows of lists in the destination columns.
- * @param bounds_policy Can be `DONT_CHECK` or `NULLIFY` Selects whether or not to nullify the
+ * @param bounds_policy Can be `DONT_CHECK` or `NULLIFY`. Selects whether or not to nullify the
  * output list row's element, when the gather index falls outside the range `[-n, n)`,
  * where `n` is the number of elements in list row corresponding to the gather-map row.
  * @param mr Device memory resource to allocate any returned objects
