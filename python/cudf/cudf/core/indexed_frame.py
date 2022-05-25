@@ -233,7 +233,7 @@ class IndexedFrame(Frame):
     
     @property
     @_cudf_nvtx_annotate
-    def axes(self) -> list[Index]:
+    def axes(self)-> list[Index]:
         """
         Return a list representing the axes of DataFrame and Series.
         DataFrame.axes returns a list of two elements: element zero is the row index and element one is the columns.
@@ -268,26 +268,13 @@ class IndexedFrame(Frame):
         [RangeIndex(start=0, stop=4, step=1)]
         
         """
-        # Series.axes
-        if isinstance(self, cudf.core.series.Series): 
-            return [self.index]
-        
         # DataFrame.axes
+        if isinstance(self, cudf.core.dataframe.DataFrame): 
+            return [self.index, self.columns]
+        
+        # Series.axes
         else:
-            # When the DataFrame is empty, either there are column names or the dataframe is completely empty
-            if self.empty:
-                if self.shape[1] == 0:
-                    return [self.index, self.columns]
-                else:
-                    return [Index([],dtype = 'object'), self.columns]
-            
-            # When the DataFrame is not empty, either there are columns or none 
-            else:
-                if self.columns.values[0] == 0:
-                    return [self.index, RangeIndex(0,1)]
-                else:
-                    return [self.index, self.columns]
-          # pandas       
+            return [self.index]     
             
     def to_dict(self, *args, **kwargs):  # noqa: D102
         raise TypeError(
