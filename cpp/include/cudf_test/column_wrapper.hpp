@@ -1441,7 +1441,44 @@ class lists_column_wrapper : public detail::column_wrapper {
     build_from_nested(elements, validity);
   }
 
+  /**
+   * @brief Construct a list column containing a single empty, optionally null row.
+   *
+   * @param valid Whether or not the empty row is also null
+   */
+  static lists_column_wrapper<T> make_one_empty_row_column(bool valid = true)
+  {
+    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0};
+    cudf::test::fixed_width_column_wrapper<int> values{};
+    return lists_column_wrapper<T>(
+      1,
+      offsets.release(),
+      values.release(),
+      valid ? 0 : 1,
+      valid ? rmm::device_buffer{} : cudf::create_null_mask(1, cudf::mask_state::ALL_NULL));
+  }
+
  private:
+  /**
+   * @brief Construct a list column from constituent parts.
+   *
+   * @param num_rows The number of lists the column represents
+   * @param offsets The column of offset values for this column
+   * @param values The column of values bounded by the offsets
+   * @param null_count The number of null list entries
+   * @param null_mask The bits specifying the null lists in device memory
+   */
+  lists_column_wrapper(size_type num_rows,
+                       std::unique_ptr<cudf::column>&& offsets,
+                       std::unique_ptr<cudf::column>&& values,
+                       size_type null_count,
+                       rmm::device_buffer&& null_mask)
+  {
+    // construct the list column
+    wrapped = make_lists_column(
+      num_rows, std::move(offsets), std::move(values), null_count, std::move(null_mask));
+  }
+
   /**
    * @brief Initialize as a nested list column composed of other list columns.
    *
