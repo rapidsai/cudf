@@ -607,103 +607,103 @@ class regex_compiler {
 
   inline re_operator const pop_operator()
   {
-    auto const ator = _operator_stack.top();
+    auto const op = _operator_stack.top();
     _operator_stack.pop();
-    return ator;
+    return op;
   }
 
   void eval_until(int min_token)
   {
     while (min_token == RBRA || _operator_stack.top().t >= min_token) {
-      auto const ator = pop_operator();
-      switch (ator.t) {
+      auto const op = pop_operator();
+      switch (op.t) {
         default:
           // unknown operator
           break;
         case LBRA:  // expects matching RBRA
         {
-          auto const op                        = pop_and();
-          auto const id_inst2                  = _prog.add_inst(RBRA);
-          _prog.inst_at(id_inst2).u1.subid     = ator.subid;
-          _prog.inst_at(op.id_last).u2.next_id = id_inst2;
-          auto const id_inst1                  = _prog.add_inst(LBRA);
-          _prog.inst_at(id_inst1).u1.subid     = ator.subid;
-          _prog.inst_at(id_inst1).u2.next_id   = op.id_first;
+          auto const operand                        = pop_and();
+          auto const id_inst2                       = _prog.add_inst(RBRA);
+          _prog.inst_at(id_inst2).u1.subid          = op.subid;
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst2;
+          auto const id_inst1                       = _prog.add_inst(LBRA);
+          _prog.inst_at(id_inst1).u1.subid          = op.subid;
+          _prog.inst_at(id_inst1).u2.next_id        = operand.id_first;
           push_and(id_inst1, id_inst2);
           return;
         }
         case OR: {
-          auto const op2                        = pop_and();
-          auto const op1                        = pop_and();
-          auto const id_inst2                   = _prog.add_inst(NOP);
-          _prog.inst_at(op2.id_last).u2.next_id = id_inst2;
-          _prog.inst_at(op1.id_last).u2.next_id = id_inst2;
-          auto const id_inst1                   = _prog.add_inst(OR);
-          _prog.inst_at(id_inst1).u1.right_id   = op1.id_first;
-          _prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
+          auto const operand2                        = pop_and();
+          auto const operand1                        = pop_and();
+          auto const id_inst2                        = _prog.add_inst(NOP);
+          _prog.inst_at(operand2.id_last).u2.next_id = id_inst2;
+          _prog.inst_at(operand1.id_last).u2.next_id = id_inst2;
+          auto const id_inst1                        = _prog.add_inst(OR);
+          _prog.inst_at(id_inst1).u1.right_id        = operand1.id_first;
+          _prog.inst_at(id_inst1).u2.left_id         = operand2.id_first;
           push_and(id_inst1, id_inst2);
           break;
         }
         case CAT: {
-          auto const op2                        = pop_and();
-          auto const op1                        = pop_and();
-          _prog.inst_at(op1.id_last).u2.next_id = op2.id_first;
-          push_and(op1.id_first, op2.id_last);
+          auto const operand2                        = pop_and();
+          auto const operand1                        = pop_and();
+          _prog.inst_at(operand1.id_last).u2.next_id = operand2.id_first;
+          push_and(operand1.id_first, operand2.id_last);
           break;
         }
         case STAR: {
-          auto const op                        = pop_and();
-          auto const id_inst1                  = _prog.add_inst(OR);
-          _prog.inst_at(op.id_last).u2.next_id = id_inst1;
-          _prog.inst_at(id_inst1).u1.right_id  = op.id_first;
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u1.right_id       = operand.id_first;
           push_and(id_inst1, id_inst1);
           break;
         }
         case STAR_LAZY: {
-          auto const op                        = pop_and();
-          auto const id_inst1                  = _prog.add_inst(OR);
-          auto const id_inst2                  = _prog.add_inst(NOP);
-          _prog.inst_at(op.id_last).u2.next_id = id_inst1;
-          _prog.inst_at(id_inst1).u2.left_id   = op.id_first;
-          _prog.inst_at(id_inst1).u1.right_id  = id_inst2;
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u2.left_id        = operand.id_first;
+          _prog.inst_at(id_inst1).u1.right_id       = id_inst2;
           push_and(id_inst1, id_inst2);
           break;
         }
         case PLUS: {
-          auto const op                        = pop_and();
-          auto const id_inst1                  = _prog.add_inst(OR);
-          _prog.inst_at(op.id_last).u2.next_id = id_inst1;
-          _prog.inst_at(id_inst1).u1.right_id  = op.id_first;
-          push_and(op.id_first, id_inst1);
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u1.right_id       = operand.id_first;
+          push_and(operand.id_first, id_inst1);
           break;
         }
         case PLUS_LAZY: {
-          auto const op                        = pop_and();
-          auto const id_inst1                  = _prog.add_inst(OR);
-          auto const id_inst2                  = _prog.add_inst(NOP);
-          _prog.inst_at(op.id_last).u2.next_id = id_inst1;
-          _prog.inst_at(id_inst1).u2.left_id   = op.id_first;
-          _prog.inst_at(id_inst1).u1.right_id  = id_inst2;
-          push_and(op.id_first, id_inst2);
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u2.left_id        = operand.id_first;
+          _prog.inst_at(id_inst1).u1.right_id       = id_inst2;
+          push_and(operand.id_first, id_inst2);
           break;
         }
         case QUEST: {
-          auto const op                        = pop_and();
-          auto const id_inst1                  = _prog.add_inst(OR);
-          auto const id_inst2                  = _prog.add_inst(NOP);
-          _prog.inst_at(id_inst1).u2.left_id   = id_inst2;
-          _prog.inst_at(id_inst1).u1.right_id  = op.id_first;
-          _prog.inst_at(op.id_last).u2.next_id = id_inst2;
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(id_inst1).u2.left_id        = id_inst2;
+          _prog.inst_at(id_inst1).u1.right_id       = operand.id_first;
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst2;
           push_and(id_inst1, id_inst2);
           break;
         }
         case QUEST_LAZY: {
-          auto const op                        = pop_and();
-          auto const id_inst1                  = _prog.add_inst(OR);
-          auto const id_inst2                  = _prog.add_inst(NOP);
-          _prog.inst_at(id_inst1).u2.left_id   = op.id_first;
-          _prog.inst_at(id_inst1).u1.right_id  = id_inst2;
-          _prog.inst_at(op.id_last).u2.next_id = id_inst2;
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(id_inst1).u2.left_id        = operand.id_first;
+          _prog.inst_at(id_inst1).u1.right_id       = id_inst2;
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst2;
           push_and(id_inst1, id_inst2);
           break;
         }
