@@ -106,11 +106,11 @@ void label_segments(InputIterator offsets_begin,
  * @code{.pseudo}
  * Examples:
  *
- * labels  = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ]
- * offsets = [ 0, 4, 6, 6, 6, 10 ]
+ * labels = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ]
+ * output = [ 0, 4, 6, 6, 6, 10 ]
  *
- * labels  = [ 0, 0, 0, 0, 0, 1, 1 ]
- * offsets = [ 0, 5, 7 ]
+ * labels = [ 0, 0, 0, 0, 0, 1, 1 ]
+ * output = [ 0, 5, 7 ]
  * @endcode
  *
  * @param labels_begin The beginning of the labels that define segments.
