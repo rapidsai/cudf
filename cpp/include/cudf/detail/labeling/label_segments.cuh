@@ -19,9 +19,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
-#include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf::detail {
@@ -69,14 +69,14 @@ void label_segments(InputIterator offsets_begin,
   thrust::for_each(rmm::exec_policy(stream),
                    thrust::make_counting_iterator(size_type{1}),
                    thrust::make_counting_iterator(num_segments),
-                   [offsets, out_begin] __device__(auto const idx) {
+                   [offsets = offsets_begin, output = out_begin] __device__(auto const idx) {
                      auto const dst_idx = offsets[idx] - offsets[0];
 
                      // Scatter value `1` to the index at offsets[idx].
                      // In case we have repeated offsets (i.e., we have empty segments), this
                      // atomicAdd call will make sure the label values corresponding to these empty
                      // segments will be skipped in the output.
-                     atomicAdd(&out_begin[dst_idx], OutputType{1});
+                     atomicAdd(&output[dst_idx], OutputType{1});
                    });
   thrust::inclusive_scan(rmm::exec_policy(stream), out_begin, out_end, out_begin);
 }
