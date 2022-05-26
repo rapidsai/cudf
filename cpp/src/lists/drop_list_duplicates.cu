@@ -40,14 +40,7 @@
 #include <thrust/count.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
-#include <thrust/scan.h>
-#include <thrust/scatter.h>
-#include <thrust/transform.h>
-#include <thrust/uninitialized_fill.h>
 
 #include <optional>
 
@@ -343,11 +336,11 @@ struct get_indices_of_unique_entries_dispatch {
   {
     auto const d_view = column_device_view::create(all_lists_entries, stream);
     auto const comp   = column_row_comparator_fn<Type>{list_indices,
-                                                       *d_view,
-                                                       *d_view,
-                                                       nulls_equal,
-                                                       all_lists_entries.has_nulls(),
-                                                       nans_equal == nan_equality::ALL_EQUAL};
+                                                     *d_view,
+                                                     *d_view,
+                                                     nulls_equal,
+                                                     all_lists_entries.has_nulls(),
+                                                     nans_equal == nan_equality::ALL_EQUAL};
     return cudf::detail::unique_copy(thrust::make_counting_iterator(0),
                                      thrust::make_counting_iterator(num_entries),
                                      output_begin,
