@@ -1721,9 +1721,21 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);
     file_ender_s fendr;
+    // write offset indices, updating column metadata along the way
+    int chunkidx = 0;
+    auto& fmd = md->file(p);
+    for (auto& r : fmd.row_groups) {
+      for (auto& c : r.columns) {
+        OffsetIndex& offsets = fmd.offset_indexes[chunkidx++];
+        buffer.resize(0);
+        int32_t len = cpw.write(offsets);
+        c.offset_index_offset = out_sink_[p]->bytes_written();
+        c.offset_index_length = len;
+        out_sink_[p]->host_write(buffer.data(), buffer.size());
+      }
+    }
+
     buffer.resize(0);
-    // TODO write offset and column indices, updating column chunk metadata
-    // as we go. how to get filepos out of out_sink_???
     fendr.footer_len = static_cast<uint32_t>(cpw.write(md->get_metadata(p)));
     fendr.magic      = parquet_magic;
     out_sink_[p]->host_write(buffer.data(), buffer.size());
