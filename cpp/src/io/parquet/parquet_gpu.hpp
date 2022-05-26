@@ -358,6 +358,8 @@ struct EncColumnChunk {
   uint16_t* dict_index;   //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
   uint8_t dict_rle_bits;  //!< Bit size for encoding dictionary indices
   bool use_dictionary;    //!< True if the chunk uses dictionary encoding
+  uint8_t* column_index_blob;  //!< Binary blob containing encode column index for this chunk
+  uint32_t column_index_size;  //!< Size of column index blob
 };
 
 /**
@@ -625,10 +627,12 @@ void EncodePageHeaders(device_span<EncPage> pages,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] pages Device array of EncPages
+ * @param[in] column_stats Optional page-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  */
 void GatherPages(device_span<EncColumnChunk> chunks,
                  device_span<gpu::EncPage const> pages,
+                 device_span<statistics_chunk const> column_stats,
                  rmm::cuda_stream_view stream);
 
 }  // namespace gpu

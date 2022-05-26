@@ -87,7 +87,7 @@ parquet::Compression to_parquet_compression(compression_type compression)
 struct column_index {
   std::vector<bool> null_pages;
   // min, max
-  int32_t boundary_order = 0; // enum
+  int32_t boundary_order = 0;  // enum
   std::vector<int64_t> null_counts;
 };
 
@@ -1100,6 +1100,11 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
       ? device_span<statistics_chunk const>(page_stats + first_page_in_batch, pages_in_batch)
       : device_span<statistics_chunk const>();
 
+  auto batch_column_stats =
+    (column_stats != nullptr)
+      ? device_span<statistics_chunk const>(column_stats + first_page_in_batch, pages_in_batch)
+      : device_span<statistics_chunk const>();
+
   uint32_t max_comp_pages =
     (compression_ != parquet::Compression::UNCOMPRESSED) ? pages_in_batch : 0;
 
@@ -1123,7 +1128,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
   DecideCompression(d_chunks_in_batch.flat_view(), stream);
   EncodePageHeaders(batch_pages, comp_stats, batch_pages_stats, chunk_stats, stream);
-  GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
+  GatherPages(d_chunks_in_batch.flat_view(), pages, batch_column_stats, stream);
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
   CUDF_CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
@@ -1624,8 +1629,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     thrust::host_vector<statistics_chunk> h_page_stats =
       cudf::detail::make_host_vector_async(page_stats, stream);
     // need pages on host to create offset_indexes
-    thrust::host_vector<gpu::EncPage> h_pages =
-      cudf::detail::make_host_vector_async(pages, stream);
+    thrust::host_vector<gpu::EncPage> h_pages = cudf::detail::make_host_vector_async(pages, stream);
 
     stream.synchronize();
 
@@ -1645,14 +1649,12 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           column_index column_idx;
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
 
-          for (uint32_t pg=0; pg < ck.num_pages; pg++) {
-            auto& enc_page = h_pages[curr_page_idx];
+          for (uint32_t pg = 0; pg < ck.num_pages; pg++) {
+            auto& enc_page        = h_pages[curr_page_idx];
             auto& curr_page_stats = h_page_stats[curr_page_idx++];
 
             // skip dict pages
-            if (enc_page.page_type != PageType::DATA_PAGE) {
-              continue;
-            }
+            if (enc_page.page_type != PageType::DATA_PAGE) { continue; }
 
             // offset_index info
             // TODO: would it be better to create vectors on the encoded chunk
@@ -1668,7 +1670,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
             offset_idx.page_locations.push_back(loc);
 
-            //printf("page %d size = %d at %ld next %ld\n",
+            // printf("page %d size = %d at %ld next %ld\n",
             //       curr_page_idx, this_page_size, curr_pg_offset, curr_pg_offset+this_page_size);
             curr_pg_offset += this_page_size;
 
@@ -1680,7 +1682,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
             column_idx.null_pages.push_back(curr_page_stats.non_nulls == 0);
             // need min/max
-            if (i==0) {  // for now just do first column
+            if (i == 0) {  // for now just do first column
               char minbuf[1024];
               char maxbuf[1024];
 
@@ -1700,7 +1702,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           }
 
           md->file(p).offset_indexes.push_back(offset_idx);
-          //md->file(p).column_indexes.push_back(column_idx);
+          // md->file(p).column_indexes.push_back(column_idx);
         }
       }
     }
@@ -1720,7 +1722,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     CompactProtocolWriter cpw(&buffer);
     file_ender_s fendr;
     buffer.resize(0);
-    //TODO write offset and column indices, updating column chunk metadata
+    // TODO write offset and column indices, updating column chunk metadata
     // as we go. how to get filepos out of out_sink_???
     fendr.footer_len = static_cast<uint32_t>(cpw.write(md->get_metadata(p)));
     fendr.magic      = parquet_magic;

@@ -191,6 +191,7 @@ class writer::impl {
    * @param first_rowgroup first rowgroup in batch
    * @param page_stats optional page-level statistics (nullptr if none)
    * @param chunk_stats optional chunk-level statistics (nullptr if none)
+   * @param column_stats optional page-level statistics for column index (nullptr if none)
    */
   void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                     device_span<gpu::EncPage> pages,

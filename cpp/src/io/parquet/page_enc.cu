@@ -1402,7 +1402,9 @@ __global__ void __launch_bounds__(128)
 
 // blockDim(1024, 1, 1)
 __global__ void __launch_bounds__(1024)
-  gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<gpu::EncPage const> pages)
+  gpuGatherPages(device_span<EncColumnChunk> chunks,
+                 device_span<gpu::EncPage const> pages,
+                 device_span<statistics_chunk const> column_stats)
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
@@ -2030,9 +2032,10 @@ void EncodePageHeaders(device_span<EncPage> pages,
 
 void GatherPages(device_span<EncColumnChunk> chunks,
                  device_span<gpu::EncPage const> pages,
+                 device_span<statistics_chunk const> column_stats,
                  rmm::cuda_stream_view stream)
 {
-  gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
+  gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages, column_stats);
 }
 
 }  // namespace gpu

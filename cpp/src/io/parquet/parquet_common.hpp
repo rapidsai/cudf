@@ -125,8 +125,8 @@ enum class PageType : uint8_t {
  * are ordered and if so, in which direction.
  */
 enum BoundaryOrder {
-  UNORDERED = 0,
-  ASCENDING = 1,
+  UNORDERED  = 0,
+  ASCENDING  = 1,
   DESCENDING = 2,
 };
 

@@ -325,17 +325,17 @@ struct PageHeader {
  * in the offsets index.
  */
 struct PageLocation {
-  int64_t offset; // Offset of the page in the file
-  int32_t compressed_page_size; // Compressed page size in bytes plus the heeader length
-  int64_t first_row_index; // Index within the column chunk of the first row of the page. reset to 0
-                           // at the beginning of each column chunk
+  int64_t offset;                // Offset of the page in the file
+  int32_t compressed_page_size;  // Compressed page size in bytes plus the heeader length
+  int64_t first_row_index;  // Index within the column chunk of the first row of the page. reset to
+                            // 0 at the beginning of each column chunk
 };
 
 /**
  * @brief Thrift-derived struct describing the offset index.
  */
 struct OffsetIndex {
-  std::vector<PageLocation> page_locations; 
+  std::vector<PageLocation> page_locations;
 };
 
 struct ColumnIndex {
