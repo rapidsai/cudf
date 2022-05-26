@@ -44,11 +44,11 @@ namespace cudf::detail {
  * @code{.pseudo}
  * Examples:
  *
- * offsets = { 0, 4, 6, 6, 6, 10 }
- * output  = { 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 }
+ * offsets = [ 0, 4, 6, 6, 6, 10 ]
+ * output  = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ]
  *
- * offsets = { 5, 10, 12 }
- * output  = { 0, 0, 0, 0, 0, 1, 1 }
+ * offsets = [ 5, 10, 12 ]
+ * output  = [ 0, 0, 0, 0, 0, 1, 1 ]
  * @endcode
  *
  * @param offsets_begin The beginning of the offsets that define segments.
