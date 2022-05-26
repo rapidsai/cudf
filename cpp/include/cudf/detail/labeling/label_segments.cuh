@@ -136,7 +136,7 @@ void labels_to_offsets(InputIterator labels_begin,
   auto const num_segments = static_cast<size_type>(thrust::distance(out_begin, out_end)) - 1;
 
   //=========================================================================
-  // Let consider an example: input_labels = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ].
+  // Let consider an example: Given input labels = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ].
 
   // This stores the unique label values.
   // Given the example above, we will have this array containing [0, 1, 4].
