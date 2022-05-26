@@ -427,7 +427,8 @@ cdef class ParquetWriter:
 
     def __cinit__(self, object filepaths_or_buffers, object index=None,
                   object compression=None, str statistics="ROWGROUP",
-                  object row_group_size_bytes=None, object row_group_size_rows=None):
+                  object row_group_size_bytes=None,
+                  object row_group_size_rows=None):
         filepaths_or_buffers = (
             list(filepaths_or_buffers)
             if is_list_like(filepaths_or_buffers)
