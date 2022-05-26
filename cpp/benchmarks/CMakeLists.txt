@@ -204,7 +204,7 @@ ConfigureBench(
   groupby/group_rank_benchmark.cpp
 )
 
-ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank_benchmark.cu groupby/group_struct_keys.cpp)
+ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank_benchmark.cpp groupby/group_struct_keys.cpp)
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
