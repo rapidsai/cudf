@@ -185,8 +185,7 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                           rmm::mr::device_memory_resource* mr)
 {
   using result_type = id_to_type<type_id::FLOAT64>;
-  CUDF_EXPECTS(covariance.type().id() == type_id::FLOAT64,
-               "Covariance result must be FLOAT64");
+  CUDF_EXPECTS(covariance.type().id() == type_id::FLOAT64, "Covariance result must be FLOAT64");
   auto stddev0_ptr = stddev_0.begin<result_type>();
   auto stddev1_ptr = stddev_1.begin<result_type>();
   auto stddev_iter = thrust::make_zip_iterator(thrust::make_tuple(stddev0_ptr, stddev1_ptr));
