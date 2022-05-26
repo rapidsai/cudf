@@ -16,8 +16,6 @@
 
 #include <cudf_test/base_fixture.hpp>
 
-#include <cudf/binaryop.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/utilities/error.hpp>
 
