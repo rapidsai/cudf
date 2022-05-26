@@ -200,8 +200,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
         masks,
         begin_bits,
         result->size(),
-        stream,
-        mr);
+        stream);
       result->set_null_count(result->size() - valid_count);
     }
   }

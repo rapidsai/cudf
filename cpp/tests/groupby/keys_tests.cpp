@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,6 +240,82 @@ TYPED_TEST(groupby_keys_test, mismatch_num_rows)
   auto agg2 = cudf::make_count_aggregation<groupby_scan_aggregation>();
   CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys, vals, keys, vals, std::move(agg2)),
                             "Size mismatch between request values and groupby keys.");
+}
+
+template <typename T>
+using FWCW = cudf::test::fixed_width_column_wrapper<T>;
+
+TYPED_TEST(groupby_keys_test, structs)
+{
+  using V = TypeParam;
+
+  using R       = cudf::detail::target_type_t<int, aggregation::ARGMAX>;
+  using STRINGS = cudf::test::strings_column_wrapper;
+  using STRUCTS = cudf::test::structs_column_wrapper;
+
+  if (std::is_same_v<V, bool>) return;
+
+  /*
+    `@` indicates null
+       keys:                values:
+       /+----------------+
+       |s1{s2{a,b},   c}|
+       +-----------------+
+     0 |  { { 1, 1}, "a"}|  1
+     1 |  { { 1, 2}, "b"}|  2
+     2 |  {@{ 2, 1}, "c"}|  3
+     3 |  {@{ 2, 1}, "c"}|  4
+     4 | @{ { 2, 2}, "d"}|  5
+     5 | @{ { 2, 2}, "d"}|  6
+     6 |  { { 1, 1}, "a"}|  7
+     7 |  {@{ 2, 1}, "c"}|  8
+     8 |  { {@1, 1}, "a"}|  9
+       +-----------------+
+  */
+
+  // clang-format off
+  auto col_a = FWCW<V>{{ 1,   1,   2,   2,   2,   2,   1,   2,   1 }, null_at(8)};
+  auto col_b = FWCW<V> { 1,   2,   1,   1,   2,   2,   1,   1,   1 };
+  auto col_c = STRINGS {"a", "b", "c", "c", "d", "d", "a", "c", "a"};
+  // clang-format on
+  auto s2 = STRUCTS{{col_a, col_b}, nulls_at({2, 3, 7})};
+
+  auto keys = STRUCTS{{s2, col_c}, nulls_at({4, 5})};
+  auto vals = FWCW<int>{1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  // clang-format off
+  auto expected_col_a = FWCW<V>{{1,   1,   1,   2 }, null_at(2)};
+  auto expected_col_b = FWCW<V>{ 1,   2,   1,   1 };
+  auto expected_col_c = STRINGS{"a", "b", "a", "c"};
+  // clang-format on
+  auto expected_s2 = STRUCTS{{expected_col_a, expected_col_b}, null_at(3)};
+
+  auto expect_keys = STRUCTS{{expected_s2, expected_col_c}, no_nulls()};
+  auto expect_vals = FWCW<R>{6, 1, 8, 7};
+
+  auto agg = cudf::make_argmax_aggregation<groupby_aggregation>();
+  EXPECT_THROW(test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg)),
+               cudf::logic_error);
+}
+
+template <typename T>
+using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
+
+TYPED_TEST(groupby_keys_test, lists)
+{
+  using R = cudf::detail::target_type_t<int32_t, aggregation::SUM>;
+
+  // clang-format off
+  auto keys   = LCW<TypeParam> { {1,1}, {2,2}, {3,3}, {1,1}, {2,2} };
+  auto values = FWCW<int32_t>  {    0,     1,     2,     3,     4  };
+
+  auto expected_keys   = LCW<TypeParam> { {1,1}, {2,2}, {3,3} };
+  auto expected_values = FWCW<R>        {    3,     5,     2  };
+  // clang-format on
+
+  auto agg = cudf::make_sum_aggregation<groupby_aggregation>();
+  EXPECT_THROW(test_single_agg(keys, values, expected_keys, expected_values, std::move(agg)),
+               cudf::logic_error);
 }
 
 struct groupby_string_keys_test : public cudf::test::BaseFixture {

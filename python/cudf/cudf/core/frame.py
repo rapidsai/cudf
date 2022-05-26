@@ -1788,7 +1788,12 @@ class Frame(BinaryOperand, Scannable):
                         )._column,
                         name=self._index.name,
                     )
-
+                elif isinstance(
+                    other._index, cudf.MultiIndex
+                ) and not isinstance(self._index, cudf.MultiIndex):
+                    self._index = cudf.MultiIndex._from_data(
+                        self._index._data, name=self._index.name
+                    )
         return self
 
     @_cudf_nvtx_annotate
