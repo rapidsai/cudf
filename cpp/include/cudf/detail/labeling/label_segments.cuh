@@ -40,14 +40,18 @@ namespace cudf::detail {
  * The labels always start from `0` regardless of the offset values.
  * In case there are empty segments, their corresponding label values will be skipped in the output.
  *
+ * Note that the caller is responsible to make sure the output range have the correct size, which is
+ * the total segment sizes (i.e., `size = *(offsets_end - 1) - *offsets_begin`). Otherwise, the
+ * result is undefined.
+ *
  * @code{.pseudo}
  * Examples:
  *
- * offsets = { 0, 4, 6, 6, 6, 10 }
- * output  = { 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 }
+ * offsets = [ 0, 4, 6, 6, 6, 10 ]
+ * output  = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ]
  *
- * offsets = { 5, 10, 12 }
- * output  = { 0, 0, 0, 0, 0, 1, 1 }
+ * offsets = [ 5, 10, 12 ]
+ * output  = [ 0, 0, 0, 0, 0, 1, 1 ]
  * @endcode
  *
  * @param offsets_begin The beginning of the offsets that define segments.
