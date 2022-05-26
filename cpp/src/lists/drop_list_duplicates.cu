@@ -20,6 +20,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
@@ -151,44 +152,6 @@ struct replace_negative_nans_dispatch {
                                      stream);
   }
 };
-
-/**
- * @brief Populate 1-based list indices for all list entries.
- *
- * Given a number of total list entries in a lists column and an array containing list offsets,
- * generate an array that maps each list entry to a 1-based index of the list containing
- * that entry.
- *
- * Instead of regular 0-based indices, we need to use 1-based indices for later post-processing.
- *
- * @code{.pseudo}
- * num_lists = 3, num_entries = 10, offsets = { 0, 4, 6, 10 }
- * output = { 1, 1, 1, 1, 2, 2, 3, 3, 3, 3 }
- * @endcode
- *
- * @param num_lists The size of the input lists column.
- * @param num_entries The number of entries in the lists column.
- * @param offsets_begin The pointer refers to data of list offsets.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return An array containing 1-based list indices corresponding to each list entry.
- */
-rmm::device_uvector<size_type> generate_entry_list_indices(size_type num_lists,
-                                                           size_type num_entries,
-                                                           offset_type const* offsets_begin,
-                                                           rmm::cuda_stream_view stream)
-{
-  auto entry_list_indices = rmm::device_uvector<size_type>(num_entries, stream);
-
-  auto const input = thrust::make_transform_iterator(
-    offsets_begin, [offsets_begin] __device__(auto const idx) { return idx - *offsets_begin; });
-  thrust::upper_bound(rmm::exec_policy(stream),
-                      input,
-                      input + num_lists,
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(num_entries),
-                      entry_list_indices.begin());
-  return entry_list_indices;
-}
 
 /**
  * @brief Perform an equality comparison between two entries in a lists column, specialized from
@@ -489,22 +452,17 @@ std::unique_ptr<column> generate_output_offsets(size_type num_lists,
                                                 rmm::mr::device_memory_resource* mr)
 {
   // Let consider an example:
-  // Given the original offsets of the input lists column is [0, 4, 5, 6, 7, 10, 11, 13].
-  // The original entries_list_indices is [1, 1, 1, 1, 2, 3, 4, 5, 5, 5, 6, 7, 7], and after
-  // extracting unique entries we have the entries_list_indices becomes [1, 1, 1, 4, 5, 5, 5, 7, 7]
-  // and num_lists is 7. These are the input to this function.
-  //
-  // Through extracting unique list entries, one entry in the list index 1 has been removed (first
-  // list, as we are using 1-based list index), and entries in the lists with indices {3, 3, 6} have
-  // been removed completely.
+  // Given the input lists column with offsets are [0, 4, 7, 7, 10], num_lists is 4, and
+  // entries_list_indices is [0, 0, 0, 0, 1, 1, 1, 3, 3, 3].
+  // After extracting unique entries we have the entries_list_indices becomes
+  // [0, 0, 1, 3, 3]. These are the input to this function.
 
-  // This variable stores the (1-based) list indices of the unique entries but only one index value
-  // per non-empty list. Given the example above, we will have this array hold the values
-  // [1, 4, 5, 7].
+  // This stores the unique list indices of unique entries (i.e., at max one list index per list).
+  // Given the example above, we will have this array hold the values [0, 1, 3].
   auto list_indices = rmm::device_uvector<size_type>(num_lists, stream);
 
   // Stores the non-zero numbers of unique entries per list.
-  // Given the example above, we will have this array contains the values [3, 1, 3, 2]
+  // Given the example above, we will have this array contains the values [2, 1, 2]
   auto list_sizes = rmm::device_uvector<size_type>(num_lists, stream);
 
   // Count the numbers of unique entries for each non-empty list.
@@ -524,7 +482,8 @@ std::unique_ptr<column> generate_output_offsets(size_type num_lists,
     rmm::exec_policy(stream), new_offsets.begin(), num_lists + 1, offset_type{0});
 
   // Scatter non-zero sizes of the output lists into the correct positions.
-  // Given the example above, we will have new_offsets = [0, 3, 0, 0, 1, 3, 0, 2]
+  // Given the example above, we scatter [2, 1, 2] by the scatter_map [0, 1, 3] and will have
+  // new_offsets = [2, 1, 0, 2, 0]
   thrust::scatter(rmm::exec_policy(stream),
                   list_sizes.begin(),
                   list_sizes.begin() + num_non_empty_lists,
@@ -532,11 +491,10 @@ std::unique_ptr<column> generate_output_offsets(size_type num_lists,
                   new_offsets.begin());
 
   // Generate offsets from sizes.
-  // Given the example above, we will have new_offsets = [0, 3, 3, 3, 4, 7, 7, 9]
-  thrust::inclusive_scan(
+  // Given the example above, we will have new_offsets = [0, 2, 3, 3, 5]
+  thrust::exclusive_scan(
     rmm::exec_policy(stream), new_offsets.begin(), new_offsets.end(), new_offsets.begin());
 
-  // Done. Hope that your head didn't explode after reading till this point.
   return std::make_unique<column>(
     data_type{type_to_id<offset_type>()}, num_lists + 1, new_offsets.release());
 }
@@ -570,9 +528,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   // The child column containing list entries.
   auto const keys_child = keys.get_sliced_child(stream);
 
-  // Generate a mapping from list entries to their 1-based list indices for the keys column.
-  auto const entries_list_indices =
-    generate_entry_list_indices(keys.size(), keys_child.size(), keys.offsets_begin(), stream);
+  // Generate a mapping from list entries to their list indices for the keys column.
+  auto const entries_list_indices = [&] {
+    auto labels = rmm::device_uvector<size_type>(keys_child.size(), stream);
+    cudf::detail::label_segments(
+      keys.offsets_begin(), keys.offsets_end(), labels.begin(), labels.end(), stream);
+    return labels;
+  }();
 
   // Generate segmented sorted order for key entries.
   // The keys column will be sorted (gathered) using this order.
