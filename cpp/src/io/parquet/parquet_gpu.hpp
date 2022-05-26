@@ -24,7 +24,7 @@
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -305,9 +305,9 @@ inline size_type __device__ row_to_value_idx(size_type idx, column_device_view c
       idx += col.offset();
       col = col.child(0);
     } else {
-      auto offset_col = col.child(lists_column_view::offsets_column_index);
-      idx             = offset_col.element<size_type>(idx + col.offset());
-      col             = col.child(lists_column_view::child_column_index);
+      auto list_col = cudf::detail::lists_column_device_view(col);
+      idx           = list_col.offset_at(idx);
+      col           = list_col.child();
     }
   }
   return idx;
