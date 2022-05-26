@@ -373,12 +373,16 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize) : m_b
       break;
     case LZO: _compression = compression_type::LZO; break;
     case LZ4: _compression = compression_type::LZ4; break;
-    case ZSTD: _compression = compression_type::ZSTD; break;
+    case ZSTD:
+      m_log2MaxRatio = 11;
+      _compression   = compression_type::ZSTD;
+      break;
     default: CUDF_FAIL("Invalid compression type");
   }
 }
 
-host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t const> src)
+host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t const> src,
+                                                            rmm::cuda_stream_view stream)
 {
   // If uncompressed, just pass-through the input
   if (src.empty() or _compression == compression_type::NONE) { return src; }
@@ -419,7 +423,7 @@ host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t co
     } else {
       // Compressed block
       dst_length += decompress(
-        _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize});
+        _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize}, stream);
     }
     i += block_len;
   }
@@ -428,7 +432,7 @@ host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t co
   return m_buf;
 }
 
-metadata::metadata(datasource* const src) : source(src)
+metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source(src)
 {
   const auto len         = source->size();
   const auto max_ps_size = std::min(len, static_cast<size_t>(256));
@@ -446,14 +450,14 @@ metadata::metadata(datasource* const src) : source(src)
 
   // Read compressed filefooter section
   buffer             = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
-  auto const ff_data = decompressor->decompress_blocks({buffer->data(), buffer->size()});
+  auto const ff_data = decompressor->decompress_blocks({buffer->data(), buffer->size()}, stream);
   ProtobufReader(ff_data.data(), ff_data.size()).read(ff);
   CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
 
   // Read compressed metadata section
   buffer =
     source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
-  auto const md_data = decompressor->decompress_blocks({buffer->data(), buffer->size()});
+  auto const md_data = decompressor->decompress_blocks({buffer->data(), buffer->size()}, stream);
   orc::ProtobufReader(md_data.data(), md_data.size()).read(md);
 
   init_parent_descriptors();

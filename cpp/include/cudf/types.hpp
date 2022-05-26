@@ -32,17 +32,15 @@
  * @brief Type declarations for libcudf.
  */
 
-namespace bit_mask {
-using bit_mask_t = uint32_t;
-}
-
 // Forward declarations
+/// @cond
 namespace rmm {
 class device_buffer;
 namespace mr {
 class device_memory_resource;
 device_memory_resource* get_current_device_resource();
 }  // namespace mr
+/// @endcond
 
 }  // namespace rmm
 
@@ -83,11 +81,11 @@ class mutable_table_view;
  * @file
  */
 
-using size_type         = int32_t;
-using bitmask_type      = uint32_t;
-using valid_type        = uint8_t;
-using offset_type       = int32_t;
-using thread_index_type = int64_t;
+using size_type         = int32_t;   ///< Row index type for columns and tables
+using bitmask_type      = uint32_t;  ///< Bitmask type stored as 32-bit unsigned integer
+using valid_type        = uint8_t;   ///< Valid type in host memory
+using offset_type       = int32_t;   ///< Offset type for column offsets
+using thread_index_type = int64_t;   ///< Thread index type in kernels
 
 /**
  * @brief Similar to `std::distance` but returns `cudf::size_type` and performs `static_cast`
@@ -145,7 +143,7 @@ enum class nan_equality /*unspecified*/ {
 };
 
 /**
- * @brief
+ * @brief Enum to consider two nulls as equal or unequal
  */
 enum class null_equality : bool {
   EQUAL,   ///< nulls compare equal
@@ -169,9 +167,9 @@ enum class sorted : bool { NO, YES };
  * @brief Indicates how a collection of values has been ordered.
  */
 struct order_info {
-  sorted is_sorted;
-  order ordering;
-  null_order null_ordering;
+  sorted is_sorted;          ///< Indicates whether the collection is sorted
+  order ordering;            ///< Indicates the order in which the values are sorted
+  null_order null_ordering;  ///< Indicates how null values compare against all other values
 };
 
 /**
@@ -243,9 +241,21 @@ class data_type {
  public:
   data_type()                 = default;
   ~data_type()                = default;
-  data_type(data_type const&) = default;
-  data_type(data_type&&)      = default;
+  data_type(data_type const&) = default;  ///< Copy constructor
+  data_type(data_type&&)      = default;  ///< Move constructor
+
+  /**
+   * @brief Copy assignment operator for data_type
+   *
+   * @return Reference to this object
+   */
   data_type& operator=(data_type const&) = default;
+
+  /**
+   * @brief Move assignment operator for data_type
+   *
+   * @return Reference to this object
+   */
   data_type& operator=(data_type&&) = default;
 
   /**
@@ -268,11 +278,15 @@ class data_type {
 
   /**
    * @brief Returns the type identifier
+   *
+   * @return The type identifier
    */
   [[nodiscard]] constexpr type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
+   *
+   * @return The scale
    */
   [[nodiscard]] constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
 
@@ -323,6 +337,7 @@ inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lh
  *
  * @throws cudf::logic_error if `is_fixed_width(element_type) == false`
  *
+ * @param t The `data_type` to get the size of
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);

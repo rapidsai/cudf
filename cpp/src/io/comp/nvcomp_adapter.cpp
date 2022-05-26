@@ -17,6 +17,7 @@
 #include "nvcomp_adapter.cuh"
 
 #include <cudf/utilities/error.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <nvcomp/snappy.h>
 
@@ -76,6 +77,17 @@ void batched_decompress(compression_type compression,
                         size_t max_uncomp_chunk_size,
                         rmm::cuda_stream_view stream)
 {
+  // TODO Consolidate config use to a common location
+  if (compression == compression_type::ZSTD) {
+#if NVCOMP_HAS_ZSTD
+    CUDF_EXPECTS(cudf::io::detail::nvcomp_integration::is_all_enabled(),
+                 "Zstandard compression is experimental, you can enable it through "
+                 "`LIBCUDF_NVCOMP_POLICY` environment variable.");
+#else
+    CUDF_FAIL("nvCOMP 2.3 or newer is required for Zstandard compression");
+#endif
+  }
+
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
