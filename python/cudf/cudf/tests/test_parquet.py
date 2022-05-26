@@ -1620,16 +1620,18 @@ def test_parquet_writer_bytes_io(simple_gdf):
 
 
 @pytest.mark.parametrize(
-    "row_group_size_kwargs", [
+    "row_group_size_kwargs",
+    [
         {"row_group_size_bytes": 4 * 1024},
         {"row_group_size_rows": 5000},
-    ]
+    ],
 )
 def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
+    # Check that row_group_size options are exposed in Python
+    # See https://github.com/rapidsai/cudf/issues/10978
+
     size = 20000
-    gdf = cudf.DataFrame(
-        {"a": range(size), "b":[1] * size}
-    )
+    gdf = cudf.DataFrame({"a": range(size), "b": [1] * size})
 
     fname = tmpdir.join("gdf.parquet")
     writer = ParquetWriter(fname, **row_group_size_kwargs)
@@ -1644,7 +1646,9 @@ def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
 
     # Know the specific row-group count for row_group_size_rows
     if "row_group_size_rows" in row_group_size_kwargs:
-        assert nrow_groups == size // row_group_size_kwargs["row_group_size_rows"]
+        assert (
+            nrow_groups == size // row_group_size_kwargs["row_group_size_rows"]
+        )
 
     assert_eq(cudf.read_parquet(fname), gdf)
 
@@ -2505,7 +2509,7 @@ def test_parquet_reader_one_level_list2(datadir):
 
 @pytest.mark.parametrize("size_bytes", [4_000_000, 1_000_000, 600_000])
 @pytest.mark.parametrize("size_rows", [1_000_000, 100_000, 10_000])
-def test_parquet_writer_row_group_size(
+def test_to_parquet_row_group_size(
     tmpdir, large_int64_gdf, size_bytes, size_rows
 ):
     fname = tmpdir.join("row_group_size.parquet")
