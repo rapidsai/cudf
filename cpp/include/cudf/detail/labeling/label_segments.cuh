@@ -19,11 +19,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/iterator_traits.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
+#include <thrust/uninitialized_fill.h>
 
 namespace cudf::detail {
 
@@ -36,12 +35,13 @@ namespace cudf::detail {
  * `offsets[i+1] - offsets[i]`.
  *
  * The labels always start from `0` regardless of the offset values.
+ * In case there are empty segments, their corresponding label values will be skipped in the output.
  *
  * @code{.pseudo}
  * Examples:
  *
- * offsets = { 0, 4, 6, 10 }
- * output  = { 0, 0, 0, 0, 1, 1, 2, 2, 2, 2 }
+ * offsets = { 0, 4, 6, 6, 6, 10 }
+ * output  = { 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 }
  *
  * offsets = { 5, 10, 12 }
  * output  = { 0, 0, 0, 0, 0, 1, 1 }
@@ -60,22 +60,25 @@ void label_segments(InputIterator offsets_begin,
                     OutputIterator out_end,
                     rmm::cuda_stream_view stream)
 {
-  auto const zero_normalized_offsets = thrust::make_transform_iterator(
-    offsets_begin, [offsets_begin] __device__(auto const idx) { return idx - *offsets_begin; });
+  auto const num_segments =
+    static_cast<size_type>(thrust::distance(offsets_begin, offsets_end)) - 1;
+  if (num_segments <= 0) { return; }
 
-  // The output labels from `upper_bound` will start from `1`.
-  // This will shift the result values back to start from `0`.
-  using OutputType  = typename thrust::iterator_value<OutputIterator>::type;
-  auto const output = thrust::make_transform_output_iterator(
-    out_begin, [] __device__(auto const idx) { return idx - OutputType{1}; });
+  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
+  thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
+  thrust::for_each(rmm::exec_policy(stream),
+                   thrust::make_counting_iterator(size_type{1}),
+                   thrust::make_counting_iterator(num_segments),
+                   [offsets, out_begin] __device__(auto const idx) {
+                     auto const dst_idx = offsets[idx] - offsets[0];
 
-  thrust::upper_bound(rmm::exec_policy(stream),
-                      zero_normalized_offsets,
-                      zero_normalized_offsets + thrust::distance(offsets_begin, offsets_end),
-                      thrust::make_counting_iterator<OutputType>(0),
-                      thrust::make_counting_iterator<OutputType>(
-                        static_cast<OutputType>(thrust::distance(out_begin, out_end))),
-                      output);
+                     // Scatter value `1` to the index at offsets[idx].
+                     // In case we have repeated offsets (i.e., we have empty segments), this
+                     // atomicAdd call will make sure the label values corresponding to these empty
+                     // segments will be skipped in the output.
+                     atomicAdd(&out_begin[dst_idx], OutputType{1});
+                   });
+  thrust::inclusive_scan(rmm::exec_policy(stream), out_begin, out_end, out_begin);
 }
 
 }  // namespace cudf::detail
