@@ -1619,6 +1619,36 @@ def test_parquet_writer_bytes_io(simple_gdf):
     assert_eq(cudf.read_parquet(output), cudf.concat([simple_gdf, simple_gdf]))
 
 
+@pytest.mark.parametrize(
+    "row_group_size_kwargs", [
+        {"row_group_size_bytes": 4 * 1024},
+        {"row_group_size_rows": 5000},
+    ]
+)
+def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
+    size = 20000
+    gdf = cudf.DataFrame(
+        {"a": range(size), "b":[1] * size}
+    )
+
+    fname = tmpdir.join("gdf.parquet")
+    writer = ParquetWriter(fname, **row_group_size_kwargs)
+    writer.write_table(gdf)
+    writer.close()
+
+    # Simple check for multiple row-groups
+    nrows, nrow_groups, columns = cudf.io.parquet.read_parquet_metadata(fname)
+    assert nrows == size
+    assert nrow_groups > 1
+    assert columns == ["a", "b"]
+
+    # Know the specific row-group count for row_group_size_rows
+    if "row_group_size_rows" in row_group_size_kwargs:
+        assert nrow_groups == size // row_group_size_kwargs["row_group_size_rows"]
+
+    assert_eq(cudf.read_parquet(fname), gdf)
+
+
 @pytest.mark.parametrize("filename", ["myfile.parquet", None])
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
 def test_parquet_partitioned(tmpdir_factory, cols, filename):
