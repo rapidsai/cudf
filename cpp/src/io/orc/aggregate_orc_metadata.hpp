@@ -65,7 +65,8 @@ class aggregate_orc_metadata {
   size_type const num_stripes;
   bool row_grp_idx_present{true};
 
-  aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const& sources);
+  aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const& sources,
+                         rmm::cuda_stream_view stream);
 
   [[nodiscard]] auto const& get_schema(int schema_idx) const
   {
@@ -116,7 +117,8 @@ class aggregate_orc_metadata {
   std::vector<metadata::stripe_source_mapping> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
     size_type& row_start,
-    size_type& row_count);
+    size_type& row_count,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Filters ORC file to a selection of columns, based on their paths in the file.

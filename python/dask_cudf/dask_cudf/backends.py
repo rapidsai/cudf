@@ -297,6 +297,16 @@ def is_categorical_dtype_cudf(obj):
 
 
 try:
+    from dask.dataframe.dispatch import grouper_dispatch
+
+    @grouper_dispatch.register((cudf.Series, cudf.DataFrame))
+    def get_grouper_cudf(obj):
+        return cudf.core.groupby.Grouper
+
+except ImportError:
+    pass
+
+try:
     try:
         from dask.array.dispatch import percentile_lookup
     except ImportError:

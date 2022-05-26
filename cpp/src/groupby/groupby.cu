@@ -65,8 +65,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  using namespace cudf::structs::detail;
-
   // If sort groupby has been called once on this groupby object, then
   // always use sort groupby from now on. Because once keys are sorted,
   // all the aggs that can be done by hash groupby are efficiently done by
@@ -74,16 +72,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
   if (_keys_are_sorted == sorted::NO and not _helper and
-      detail::hash::can_use_hash_groupby(_keys, requests)) {
-    // Optionally flatten nested key columns.
-    auto flattened             = flatten_nested_columns(_keys, {}, {}, column_nullability::FORCE);
-    auto flattened_keys        = flattened.flattened_columns();
-    auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
-    CUDF_EXPECTS(std::all_of(flattened_keys.begin(), flattened_keys.end(), is_supported_key_type),
-                 "Unsupported groupby key type does not support equality comparison");
-    auto [grouped_keys, results] =
-      detail::hash::groupby(flattened_keys, requests, _include_null_keys, stream, mr);
-    return std::pair(unflatten_nested_columns(std::move(grouped_keys), _keys), std::move(results));
+      detail::hash::can_use_hash_groupby(requests)) {
+    return detail::hash::groupby(_keys, requests, _include_null_keys, stream, mr);
   } else {
     return sort_aggregate(requests, stream, mr);
   }

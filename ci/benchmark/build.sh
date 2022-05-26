@@ -37,7 +37,7 @@ export GBENCH_BENCHMARKS_DIR="$WORKSPACE/cpp/build/gbenchmarks/"
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
-export INSTALL_DASK_MAIN=1
+export INSTALL_DASK_MAIN=0
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?
@@ -82,8 +82,8 @@ if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
     gpuci_logger "gpuci_mamba_retry update dask"
     gpuci_mamba_retry update dask
 else
-    gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.03.0 conda-forge::distributed>=2022.03.0 conda-forge::dask-core>=2022.03.0 --force-reinstall"
-    gpuci_mamba_retry install conda-forge::dask>=2022.03.0 conda-forge::distributed>=2022.03.0 conda-forge::dask-core>=2022.03.0 --force-reinstall
+    gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.05.1 conda-forge::distributed==2022.05.1 conda-forge::dask-core==2022.05.1 --force-reinstall"
+    gpuci_mamba_retry install conda-forge::dask==2022.05.1 conda-forge::distributed==2022.05.1 conda-forge::dask-core==2022.05.1 --force-reinstall
 fi
 
 # Install the master version of streamz

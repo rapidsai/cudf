@@ -3073,6 +3073,12 @@ def test_dataframe_empty_sort_index():
     [
         pd.RangeIndex(0, 3, 1),
         [3.0, 1.0, np.nan],
+        # Test for single column MultiIndex
+        pd.MultiIndex.from_arrays(
+            [
+                [2, 0, 1],
+            ]
+        ),
         pytest.param(
             pd.RangeIndex(2, -1, -1),
             marks=[
