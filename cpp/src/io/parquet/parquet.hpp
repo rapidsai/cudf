@@ -321,6 +321,28 @@ struct PageHeader {
 };
 
 /**
+ * @brief Thrift-derived struct describing page location information stored
+ * in the offsets index.
+ */
+struct PageLocation {
+  int64_t offset; // Offset of the page in the file
+  int32_t compressed_page_size; // Compressed page size in bytes plus the heeader length
+  int64_t first_row_index; // Index within the column chunk of the first row of the page. reset to 0
+                           // at the beginning of each column chunk
+};
+
+/**
+ * @brief Thrift-derived struct describing the offset index.
+ */
+struct OffsetIndex {
+  std::vector<PageLocation> page_locations; 
+};
+
+struct ColumnIndex {
+  std::vector<uint8_t> column_index_blob;  // Encoded chunk-level column index info as binary blob
+};
+
+/**
  * @brief Count the number of leading zeros in an unsigned integer
  */
 static inline int CountLeadingZeros32(uint32_t value)

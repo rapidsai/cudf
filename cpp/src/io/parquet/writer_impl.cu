@@ -84,6 +84,13 @@ parquet::Compression to_parquet_compression(compression_type compression)
 
 }  // namespace
 
+struct column_index {
+  std::vector<bool> null_pages;
+  // min, max
+  int32_t boundary_order = 0; // enum
+  std::vector<int64_t> null_counts;
+};
+
 struct aggregate_writer_metadata {
   aggregate_writer_metadata(std::vector<partition_info> const& partitions,
                             size_type num_columns,
@@ -185,6 +192,8 @@ struct aggregate_writer_metadata {
     int64_t num_rows = 0;
     std::vector<RowGroup> row_groups;
     std::vector<KeyValue> key_value_metadata;
+    std::vector<OffsetIndex> offset_indexes;
+    std::vector<ColumnIndex> column_indexes;
   };
   std::vector<per_file_metadata> files;
   std::string created_by         = "";
@@ -1081,7 +1090,8 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
                                 uint32_t rowgroups_in_batch,
                                 uint32_t first_rowgroup,
                                 const statistics_chunk* page_stats,
-                                const statistics_chunk* chunk_stats)
+                                const statistics_chunk* chunk_stats,
+                                const statistics_chunk* column_stats)
 {
   auto batch_pages = pages.subspan(first_page_in_batch, pages_in_batch);
 
@@ -1539,7 +1549,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       r,
       (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data() : nullptr,
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
-                                                               : nullptr);
+                                                               : nullptr,
+      (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) ? page_stats.data() : nullptr);
+
     std::vector<std::future<void>> write_tasks;
     for (; r < rnext; r++) {
       int p           = rg_to_part[r];
@@ -1606,6 +1618,94 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       task.wait();
     }
   }
+
+  if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
+    // need page stats on host to create column_indexes
+    thrust::host_vector<statistics_chunk> h_page_stats =
+      cudf::detail::make_host_vector_async(page_stats, stream);
+    // need pages on host to create offset_indexes
+    thrust::host_vector<gpu::EncPage> h_pages =
+      cudf::detail::make_host_vector_async(pages, stream);
+
+    stream.synchronize();
+
+    // add column and offset indexes to metadata
+    for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
+      auto const rnext   = r + batch_list[b];
+      auto curr_page_idx = chunks[r][0].first_page;
+      for (; r < rnext; r++) {
+        int p           = rg_to_part[r];
+        int global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
+        auto& row_group = md->file(p).row_groups[global_r];
+        for (auto i = 0; i < num_columns; i++) {
+          gpu::EncColumnChunk& ck = chunks[r][i];
+          auto& column_chunk_meta = row_group.columns[i].meta_data;
+
+          OffsetIndex offset_idx;
+          column_index column_idx;
+          int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
+
+          for (uint32_t pg=0; pg < ck.num_pages; pg++) {
+            auto& enc_page = h_pages[curr_page_idx];
+            auto& curr_page_stats = h_page_stats[curr_page_idx++];
+
+            // skip dict pages
+            if (enc_page.page_type != PageType::DATA_PAGE) {
+              continue;
+            }
+
+            // offset_index info
+            // TODO: would it be better to create vectors on the encoded chunk
+            // struct for page sizes and start rows.  then just memcpy
+            // those and do exclusive_scan to calculate page offsets. doing it
+            // this way doesn't require changes to EncColumnChunk, but memcpys
+            // more data than necessary...but it's likely small enough that the
+            // cost of invoking the memcpy dominates rather than the amount of
+            // bytes transfered.
+
+            int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
+            // first_row_idx is relative to start of row group
+            PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
+            offset_idx.page_locations.push_back(loc);
+
+            //printf("page %d size = %d at %ld next %ld\n",
+            //       curr_page_idx, this_page_size, curr_pg_offset, curr_pg_offset+this_page_size);
+            curr_pg_offset += this_page_size;
+
+            // column_index info
+            // TODO: since this doesn't rely on knowledge of the file structure,
+            // probably best to create this on device, and return as thrift-encoded
+            // blob/size per chunk.  then this can be done in parallel per chunk,
+            // likely in gatherPages().
+
+            column_idx.null_pages.push_back(curr_page_stats.non_nulls == 0);
+            // need min/max
+            if (i==0) {  // for now just do first column
+              char minbuf[1024];
+              char maxbuf[1024];
+
+              CUDF_CUDA_TRY(cudaMemcpyAsync(minbuf,
+                                            curr_page_stats.min_value.str_val.ptr,
+                                            curr_page_stats.min_value.str_val.length,
+                                            cudaMemcpyDeviceToHost,
+                                            stream.value()));
+              CUDF_CUDA_TRY(cudaMemcpyAsync(maxbuf,
+                                            curr_page_stats.max_value.str_val.ptr,
+                                            curr_page_stats.max_value.str_val.length,
+                                            cudaMemcpyDeviceToHost,
+                                            stream.value()));
+              stream.synchronize();
+            }
+            column_idx.null_counts.push_back(curr_page_stats.null_count);
+          }
+
+          md->file(p).offset_indexes.push_back(offset_idx);
+          //md->file(p).column_indexes.push_back(column_idx);
+        }
+      }
+    }
+  }
+
   last_write_successful = true;
 }
 
@@ -1620,6 +1720,8 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     CompactProtocolWriter cpw(&buffer);
     file_ender_s fendr;
     buffer.resize(0);
+    //TODO write offset and column indices, updating column chunk metadata
+    // as we go. how to get filepos out of out_sink_???
     fendr.footer_len = static_cast<uint32_t>(cpw.write(md->get_metadata(p)));
     fendr.magic      = parquet_magic;
     out_sink_[p]->host_write(buffer.data(), buffer.size());

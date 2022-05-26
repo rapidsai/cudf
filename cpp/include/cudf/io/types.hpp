@@ -94,6 +94,7 @@ enum statistics_freq {
   STATISTICS_NONE     = 0,  ///< No column statistics
   STATISTICS_ROWGROUP = 1,  ///< Per-Rowgroup column statistics
   STATISTICS_PAGE     = 2,  ///< Per-page column statistics
+  STATISTICS_COLUMN   = 3,  ///< Full column and offset indices. Implies STATISTICS_ROWGROUP
 };
 
 /**

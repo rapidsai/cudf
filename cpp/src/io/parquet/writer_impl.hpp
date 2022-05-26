@@ -200,7 +200,8 @@ class writer::impl {
                     uint32_t rowgroups_in_batch,
                     uint32_t first_rowgroup,
                     const statistics_chunk* page_stats,
-                    const statistics_chunk* chunk_stats);
+                    const statistics_chunk* chunk_stats,
+                    const statistics_chunk* column_stats);
 
  private:
   // TODO : figure out if we want to keep this. It is currently unused.
