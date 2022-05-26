@@ -1714,3 +1714,18 @@ def test_empty_columns():
 
     got_df = cudf.read_orc(buffer)
     assert_eq(expected, got_df)
+
+
+def test_orc_reader_zstd_compression(list_struct_buff):
+    expected = cudf.read_orc(list_struct_buff)
+    # save with ZSTD compression
+    buffer = BytesIO()
+    pyarrow_tbl = pyarrow.orc.ORCFile(list_struct_buff).read()
+    writer = pyarrow.orc.ORCWriter(buffer, compression="zstd")
+    writer.write(pyarrow_tbl)
+    writer.close()
+    try:
+        got = cudf.read_orc(buffer)
+        assert_eq(expected, got)
+    except RuntimeError:
+        pytest.mark.xfail(reason="zstd support is not enabled")
