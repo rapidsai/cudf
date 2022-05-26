@@ -1568,6 +1568,29 @@ def test_series_nunique_index(data):
 
     assert_eq(expected, actual)
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1, 2, 3, 4],
+        ['a', 'b', 'c'],
+        [1.2, 2.2, 4.5],
+        [np.nan, np.nan],
+        [None, None, None],
+    ],
+)
+
+def test_axes_series(data):
+
+    # print(data)
+    psr = pd.Series(data)
+    csr = cudf.Series(data)
+    
+    expected = psr.axes
+    actual = csr.axes
+    
+    for i in range(len(actual)):
+        assert_eq(expected[i], actual[i])
 
 @pytest.mark.parametrize(
     "data",
