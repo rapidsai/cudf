@@ -1,170 +1,95 @@
+/*
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/types.hpp>
+#include <cudf/aggregation.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/groupby.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 
-#include <thrust/binary_search.h>
-#include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/iterator_traits.h>
-#include <thrust/iterator/transform_iterator.h>
-#include <thrust/iterator/transform_output_iterator.h>
-#include <thrust/scan.h>
-#include <thrust/scatter.h>
-#include <thrust/uninitialized_fill.h>
+static constexpr cudf::size_type num_struct_members = 8;
+static constexpr cudf::size_type max_int            = 100;
+static constexpr cudf::size_type max_str_length     = 32;
 
-#include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-
-//==================================================================================================
-auto create_offsets(cudf::size_type n_groups, rmm::cuda_stream_view stream)
+static auto create_data_table(cudf::size_type n_rows)
 {
-  // This is the maximum size of each group.
-  constexpr cudf::size_type max_int = 1000;
-
-  auto table_profile = data_profile{};
+  data_profile table_profile;
   table_profile.set_distribution_params(cudf::type_id::INT32, distribution_id::UNIFORM, 0, max_int);
-  auto sizes =
-    std::move(create_random_table({cudf::type_id::INT32}, row_count{n_groups}, table_profile)
-                ->release()
-                .front());
-  auto const sizes_view = sizes->mutable_view();
+  table_profile.set_distribution_params(
+    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
 
-  thrust::exclusive_scan(rmm::exec_policy(),
-                         sizes_view.template begin<cudf::size_type>(),
-                         sizes_view.template end<cudf::size_type>(),
-                         sizes_view.template begin<cudf::size_type>());
-
-  cudf::size_type n_elements;
-  CUDF_CUDA_TRY(cudaMemcpyAsync(&n_elements,
-                                sizes_view.template end<cudf::size_type>() - 1,
-                                sizeof(cudf::size_type),
-                                cudaMemcpyDeviceToHost,
-                                stream.value()));
-  stream.synchronize();
-
-  return std::pair{std::move(sizes), n_elements};
+  // The first two struct members are int32 and string.
+  // The first column is also used as keys in groupby.
+  // The subsequent struct members are int32 and string again.
+  return create_random_table(
+    cycle_dtypes({cudf::type_id::INT32, cudf::type_id::STRING}, num_struct_members),
+    row_count{n_rows},
+    table_profile);
 }
 
-//==================================================================================================
-template <typename InputIterator, typename OutputIterator>
-void old_way(InputIterator offsets_begin,
-             InputIterator offsets_end,
-             OutputIterator out_begin,
-             OutputIterator out_end,
-             rmm::cuda_stream_view stream)
+// Max aggregation/scan technically has the same performance as min.
+template <typename OpType>
+void BM_groupby_min_struct(benchmark::State& state)
 {
-  thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, cudf::size_type{0});
-  thrust::scatter(
-    rmm::exec_policy(stream),
-    thrust::make_constant_iterator(1, 1),
-    thrust::make_constant_iterator(
-      1, static_cast<cudf::size_type>(thrust::distance(offsets_begin, offsets_end)) - 1),
-    offsets_begin + 1,
-    out_begin);
-  thrust::inclusive_scan(rmm::exec_policy(stream), out_begin, out_end, out_begin);
-}
+  auto const n_rows = static_cast<cudf::size_type>(state.range(0));
+  auto data_cols    = create_data_table(n_rows)->release();
 
-//==================================================================================================
-template <typename InputIterator, typename OutputIterator>
-void new_way(InputIterator offsets_begin,
-             InputIterator offsets_end,
-             OutputIterator out_begin,
-             OutputIterator out_end,
-             rmm::cuda_stream_view stream)
-{
-  auto const zero_normalized_offsets = thrust::make_transform_iterator(
-    offsets_begin, [offsets_begin] __device__(auto const idx) { return idx - *offsets_begin; });
+  auto const keys_view = data_cols.front()->view();
+  auto const values =
+    cudf::make_structs_column(keys_view.size(), std::move(data_cols), 0, rmm::device_buffer());
 
-  // The output labels from `upper_bound` will start from `1`.
-  // This will shift the result values back to start from `0`.
-  using OutputType  = typename thrust::iterator_value<OutputIterator>::type;
-  auto const output = thrust::make_transform_output_iterator(
-    out_begin, [] __device__(auto const idx) { return idx - OutputType{1}; });
+  using RequestType = std::conditional_t<std::is_same_v<OpType, cudf::groupby_aggregation>,
+                                         cudf::groupby::aggregation_request,
+                                         cudf::groupby::scan_request>;
 
-  thrust::upper_bound(rmm::exec_policy(stream),
-                      zero_normalized_offsets,
-                      zero_normalized_offsets + thrust::distance(offsets_begin, offsets_end),
-                      thrust::make_counting_iterator<OutputType>(0),
-                      thrust::make_counting_iterator<OutputType>(
-                        static_cast<OutputType>(thrust::distance(out_begin, out_end))),
-                      output);
-}
-
-//==================================================================================================
-template <typename InputIterator, typename OutputIterator>
-void new_way_v2(InputIterator offsets_begin,
-                InputIterator offsets_end,
-                OutputIterator out_begin,
-                OutputIterator out_end,
-                rmm::cuda_stream_view stream)
-{
-  auto const num_segments =
-    static_cast<cudf::size_type>(thrust::distance(offsets_begin, offsets_end)) - 1;
-  if (num_segments <= 0) { return; }
-
-  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
-  thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
-  thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator(cudf::size_type{1}),
-                   thrust::make_counting_iterator(num_segments),
-                   [offsets = offsets_begin, output = out_begin] __device__(auto const idx) {
-                     auto const dst_idx = offsets[idx] - offsets[0];
-
-                     // Scatter value `1` to the index at offsets[idx].
-                     // In case we have repeated offsets (i.e., we have empty segments), this
-                     // atomicAdd call will make sure the label values corresponding to these empty
-                     // segments will be skipped in the output.
-                     atomicAdd(&output[dst_idx], OutputType{1});
-                   });
-  thrust::inclusive_scan(rmm::exec_policy(stream), out_begin, out_end, out_begin);
-}
-
-//==================================================================================================
-template <bool use_old>
-void BM_labeling(benchmark::State& state)
-{
-  auto const n_groups = static_cast<cudf::size_type>(state.range(0));
-  auto const stream   = rmm::cuda_stream_default;
-
-  auto const [offsets, n_labels] = create_offsets(n_groups, stream);
-  auto const offsets_view        = offsets->view();
-  auto labels                    = rmm::device_uvector<cudf::size_type>(n_labels, stream);
+  auto gb_obj   = cudf::groupby::groupby(cudf::table_view({keys_view}));
+  auto requests = std::vector<RequestType>();
+  requests.emplace_back(RequestType());
+  requests.front().values = values->view();
+  requests.front().aggregations.push_back(cudf::make_min_aggregation<OpType>());
 
   for (auto _ : state) {
     [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
-    if constexpr (use_old) {
-      old_way(offsets_view.template begin<cudf::size_type>(),
-              offsets_view.template end<cudf::size_type>(),
-              labels.begin(),
-              labels.end(),
-              stream);
+    if constexpr (std::is_same_v<OpType, cudf::groupby_aggregation>) {
+      [[maybe_unused]] auto const result = gb_obj.aggregate(requests);
     } else {
-      new_way_v2(offsets_view.template begin<cudf::size_type>(),
-                 offsets_view.template end<cudf::size_type>(),
-                 labels.begin(),
-                 labels.end(),
-                 stream);
+      [[maybe_unused]] auto const result = gb_obj.scan(requests);
     }
   }
 }
 
-//==================================================================================================
-class Labeling : public cudf::benchmark {
+class Groupby : public cudf::benchmark {
 };
 
-#define MIN_RANGE 1'000
-#define MAX_RANGE 4'200'000
+#define MIN_RANGE 10'000
+#define MAX_RANGE 10'000'000
 
-#define REGISTER_BENCHMARK(name, use_old)                                                         \
-  BENCHMARK_DEFINE_F(Labeling, name)(::benchmark::State & state) { BM_labeling<use_old>(state); } \
-  BENCHMARK_REGISTER_F(Labeling, name)                                                            \
-    ->UseManualTime()                                                                             \
-    ->Unit(benchmark::kMillisecond)                                                               \
-    ->RangeMultiplier(4)                                                                          \
+#define REGISTER_BENCHMARK(name, op_type)                       \
+  BENCHMARK_DEFINE_F(Groupby, name)(::benchmark::State & state) \
+  {                                                             \
+    BM_groupby_min_struct<op_type>(state);                      \
+  }                                                             \
+  BENCHMARK_REGISTER_F(Groupby, name)                           \
+    ->UseManualTime()                                           \
+    ->Unit(benchmark::kMillisecond)                             \
+    ->RangeMultiplier(4)                                        \
     ->Ranges({{MIN_RANGE, MAX_RANGE}});
 
-// REGISTER_BENCHMARK(LabelingOldWay, true)
-REGISTER_BENCHMARK(LabelingNewWay, false)
+REGISTER_BENCHMARK(Aggregation, cudf::groupby_aggregation)
+REGISTER_BENCHMARK(Scan, cudf::groupby_scan_aggregation)
