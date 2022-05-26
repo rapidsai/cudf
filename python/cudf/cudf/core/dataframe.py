@@ -1191,7 +1191,47 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise TypeError(
                 f"__getitem__ on type {type(arg)} is not supported"
             )
+    
+    @property
+    @_cudf_nvtx_annotate
+    def axes(self)-> list[Index]:
+        """
+        Return a list representing the axes of DataFrame and Series.
+        DataFrame.axes returns a list of two elements: element zero is the row index and element one is the columns.
+        Series.axes returns a list containing the row index. 
+        
+        Examples
+        --------
+        **DataFrame**
+        
+        >>> import cudf
+        
+        >>> cdf1 = cudf.DataFrame()
+        >>> cdf1["key"] = [0,0,1,1]
+        >>> cdf1["k2"] = [1,2,2,3]
+        >>> cdf1["val"] = [1,2,3,4]
+        >>> cdf1["temp"] = [-1,2,2,3]
+        >>> print(cdf1.axes)
+        [RangeIndex(start=0, stop=4, step=1), Index(['key', 'k2', 'val', 'temp'], dtype='object')]
+        
+        >>> cdf1.groupby(["key", "k2"])
+        >>> print((cdf1.groupby(["key", "k2"]).sum()).axes)
+        [MultiIndex([(0, 2),
+             (1, 2),
+             (1, 3),
+             (0, 1)],
+            names=['key', 'k2']), Index(['val', 'temp'], dtype='object')]
+        
+        **Series**
+        
+        >>> csf1 = cudf.Series([1, 2, 3, 4])
+        >>> print(csf1.axes)
+        [RangeIndex(start=0, stop=4, step=1)]
+        
+        """
+        return [self.index, self.columns]
 
+    
     @_cudf_nvtx_annotate
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*"""
