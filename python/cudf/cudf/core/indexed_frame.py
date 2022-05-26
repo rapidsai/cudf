@@ -229,7 +229,7 @@ class IndexedFrame(Frame):
 
     def __init__(self, data=None, index=None):
         super().__init__(data=data, index=index)
-                
+
     def to_dict(self, *args, **kwargs):  # noqa: D102
         raise TypeError(
             "cuDF does not support conversion to host memory "
