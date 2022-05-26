@@ -149,16 +149,16 @@ class regex_parser {
    * @brief Single parsed pattern element.
    */
   struct Item {
-    int t;
+    int32_t type;
     union {
-      char32_t yy;
-      int cclass_id;
+      char32_t chr;
+      int32_t cclass_id;
       struct {
-        short n;
-        short m;
+        int16_t n;
+        int16_t m;
       } count;
     } d;
-    Item(int token, char32_t chr = 0) : t{token}, d{chr} {}
+    Item(int32_t type, char32_t chr = 0) : type{type}, d{chr} {}
   };
 
  private:
@@ -167,14 +167,14 @@ class regex_parser {
   char32_t const* _expr_ptr;
   bool _lex_done{false};
 
-  int _id_ccls_w{-1};  // alphanumeric
-  int _id_ccls_W{-1};  // not alphanumeric
-  int _id_ccls_s{-1};  // space
-  int _id_ccls_d{-1};  // digit
-  int _id_ccls_D{-1};  // not digit
+  int32_t _id_ccls_w{-1};  // alphanumeric
+  int32_t _id_ccls_W{-1};  // not alphanumeric
+  int32_t _id_ccls_s{-1};  // space
+  int32_t _id_ccls_d{-1};  // digit
+  int32_t _id_ccls_D{-1};  // not digit
 
   char32_t _chr{};       // last lex'd char
-  int _cclass_id{};      // last lex'd class
+  int32_t _cclass_id{};  // last lex'd class
   int16_t _min_count{};  // data for counted operators
   int16_t _max_count{};
 
@@ -187,20 +187,23 @@ class regex_parser {
       c = 0;
       return true;
     }
+
     c = *_expr_ptr++;
     if (c == '\\') {
       c = *_expr_ptr++;
       return true;
     }
-    if (c == 0) _lex_done = true;
+
+    if (c == 0) { _lex_done = true; }
+
     return false;
   }
 
-  int build_cclass()
+  int32_t build_cclass()
   {
-    int type = CCLASS;
+    int32_t type = CCLASS;
     std::vector<char32_t> cls;
-    int builtins = 0;
+    int32_t builtins = 0;
 
     char32_t chr = 0;
     auto quoted  = next_char(chr);
@@ -214,7 +217,7 @@ class regex_parser {
     }
 
     // parse class into a set of spans
-    int count_char = 0;
+    auto count_char = 0;
     while (true) {
       count_char++;
       if (chr == 0) {
@@ -258,12 +261,12 @@ class regex_parser {
       if (!quoted && chr == ']' && count_char > 1) break;
       if (!quoted && chr == '-') {
         if (cls.empty()) {
-          // malformed '[]'
+          // malformed '[]': TODO assert or exception?
           return 0;
         }
         quoted = next_char(chr);
         if ((!quoted && chr == ']') || chr == 0) {
-          // malformed '[]'
+          // malformed '[]': TODO assert or exception?
           return 0;
         }
         cls.back() = chr;
@@ -309,11 +312,11 @@ class regex_parser {
     return type;
   }
 
-  int lex(int dot_type)
+  int32_t lex(int32_t dot_type)
   {
     _chr         = 0;
     char32_t chr = 0;
-    int quoted   = next_char(chr);
+    auto quoted  = next_char(chr);
     if (quoted) {
       // treating all quoted numbers as Octal, since we are not supporting backreferences
       if (chr >= '0' && chr <= '7') {
@@ -401,8 +404,9 @@ class regex_parser {
             // let valid escapable chars fall through as literal CHAR
             if (chr && (std::find(escapable_chars.begin(),
                                   escapable_chars.end(),
-                                  static_cast<char>(chr)) != escapable_chars.end()))
+                                  static_cast<char>(chr)) != escapable_chars.end())) {
               break;
+            }
             // anything else is a bad escape so throw an error
             CUDF_FAIL("invalid regex pattern: bad escape character at position " +
                       std::to_string(_expr_ptr - _pattern_begin - 1));
@@ -445,16 +449,17 @@ class regex_parser {
     // The quantifiers require at least one "real" previous item.
     // We are throwing an error in these two if-checks for invalid quantifiers.
     // Another option is to just return CHAR silently here which effectively
-    // treats the yy character as a literal instead as a quantifier.
+    // treats the chr character as a literal instead as a quantifier.
     // This could lead to confusion where sometimes unescaped quantifier characters
     // are treated as regex expressions and sometimes they are not.
-    if (_items.empty()) CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0");
+    if (_items.empty()) { CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0"); }
 
     if (std::find(valid_preceding_inst_types.begin(),
                   valid_preceding_inst_types.end(),
-                  _items.back().t) == valid_preceding_inst_types.end())
+                  _items.back().type) == valid_preceding_inst_types.end()) {
       CUDF_FAIL("invalid regex pattern: nothing to repeat at position " +
                 std::to_string(_expr_ptr - _pattern_begin - 1));
+    }
 
     // handle quantifiers
     switch (chr) {
@@ -559,15 +564,15 @@ class regex_parser {
     for (std::size_t index = 0; index < in.size(); index++) {
       auto const item = in[index];
 
-      if (item.t != COUNTED && item.t != COUNTED_LAZY) {
+      if (item.type != COUNTED && item.type != COUNTED_LAZY) {
         out.push_back(item);
-        if (item.t == LBRA || item.t == LBRA_NC) {
+        if (item.type == LBRA || item.type == LBRA_NC) {
           lbra_stack.push(index);
           repeat_start_index = -1;
-        } else if (item.t == RBRA) {
+        } else if (item.type == RBRA) {
           repeat_start_index = lbra_stack.top();
           lbra_stack.pop();
-        } else if ((item.t & ITEM_MASK) != OPERATOR_MASK) {
+        } else if ((item.type & ITEM_MASK) != OPERATOR_MASK) {
           repeat_start_index = index;
         }
       } else {
@@ -600,15 +605,15 @@ class regex_parser {
           }
           for (int j = n; j < m; j++) {
             out.push_back(regex_parser::Item{RBRA, 0});
-            out.push_back(regex_parser::Item{item.t == COUNTED ? QUEST : QUEST_LAZY, 0});
+            out.push_back(regex_parser::Item{item.type == COUNTED ? QUEST : QUEST_LAZY, 0});
           }
         } else {
           // infinite repeats
           if (n > 0) {  // append '+' after last repetition
-            out.push_back(regex_parser::Item{item.t == COUNTED ? PLUS : PLUS_LAZY, 0});
+            out.push_back(regex_parser::Item{item.type == COUNTED ? PLUS : PLUS_LAZY, 0});
           } else {  // copy it once then append '*'
             out.insert(out.end(), begin, end);
-            out.push_back(regex_parser::Item{item.t == COUNTED ? STAR : STAR_LAZY, 0});
+            out.push_back(regex_parser::Item{item.type == COUNTED ? STAR : STAR_LAZY, 0});
           }
         }
       }
@@ -617,15 +622,15 @@ class regex_parser {
   }
 
  public:
-  regex_parser(const char32_t* pattern, int dot_type, reprog& prog)
+  regex_parser(const char32_t* pattern, int32_t dot_type, reprog& prog)
     : _prog(prog), _pattern_begin(pattern), _expr_ptr(pattern)
   {
-    int token = 0;
-    while ((token = lex(dot_type)) != END) {
-      Item item{token, _chr};
-      if (token == CCLASS || token == NCCLASS)
+    int32_t type = 0;
+    while ((type = lex(dot_type)) != END) {
+      Item item{type, _chr};
+      if (type == CCLASS || type == NCCLASS) {
         item.d.cclass_id = _cclass_id;
-      else if (token == COUNTED || token == COUNTED_LAZY) {
+      } else if (type == COUNTED || type == COUNTED_LAZY) {
         item.d.count.n = _min_count;
         item.d.count.m = _max_count;
         _has_counted   = true;
@@ -844,11 +849,11 @@ class regex_compiler {
 
     for (int i = 0; i < static_cast<int>(items.size()); i++) {
       auto const item = items[i];
-      int token       = item.t;
+      int token       = item.type;
       if (token == CCLASS || token == NCCLASS)
         yyclass_id = item.d.cclass_id;
       else
-        yy = item.d.yy;
+        yy = item.d.chr;
 
       if (token == LBRA) {
         ++cursubid;
