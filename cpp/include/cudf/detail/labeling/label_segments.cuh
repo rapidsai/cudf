@@ -70,6 +70,7 @@ void label_segments(InputIterator offsets_begin,
                    thrust::make_counting_iterator(size_type{1}),
                    thrust::make_counting_iterator(num_segments),
                    [offsets = offsets_begin, output = out_begin] __device__(auto const idx) {
+                     // Zero-normalized offsets.
                      auto const dst_idx = offsets[idx] - offsets[0];
 
                      // Scatter value `1` to the index at offsets[idx].
