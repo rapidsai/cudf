@@ -1,19 +1,3 @@
-/*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
@@ -21,6 +5,7 @@
 #include <cudf/types.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/iterator_traits.h>
@@ -109,6 +94,35 @@ void new_way(InputIterator offsets_begin,
 }
 
 //==================================================================================================
+template <typename InputIterator, typename OutputIterator>
+void new_way_v2(InputIterator offsets_begin,
+                InputIterator offsets_end,
+                OutputIterator out_begin,
+                OutputIterator out_end,
+                rmm::cuda_stream_view stream)
+{
+  auto const num_segments =
+    static_cast<cudf::size_type>(thrust::distance(offsets_begin, offsets_end)) - 1;
+  if (num_segments <= 0) { return; }
+
+  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
+  thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
+  thrust::for_each(rmm::exec_policy(stream),
+                   thrust::make_counting_iterator(cudf::size_type{1}),
+                   thrust::make_counting_iterator(num_segments),
+                   [offsets = offsets_begin, output = out_begin] __device__(auto const idx) {
+                     auto const dst_idx = offsets[idx] - offsets[0];
+
+                     // Scatter value `1` to the index at offsets[idx].
+                     // In case we have repeated offsets (i.e., we have empty segments), this
+                     // atomicAdd call will make sure the label values corresponding to these empty
+                     // segments will be skipped in the output.
+                     atomicAdd(&output[dst_idx], OutputType{1});
+                   });
+  thrust::inclusive_scan(rmm::exec_policy(stream), out_begin, out_end, out_begin);
+}
+
+//==================================================================================================
 template <bool use_old>
 void BM_labeling(benchmark::State& state)
 {
@@ -128,11 +142,11 @@ void BM_labeling(benchmark::State& state)
               labels.end(),
               stream);
     } else {
-      new_way(offsets_view.template begin<cudf::size_type>(),
-              offsets_view.template end<cudf::size_type>(),
-              labels.begin(),
-              labels.end(),
-              stream);
+      new_way_v2(offsets_view.template begin<cudf::size_type>(),
+                 offsets_view.template end<cudf::size_type>(),
+                 labels.begin(),
+                 labels.end(),
+                 stream);
     }
   }
 }
@@ -152,5 +166,5 @@ class Labeling : public cudf::benchmark {
     ->RangeMultiplier(4)                                                                          \
     ->Ranges({{MIN_RANGE, MAX_RANGE}});
 
-REGISTER_BENCHMARK(LabelingOldWay, true)
-// REGISTER_BENCHMARK(LabelingNewWay, false)
+// REGISTER_BENCHMARK(LabelingOldWay, true)
+REGISTER_BENCHMARK(LabelingNewWay, false)
