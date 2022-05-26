@@ -3250,4 +3250,77 @@ TEST_F(ParquetChunkedWriterTest, RowGroupPageSizeMatch)
   EXPECT_EQ(options.get_row_group_size_rows(), options.get_max_page_size_rows());
 }
 
+TEST_F(ParquetWriterTest, EmptyList)
+{
+  auto L1 = cudf::make_lists_column(0,
+                                    cudf::make_empty_column(cudf::data_type(cudf::type_id::INT32)),
+                                    cudf::make_empty_column(cudf::data_type{cudf::type_id::INT64}),
+                                    0,
+                                    {});
+  auto L0 = cudf::make_lists_column(
+    3, cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0}.release(), std::move(L1), 0, {});
+
+  auto filepath = temp_env->get_temp_filepath("EmptyList.parquet");
+  cudf::io::write_parquet(cudf::io::parquet_writer_options_builder(cudf::io::sink_info(filepath),
+                                                                   cudf::table_view({*L0})));
+
+  auto result = cudf_io::read_parquet(
+    cudf::io::parquet_reader_options_builder(cudf::io::source_info(filepath)));
+
+  using lcw     = cudf::test::lists_column_wrapper<int64_t>;
+  auto expected = lcw{lcw{}, lcw{}, lcw{}};
+  cudf::test::print(expected);
+  cudf::test::expect_columns_equal(result.tbl->view().column(0), expected);
+}
+
+TEST_F(ParquetWriterTest, DeepEmptyList)
+{
+  // Make a list column LLLi st only L is valid and LLi are all null. This tests whether we can
+  // handle multiple nullptr offsets
+
+  auto L2 = cudf::make_lists_column(0,
+                                    cudf::make_empty_column(cudf::data_type(cudf::type_id::INT32)),
+                                    cudf::make_empty_column(cudf::data_type{cudf::type_id::INT64}),
+                                    0,
+                                    {});
+  auto L1 = cudf::make_lists_column(
+    0, cudf::make_empty_column(cudf::data_type(cudf::type_id::INT32)), std::move(L2), 0, {});
+  auto L0 = cudf::make_lists_column(
+    3, cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0}.release(), std::move(L1), 0, {});
+
+  auto filepath = temp_env->get_temp_filepath("DeepEmptyList.parquet");
+  cudf::io::write_parquet(cudf::io::parquet_writer_options_builder(cudf::io::sink_info(filepath),
+                                                                   cudf::table_view({*L0})));
+
+  auto result = cudf_io::read_parquet(
+    cudf::io::parquet_reader_options_builder(cudf::io::source_info(filepath)));
+
+  cudf::test::expect_columns_equal(result.tbl->view().column(0), *L0);
+}
+
+TEST_F(ParquetWriterTest, EmptyListWithStruct)
+{
+  auto L2 = cudf::make_lists_column(0,
+                                    cudf::make_empty_column(cudf::data_type(cudf::type_id::INT32)),
+                                    cudf::make_empty_column(cudf::data_type{cudf::type_id::INT64}),
+                                    0,
+                                    {});
+
+  auto children = std::vector<std::unique_ptr<cudf::column>>{};
+  children.push_back(std::move(L2));
+  auto S2 = cudf::make_structs_column(0, std::move(children), 0, {});
+  auto L1 = cudf::make_lists_column(
+    0, cudf::make_empty_column(cudf::data_type(cudf::type_id::INT32)), std::move(S2), 0, {});
+  auto L0 = cudf::make_lists_column(
+    3, cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0}.release(), std::move(L1), 0, {});
+
+  auto filepath = temp_env->get_temp_filepath("EmptyListWithStruct.parquet");
+  cudf::io::write_parquet(cudf::io::parquet_writer_options_builder(cudf::io::sink_info(filepath),
+                                                                   cudf::table_view({*L0})));
+  auto result = cudf_io::read_parquet(
+    cudf::io::parquet_reader_options_builder(cudf::io::source_info(filepath)));
+
+  cudf::test::expect_columns_equal(result.tbl->view().column(0), *L0);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
