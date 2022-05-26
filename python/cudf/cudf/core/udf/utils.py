@@ -22,8 +22,8 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
 )
 from cudf.api.types import is_string_dtype
-from stringudfs._lib.cudf_jit_udf import to_string_view_array, from_dstring_array
-from stringudfs import ptxpath
+from strings_udf._lib.cudf_jit_udf import to_string_view_array, from_dstring_array
+from strings_udf import ptxpath
 
 from cudf.utils.utils import _cudf_nvtx_annotate
 

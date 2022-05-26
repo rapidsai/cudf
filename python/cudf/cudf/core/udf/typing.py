@@ -37,7 +37,7 @@ SUPPORTED_NUMBA_TYPES = (
 
 import operator
 
-from stringudfs._typing import DString, StringView, dstring, string_view, dstring_model, stringview_model, str_view_arg_handler
+from strings_udf._typing import DString, StringView, dstring, string_view, dstring_model, stringview_model, str_view_arg_handler
 
 
 
@@ -394,6 +394,41 @@ class StringLiteralLength(AbstractTemplate):
         if isinstance(args[0], types.StringLiteral) and len(args) == 1:
             return nb_signature(types.int32, args[0])
 
+class MaskedStringViewStartsWith(AbstractTemplate):
+    key = "MaskedType.startswith"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.boolean), MaskedType(string_view), recvr=self.this
+        )
+
+class MaskedStringViewEndsWith(AbstractTemplate):
+    key = "MaskedType.endswith"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.boolean), MaskedType(string_view), recvr=self.this
+        )
+
+@cuda_decl_registry.register_attr
+class MaskedStringViewAttrs(AttributeTemplate):
+    key = MaskedType(string_view)
+
+    def resolve_startswith(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewStartsWith, MaskedType(string_view)
+        )
+
+    def resolve_endswith(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewEndsWith, MaskedType(string_view)
+        )
+
+    def resolve_value(self, mod):
+        return string_view
+
+    def resolve_valid(self, mod):
+        return types.boolean
 
 for binary_op in arith_ops + bitwise_ops + comparison_ops:
     # Every op shares the same typing class
