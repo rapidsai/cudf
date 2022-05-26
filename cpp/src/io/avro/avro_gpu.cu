@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "avro_gpu.h"
+#include "avro_gpu.hpp"
 
 #include <io/utilities/block_utils.cuh>
 
@@ -227,7 +227,7 @@ avro_decode_row(schemadesc_s const* schema,
  * @param[in] first_row Crop all rows below first_row
  */
 // blockDim {32,num_warps,1}
-extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
+__global__ void __launch_bounds__(num_warps * 32, 2)
   gpuDecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema_g,
                           device_span<string_index_pair const> global_dictionary,

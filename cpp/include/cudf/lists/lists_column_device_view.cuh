@@ -83,7 +83,7 @@ class lists_column_device_view : private column_device_view {
   /**
    * @brief Fetches the child column of the underlying list column with offset and size applied
    */
-  [[nodiscard]] __device__ inline column_device_view sliced_child() const
+  [[nodiscard]] __device__ inline column_device_view get_sliced_child() const
   {
     auto start = offset_at(0);
     auto end   = offset_at(size());

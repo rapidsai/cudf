@@ -38,15 +38,29 @@ project(
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_SHARED_LIBS "Build cuDF JNI shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+option(PER_THREAD_DEFAULT_STREAM "[DEPRECATED] Build with per-thread default stream" OFF)
+mark_as_advanced(FORCE, PER_THREAD_DEFAULT_STREAM)
+option(CUDF_USE_PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
 
+# PER_THREAD_DEFAULT_STREAM will be replaced with CUDF_USE_PER_THREAD_DEFAULT_STREAM
+if(PER_THREAD_DEFAULT_STREAM)
+  set(CUDF_USE_PER_THREAD_DEFAULT_STREAM ON)
+  message(
+    DEPRECATION
+      "CUDF: PER_THREAD_DEFAULT_STREAM is deprecated, and will be removed in a future release,
+        please use CUDF_USE_PER_THREAD_DEFAULT_STREAM instead."
+  )
+endif()
+
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF_JNI: Build cuDF JNI shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
-message(VERBOSE "CUDF_JNI: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
+message(VERBOSE
+        "CUDF_JNI: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}"
+)
 message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
 message(VERBOSE "CUDF_JNI: Link with libcudf statically: ${CUDF_JNI_LIBCUDF_STATIC}")
@@ -80,9 +94,9 @@ if(NOT USE_NVTX)
   target_compile_definitions(cudfjni PUBLIC NVTX_DISABLE)
 endif()
 
-if(PER_THREAD_DEFAULT_STREAM)
+if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   message(STATUS "Using per-thread default stream")
-  add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
+  add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM)
 endif()
 
 # ##################################################################################################
@@ -91,16 +105,18 @@ endif()
 rapids_cmake_build_type("Release")
 
 # ##################################################################################################
-# * nvcomp------------------------------------------------------------------------------------------
-
-set(nvcomp_DIR "${CUDF_CPP_BUILD_DIR}/_deps/nvcomp-build")
-rapids_find_package(nvcomp REQUIRED)
-
-# ##################################################################################################
 # * CUDF ------------------------------------------------------------------------------------------
 
 set(cudf_ROOT "${CUDF_CPP_BUILD_DIR}")
 rapids_find_package(cudf REQUIRED)
+
+# ##################################################################################################
+# * nvcomp------------------------------------------------------------------------------------------
+
+if(NOT DEFINED nvcomp_DIR)
+  set(nvcomp_DIR "${CUDF_CPP_BUILD_DIR}/_deps/nvcomp-build")
+endif()
+rapids_find_package(nvcomp REQUIRED)
 
 # ##################################################################################################
 # * find JNI -------------------------------------------------------------------------------------
@@ -239,4 +255,17 @@ if(CUDA_STATIC_RUNTIME)
 else()
   # Tell CMake what CUDA language runtime to use
   set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
+endif()
+
+# ##################################################################################################
+# * install shared libraries ----------------------------------------------------------------------
+if(TARGET nvcomp::nvcomp)
+  add_custom_command(
+    TARGET cudfjni
+    PRE_LINK
+    COMMAND
+      ${CMAKE_COMMAND} -E copy $<TARGET_FILE:nvcomp::nvcomp> $<TARGET_FILE:nvcomp::nvcomp_gdeflate>
+      $<TARGET_FILE:nvcomp::nvcomp_bitcomp> "${PROJECT_BINARY_DIR}"
+    COMMENT "Copying nvcomp libraries to ${PROJECT_BINARY_DIR}"
+  )
 endif()
