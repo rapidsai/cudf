@@ -558,28 +558,30 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "Can only use .dt accessor with datetimelike values"
             )
 
-    @property
+    @property  # type:ignore
     @_cudf_nvtx_annotate
-    def axes(self)-> list[Index]:
+    def axes(self):
         """
         Return a list representing the axes of DataFrame and Series.
-        DataFrame.axes returns a list of two elements: element zero is the row index and element one is the columns.
-        Series.axes returns a list containing the row index. 
-        
+        DataFrame.axes returns a list of two elements:
+            element zero is the row index and element one is the columns.
+        Series.axes returns a list containing the row index.
+
         Examples
         --------
         **DataFrame**
-        
+
         >>> import cudf
-        
+
         >>> cdf1 = cudf.DataFrame()
         >>> cdf1["key"] = [0,0,1,1]
         >>> cdf1["k2"] = [1,2,2,3]
         >>> cdf1["val"] = [1,2,3,4]
         >>> cdf1["temp"] = [-1,2,2,3]
         >>> print(cdf1.axes)
-        [RangeIndex(start=0, stop=4, step=1), Index(['key', 'k2', 'val', 'temp'], dtype='object')]
-        
+        [RangeIndex(start=0, stop=4, step=1),
+            Index(['key', 'k2', 'val', 'temp'], dtype='object')]
+
         >>> cdf1.groupby(["key", "k2"])
         >>> print((cdf1.groupby(["key", "k2"]).sum()).axes)
         [MultiIndex([(0, 2),
@@ -587,16 +589,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
              (1, 3),
              (0, 1)],
             names=['key', 'k2']), Index(['val', 'temp'], dtype='object')]
-        
+
         **Series**
-        
+
         >>> csf1 = cudf.Series([1, 2, 3, 4])
         >>> print(csf1.axes)
         [RangeIndex(start=0, stop=4, step=1)]
-        
+
         """
         return [self.index]
-    
+
     @_cudf_nvtx_annotate
     def serialize(self):
         header, frames = super().serialize()
