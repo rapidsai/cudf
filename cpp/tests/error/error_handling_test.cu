@@ -85,6 +85,25 @@ TEST(StreamCheck, CatchFailedKernel)
                             "invalid configuration argument");
 }
 
+__global__ void kernel(int* p) { *p = 42; }
+
+TEST(DeathTest, CudaFatalError)
+{
+  testing::FLAGS_gtest_death_test_style = "threadsafe";
+  auto call_kernel                      = []() {
+    int* p;
+    cudaMalloc(&p, 2 * sizeof(int));
+    int* misaligned = (int*)(reinterpret_cast<char*>(p) + 1);
+    kernel<<<1, 1>>>(misaligned);
+    try {
+      CUDF_CUDA_TRY(cudaDeviceSynchronize());
+    } catch (const cudf::fatal_cuda_error& fe) {
+      std::abort();
+    }
+  };
+  ASSERT_DEATH(call_kernel(), "");
+}
+
 #ifndef NDEBUG
 
 __global__ void assert_false_kernel() { cudf_assert(false && "this kernel should die"); }
@@ -119,23 +138,11 @@ TEST(DebugAssert, cudf_assert_true)
 
 #endif
 
-TEST(FatalCase, CudaFatalError)
-{
-  auto type = cudf::data_type{cudf::type_id::INT32};
-  auto cv   = cudf::column_view(type, 256, (void*)256);
-  cudf::binary_operation(cv, cv, cudf::binary_operator::ADD, type);
-  EXPECT_THROW(CUDF_CUDA_TRY(cudaDeviceSynchronize()), cudf::fatal_cuda_error);
-}
-
 // These tests don't use CUDF_TEST_PROGRAM_MAIN because :
 // 1.) They don't need the RMM Pool
 // 2.) The RMM Pool interferes with the death test
-// 3.) The order of test cases matters
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  ::testing::GTEST_FLAG(filter) = "-FatalCase.*";
-  int ret                       = RUN_ALL_TESTS();
-  ::testing::GTEST_FLAG(filter) = "FatalCase.*";
-  return ret + RUN_ALL_TESTS();
+  return RUN_ALL_TESTS();
 }

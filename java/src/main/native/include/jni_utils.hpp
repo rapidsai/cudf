@@ -865,8 +865,9 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
     /* Double check whether the thrown exception is unrecoverable CUDA error or not. */            \
     /* Like cudf::detail::throw_cuda_error, it is nearly certain that a fatal error  */            \
     /* occurred if the second call doesn't return with cudaSuccess. */                             \
-    auto const last = cudaDeviceSynchronize();                                                     \
-    if (cudaSuccess != last && last == cudaGetLastError()) {                                       \
+    cudaGetLastError();                                                                            \
+    auto const last = cudaFree(0);                                                                 \
+    if (cudaSuccess != last && last == cudaDeviceSynchronize()) {                                  \
       auto msg = e.what() == nullptr ? std::string{""} : e.what();                                 \
       auto cuda_error = cudf::fatal_cuda_error{msg, last};                                         \
       JNI_CHECK_CUDA_ERROR(env, cudf::jni::CUDA_FATAL_ERROR_CLASS, cuda_error, ret_val);           \
