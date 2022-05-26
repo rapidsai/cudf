@@ -126,6 +126,10 @@ void labels_to_offsets(InputIterator labels_begin,
                        OutputIterator out_end,
                        rmm::cuda_stream_view stream)
 {
+  // The output offsets need to be filled with `0` value first.
+  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
+  thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
+
   auto const num_labels = static_cast<size_type>(thrust::distance(labels_begin, labels_end));
   if (num_labels == 0) { return; }
 
@@ -150,10 +154,6 @@ void labels_to_offsets(InputIterator labels_begin,
                                          list_indices.begin(),  // output unique keys
                                          list_sizes.begin());  // count for each key
   auto const num_non_empty_segments = thrust::distance(list_indices.begin(), end.first);
-
-  // The output offsets need to be filled with `0` value first.
-  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
-  thrust::uninitialized_fill_n(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
 
   // Scatter segment sizes into the end position of their corresponding segment indices.
   // Given the example above, we scatter [4, 2, 4] by the scatter_map [0, 1, 4], resulting
