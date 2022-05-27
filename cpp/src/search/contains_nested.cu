@@ -50,14 +50,12 @@ bool contains_nested_element(column_view const& haystack,
     return thrust::any_of(
       rmm::exec_policy(stream), begin, end, [d_comp, haystack_valid_it] __device__(auto const idx) {
         if (!haystack_valid_it[static_cast<size_type>(idx)]) { return false; }
-        return d_comp(idx,
-                      static_cast<rhs_index_type>(0));  // compare haystack[idx] == needle[0].
+        return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
       });
   }
 
   return thrust::any_of(rmm::exec_policy(stream), begin, end, [d_comp] __device__(auto const idx) {
-    return d_comp(idx,
-                  static_cast<rhs_index_type>(0));  // compare haystack[idx] == needle[0].
+    return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
   });
 }
 
