@@ -491,6 +491,8 @@ class parquet_writer_options {
   /**
    * @brief Returns the maximum uncompressed page size, in bytes. If set larger than the row group
    * size, then this will return the row group size.
+   *
+   * @return Maximum uncompressed page size, in bytes
    */
   auto get_max_page_size_bytes() const
   {
@@ -500,6 +502,8 @@ class parquet_writer_options {
   /**
    * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
    * will return the row group size.
+   *
+   * @return Maximum page size, in rows
    */
   auto get_max_page_size_rows() const
   {
@@ -597,6 +601,7 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
   {
@@ -606,6 +611,7 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum page size, in rows.
+   * @param size_rows Maximum page size, in rows to set
    */
   void set_max_page_size_rows(size_type size_rows)
   {
@@ -922,6 +928,8 @@ class chunked_parquet_writer_options {
   /**
    * @brief Returns maximum uncompressed page size, in bytes. If set larger than the row group size,
    * then this will return the row group size.
+   *
+   * @return Maximum uncompressed page size, in bytes
    */
   auto get_max_page_size_bytes() const
   {
@@ -931,6 +939,8 @@ class chunked_parquet_writer_options {
   /**
    * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
    * will return the row group size.
+   *
+   * @return Maximum page size, in rows
    */
   auto get_max_page_size_rows() const
   {
@@ -1002,6 +1012,7 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
   {
@@ -1011,6 +1022,7 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum page size, in rows.
+   * @param size_rows The maximum page size, in rows to set
    */
   void set_max_page_size_rows(size_type size_rows)
   {
