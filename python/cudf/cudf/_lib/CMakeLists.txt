@@ -56,7 +56,9 @@ set(cython_sources
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
-  CXX SOURCE_FILES "${cython_sources}" LINKED_LIBRARIES "${linked_libraries}"
+  CXX
+  SOURCE_FILES "${cython_sources}"
+  LINKED_LIBRARIES "${linked_libraries}"
 )
 
 find_package(NumPy REQUIRED)
@@ -79,4 +81,3 @@ endforeach()
 add_subdirectory(io)
 add_subdirectory(nvtext)
 add_subdirectory(strings)
-

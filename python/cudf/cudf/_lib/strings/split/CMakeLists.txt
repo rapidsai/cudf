@@ -16,7 +16,9 @@ set(cython_sources partition.pyx split.pyx)
 
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
-  CXX SOURCE_FILES "${cython_sources}" LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX strings_
+  CXX
+  SOURCE_FILES "${cython_sources}"
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX strings_
 )
 
 foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)

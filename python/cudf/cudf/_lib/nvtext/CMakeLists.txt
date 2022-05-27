@@ -17,7 +17,9 @@ set(cython_sources edit_distance.pyx generate_ngrams.pyx ngrams_tokenize.pyx nor
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
-  CXX SOURCE_FILES "${cython_sources}" LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX nvtext_
+  CXX
+  SOURCE_FILES "${cython_sources}"
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX nvtext_
 )
 
 foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
