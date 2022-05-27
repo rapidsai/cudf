@@ -1252,7 +1252,7 @@ class header_encoder {
     current_header_ptr  = cpw_put_byte(current_header_ptr, value ? ST_FLD_TRUE : ST_FLD_FALSE);
   }
 
-  inline __device__ void put_binary(void* value, uint32_t length)
+  inline __device__ void put_binary(const void* value, uint32_t length)
   {
     current_header_ptr  = cpw_put_uint32(current_header_ptr, length);
     memcpy(current_header_ptr, value, length);
@@ -1302,12 +1302,15 @@ class header_encoder {
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
-__device__ uint8_t* EncodeStatistics(uint8_t* start,
-                                     const statistics_chunk* s,
-                                     uint8_t dtype,
-                                     float* fp_scratch)
+__device__ void get_min_max(const statistics_chunk * s,
+                            uint8_t dtype,
+                            float* fp_scratch,
+                            const void** vmin,
+                            const void** vmax,
+                            uint32_t* lmin,
+                            uint32_t* lmax)
 {
-  uint8_t *end, dtype_len;
+  uint8_t dtype_len;
   switch (dtype) {
     case dtype_bool: dtype_len = 1; break;
     case dtype_int8:
@@ -1323,29 +1326,43 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     case dtype_string:
     default: dtype_len = 0; break;
   }
+  if (s->has_minmax) {
+    if (dtype == dtype_string) {
+      *lmin = s->min_value.str_val.length;
+      *vmin = s->min_value.str_val.ptr;
+      *lmax = s->max_value.str_val.length;
+      *vmax = s->max_value.str_val.ptr;
+    } else {
+      *lmin = *lmax = dtype_len;
+      if (dtype == dtype_float32) {  // Convert from double to float32
+        fp_scratch[0] = s->min_value.fp_val;
+        fp_scratch[1] = s->max_value.fp_val;
+        *vmin          = &fp_scratch[0];
+        *vmax          = &fp_scratch[1];
+      } else {
+        *vmin = &s->min_value;
+        *vmax = &s->max_value;
+      }
+    }
+  } else {
+    *lmin = *lmax = 0;
+    *vmin = *vmax = nullptr;
+  }
+}
+
+__device__ uint8_t* EncodeStatistics(uint8_t* start,
+                                     const statistics_chunk* s,
+                                     uint8_t dtype,
+                                     float* fp_scratch)
+{
+  uint8_t *end;
   header_encoder encoder(start);
   encoder.field_int64(3, s->null_count);
   if (s->has_minmax) {
     const void *vmin, *vmax;
     uint32_t lmin, lmax;
 
-    if (dtype == dtype_string) {
-      lmin = s->min_value.str_val.length;
-      vmin = s->min_value.str_val.ptr;
-      lmax = s->max_value.str_val.length;
-      vmax = s->max_value.str_val.ptr;
-    } else {
-      lmin = lmax = dtype_len;
-      if (dtype == dtype_float32) {  // Convert from double to float32
-        fp_scratch[0] = s->min_value.fp_val;
-        fp_scratch[1] = s->max_value.fp_val;
-        vmin          = &fp_scratch[0];
-        vmax          = &fp_scratch[1];
-      } else {
-        vmin = &s->min_value;
-        vmax = &s->max_value;
-      }
-    }
+    get_min_max(s, dtype, fp_scratch, &vmin, &vmax, &lmin, &lmax);
     encoder.field_binary(5, vmax, lmax);
     encoder.field_binary(6, vmin, lmin);
   }
@@ -1447,6 +1464,7 @@ __global__ void __launch_bounds__(1024)
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
+  __shared__ __align__(8) float fp_scratch[2];
 
   uint32_t t = threadIdx.x;
   uint8_t *dst, *dst_base;
@@ -1488,35 +1506,43 @@ __global__ void __launch_bounds__(1024)
     chunks[blockIdx.x].bfr_size        = uncompressed_size;
     chunks[blockIdx.x].compressed_size = (dst - dst_base);
     if (ck_g.use_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
+    parquet_column_device_view col_g = *ck_g.col_desc;
 
     // TODO
-    // do min/max properly
     // allocate memory for blob properly
     // how to do boundary order
     // cleanup
     if (not column_stats.empty()) {
+      const void *vmin, *vmax;
+      uint32_t lmin, lmax;
+      
       size_t first_data_page = ck_g.use_dictionary ? 1 : 0;
+      uint32_t pageidx = ck_g.first_page;
       header_encoder encoder(ck_g.column_index_blob);
       // null_pages
       encoder.field_list_begin(1, num_pages-first_data_page, ST_FLD_TRUE);
       for (uint32_t page = first_data_page; page < num_pages; page++)
-        encoder.put_bool(column_stats[page].non_nulls == 0);
+        encoder.put_bool(column_stats[pageidx+page].non_nulls == 0);
       encoder.field_list_end(1);
       // min_values
       encoder.field_list_begin(2, num_pages-first_data_page, ST_FLD_BINARY);
-      for (uint32_t page = first_data_page; page < num_pages; page++)
-        encoder.put_binary((void*)"bar45678", 8);
+      for (uint32_t page = first_data_page; page < num_pages; page++) {
+        get_min_max(&column_stats[pageidx+page], col_g.stats_dtype, fp_scratch, &vmin, &vmax, &lmin, &lmax);
+        encoder.put_binary(vmin, lmin);
+      }
       encoder.field_list_end(2);
       // max_values
       encoder.field_list_begin(3, num_pages-first_data_page, ST_FLD_BINARY);
-      for (uint32_t page = first_data_page; page < num_pages; page++)
-        encoder.put_binary((void*)"foo45678", 8);
+      for (uint32_t page = first_data_page; page < num_pages; page++) {
+        get_min_max(&column_stats[pageidx+page], col_g.stats_dtype, fp_scratch, &vmin, &vmax, &lmin, &lmax);
+        encoder.put_binary(vmax, lmax);
+      }
       encoder.field_list_end(3);
       encoder.field_int32(4, 0); // boundary order???
       // null_counts
       encoder.field_list_begin(5, num_pages-first_data_page, ST_FLD_I64);
       for (uint32_t page = first_data_page; page < num_pages; page++)
-        encoder.put_int64(column_stats[page].null_count);
+        encoder.put_int64(column_stats[pageidx+page].null_count);
       encoder.field_list_end(5);
       encoder.end(&col_idx_end, false);
       
