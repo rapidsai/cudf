@@ -423,9 +423,9 @@ cdef class ParquetWriter:
         Name of the compression to use. Use ``None`` for no compression.
     statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
         Level at which column statistics should be included in file.
-    row_group_size_bytes: int, default 13369344
+    row_group_size_bytes: int, default 134217728
         Maximum size of each stripe of the output.
-        By default, 13369344 (128MB) will be used.
+        By default, 134217728 (128MB) will be used.
     row_group_size_rows: int, default 1000000
         Maximum number of rows of each stripe of the output.
         By default, 1000000 (10^6 rows) will be used.
@@ -442,7 +442,7 @@ cdef class ParquetWriter:
     cdef cudf_io_types.statistics_freq stat_freq
     cdef cudf_io_types.compression_type comp_type
     cdef object index
-    cdef size_type row_group_size_bytes
+    cdef size_t row_group_size_bytes
     cdef size_type row_group_size_rows
 
     def __cinit__(self, object filepath_or_buffer, object index=None,
