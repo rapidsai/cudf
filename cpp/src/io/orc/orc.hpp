@@ -496,14 +496,14 @@ class ProtobufWriter {
     return l;
   }
 
-  uint32_t varlen_size(uint64_t v)
+  uint32_t varint_size(uint64_t val)
   {
-    int l = 1;
-    while (v > 0x7f) {
-      v >>= 7;
-      l++;
+    auto len = 1u;
+    while (val > 0x7f) {
+      val >>= 7;
+      ++len;
     }
-    return l;
+    return len;
   }
 
   uint32_t put_int(int64_t v)

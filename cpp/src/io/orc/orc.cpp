@@ -250,8 +250,8 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
 
   auto const stats_size = (stats == nullptr)
                             ? 0
-                            : varlen_size(encode_field_number<decltype(*stats)>(2)) +
-                                varlen_size(stats->size()) + stats->size();
+                            : varint_size(encode_field_number<decltype(*stats)>(2)) +
+                                varint_size(stats->size()) + stats->size();
   auto const entry_size = positions_data.size() + stats_size;
 
   // 1:RowIndex.entry
