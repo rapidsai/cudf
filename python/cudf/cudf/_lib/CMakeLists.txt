@@ -56,12 +56,8 @@ set(cython_sources
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
-  SOURCE_FILES "${cython_sources}" LINKED_LIBRARIES "${linked_libraries}" CXX
+  CXX SOURCE_FILES "${cython_sources}" LINKED_LIBRARIES "${linked_libraries}"
 )
-
-add_subdirectory(io)
-add_subdirectory(nvtext)
-add_subdirectory(strings)
 
 find_package(NumPy REQUIRED)
 set(targets_using_numpy gpuarrow interop avro csv orc json parquet)
@@ -79,3 +75,8 @@ target_link_libraries(gpuarrow ${arrow_python_shared_library})
 foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
   set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/cpp")
 endforeach()
+
+add_subdirectory(io)
+add_subdirectory(nvtext)
+add_subdirectory(strings)
+
