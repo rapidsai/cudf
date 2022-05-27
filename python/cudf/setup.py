@@ -38,7 +38,7 @@ install_requires = [
     "nvtx>=0.2.1",
     "packaging",
     "pandas>=1.0,<1.5.0dev0",
-    "protobuf",
+    "protobuf>=3.20.1,<3.21.0a0",
     "typing_extensions",
 ]
 
