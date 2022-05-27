@@ -103,8 +103,13 @@ enum statistics_freq {
  * cudf columns.
  */
 struct column_name_info {
-  std::string name;
-  std::vector<column_name_info> children;
+  std::string name;                        ///< Column name
+  std::vector<column_name_info> children;  ///< Child column names
+  /**
+   * @brief Construct a column name info with a name and no children
+   *
+   * @param _name Column name
+   */
   column_name_info(std::string const& _name) : name(_name) {}
   column_name_info() = default;
 };
@@ -138,8 +143,8 @@ struct table_metadata {
  * @brief Table with table metadata used by io readers to return the metadata by value
  */
 struct table_with_metadata {
-  std::unique_ptr<table> tbl;
-  table_metadata metadata;
+  std::unique_ptr<table> tbl;  //!< Table
+  table_metadata metadata;     //!< Table metadata
 };
 
 /**
@@ -148,9 +153,15 @@ struct table_with_metadata {
  * Used to describe buffer input in `source_info` objects.
  */
 struct host_buffer {
-  const char* data = nullptr;
-  size_t size      = 0;
+  const char* data = nullptr;  //!< Pointer to the buffer
+  size_t size      = 0;        //!< Size of the buffer
   host_buffer()    = default;
+  /**
+   * @brief Construct a new host buffer object
+   *
+   * @param data Pointer to the buffer
+   * @param size Size of the buffer
+   */
   host_buffer(const char* data, size_t size) : data(data), size(size) {}
 };
 
@@ -158,35 +169,94 @@ struct host_buffer {
  * @brief Source information for read interfaces
  */
 struct source_info {
-  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> _files;
+  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> _files;  //!< Input files
 
   source_info() = default;
 
+  /**
+   * @brief Construct a new source info object for mutiple files
+   *
+   * @param file_paths Input files paths
+   */
   explicit source_info(std::vector<std::string> const& file_paths) : _filepaths(file_paths) {}
+
+  /**
+   * @brief Construct a new source info object for a single file
+   *
+   * @param file_path Single input file
+   */
   explicit source_info(std::string const& file_path) : _filepaths({file_path}) {}
 
+  /**
+   * @brief Construct a new source info object for multiple buffers in host memory
+   *
+   * @param host_buffers Input buffers in host memory
+   */
   explicit source_info(std::vector<host_buffer> const& host_buffers)
     : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
   {
   }
+
+  /**
+   * @brief Construct a new source info object for a single buffer
+   *
+   * @param host_data Input buffer in host memory
+   * @param size Size of the buffer
+   */
   explicit source_info(const char* host_data, size_t size)
     : _type(io_type::HOST_BUFFER), _buffers({{host_data, size}})
   {
   }
 
+  /**
+   * @brief Construct a new source info object for multiple user-implemented sources
+   *
+   * @param sources  User-implemented input sources
+   */
   explicit source_info(std::vector<cudf::io::datasource*> const& sources)
     : _type(io_type::USER_IMPLEMENTED), _user_sources(sources)
   {
   }
+
+  /**
+   * @brief Construct a new source info object for a single user-implemented source
+   *
+   * @param source Single user-implemented Input source
+   */
   explicit source_info(cudf::io::datasource* source)
     : _type(io_type::USER_IMPLEMENTED), _user_sources({source})
   {
   }
 
+  /**
+   * @brief Get the type of the input
+   *
+   * @return The type of the input
+   */
   [[nodiscard]] auto type() const { return _type; }
+  /**
+   * @brief Get the filepaths of the input
+   *
+   * @return The filepaths of the input
+   */
   [[nodiscard]] auto const& filepaths() const { return _filepaths; }
+  /**
+   * @brief Get the host buffers of the input
+   *
+   * @return The host buffers of the input
+   */
   [[nodiscard]] auto const& buffers() const { return _buffers; }
+  /**
+   * @brief Get the input files
+   *
+   * @return The input files
+   */
   [[nodiscard]] auto const& files() const { return _files; }
+  /**
+   * @brief Get the user sources of the input
+   *
+   * @return The user sources of the input
+   */
   [[nodiscard]] auto const& user_sources() const { return _user_sources; }
 
  private:
@@ -201,36 +271,98 @@ struct source_info {
  */
 struct sink_info {
   sink_info() = default;
+  /**
+   * @brief Construct a new sink info object
+   *
+   * @param num_sinks Number of sinks
+   */
   sink_info(size_t num_sinks) : _num_sinks(num_sinks) {}
 
+  /**
+   * @brief Construct a new sink info object for multiple files
+   *
+   * @param file_paths Output files paths
+   */
   explicit sink_info(std::vector<std::string> const& file_paths)
     : _type(io_type::FILEPATH), _num_sinks(file_paths.size()), _filepaths(file_paths)
   {
   }
+
+  /**
+   * @brief Construct a new sink info object for a single file
+   *
+   * @param file_path Single output file path
+   */
   explicit sink_info(std::string const& file_path)
     : _type(io_type::FILEPATH), _filepaths({file_path})
   {
   }
 
+  /**
+   * @brief Construct a new sink info object for multiple host buffers
+   *
+   * @param buffers Output host buffers
+   */
   explicit sink_info(std::vector<std::vector<char>*> const& buffers)
     : _type(io_type::HOST_BUFFER), _num_sinks(buffers.size()), _buffers(buffers)
   {
   }
+  /**
+   * @brief Construct a new sink info object for a single host buffer
+   *
+   * @param buffer Single output host buffer
+   */
   explicit sink_info(std::vector<char>* buffer) : _type(io_type::HOST_BUFFER), _buffers({buffer}) {}
 
+  /**
+   * @brief Construct a new sink info object for multiple user-implemented sinks
+   *
+   * @param user_sinks Output user-implemented sinks
+   */
   explicit sink_info(std::vector<cudf::io::data_sink*> const& user_sinks)
     : _type(io_type::USER_IMPLEMENTED), _num_sinks(user_sinks.size()), _user_sinks(user_sinks)
   {
   }
+
+  /**
+   * @brief Construct a new sink info object for a single user-implemented sink
+   *
+   * @param user_sink Single output user-implemented sink
+   */
   explicit sink_info(class cudf::io::data_sink* user_sink)
     : _type(io_type::USER_IMPLEMENTED), _user_sinks({user_sink})
   {
   }
 
+  /**
+   * @brief Get the type of the input
+   *
+   * @return The type of the input
+   */
   [[nodiscard]] auto type() const { return _type; }
+  /**
+   * @brief Get the number of sinks
+   *
+   * @return The number of sinks
+   */
   [[nodiscard]] auto num_sinks() const { return _num_sinks; }
+  /**
+   * @brief Get the filepaths of the input
+   *
+   *  @return The filepaths of the input
+   */
   [[nodiscard]] auto const& filepaths() const { return _filepaths; }
+  /**
+   * @brief Get the host buffers of the input
+   *
+   *  @return The host buffers of the input
+   */
   [[nodiscard]] auto const& buffers() const { return _buffers; }
+  /**
+   * @brief Get the user sinks of the input
+   *
+   *  @return The user sinks of the input
+   */
   [[nodiscard]] auto const& user_sinks() const { return _user_sinks; }
 
  private:
@@ -243,6 +375,9 @@ struct sink_info {
 
 class table_input_metadata;
 
+/**
+ * @brief Metadata for a column
+ */
 class column_in_metadata {
   friend table_input_metadata;
   std::string _name = "";
@@ -256,10 +391,16 @@ class column_in_metadata {
 
  public:
   column_in_metadata() = default;
+  /**
+   * @brief Construct a new column in metadata object
+   *
+   * @param name Column name
+   */
   column_in_metadata(std::string_view name) : _name{name} {}
   /**
-   * @brief Get the children of this column metadata
+   * @brief Add the children metadata of this column
    *
+   * @param child The children metadata of this column to add
    * @return this for chaining
    */
   column_in_metadata& add_child(column_in_metadata const& child)
@@ -271,6 +412,7 @@ class column_in_metadata {
   /**
    * @brief Set the name of this column
    *
+   * @param name Name of the column
    * @return this for chaining
    */
   column_in_metadata& set_name(std::string const& name)
@@ -284,7 +426,8 @@ class column_in_metadata {
    *
    * Only valid in case of chunked writes. In single writes, this option is ignored.
    *
-   * @return column_in_metadata&
+   * @param nullable Whether this column is nullable
+   * @return this for chaining
    */
   column_in_metadata& set_nullability(bool nullable)
   {
@@ -362,11 +505,15 @@ class column_in_metadata {
 
   /**
    * @brief Get the name of this column
+   *
+   * @return The name of this column
    */
   [[nodiscard]] std::string get_name() const { return _name; }
 
   /**
    * @brief Get whether nullability has been explicitly set for this column.
+   *
+   * @return Boolean indicating whether nullability has been explicitly set for this column
    */
   [[nodiscard]] bool is_nullability_defined() const { return _nullable.has_value(); }
 
@@ -374,21 +521,29 @@ class column_in_metadata {
    * @brief Gets the explicitly set nullability for this column.
    * @throws If nullability is not explicitly defined for this column.
    *         Check using `is_nullability_defined()` first.
+   * @return Boolean indicating whether this column is nullable
    */
   [[nodiscard]] bool nullable() const { return _nullable.value(); }
 
   /**
    * @brief If this is the metadata of a list column, returns whether it is to be encoded as a map.
+   *
+   * @return Boolean indicating whether this column is to be encoded as a map
    */
   [[nodiscard]] bool is_map() const { return _list_column_is_map; }
 
   /**
    * @brief Get whether to encode this timestamp column using deprecated int96 physical type
+   *
+   * @return Boolean indicating whether to encode this timestamp column using deprecated int96
+   *         physical type
    */
   [[nodiscard]] bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
 
   /**
    * @brief Get whether precision has been set for this decimal column
+   *
+   * @return Boolean indicating whether precision has been set for this decimal column
    */
   [[nodiscard]] bool is_decimal_precision_set() const { return _decimal_precision.has_value(); }
 
@@ -396,11 +551,14 @@ class column_in_metadata {
    * @brief Get the decimal precision that was set for this column.
    * @throws If decimal precision was not set for this column.
    *         Check using `is_decimal_precision_set()` first.
+   * @return The decimal precision that was set for this column
    */
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
 
   /**
    * @brief Get whether parquet field id has been set for this column.
+   *
+   * @return Boolean indicating whether parquet field id has been set for this column
    */
   [[nodiscard]] bool is_parquet_field_id_set() const { return _parquet_field_id.has_value(); }
 
@@ -408,15 +566,21 @@ class column_in_metadata {
    * @brief Get the parquet field id that was set for this column.
    * @throws If parquet field id was not set for this column.
    *         Check using `is_parquet_field_id_set()` first.
+   * @return The parquet field id that was set for this column
    */
   [[nodiscard]] int32_t get_parquet_field_id() const { return _parquet_field_id.value(); }
 
   /**
    * @brief Get the number of children of this column
+   *
+   * @return The number of children of this column
    */
   [[nodiscard]] size_type num_children() const { return children.size(); }
 };
 
+/**
+ * @brief Metadata for a table
+ */
 class table_input_metadata {
  public:
   table_input_metadata() = default;  // Required by cython
@@ -430,7 +594,7 @@ class table_input_metadata {
    */
   table_input_metadata(table_view const& table);
 
-  std::vector<column_in_metadata> column_metadata;
+  std::vector<column_in_metadata> column_metadata;  //!< List of column metadata
 };
 
 /**
@@ -440,10 +604,16 @@ class table_input_metadata {
  * writing, one partition_info struct defines one partition and corresponds to one output file
  */
 struct partition_info {
-  size_type start_row;
-  size_type num_rows;
+  size_type start_row;  //!< The start row of the partition
+  size_type num_rows;   //!< The number of rows in the partition
 
   partition_info() = default;
+  /**
+   * @brief Construct a new partition_info
+   *
+   * @param start_row The start row of the partition
+   * @param num_rows The number of rows in the partition
+   */
   partition_info(size_type start_row, size_type num_rows) : start_row(start_row), num_rows(num_rows)
   {
   }
