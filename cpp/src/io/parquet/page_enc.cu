@@ -1160,6 +1160,12 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
 /**
  * Minimal thrift compact protocol support
  */
+inline __device__ uint8_t* cpw_put_byte(uint8_t* p, uint8_t v)
+{
+  *p++ = v;
+  return p;
+}
+
 inline __device__ uint8_t* cpw_put_uint32(uint8_t* p, uint32_t v)
 {
   while (v > 0x7f) {
@@ -1224,6 +1230,39 @@ class header_encoder {
   {
     *current_header_ptr++ = 0;
     current_field_index   = field;
+  }
+
+  inline __device__ void field_list_begin(int field, size_t len, int type)
+  {
+    current_header_ptr =
+      cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_LIST);
+    current_header_ptr =
+      cpw_put_byte(current_header_ptr, (uint8_t)((std::min(len, (size_t)0xfu) << 4) | type));
+    if (len >= 0xf) current_header_ptr = cpw_put_uint32(current_header_ptr, len);
+    current_field_index = 0;
+  }
+
+  inline __device__ void field_list_end(int field)
+  {
+    current_field_index   = field;
+  }
+
+  inline __device__ void put_bool(bool value)
+  {
+    current_header_ptr  = cpw_put_byte(current_header_ptr, value ? ST_FLD_TRUE : ST_FLD_FALSE);
+  }
+
+  inline __device__ void put_binary(void* value, uint32_t length)
+  {
+    current_header_ptr  = cpw_put_uint32(current_header_ptr, length);
+    memcpy(current_header_ptr, value, length);
+    current_header_ptr += length;
+  }
+
+  template <typename T>
+  inline __device__ void put_int64(T value)
+  {
+    current_header_ptr = cpw_put_int64(current_header_ptr, static_cast<int64_t>(value));
   }
 
   template <typename T>
@@ -1445,9 +1484,44 @@ __global__ void __launch_bounds__(1024)
     if (!t && page == 0 && ck_g.use_dictionary) { ck_g.dictionary_size = hdr_len + data_len; }
   }
   if (t == 0) {
+    uint8_t *col_idx_end;
     chunks[blockIdx.x].bfr_size        = uncompressed_size;
     chunks[blockIdx.x].compressed_size = (dst - dst_base);
     if (ck_g.use_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
+
+    // TODO
+    // do min/max properly
+    // allocate memory for blob properly
+    // how to do boundary order
+    // cleanup
+    if (not column_stats.empty()) {
+      size_t first_data_page = ck_g.use_dictionary ? 1 : 0;
+      header_encoder encoder(ck_g.column_index_blob);
+      // null_pages
+      encoder.field_list_begin(1, num_pages-first_data_page, ST_FLD_TRUE);
+      for (uint32_t page = first_data_page; page < num_pages; page++)
+        encoder.put_bool(column_stats[page].non_nulls == 0);
+      encoder.field_list_end(1);
+      // min_values
+      encoder.field_list_begin(2, num_pages-first_data_page, ST_FLD_BINARY);
+      for (uint32_t page = first_data_page; page < num_pages; page++)
+        encoder.put_binary((void*)"bar45678", 8);
+      encoder.field_list_end(2);
+      // max_values
+      encoder.field_list_begin(3, num_pages-first_data_page, ST_FLD_BINARY);
+      for (uint32_t page = first_data_page; page < num_pages; page++)
+        encoder.put_binary((void*)"foo45678", 8);
+      encoder.field_list_end(3);
+      encoder.field_int32(4, 0); // boundary order???
+      // null_counts
+      encoder.field_list_begin(5, num_pages-first_data_page, ST_FLD_I64);
+      for (uint32_t page = first_data_page; page < num_pages; page++)
+        encoder.put_int64(column_stats[page].null_count);
+      encoder.field_list_end(5);
+      encoder.end(&col_idx_end, false);
+      
+      chunks[blockIdx.x].column_index_size = (uint32_t)(col_idx_end - ck_g.column_index_blob);
+    }
   }
 }
 

@@ -1503,6 +1503,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
   rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
   rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
+  // FIXME 1MB is way too big...need to do better job of estimating space needed for column indexes
+  rmm::device_buffer col_idx_bfr(1024*1024*num_rowgroups*num_columns, stream);
   rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
@@ -1510,13 +1512,16 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
     auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
+    auto bfr_i = static_cast<uint8_t*>(col_idx_bfr.data());
     for (auto j = 0; j < batch_list[b]; j++, r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk& ck = chunks[r][i];
         ck.uncompressed_bfr     = bfr;
         ck.compressed_bfr       = bfr_c;
+        ck.column_index_blob    = bfr_i;
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
+        bfr_i += 1024*1024;
       }
     }
   }
@@ -1625,12 +1630,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
-    // need page stats on host to create column_indexes
-    thrust::host_vector<statistics_chunk> h_page_stats =
-      cudf::detail::make_host_vector_async(page_stats, stream);
     // need pages on host to create offset_indexes
     thrust::host_vector<gpu::EncPage> h_pages = cudf::detail::make_host_vector_async(pages, stream);
-
     stream.synchronize();
 
     // add column and offset indexes to metadata
@@ -1645,13 +1646,21 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           gpu::EncColumnChunk& ck = chunks[r][i];
           auto& column_chunk_meta = row_group.columns[i].meta_data;
 
-          OffsetIndex offset_idx;
-          column_index column_idx;
+          // start transfer of column index
+          ColumnIndex column_idx;
+          column_idx.column_index_blob.resize(ck.column_index_size);
+          CUDF_CUDA_TRY(cudaMemcpyAsync(column_idx.column_index_blob.data(),
+                                        ck.column_index_blob,
+                                        ck.column_index_size,
+                                        cudaMemcpyDeviceToHost,
+                                        stream.value()));
+
+          // do offsets while column index is transfering
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
 
+          OffsetIndex offset_idx;
           for (uint32_t pg = 0; pg < ck.num_pages; pg++) {
-            auto& enc_page        = h_pages[curr_page_idx];
-            auto& curr_page_stats = h_page_stats[curr_page_idx++];
+            auto& enc_page        = h_pages[curr_page_idx++];
 
             // skip dict pages
             if (enc_page.page_type != PageType::DATA_PAGE) { continue; }
@@ -1679,30 +1688,11 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
             // probably best to create this on device, and return as thrift-encoded
             // blob/size per chunk.  then this can be done in parallel per chunk,
             // likely in gatherPages().
-
-            column_idx.null_pages.push_back(curr_page_stats.non_nulls == 0);
-            // need min/max
-            if (i == 0) {  // for now just do first column
-              char minbuf[1024];
-              char maxbuf[1024];
-
-              CUDF_CUDA_TRY(cudaMemcpyAsync(minbuf,
-                                            curr_page_stats.min_value.str_val.ptr,
-                                            curr_page_stats.min_value.str_val.length,
-                                            cudaMemcpyDeviceToHost,
-                                            stream.value()));
-              CUDF_CUDA_TRY(cudaMemcpyAsync(maxbuf,
-                                            curr_page_stats.max_value.str_val.ptr,
-                                            curr_page_stats.max_value.str_val.length,
-                                            cudaMemcpyDeviceToHost,
-                                            stream.value()));
-              stream.synchronize();
-            }
-            column_idx.null_counts.push_back(curr_page_stats.null_count);
           }
 
+          stream.synchronize();
           md->file(p).offset_indexes.push_back(offset_idx);
-          // md->file(p).column_indexes.push_back(column_idx);
+          md->file(p).column_indexes.push_back(column_idx);
         }
       }
     }
@@ -1721,17 +1711,32 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);
     file_ender_s fendr;
-    // write offset indices, updating column metadata along the way
-    int chunkidx = 0;
-    auto& fmd = md->file(p);
-    for (auto& r : fmd.row_groups) {
-      for (auto& c : r.columns) {
-        OffsetIndex& offsets = fmd.offset_indexes[chunkidx++];
-        buffer.resize(0);
-        int32_t len = cpw.write(offsets);
-        c.offset_index_offset = out_sink_[p]->bytes_written();
-        c.offset_index_length = len;
-        out_sink_[p]->host_write(buffer.data(), buffer.size());
+
+    if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
+      auto& fmd = md->file(p);
+
+      // write column indices, updating column metadata along the way
+      int chunkidx = 0;
+      for (auto& r : fmd.row_groups) {
+        for (auto& c : r.columns) {
+          ColumnIndex& index = fmd.column_indexes[chunkidx++];
+          c.column_index_offset = out_sink_[p]->bytes_written();
+          c.column_index_length = index.column_index_blob.size();
+          out_sink_[p]->host_write(index.column_index_blob.data(), index.column_index_blob.size());
+        }
+      }
+    
+      // write offset indices, updating column metadata along the way
+      chunkidx = 0;
+      for (auto& r : fmd.row_groups) {
+        for (auto& c : r.columns) {
+          OffsetIndex& offsets = fmd.offset_indexes[chunkidx++];
+          buffer.resize(0);
+          int32_t len = cpw.write(offsets);
+          c.offset_index_offset = out_sink_[p]->bytes_written();
+          c.offset_index_length = len;
+          out_sink_[p]->host_write(buffer.data(), buffer.size());
+        }
       }
     }
 
