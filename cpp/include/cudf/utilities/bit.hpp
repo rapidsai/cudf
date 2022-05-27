@@ -93,7 +93,6 @@ constexpr CUDF_HOST_DEVICE inline size_type intra_word_index(size_type bit_index
  *
  * @param bitmask The bitmask containing the bit to set
  * @param bit_index Index of the bit to set
- * @return void
  */
 CUDF_HOST_DEVICE inline void set_bit_unsafe(bitmask_type* bitmask, size_type bit_index)
 {
@@ -109,7 +108,6 @@ CUDF_HOST_DEVICE inline void set_bit_unsafe(bitmask_type* bitmask, size_type bit
  *
  * @param bitmask The bitmask containing the bit to clear
  * @param bit_index The index of the bit to clear
- * @return void
  */
 CUDF_HOST_DEVICE inline void clear_bit_unsafe(bitmask_type* bitmask, size_type bit_index)
 {
