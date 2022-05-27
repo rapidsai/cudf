@@ -94,7 +94,15 @@ class column_wrapper {
  */
 template <typename From, typename To>
 struct fixed_width_type_converter {
-  // Are the types same - simply copy elements from [begin, end) to out
+  /// Are the types same - simply copy elements from [begin, end) to out
+  /**
+   * @brief No conversion necessary
+   *
+   * @tparam FromT Source type
+   * @tparam ToT Target type
+   * @param element Source value
+   * @return The converted target value, same as source value
+   */
   template <typename FromT                                      = From,
             typename ToT                                        = To,
             std::enable_if_t<std::is_same_v<FromT, ToT>, void>* = nullptr>
@@ -103,7 +111,15 @@ struct fixed_width_type_converter {
     return element;
   }
 
-  // Are the types convertible or can target be constructed from source?
+  /// Are the types convertible or can target be constructed from source?
+  /**
+   * @brief  Convert types if possible, otherwise construct target from source.
+   *
+   * @tparam FromT Source type
+   * @tparam ToT Target type
+   * @param element Source value
+   * @return The converted target value
+   */
   template <
     typename FromT          = From,
     typename ToT            = To,
@@ -115,7 +131,14 @@ struct fixed_width_type_converter {
     return static_cast<ToT>(element);
   }
 
-  // Convert integral values to timestamps
+  /**
+   * @brief  Convert integral values to timestamps
+   *
+   * @tparam FromT Source type
+   * @tparam ToT Target type
+   * @param element Source value
+   * @return The converted target `timestamp` value
+   */
   template <
     typename FromT                                                                  = From,
     typename ToT                                                                    = To,
@@ -484,6 +507,11 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   }
 };
 
+/**
+ * @brief A wrapper for a column of fixed-width elements.
+ *
+ * @tparam Rep The type of the column
+ */
 template <typename Rep>
 class fixed_point_column_wrapper : public detail::column_wrapper {
  public:
@@ -1445,6 +1473,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @brief Construct a list column containing a single empty, optionally null row.
    *
    * @param valid Whether or not the empty row is also null
+   * @return A list column containing a single empty row
    */
   static lists_column_wrapper<T> make_one_empty_row_column(bool valid = true)
   {

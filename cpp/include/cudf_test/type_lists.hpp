@@ -146,6 +146,17 @@ make_type_param_scalar(T const init_value)
   return static_cast<TypeParam>(init_value);
 }
 
+/**
+ * @brief Convert the timestamp value of type T to a fixed width type of type TypeParam.
+ *
+ * This function is necessary because some types (such as timestamp types) are not directly
+ * constructible from timestamp types. This function is offered as a convenience to allow
+ * implicitly constructing such objects from timestamp values.
+ *
+ * @param init_value Value used to initialize the fixed width type
+ * @return A fixed width type - TimeStamp of type TypeParam with the
+ *         value specified
+ */
 template <typename TypeParam, typename T>
 std::enable_if_t<cudf::is_timestamp_t<TypeParam>::value, TypeParam> make_type_param_scalar(
   T const init_value)
@@ -153,6 +164,14 @@ std::enable_if_t<cudf::is_timestamp_t<TypeParam>::value, TypeParam> make_type_pa
   return TypeParam{typename TypeParam::duration(init_value)};
 }
 
+/**
+ * @brief Convert the numeric value of type T to a string type.
+ *
+ * This function converts the numeric value of type T to its string representation.
+ *
+ * @param init_value Value to convert to a string
+ * @return string representation of the value
+ */
 template <typename TypeParam, typename T>
 std::enable_if_t<std::is_same_v<TypeParam, std::string>, TypeParam> make_type_param_scalar(
   T const init_value)
