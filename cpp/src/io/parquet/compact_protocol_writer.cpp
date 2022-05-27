@@ -221,13 +221,6 @@ size_t CompactProtocolWriter::write(const OffsetIndex& s)
   return c.value();
 }
 
-size_t CompactProtocolWriter::write(const ColumnIndex& s)
-{
-  CompactProtocolFieldWriter c(*this);
-  // TODO: stub
-  return c.value();
-}
-
 void CompactProtocolFieldWriter::put_byte(uint8_t v) { writer.m_buf.push_back(v); }
 
 void CompactProtocolFieldWriter::put_byte(const uint8_t* raw, uint32_t len)
