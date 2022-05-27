@@ -408,7 +408,7 @@ struct preprocessed_table {
    * values compare to all other for every column. If it is nullptr, then null precedence would be
    * `null_order::BEFORE` for all columns.
    * @param stream The stream to launch kernels and h->d copies on while preprocessing.
-   * @return A preprocessed table as a shared pointer
+   * @return A shared pointer to a preprocessed table
    */
   static std::shared_ptr<preprocessed_table> create(table_view const& table,
                                                     host_span<order const> column_order,
@@ -972,7 +972,7 @@ class self_comparator {
    */
   template <typename Nullate>
   device_row_comparator<Nullate> device_comparator(
-    Nullate nullate = {}, null_equality nulls_are_equal = n`ull_equality::EQUAL) const
+    Nullate nullate = {}, null_equality nulls_are_equal = null_equality::EQUAL) const
   {
     return device_row_comparator(nullate, *d_t, *d_t, nulls_are_equal);
   }

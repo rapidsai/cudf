@@ -117,8 +117,8 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  * @brief A specialization for non-floating-point `Element` type relational
  * comparison to derive the order of the elements with respect to `lhs`.
  *
- * @param lhs first element
- * @param rhs second element
+ * @param lhs The first element
+ * @param rhs The second element
  * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
@@ -256,7 +256,7 @@ class row_equality_comparator {
    *
    * @param lhs_row_index The index of the first row to compare (in the lhs table)
    * @param rhs_row_index The index of the second row to compare (in the rhs table)
-   * @return true if both rows are equal
+   * @return true if both rows are equal, otherwise false
    */
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
   {
