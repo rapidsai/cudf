@@ -194,13 +194,8 @@ ConfigureBench(FILL_BENCH filling/repeat.cpp)
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(
-  GROUPBY_BENCH
-  groupby/group_sum.cpp
-  groupby/group_nth.cpp
-  groupby/group_shift.cpp
-  groupby/group_struct_values.cpp
-  groupby/group_no_requests.cpp
-  groupby/group_scan.cpp
+  GROUPBY_BENCH groupby/group_sum.cpp groupby/group_nth.cpp groupby/group_shift.cpp
+  groupby/group_struct_values.cpp groupby/group_no_requests.cpp groupby/group_scan.cpp
 )
 
 ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank.cpp groupby/group_struct_keys.cpp)
