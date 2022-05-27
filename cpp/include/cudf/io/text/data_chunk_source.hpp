@@ -36,9 +36,24 @@ namespace text {
  */
 class device_data_chunk {
  public:
-  virtual ~device_data_chunk()                     = default;
-  [[nodiscard]] virtual char const* data() const   = 0;
-  [[nodiscard]] virtual std::size_t size() const   = 0;
+  virtual ~device_data_chunk() = default;
+  /**
+   * @pure @brief Returns a pointer to the underlying device data.
+   *
+   * @return A pointer to the underlying device data
+   */
+  [[nodiscard]] virtual char const* data() const = 0;
+  /**
+   * @pure @brief Returns the size of the underlying device data.
+   *
+   * @return The size of the underlying device data
+   */
+  [[nodiscard]] virtual std::size_t size() const = 0;
+  /**
+   * @pure @brief Returns a span over the underlying device data.
+   *
+   * @return A span over the underlying device data
+   */
   virtual operator device_span<char const>() const = 0;
 };
 
@@ -53,18 +68,23 @@ class device_data_chunk {
  */
 class data_chunk_reader {
  public:
-  virtual ~data_chunk_reader()              = default;
+  virtual ~data_chunk_reader() = default;
+  /**
+   * @pure @brief Skips the specified number of bytes in the data source.
+   *
+   * @param size The number of bytes to skip
+   */
   virtual void skip_bytes(std::size_t size) = 0;
 
   /**
-   * @brief Get the next chunk of bytes from the data source
+   * @pure @brief Get the next chunk of bytes from the data source
    *
    * Performs any necessary work to read and prepare the underlying data source for consumption as a
    * view over device memory. Common implementations may read from a file, copy data from host
    * memory, allocate temporary memory, perform iterative decompression, or even launch device
    * kernels.
    *
-   * @param size number of bytes to read.
+   * @param size number of bytes to read
    * @param stream stream to associate allocations or perform work required to obtain chunk
    * @return a chunk of data up to @p size bytes. May return less than @p size bytes if
    * reader reaches end of underlying data source. Returned data must be accessed in stream order
@@ -80,7 +100,13 @@ class data_chunk_reader {
  */
 class data_chunk_source {
  public:
-  virtual ~data_chunk_source()                                                   = default;
+  virtual ~data_chunk_source() = default;
+
+  /**
+   * @pure @brief Get a reader for the data source.
+   *
+   * @return `data_chunk_reader` object for the data source
+   */
   [[nodiscard]] virtual std::unique_ptr<data_chunk_reader> create_reader() const = 0;
 };
 
