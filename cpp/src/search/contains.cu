@@ -52,22 +52,18 @@ struct contains_scalar_dispatch {
     auto const d_haystack = column_device_view::create(haystack, stream);
     auto const s          = static_cast<ScalarType const*>(&needle);
 
-    auto const check_contain = [stream](auto const& begin, auto const& end, auto const& val) {
-      return thrust::find(rmm::exec_policy(stream), begin, end, val) != end;
-    };
-
     if (haystack.has_nulls()) {
       auto const begin = d_haystack->pair_begin<DType, true>();
       auto const end   = d_haystack->pair_end<DType, true>();
       auto const val   = thrust::make_pair(s->value(stream), true);
 
-      return check_contain(begin, end, val);
+      return thrust::find(rmm::exec_policy(stream), begin, end, val) != end;
     } else {
       auto const begin = d_haystack->begin<DType>();
       auto const end   = d_haystack->end<DType>();
       auto const val   = s->value(stream);
 
-      return check_contain(begin, end, val);
+      return thrust::find(rmm::exec_policy(stream), begin, end, val) != end;
     }
   }
 };
