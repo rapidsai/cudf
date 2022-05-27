@@ -573,10 +573,10 @@ cdef class ParquetWriter:
                 .key_value_metadata(move(user_data))
                 .compression(self.comp_type)
                 .stats_level(self.stat_freq)
+                .row_group_size_bytes(self.row_group_size_bytes)
+                .row_group_size_rows(self.row_group_size_rows)
                 .build()
             )
-            args.set_row_group_size_bytes(self.row_group_size_bytes)
-            args.set_row_group_size_rows(self.row_group_size_rows)
             self.writer.reset(new cpp_parquet_chunked_writer(args))
         self.initialized = True
 
