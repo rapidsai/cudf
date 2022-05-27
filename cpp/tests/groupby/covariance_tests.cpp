@@ -51,9 +51,8 @@ TYPED_TEST(groupby_covariance_test, invalid_types)
   auto member_0 = fixed_width_column_wrapper<V>{{1, 1, 1, 2}};
   // Covariance aggregations require all types are convertible to double, but
   // timestamp_D cannot be converted to double.
-  auto member_1 =
-    fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{{0, 0, 1, 1}};
-  auto vals = structs{{member_0, member_1}};
+  auto member_1 = fixed_width_column_wrapper<cudf::duration_D, cudf::duration::rep>{{0, 0, 1, 1}};
+  auto vals     = structs{{member_0, member_1}};
 
   auto agg = cudf::make_covariance_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, keys, vals, std::move(agg), force_use_sort_impl::YES);
