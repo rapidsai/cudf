@@ -201,7 +201,6 @@ ConfigureBench(
   groupby/group_struct_values.cpp
   groupby/group_no_requests.cpp
   groupby/group_scan.cpp
-  groupby/group_rank.cpp
 )
 
 ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank.cpp groupby/group_struct_keys.cpp)
