@@ -1634,9 +1634,8 @@ def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
     gdf = cudf.DataFrame({"a": range(size), "b": [1] * size})
 
     fname = tmpdir.join("gdf.parquet")
-    writer = ParquetWriter(fname, **row_group_size_kwargs)
-    writer.write_table(gdf)
-    writer.close()
+    with ParquetWriter(fname, **row_group_size_kwargs) as writer:
+        writer.write_table(gdf)
 
     # Simple check for multiple row-groups
     nrows, nrow_groups, columns = cudf.io.parquet.read_parquet_metadata(fname)
