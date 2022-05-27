@@ -16,14 +16,7 @@ cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
 set(cudf_version 22.08.00)
 
-# TODO: Once the rapids-cmake PR is merged, we can use the same fetch_rapids.cmake script here.
-# include(../../fetch_rapids.cmake)
-file(
-  DOWNLOAD
-  https://raw.githubusercontent.com/vyasr/rapids-cmake/feature/rapids_cython_prefix/RAPIDS.cmake
-  ${CMAKE_BINARY_DIR}/RAPIDS.cmake
-)
-include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+include(../../fetch_rapids.cmake)
 
 project(
   cudf-python
