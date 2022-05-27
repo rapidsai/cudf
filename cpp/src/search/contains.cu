@@ -48,9 +48,9 @@ namespace {
 
 struct contains_scalar_dispatch {
   template <typename Type>
-  std::enable_if_t<!is_nested<Type>(), bool> operator()(column_view const& haystack,
-                                                        scalar const& needle,
-                                                        rmm::cuda_stream_view stream) const
+  bool operator()(column_view const& haystack,
+                  scalar const& needle,
+                  rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
@@ -118,7 +118,7 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 }
 
 struct multi_contains_dispatch {
-  template <typename Element>
+  template <typename Type>
   std::unique_ptr<column> operator()(column_view const& haystack,
                                      column_view const& needles,
                                      rmm::cuda_stream_view stream,
@@ -170,14 +170,20 @@ struct multi_contains_dispatch {
 
 template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<list_view>(
-  column_view const&, column_view const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+  column_view const&,
+  column_view const&,
+  rmm::cuda_stream_view,
+  rmm::mr::device_memory_resource*) const
 {
   CUDF_FAIL("list_view type not supported");
 }
 
 template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<struct_view>(
-  column_view const&, column_view const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+  column_view const&,
+  column_view const&,
+  rmm::cuda_stream_view,
+  rmm::mr::device_memory_resource*) const
 {
   CUDF_FAIL("struct_view type not supported");
 }
