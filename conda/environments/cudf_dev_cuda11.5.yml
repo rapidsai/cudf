@@ -16,6 +16,7 @@ dependencies:
   - rmm=22.08.*
   - cmake>=3.20.1,!=3.23.0
   - cmake_setuptools>=0.1.3
+  - scikit-build>=0.13.1
   - python>=3.7,<3.9
   - numba>=0.54
   - numpy
