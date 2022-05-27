@@ -158,7 +158,9 @@ class regex_parser {
         int16_t m;
       } count;
     } d;
-    Item(int32_t type, char32_t chr = 0) : type{type}, d{chr} {}
+    Item(int32_t type, char32_t chr) : type{type}, d{chr} {}
+    Item(int32_t type, int32_t id) : type{type}, d{.cclass_id{id}} {}
+    Item(int32_t type, int16_t n, int16_t m) : type{type}, d{.count{n, m}} {}
   };
 
  private:
@@ -554,7 +556,7 @@ class regex_parser {
     return CHAR;
   }
 
-  std::vector<regex_parser::Item> expand_counted_items()
+  std::vector<regex_parser::Item> expand_counted_items() const
   {
     std::vector<regex_parser::Item> const& in = _items;
     std::vector<regex_parser::Item> out;
@@ -627,19 +629,17 @@ class regex_parser {
   {
     int32_t type = 0;
     while ((type = lex(dot_type)) != END) {
-      Item item{type, _chr};
-      if (type == CCLASS || type == NCCLASS) {
-        item.d.cclass_id = _cclass_id;
-      } else if (type == COUNTED || type == COUNTED_LAZY) {
-        item.d.count.n = _min_count;
-        item.d.count.m = _max_count;
-        _has_counted   = true;
-      }
+      auto const item = [type, chr = _chr, cid = _cclass_id, n = _min_count, m = _max_count] {
+        if (type == CCLASS || type == NCCLASS) return Item{type, cid};
+        if (type == COUNTED || type == COUNTED_LAZY) return Item{type, n, m};
+        return Item{type, chr};
+      }();
       _items.push_back(item);
+      if (type == COUNTED || type == COUNTED_LAZY) _has_counted = true;
     }
   }
 
-  std::vector<regex_parser::Item> get_items()
+  std::vector<regex_parser::Item> get_items() const
   {
     return _has_counted ? expand_counted_items() : _items;
   }
@@ -829,11 +829,8 @@ class regex_compiler {
   regex_compiler(const char32_t* pattern, regex_flags const flags, reprog& prog)
     : _prog(prog), _last_was_and(false), _bracket_count(0), _flags(flags)
   {
-    // Parse
-    auto const items = [&] {
-      regex_parser parser(pattern, is_dotall(flags) ? ANYNL : ANY, _prog);
-      return parser.get_items();
-    }();
+    // Parse pattern into items
+    auto const items = regex_parser(pattern, is_dotall(flags) ? ANYNL : ANY, _prog).get_items();
 
     int cur_subid{};
     int push_subid{};
