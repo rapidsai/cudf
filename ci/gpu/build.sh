@@ -94,8 +94,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.05.1 conda-forge::distributed==2022.05.1 conda-forge::dask-core==2022.05.1 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask==2022.05.1 conda-forge::distributed==2022.05.1 conda-forge::dask-core==2022.05.1 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.05.2 conda-forge::distributed==2022.05.2 conda-forge::dask-core==2022.05.2 --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask==2022.05.2 conda-forge::distributed==2022.05.2 conda-forge::dask-core==2022.05.2 --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
