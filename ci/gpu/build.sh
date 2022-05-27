@@ -169,12 +169,14 @@ else
     gpuci_logger "Installing libcudf, libcudf_kafka and libcudf-tests"
     gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
 
+    # TODO: Move boa install to gpuci/rapidsai
+    gpuci_mamba_retry install boa
     gpuci_logger "Building cudf, dask-cudf, cudf_kafka and custreamz"
     export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
 
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
