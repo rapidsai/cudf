@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, List, cast
+from typing import TYPE_CHECKING, Any, ClassVar, List, cast
 
 import cudf
 from cudf import _lib as libcudf
@@ -29,7 +29,7 @@ class Merge:
     # join key. The `joiner` returns a tuple of two Columns
     # representing the rows to gather from the left- and right- side
     # tables respectively.
-    _joiner: Callable = libcudf.join.join
+    _joiner: ClassVar[staticmethod] = staticmethod(libcudf.join.join)
 
     def __init__(
         self,
@@ -445,7 +445,7 @@ class Merge:
 
 
 class MergeSemi(Merge):
-    _joiner: Callable = libcudf.join.semi_join
+    _joiner: ClassVar[staticmethod] = staticmethod(libcudf.join.semi_join)
 
     def _merge_results(self, lhs: Frame, rhs: Frame):
         # semi-join result includes only lhs columns
