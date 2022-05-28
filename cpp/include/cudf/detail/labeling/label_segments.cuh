@@ -127,7 +127,7 @@ void labels_to_offsets(InputIterator labels_begin,
                        OutputIterator out_end,
                        rmm::cuda_stream_view stream)
 {
-  // The output offsets need to be filled with `0` value first.
+  // Always fill the entire output array with `0` value regardless of the input.
   using OutputType = typename thrust::iterator_value<OutputIterator>::type;
   thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
 
