@@ -48,7 +48,7 @@ enum scale_type : int32_t {};
 enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 
 /**
- * @brief Returns `true` if the type is supported underlying representation type by `fixed_point`
+ * @brief Returns `true` if the representation type is supported by `fixed_point`
  *
  * @tparam T The representation type
  * @return `true` if the type is supported by `fixed_point` implementation
@@ -62,10 +62,10 @@ constexpr inline auto is_supported_representation_type()
 }
 
 /**
- * @brief Returns `true` if the type is supported value type to construct a `fixed_point` type
+ * @brief Returns `true` if the value type is supported for constructing a `fixed_point`
  *
  * @tparam T The construction value type
- * @return `true` if the type is supported value type to construct a `fixed_point` type
+ * @return `true` if the value type is supported to construct a `fixed_point` type
  */
 template <typename T>
 constexpr inline auto is_supported_construction_value_type()
@@ -264,7 +264,7 @@ class fixed_point {
    * @brief "Scale-less" constructor that constructs `fixed_point` number with a specified
    * value and scale of zero
    *
-   * @tparam T The value type that you are constructing from
+   * @tparam T The value type being constructing from
    * @param value The value that will be constructed from
    */
   template <typename T,
