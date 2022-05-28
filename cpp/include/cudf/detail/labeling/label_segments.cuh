@@ -67,6 +67,7 @@ void label_segments(InputIterator offsets_begin,
                     OutputIterator out_end,
                     rmm::cuda_stream_view stream)
 {
+  // Always fill the entire output array with `0` value regardless of the input.
   using OutputType = typename thrust::iterator_value<OutputIterator>::type;
   thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
 
