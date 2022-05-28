@@ -39,6 +39,8 @@ namespace io {
 
 constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  // 128MB
 constexpr size_type default_row_group_size_rows = 1000000;
+constexpr size_t default_max_page_size_bytes    = 512 * 1024;
+constexpr size_type default_max_page_size_rows  = 20000;
 
 /**
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
@@ -382,6 +384,10 @@ class parquet_writer_options {
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
   size_type _row_group_size_rows = default_row_group_size_rows;
+  // Maximum size of each page (uncompressed)
+  size_t _max_page_size_bytes = default_max_page_size_bytes;
+  // Maximum number of rows in a page
+  size_type _max_page_size_rows = default_max_page_size_rows;
 
   /**
    * @brief Constructor from sink and table.
@@ -483,6 +489,24 @@ class parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
+   * @brief Returns the maximum uncompressed page size, in bytes. If set larger than the row group
+   * size, then this will return the row group size.
+   */
+  auto get_max_page_size_bytes() const
+  {
+    return std::min(_max_page_size_bytes, get_row_group_size_bytes());
+  }
+
+  /**
+   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
+   * will return the row group size.
+   */
+  auto get_max_page_size_rows() const
+  {
+    return std::min(_max_page_size_rows, get_row_group_size_rows());
+  }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -555,8 +579,8 @@ class parquet_writer_options {
   void set_row_group_size_bytes(size_t size_bytes)
   {
     CUDF_EXPECTS(
-      size_bytes >= 512 * 1024,
-      "The maximum row group size cannot be smaller than the page size, which is 512KB.");
+      size_bytes >= 4 * 1024,
+      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
     _row_group_size_bytes = size_bytes;
   }
 
@@ -567,8 +591,28 @@ class parquet_writer_options {
   {
     CUDF_EXPECTS(
       size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the page size, which is 5000 rows.");
+      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
     _row_group_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the maximum uncompressed page size, in bytes.
+   */
+  void set_max_page_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
+    _max_page_size_bytes = size_bytes;
+  }
+
+  /**
+   * @brief Sets the maximum page size, in rows.
+   */
+  void set_max_page_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(
+      size_rows >= 5000,
+      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
+    _max_page_size_rows = size_rows;
   }
 };
 
@@ -690,12 +734,39 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets the maximum number of rows in output row groups.
    *
-   * @param val maximum number or rows
+   * @param val maximum number of rows
    * @return this for chaining.
    */
   parquet_writer_options_builder& row_group_size_rows(size_type val)
   {
     options.set_row_group_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum uncompressed page size, in bytes. Serves as a hint to the writer,
+   * and can be exceeded under certain circumstances. Cannot be larger than the row group size in
+   * bytes, and will be adjusted to match if it is.
+   *
+   * @param val maximum page size
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& max_page_size_bytes(size_t val)
+  {
+    options.set_max_page_size_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum page size, in rows. Counts only top-level rows, ignoring any nesting.
+   * Cannot be larger than the row group size in rows, and will be adjusted to match if it is.
+   *
+   * @param val maximum rows per page
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& max_page_size_rows(size_type val)
+  {
+    options.set_max_page_size_rows(val);
     return *this;
   }
 
@@ -783,6 +854,10 @@ class chunked_parquet_writer_options {
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
   size_type _row_group_size_rows = default_row_group_size_rows;
+  // Maximum size of each page (uncompressed)
+  size_t _max_page_size_bytes = default_max_page_size_bytes;
+  // Maximum number of rows in a page
+  size_type _max_page_size_rows = default_max_page_size_rows;
 
   /**
    * @brief Constructor from sink.
@@ -845,6 +920,24 @@ class chunked_parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
+   * @brief Returns maximum uncompressed page size, in bytes. If set larger than the row group size,
+   * then this will return the row group size.
+   */
+  auto get_max_page_size_bytes() const
+  {
+    return std::min(_max_page_size_bytes, get_row_group_size_bytes());
+  }
+
+  /**
+   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
+   * will return the row group size.
+   */
+  auto get_max_page_size_rows() const
+  {
+    return std::min(_max_page_size_rows, get_row_group_size_rows());
+  }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
@@ -891,8 +984,8 @@ class chunked_parquet_writer_options {
   void set_row_group_size_bytes(size_t size_bytes)
   {
     CUDF_EXPECTS(
-      size_bytes >= 512 * 1024,
-      "The maximum row group size cannot be smaller than the page size, which is 512KB.");
+      size_bytes >= 4 * 1024,
+      "The maximum row group size cannot be smaller than the minimum page size, which is 4KB.");
     _row_group_size_bytes = size_bytes;
   }
 
@@ -903,8 +996,28 @@ class chunked_parquet_writer_options {
   {
     CUDF_EXPECTS(
       size_rows >= 5000,
-      "The maximum row group size cannot be smaller than the page size, which is 5000 rows.");
+      "The maximum row group size cannot be smaller than the fragment size, which is 5000 rows.");
     _row_group_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the maximum uncompressed page size, in bytes.
+   */
+  void set_max_page_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 4 * 1024, "The maximum page size cannot be smaller than 4KB.");
+    _max_page_size_bytes = size_bytes;
+  }
+
+  /**
+   * @brief Sets the maximum page size, in rows.
+   */
+  void set_max_page_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(
+      size_rows >= 5000,
+      "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
+    _max_page_size_rows = size_rows;
   }
 
   /**
@@ -1016,12 +1129,39 @@ class chunked_parquet_writer_options_builder {
   /**
    * @brief Sets the maximum number of rows in output row groups.
    *
-   * @param val maximum number or rows
+   * @param val maximum number of rows
    * @return this for chaining.
    */
   chunked_parquet_writer_options_builder& row_group_size_rows(size_type val)
   {
     options.set_row_group_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum uncompressed page size, in bytes. Serves as a hint to the writer,
+   * and can be exceeded under certain circumstances. Cannot be larger than the row group size in
+   * bytes, and will be adjusted to match if it is.
+   *
+   * @param val maximum page size
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& max_page_size_bytes(size_t val)
+  {
+    options.set_max_page_size_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum page size, in rows. Counts only top-level rows, ignoring any nesting.
+   * Cannot be larger than the row group size in rows, and will be adjusted to match if it is.
+   *
+   * @param val maximum rows per page
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& max_page_size_rows(size_type val)
+  {
+    options.set_max_page_size_rows(val);
     return *this;
   }
 

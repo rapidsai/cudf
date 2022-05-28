@@ -333,8 +333,7 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
       masks,
       begin_bits,
       child.size(),
-      stream,
-      mr);
+      stream);
     auto const null_count = child.size() - valid_count;
     child.set_null_count(null_count);
   }

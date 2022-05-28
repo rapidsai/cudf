@@ -92,12 +92,13 @@ void add_column_to_mapping(std::map<size_type, std::vector<size_type>>& selected
 /**
  * @brief Create a metadata object from each element in the source vector
  */
-auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const& sources)
+auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const& sources,
+                            rmm::cuda_stream_view stream)
 {
   std::vector<metadata> metadatas;
   std::transform(
-    sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [](auto const& source) {
-      return metadata(source.get());
+    sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [stream](auto const& source) {
+      return metadata(source.get(), stream);
     });
   return metadatas;
 }
@@ -121,8 +122,8 @@ size_type aggregate_orc_metadata::calc_num_stripes() const
 }
 
 aggregate_orc_metadata::aggregate_orc_metadata(
-  std::vector<std::unique_ptr<datasource>> const& sources)
-  : per_file_metadata(metadatas_from_sources(sources)),
+  std::vector<std::unique_ptr<datasource>> const& sources, rmm::cuda_stream_view stream)
+  : per_file_metadata(metadatas_from_sources(sources, stream)),
     num_rows(calc_num_rows()),
     num_stripes(calc_num_stripes())
 {
@@ -152,7 +153,8 @@ aggregate_orc_metadata::aggregate_orc_metadata(
 std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
   size_type& row_start,
-  size_type& row_count)
+  size_type& row_count,
+  rmm::cuda_stream_view stream)
 {
   std::vector<metadata::stripe_source_mapping> selected_stripes_mapping;
 
@@ -234,7 +236,7 @@ std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stri
         const auto buffer =
           per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
         auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
-          {buffer->data(), buffer->size()});
+          {buffer->data(), buffer->size()}, stream);
         ProtobufReader(sf_data.data(), sf_data.size())
           .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
         mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];

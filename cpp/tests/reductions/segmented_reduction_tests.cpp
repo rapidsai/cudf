@@ -323,7 +323,7 @@ TYPED_TEST(SegmentedReductionTest, AllIncludeNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
-TEST_F(SegmentedReductionTestUntyped, PartialSegmentReudction)
+TEST_F(SegmentedReductionTestUntyped, PartialSegmentReduction)
 {
   // Segmented reduction allows offsets only specify part of the input columns.
   // [1], [2, 3], [4]
@@ -385,6 +385,43 @@ TEST_F(SegmentedReductionTestUntyped, ReduceEmptyColumn)
                               data_type{type_to_id<int32_t>()},
                               null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TEST_F(SegmentedReductionTestUntyped, EmptyInputWithOffsets)
+{
+  auto input     = fixed_width_column_wrapper<int32_t>{};
+  auto offsets   = std::vector<size_type>{0, 0, 0, 0, 0, 0};
+  auto d_offsets = thrust::device_vector<size_type>(offsets);
+  auto expect    = fixed_width_column_wrapper<int32_t>{{XXX, XXX, XXX, XXX, XXX}, {0, 0, 0, 0, 0}};
+
+  auto aggregates =
+    std::vector<std::unique_ptr<cudf::segmented_reduce_aggregation,
+                                std::default_delete<cudf::segmented_reduce_aggregation>>>();
+  aggregates.push_back(std::move(make_max_aggregation<segmented_reduce_aggregation>()));
+  aggregates.push_back(std::move(make_min_aggregation<segmented_reduce_aggregation>()));
+  aggregates.push_back(std::move(make_sum_aggregation<segmented_reduce_aggregation>()));
+  aggregates.push_back(std::move(make_product_aggregation<segmented_reduce_aggregation>()));
+
+  auto output_type = data_type{type_to_id<int32_t>()};
+  for (auto&& agg : aggregates) {
+    auto result = segmented_reduce(input, d_offsets, *agg, output_type, null_policy::EXCLUDE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+  }
+
+  auto expect_bool = fixed_width_column_wrapper<bool>{{XXX, XXX, XXX, XXX, XXX}, {0, 0, 0, 0, 0}};
+
+  auto result = segmented_reduce(input,
+                                 d_offsets,
+                                 *make_any_aggregation<segmented_reduce_aggregation>(),
+                                 data_type{type_id::BOOL8},
+                                 null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect_bool);
+  result = segmented_reduce(input,
+                            d_offsets,
+                            *make_all_aggregation<segmented_reduce_aggregation>(),
+                            data_type{type_id::BOOL8},
+                            null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect_bool);
 }
 
 template <typename T>
@@ -712,6 +749,27 @@ TEST_F(SegmentedReductionStringTest, MinExcludeNulls)
                               output_dtype,
                               null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TEST_F(SegmentedReductionStringTest, EmptyInputWithOffsets)
+{
+  auto input     = strings_column_wrapper{};
+  auto offsets   = std::vector<size_type>{0, 0, 0, 0};
+  auto d_offsets = thrust::device_vector<size_type>(offsets);
+  auto expect    = strings_column_wrapper({XXX, XXX, XXX}, {0, 0, 0});
+
+  auto result = segmented_reduce(input,
+                                 d_offsets,
+                                 *make_max_aggregation<segmented_reduce_aggregation>(),
+                                 data_type{type_id::STRING},
+                                 null_policy::EXCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+  result = segmented_reduce(input,
+                            d_offsets,
+                            *make_min_aggregation<segmented_reduce_aggregation>(),
+                            data_type{type_id::STRING},
+                            null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
 #undef XXX

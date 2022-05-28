@@ -37,7 +37,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -64,6 +64,15 @@ namespace groupby {
 namespace detail {
 namespace hash {
 namespace {
+
+// TODO: replace it with `cuco::static_map`
+// https://github.com/rapidsai/cudf/issues/10401
+using map_type = concurrent_unordered_map<
+  cudf::size_type,
+  cudf::size_type,
+  cudf::experimental::row::hash::device_row_hasher<cudf::detail::default_hash,
+                                                   cudf::nullate::DYNAMIC>,
+  cudf::experimental::row::equality::device_row_comparator<cudf::nullate::DYNAMIC>>;
 
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
@@ -179,14 +188,13 @@ class groupby_simple_aggregations_collector final
   }
 };
 
-template <typename Map>
 class hash_compound_agg_finalizer final : public cudf::detail::aggregation_finalizer {
   column_view col;
   data_type result_type;
   cudf::detail::result_cache* sparse_results;
   cudf::detail::result_cache* dense_results;
   device_span<size_type const> gather_map;
-  Map const& map;
+  map_type const& map;
   bitmask_type const* __restrict__ row_bitmask;
   rmm::cuda_stream_view stream;
   rmm::mr::device_memory_resource* mr;
@@ -198,7 +206,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               cudf::detail::result_cache* sparse_results,
                               cudf::detail::result_cache* dense_results,
                               device_span<size_type const> gather_map,
-                              Map const& map,
+                              map_type const& map,
                               bitmask_type const* row_bitmask,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
@@ -327,7 +335,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       col.size(),
-      ::cudf::detail::var_hash_functor<Map>{
+      ::cudf::detail::var_hash_functor<map_type>{
         map, row_bitmask, *var_result_view, *values_view, *sum_view, *count_view, agg._ddof});
     sparse_results->add_result(col, agg, std::move(var_result));
     dense_results->add_result(col, agg, to_dense_agg_result(agg));
@@ -385,14 +393,12 @@ flatten_single_pass_aggs(host_span<aggregation_request const> requests)
  *
  * @see groupby_null_templated()
  */
-template <typename Map>
 void sparse_to_dense_results(table_view const& keys,
                              host_span<aggregation_request const> requests,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
                              device_span<size_type const> gather_map,
-                             // size_type map_size,
-                             Map const& map,
+                             map_type const& map,
                              bool keys_have_nulls,
                              null_policy include_null_keys,
                              rmm::cuda_stream_view stream,
@@ -409,49 +415,12 @@ void sparse_to_dense_results(table_view const& keys,
 
     // Given an aggregation, this will get the result from sparse_results and
     // convert and return dense, compacted result
-    auto finalizer = hash_compound_agg_finalizer<Map>(
+    auto finalizer = hash_compound_agg_finalizer(
       col, sparse_results, dense_results, gather_map, map, row_bitmask_ptr, stream, mr);
     for (auto&& agg : agg_v) {
       agg->finalize(finalizer);
     }
   }
-}
-
-/**
- * @brief Construct hash map that uses row comparator and row hasher on
- * `d_keys` table and stores indices
- */
-auto create_hash_map(table_device_view const& d_keys,
-                     bool keys_have_nulls,
-                     null_policy include_null_keys,
-                     rmm::cuda_stream_view stream)
-{
-  size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
-  size_type constexpr unused_value{std::numeric_limits<size_type>::max()};
-
-  using map_type =
-    concurrent_unordered_map<size_type,
-                             size_type,
-                             row_hasher<cudf::detail::default_hash, nullate::DYNAMIC>,
-                             row_equality_comparator<nullate::DYNAMIC>>;
-
-  using allocator_type = typename map_type::allocator_type;
-
-  auto const null_keys_are_equal =
-    include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
-
-  row_hasher<cudf::detail::default_hash, nullate::DYNAMIC> hasher{nullate::DYNAMIC{keys_have_nulls},
-                                                                  d_keys};
-  row_equality_comparator rows_equal{
-    nullate::DYNAMIC{keys_have_nulls}, d_keys, d_keys, null_keys_are_equal};
-
-  return map_type::create(compute_hash_table_size(d_keys.num_rows()),
-                          stream,
-                          unused_key,
-                          unused_value,
-                          hasher,
-                          rows_equal,
-                          allocator_type());
 }
 
 // make table that will hold sparse results
@@ -491,11 +460,10 @@ auto create_sparse_results_table(table_view const& flattened_values,
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
  */
-template <typename Map>
 void compute_single_pass_aggs(table_view const& keys,
                               host_span<aggregation_request const> requests,
                               cudf::detail::result_cache* sparse_results,
-                              Map& map,
+                              map_type& map,
                               bool keys_have_nulls,
                               null_policy include_null_keys,
                               rmm::cuda_stream_view stream)
@@ -509,22 +477,22 @@ void compute_single_pass_aggs(table_view const& keys,
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
   auto d_values       = table_device_view::create(flattened_values, stream);
   auto const d_aggs   = cudf::detail::make_device_uvector_async(agg_kinds, stream);
-
-  bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
+  auto const skip_key_rows_with_nulls =
+    keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
   auto row_bitmask =
     skip_key_rows_with_nulls ? cudf::detail::bitmask_and(keys, stream).first : rmm::device_buffer{};
+
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator(0),
     keys.num_rows(),
-    hash::compute_single_pass_aggs_fn<Map>{map,
-                                           keys.num_rows(),
-                                           *d_values,
-                                           *d_sparse_table,
-                                           d_aggs.data(),
-                                           static_cast<bitmask_type*>(row_bitmask.data()),
-                                           skip_key_rows_with_nulls});
+    hash::compute_single_pass_aggs_fn<map_type>{map,
+                                                *d_values,
+                                                *d_sparse_table,
+                                                d_aggs.data(),
+                                                static_cast<bitmask_type*>(row_bitmask.data()),
+                                                skip_key_rows_with_nulls});
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();
   for (size_t i = 0; i < aggs.size(); i++) {
@@ -538,8 +506,7 @@ void compute_single_pass_aggs(table_view const& keys,
  * @brief Computes and returns a device vector containing all populated keys in
  * `map`.
  */
-template <typename Map>
-rmm::device_uvector<size_type> extract_populated_keys(Map map,
+rmm::device_uvector<size_type> extract_populated_keys(map_type const& map,
                                                       size_type num_keys,
                                                       rmm::cuda_stream_view stream)
 {
@@ -589,13 +556,33 @@ rmm::device_uvector<size_type> extract_populated_keys(Map map,
 std::unique_ptr<table> groupby(table_view const& keys,
                                host_span<aggregation_request const> requests,
                                cudf::detail::result_cache* cache,
-                               bool keys_have_nulls,
-                               null_policy include_null_keys,
+                               bool const keys_have_nulls,
+                               null_policy const include_null_keys,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto d_keys_ptr = table_device_view::create(keys, stream);
-  auto map        = create_hash_map(*d_keys_ptr, keys_have_nulls, include_null_keys, stream);
+  auto const num_keys            = keys.num_rows();
+  auto const null_keys_are_equal = null_equality::EQUAL;
+  auto const has_null            = nullate::DYNAMIC{cudf::has_nested_nulls(keys)};
+
+  auto preprocessed_keys = cudf::experimental::row::hash::preprocessed_table::create(keys, stream);
+  auto const comparator  = cudf::experimental::row::equality::self_comparator{preprocessed_keys};
+  auto const row_hash    = cudf::experimental::row::hash::row_hasher{std::move(preprocessed_keys)};
+  auto const d_key_equal = comparator.device_comparator(has_null, null_keys_are_equal);
+  auto const d_row_hash  = row_hash.device_hasher(has_null);
+
+  size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
+  size_type constexpr unused_value{std::numeric_limits<size_type>::max()};
+
+  using allocator_type = typename map_type::allocator_type;
+
+  auto map = map_type::create(compute_hash_table_size(num_keys),
+                              stream,
+                              unused_key,
+                              unused_value,
+                              d_row_hash,
+                              d_key_equal,
+                              allocator_type());
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash map
@@ -635,13 +622,12 @@ std::unique_ptr<table> groupby(table_view const& keys,
  * @brief Indicates if a set of aggregation requests can be satisfied with a
  * hash-based groupby implementation.
  *
- * @param keys The table of keys
  * @param requests The set of columns to aggregate and the aggregations to
  * perform
  * @return true A hash-based groupby should be used
  * @return false A hash-based groupby should not be used
  */
-bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests)
+bool can_use_hash_groupby(host_span<aggregation_request const> requests)
 {
   return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
     // Currently, structs are not supported in any of hash-based aggregations.
@@ -667,10 +653,18 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  auto const has_nested_column =
+    std::any_of(keys.begin(), keys.end(), [](cudf::column_view const& col) {
+      return cudf::is_nested(col.type());
+    });
+  if (has_nested_column and include_null_keys == cudf::null_policy::EXCLUDE) {
+    CUDF_FAIL("Null keys of nested type cannot be excluded.");
+  }
+
   cudf::detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys =
-    groupby(keys, requests, &cache, has_nulls(keys), include_null_keys, stream, mr);
+    groupby(keys, requests, &cache, cudf::has_nulls(keys), include_null_keys, stream, mr);
 
   return std::pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
 }
