@@ -884,17 +884,17 @@ class device_row_comparator {
 };
 
 /**
- * @brief Preprocess table for use with row equality comparison or row hashing
- *
- * Sets up the table for use with row equality comparison or row hashing. The resulting
- * preprocessed table can be passed to the constructor of `equality::self_comparator` to
- * avoid preprocessing again.
+ * @brief Preprocessed table for use with row equality comparison or row hashing
  *
  */
 struct preprocessed_table {
   /**
    * @brief Factory to construct preprocessed_table for use with
    * row equality comparison or row hashing
+   *
+   * Sets up the table for use with row equality comparison or row hashing. The resulting
+   * preprocessed table can be passed to the constructor of `equality::self_comparator` to
+   * avoid preprocessing again.
    *
    * @param table The table to preprocess
    * @param stream The cuda stream to use while preprocessing.
