@@ -64,12 +64,13 @@ void label_segments(InputIterator offsets_begin,
                     OutputIterator out_end,
                     rmm::cuda_stream_view stream)
 {
+  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
+  thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
+
   auto const num_segments =
     static_cast<size_type>(thrust::distance(offsets_begin, offsets_end)) - 1;
   if (num_segments <= 0) { return; }
 
-  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
-  thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
   thrust::for_each(rmm::exec_policy(stream),
                    offsets_begin + 1,
                    offsets_end,
