@@ -138,7 +138,7 @@ std::unique_ptr<column> segmented_reduce(
  * null_policy::EXCLUDE. Include nulls if null_policy::INCLUDE.
  * Any operation with a null results in a null.
  * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
- * @returns unique pointer to new output column
+ * @returns Scanned output column
  */
 std::unique_ptr<column> scan(
   const column_view& input,
