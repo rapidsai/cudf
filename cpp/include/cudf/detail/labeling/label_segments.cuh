@@ -72,8 +72,8 @@ void label_segments(InputIterator offsets_begin,
   if (num_segments <= 0) { return; }
 
   thrust::for_each(rmm::exec_policy(stream),
-                   offsets_begin + 1,
-                   offsets_end,
+                   offsets_begin + 1,  // exclude the first offset value
+                   offsets_end - 1,    // exclude the last offset value
                    [offsets = offsets_begin, output = out_begin] __device__(auto const idx) {
                      // Zero-normalized offsets.
                      auto const dst_idx = idx - (*offsets);
