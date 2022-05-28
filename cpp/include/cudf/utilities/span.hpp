@@ -378,13 +378,19 @@ class base_2dspan {
    */
   [[nodiscard]] constexpr bool is_empty() const noexcept { return count() == 0; }
 
- private:
+  /**
+   * @brief Returns flattened index of the element at the specified 2D position.
+   *
+   * @param row The row index
+   * @param column The column index
+   * @param size The size of the 2D span as pair
+   * @return The flattened index of the element at the specified 2D position
+   */
   static constexpr size_t flatten_index(size_t row, size_t column, size_type size) noexcept
   {
     return row * size.second + column;
   }
 
- public:
   /**
    * @brief Returns a reference to the row-th element of the sequence.
    * The behavior is undefined if row is out of range (i.e., if it is greater than or equal to
