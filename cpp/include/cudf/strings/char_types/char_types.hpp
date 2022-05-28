@@ -92,7 +92,7 @@ string_character_types& operator|=(string_character_types& lhs, string_character
  *
  * @param strings Strings instance for this operation
  * @param types The character types to check in each string
- * @param verify_types Only verify against these character types
+ * @param verify_types Only verify against these character types.
  *                     Default `ALL_TYPES` means return `true`
  *                     iff all characters match `types`.
  * @param mr Device memory resource used to allocate the returned column's device memory

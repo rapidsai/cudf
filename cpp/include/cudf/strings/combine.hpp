@@ -65,9 +65,9 @@ enum class output_if_empty_list {
  * @throw cudf::logic_error if separator is not valid.
  *
  * @param strings Strings for this operation
- * @param separator String that should inserted between each string
+ * @param separator String that should inserted between each string.
  *        Default is an empty string.
- * @param narep String that should represent any null strings found
+ * @param narep String that should represent any null strings found.
  *        Default of invalid-scalar will ignore any null entries.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column containing one string.
@@ -183,7 +183,7 @@ std::unique_ptr<column> concatenate(
  * @throw cudf::logic_error if only one column is specified
  *
  * @param strings_columns List of string columns to concatenate
- * @param separator String that should inserted between each string from each row
+ * @param separator String that should inserted between each string from each row.
  *        Default is an empty string.
  * @param narep String that should be used in place of any null strings
  *        found in any column. Default of invalid-scalar means any null entry in any column will
