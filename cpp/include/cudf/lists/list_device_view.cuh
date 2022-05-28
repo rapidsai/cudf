@@ -39,8 +39,8 @@ class list_device_view {
   /**
    * @brief Constructs a list_device_view from a list column and index.
    *
-   * @param lists_column list column device view where list is taken
-   * @param row_index index of the list row to take
+   * @param lists_column list column device view containing the list to view
+   * @param row_index index of the list row to view
    */
   __device__ inline list_device_view(lists_column_device_view const& lists_column,
                                      size_type const& row_index)
@@ -102,7 +102,7 @@ class list_device_view {
   }
 
   /**
-   * @brief Checks whether the element is null at the specified index in the list row.
+   * @brief Checks whether the element is null at the specified index in the list
    *
    * @param idx The index into the list row
    * @return `true` if the element is null at the specified index in the list row
@@ -117,7 +117,7 @@ class list_device_view {
   /**
    * @brief Checks whether this list row is null.
    *
-   * @return `true` if this list row is null
+   * @return `true` if this list is null
    */
   [[nodiscard]] __device__ inline bool is_null() const { return lists_column.is_null(_row_index); }
 
@@ -167,7 +167,7 @@ class list_device_view {
    *   1. `p.first` is undefined
    *   2. `p.second == false`
    *
-   * @return A pair iterator positioned to the first element in the list_device_view
+   * @return A pair iterator to the first element in the list_device_view and whether or not the element is valid
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_begin() const
@@ -179,7 +179,7 @@ class list_device_view {
    * @brief Fetcher for a pair iterator to one position past the last element in the
    * list_device_view.
    *
-   * @return A pair iterator positioned one past the last element in the list_device_view
+   * @return A pair iterator to one past the last element in the list_device_view and whether or not that element is valid
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_end() const
@@ -203,7 +203,7 @@ class list_device_view {
    *   1. `p.first` is undefined
    *   2. `p.second == false`
    *
-   * @return A pair iterator positioned to the first element in the list_device_view
+   * @return A pair iterator to the first element in the list_device_view and whether or not that element is valid
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_begin() const
@@ -216,7 +216,7 @@ class list_device_view {
    * @brief Fetcher for a pair iterator to one position past the last element in the
    * list_device_view.
    *
-   * @return A pair iterator positioned one past the last element in the list_device_view
+   * @return A pair iterator one past the last element in the list_device_view and whether or not that element is valid
    */
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_end() const

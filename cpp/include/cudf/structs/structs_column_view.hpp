@@ -31,7 +31,7 @@ namespace cudf {
  */
 
 /**
- * @brief Given a column-view of struct type, an instance of this class
+ * @brief Given a column view of struct type, an instance of this class
  * provides a wrapper on this compound column for struct operations.
  */
 class structs_column_view : public column_view {
