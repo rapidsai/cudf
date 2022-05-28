@@ -23,7 +23,6 @@
 #include <thrust/distance.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/uninitialized_fill.h>
@@ -68,20 +67,21 @@ void label_segments(InputIterator offsets_begin,
                     OutputIterator out_end,
                     rmm::cuda_stream_view stream)
 {
+  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
+  thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
+
   auto const num_segments =
     static_cast<size_type>(thrust::distance(offsets_begin, offsets_end)) - 1;
   if (num_segments <= 0) { return; }
 
-  using OutputType = typename thrust::iterator_value<OutputIterator>::type;
-  thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
   thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator(size_type{1}),
-                   thrust::make_counting_iterator(num_segments),
+                   offsets_begin + 1,  // exclude the first offset value
+                   offsets_end - 1,    // exclude the last offset value
                    [offsets = offsets_begin, output = out_begin] __device__(auto const idx) {
                      // Zero-normalized offsets.
-                     auto const dst_idx = offsets[idx] - offsets[0];
+                     auto const dst_idx = idx - (*offsets);
 
-                     // Scatter value `1` to the index at offsets[idx].
+                     // Scatter value `1` to the index at (idx - offsets[0]).
                      // In case we have repeated offsets (i.e., we have empty segments), this
                      // atomicAdd call will make sure the label values corresponding to these empty
                      // segments will be skipped in the output.

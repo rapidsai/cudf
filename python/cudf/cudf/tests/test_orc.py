@@ -1729,3 +1729,17 @@ def test_orc_reader_zstd_compression(list_struct_buff):
         assert_eq(expected, got)
     except RuntimeError:
         pytest.mark.xfail(reason="zstd support is not enabled")
+
+
+def test_writer_protobuf_large_rowindexentry():
+    s = [
+        "Length of the two strings needs to add up to at least ~120",
+        "So that the encoded statistics are larger than 128 bytes",
+    ] * 5001  # generate more than 10K rows to have two row groups
+    df = cudf.DataFrame({"s1": s})
+
+    buff = BytesIO()
+    df.to_orc(buff)
+
+    got = cudf.read_orc(buff)
+    assert_frame_equal(df, got)
