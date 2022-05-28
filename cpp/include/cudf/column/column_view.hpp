@@ -656,14 +656,14 @@ class mutable_column_view : public detail::column_view_base {
   /**
    * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
    *
-   * @return iterator to the beginning of the ordered sequence of child column-views
+   * @return An iterator to a `mutable_column_view` referencing the first child column
    */
   auto child_begin() const noexcept { return mutable_children.begin(); }
 
   /**
    * @brief Returns iterator to the end of the ordered sequence of child column-views.
    *
-   * @return iterator to the end of the ordered sequence of child column-views
+   * @return An iterator to a `mutable_column_view` to the element following the last child column
    */
   auto child_end() const noexcept { return mutable_children.end(); }
 
