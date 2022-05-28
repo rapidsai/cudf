@@ -14,8 +14,9 @@
  */
 #pragma once
 
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <tests/iterator/iterator_tests.cuh>
+
+#include <cudf/detail/utilities/vector_factories.hpp>
 
 #include <thrust/host_vector.h>
 
