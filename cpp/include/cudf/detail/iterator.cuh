@@ -110,7 +110,7 @@ struct null_replaced_value_accessor {
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
-  __device__ inline Element operator()(cudf::size_type i) const
+  __device__ inline Element const operator()(cudf::size_type i) const
   {
     return has_nulls && col.is_null_nocheck(i) ? null_replacement : col.element<Element>(i);
   }
@@ -366,7 +366,7 @@ struct scalar_value_accessor {
    *
    * @return value of the scalar.
    */
-  __device__ inline Element operator()(size_type) const { return dscalar.value(); }
+  __device__ inline Element const operator()(size_type) const { return dscalar.value(); }
 };
 
 /**
@@ -433,7 +433,7 @@ struct scalar_optional_accessor : public scalar_value_accessor<Element> {
   /**
    * @brief returns a thrust::optional<Element> for the scalar value.
    */
-  __device__ inline value_type operator()(size_type) const
+  __device__ inline value_type const operator()(size_type) const
   {
     if (has_nulls && !super_t::dscalar.is_valid()) { return value_type{thrust::nullopt}; }
 
@@ -470,7 +470,7 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
    *
    * @return a pair with value and validity of the scalar.
    */
-  __device__ inline value_type operator()(size_type) const
+  __device__ inline value_type const operator()(size_type) const
   {
     return {Element(super_t::dscalar.value()), super_t::dscalar.is_valid()};
   }
@@ -517,7 +517,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
    *
    * @return a pair with representative value and validity of the scalar.
    */
-  __device__ inline value_type operator()(size_type) const
+  __device__ inline value_type const operator()(size_type) const
   {
     return {get_rep(base::dscalar), base::dscalar.is_valid()};
   }
