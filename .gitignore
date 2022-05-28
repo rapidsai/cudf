@@ -47,6 +47,7 @@ parts/
 sdist/
 var/
 wheels/
+_skbuild/
 *.egg-info/
 .installed.cfg
 *.egg
