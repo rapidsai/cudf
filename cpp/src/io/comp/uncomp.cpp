@@ -15,10 +15,13 @@
  */
 
 #include "io_uncomp.hpp"
+#include "nvcomp_adapter.hpp"
 #include "unbz2.hpp"  // bz2 uncompress
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cuda_runtime.h>
 
@@ -498,14 +501,50 @@ size_t decompress_snappy(host_span<uint8_t const> src, host_span<uint8_t> dst)
   return uncompressed_size;
 }
 
+/**
+ * @brief ZSTD decompressor that uses nvcomp
+ */
+size_t decompress_zstd(host_span<uint8_t const> src,
+                       host_span<uint8_t> dst,
+                       rmm::cuda_stream_view stream)
+{
+  // Init device span of spans (source)
+  auto const d_src = cudf::detail::make_device_uvector_async(src, stream);
+  auto hd_srcs     = hostdevice_vector<device_span<uint8_t const>>(1, stream);
+  hd_srcs[0]       = d_src;
+  hd_srcs.host_to_device(stream);
+
+  // Init device span of spans (temporary destination)
+  auto d_dst   = rmm::device_uvector<uint8_t>(dst.size(), stream);
+  auto hd_dsts = hostdevice_vector<device_span<uint8_t>>(1, stream);
+  hd_dsts[0]   = d_dst;
+  hd_dsts.host_to_device(stream);
+
+  auto hd_stats                   = hostdevice_vector<decompress_status>(1, stream);
+  auto const max_uncomp_page_size = dst.size();
+  nvcomp::batched_decompress(
+    nvcomp::compression_type::ZSTD, hd_srcs, hd_dsts, hd_stats, max_uncomp_page_size, stream);
+
+  hd_stats.device_to_host(stream, true);
+  CUDF_EXPECTS(hd_stats[0].status == 0, "ZSTD decompression failed");
+
+  // Copy temporary output to `dst`
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    dst.data(), d_dst.data(), hd_stats[0].bytes_written, cudaMemcpyDeviceToHost, stream.value()));
+
+  return hd_stats[0].bytes_written;
+}
+
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
-                  host_span<uint8_t> dst)
+                  host_span<uint8_t> dst,
+                  rmm::cuda_stream_view stream)
 {
   switch (compression) {
     case compression_type::GZIP: return decompress_gzip(src, dst);
     case compression_type::ZLIB: return decompress_zlib(src, dst);
     case compression_type::SNAPPY: return decompress_snappy(src, dst);
+    case compression_type::ZSTD: return decompress_zstd(src, dst, stream);
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
