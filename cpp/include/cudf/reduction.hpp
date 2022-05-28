@@ -62,9 +62,9 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
- * @param output_dtype The computation and output precision.
+ * @param output_dtype The computation and output precision
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @returns Output scalar with reduce result.
+ * @returns Output scalar with reduce result
  */
 std::unique_ptr<scalar> reduce(
   column_view const& col,
@@ -102,17 +102,17 @@ std::unique_ptr<scalar> reduce(
  * @throw cudf::logic_error if `any` or `all` reduction is called and the
  * output type is not bool8.
  *
- * @param segmented_values Column view of segmented inputs.
+ * @param segmented_values Column view of segmented inputs
  * @param offsets Each segment's offset of @p segmented_values. A list of offsets
  * with size `num_segments + 1`. The size of `i`th segment is `offsets[i+1] -
  * offsets[i]`.
- * @param agg Aggregation operator applied by the reduction.
- * @param output_dtype  The output precision.
+ * @param agg Aggregation operator applied by the reduction
+ * @param output_dtype  The output precision
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @returns Output column with results of segmented reduction.
+ * @returns Output column with results of segmented reduction
  */
 std::unique_ptr<column> segmented_reduce(
   column_view const& segmented_values,

@@ -52,7 +52,7 @@ rmm::device_buffer concatenate_masks(
  * If types of the input columns mismatch
  *
  * @param columns_to_concat host_span of column views to be concatenated into a single column
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A single column having all the rows from the elements of `columns_to_concat` respectively
  * in the same order.
  */
@@ -82,7 +82,7 @@ std::unique_ptr<column> concatenate(
  * If number of columns mismatch
  *
  * @param tables_to_concat host_span of table views to be concatenated into a single table
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return A single table having all the rows from the elements of `tables_to_concat` respectively
  * in the same order.
  */

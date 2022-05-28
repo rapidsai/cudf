@@ -38,7 +38,7 @@ namespace datetime {
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t years
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
@@ -52,7 +52,7 @@ std::unique_ptr<cudf::column> extract_year(
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t months
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
@@ -66,7 +66,7 @@ std::unique_ptr<cudf::column> extract_month(
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t days
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
@@ -80,7 +80,7 @@ std::unique_ptr<cudf::column> extract_day(
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t days
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
@@ -94,7 +94,7 @@ std::unique_ptr<cudf::column> extract_weekday(
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t hours
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
@@ -108,7 +108,7 @@ std::unique_ptr<cudf::column> extract_hour(
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t minutes
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
@@ -122,7 +122,7 @@ std::unique_ptr<cudf::column> extract_minute(
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of the extracted int16_t seconds
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
@@ -143,7 +143,7 @@ std::unique_ptr<cudf::column> extract_second(
  * cudf::column.
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column containing last day of the month as TIMESTAMP_DAYS
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
@@ -157,9 +157,9 @@ std::unique_ptr<cudf::column> last_day_of_month(
  * returns an int16_t cudf::column. The value is between [1, {365-366}]
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
- * @returns cudf::column of datatype INT16 containing the day number since the start of the year.
+ * @returns cudf::column of datatype INT16 containing the day number since the start of the year
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  */
 std::unique_ptr<cudf::column> day_of_year(
@@ -190,11 +190,11 @@ std::unique_ptr<cudf::column> day_of_year(
  * is not INT16 or INT32.
  * @throw cudf::logic_error if `timestamps` column size is not equal to `months` column size.
  *
- * @param timestamps cudf::column_view of timestamp type.
- * @param months cudf::column_view of integer type containing the number of months to add.
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param timestamps cudf::column_view of timestamp type
+ * @param months cudf::column_view of integer type containing the number of months to add
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
- * @returns cudf::column of timestamp type containing the computed timestamps.
+ * @returns cudf::column of timestamp type containing the computed timestamps
  */
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
@@ -225,11 +225,11 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  * is not INT16 or INT32.
  * @throw cudf::logic_error if `timestamps` column size is not equal to `months` column size.
  *
- * @param timestamps cudf::column_view of timestamp type.
- * @param months cudf::scalar of integer type containing the number of months to add.
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param timestamps cudf::column_view of timestamp type
+ * @param months cudf::scalar of integer type containing the number of months to add
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
- * @return cudf::column of timestamp type containing the computed timestamps.
+ * @return cudf::column of timestamp type containing the computed timestamps
  */
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
@@ -244,7 +244,7 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  * `output[i] is null` if `column[i]` is null
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns cudf::column of datatype BOOL8 truth value of the corresponding date
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
@@ -262,7 +262,7 @@ std::unique_ptr<cudf::column> is_leap_year(
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  *
  * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  * @return cudf::column of datatype INT16 of days in month of the corresponding date
  */
 std::unique_ptr<cudf::column> days_in_month(
@@ -278,7 +278,7 @@ std::unique_ptr<cudf::column> days_in_month(
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  *
  * @param column The input column containing datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param mr Device memory resource used to allocate device memory of the returned column
  * @return A column of INT16 type indicating which quarter the date is in
  */
 std::unique_ptr<cudf::column> extract_quarter(
@@ -302,12 +302,12 @@ enum class rounding_frequency : int32_t {
 /**
  * @brief Round datetimes up to the nearest multiple of the given frequency.
  *
- * @param column cudf::column_view of the input datetime values.
- * @param freq rounding_frequency indicating the frequency to round up to.
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param column cudf::column_view of the input datetime values
+ * @param freq rounding_frequency indicating the frequency to round up to
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
- * @return cudf::column of the same datetime resolution as the input column.
+ * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<cudf::column> ceil_datetimes(
   cudf::column_view const& column,
@@ -317,12 +317,12 @@ std::unique_ptr<cudf::column> ceil_datetimes(
 /**
  * @brief Round datetimes down to the nearest multiple of the given frequency.
  *
- * @param column cudf::column_view of the input datetime values.
- * @param freq rounding_frequency indicating the frequency to round down to.
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param column cudf::column_view of the input datetime values
+ * @param freq rounding_frequency indicating the frequency to round down to
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
- * @return cudf::column of the same datetime resolution as the input column.
+ * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<cudf::column> floor_datetimes(
   cudf::column_view const& column,
@@ -332,12 +332,12 @@ std::unique_ptr<cudf::column> floor_datetimes(
 /**
  * @brief Round datetimes to the nearest multiple of the given frequency.
  *
- * @param column cudf::column_view of the input datetime values.
- * @param freq rounding_frequency indicating the frequency to round to.
- * @param mr Device memory resource used to allocate device memory of the returned column.
+ * @param column cudf::column_view of the input datetime values
+ * @param freq rounding_frequency indicating the frequency to round to
+ * @param mr Device memory resource used to allocate device memory of the returned column
  *
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
- * @return cudf::column of the same datetime resolution as the input column.
+ * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<cudf::column> round_datetimes(
   cudf::column_view const& column,
