@@ -39,9 +39,9 @@ class expression_parser;
  */
 struct expression {
   /**
-   * @pure @brief Accepts a visitor class.
+   * @brief Accepts a visitor class.
    *
-   * @param visitor Visitor
+   * @param visitor The `expression_parser` parsing this expression tree
    * @return Index of device data reference for this instance
    */
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
@@ -51,7 +51,7 @@ struct expression {
    *
    * @param left The left operand of the expression (The same is used as right operand)
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return `true` if the expression may evaluate to null
+   * @return `true` if the expression may evaluate to null, otherwise false
    */
   [[nodiscard]] bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
   {
@@ -59,12 +59,12 @@ struct expression {
   }
 
   /**
-   * @pure @brief Returns true if the expression may evaluate to null.
+   * @brief Returns true if the expression may evaluate to null.
    *
    * @param left The left operand of the expression
    * @param right The right operand of the expression
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return `true` if the expression may evaluate to null
+   * @return `true` if the expression may evaluate to null, otherwise false
    */
   [[nodiscard]] virtual bool may_evaluate_null(table_view const& left,
                                                table_view const& right,
@@ -211,7 +211,7 @@ class literal : public expression {
   /**
    * @brief Accepts a visitor class.
    *
-   * @param visitor Visitor
+   * @param visitor The `expression_parser` parsing this expression tree
    * @return Index of device data reference for this instance
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
@@ -267,7 +267,7 @@ class column_reference : public expression {
   /**
    * @brief Get the table source.
    *
-   * @return table_reference enum value
+   * @return table_reference The reference to the table containing this column
    */
   [[nodiscard]] table_reference get_table_source() const { return table_source; }
 
@@ -307,7 +307,7 @@ class column_reference : public expression {
   /**
    * @brief Accepts a visitor class.
    *
-   * @param visitor Visitor
+   * @param visitor The `expression_parser` parsing this expression tree
    * @return Index of device data reference for this instance
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
@@ -370,7 +370,7 @@ class operation : public expression {
   /**
    * @brief Accepts a visitor class.
    *
-   * @param visitor Visitor
+   * @param visitor The `expression_parser` parsing this expression tree
    * @return Index of device data reference for this instance
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
