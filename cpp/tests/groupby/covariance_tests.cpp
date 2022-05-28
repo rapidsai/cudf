@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,22 @@ using supported_types = RemoveIf<ContainedIn<Types<bool>>, cudf::test::NumericTy
 
 TYPED_TEST_SUITE(groupby_covariance_test, supported_types);
 using K = int32_t;
+
+TYPED_TEST(groupby_covariance_test, invalid_types)
+{
+  using V = TypeParam;
+
+  auto keys     = fixed_width_column_wrapper<K>{{1, 2, 2, 1}};
+  auto member_0 = fixed_width_column_wrapper<V>{{1, 1, 1, 2}};
+  // Covariance aggregations require all types are convertible to double, but
+  // duration_D cannot be converted to double.
+  auto member_1 = fixed_width_column_wrapper<cudf::duration_D, cudf::duration_D::rep>{{0, 0, 1, 1}};
+  auto vals     = structs{{member_0, member_1}};
+
+  auto agg = cudf::make_covariance_aggregation<groupby_aggregation>();
+  EXPECT_THROW(test_single_agg(keys, vals, keys, vals, std::move(agg), force_use_sort_impl::YES),
+               cudf::logic_error);
+}
 
 TYPED_TEST(groupby_covariance_test, basic)
 {

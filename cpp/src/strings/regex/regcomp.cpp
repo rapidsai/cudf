@@ -570,182 +570,180 @@ class regex_parser {
  * @brief The compiler converts class list into instructions.
  */
 class regex_compiler {
-  reprog& m_prog;
-
-  struct Node {
+  struct and_node {
     int id_first;
     int id_last;
   };
 
-  int cursubid;
-  int pushsubid;
-  std::vector<Node> andstack;
-
-  struct Ator {
+  struct re_operator {
     int t;
     int subid;
   };
 
-  std::vector<Ator> atorstack;
+  reprog& _prog;
+  std::stack<and_node> _and_stack;
+  std::stack<re_operator> _operator_stack;
+  bool _last_was_and;
+  int _bracket_count;
+  regex_flags _flags;
 
-  bool lastwasand;
-  int nbra;
+  inline void push_and(int first, int last) { _and_stack.push({first, last}); }
 
-  regex_flags flags;
-
-  char32_t yy;
-  int yyclass_id;
-
-  inline void pushand(int f, int l) { andstack.push_back({f, l}); }
-
-  inline Node popand(int op)
+  inline and_node pop_and()
   {
-    if (andstack.size() < 1) {
-      // missing operand for op
-      int inst_id = m_prog.add_inst(NOP);
-      pushand(inst_id, inst_id);
+    if (_and_stack.empty()) {
+      auto const inst_id = _prog.add_inst(NOP);
+      push_and(inst_id, inst_id);
     }
-    Node node = andstack[andstack.size() - 1];
-    andstack.pop_back();
+    auto const node = _and_stack.top();
+    _and_stack.pop();
     return node;
   }
 
-  inline void pushator(int t)
+  inline void push_operator(int token, int subid = 0)
   {
-    Ator ator;
-    ator.t     = t;
-    ator.subid = pushsubid;
-    atorstack.push_back(ator);
+    _operator_stack.push(re_operator{token, subid});
   }
 
-  inline Ator popator()
+  inline re_operator const pop_operator()
   {
-    Ator ator = atorstack[atorstack.size() - 1];
-    atorstack.pop_back();
-    return ator;
+    auto const op = _operator_stack.top();
+    _operator_stack.pop();
+    return op;
   }
 
-  void evaluntil(int pri)
+  void eval_until(int min_token)
   {
-    Node op1;
-    Node op2;
-    int id_inst1 = -1;
-    int id_inst2 = -1;
-    while (pri == RBRA || atorstack[atorstack.size() - 1].t >= pri) {
-      Ator ator = popator();
-      switch (ator.t) {
+    while (min_token == RBRA || _operator_stack.top().t >= min_token) {
+      auto const op = pop_operator();
+      switch (op.t) {
         default:
-          // unknown operator in evaluntil
+          // unknown operator
           break;
-        case LBRA: /* must have been RBRA */
-          op1                                    = popand('(');
-          id_inst2                               = m_prog.add_inst(RBRA);
-          m_prog.inst_at(id_inst2).u1.subid      = ator.subid;
-          m_prog.inst_at(op1.id_last).u2.next_id = id_inst2;
-          id_inst1                               = m_prog.add_inst(LBRA);
-          m_prog.inst_at(id_inst1).u1.subid      = ator.subid;
-          m_prog.inst_at(id_inst1).u2.next_id    = op1.id_first;
-          pushand(id_inst1, id_inst2);
+        case LBRA:  // expects matching RBRA
+        {
+          auto const operand                        = pop_and();
+          auto const id_inst2                       = _prog.add_inst(RBRA);
+          _prog.inst_at(id_inst2).u1.subid          = op.subid;
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst2;
+          auto const id_inst1                       = _prog.add_inst(LBRA);
+          _prog.inst_at(id_inst1).u1.subid          = op.subid;
+          _prog.inst_at(id_inst1).u2.next_id        = operand.id_first;
+          push_and(id_inst1, id_inst2);
           return;
-        case OR:
-          op2                                    = popand('|');
-          op1                                    = popand('|');
-          id_inst2                               = m_prog.add_inst(NOP);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst2;
-          m_prog.inst_at(op1.id_last).u2.next_id = id_inst2;
-          id_inst1                               = m_prog.add_inst(OR);
-          m_prog.inst_at(id_inst1).u1.right_id   = op1.id_first;
-          m_prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
-          pushand(id_inst1, id_inst2);
+        }
+        case OR: {
+          auto const operand2                        = pop_and();
+          auto const operand1                        = pop_and();
+          auto const id_inst2                        = _prog.add_inst(NOP);
+          _prog.inst_at(operand2.id_last).u2.next_id = id_inst2;
+          _prog.inst_at(operand1.id_last).u2.next_id = id_inst2;
+          auto const id_inst1                        = _prog.add_inst(OR);
+          _prog.inst_at(id_inst1).u1.right_id        = operand1.id_first;
+          _prog.inst_at(id_inst1).u2.left_id         = operand2.id_first;
+          push_and(id_inst1, id_inst2);
           break;
-        case CAT:
-          op2                                    = popand(0);
-          op1                                    = popand(0);
-          m_prog.inst_at(op1.id_last).u2.next_id = op2.id_first;
-          pushand(op1.id_first, op2.id_last);
+        }
+        case CAT: {
+          auto const operand2                        = pop_and();
+          auto const operand1                        = pop_and();
+          _prog.inst_at(operand1.id_last).u2.next_id = operand2.id_first;
+          push_and(operand1.id_first, operand2.id_last);
           break;
-        case STAR:
-          op2                                    = popand('*');
-          id_inst1                               = m_prog.add_inst(OR);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u1.right_id   = op2.id_first;
-          pushand(id_inst1, id_inst1);
+        }
+        case STAR: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u1.right_id       = operand.id_first;
+          push_and(id_inst1, id_inst1);
           break;
-        case STAR_LAZY:
-          op2                                    = popand('*');
-          id_inst1                               = m_prog.add_inst(OR);
-          id_inst2                               = m_prog.add_inst(NOP);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
-          m_prog.inst_at(id_inst1).u1.right_id   = id_inst2;
-          pushand(id_inst1, id_inst2);
+        }
+        case STAR_LAZY: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u2.left_id        = operand.id_first;
+          _prog.inst_at(id_inst1).u1.right_id       = id_inst2;
+          push_and(id_inst1, id_inst2);
           break;
-        case PLUS:
-          op2                                    = popand('+');
-          id_inst1                               = m_prog.add_inst(OR);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u1.right_id   = op2.id_first;
-          pushand(op2.id_first, id_inst1);
+        }
+        case PLUS: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u1.right_id       = operand.id_first;
+          push_and(operand.id_first, id_inst1);
           break;
-        case PLUS_LAZY:
-          op2                                    = popand('+');
-          id_inst1                               = m_prog.add_inst(OR);
-          id_inst2                               = m_prog.add_inst(NOP);
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst1;
-          m_prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
-          m_prog.inst_at(id_inst1).u1.right_id   = id_inst2;
-          pushand(op2.id_first, id_inst2);
+        }
+        case PLUS_LAZY: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst1;
+          _prog.inst_at(id_inst1).u2.left_id        = operand.id_first;
+          _prog.inst_at(id_inst1).u1.right_id       = id_inst2;
+          push_and(operand.id_first, id_inst2);
           break;
-        case QUEST:
-          op2                                    = popand('?');
-          id_inst1                               = m_prog.add_inst(OR);
-          id_inst2                               = m_prog.add_inst(NOP);
-          m_prog.inst_at(id_inst1).u2.left_id    = id_inst2;
-          m_prog.inst_at(id_inst1).u1.right_id   = op2.id_first;
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst2;
-          pushand(id_inst1, id_inst2);
+        }
+        case QUEST: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(id_inst1).u2.left_id        = id_inst2;
+          _prog.inst_at(id_inst1).u1.right_id       = operand.id_first;
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst2;
+          push_and(id_inst1, id_inst2);
           break;
-        case QUEST_LAZY:
-          op2                                    = popand('?');
-          id_inst1                               = m_prog.add_inst(OR);
-          id_inst2                               = m_prog.add_inst(NOP);
-          m_prog.inst_at(id_inst1).u2.left_id    = op2.id_first;
-          m_prog.inst_at(id_inst1).u1.right_id   = id_inst2;
-          m_prog.inst_at(op2.id_last).u2.next_id = id_inst2;
-          pushand(id_inst1, id_inst2);
+        }
+        case QUEST_LAZY: {
+          auto const operand                        = pop_and();
+          auto const id_inst1                       = _prog.add_inst(OR);
+          auto const id_inst2                       = _prog.add_inst(NOP);
+          _prog.inst_at(id_inst1).u2.left_id        = operand.id_first;
+          _prog.inst_at(id_inst1).u1.right_id       = id_inst2;
+          _prog.inst_at(operand.id_last).u2.next_id = id_inst2;
+          push_and(id_inst1, id_inst2);
           break;
+        }
       }
     }
   }
 
-  void Operator(int t)
+  void handle_operator(int token, int subid = 0)
   {
-    if (t == RBRA && --nbra < 0)
+    if (token == RBRA && --_bracket_count < 0) {
       // unmatched right paren
       return;
-    if (t == LBRA) {
-      nbra++;
-      if (lastwasand) Operator(CAT);
-    } else
-      evaluntil(t);
-    if (t != RBRA) pushator(t);
-    lastwasand = (t == STAR || t == QUEST || t == PLUS || t == STAR_LAZY || t == QUEST_LAZY ||
-                  t == PLUS_LAZY || t == RBRA);
+    }
+    if (token == LBRA) {
+      _bracket_count++;
+      if (_last_was_and) { handle_operator(CAT, subid); }
+    } else {
+      eval_until(token);
+    }
+    if (token != RBRA) { push_operator(token, subid); }
+
+    static std::vector<int> tokens{STAR, STAR_LAZY, QUEST, QUEST_LAZY, PLUS, PLUS_LAZY, RBRA};
+    _last_was_and =
+      std::any_of(tokens.cbegin(), tokens.cend(), [token](auto t) { return t == token; });
   }
 
-  void Operand(int t)
+  void handle_operand(int token, int subid = 0, char32_t yy = 0, int class_id = 0)
   {
-    if (lastwasand) Operator(CAT); /* catenate is implicit */
-    int inst_id = m_prog.add_inst(t);
-    if (t == CCLASS || t == NCCLASS) {
-      m_prog.inst_at(inst_id).u1.cls_id = yyclass_id;
-    } else if (t == CHAR) {
-      m_prog.inst_at(inst_id).u1.c = yy;
-    } else if (t == BOL || t == EOL) {
-      m_prog.inst_at(inst_id).u1.c = is_multiline(flags) ? yy : '\n';
+    if (_last_was_and) { handle_operator(CAT, subid); }  // catenate is implicit
+
+    auto const inst_id = _prog.add_inst(token);
+    if (token == CCLASS || token == NCCLASS) {
+      _prog.inst_at(inst_id).u1.cls_id = class_id;
+    } else if (token == CHAR) {
+      _prog.inst_at(inst_id).u1.c = yy;
+    } else if (token == BOL || token == EOL) {
+      _prog.inst_at(inst_id).u1.c = is_multiline(_flags) ? yy : '\n';
     }
-    pushand(inst_id, inst_id);
-    lastwasand = true;
+    push_and(inst_id, inst_id);
+    _last_was_and = true;
   }
 
   std::vector<regex_parser::Item> expand_counted(std::vector<regex_parser::Item> const& in)
@@ -816,58 +814,50 @@ class regex_compiler {
 
  public:
   regex_compiler(const char32_t* pattern, regex_flags const flags, reprog& prog)
-    : m_prog(prog),
-      cursubid(0),
-      pushsubid(0),
-      lastwasand(false),
-      nbra(0),
-      flags(flags),
-      yy(0),
-      yyclass_id(0)
+    : _prog(prog), _last_was_and(false), _bracket_count(0), _flags(flags)
   {
     // Parse
     std::vector<regex_parser::Item> const items = [&] {
-      regex_parser parser(pattern, is_dotall(flags) ? ANYNL : ANY, m_prog);
+      regex_parser parser(pattern, is_dotall(flags) ? ANYNL : ANY, _prog);
       return parser.m_has_counted ? expand_counted(parser.m_items) : parser.m_items;
     }();
 
-    /* Start with a low priority operator to prime parser */
-    pushator(START - 1);
+    int cur_subid{};
+    int push_subid{};
 
-    for (int i = 0; i < static_cast<int>(items.size()); i++) {
-      auto const item = items[i];
-      int token       = item.t;
-      if (token == CCLASS || token == NCCLASS)
-        yyclass_id = item.d.yyclass_id;
-      else
-        yy = item.d.yy;
+    // Start with a low priority operator
+    push_operator(START - 1);
+
+    for (auto const item : items) {
+      auto token = item.t;
 
       if (token == LBRA) {
-        ++cursubid;
-        pushsubid = cursubid;
+        ++cur_subid;
+        push_subid = cur_subid;
       } else if (token == LBRA_NC) {
-        pushsubid = 0;
-        token     = LBRA;
+        push_subid = 0;
+        token      = LBRA;
       }
 
-      if ((token & 0300) == OPERATOR_MASK)
-        Operator(token);
-      else
-        Operand(token);
+      if ((token & ITEM_MASK) == OPERATOR_MASK) {
+        handle_operator(token, push_subid);
+      } else {
+        handle_operand(token, push_subid, item.d.yy, item.d.yyclass_id);
+      }
     }
 
-    /* Close with a low priority operator */
-    evaluntil(START);
-    /* Force END */
-    Operand(END);
-    evaluntil(START);
-    if (nbra)
-      ;  // "unmatched left paren";
-    /* points to first and only operand */
-    m_prog.set_start_inst(andstack[andstack.size() - 1].id_first);
-    m_prog.finalize();
-    m_prog.check_for_errors();
-    m_prog.set_groups_count(cursubid);
+    // Close with a low priority operator
+    eval_until(START);
+    // Force END
+    handle_operand(END, push_subid);
+    eval_until(START);
+
+    CUDF_EXPECTS(_bracket_count == 0, "unmatched left parenthesis");
+
+    _prog.set_start_inst(_and_stack.top().id_first);
+    _prog.finalize();
+    _prog.check_for_errors();
+    _prog.set_groups_count(cur_subid);
   }
 };
 
