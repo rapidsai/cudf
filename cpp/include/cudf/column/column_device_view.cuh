@@ -57,8 +57,9 @@ struct nullate {
   struct NO : std::bool_constant<false> {
   };
   /**
-   * @brief The`nullate::DYNAMIC` defers the assumption of nullability to runtime, rather at
-   * compiletime and the caller specifies if the column has nulls at runtime.
+   * @brief `nullate::DYNAMIC` defers the determination of nullability to run time rather than
+   * compile time. The calling code is responsible for specifying whether or not nulls are
+   * present using the constructor parameter at run time.
    */
   struct DYNAMIC {
     DYNAMIC() = delete;
@@ -74,7 +75,7 @@ struct nullate {
     /**
      * @brief Returns true if nulls are expected in the operation in which this object is applied.
      *
-     * @return `true` if nulls are expected in the operation in which this object is applied
+     * @return `true` if nulls are expected in the operation in which this object is applied, otherwise false
      */
     constexpr operator bool() const noexcept { return value; }
     bool value;  ///< True if nulls are expected
@@ -1309,7 +1310,8 @@ struct optional_accessor {
    * @brief Returns a `thrust::optional` of `column[i]`.
    *
    * @param i The index of the element to return
-   * @return A `thrust::optional` of `column[i]`
+   * @return A `thrust::optional` that contains the value of `column[i]` is not null. If that
+   * element is null, the resulting optional will not contain a value.
    */
   __device__ inline thrust::optional<T> operator()(cudf::size_type i) const
   {
@@ -1357,6 +1359,7 @@ struct pair_accessor {
 
   /**
    * @brief Pair accessor
+   *
    * @param[in] i index of the element
    * @return pair(element, validity)
    */
@@ -1402,6 +1405,7 @@ struct pair_rep_accessor {
 
   /**
    * @brief Pair accessor
+   *
    * @param[in] i index of element to access
    * @return pair of element and validity
    */
@@ -1426,6 +1430,7 @@ struct pair_rep_accessor {
 
 /**
  * @brief Mutable value accessor of column without null bitmask
+ *
  * A unary functor returns scalar value at `id`.
  * `operator() (cudf::size_type id)` computes reference to `element`
  * This functor is only allowed for non-nullable columns.
@@ -1452,6 +1457,7 @@ struct mutable_value_accessor {
 
   /**
    * @brief Accessor
+   *
    * @param[in] i index of element to access
    * @return reference to element at `i`
    */

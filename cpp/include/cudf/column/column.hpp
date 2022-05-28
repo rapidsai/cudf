@@ -141,7 +141,7 @@ class column {
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
    *
-   * @return The count of null elements
+   * @return The number of null elements
    */
   [[nodiscard]] size_type null_count() const;
 

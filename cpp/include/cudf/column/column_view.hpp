@@ -406,14 +406,14 @@ class column_view : public detail::column_view_base {
   /**
    * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
    *
-   * @return Child column-views beginning iterator
+   * @return An iterator to a `column_view` referencing the first child column
    */
   auto child_begin() const noexcept { return _children.cbegin(); }
 
   /**
    * @brief Returns iterator to the end of the ordered sequence of child column-views.
    *
-   * @return Child column-views end iterator
+   * @return An iterator to a `column_view` to the element following the last child column
    */
   auto child_end() const noexcept { return _children.cend(); }
 
