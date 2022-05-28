@@ -75,7 +75,8 @@ struct nullate {
     /**
      * @brief Returns true if nulls are expected in the operation in which this object is applied.
      *
-     * @return `true` if nulls are expected in the operation in which this object is applied, otherwise false
+     * @return `true` if nulls are expected in the operation in which this object is applied,
+     * otherwise false
      */
     constexpr operator bool() const noexcept { return value; }
     bool value;  ///< True if nulls are expected
