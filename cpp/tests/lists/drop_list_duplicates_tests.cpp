@@ -204,8 +204,16 @@ TEST_F(DropListDuplicatesTest, StringTestsNonNull)
 {
   // Trivial cases - empty input.
   {
-    auto const lists    = StrListsCol{{}};
-    auto const expected = StrListsCol{{}};
+    auto const lists    = StrListsCol{};
+    auto const expected = StrListsCol{};
+    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+  }
+
+  // Empty input lists.
+  {
+    auto const lists    = StrListsCol{{}, {}, {}};
+    auto const expected = StrListsCol{{}, {}, {}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
