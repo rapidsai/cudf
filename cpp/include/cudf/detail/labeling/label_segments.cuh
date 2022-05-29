@@ -67,13 +67,16 @@ void label_segments(InputIterator offsets_begin,
                     OutputIterator out_end,
                     rmm::cuda_stream_view stream)
 {
-  // Always fill the entire output array with `0` value regardless of the input.
+  // If the output array is empty, that means we have all empty segments.
+  // In such cases, there will not be any label value to output.
+  if (thrust::distance(out_begin, out_end) == 0) { return; }
+
+  // When the output array is not empty, always fill it with `0` value first.
   using OutputType = typename thrust::iterator_value<OutputIterator>::type;
   thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
 
-  auto const num_segments =
-    static_cast<size_type>(thrust::distance(offsets_begin, offsets_end)) - 1;
-  if (num_segments <= 0) { return; }
+  // Size of the input offset array needs to be at least two to properly define segments.
+  if (thrust::distance(offsets_begin, offsets_end) <= 1) { return; }
 
   thrust::for_each(rmm::exec_policy(stream),
                    offsets_begin + 1,  // exclude the first offset value
