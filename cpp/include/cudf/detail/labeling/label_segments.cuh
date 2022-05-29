@@ -135,8 +135,7 @@ void labels_to_offsets(InputIterator labels_begin,
   using OutputType = typename thrust::iterator_value<OutputIterator>::type;
   thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
 
-  auto const num_labels = static_cast<size_type>(thrust::distance(labels_begin, labels_end));
-  if (num_labels == 0) { return; }
+  if (thrust::distance(labels_begin, labels_end) == 0) { return; }
 
   auto const num_segments = static_cast<size_type>(thrust::distance(out_begin, out_end)) - 1;
 
