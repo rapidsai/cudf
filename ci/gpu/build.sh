@@ -236,6 +236,8 @@ cd "$WORKSPACE/python/cudf/cudf"
 # It is essential to cd into $WORKSPACE/python/cudf/cudf as `pytest-xdist` + `coverage` seem to work only at this directory level.
 gpuci_logger "Python py.test for cuDF"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope tests
+gpuci_logger "Python py.tests for cuDF with continuous spelling"
+CUDF_SPILL=on CUDF_SPILL_DEVICE_LIMIT=1 py.test -n 8 tests/test_binops.py -v
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"
