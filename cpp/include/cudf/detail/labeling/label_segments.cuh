@@ -73,8 +73,9 @@ void label_segments(InputIterator offsets_begin,
   using OutputType = typename thrust::iterator_value<OutputIterator>::type;
   thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
 
-  // Size of the input offset array needs to be at least two to properly define segments.
-  if (thrust::distance(offsets_begin, offsets_end) <= 1) { return; }
+  // If the offsets array has no more than 2 offset values, there will be at max 1 segment.
+  // In such cases, the output will just be an array of all `0` values (which we already filled).
+  if (thrust::distance(offsets_begin, offsets_end) <= 2) { return; }
 
   thrust::for_each(rmm::exec_policy(stream),
                    offsets_begin + 1,  // exclude the first offset value
@@ -85,8 +86,8 @@ void label_segments(InputIterator offsets_begin,
 
                      // Scatter value `1` to the index at (idx - offsets[0]).
                      // In case we have repeated offsets (i.e., we have empty segments), this
-                     // atomicAdd call will make sure the label values corresponding to these empty
-                     // segments will be skipped in the output.
+                     // `atomicAdd` call will make sure the label values corresponding to these
+                     // empty segments will be skipped in the output.
                      atomicAdd(&output[dst_idx], OutputType{1});
                    });
   thrust::inclusive_scan(rmm::exec_policy(stream), out_begin, out_end, out_begin);
