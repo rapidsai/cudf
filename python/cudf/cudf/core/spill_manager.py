@@ -116,7 +116,7 @@ class SpillManager:
         for buf in self.base_buffers():
             if not buf.is_spilled and buf._ptr and buf.size:
                 buf_end = buf._ptr + buf.size
-                if end >= buf._ptr and buf_end >= ptr:
+                if end > buf._ptr and buf_end > ptr:
                     if hit is not None:
                         raise RuntimeError(
                             f"Two base buffers overlap: {hit} and {buf}"
