@@ -3269,7 +3269,6 @@ TEST_F(ParquetWriterTest, EmptyList)
 
   using lcw     = cudf::test::lists_column_wrapper<int64_t>;
   auto expected = lcw{lcw{}, lcw{}, lcw{}};
-  cudf::test::print(expected);
   cudf::test::expect_columns_equal(result.tbl->view().column(0), expected);
 }
 
