@@ -204,16 +204,8 @@ TEST_F(DropListDuplicatesTest, StringTestsNonNull)
 {
   // Trivial cases - empty input.
   {
-    auto const lists    = StrListsCol{};
-    auto const expected = StrListsCol{};
-    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
-  }
-
-  // Empty input lists.
-  {
-    auto const lists    = StrListsCol{{}, {}, {}};
-    auto const expected = StrListsCol{{}, {}, {}};
+    auto const lists    = StrListsCol{{}};
+    auto const expected = StrListsCol{{}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
@@ -318,6 +310,19 @@ TYPED_TEST(DropListDuplicatesTypedTest, TrivialInputTests)
   {
     auto const lists    = ListsCol{};
     auto const expected = ListsCol{};
+    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+
+    auto const [results_keys, results_vals] = cudf::lists::drop_list_duplicates(
+      cudf::lists_column_view{lists}, cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected, verbosity);
+  }
+
+  // All input lists are empty.
+  {
+    auto const lists    = ListsCol{ListsCol{}, ListsCol{}, ListsCol{}};
+    auto const expected = ListsCol{ListsCol{}, ListsCol{}, ListsCol{}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
 
