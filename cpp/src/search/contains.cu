@@ -146,11 +146,13 @@ struct multi_contains_dispatch {
     auto const haystack_set    = cudf::detail::unordered_multiset<Type>::create(haystack, stream);
     auto const haystack_set_dv = haystack_set.to_device();
     auto const needles_cdv_ptr = column_device_view::create(needles, stream);
-    auto const needles_it      = thrust::make_counting_iterator<size_type>(0);
 
     auto const do_check = [&](auto const& check_fn) {
-      thrust::transform(
-        rmm::exec_policy(stream), needles_it, needles_it + needles.size(), out_begin, check_fn);
+      thrust::transform(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(needles.size()),
+                        out_begin,
+                        check_fn);
     };
 
     using SetType = decltype(haystack_set_dv);
