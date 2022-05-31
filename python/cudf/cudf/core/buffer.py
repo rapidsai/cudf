@@ -46,6 +46,13 @@ class Buffer(Serializable):
         Python object to which the lifetime of the memory
         allocation is tied. If provided, a reference to this
         object is kept in this Buffer.
+    sole_owner : bool, optional
+        Whether or not this buffer is the sole owner of the
+        underlying memory.
+    ptr_exposed : bool, optional
+        Whether or not a raw pointer (integer or C pointer) has
+        been exposed to the outside world . If this is the case,
+        the buffer cannot be spilled.
     """
 
     _ptr: Optional[int]
@@ -315,7 +322,7 @@ class Buffer(Serializable):
         else:
             data_info = str(hex(self._ptr))
         return (
-            f"<Buffer {hex(id(self))} size={self._size} "
+            f"<cudf.core.buffer.Buffer size={self._size} "
             f"spillable={self.spillable} ptr_exposed={self.ptr_exposed} "
             f"access_counter={self._access_counter.use_count()} "
             f"ptr={data_info} owner={repr(self._owner)}>"
