@@ -1471,7 +1471,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         // fixed 26 bytes + (sizeof(bool)+sizeof(int64)+2*max_statsize)*num_pages_in_chunk
         // ck_stat_size is a good proxy for how much memory is needed for the min/max values
         // calculating this per-chunk because the sizes can be wildly different
-        column_index_bfr_size += 26 + (ck->ck_stat_size + 9)*ck->num_pages;
+        column_index_bfr_size += 26 + (ck->ck_stat_size + 9) * ck->num_pages;
       }
     }
     // TBD: We may want to also shorten the batch if we have enough pages (not just based on size)
@@ -1518,7 +1518,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         ck.column_index_blob    = bfr_i;
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
-        bfr_i += 26 + (ck.ck_stat_size + 9)*ck.num_pages;
+        bfr_i += 26 + (ck.ck_stat_size + 9) * ck.num_pages;
       }
     }
   }
@@ -1657,7 +1657,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
           OffsetIndex offset_idx;
           for (uint32_t pg = 0; pg < ck.num_pages; pg++) {
-            auto& enc_page        = h_pages[curr_page_idx++];
+            auto& enc_page = h_pages[curr_page_idx++];
 
             // skip dict pages
             if (enc_page.page_type != PageType::DATA_PAGE) { continue; }
@@ -1716,20 +1716,20 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
       int chunkidx = 0;
       for (auto& r : fmd.row_groups) {
         for (auto& c : r.columns) {
-          ColumnIndex& index = fmd.column_indexes[chunkidx++];
+          ColumnIndex& index    = fmd.column_indexes[chunkidx++];
           c.column_index_offset = out_sink_[p]->bytes_written();
           c.column_index_length = index.column_index_blob.size();
           out_sink_[p]->host_write(index.column_index_blob.data(), index.column_index_blob.size());
         }
       }
-    
+
       // write offset indices, updating column metadata along the way
       chunkidx = 0;
       for (auto& r : fmd.row_groups) {
         for (auto& c : r.columns) {
           OffsetIndex& offsets = fmd.offset_indexes[chunkidx++];
           buffer.resize(0);
-          int32_t len = cpw.write(offsets);
+          int32_t len           = cpw.write(offsets);
           c.offset_index_offset = out_sink_[p]->bytes_written();
           c.offset_index_length = len;
           out_sink_[p]->host_write(buffer.data(), buffer.size());
