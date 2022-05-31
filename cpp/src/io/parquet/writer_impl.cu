@@ -1518,7 +1518,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         ck.column_index_blob    = bfr_i;
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
-        bfr_i += 26 + (ck->ck_stat_size + 9)*ck->num_pages;
+        bfr_i += 26 + (ck.ck_stat_size + 9)*ck.num_pages;
       }
     }
   }
