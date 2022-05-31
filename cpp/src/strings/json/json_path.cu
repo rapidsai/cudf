@@ -39,9 +39,6 @@
 #include <thrust/scan.h>
 #include <thrust/tuple.h>
 
-#include <algorithm>
-#include <numeric>
-
 namespace cudf {
 namespace strings {
 namespace detail {
