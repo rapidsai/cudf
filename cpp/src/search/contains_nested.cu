@@ -106,7 +106,7 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
   // more processing time due to expensive row comparisons.
   {
     auto const haystack_it = cudf::detail::make_counting_transform_iterator(
-      0, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
+      size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
 
     auto const hasher   = cudf::experimental::row::hash::row_hasher(haystack_tv, stream);
     auto const d_hasher = detail::experimental::compaction_hash(
@@ -128,7 +128,8 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
     // Thus, needle indices will iterate in reverse order in the range `[-1, -1-needles.size())`.
     // They will be converted back to the range `[0, needles.size())` then into `rhs_index_type`
     // automatically by `index_normalized_hasher_adapter` and `index_normalized_hasher_adapter`.
-    auto const needles_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(0));
+    auto const needles_it =
+      thrust::make_reverse_iterator(thrust::make_counting_iterator(size_type{0}));
 
     auto const hasher   = cudf::experimental::row::hash::row_hasher(needles_tv, stream);
     auto const d_hasher = cudf::experimental::row::hash::index_normalized_hasher_adapter{
