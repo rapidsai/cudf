@@ -230,7 +230,7 @@ if hasArg --incl_cache_stats; then
 fi
 
 # Append `-DFIND_CUDF_CPP=ON` to CMAKE_ARGS unless a user specified the option.
-if [[ ${CMAKE_ARGS} != *"DFIND_CUDF_CPP"* ]]; then
+if [[ "${CMAKE_ARGS}" != *"DFIND_CUDF_CPP"* ]]; then
     CMAKE_ARGS="${CMAKE_ARGS} -DFIND_CUDF_CPP=ON"
 fi
 
