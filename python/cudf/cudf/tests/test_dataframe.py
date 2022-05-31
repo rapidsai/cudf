@@ -262,8 +262,9 @@ def test_append_index(a, b):
 def test_axes_dataframe(data):
 
     # print(data)
-    psr = pd.DataFrame(data)
+    # psr = pd.DataFrame(data)
     csr = cudf.DataFrame(data)
+    psr = csr.to_pandas()
 
     expected = psr.axes
     actual = csr.axes
