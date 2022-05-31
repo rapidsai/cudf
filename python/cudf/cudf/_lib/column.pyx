@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import time
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -69,6 +71,10 @@ cdef class AccessCounter:
 ctypedef vector[shared_ptr[void]] OwnersVecT  # Type aliasing
 
 cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners):
+    """
+    Retrieve the raw data pointer of `buf`. If adds an owner reference
+    to `owners`.
+    """
     cdef AccessCounter ac
 
     if buf is None:
@@ -78,6 +84,7 @@ cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners):
         buf_ptr_exposed = buf._ptr_exposed
         buf.move_inplace(target="gpu")  # Unspill
         buf._ptr_exposed = True  # Expose the raw pointer
+        buf._last_accessed = time.monotonic()
         ac = buf._access_counter
         deref(owners).push_back(static_pointer_cast[void, int](ac.counter))
         # Now that we have a refence to `ac.counter`, we can recover
