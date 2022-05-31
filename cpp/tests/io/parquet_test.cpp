@@ -34,6 +34,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <src/io/parquet/compact_protocol_reader.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -3321,6 +3323,79 @@ TEST_F(ParquetWriterTest, EmptyListWithStruct)
     cudf::io::parquet_reader_options_builder(cudf::io::source_info(filepath)));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), *L0);
+}
+
+TEST_F(ParquetWriterTest, CheckPageRows)
+{
+  auto sequence = thrust::make_counting_iterator(0);
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto page_rows = 5000;
+  constexpr auto num_rows  = 2 * page_rows;
+  column_wrapper<int> col(sequence, sequence + num_rows, validity);
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(1, expected->num_columns());
+
+  auto filepath = temp_env->get_temp_filepath("CheckPageRows.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .max_page_size_rows(page_rows);
+  cudf_io::write_parquet(out_opts);
+
+  // check first page header and make sure it has only 5000 values
+  int fd = open(filepath.c_str(), O_RDONLY);
+  unsigned char buf[1024];
+  read(fd, buf, sizeof(buf));
+
+  // check magic
+  EXPECT_EQ(buf[0], 0x50);  // P
+  EXPECT_EQ(buf[1], 0x41);  // A
+  EXPECT_EQ(buf[2], 0x52);  // R
+  EXPECT_EQ(buf[3], 0x31);  // 1
+
+  cudf_io::parquet::CompactProtocolReader reader(&buf[4], sizeof(buf) - 4);
+  reader.get_i32();  // fld 1
+  int32_t page_type = reader.get_i32();
+  reader.get_i32();  // fld 2
+  reader.get_i32();  // uncomp_size
+  reader.get_i32();  // fld 3
+  int32_t comp_size = reader.get_i32();
+
+  // check to see if first page is data page, if not, then skip
+  if (page_type != 0) {
+    // read rest of header, get file pos, and seek to next header
+    reader.get_i32();  // struct start
+    reader.get_i32();  // fld 1
+    reader.get_i32();  // nvals
+    reader.get_i32();  // fld 2
+    reader.get_i32();  // encoding
+    reader.getb();     // end of struct
+    reader.getb();     // end of struct
+
+    // seek to next page header and read
+    int32_t pos = 4 + reader.bytecount() + comp_size;
+    lseek(fd, pos, SEEK_SET);
+    read(fd, buf, sizeof(buf));
+    reader.init(buf, sizeof(buf));
+
+    reader.get_i32();  // fld 1
+    page_type = reader.get_i32();
+    reader.get_i32();  // fld 2
+    reader.get_i32();  // uncomp_size
+    reader.get_i32();  // fld 3
+    comp_size = reader.get_i32();
+  }
+
+  EXPECT_EQ(page_type, 0);
+  reader.get_i32();                  // struct start
+  reader.get_i32();                  // fld 1
+  int32_t nvals = reader.get_i32();  // numvals
+  close(fd);
+
+  EXPECT_EQ(nvals, page_rows);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
