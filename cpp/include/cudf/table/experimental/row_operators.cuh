@@ -32,6 +32,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/iterator/iterator_adaptor.h>
+#include <thrust/iterator/iterator_facade.h>
 #include <thrust/logical.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
@@ -69,6 +71,68 @@ struct dispatch_void_if_nested {
 };
 
 namespace row {
+
+enum class lhs_index_type : size_type {};
+enum class rhs_index_type : size_type {};
+
+/**
+ * @brief A counting iterator that uses strongly typed indices bound to tables.
+ *
+ * Performing lexicographic or equality comparisons between values in two
+ * tables requires the use of strongly typed indices. The strong index types
+ * `lhs_index_type` and `rhs_index_type` ensure that index values are bound to
+ * the correct table, regardless of the order in which these indices are
+ * provided to the call operator. This struct and its type aliases
+ * `lhs_iterator` and `rhs_iterator` provide an interface similar to a counting
+ * iterator, with strongly typed values to represent the table indices.
+ *
+ * @tparam Index The strong index type
+ */
+template <typename Index, typename Underlying = std::underlying_type_t<Index>>
+struct strong_index_iterator : public thrust::iterator_facade<strong_index_iterator<Index>,
+                                                              Index,
+                                                              thrust::use_default,
+                                                              thrust::random_access_traversal_tag,
+                                                              Index,
+                                                              Underlying> {
+  using super_t = thrust::iterator_adaptor<strong_index_iterator<Index>, Index>;
+
+  explicit constexpr strong_index_iterator(Underlying n) : begin{n} {}
+
+  friend class thrust::iterator_core_access;
+
+ private:
+  __device__ constexpr void increment() { ++begin; }
+  __device__ constexpr void decrement() { --begin; }
+
+  __device__ constexpr void advance(Underlying n) { begin += n; }
+
+  __device__ constexpr bool equal(strong_index_iterator<Index> const& other) const noexcept
+  {
+    return begin == other.begin;
+  }
+
+  __device__ constexpr Index dereference() const noexcept { return static_cast<Index>(begin); }
+
+  __device__ constexpr Underlying distance_to(
+    strong_index_iterator<Index> const& other) const noexcept
+  {
+    return other.begin - begin;
+  }
+
+  Underlying begin{};
+};
+
+/**
+ * @brief Iterator representing indices into a left-side table.
+ */
+using lhs_iterator = strong_index_iterator<lhs_index_type>;
+
+/**
+ * @brief Iterator representing indices into a right-side table.
+ */
+using rhs_iterator = strong_index_iterator<rhs_index_type>;
+
 namespace lexicographic {
 
 /**
@@ -91,6 +155,8 @@ namespace lexicographic {
 template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
+  friend class two_table_comparator;
+
   /**
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
@@ -183,9 +249,9 @@ class device_row_comparator {
 
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
-                             not std::is_same_v<Element, cudf::struct_view>),
-              typename... Args>
-    __device__ cuda::std::pair<weak_ordering, int> operator()(Args...) const noexcept
+                             not std::is_same_v<Element, cudf::struct_view>)>
+    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type const,
+                                                              size_type const) const noexcept
     {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
@@ -211,8 +277,8 @@ class device_row_comparator {
         }
 
         // Non-empty structs have been modified to only have 1 child when using this.
-        lcol = detail::structs_column_device_view(lcol).sliced_child(0);
-        rcol = detail::structs_column_device_view(rcol).sliced_child(0);
+        lcol = detail::structs_column_device_view(lcol).get_sliced_child(0);
+        rcol = detail::structs_column_device_view(rcol).get_sliced_child(0);
         ++depth;
       }
 
@@ -234,12 +300,13 @@ class device_row_comparator {
    * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less, greater, or equivalent to the row at `rhs_index` in the `rhs` table.
    *
-   * @param lhs_index The index of row in the `lhs` table to examine
+   * @param lhs_index The index of the row in the `lhs` table to examine
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return weak ordering comparison of the row in the `lhs` table relative to the row in the `rhs`
    * table
    */
-  __device__ weak_ordering operator()(size_type lhs_index, size_type rhs_index) const noexcept
+  __device__ weak_ordering operator()(size_type const lhs_index,
+                                      size_type const rhs_index) const noexcept
   {
     int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
@@ -288,12 +355,14 @@ class device_row_comparator {
  */
 template <typename Comparator, weak_ordering... values>
 struct weak_ordering_comparator_impl {
-  __device__ bool operator()(size_type const lhs, size_type const rhs) const noexcept
+  template <typename LhsType, typename RhsType>
+  __device__ constexpr bool operator()(LhsType const lhs_index,
+                                       RhsType const rhs_index) const noexcept
   {
-    weak_ordering const result = comparator(lhs, rhs);
+    weak_ordering const result = comparator(lhs_index, rhs_index);
     return ((result == values) || ...);
   }
-  Comparator comparator;
+  Comparator const comparator;
 };
 
 /**
@@ -302,14 +371,12 @@ struct weak_ordering_comparator_impl {
  *
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
-template <typename Nullate>
-using less_comparator =
-  weak_ordering_comparator_impl<device_row_comparator<Nullate>, weak_ordering::LESS>;
+template <typename Comparator>
+using less_comparator = weak_ordering_comparator_impl<Comparator, weak_ordering::LESS>;
 
-template <typename Nullate>
-using less_equivalent_comparator = weak_ordering_comparator_impl<device_row_comparator<Nullate>,
-                                                                 weak_ordering::LESS,
-                                                                 weak_ordering::EQUIVALENT>;
+template <typename Comparator>
+using less_equivalent_comparator =
+  weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT>;
 
 struct preprocessed_table {
   using table_device_view_owner =
@@ -319,7 +386,7 @@ struct preprocessed_table {
    * @brief Preprocess table for use with lexicographical comparison
    *
    * Sets up the table for use with lexicographical comparison. The resulting preprocessed table can
-   * be passed to the constructor of `lex::self_comparator` to avoid preprocessing again.
+   * be passed to the constructor of `lexicographic::self_comparator` to avoid preprocessing again.
    *
    * @param table The table to preprocess
    * @param column_order Optional, host array the same length as a row that indicates the desired
@@ -337,6 +404,7 @@ struct preprocessed_table {
 
  private:
   friend class self_comparator;
+  friend class two_table_comparator;
 
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
@@ -395,10 +463,10 @@ struct preprocessed_table {
   }
 
  private:
-  table_device_view_owner _t;
-  rmm::device_uvector<order> _column_order;
-  rmm::device_uvector<null_order> _null_precedence;
-  rmm::device_uvector<size_type> _depths;
+  table_device_view_owner const _t;
+  rmm::device_uvector<order> const _column_order;
+  rmm::device_uvector<null_order> const _null_precedence;
+  rmm::device_uvector<size_type> const _depths;
 };
 
 /**
@@ -420,7 +488,7 @@ class self_comparator {
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of
    * the same table.
    *
-   * @param table The table to compare
+   * @param t The table to compare
    * @param column_order Optional, host array the same length as a row that indicates the desired
    * ascending/descending order of each column in a row. If empty, it is assumed all columns are
    * sorted in ascending order.
@@ -459,14 +527,132 @@ class self_comparator {
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    */
   template <typename Nullate>
-  less_comparator<Nullate> device_comparator(Nullate nullate = {}) const
+  less_comparator<device_row_comparator<Nullate>> device_comparator(Nullate nullate = {}) const
   {
-    return less_comparator<Nullate>{device_row_comparator<Nullate>(
+    return less_comparator<device_row_comparator<Nullate>>{device_row_comparator<Nullate>(
       nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
   }
 
  private:
   std::shared_ptr<preprocessed_table> d_t;
+};
+
+template <typename Comparator>
+struct strong_index_comparator_adapter {
+  __device__ constexpr weak_ordering operator()(lhs_index_type const lhs_index,
+                                                rhs_index_type const rhs_index) const noexcept
+  {
+    return comparator(static_cast<cudf::size_type>(lhs_index),
+                      static_cast<cudf::size_type>(rhs_index));
+  }
+
+  __device__ constexpr weak_ordering operator()(rhs_index_type const rhs_index,
+                                                lhs_index_type const lhs_index) const noexcept
+  {
+    auto const left_right_ordering =
+      comparator(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
+
+    // Invert less/greater values to reflect right to left ordering
+    if (left_right_ordering == weak_ordering::LESS) {
+      return weak_ordering::GREATER;
+    } else if (left_right_ordering == weak_ordering::GREATER) {
+      return weak_ordering::LESS;
+    }
+    return weak_ordering::EQUIVALENT;
+  }
+
+  Comparator const comparator;
+};
+
+/**
+ * @brief An owning object that can be used to lexicographically compare rows of two different
+ * tables
+ *
+ * This class takes two table_views and preprocesses certain columns to allow for lexicographical
+ * comparison. The preprocessed table and temporary data required for the comparison are created and
+ * owned by this class.
+ *
+ * Alternatively, `two_table_comparator` can be constructed from two existing
+ * `shared_ptr<preprocessed_table>`s when sharing the same tables among multiple comparators.
+ *
+ * This class can then provide a functor object that can used on the device.
+ * The object of this class must outlive the usage of the device functor.
+ */
+class two_table_comparator {
+ public:
+  /**
+   * @brief Construct an owning object for performing a lexicographic comparison between rows of
+   * two different tables.
+   *
+   * The left and right table are expected to have the same number of columns
+   * and data types for each column.
+   *
+   * @param left The left table to compare
+   * @param right The right table to compare
+   * @param column_order Optional, host array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If empty, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If empty, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
+  two_table_comparator(table_view const& left,
+                       table_view const& right,
+                       host_span<order const> column_order         = {},
+                       host_span<null_order const> null_precedence = {},
+                       rmm::cuda_stream_view stream                = rmm::cuda_stream_default);
+
+  /**
+   * @brief Construct an owning object for performing a lexicographic comparison between two rows of
+   * the same preprocessed table.
+   *
+   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
+   * multiple comparators.
+   *
+   * @param left A table preprocessed for lexicographic comparison
+   * @param right A table preprocessed for lexicographic comparison
+   */
+  two_table_comparator(std::shared_ptr<preprocessed_table> left,
+                       std::shared_ptr<preprocessed_table> right)
+    : d_left_table{std::move(left)}, d_right_table{std::move(right)}
+  {
+  }
+
+  /**
+   * @brief Return the binary operator for comparing rows in the table.
+   *
+   * Returns a binary callable, `F`, with signatures
+   * `bool F(lhs_index_type, rhs_index_type)` and
+   * `bool F(rhs_index_type, lhs_index_type)`.
+   *
+   * `F(lhs_index_type i, rhs_index_type j)` returns true if and only if row
+   * `i` of the left table compares lexicographically less than row `j` of the
+   * right table.
+   *
+   * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and
+   * only if row `i` of the right table compares lexicographically less than row
+   * `j` of the left table.
+   *
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+   */
+  template <typename Nullate>
+  less_comparator<strong_index_comparator_adapter<device_row_comparator<Nullate>>>
+  device_comparator(Nullate nullate = {}) const
+  {
+    return less_comparator<strong_index_comparator_adapter<device_row_comparator<Nullate>>>{
+      device_row_comparator<Nullate>(nullate,
+                                     *d_left_table,
+                                     *d_right_table,
+                                     d_left_table->depths(),
+                                     d_left_table->column_order(),
+                                     d_left_table->null_precedence())};
+  }
+
+ private:
+  std::shared_ptr<preprocessed_table> d_left_table;
+  std::shared_ptr<preprocessed_table> d_right_table;
 };
 
 }  // namespace lexicographic
@@ -480,6 +666,7 @@ namespace equality {
 template <typename Nullate>
 class device_row_comparator {
   friend class self_comparator;
+  friend class two_table_comparator;
 
  public:
   /**
@@ -603,8 +790,8 @@ class device_row_comparator {
         if (lcol.type().id() == type_id::STRUCT) {
           if (lcol.num_child_columns() == 0) { return true; }
           // Non-empty structs are assumed to be decomposed and contain only one child
-          lcol = detail::structs_column_device_view(lcol).sliced_child(0);
-          rcol = detail::structs_column_device_view(rcol).sliced_child(0);
+          lcol = detail::structs_column_device_view(lcol).get_sliced_child(0);
+          rcol = detail::structs_column_device_view(rcol).get_sliced_child(0);
         } else if (lcol.type().id() == type_id::LIST) {
           auto l_list_col = detail::lists_column_device_view(lcol);
           auto r_list_col = detail::lists_column_device_view(rcol);
@@ -615,8 +802,8 @@ class device_row_comparator {
             return false;
           }
 
-          lcol = l_list_col.sliced_child();
-          rcol = r_list_col.sliced_child();
+          lcol = l_list_col.get_sliced_child();
+          rcol = r_list_col.get_sliced_child();
           if (lcol.size() != rcol.size()) { return false; }
         }
       }
@@ -689,6 +876,7 @@ struct preprocessed_table {
 
  private:
   friend class self_comparator;
+  friend class two_table_comparator;
   friend class hash::row_hasher;
 
   using table_device_view_owner =
@@ -755,6 +943,98 @@ class self_comparator {
 
  private:
   std::shared_ptr<preprocessed_table> d_t;
+};
+
+template <typename Comparator>
+struct strong_index_comparator_adapter {
+  __device__ constexpr bool operator()(lhs_index_type const lhs_index,
+                                       rhs_index_type const rhs_index) const noexcept
+  {
+    return comparator(static_cast<cudf::size_type>(lhs_index),
+                      static_cast<cudf::size_type>(rhs_index));
+  }
+
+  __device__ constexpr bool operator()(rhs_index_type const rhs_index,
+                                       lhs_index_type const lhs_index) const noexcept
+  {
+    return this->operator()(lhs_index, rhs_index);
+  }
+
+  Comparator const comparator;
+};
+
+/**
+ * @brief An owning object that can be used to equality compare rows of two different tables.
+ *
+ * This class takes two table_views and preprocesses certain columns to allow for equality
+ * comparison. The preprocessed table and temporary data required for the comparison are created and
+ * owned by this class.
+ *
+ * Alternatively, `two_table_comparator` can be constructed from two existing
+ * `shared_ptr<preprocessed_table>`s when sharing the same tables among multiple comparators.
+ *
+ * This class can then provide a functor object that can used on the device.
+ * The object of this class must outlive the usage of the device functor.
+ */
+class two_table_comparator {
+ public:
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows from two
+   * tables.
+   *
+   * The left and right table are expected to have the same number of columns and data types for
+   * each column.
+   *
+   * @param left The left table to compare.
+   * @param right The right table to compare.
+   * @param stream The stream to construct this object on. Not the stream that will be used for
+   * comparisons using this object.
+   */
+  two_table_comparator(table_view const& left,
+                       table_view const& right,
+                       rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Construct an owning object for performing equality comparisons between two rows from two
+   * tables.
+   *
+   * This constructor allows independently constructing a `preprocessed_table` and sharing it among
+   * multiple comparators.
+   *
+   * @param left The left table preprocessed for equality comparison.
+   * @param right The right table preprocessed for equality comparison.
+   */
+  two_table_comparator(std::shared_ptr<preprocessed_table> left,
+                       std::shared_ptr<preprocessed_table> right)
+    : d_left_table{std::move(left)}, d_right_table{std::move(right)}
+  {
+  }
+
+  /**
+   * @brief Return the binary operator for comparing rows in the table.
+   *
+   * Returns a binary callable, `F`, with signatures `bool F(lhs_index_type, rhs_index_type)` and
+   * `bool F(rhs_index_type, lhs_index_type)`.
+   *
+   * `F(lhs_index_type i, rhs_index_type j)` returns true if and only if row `i` of the left table
+   * compares equal to row `j` of the right table.
+   *
+   * Similarly, `F(rhs_index_type i, lhs_index_type j)` returns true if and only if row `i` of the
+   * right table compares equal to row `j` of the left table.
+   *
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+   */
+  template <typename Nullate>
+  auto device_comparator(Nullate nullate               = {},
+                         null_equality nulls_are_equal = null_equality::EQUAL) const
+  {
+    return strong_index_comparator_adapter<device_row_comparator<Nullate>>{
+      device_row_comparator<Nullate>(nullate, *d_left_table, *d_right_table, nulls_are_equal)};
+  }
+
+ private:
+  std::shared_ptr<preprocessed_table> d_left_table;
+  std::shared_ptr<preprocessed_table> d_right_table;
 };
 
 }  // namespace equality
@@ -867,7 +1147,7 @@ class device_row_hasher {
         if (curr_col.type().id() == type_id::STRUCT) {
           if (curr_col.num_child_columns() == 0) { return hash; }
           // Non-empty structs are assumed to be decomposed and contain only one child
-          curr_col = detail::structs_column_device_view(curr_col).sliced_child(0);
+          curr_col = detail::structs_column_device_view(curr_col).get_sliced_child(0);
         } else if (curr_col.type().id() == type_id::LIST) {
           auto list_col   = detail::lists_column_device_view(curr_col);
           auto list_sizes = make_list_size_iterator(list_col);
@@ -875,7 +1155,7 @@ class device_row_hasher {
             list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
               return cudf::detail::hash_combine(hash, hash_fn<size_type>{}(size));
             });
-          curr_col = list_col.sliced_child();
+          curr_col = list_col.get_sliced_child();
         }
       }
       for (int i = 0; i < curr_col.size(); ++i) {

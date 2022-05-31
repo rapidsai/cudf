@@ -54,8 +54,8 @@ THE SOFTWARE.
 
 */
 
-#include "brotli_dict.h"
-#include "gpuinflate.h"
+#include "brotli_dict.hpp"
+#include "gpuinflate.hpp"
 
 #include <io/utilities/block_utils.cuh>
 
@@ -90,7 +90,7 @@ inline __device__ uint32_t brev8(uint32_t x)
 }
 
 #define CONSTANT static const __device__ __constant__
-#include "brotli_tables.h"
+#include "brotli_tables.hpp"
 
 /* typeof(MODE) == ContextType; returns ContextLut */
 __inline__ __device__ int brotli_context_lut(int mode) { return (mode << 9); }

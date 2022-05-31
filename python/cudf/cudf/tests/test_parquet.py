@@ -2509,8 +2509,11 @@ def test_parquet_reader_decimal_columns():
     assert_eq(actual, expected)
 
 
-def test_parquet_reader_unsupported_compression(datadir):
+def test_parquet_reader_zstd_compression(datadir):
     fname = datadir / "spark_zstd.parquet"
-
-    with pytest.raises(RuntimeError):
-        cudf.read_parquet(fname)
+    try:
+        df = cudf.read_parquet(fname)
+        pdf = pd.read_parquet(fname)
+        assert_eq(df, pdf)
+    except RuntimeError:
+        pytest.mark.xfail(reason="zstd support is not enabled")
