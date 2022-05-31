@@ -178,3 +178,13 @@ def test_lookup_address_range(manager: SpillManager):
     assert manager.lookup_address_range(buf.ptr - 1, buf.size + 1) is buf
     assert manager.lookup_address_range(buf.ptr + buf.size, buf.size) is None
     assert manager.lookup_address_range(buf.ptr - buf.size, buf.size) is None
+
+
+def test_spilling_df_views():
+    df = gen_df()
+    assert gen_df.is_spillable(df)
+    gen_df.buffer(df).move_inplace(target="cpu")
+    assert gen_df.is_spilled(df)
+    df_view = df.loc[1:]
+    assert not gen_df.is_spillable(df)
+    assert not gen_df.is_spillable(df_view)
