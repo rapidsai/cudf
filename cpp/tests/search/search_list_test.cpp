@@ -85,6 +85,8 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, TrivialInput)
   }();
 
   EXPECT_TRUE(cudf::contains(haystack, needle1));
+
+  // Lists are order-senstive.
   EXPECT_FALSE(cudf::contains(haystack, needle2));
 }
 
