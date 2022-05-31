@@ -69,17 +69,21 @@ cdef class AccessCounter:
 ctypedef vector[shared_ptr[void]] OwnersVecT  # Type aliasing
 
 cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners):
+    cdef AccessCounter ac
+
     if buf is None:
         return NULL
 
-    buf_ptr_exposed = buf.ptr_exposed
-    cdef uintptr_t ptr = buf.ptr  # Expose the raw pointer
-    cdef AccessCounter ac = buf._access_counter
-    deref(owners).push_back(static_pointer_cast[void, int](ac.counter))
-    # Now that we have a refence to `ac.counter`, we can recover
-    # the "expose" state of `buf`
-    buf._ptr_exposed = buf_ptr_exposed
-    return <void*> ptr
+    with buf._lock:
+        buf_ptr_exposed = buf._ptr_exposed
+        buf.move_inplace(target="gpu")  # Unspill
+        buf._ptr_exposed = True  # Expose the raw pointer
+        ac = buf._access_counter
+        deref(owners).push_back(static_pointer_cast[void, int](ac.counter))
+        # Now that we have a refence to `ac.counter`, we can recover
+        # the "expose" state of `buf`
+        buf._ptr_exposed = buf_ptr_exposed
+        return <void*><uintptr_t>buf._ptr
 
 
 cdef class Column:
