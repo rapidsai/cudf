@@ -98,7 +98,7 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
                           stream.value()};
 
   // Insert all indices of the elements in the haystack column into the hash map.
-  // As such, we will use `thrust::equal_to` as key comparator.
+  // As such, we will use `thrust::equal_to` as key comparator to not ignore any key.
   //
   // An alternative way to this is to use `self_comparator` for key comparisons, which would only
   // insert unique rows of the haystack column. This would save some memory (or significant amount
@@ -120,16 +120,14 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
   }
 
   // Check for existence of needles in haystack.
-  // During this, we will use `table_comparator_adapter` to convert the existing indices in the
-  // hash map (i.e., indices of haystack elements) into `lhs_index_type`, and indices of the
+  // During this, we will use `index_normalized_comparator_adapter` to convert the existing indices
+  // in the hash map (i.e., indices of haystack elements) into `lhs_index_type`, and indices of the
   // searching needles into `rhs_index_type` for row comparisons.
   {
-    // Supply negative indices so `table_comparator_adapter` can recognize and convert them to
-    // `rhs_index_type`.
     // A reverse iterator constructed from `0` value will begin from `-1`.
-    // Thus, needle indices will iterate in reverse order in the range `[-1, -1-neeedles.size())`.
-    // They need to be converted back to the range `[0, needles.size())` when calling to table
-    // comparator and row hasher.
+    // Thus, needle indices will iterate in reverse order in the range `[-1, -1-needles.size())`.
+    // They will be converted back to the range `[0, needles.size())` then into `rhs_index_type`
+    // automatically by `index_normalized_hasher_adapter` and `index_normalized_hasher_adapter`.
     auto const needles_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(0));
 
     auto const hasher   = cudf::experimental::row::hash::row_hasher(needles_tv, stream);
