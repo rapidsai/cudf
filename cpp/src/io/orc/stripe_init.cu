@@ -239,8 +239,8 @@ enum row_entry_state_e {
  * @return bytes consumed
  */
 static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s* s,
-                                                      const uint8_t* start,
-                                                      const uint8_t* end)
+                                                      uint8_t const* const start,
+                                                      uint8_t const* const end)
 {
   constexpr uint32_t pb_rowindexentry_id = ProtofType::FIXEDLEN + 8;
 
@@ -471,7 +471,7 @@ __global__ void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_gr
                           : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].num_rows;
       auto const start_row =
         (use_base_stride)
-          ? rowidx_stride
+          ? i * rowidx_stride
           : row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x].start_row;
       for (int j = t4; j < rowgroup_size4; j += 4) {
         ((uint32_t*)&row_groups[(s->rowgroup_start + i) * num_columns + blockIdx.x])[j] =

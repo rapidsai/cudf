@@ -25,8 +25,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf::detail {
@@ -49,31 +49,20 @@ bool contains_nested_element(column_view const& haystack,
   auto const end   = begin + haystack.size();
   using cudf::experimental::row::rhs_index_type;
 
-  auto const found_it = [&] {
-    if (haystack.has_nulls()) {
-      auto const haystack_cdv_ptr  = column_device_view::create(haystack, stream);
-      auto const haystack_valid_it = cudf::detail::make_validity_iterator<false>(*haystack_cdv_ptr);
+  if (haystack.has_nulls()) {
+    auto const haystack_cdv_ptr  = column_device_view::create(haystack, stream);
+    auto const haystack_valid_it = cudf::detail::make_validity_iterator<false>(*haystack_cdv_ptr);
 
-      return thrust::find_if(
-        rmm::exec_policy(stream),
-        begin,
-        end,
-        [d_comp, haystack_valid_it] __device__(auto const idx) {
-          if (!haystack_valid_it[static_cast<size_type>(idx)]) { return false; }
-          return d_comp(idx,
-                        static_cast<rhs_index_type>(0));  // compare haystack[idx] == needle[0].
-        });
+    return thrust::any_of(
+      rmm::exec_policy(stream), begin, end, [d_comp, haystack_valid_it] __device__(auto const idx) {
+        if (!haystack_valid_it[static_cast<size_type>(idx)]) { return false; }
+        return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
+      });
+  }
 
-    } else {
-      return thrust::find_if(
-        rmm::exec_policy(stream), begin, end, [d_comp] __device__(auto const idx) {
-          return d_comp(idx,
-                        static_cast<rhs_index_type>(0));  // compare haystack[idx] == needle[0].
-        });
-    }
-  }();
-
-  return found_it != end;
+  return thrust::any_of(rmm::exec_policy(stream), begin, end, [d_comp] __device__(auto const idx) {
+    return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
+  });
 }
 
 namespace {
@@ -81,18 +70,18 @@ namespace {
  * @brief Convert an index `i` iterating in reverse order in the range `[-1, -size-1)` into the
  *        valid index range `[0, size)`.
  *
- * This conversion is needed when we want to use two strong index types but are limited to use only
- * one type. As such, we can use non-negative indices to denote one strong index type and negative
- * indices to denote the other. After recognizing the corresponding type, we need to convert the
- * negative indices into their original values.
+ * This conversion is needed when we want to use two strong index types but are limited to use
+ * only one type. As such, we can use non-negative indices to denote one strong index type and
+ * negative indices to denote the other. After recognizing the corresponding type, we need to
+ * convert the negative indices into their original values.
  */
 struct index_adapter {
   __device__ inline auto operator()(size_type const i) const noexcept { return -(i + 1); }
 };
 
 /**
- * @brief The adapter functor for calling a table comparator from row indices that may have negative
- *        values.
+ * @brief The adapter functor for calling a table comparator from row indices that may have
+ * negative values.
  *
  * @tparam Comparator A class of table comparator with strong index types and supports nested
  *         types data.
@@ -217,9 +206,9 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
   }
 
   // Check for existence of needles in haystack.
-  // During this, we will use `table_comparator_adapter` to convert the existing indices in the hash
-  // map (i.e., indices of haystack elements) into `lhs_index_type`, and indices of the searching
-  // needles into `rhs_index_type` for row comparisons.
+  // During this, we will use `table_comparator_adapter` to convert the existing indices in the
+  // hash map (i.e., indices of haystack elements) into `lhs_index_type`, and indices of the
+  // searching needles into `rhs_index_type` for row comparisons.
   {
     // Supply negative indices so `table_comparator_adapter` can recognize and convert them to
     // `rhs_index_type`.

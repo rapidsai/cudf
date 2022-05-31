@@ -17,24 +17,17 @@
 #include <hash/unordered_multiset.cuh>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/lists/list_view.hpp>
-#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/struct_view.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/fill.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
@@ -59,23 +52,19 @@ struct contains_scalar_dispatch {
     auto const d_haystack = column_device_view::create(haystack, stream);
     auto const s          = static_cast<ScalarType const*>(&needle);
 
-    auto const check_contain = [stream](auto const& begin, auto const& end, auto const& val) {
-      auto const found_it = thrust::find(rmm::exec_policy(stream), begin, end, val);
-      return found_it != end;
-    };
-
     if (haystack.has_nulls()) {
       auto const begin = d_haystack->pair_begin<DType, true>();
       auto const end   = d_haystack->pair_end<DType, true>();
       auto const val   = thrust::make_pair(s->value(stream), true);
 
-      return check_contain(begin, end, val);
+      return thrust::find(rmm::exec_policy(stream), begin, end, val) != end;
+
     } else {
       auto const begin = d_haystack->begin<DType>();
       auto const end   = d_haystack->end<DType>();
       auto const val   = s->value(stream);
 
-      return check_contain(begin, end, val);
+      return thrust::find(rmm::exec_policy(stream), begin, end, val) != end;
     }
   }
 

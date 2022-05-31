@@ -14,6 +14,15 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/io_metadata_utilities.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -24,14 +33,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/io_metadata_utilities.hpp>
-#include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -2553,8 +2554,8 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
       cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).columns({"b", "a"});
     auto result = cudf_io::read_parquet(read_opts);
 
-    cudf::test::expect_columns_equal(result.tbl->view().column(0), b);
-    cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), b);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), a);
   }
 
   {
@@ -2575,8 +2576,8 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
       cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).columns({"b", "a"});
     auto result = cudf_io::read_parquet(read_opts);
 
-    cudf::test::expect_columns_equal(result.tbl->view().column(0), b);
-    cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), b);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), a);
   }
 
   auto a = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3, 10, 20, 30};
@@ -2604,10 +2605,10 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
         .columns({"d", "a", "b", "c"});
     auto result = cudf_io::read_parquet(read_opts);
 
-    cudf::test::expect_columns_equal(result.tbl->view().column(0), d);
-    cudf::test::expect_columns_equal(result.tbl->view().column(1), a);
-    cudf::test::expect_columns_equal(result.tbl->view().column(2), b);
-    cudf::test::expect_columns_equal(result.tbl->view().column(3), c);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), d);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), a);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(2), b);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(3), c);
   }
 
   {
@@ -2617,10 +2618,10 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
         .columns({"c", "d", "a", "b"});
     auto result = cudf_io::read_parquet(read_opts);
 
-    cudf::test::expect_columns_equal(result.tbl->view().column(0), c);
-    cudf::test::expect_columns_equal(result.tbl->view().column(1), d);
-    cudf::test::expect_columns_equal(result.tbl->view().column(2), a);
-    cudf::test::expect_columns_equal(result.tbl->view().column(3), b);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), c);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), d);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(2), a);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(3), b);
   }
 
   {
@@ -2630,10 +2631,10 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
         .columns({"d", "c", "b", "a"});
     auto result = cudf_io::read_parquet(read_opts);
 
-    cudf::test::expect_columns_equal(result.tbl->view().column(0), d);
-    cudf::test::expect_columns_equal(result.tbl->view().column(1), c);
-    cudf::test::expect_columns_equal(result.tbl->view().column(2), b);
-    cudf::test::expect_columns_equal(result.tbl->view().column(3), a);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), d);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), c);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(2), b);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(3), a);
   }
 }
 
@@ -2951,7 +2952,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
               sizeof(col0_data) / sizeof(col0_data[0]));
     cudf::test::fixed_point_column_wrapper<int32_t> col0(
       std::begin(col0_data), std::end(col0_data), validity, numeric::scale_type{-4});
-    cudf::test::expect_columns_equal(result.tbl->view().column(0), col0);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), col0);
 
     int64_t col1_data[] = {29274040266581,  -17210335917753, -58420730139037,
                            68073792696254,  2236456014294,   13704555677045,
@@ -2976,7 +2977,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
               sizeof(col1_data) / sizeof(col1_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col1(
       std::begin(col1_data), std::end(col1_data), validity, numeric::scale_type{-5});
-    cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), col1);
 
     cudf_io::parquet_reader_options read_strict_opts = read_opts;
     read_strict_opts.set_columns({"dec7p4", "dec14p5"});
@@ -3088,7 +3089,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
               sizeof(col0_data) / sizeof(col0_data[0]));
     cudf::test::fixed_point_column_wrapper<int32_t> col0(
       std::begin(col0_data), std::end(col0_data), validity_c0, numeric::scale_type{-3});
-    cudf::test::expect_columns_equal(result.tbl->view().column(0), col0);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), col0);
 
     auto validity_c1    = cudf::test::iterators::nulls_at({18});
     int64_t col1_data[] = {361378026250,
@@ -3116,7 +3117,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
               sizeof(col1_data) / sizeof(col1_data[0]));
     cudf::test::fixed_point_column_wrapper<int64_t> col1(
       std::begin(col1_data), std::end(col1_data), validity_c1, numeric::scale_type{-11});
-    cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), col1);
 
     auto validity_c2       = cudf::test::iterators::nulls_at({6, 14});
     __int128_t col2_data[] = {9078697037144433659,
@@ -3144,7 +3145,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
               sizeof(col2_data) / sizeof(col2_data[0]));
     cudf::test::fixed_point_column_wrapper<__int128_t> col2(
       std::begin(col2_data), std::end(col2_data), validity_c2, numeric::scale_type{-1});
-    cudf::test::expect_columns_equal(result.tbl->view().column(2), col2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(2), col2);
   }
 }
 
@@ -3269,8 +3270,7 @@ TEST_F(ParquetWriterTest, EmptyList)
 
   using lcw     = cudf::test::lists_column_wrapper<int64_t>;
   auto expected = lcw{lcw{}, lcw{}, lcw{}};
-  cudf::test::print(expected);
-  cudf::test::expect_columns_equal(result.tbl->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected);
 }
 
 TEST_F(ParquetWriterTest, DeepEmptyList)
@@ -3295,7 +3295,7 @@ TEST_F(ParquetWriterTest, DeepEmptyList)
   auto result = cudf_io::read_parquet(
     cudf::io::parquet_reader_options_builder(cudf::io::source_info(filepath)));
 
-  cudf::test::expect_columns_equal(result.tbl->view().column(0), *L0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), *L0);
 }
 
 TEST_F(ParquetWriterTest, EmptyListWithStruct)
@@ -3320,7 +3320,7 @@ TEST_F(ParquetWriterTest, EmptyListWithStruct)
   auto result = cudf_io::read_parquet(
     cudf::io::parquet_reader_options_builder(cudf::io::source_info(filepath)));
 
-  cudf::test::expect_columns_equal(result.tbl->view().column(0), *L0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), *L0);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
