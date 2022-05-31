@@ -40,10 +40,10 @@ namespace detail {
 namespace {
 
 struct contains_scalar_dispatch {
-  template <typename Type>
-  std::enable_if_t<!is_nested<Type>(), bool> operator()(column_view const& haystack,
-                                                        scalar const& needle,
-                                                        rmm::cuda_stream_view stream) const
+  template <typename Type, CUDF_ENABLE_IF(!is_nested<Type>())>
+  bool operator()(column_view const& haystack,
+                  scalar const& needle,
+                  rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
@@ -71,10 +71,10 @@ struct contains_scalar_dispatch {
     }
   }
 
-  template <typename Type>
-  std::enable_if_t<is_nested<Type>(), bool> operator()(column_view const& haystack,
-                                                       scalar const& needle,
-                                                       rmm::cuda_stream_view stream) const
+  template <typename Type, CUDF_ENABLE_IF(is_nested<Type>())>
+  bool operator()(column_view const& haystack,
+                  scalar const& needle,
+                  rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
     // Haystack and needle structure compatibility will be checked by the table comparator
@@ -106,12 +106,27 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 }
 
 struct multi_contains_dispatch {
-  template <typename Type>
-  std::enable_if_t<!is_nested<Type>(), std::unique_ptr<column>> operator()(
-    column_view const& haystack,
-    column_view const& needles,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const
+  template <bool has_nulls, typename ElementType, typename Haystack>
+  struct contains_fn {
+    bool __device__ operator()(size_type const idx) const
+    {
+      if constexpr (has_nulls) {
+        return needles.is_null_nocheck(idx) ||
+               haystack.contains(needles.template element<ElementType>(idx));
+      } else {
+        return haystack.contains(needles.template element<ElementType>(idx));
+      }
+    }
+
+    Haystack const haystack;
+    column_device_view const needles;
+  };
+
+  template <typename Type, CUDF_ENABLE_IF(!is_nested<Type>())>
+  std::unique_ptr<column> operator()(column_view const& haystack,
+                                     column_view const& needles,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     auto result = make_numeric_column(data_type{type_to_id<bool>()},
                                       needles.size(),
@@ -129,39 +144,30 @@ struct multi_contains_dispatch {
     }
 
     auto const haystack_set    = cudf::detail::unordered_multiset<Type>::create(haystack, stream);
+    auto const haystack_set_dv = haystack_set.to_device();
     auto const needles_cdv_ptr = column_device_view::create(needles, stream);
     auto const needles_it      = thrust::make_counting_iterator<size_type>(0);
 
+    auto const do_check = [&](auto const& check_fn) {
+      thrust::transform(
+        rmm::exec_policy(stream), needles_it, needles_it + needles.size(), out_begin, check_fn);
+    };
+
+    using SetType = decltype(haystack_set_dv);
     if (needles.has_nulls()) {
-      thrust::transform(rmm::exec_policy(stream),
-                        needles_it,
-                        needles_it + needles.size(),
-                        out_begin,
-                        [haystack = haystack_set.to_device(),
-                         needles  = *needles_cdv_ptr] __device__(size_type const idx) {
-                          return needles.is_null_nocheck(idx) ||
-                                 haystack.contains(needles.template element<Type>(idx));
-                        });
+      do_check(contains_fn<true, Type, SetType>{haystack_set_dv, *needles_cdv_ptr});
     } else {
-      thrust::transform(rmm::exec_policy(stream),
-                        needles_it,
-                        needles_it + needles.size(),
-                        out_begin,
-                        [haystack = haystack_set.to_device(),
-                         needles  = *needles_cdv_ptr] __device__(size_type const index) {
-                          return haystack.contains(needles.template element<Type>(index));
-                        });
+      do_check(contains_fn<false, Type, SetType>{haystack_set_dv, *needles_cdv_ptr});
     }
 
     return result;
   }
 
-  template <typename Type>
-  std::enable_if_t<is_nested<Type>(), std::unique_ptr<column>> operator()(
-    column_view const& haystack,
-    column_view const& needles,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const
+  template <typename Type, CUDF_ENABLE_IF(is_nested<Type>())>
+  std::unique_ptr<column> operator()(column_view const& haystack,
+                                     column_view const& needles,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     return multi_contains_nested_elements(haystack, needles, stream, mr);
   }
