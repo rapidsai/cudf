@@ -1582,7 +1582,6 @@ __global__ void __launch_bounds__(1024)
     if (!t && page == 0 && ck_g.use_dictionary) { ck_g.dictionary_size = hdr_len + data_len; }
   }
   if (t == 0) {
-    uint8_t* col_idx_end;
     chunks[blockIdx.x].bfr_size        = uncompressed_size;
     chunks[blockIdx.x].compressed_size = (dst - dst_base);
     if (ck_g.use_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
@@ -1592,6 +1591,7 @@ __global__ void __launch_bounds__(1024)
       parquet_column_device_view col_g = *ck_g.col_desc;
       const void *vmin, *vmax;
       uint32_t lmin, lmax;
+      uint8_t* col_idx_end;
 
       size_t first_data_page = ck_g.use_dictionary ? 1 : 0;
       uint32_t pageidx       = ck_g.first_page;
