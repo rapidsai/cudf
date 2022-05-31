@@ -317,6 +317,7 @@ class Buffer(Serializable):
         return (
             f"<Buffer {hex(id(self))} size={self._size} "
             f"spillable={self.spillable} ptr_exposed={self.ptr_exposed} "
+            f"access_counter={self._access_counter.use_count()} "
             f"ptr={data_info} owner={repr(self._owner)}>"
         )
 
