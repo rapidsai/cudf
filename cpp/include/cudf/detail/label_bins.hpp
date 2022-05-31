@@ -21,6 +21,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
@@ -50,7 +51,7 @@ std::unique_ptr<column> label_bins(
   inclusive left_inclusive,
   column_view const& right_edges,
   inclusive right_inclusive,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

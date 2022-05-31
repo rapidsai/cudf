@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -63,7 +64,7 @@ namespace cudf {
 std::unique_ptr<column> make_dictionary_column(
   column_view const& keys_column,
   column_view const& indices_column,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -115,7 +116,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
 std::unique_ptr<column> make_dictionary_column(
   std::unique_ptr<column> keys_column,
   std::unique_ptr<column> indices_column,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

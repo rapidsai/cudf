@@ -19,6 +19,7 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/copying.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -44,7 +45,7 @@ static void BM_copy_if_else(benchmark::State& state, bool nulls)
   cudf::column_view lhs(input->view().column(0));
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     cudf::copy_if_else(lhs, rhs, decision);
   }
 }

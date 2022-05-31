@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -35,7 +36,7 @@ std::unique_ptr<table> repeat(
   table_view const& input_table,
   column_view const& count,
   bool check_count,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -47,7 +48,7 @@ std::unique_ptr<table> repeat(
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   size_type count,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

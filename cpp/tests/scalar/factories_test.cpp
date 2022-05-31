@@ -21,13 +21,14 @@
 
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 class ScalarFactoryTest : public cudf::test::BaseFixture {
  public:
-  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
+  rmm::cuda_stream_view stream() { return cudf::default_stream_value; }
 };
 
 template <typename T>

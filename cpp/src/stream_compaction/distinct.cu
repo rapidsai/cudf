@@ -31,6 +31,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -105,7 +106,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(input, keys, nulls_equal, rmm::cuda_stream_default, mr);
+  return detail::distinct(input, keys, nulls_equal, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

@@ -21,6 +21,7 @@
 #include <cudf/detail/reshape.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -64,7 +65,7 @@ std::unique_ptr<table> tile(const table_view& in,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::tile(in, count, rmm::cuda_stream_default, mr);
+  return detail::tile(in, count, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

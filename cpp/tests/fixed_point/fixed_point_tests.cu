@@ -21,9 +21,9 @@
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/reduce.h>
@@ -106,7 +106,7 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 
   EXPECT_EQ(static_cast<int32_t>(res1), res2);
 
-  rmm::device_uvector<int32_t> d_vec3(1000, rmm::cuda_stream_default);
+  rmm::device_uvector<int32_t> d_vec3(1000, cudf::default_stream_value);
 
   thrust::transform(rmm::exec_policy(),
                     std::cbegin(d_vec1),

@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -53,7 +54,7 @@ namespace detail {
 std::unique_ptr<column> encode(
   column_view const& column,
   data_type indices_type              = data_type{type_id::UINT32},
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -73,7 +74,7 @@ std::unique_ptr<column> encode(
  */
 std::unique_ptr<column> decode(
   dictionary_column_view const& dictionary_column,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

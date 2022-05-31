@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -32,7 +33,7 @@ namespace detail {
 std::unique_ptr<table> tile(
   table_view const& input,
   size_type count,
-  rmm::cuda_stream_view               = rmm::cuda_stream_default,
+  rmm::cuda_stream_view               = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -42,7 +43,7 @@ std::unique_ptr<table> tile(
  */
 std::unique_ptr<column> interleave_columns(
   table_view const& input,
-  rmm::cuda_stream_view               = rmm::cuda_stream_default,
+  rmm::cuda_stream_view               = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

@@ -27,6 +27,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -136,7 +137,7 @@ std::unique_ptr<column> compute_column(table_view const& table,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_column(table, expr, rmm::cuda_stream_default, mr);
+  return detail::compute_column(table, expr, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

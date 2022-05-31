@@ -30,6 +30,7 @@
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -615,7 +616,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
 {
   CUDF_FUNC_RANGE();
   return detail::drop_list_duplicates(
-    keys, values, nulls_equal, nans_equal, keep_option, rmm::cuda_stream_default, mr);
+    keys, values, nulls_equal, nans_equal, keep_option, cudf::default_stream_value, mr);
 }
 
 /**
@@ -630,7 +631,8 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& input,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_list_duplicates(input, nulls_equal, nans_equal, rmm::cuda_stream_default, mr);
+  return detail::drop_list_duplicates(
+    input, nulls_equal, nans_equal, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf::lists

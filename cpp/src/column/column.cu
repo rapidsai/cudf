@@ -29,6 +29,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -143,7 +144,7 @@ size_type column::null_count() const
   CUDF_FUNC_RANGE();
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count = cudf::detail::null_count(
-      static_cast<bitmask_type const*>(_null_mask.data()), 0, size(), rmm::cuda_stream_default);
+      static_cast<bitmask_type const*>(_null_mask.data()), 0, size(), cudf::default_stream_value);
   }
   return _null_count;
 }

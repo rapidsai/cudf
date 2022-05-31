@@ -235,7 +235,7 @@ Also, `@copydoc` is useful when documenting a `detail` function that differs onl
  */
 std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                 std::vector<size_type> const& indices,
-                                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                                                rmm::cuda_stream_view stream = cudf::default_stream_value);
 ```
 
 Note, you must specify the whole signature of the function, including optional parameters, so that doxygen will be able to locate it.

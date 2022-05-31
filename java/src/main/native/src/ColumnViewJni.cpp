@@ -72,6 +72,7 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -480,7 +481,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
 
     // Extract list offsets and a column of struct<keys, values> from the input lists column.
     auto const lists_keys_vals = cudf::lists_column_view(*input_cv);
-    auto const keys_vals = lists_keys_vals.get_sliced_child(rmm::cuda_stream_default);
+    auto const keys_vals = lists_keys_vals.get_sliced_child(cudf::default_stream_value);
     CUDF_EXPECTS(keys_vals.type().id() == cudf::type_id::STRUCT,
                  "Input column has child that is not a structs column.");
     CUDF_EXPECTS(keys_vals.num_children() == 2,

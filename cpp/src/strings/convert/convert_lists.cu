@@ -19,6 +19,7 @@
 #include <cudf/strings/convert/convert_lists.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -234,7 +235,7 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::format_list_column(input, na_rep, separators, rmm::cuda_stream_default, mr);
+  return detail::format_list_column(input, na_rep, separators, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <io/utilities/time_utils.cuh>
@@ -114,7 +115,9 @@ class timezone_table {
 
  public:
   // Safe to use the default stream, device_uvectors will not change after they are created empty
-  timezone_table() : ttimes{0, rmm::cuda_stream_default}, offsets{0, rmm::cuda_stream_default} {}
+  timezone_table() : ttimes{0, cudf::default_stream_value}, offsets{0, cudf::default_stream_value}
+  {
+  }
   timezone_table(int32_t gmt_offset,
                  rmm::device_uvector<int64_t>&& ttimes,
                  rmm::device_uvector<int32_t>&& offsets)

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/round.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -34,7 +35,7 @@ std::unique_ptr<column> round(
   column_view const& input,
   int32_t decimal_places,
   rounding_method method,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

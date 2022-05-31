@@ -23,6 +23,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/optional.h>
@@ -536,7 +537,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
  */
 std::unique_ptr<column> row_bit_count(table_view const& t, rmm::mr::device_memory_resource* mr)
 {
-  return detail::row_bit_count(t, rmm::cuda_stream_default, mr);
+  return detail::row_bit_count(t, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

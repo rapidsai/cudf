@@ -24,6 +24,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -35,7 +36,7 @@ class ColumnFactoryTest : public cudf::test::BaseFixture {
 
  public:
   cudf::size_type size() { return _size; }
-  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
+  rmm::cuda_stream_view stream() { return cudf::default_stream_value; }
 };
 
 template <typename T>

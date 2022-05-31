@@ -19,6 +19,7 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -44,7 +45,7 @@ std::unique_ptr<column> rolling_window(
   column_view const& following_window,
   size_type min_periods,
   rolling_aggregation const& agg,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

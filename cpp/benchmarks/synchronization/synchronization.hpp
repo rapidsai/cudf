@@ -63,6 +63,7 @@
 #include <benchmark/benchmark.h>
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -82,7 +83,7 @@ class cuda_event_timer {
    */
   cuda_event_timer(benchmark::State& state,
                    bool flush_l2_cache,
-                   rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                   rmm::cuda_stream_view stream = cudf::default_stream_value);
 
   // The user must provide a benchmark::State object to set
   // the timer so we disable the default c'tor.
