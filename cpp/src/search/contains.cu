@@ -47,6 +47,10 @@ struct contains_scalar_dispatch {
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
+    // In case the input scalar is invalid, it should be handled at the caller site before
+    // dispatching to this function.
+    // (Handling such case is very simple: just check if the input haystack column has nulls).
+
     using DType           = device_storage_type_t<Type>;
     using ScalarType      = cudf::scalar_type_t<Type>;
     auto const d_haystack = column_device_view::create(haystack, stream);
@@ -75,6 +79,10 @@ struct contains_scalar_dispatch {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
     // Haystack and needle structure compatibility will be checked by the table comparator
     // constructor during call to `contains_nested_element`.
+
+    // In case the input scalar is invalid, it should be handled at the caller site before
+    // dispatching to this function.
+    // (Handling such case is very simple: just check if the input haystack column has nulls).
 
     auto const needle_as_col = make_column_from_scalar(needle, 1, stream);
     return contains_nested_element(haystack, needle_as_col->view(), stream);
