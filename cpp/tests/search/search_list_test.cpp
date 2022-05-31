@@ -122,6 +122,17 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SimpleInputWithNulls)
   using tdata_col = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
+  // Test with invalid scalar.
+  {
+    auto const haystack = lists_col{{1, 2}, {1}, {}, {1, 3}, {4}, {}, {1, 1}};
+    auto const needle   = [] {
+      auto child = tdata_col{};
+      return cudf::list_scalar(child, false);
+    }();
+
+    EXPECT_FALSE(cudf::contains(haystack, needle));
+  }
+
   // Test with nulls at the top level.
   {
     auto const haystack =
@@ -131,8 +142,13 @@ TYPED_TEST(TypedListsContainsTestScalarNeedle, SimpleInputWithNulls)
       auto child = tdata_col{1, 2};
       return cudf::list_scalar(child);
     }();
+    auto const needle2 = [] {
+      auto child = tdata_col{};
+      return cudf::list_scalar(child, false);
+    }();
 
     EXPECT_TRUE(cudf::contains(haystack, needle1));
+    EXPECT_TRUE(cudf::contains(haystack, needle2));
   }
 
   // Test with nulls at the children level.
