@@ -229,6 +229,11 @@ if hasArg --incl_cache_stats; then
     BUILD_REPORT_INCL_CACHE_STATS=ON
 fi
 
+# Append `-DFIND_CUDF_CPP=ON` to CMAKE_ARGS unless a user specified the option.
+if [[ ${CMAKE_ARGS} != *"DFIND_CUDF_CPP"* ]]; then
+    CMAKE_ARGS="${CMAKE_ARGS} -DFIND_CUDF_CPP=ON"
+fi
+
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
