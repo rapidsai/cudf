@@ -32,7 +32,7 @@ using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using structs_col = cudf::test::structs_column_wrapper;
 using strings_col = cudf::test::strings_column_wrapper;
 
-constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
 constexpr int32_t null{0};       // Mark for null child elements at the current level
 constexpr int32_t XXX{0};        // Mark for null elements at all levels
 constexpr int32_t dont_care{0};  // Mark for elements that will be sliced off
