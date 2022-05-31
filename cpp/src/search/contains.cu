@@ -58,7 +58,6 @@ struct contains_scalar_dispatch {
       auto const val   = thrust::make_pair(s->value(stream), true);
 
       return thrust::find(rmm::exec_policy(stream), begin, end, val) != end;
-
     } else {
       auto const begin = d_haystack->begin<DType>();
       auto const end   = d_haystack->end<DType>();
@@ -75,7 +74,7 @@ struct contains_scalar_dispatch {
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
     // Haystack and needle structure compatibility will be checked by the table comparator
-    // constructor during calling to `contains_nested_element`.
+    // constructor during call to `contains_nested_element`.
 
     auto const needle_as_col = make_column_from_scalar(needle, 1, stream);
     return contains_nested_element(haystack, needle_as_col->view(), stream);
