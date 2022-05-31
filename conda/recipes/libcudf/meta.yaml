@@ -278,9 +278,9 @@ outputs:
         - test -f $PREFIX/include/cudf_test/type_list_utilities.hpp
         - test -f $PREFIX/include/cudf_test/type_lists.hpp
     about:
-      home: http://rapids.ai/
+      home: https://rapids.ai/
       license: Apache-2.0
-      license_family: Apache
+      license_family: APACHE
       license_file: LICENSE
       summary: libcudf library
       prelink_message:
@@ -303,9 +303,9 @@ outputs:
       commands:
         - test -f $PREFIX/lib/libcudf_kafka.so
     about:
-      home: http://rapids.ai/
+      home: https://rapids.ai/
       license: Apache-2.0
-      license_family: Apache
+      license_family: APACHE
       license_file: LICENSE
       summary: libcudf_kafka library
   - name: libcudf-example
@@ -327,9 +327,9 @@ outputs:
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
     about:
-      home: http://rapids.ai/
+      home: https://rapids.ai/
       license: Apache-2.0
-      license_family: Apache
+      license_family: APACHE
       license_file: LICENSE
       summary: libcudf_example library
   - name: libcudf-tests
@@ -350,8 +350,8 @@ outputs:
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
     about:
-      home: http://rapids.ai/
+      home: https://rapids.ai/
       license: Apache-2.0
-      license_family: Apache
+      license_family: APACHE
       license_file: LICENSE
       summary: libcudf test & benchmark executables
