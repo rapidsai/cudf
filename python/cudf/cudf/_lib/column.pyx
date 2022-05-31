@@ -71,11 +71,14 @@ ctypedef vector[shared_ptr[void]] OwnersVecT  # Type aliasing
 cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners):
     if buf is None:
         return NULL
-    cdef uintptr_t ptr = buf.ptr
+
+    buf_ptr_exposed = buf.ptr_exposed
+    cdef uintptr_t ptr = buf.ptr  # Expose the raw pointer
     cdef AccessCounter ac = buf._access_counter
     deref(owners).push_back(static_pointer_cast[void, int](ac.counter))
-    # Now that we have a ref to `ac.counter`, we can "unexpose" `buf`
-    buf._ptr_exposed = False
+    # Now that we have a refence to `ac.counter`, we can recover
+    # the "expose" state of `buf`
+    buf._ptr_exposed = buf_ptr_exposed
     return <void*> ptr
 
 
