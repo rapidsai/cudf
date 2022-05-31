@@ -303,6 +303,17 @@ class Buffer(Serializable):
         copy_device_to_ptr(self.ptr, out.ptr, self.size)
         return out
 
+    def __repr__(self) -> str:
+        if self._ptr is None:
+            data_info = str(self._ptr_desc)
+        else:
+            data_info = str(hex(self._ptr))
+        return (
+            f"<Buffer {hex(id(self))} size={self._size} "
+            f"spillable={self.spillable} ptr={data_info} "
+            f"owner={repr(self._owner)}>"
+        )
+
 
 def _buffer_data_from_array_interface(array_interface):
     ptr = array_interface["data"][0]
