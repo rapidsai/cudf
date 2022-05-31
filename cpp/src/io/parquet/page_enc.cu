@@ -1509,7 +1509,6 @@ __global__ void __launch_bounds__(1024)
     parquet_column_device_view col_g = *ck_g.col_desc;
 
     // TODO
-    // allocate memory for blob properly
     // how to do boundary order
     // cleanup
     if (not column_stats.empty()) {

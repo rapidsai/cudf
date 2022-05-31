@@ -1452,6 +1452,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   size_type max_pages_in_batch = 0;
   size_t bytes_in_batch        = 0;
   size_t comp_bytes_in_batch   = 0;
+  size_t column_index_bfr_size = 0;
   for (size_type r = 0, groups_in_batch = 0, pages_in_batch = 0; r <= num_rowgroups; r++) {
     size_t rowgroup_size      = 0;
     size_t comp_rowgroup_size = 0;
@@ -1467,6 +1468,10 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         comp_rowgroup_size += ck->compressed_size;
         max_chunk_bfr_size =
           std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
+        // fixed 26 bytes + (sizeof(bool)+sizeof(int64)+2*max_statsize)*num_pages_in_chunk
+        // ck_stat_size is a good proxy for how much memory is needed for the min/max values
+        // calculating this per-chunk because the sizes can be wildly different
+        column_index_bfr_size += 26 + (ck->ck_stat_size + 9)*ck->num_pages;
       }
     }
     // TBD: We may want to also shorten the batch if we have enough pages (not just based on size)
@@ -1496,8 +1501,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
   rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
   rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
-  // FIXME 1MB is way too big...need to do better job of estimating space needed for column indexes
-  rmm::device_buffer col_idx_bfr(1024*1024*num_rowgroups*num_columns, stream);
+  rmm::device_buffer col_idx_bfr(column_index_bfr_size, stream);
   rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
@@ -1514,7 +1518,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         ck.column_index_blob    = bfr_i;
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
-        bfr_i += 1024*1024;
+        bfr_i += 26 + (ck->ck_stat_size + 9)*ck->num_pages;
       }
     }
   }
