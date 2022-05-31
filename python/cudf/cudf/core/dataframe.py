@@ -1231,7 +1231,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         [RangeIndex(start=0, stop=4, step=1)]
 
         """
-        return [self.index, self.columns]
+        return [self._index, self.columns]
 
     @_cudf_nvtx_annotate
     def __setitem__(self, arg, value):
