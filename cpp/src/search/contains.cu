@@ -83,7 +83,7 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
 {
   CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
   // Haystack and needle structure compatibility will be checked by the table comparator
-  // constructor during calling to `contains_nested_element`.
+  // constructor during call to `contains_nested_element`.
 
   auto const needle_as_col = make_column_from_scalar(needle, 1, stream);
   return contains_nested_element(haystack, needle_as_col->view(), stream);
