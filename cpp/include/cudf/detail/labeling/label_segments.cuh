@@ -75,9 +75,9 @@ void label_segments(InputIterator offsets_begin,
 
   // If the offsets array has no more than 2 offset values, there will be at max 1 segment.
   // In such cases, the output will just be an array of all `0` values (which we already filled).
-  // We should terminate here, otherwise the `for_each` loop and `inclusive_scan` below sill do
-  // their entire computation. That is unnecessary but expensive if we have the input offsets
-  // defining a very large segment.
+  // We should terminate here, otherwise the `inclusive_scan` call below still do its entire
+  // computation. That is unnecessary and may be expensive if we have the input offsets defining a
+  // very large segment.
   if (thrust::distance(offsets_begin, offsets_end) <= 2) { return; }
 
   thrust::for_each(rmm::exec_policy(stream),
