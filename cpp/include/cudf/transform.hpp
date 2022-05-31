@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ std::unique_ptr<column> transform(
  * @throws cudf::logic_error if `input.type()` is a non-floating type
  *
  * @param input         An immutable view of the input column of floating-point type
- * @param mr            Device memory resource used to allocate the returned bitmask.
+ * @param mr            Device memory resource used to allocate the returned bitmask
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count obtained by replacing `NaN` in `input` with null.
  */
@@ -77,10 +77,10 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  *
  * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
  *
- * @param table The table used for expression evaluation.
- * @param expr The root of the expression tree.
- * @param mr Device memory resource.
- * @return std::unique_ptr<column> Output column.
+ * @param table The table used for expression evaluation
+ * @param expr The root of the expression tree
+ * @param mr Device memory resource
+ * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> compute_column(
   table_view const& table,
@@ -96,8 +96,8 @@ std::unique_ptr<column> compute_column(
  *
  * @throws cudf::logic_error if `input.type()` is a non-boolean type
  *
- * @param input        Boolean elements to convert to a bitmask.
- * @param mr           Device memory resource used to allocate the returned bitmask.
+ * @param input        Boolean elements to convert to a bitmask
+ * @param mr           Device memory resource used to allocate the returned bitmask
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count obtained from input considering `true` represent `valid`/`1` and
  * `false` represent `invalid`/`0`.
@@ -185,7 +185,7 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
  * @param begin_bit position of the bit from which the conversion should start
  * @param end_bit position of the bit before which the conversion should stop
  * @param mr Device memory resource used to allocate the returned columns' device memory
- * @return A boolean column representing the given mask from [begin_bit, end_bit).
+ * @return A boolean column representing the given mask from [begin_bit, end_bit)
  */
 std::unique_ptr<column> mask_to_bools(
   bitmask_type const* bitmask,
@@ -214,9 +214,9 @@ std::unique_ptr<column> mask_to_bools(
  *
  * row_bit_count(column(x)) >= row_bit_count(gather(column(x)))
  *
- * @param t The table view to perform the computation on.
+ * @param t The table view to perform the computation on
  * @param mr Device memory resource used to allocate the returned columns' device memory
- * @return A 32-bit integer column containing the per-row bit counts.
+ * @return A 32-bit integer column containing the per-row bit counts
  */
 std::unique_ptr<column> row_bit_count(
   table_view const& t,

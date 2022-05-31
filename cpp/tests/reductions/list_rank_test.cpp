@@ -18,7 +18,8 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
-#include "benchmarks/common/generate_input.hpp"
+#include <benchmarks/common/generate_input.hpp>
+
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/reduction.hpp>
