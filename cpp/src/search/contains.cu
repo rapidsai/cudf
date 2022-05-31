@@ -40,10 +40,10 @@ namespace detail {
 namespace {
 
 struct contains_scalar_dispatch {
-  template <typename Type, CUDF_ENABLE_IF(!is_nested<Type>())>
-  bool operator()(column_view const& haystack,
-                  scalar const& needle,
-                  rmm::cuda_stream_view stream) const
+  template <typename Type>
+  std::enable_if_t<!is_nested<Type>(), bool> operator()(column_view const& haystack,
+                                                        scalar const& needle,
+                                                        rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
@@ -71,10 +71,10 @@ struct contains_scalar_dispatch {
     }
   }
 
-  template <typename Type, CUDF_ENABLE_IF(is_nested<Type>())>
-  bool operator()(column_view const& haystack,
-                  scalar const& needle,
-                  rmm::cuda_stream_view stream) const
+  template <typename Type>
+  std::enable_if_t<is_nested<Type>(), bool> operator()(column_view const& haystack,
+                                                       scalar const& needle,
+                                                       rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
     // Haystack and needle structure compatibility will be checked by the table comparator
@@ -106,11 +106,12 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 }
 
 struct multi_contains_dispatch {
-  template <typename Type, CUDF_ENABLE_IF(!is_nested<Type>())>
-  std::unique_ptr<column> operator()(column_view const& haystack,
-                                     column_view const& needles,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+  template <typename Type>
+  std::enable_if_t<!is_nested<Type>(), std::unique_ptr<column>> operator()(
+    column_view const& haystack,
+    column_view const& needles,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
   {
     auto result = make_numeric_column(data_type{type_to_id<bool>()},
                                       needles.size(),
@@ -155,11 +156,12 @@ struct multi_contains_dispatch {
     return result;
   }
 
-  template <typename Type, CUDF_ENABLE_IF(is_nested<Type>())>
-  std::unique_ptr<column> operator()(column_view const& haystack,
-                                     column_view const& needles,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+  template <typename Type>
+  std::enable_if_t<is_nested<Type>(), std::unique_ptr<column>> operator()(
+    column_view const& haystack,
+    column_view const& needles,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
   {
     return multi_contains_nested_elements(haystack, needles, stream, mr);
   }
