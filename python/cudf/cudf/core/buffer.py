@@ -110,8 +110,9 @@ class Buffer(Serializable):
         if not self._sole_owner and self._owner is not None:
             base_buffer = get_base_buffer(self._owner)
             if base_buffer is not None:
-                assert not base_buffer.is_spilled
-                base_buffer._ptr_exposed = True
+                with base_buffer._lock:
+                    assert not base_buffer.is_spilled
+                    base_buffer._ptr_exposed = True
 
         self._spill_manager = None
         if global_manager.enabled:
@@ -127,7 +128,9 @@ class Buffer(Serializable):
                             f"known memory {self} {base}"
                         )
                 elif base:
-                    base._ptr_exposed = True
+                    with base._lock:
+                        assert not base.is_spilled
+                        base._ptr_exposed = True
 
                 self._spill_manager.add(self)
 
