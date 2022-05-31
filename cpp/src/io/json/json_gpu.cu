@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "json_gpu.h"
+#include "json_gpu.hpp"
 
 #include <io/csv/datetime.cuh>
 #include <io/utilities/column_type_histogram.hpp>
@@ -22,7 +22,7 @@
 
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/lists/list_view.cuh>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>

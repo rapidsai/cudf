@@ -16,10 +16,11 @@
 
 #pragma once
 
-#include <map>
-
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/traits.hpp>
+
+#include <map>
+#include <optional>
 
 /**
  * @file generate_input.hpp

@@ -88,7 +88,7 @@ class reprog_device {
    * @return The program device object.
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    std::string const& pattern, rmm::cuda_stream_view stream);
+    std::string_view pattern, rmm::cuda_stream_view stream);
 
   /**
    * @brief Create the device program instance from a regex pattern.
@@ -99,7 +99,7 @@ class reprog_device {
    * @return The program device object.
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    std::string const& pattern, regex_flags const re_flags, rmm::cuda_stream_view stream);
+    std::string_view pattern, regex_flags const re_flags, rmm::cuda_stream_view stream);
 
   /**
    * @brief Called automatically by the unique_ptr returned from create().

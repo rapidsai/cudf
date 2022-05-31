@@ -2146,7 +2146,7 @@ class TimedeltaIndex(GenericIndex):
         This is not yet supported
     closed : str, optional
         This is not yet supported
-    dtype : str or numpy.dtype, optional
+    dtype : str or :class:`numpy.dtype`, optional
         Data type for the output Index. If not specified, the
         default dtype will be ``timedelta64[ns]``.
     name : object
