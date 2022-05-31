@@ -33,6 +33,8 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <src/io/parquet/compact_protocol_reader.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -3323,38 +3325,6 @@ TEST_F(ParquetWriterTest, EmptyListWithStruct)
   cudf::test::expect_columns_equal(result.tbl->view().column(0), *L0);
 }
 
-class ThriftReaderLite {
- public:
-  explicit ThriftReaderLite(const uint8_t* base = nullptr, size_t len = 0) { init(base, len); }
-  void init(const uint8_t* base, size_t len)
-  {
-    m_base = m_cur = base;
-    m_end          = base + len;
-  }
-  unsigned int getb() noexcept { return (m_cur < m_end) ? *m_cur++ : 0; }
-  uint32_t get_u32() noexcept
-  {
-    uint32_t v = 0;
-    for (uint32_t l = 0;; l += 7) {
-      uint32_t c = getb();
-      v |= (c & 0x7f) << l;
-      if (c < 0x80) break;
-    }
-    return v;
-  }
-  int32_t get_i32() noexcept
-  {
-    uint32_t u = get_u32();
-    return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
-  }
-  uint32_t bytes_read() { return m_cur - m_base; }
-
- private:
-  const uint8_t* m_base = nullptr;
-  const uint8_t* m_cur  = nullptr;
-  const uint8_t* m_end  = nullptr;
-};
-
 TEST_F(ParquetWriterTest, CheckPageRows)
 {
   auto sequence = thrust::make_counting_iterator(0);
@@ -3386,7 +3356,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   EXPECT_EQ(buf[2], 0x52);  // R
   EXPECT_EQ(buf[3], 0x31);  // 1
 
-  ThriftReaderLite reader(&buf[4], sizeof(buf) - 4);
+  cudf_io::parquet::CompactProtocolReader reader(&buf[4], sizeof(buf) - 4);
   reader.get_i32();  // fld 1
   int32_t page_type = reader.get_i32();
   reader.get_i32();  // fld 2
@@ -3406,7 +3376,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
     reader.getb();     // end of struct
 
     // seek to next page header and read
-    int32_t pos = 4 + reader.bytes_read() + comp_size;
+    int32_t pos = 4 + reader.bytecount() + comp_size;
     lseek(fd, pos, SEEK_SET);
     read(fd, buf, sizeof(buf));
     reader.init(buf, sizeof(buf));
