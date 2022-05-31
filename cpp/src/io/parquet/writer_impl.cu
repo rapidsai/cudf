@@ -84,13 +84,6 @@ parquet::Compression to_parquet_compression(compression_type compression)
 
 }  // namespace
 
-struct column_index {
-  std::vector<bool> null_pages;
-  // min, max
-  int32_t boundary_order = 0;  // enum
-  std::vector<int64_t> null_counts;
-};
-
 struct aggregate_writer_metadata {
   aggregate_writer_metadata(std::vector<partition_info> const& partitions,
                             size_type num_columns,
