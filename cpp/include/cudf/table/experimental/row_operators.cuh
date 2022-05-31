@@ -136,8 +136,8 @@ using rhs_iterator = strong_index_iterator<rhs_index_type>;
 namespace lexicographic {
 
 /**
- * @brief Relational comparator functor that evaluates `NaN` as not less, not equivalent, and not greater
- * than all other values. This is IEE 754 compliant.
+ * @brief Relational comparator functor that evaluates `NaN` as not less, not equivalent, and not
+ * greater than all other values. This is IEE 754 compliant.
  */
 struct physical_element_comparator {
   /**
