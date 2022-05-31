@@ -1456,6 +1456,41 @@ __global__ void __launch_bounds__(128)
   if (t == 0) pages[blockIdx.x] = page_g;
 }
 
+// FIXME...how do we know if signed or unsigned by this point.  need to do this
+// back at the typed_statistics_chunk level?
+__device__ int32_t compareValues(uint8_t dtype, statistics_val& v1, statistics_val& v2)
+{
+  return 0;
+}
+
+__device__ bool isAscending(const statistics_chunk* s, uint8_t dtype, uint32_t num_pages)
+{
+  for (uint32_t i=1; i < num_pages; i++) {
+    if (compareValues(dtype, s[i-1].min_value, s[i].min_value) > 0) || compareValues(dtype, s[i-1].max_value, s[i].max_value) > 0)
+      return false;
+  }
+  return true;
+}
+
+__device__ bool isDescending(const statistics_chunk* s, uint8_t dtype, uint32_t num_pages)
+{
+  for (uint32_t i=1; i < num_pages; i++) {
+    if (compareValues(dtype, s[i-1].min_value, s[i].min_value) < 0) || compareValues(dtype, s[i-1].max_value, s[i].max_value) < 0)
+      return false;
+  }
+  return true;
+}
+
+__device__ int32_t calculateBoundaryOrder(const statistics_chunk* s, uint8_t dtype, uint32_t num_pages)
+{
+  if (isAscending(s, dtype, num_pages))
+    return BoundaryOrder::ASCENDING;
+  else if (isDescending(s, dtype, num_pages))
+    return BoundaryOrder::DESCENDING;
+  else
+    return BoundaryOrder::UNORDERED;
+}
+
 // blockDim(1024, 1, 1)
 __global__ void __launch_bounds__(1024)
   gpuGatherPages(device_span<EncColumnChunk> chunks,
@@ -1506,12 +1541,9 @@ __global__ void __launch_bounds__(1024)
     chunks[blockIdx.x].bfr_size        = uncompressed_size;
     chunks[blockIdx.x].compressed_size = (dst - dst_base);
     if (ck_g.use_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
-    parquet_column_device_view col_g = *ck_g.col_desc;
 
-    // TODO
-    // how to do boundary order
-    // cleanup
     if (not column_stats.empty()) {
+      parquet_column_device_view col_g = *ck_g.col_desc;
       const void *vmin, *vmax;
       uint32_t lmin, lmax;
       
@@ -1537,7 +1569,7 @@ __global__ void __launch_bounds__(1024)
         encoder.put_binary(vmax, lmax);
       }
       encoder.field_list_end(3);
-      encoder.field_int32(4, 0); // boundary order???
+      encoder.field_int32(4, calculate_boundary_order(&column_stats[first_data_page+pageidx], col_g.stats_dtype, num_pages));
       // null_counts
       encoder.field_list_begin(5, num_pages-first_data_page, ST_FLD_I64);
       for (uint32_t page = first_data_page; page < num_pages; page++)
