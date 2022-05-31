@@ -167,7 +167,9 @@ class Buffer(Serializable):
                 return
 
             if not self.spillable:
-                raise ValueError("Cannot in-place move an unspillable buffer")
+                raise ValueError(
+                    f"Cannot in-place move an unspillable buffer: {self}"
+                )
 
             if (ptr_type, target) == ("gpu", "cpu"):
                 host_mem = memoryview(bytearray(self.size))
@@ -311,8 +313,8 @@ class Buffer(Serializable):
             data_info = str(hex(self._ptr))
         return (
             f"<Buffer {hex(id(self))} size={self._size} "
-            f"spillable={self.spillable} ptr={data_info} "
-            f"owner={repr(self._owner)}>"
+            f"spillable={self.spillable} ptr_exposed={self.ptr_exposed} "
+            f"ptr={data_info} owner={repr(self._owner)}>"
         )
 
 
