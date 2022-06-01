@@ -232,7 +232,6 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
 {
   CUDF_EXPECTS(key_positions->type().id() == type_id::INT32,
                "Expected input column of type INT32.");
-  // If position == NOT_FOUND_SENTINEL, the list did not contain the search key.
   auto const positions_begin = key_positions->view().template begin<size_type>();
   auto result                = make_numeric_column(
     data_type{type_id::BOOL8}, key_positions->size(), mask_state::UNALLOCATED, stream, mr);
@@ -240,7 +239,10 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                     positions_begin,
                     positions_begin + key_positions->size(),
                     result->mutable_view().template begin<bool>(),
-                    [] __device__(auto const i) { return i != NOT_FOUND_SENTINEL; });
+                    [] __device__(auto const i) {
+                      // position == NOT_FOUND_SENTINEL: the list does not contain the search key.
+                      return i != NOT_FOUND_SENTINEL;
+                    });
 
   auto const null_count                    = key_positions->null_count();
   [[maybe_unused]] auto [_, null_mask, __] = key_positions->release();
