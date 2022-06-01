@@ -393,6 +393,7 @@ class base_2dspan {
 
   /**
    * @brief Returns a reference to the row-th element of the sequence.
+   *
    * The behavior is undefined if row is out of range (i.e., if it is greater than or equal to
    * size()).
    *
@@ -406,14 +407,16 @@ class base_2dspan {
 
   /**
    * @brief Returns a reference to the first element in the span.
-   * Calling front on an empty span results in undefined behavior.
+   *
+   * Calling front() on an empty span results in undefined behavior.
    *
    * @return Reference to the first element in the span
    */
   [[nodiscard]] constexpr RowType<T, dynamic_extent> front() const { return (*this)[0]; }
   /**
    * @brief Returns a reference to the last element in the span.
-   * Calling last on an empty span results in undefined behavior.
+   *
+   * Calling back() on an empty span results in undefined behavior.
    *
    * @return Reference to the last element in the span
    */
