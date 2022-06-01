@@ -127,7 +127,7 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
     // A reverse iterator constructed from `0` value will begin from `-1`.
     // Thus, needle indices will iterate in reverse order in the range `[-1, -1-needles.size())`.
     // They will be converted back to the range `[0, needles.size())` then into `rhs_index_type`
-    // automatically by `index_normalized_hasher_adapter` and `index_normalized_hasher_adapter`.
+    // automatically by `index_normalized_hasher_adapter` and `index_normalized_comparator_adapter`.
     auto const needles_it =
       thrust::make_reverse_iterator(thrust::make_counting_iterator(size_type{0}));
 

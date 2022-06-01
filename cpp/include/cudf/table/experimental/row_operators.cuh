@@ -144,7 +144,7 @@ using rhs_iterator = strong_index_iterator<rhs_index_type>;
  * recognizing the corresponding type, we need to convert the negative indices into their original
  * values.
  *
- * @param idx The negative index iteraring in reverse order in the range `[-1, -size-1)`
+ * @param idx The negative index iterating in reverse order in the range `[-1, -size-1)`
  * @return The converted index iterating in forward order in the range `[0, size)`
  */
 [[nodiscard]] __device__ auto constexpr normalize_index(size_type const idx) { return -(idx + 1); }
@@ -996,7 +996,7 @@ struct strong_index_comparator_adapter {
  */
 template <typename Comparator>
 struct index_normalized_comparator_adapter {
-  index_normalized_comparator_adapter(Comparator&& comparator_) : comparator(std::move(comparator_))
+  index_normalized_comparator_adapter(Comparator&& comparator) : comparator(std::move(comparator))
   {
   }
   /**
