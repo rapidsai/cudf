@@ -40,8 +40,8 @@ namespace detail {
 /**
  * @brief Return the number of UTF-8 characters in this provided char array.
  *
- * @param str String with encoded char bytes
- * @param bytes Number of bytes in str
+ * @param str String with encoded char bytes.
+ * @param bytes Number of bytes in str.
  * @return The number of characters in the array.
  */
 __device__ inline size_type characters_in_string(const char* str, size_type bytes)

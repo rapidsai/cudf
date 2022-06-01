@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,9 +51,9 @@ namespace strings {
  *        can be stored by the index type
  *        (i.e., @code input.size() * repeat_times > numeric_limits<size_type>::max() @endcode).
  *
- * @param input The scalar containing the string to repeat
- * @param repeat_times The number of times the input string is repeated
- * @param mr Device memory resource used to allocate the returned string scalar
+ * @param input The scalar containing the string to repeat.
+ * @param repeat_times The number of times the input string is repeated.
+ * @param mr Device memory resource used to allocate the returned string scalar.
  * @return New string scalar in which the input string is repeated.
  */
 std::unique_ptr<string_scalar> repeat_string(
@@ -83,9 +83,9 @@ std::unique_ptr<string_scalar> repeat_string(
  * out is ['aaaaaa', null, '', 'bbcbbcbbc']
  * @endcode
  *
- * @param input The column containing strings to repeat
- * @param repeat_times The number of times each input string is repeated
- * @param mr Device memory resource used to allocate the returned strings column
+ * @param input The column containing strings to repeat.
+ * @param repeat_times The number of times each input string is repeated.
+ * @param mr Device memory resource used to allocate the returned strings column.
  * @return New column containing the repeated strings.
  */
 std::unique_ptr<column> repeat_strings(
@@ -121,12 +121,12 @@ std::unique_ptr<column> repeat_strings(
  * @throw cudf::logic_error if the input `repeat_times` column has data type other than integer.
  * @throw cudf::logic_error if the input columns have different sizes.
  *
- * @param input The column containing strings to repeat
+ * @param input The column containing strings to repeat.
  * @param repeat_times The column containing numbers of times that the corresponding input strings
  *        are repeated.
  * @param output_strings_sizes The optional column containing pre-computed sizes of the output
  *        strings.
- * @param mr Device memory resource used to allocate the returned strings column
+ * @param mr Device memory resource used to allocate the returned strings column.
  * @return New column containing the repeated strings.
  */
 std::unique_ptr<column> repeat_strings(
@@ -154,10 +154,10 @@ std::unique_ptr<column> repeat_strings(
  * @throw cudf::logic_error if the input `repeat_times` column has data type other than integer.
  * @throw cudf::logic_error if the input columns have different sizes.
  *
- * @param input The column containing strings to repeat
+ * @param input The column containing strings to repeat.
  * @param repeat_times The column containing numbers of times that the corresponding input strings
  *        are repeated.
- * @param mr Device memory resource used to allocate the returned strings column
+ * @param mr Device memory resource used to allocate the returned strings column.
  * @return A pair with the first item is an int32_t column containing sizes of the output strings,
  *         and the second item is an int64_t number containing the total sizes (in bytes) of the
  *         output strings column.

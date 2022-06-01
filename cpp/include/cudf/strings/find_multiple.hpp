@@ -46,9 +46,9 @@ namespace strings {
  *
  * @throw cudf::logic_error if `targets` is empty or contains nulls
  *
- * @param input Strings instance for this operation
- * @param targets Strings to search for in each string
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param input Strings instance for this operation.
+ * @param targets Strings to search for in each string.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Lists column with character position values.
  */
 std::unique_ptr<column> find_multiple(

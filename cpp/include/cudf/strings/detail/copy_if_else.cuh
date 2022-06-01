@@ -47,12 +47,12 @@ namespace detail {
  * `thrust::optional<string_view>` where the `optional` has a value iff the element is valid.
  * @tparam Filter Functor that takes an index and returns a boolean.
  *
- * @param lhs_begin Start of first set of data. Used when `filter_fn` returns true
- * @param lhs_end End of first set of data
- * @param rhs_begin Strings of second set of data. Used when `filter_fn` returns false
- * @param filter_fn Called to determine which iterator to use for a specific row
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param lhs_begin Start of first set of data. Used when `filter_fn` returns true.
+ * @param lhs_end End of first set of data.
+ * @param rhs_begin Strings of second set of data. Used when `filter_fn` returns false.
+ * @param filter_fn Called to determine which iterator to use for a specific row.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 template <typename StringIterLeft, typename StringIterRight, typename Filter>

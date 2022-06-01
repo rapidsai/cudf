@@ -68,11 +68,11 @@ __forceinline__ __device__ uint4 load_uint4(const char* ptr)
  * @tparam StringIterator Iterator should produce `string_view` objects.
  * @tparam MapIterator Iterator for retrieving integer indices of the `StringIterator`.
  *
- * @param strings_begin Start of the iterator to retrieve `string_view` instances
- * @param out_chars Output buffer for gathered characters
- * @param out_offsets The offset values associated with the output buffer
- * @param string_indices Start of index iterator
- * @param total_out_strings Number of output strings to be gathered
+ * @param strings_begin Start of the iterator to retrieve `string_view` instances.
+ * @param out_chars Output buffer for gathered characters.
+ * @param out_offsets The offset values associated with the output buffer.
+ * @param string_indices Start of index iterator.
+ * @param total_out_strings Number of output strings to be gathered.
  */
 template <typename StringIterator, typename MapIterator>
 __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
@@ -153,11 +153,11 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
  * @tparam StringIterator Iterator should produce `string_view` objects.
  * @tparam MapIterator Iterator for retrieving integer indices of the `StringIterator`.
  *
- * @param strings_begin Start of the iterator to retrieve `string_view` instances
- * @param out_chars Output buffer for gathered characters
- * @param out_offsets The offset values associated with the output buffer
- * @param string_indices Start of index iterator
- * @param total_out_strings Number of output strings to be gathered
+ * @param strings_begin Start of the iterator to retrieve `string_view` instances.
+ * @param out_chars Output buffer for gathered characters.
+ * @param out_offsets The offset values associated with the output buffer.
+ * @param string_indices Start of index iterator.
+ * @param total_out_strings Number of output strings to be gathered.
  */
 template <int strings_per_threadblock, typename StringIterator, typename MapIterator>
 __global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
@@ -212,13 +212,13 @@ __global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
  * @tparam StringIterator Iterator should produce `string_view` objects.
  * @tparam MapIterator Iterator for retrieving integer indices of the `StringIterator`.
  *
- * @param strings_begin Start of the iterator to retrieve `string_view` instances
- * @param map_begin Start of index iterator
- * @param map_end End of index iterator
- * @param offsets The offset values to be associated with the output chars column
- * @param chars_bytes The total number of bytes for the output chars column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings_begin Start of the iterator to retrieve `string_view` instances.
+ * @param map_begin Start of index iterator.
+ * @param map_end End of index iterator.
+ * @param offsets The offset values to be associated with the output chars column.
+ * @param chars_bytes The total number of bytes for the output chars column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New chars column fit for a strings column.
  */
 template <typename StringIterator, typename MapIterator>
@@ -279,11 +279,11 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
  * @tparam NullifyOutOfBounds If true, indices outside the column's range are nullified.
  * @tparam MapIterator Iterator for retrieving integer indices of the column.
  *
- * @param strings Strings instance for this operation
- * @param begin Start of index iterator
- * @param end End of index iterator
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param begin Start of index iterator.
+ * @param end End of index iterator.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column containing the gathered strings.
  */
 template <bool NullifyOutOfBounds, typename MapIterator>
@@ -362,12 +362,12 @@ std::unique_ptr<cudf::column> gather(
  *
  * @tparam MapIterator Iterator for retrieving integer indices of the column.
  *
- * @param strings Strings instance for this operation
- * @param begin Start of index iterator
- * @param end End of index iterator
- * @param nullify_out_of_bounds If true, indices outside the column's range are nullified
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param begin Start of index iterator.
+ * @param end End of index iterator.
+ * @param nullify_out_of_bounds If true, indices outside the column's range are nullified.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column containing the gathered strings.
  */
 template <typename MapIterator>

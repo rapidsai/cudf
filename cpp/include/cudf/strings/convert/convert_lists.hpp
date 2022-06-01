@@ -48,10 +48,10 @@ namespace strings {
  *
  * @throw cudf::logic_error if the input column is not a LIST type with a STRING child.
  *
- * @param input Lists column to format
- * @param na_rep Replacement string for null elements
- * @param separators Strings to use for enclosing list components and separating elements
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param input Lists column to format.
+ * @param na_rep Replacement string for null elements.
+ * @param separators Strings to use for enclosing list components and separating elements.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> format_list_column(

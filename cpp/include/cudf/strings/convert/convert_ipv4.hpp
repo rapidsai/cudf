@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,8 +46,8 @@ namespace strings {
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
- * @param strings Strings instance for this operation
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT64 column converted from strings.
  */
 std::unique_ptr<column> ipv4_to_integers(
@@ -69,8 +69,8 @@ std::unique_ptr<column> ipv4_to_integers(
  *
  * @throw cudf::logic_error if the input column is not INT64 type.
  *
- * @param integers Integer (INT64) column to convert
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param integers Integer (INT64) column to convert.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> integers_to_ipv4(
@@ -94,8 +94,8 @@ std::unique_ptr<column> integers_to_ipv4(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> is_ipv4(

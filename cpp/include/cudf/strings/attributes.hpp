@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,8 +39,8 @@ namespace strings {
  *
  * Any null string will result in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column with lengths for each string.
  */
 std::unique_ptr<column> count_characters(
@@ -57,8 +57,8 @@ std::unique_ptr<column> count_characters(
  *
  * Any null string will result in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column with the number of bytes for each string.
  */
 std::unique_ptr<column> count_bytes(
@@ -77,8 +77,8 @@ std::unique_ptr<column> count_bytes(
  *
  * Any null string is ignored. No null entries will appear in the output column.
  *
- * @param strings Strings instance for this operation
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column with code point integer values for each character.
  */
 std::unique_ptr<column> code_points(

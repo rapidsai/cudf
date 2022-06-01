@@ -30,9 +30,9 @@ namespace detail {
  *
  * This will return the properly sized column to be filled in by the caller.
  *
- * @param bytes Number of bytes for the chars column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param bytes Number of bytes for the chars column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return The chars child column for a strings column.
  */
 std::unique_ptr<column> create_chars_child_column(
@@ -43,9 +43,9 @@ std::unique_ptr<column> create_chars_child_column(
 /**
  * @brief Creates a string_view vector from a strings column.
  *
- * @param strings Strings column instance
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned vector's device memory
+ * @param strings Strings column instance.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned vector's device memory.
  * @return Device vector of string_views
  */
 rmm::device_uvector<string_view> create_string_vector_from_column(

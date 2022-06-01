@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,12 +41,12 @@ namespace strings {
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings_column Strings instance for this operation
- * @param delimiter UTF-8 encoded string indicating the split points in each string;
+ * @param strings_column Strings instance for this operation.
+ * @param delimiter UTF-8 encoded string indicating the split points in each string.
  *        Default of empty string indicates split on whitespace.
- * @param maxsplit Maximum number of splits to perform;
+ * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned table's device memory
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New table of strings columns.
  */
 std::unique_ptr<table> split(
@@ -69,12 +69,12 @@ std::unique_ptr<table> split(
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings_column Strings instance for this operation
- * @param delimiter UTF-8 encoded string indicating the split points in each string;
+ * @param strings_column Strings instance for this operation.
+ * @param delimiter UTF-8 encoded string indicating the split points in each string.
  *        Default of empty string indicates split on whitespace.
- * @param maxsplit Maximum number of splits to perform;
+ * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned table's device memory
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New strings columns.
  */
 std::unique_ptr<table> rsplit(
@@ -139,12 +139,12 @@ std::unique_ptr<table> rsplit(
  *
  * @throw cudf:logic_error if `delimiter` is invalid.
  *
- * @param strings A column of string elements to be split
- * @param delimiter The string to identify split points in each string
+ * @param strings A column of string elements to be split.
+ * @param delimiter The string to identify split points in each string.
  *        Default of empty string indicates split on whitespace.
- * @param maxsplit Maximum number of splits to perform
+ * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory
+ * @param mr Device memory resource used to allocate the returned result's device memory.
  * @return Lists column of strings
  *         Each vector of the lists column holds splits from a single row
  *         element of the input column.
@@ -216,12 +216,12 @@ std::unique_ptr<column> split_record(
  *
  * @throw cudf:logic_error if `delimiter` is invalid.
  *
- * @param strings A column of string elements to be split
- * @param delimiter The string to identify split points in each string;
+ * @param strings A column of string elements to be split.
+ * @param delimiter The string to identify split points in each string.
  *        Default of empty string indicates split on whitespace.
- * @param maxsplit Maximum number of splits to perform;
+ * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory
+ * @param mr Device memory resource used to allocate the returned result's device memory.
  * @return Lists column of strings
  *         Each vector of the lists column holds splits from a single row
  *         element of the input column.

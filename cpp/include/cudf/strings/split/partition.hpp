@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,10 +49,10 @@ namespace strings {
  * r[2] is ["cd","g_h"]
  * @endcode
  *
- * @param strings Strings instance for this operation
- * @param delimiter UTF-8 encoded string indicating where to split each string;
+ * @param strings Strings instance for this operation.
+ * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
- * @param mr Device memory resource used to allocate the returned table's device memory
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New table of strings columns.
  */
 std::unique_ptr<table> partition(
@@ -81,10 +81,10 @@ std::unique_ptr<table> partition(
  * r[2] is ["cd","h"]
  * @endcode
  *
- * @param strings Strings instance for this operation
- * @param delimiter UTF-8 encoded string indicating where to split each string;
+ * @param strings Strings instance for this operation.
+ * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
- * @param mr Device memory resource used to allocate the returned table's device memory
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New strings columns.
  */
 std::unique_ptr<table> rpartition(

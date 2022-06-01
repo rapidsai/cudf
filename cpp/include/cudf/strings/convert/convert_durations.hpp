@@ -63,10 +63,10 @@ namespace strings {
  *
  * @throw cudf::logic_error if duration_type is not a duration type.
  *
- * @param strings Strings instance for this operation
- * @param duration_type The duration type used for creating the output column
- * @param format String specifying the duration format in strings
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param duration_type The duration type used for creating the output column.
+ * @param format String specifying the duration format in strings.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New duration column.
  */
 std::unique_ptr<column> to_durations(
@@ -113,10 +113,10 @@ std::unique_ptr<column> to_durations(
  *
  * @throw cudf::logic_error if `durations` column parameter is not a duration type.
  *
- * @param durations Duration values to convert
- * @param format The string specifying output format;
+ * @param durations Duration values to convert.
+ * @param format The string specifying output format.
  *        Default format is ""%d days %H:%M:%S".
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with formatted durations.
  */
 std::unique_ptr<column> from_durations(

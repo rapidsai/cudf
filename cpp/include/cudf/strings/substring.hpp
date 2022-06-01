@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,11 +48,11 @@ namespace strings {
  * r2 is now ["lo","ob"]
  * @endcode
  *
- * @param strings Strings column for this operation
- * @param start First character position to begin the substring
- * @param stop Last character position (exclusive) to end the substring
- * @param step Distance between input characters retrieved
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings column for this operation.
+ * @param start First character position to begin the substring.
+ * @param stop Last character position (exclusive) to end the substring.
+ * @param step Distance between input characters retrieved.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with sorted elements of this instance.
  */
 std::unique_ptr<column> slice_strings(
@@ -93,10 +93,10 @@ std::unique_ptr<column> slice_strings(
  * @throw cudf::logic_error if starts and stops are not same integer type.
  * @throw cudf::logic_error if starts or stops contains nulls.
  *
- * @param strings Strings column for this operation
- * @param starts First character positions to begin the substring
- * @param stops Last character (exclusive) positions to end the substring
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings column for this operation.
+ * @param starts First character positions to begin the substring.
+ * @param stops Last character (exclusive) positions to end the substring.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with sorted elements of this instance.
  */
 std::unique_ptr<column> slice_strings(
@@ -135,11 +135,11 @@ std::unique_ptr<column> slice_strings(
  * r =    ['nvidia.com',     null, 'google.com',     '', 'foo']
  * @endcode
  *
- * @param strings Strings instance for this operation
- * @param delimiter UTF-8 encoded string to search for in each string
+ * @param strings Strings instance for this operation.
+ * @param delimiter UTF-8 encoded string to search for in each string.
  * @param count Number of times to search for delimiter in each string. If the value is positive,
  *              delimiter is searched from left to right; else, it is searched from right to left.
- * @param mr Resource for allocating device memory
+ * @param mr Resource for allocating device memory.
  * @return New strings column containing the substrings.
  */
 std::unique_ptr<column> slice_strings(
@@ -185,11 +185,11 @@ std::unique_ptr<column> slice_strings(
  * @throw cudf::logic_error if the number of rows in @p strings and @p delimiter_strings do not
  * match.
  *
- * @param strings Strings instance for this operation
- * @param delimiter_strings UTF-8 encoded string for each row
+ * @param strings Strings instance for this operation.
+ * @param delimiter_strings UTF-8 encoded string for each row.
  * @param count Number of times to search for delimiter in each string. If the value is positive,
  *              delimiter is searched from left to right; else, it is searched from right to left.
- * @param mr Resource for allocating device memory
+ * @param mr Resource for allocating device memory.
  * @return New strings column containing the substrings.
  */
 std::unique_ptr<column> slice_strings(

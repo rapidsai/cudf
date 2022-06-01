@@ -61,7 +61,7 @@ constexpr size_type bytes_in_char_utf8(char_utf8 character)
  * single character. For example, for the two-byte 0xC3A8 single character,
  * the first byte would return 2 and the second byte would return 0.
  *
- * @param byte Byte from an encoded character
+ * @param byte Byte from an encoded character.
  * @return Number of bytes.
  */
 constexpr size_type bytes_in_utf8_byte(uint8_t byte)
@@ -75,8 +75,8 @@ constexpr size_type bytes_in_utf8_byte(uint8_t byte)
 /**
  * @brief Convert a char array into a char_utf8 value.
  *
- * @param str String containing encoded char bytes
- * @param[out] character Single char_utf8 value
+ * @param str String containing encoded char bytes.
+ * @param[out] character Single char_utf8 value.
  * @return The number of bytes in the character
  */
 constexpr size_type to_char_utf8(const char* str, char_utf8& character)
@@ -103,7 +103,7 @@ constexpr size_type to_char_utf8(const char* str, char_utf8& character)
  * @brief Place a char_utf8 value into a char array.
  *
  * @param character Single character
- * @param[out] str Output array
+ * @param[out] str Output array.
  * @return The number of bytes in the character
  */
 constexpr inline size_type from_char_utf8(char_utf8 character, char* str)

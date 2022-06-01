@@ -44,8 +44,8 @@ namespace detail {
  * @tparam Iterator Used as input to scan to set the offset values.
  * @param begin The beginning of the input sequence
  * @param end The end of the input sequence
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return offsets child column for strings column
  */
 template <typename InputIterator>
@@ -75,9 +75,9 @@ std::unique_ptr<column> make_offsets_child_column(
  * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
  * copied.
  *
- * @param buffer Device buffer to copy to
- * @param input Data to copy from
- * @param bytes Number of bytes to copy
+ * @param buffer Device buffer to copy to.
+ * @param input Data to copy from.
+ * @param bytes Number of bytes to copy.
  * @return Pointer to the end of the output buffer after the copy.
  */
 __device__ inline char* copy_and_increment(char* buffer, const char* input, size_type bytes)
@@ -90,8 +90,8 @@ __device__ inline char* copy_and_increment(char* buffer, const char* input, size
  * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
  * copied.
  *
- * @param buffer Device buffer to copy to
- * @param d_string String to copy
+ * @param buffer Device buffer to copy to.
+ * @param d_string String to copy.
  * @return Pointer to the end of the output buffer after the copy.
  */
 __device__ inline char* copy_string(char* buffer, const string_view& d_string)
@@ -109,10 +109,10 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  *
  * @param size_and_exec_fn This is called twice. Once for the output size of each string
  *        and once again to fill in the memory pointed to by d_chars.
- * @param exec_size Number of rows for executing the `size_and_exec_fn` function
- * @param strings_count Number of strings
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned columns' device memory
+ * @param exec_size Number of rows for executing the `size_and_exec_fn` function.
+ * @param strings_count Number of strings.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @return offsets child column and chars child column for a strings column
  */
 template <typename SizeAndExecuteFunction>
@@ -168,9 +168,9 @@ auto make_strings_children(
  *
  * @param size_and_exec_fn This is called twice. Once for the output size of each string
  *        and once again to fill in the memory pointed to by d_chars.
- * @param strings_count Number of strings
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned columns' device memory
+ * @param strings_count Number of strings.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @return offsets child column and chars child column for a strings column
  */
 template <typename SizeAndExecuteFunction>

@@ -148,7 +148,7 @@ class string_view {
    * @brief Comparing target string with this string. Each character is compared
    * as a UTF-8 code-point value.
    *
-   * @param str Target string to compare with this string
+   * @param str Target string to compare with this string.
    * @return 0  If they compare equal.
    *         <0 Either the value of the first character of this string that does
    *            not match is lower in the arg string, or all compared characters
@@ -162,8 +162,8 @@ class string_view {
    * @brief Comparing target string with this string. Each character is compared
    * as a UTF-8 code-point value.
    *
-   * @param str Target string to compare with this string
-   * @param bytes Number of bytes in str
+   * @param str Target string to compare with this string.
+   * @param bytes Number of bytes in str.
    * @return 0  If they compare equal.
    *         <0 Either the value of the first character of this string that does
    *            not match is lower in the arg string, or all compared characters
@@ -177,42 +177,42 @@ class string_view {
   /**
    * @brief Returns true if rhs matches this string exactly.
    *
-   * @param rhs Target string to compare with this string
+   * @param rhs Target string to compare with this string.
    * @return true if rhs matches this string exactly
    */
   __device__ inline bool operator==(const string_view& rhs) const;
   /**
    * @brief Returns true if rhs does not match this string.
    *
-   * @param rhs Target string to compare with this string
+   * @param rhs Target string to compare with this string.
    * @return true if rhs does not match this string
    */
   __device__ inline bool operator!=(const string_view& rhs) const;
   /**
    * @brief Returns true if this string is ordered before rhs.
    *
-   * @param rhs Target string to compare with this string
+   * @param rhs Target string to compare with this string.
    * @return true if this string is ordered before rhs
    */
   __device__ inline bool operator<(const string_view& rhs) const;
   /**
    * @brief Returns true if rhs is ordered before this string.
    *
-   * @param rhs Target string to compare with this string
+   * @param rhs Target string to compare with this string.
    * @return true if rhs is ordered before this string
    */
   __device__ inline bool operator>(const string_view& rhs) const;
   /**
    * @brief Returns true if this string matches or is ordered before rhs.
    *
-   * @param rhs Target string to compare with this string
+   * @param rhs Target string to compare with this string.
    * @return true if this string matches or is ordered before rhs
    */
   __device__ inline bool operator<=(const string_view& rhs) const;
   /**
    * @brief Returns true if rhs matches or is ordered before this string.
    *
-   * @param rhs Target string to compare with this string
+   * @param rhs Target string to compare with this string.
    * @return true if rhs matches or is ordered before this string
    */
   __device__ inline bool operator>=(const string_view& rhs) const;
@@ -221,9 +221,9 @@ class string_view {
    * @brief Returns the character position of the first occurrence where the
    * argument str is found in this string within the character range [pos,pos+n).
    *
-   * @param str Target string to search within this string
-   * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search;
+   * @param str Target string to search within this string.
+   * @param pos Character position to start search within this string.
+   * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if str is not found in this string.
    */
@@ -234,10 +234,10 @@ class string_view {
    * @brief Returns the character position of the first occurrence where the
    * array str is found in this string within the character range [pos,pos+n).
    *
-   * @param str Target array to search within this string
-   * @param bytes Number of bytes in str
-   * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search;
+   * @param str Target array to search within this string.
+   * @param bytes Number of bytes in str.
+   * @param pos Character position to start search within this string.
+   * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
@@ -249,9 +249,9 @@ class string_view {
    * @brief Returns the character position of the first occurrence where
    * character is found in this string within the character range [pos,pos+n).
    *
-   * @param character Single encoded character
-   * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search;
+   * @param character Single encoded character.
+   * @param pos Character position to start search within this string.
+   * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
@@ -262,9 +262,9 @@ class string_view {
    * @brief Returns the character position of the last occurrence where the
    * argument str is found in this string within the character range [pos,pos+n).
    *
-   * @param str Target string to search within this string
-   * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search;
+   * @param str Target string to search within this string.
+   * @param pos Character position to start search within this string.
+   * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
@@ -275,10 +275,10 @@ class string_view {
    * @brief Returns the character position of the last occurrence where the
    * array str is found in this string within the character range [pos,pos+n).
    *
-   * @param str Target string to search with this string
-   * @param bytes Number of bytes in str
-   * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search;
+   * @param str Target string to search with this string.
+   * @param bytes Number of bytes in str.
+   * @param pos Character position to start search within this string.
+   * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
@@ -290,9 +290,9 @@ class string_view {
    * @brief Returns the character position of the last occurrence where
    * character is found in this string within the character range [pos,pos+n).
    *
-   * @param character Single encoded character
-   * @param pos Character position to start search within this string
-   * @param count Number of characters from pos to include in the search;
+   * @param character Single encoded character.
+   * @param pos Character position to start search within this string.
+   * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
@@ -304,8 +304,8 @@ class string_view {
    * @brief Return a sub-string of this string. The original string and device
    * memory must still be maintained for the lifetime of the returned instance.
    *
-   * @param start Character position to start the sub-string
-   * @param length Number of characters from start to include in the sub-string
+   * @param start Character position to start the sub-string.
+   * @param length Number of characters from start to include in the sub-string.
    * @return New instance pointing to a subset of the characters within this instance.
    */
   __device__ [[nodiscard]] inline string_view substr(size_type start, size_type length) const;
@@ -339,8 +339,8 @@ class string_view {
   /**
    * @brief Create instance from existing device char array.
    *
-   * @param data Device char array encoded in UTF8
-   * @param bytes Number of bytes in data array
+   * @param data Device char array encoded in UTF8.
+   * @param bytes Number of bytes in data array.
    */
   CUDF_HOST_DEVICE inline string_view(const char* data, size_type bytes)
     : _data(data), _bytes(bytes), _length(UNKNOWN_STRING_LENGTH)
@@ -371,7 +371,7 @@ class string_view {
   /**
    * @brief Return the character position of the given byte offset.
    *
-   * @param bytepos Byte position from start of _data
+   * @param bytepos Byte position from start of _data.
    * @return The character position for the specified byte.
    */
   __device__ [[nodiscard]] inline size_type character_offset(size_type bytepos) const;

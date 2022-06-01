@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,12 +41,12 @@ namespace strings {
  *
  * @throw cudf::logic_error if start position is greater than stop position.
  *
- * @param strings Strings instance for this operation
- * @param target UTF-8 encoded string to search for in each string
- * @param start First character position to include in the search
- * @param stop Last position (exclusive) to include in the search;
+ * @param strings Strings instance for this operation.
+ * @param target UTF-8 encoded string to search for in each string.
+ * @param start First character position to include in the search.
+ * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search to the end of the string.
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New integer column with character position values.
  */
 std::unique_ptr<column> find(
@@ -70,12 +70,12 @@ std::unique_ptr<column> find(
  *
  * @throw cudf::logic_error if start position is greater than stop position.
  *
- * @param strings Strings instance for this operation
- * @param target UTF-8 encoded string to search for in each string
- * @param start First position to include in the search
- * @param stop Last position (exclusive) to include in the search;
+ * @param strings Strings instance for this operation.
+ * @param target UTF-8 encoded string to search for in each string.
+ * @param start First position to include in the search.
+ * @param stop Last position (exclusive) to include in the search.
  *             Default of -1 will search starting at the end of the string.
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New integer column with character position values.
  */
 std::unique_ptr<column> rfind(
@@ -94,9 +94,9 @@ std::unique_ptr<column> rfind(
  *
  * Any null string entries return corresponding null entries in the output columns.
  *
- * @param strings Strings instance for this operation
- * @param target UTF-8 encoded string to search for in each string
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param target UTF-8 encoded string to search for in each string.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> contains(
@@ -117,9 +117,9 @@ std::unique_ptr<column> contains(
  *
  * @throw cudf::logic_error if `strings.size() != targets.size()`.
  *
- * @param strings Strings instance for this operation
- * @param targets Strings column of targets to check row-wise in `strings`
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param targets Strings column of targets to check row-wise in `strings`.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> contains(
@@ -137,9 +137,9 @@ std::unique_ptr<column> contains(
  *
  * Any null string entries return corresponding null entries in the output columns.
  *
- * @param strings Strings instance for this operation
- * @param target UTF-8 encoded string to search for in each string
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param target UTF-8 encoded string to search for in each string.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> starts_with(
@@ -161,9 +161,9 @@ std::unique_ptr<column> starts_with(
  *
  * @throw cudf::logic_error if `strings.size() != targets.size()`.
  *
- * @param strings Strings instance for this operation
- * @param targets Strings instance for this operation
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param targets Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> starts_with(
@@ -181,9 +181,9 @@ std::unique_ptr<column> starts_with(
  *
  * Any null string entries return corresponding null entries in the output columns.
  *
- * @param strings Strings instance for this operation
- * @param target UTF-8 encoded string to search for in each string
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param target UTF-8 encoded string to search for in each string.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> ends_with(
@@ -205,9 +205,9 @@ std::unique_ptr<column> ends_with(
  *
  * @throw cudf::logic_error if `strings.size() != targets.size()`.
  *
- * @param strings Strings instance for this operation
- * @param targets Strings instance for this operation
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param strings Strings instance for this operation.
+ * @param targets Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New type_id::BOOL8 column.
  */
 std::unique_ptr<column> ends_with(
