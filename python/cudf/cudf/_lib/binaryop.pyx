@@ -56,6 +56,9 @@ class BinaryOperation(IntEnum):
     POW = (
         <underlying_type_t_binary_operator> binary_operator.POW
     )
+    INTPOW = (
+        <underlying_type_t_binary_operator> binary_operator.INTPOW
+    )
     EQ = (
         <underlying_type_t_binary_operator> binary_operator.EQUAL
     )

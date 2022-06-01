@@ -216,6 +216,29 @@ struct Pow {
   }
 };
 
+struct IntPow {
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<(std::is_integral_v<TypeLhs> and
+                              std::is_integral_v<TypeRhs>)>* = nullptr>
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> int
+  {
+    cudf_assert(y >= 0 && "integer exponentiation with negative exponent is not possible.");
+    if (y == 0) {return 1;}
+    if (x == 0) {return 0;}
+    while (y > 1) {
+      TypeLhs extra = 1;
+      if (y & 1) {
+        extra *= x;
+        y -= 1;
+      }
+      y >>= 1;
+      x *= x;
+    }
+    return x * extra;
+  }
+};
+
 struct LogBase {
   template <typename TypeLhs,
             typename TypeRhs,
