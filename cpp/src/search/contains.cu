@@ -106,20 +106,21 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 }
 
 struct multi_contains_dispatch {
-  template <bool has_nulls, typename ElementType, typename Haystack>
+  template <typename ElementType, typename Haystack>
   struct contains_fn {
     bool __device__ operator()(size_type const idx) const
     {
-      if constexpr (has_nulls) {
-        return needles.is_null_nocheck(idx) ||
-               haystack.contains(needles.template element<ElementType>(idx));
-      } else {
-        return haystack.contains(needles.template element<ElementType>(idx));
+      if (needles_has_nulls && needles.is_null_nocheck(idx)) {
+        // `true` or `false`: doesn't matter, this will be masked out as a null element.
+        return true;
       }
+
+      return haystack.contains(needles.template element<ElementType>(idx));
     }
 
     Haystack const haystack;
     column_device_view const needles;
+    bool const needles_has_nulls;
   };
 
   template <typename Type, CUDF_ENABLE_IF(!is_nested<Type>())>
@@ -147,21 +148,12 @@ struct multi_contains_dispatch {
     auto const haystack_set_dv = haystack_set.to_device();
     auto const needles_cdv_ptr = column_device_view::create(needles, stream);
 
-    auto const do_check = [&](auto const& check_fn) {
-      thrust::transform(rmm::exec_policy(stream),
-                        thrust::make_counting_iterator<size_type>(0),
-                        thrust::make_counting_iterator<size_type>(needles.size()),
-                        out_begin,
-                        check_fn);
-    };
-
-    using SetType = decltype(haystack_set_dv);
-    if (needles.has_nulls()) {
-      do_check(contains_fn<true, Type, SetType>{haystack_set_dv, *needles_cdv_ptr});
-    } else {
-      do_check(contains_fn<false, Type, SetType>{haystack_set_dv, *needles_cdv_ptr});
-    }
-
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(needles.size()),
+                      out_begin,
+                      contains_fn<Type, decltype(haystack_set_dv)>{
+                        haystack_set_dv, *needles_cdv_ptr, needles.has_nulls()});
     return result;
   }
 
