@@ -313,6 +313,7 @@ TEST_F(StringsContainsTests, Errors)
 
   EXPECT_THROW(cudf::strings::contains_re(strings_view, "(3?)+"), cudf::logic_error);
   EXPECT_THROW(cudf::strings::contains_re(strings_view, "3?+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::count_re(strings_view, "{3}a"), cudf::logic_error);
 }
 
 TEST_F(StringsContainsTests, CountTest)
@@ -351,6 +352,57 @@ TEST_F(StringsContainsTests, CountTest)
       h_expected + h_strings.size(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
+TEST_F(StringsContainsTests, FixedQuantifier)
+{
+  auto input = cudf::test::strings_column_wrapper({"a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaa"});
+  auto sv    = cudf::strings_column_view(input);
+
+  {
+    // exact match
+    auto results = cudf::strings::count_re(sv, "a{3}");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 1, 1, 1, 2});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // range match (greedy quantifier)
+    auto results = cudf::strings::count_re(sv, "a{3,5}");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 1, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // minimum match (greedy quantifier)
+    auto results = cudf::strings::count_re(sv, "a{2,}");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 1, 1, 1, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // range match (lazy quantifier)
+    auto results = cudf::strings::count_re(sv, "a{2,4}?");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 1, 1, 2, 2, 3});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // minimum match (lazy quantifier)
+    auto results = cudf::strings::count_re(sv, "a{1,}?");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 2, 3, 4, 5, 6});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // zero match
+    auto results = cudf::strings::count_re(sv, "aaaa{0}");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 1, 1, 1, 2});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // poorly formed
+    auto results = cudf::strings::count_re(sv, "aaaa{n,m}");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 0, 0, 0, 0, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    EXPECT_THROW(cudf::strings::count_re(sv, "aaaa{1234,5678}"), cudf::logic_error);
+    EXPECT_THROW(cudf::strings::count_re(sv, "aaaa{123,5678}"), cudf::logic_error);
   }
 }
 
