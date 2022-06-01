@@ -1515,6 +1515,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def bfill(self, value=None, method=None, axis=None, inplace=None, limit=None):
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
+
         Returns
         -------
             Object with missing values filled or None if ``inplace=True``.
@@ -1525,6 +1526,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def ffill(self, value=None, method=None, axis=None, inplace=None, limit=None):
         """
         Synonym for :meth:`Series.fillna` with ``method='bfill'``.
+        
         Returns
         -------
             Object with missing values filled or None if ``inplace=True``.
