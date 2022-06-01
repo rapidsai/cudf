@@ -58,15 +58,18 @@ auto constexpr is_supported_non_nested_type()
  * @brief Return a pair of index iterators {begin, end} to loop through elements within a list.
  *
  * Depending on the value of `find_first`, a pair of forward or reverse iterators will be returned,
- * allowing to loop through elements in the list by first-to-last or last-to-first order:
+ * allowing to loop through elements in the list by first-to-last or last-to-first order.
+ *
+ * Note that the indices are `0`-based: The first element in any list is always at `0` index.
  *
  * @tparam find_first A boolean value indicating whether we want to find the first or last
  *         appearance of a given key in the list.
  * @param size The number of elements in the list.
- * @return An iterator to iterate through the range [0, size) by forward or reverse order.
+ * @return A pair of {begin, end} iterators to iterate through the range `[0, size)` by forward or
+ *         reverse order.
  */
 template <bool find_first>
-auto __device__ element_index_pair_iter(size_type size)
+auto __device__ element_index_pair_iter(size_type const size)
 {
   if constexpr (find_first) {
     return thrust::pair(thrust::make_counting_iterator<size_type>(0),
@@ -95,8 +98,8 @@ struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>
   template <typename SearchKeyIter, typename OutputPairIter>
   static void invoke(cudf::detail::lists_column_device_view const& lists,
                      SearchKeyIter const& keys_iter,
-                     duplicate_find_option find_option,
                      OutputPairIter const& out_iter,
+                     duplicate_find_option find_option,
                      rmm::cuda_stream_view stream)
   {
     thrust::tabulate(rmm::exec_policy(stream),
@@ -105,10 +108,11 @@ struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>
                      [lists, keys_iter, find_option] __device__(
                        auto const list_idx) -> thrust::pair<size_type, bool> {
                        auto const list = list_device_view{lists, list_idx};
+                       // A null list never contains any key.
                        if (list.is_null()) { return {NOT_FOUND_SENTINEL, false}; }
 
                        auto const key_opt = keys_iter[list_idx];
-                       if (!key_opt) { return {NOT_FOUND_SENTINEL, false}; }
+                       if (!key_opt) { return {NOT_FOUND_SENTINEL, false}; }  // <-- a null key
 
                        auto const key = key_opt.value();
                        return {find_option == duplicate_find_option::FIND_FIRST
@@ -128,6 +132,7 @@ struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>
         return !list.is_null(idx) &&
                cudf::equality_compare(list.template element<Type>(idx), search_key);
       });
+    // If the key is found, return its found position in the list from `found_iter`.
     return found_iter == end ? NOT_FOUND_SENTINEL : *found_iter;
   }
 };
@@ -135,8 +140,11 @@ struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>
 /**
  * @brief Create a device pointer to the search key(s).
  *
- * @return Depending on the type of the input key(s), a scalar pointer or a `column_device_view`
- *         pointer will be return.
+ * The returned pointer will be used to construct an optional iterator for the keys, which also have
+ * the same interface for both `scalar` and `column_device_view`.
+ *
+ * @return Depending on the type of the input key(s), a `scalar` pointer or a `column_device_view`
+ *         pointer will be returned.
  */
 template <typename SearchKeyType>
 auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
@@ -150,7 +158,7 @@ auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
 }
 
 /**
- * @brief Dispatch functor to search for key element(s) in a lists column.
+ * @brief Dispatch functor to search for key element(s) in the corresponding rows of a lists column.
  */
 struct dispatch_index_of {
   template <typename Type, typename... Args>
@@ -197,7 +205,7 @@ struct dispatch_index_of {
 
     auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
       *keys_dv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
-    search_index_fn<Type>::invoke(lists_cdv, keys_iter, find_option, out_iter, stream);
+    search_index_fn<Type>::invoke(lists_cdv, keys_iter, out_iter, find_option, stream);
 
     if (search_keys_have_nulls || lists.has_nulls()) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
