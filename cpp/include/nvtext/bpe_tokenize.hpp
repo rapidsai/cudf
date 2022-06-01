@@ -62,7 +62,7 @@ struct bpe_merge_pairs {
   ~bpe_merge_pairs();
 
   /**
-   * @brief  Returns the number of merge pairs in the table.
+   * @brief Returns the number of merge pairs in the table.
    *
    * @return The number of merge pairs in the table
    */

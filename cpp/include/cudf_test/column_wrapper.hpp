@@ -94,9 +94,8 @@ class column_wrapper {
  */
 template <typename From, typename To>
 struct fixed_width_type_converter {
-  /// Are the types same - simply copy elements from [begin, end) to out
   /**
-   * @brief No conversion necessary
+   * @brief No conversion necessary: Same type, simply copy element to output.
    *
    * @tparam FromT Source type
    * @tparam ToT Target type
@@ -111,9 +110,8 @@ struct fixed_width_type_converter {
     return element;
   }
 
-  /// Are the types convertible or can target be constructed from source?
   /**
-   * @brief  Convert types if possible, otherwise construct target from source.
+   * @brief Convert types if possible, otherwise construct target from source.
    *
    * @tparam FromT Source type
    * @tparam ToT Target type
@@ -132,7 +130,7 @@ struct fixed_width_type_converter {
   }
 
   /**
-   * @brief  Convert integral values to timestamps
+   * @brief Convert integral values to timestamps
    *
    * @tparam FromT Source type
    * @tparam ToT Target type
