@@ -16,14 +16,12 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/contains.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -50,12 +48,6 @@ auto constexpr is_supported_non_nested_type()
 {
   return cudf::is_numeric<Type>() || cudf::is_chrono<Type>() || cudf::is_fixed_point<Type>() ||
          std::is_same_v<Type, cudf::string_view>;
-}
-
-template <typename Type>
-auto constexpr is_supported_type()
-{
-  return is_supported_non_nested_type<Type>() || cudf::is_nested<Type>();
 }
 
 /**
@@ -136,53 +128,6 @@ struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>
   }
 };
 
-template <typename Type>
-struct search_index_fn<Type, std::enable_if_t<is_nested<Type>()>> {
-  template <typename KeyValidityIter, typename EqComparator, typename OutputPairIter>
-  static void invoke(cudf::detail::lists_column_device_view const& lists,
-                     bool search_key_is_scalar,
-                     KeyValidityIter const& key_validity_iter,
-                     EqComparator const& d_comp,
-                     duplicate_find_option find_option,
-                     OutputPairIter const& out_iter,
-                     rmm::cuda_stream_view stream)
-  {
-    thrust::tabulate(
-      rmm::exec_policy(stream),
-      out_iter,
-      out_iter + lists.size(),
-      [lists, search_key_is_scalar, key_validity_iter, d_comp, find_option] __device__(
-        auto const list_idx) -> thrust::pair<size_type, bool> {
-        auto const list = list_device_view{lists, list_idx};
-        if (list.is_null() || !key_validity_iter[list_idx]) { return {NOT_FOUND_SENTINEL, false}; }
-
-        return {find_option == duplicate_find_option::FIND_FIRST
-                  ? search_list<true>(list, search_key_is_scalar, d_comp)
-                  : search_list<false>(list, search_key_is_scalar, d_comp),
-                true};
-      });
-  }
-
- private:
-  template <bool find_first, typename EqComparator>
-  static __device__ size_type search_list(list_device_view const& list,
-                                          bool search_key_is_scalar,
-                                          EqComparator const& d_comp)
-  {
-    auto const [begin, end] = element_index_pair_iter<find_first>(list.size());
-    using cudf::experimental::row::lhs_index_type;
-    using cudf::experimental::row::rhs_index_type;
-
-    auto const found_iter = thrust::find_if(
-      thrust::seq, begin, end, [&list, d_comp, search_key_is_scalar] __device__(auto const idx) {
-        return !list.is_null(idx) &&
-               d_comp(static_cast<lhs_index_type>(list.element_offset(idx)),
-                      static_cast<rhs_index_type>(search_key_is_scalar ? 0 : list.row_index()));
-      });
-    return found_iter == end ? NOT_FOUND_SENTINEL : *found_iter;
-  }
-};
-
 /**
  * @brief Create a device pointer to the search key(s).
  *
@@ -201,36 +146,18 @@ auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
 }
 
 /**
- * @brief Create a `table_view` from the search key(s).
- *
- * If the input search key is a (nested type) scalar, a new column is materialized from that scalar
- * before a `table_view` is generated from it. As such, the new created column will also be
- * returned.
- */
-template <typename SearchKeyType>
-std::pair<table_view, std::unique_ptr<column>> get_table_view_from_nested_keys(
-  SearchKeyType const& search_keys, rmm::cuda_stream_view stream)
-{
-  if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
-    auto tmp_column = make_column_from_scalar(search_keys, 1, stream);
-    return {table_view{{tmp_column->view()}}, std::move(tmp_column)};
-  } else {
-    return {table_view{{search_keys}}, nullptr};
-  }
-}
-
-/**
  * @brief Dispatch functor to search for key element(s) in a lists column.
  */
 struct dispatch_index_of {
   template <typename Type, typename... Args>
-  std::enable_if_t<!is_supported_type<Type>(), std::unique_ptr<column>> operator()(Args&&...) const
+  std::enable_if_t<!is_supported_non_nested_type<Type>(), std::unique_ptr<column>> operator()(
+    Args&&...) const
   {
     CUDF_FAIL("Unsupported type in `dispatch_index_of` functor.");
   }
 
   template <typename Type, typename SearchKeyType>
-  std::enable_if_t<is_supported_type<Type>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<is_supported_non_nested_type<Type>(), std::unique_ptr<column>> operator()(
     lists_column_view const& lists,
     SearchKeyType const& search_keys,
     bool search_keys_have_nulls,
@@ -266,24 +193,9 @@ struct dispatch_index_of {
     auto const out_iter = thrust::make_zip_iterator(
       out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
-    if constexpr (cudf::is_nested<Type>()) {  // list + struct =====================================
-      auto const key_validity_iter = cudf::detail::make_validity_iterator<true>(*keys_dv_ptr);
-      auto const child_tview       = table_view{{child}};
-      [[maybe_unused]] auto const [keys_tview, _] =
-        get_table_view_from_nested_keys(search_keys, stream);
-      auto const has_nulls = has_nested_nulls(child_tview) || has_nested_nulls(keys_tview);
-      auto const comparator =
-        cudf::experimental::row::equality::two_table_comparator(child_tview, keys_tview, stream);
-      auto const d_comp = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
-
-      search_index_fn<Type>::invoke(
-        lists_cdv, search_key_is_scalar, key_validity_iter, d_comp, find_option, out_iter, stream);
-    } else {  // other supported types that are not nested =========================================
-      auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
-        *keys_dv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
-
-      search_index_fn<Type>::invoke(lists_cdv, keys_iter, find_option, out_iter, stream);
-    }
+    auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
+      *keys_dv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
+    search_index_fn<Type>::invoke(lists_cdv, keys_iter, find_option, out_iter, stream);
 
     if (search_keys_have_nulls || lists.has_nulls()) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
