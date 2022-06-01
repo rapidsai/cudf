@@ -111,11 +111,13 @@ struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>
                      [lists, keys_iter, find_option] __device__(
                        auto const list_idx) -> thrust::pair<size_type, bool> {
                        auto const list = list_device_view{lists, list_idx};
-                       // A null list never contains any key.
+                       // A null list never contains any key, even null key.
+                       // In addition, a null list will result in a null output row.
                        if (list.is_null()) { return {NOT_FOUND_SENTINEL, false}; }
 
                        auto const key_opt = keys_iter[list_idx];
-                       if (!key_opt) { return {NOT_FOUND_SENTINEL, false}; }  // <-- a null key
+                       // A null key will also result in a null output row.
+                       if (!key_opt) { return {NOT_FOUND_SENTINEL, false}; }
 
                        auto const key = key_opt.value();
                        return {find_option == duplicate_find_option::FIND_FIRST
@@ -143,8 +145,8 @@ struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>
 /**
  * @brief Create a device pointer to the search key(s).
  *
- * The returned pointer will be used to construct an optional iterator for the keys, which also have
- * the same interface for both `scalar` and `column_device_view`.
+ * The returned pointer will be used to construct a validity iterator or an optional iterator for
+ * the keys, which also have the same interface for both `scalar` and `column_device_view`.
  *
  * @return Depending on the type of the input key(s), a `scalar` pointer or a `column_device_view`
  *         pointer will be returned.
@@ -188,6 +190,7 @@ struct dispatch_index_of {
 
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
     if (search_key_is_scalar && search_keys_have_nulls) {
+      // If the scalar key is invalid/null, the entire output column will be all nulls.
       return make_numeric_column(data_type(type_id::INT32),
                                  lists.size(),
                                  cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
@@ -221,7 +224,7 @@ struct dispatch_index_of {
 
 /**
  * @brief Converts key-positions vector (from `index_of()`) to a BOOL8 vector, indicating if
- *        the search key was found.
+ *        the search key(s) were found.
  */
 std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                                     rmm::cuda_stream_view stream,
