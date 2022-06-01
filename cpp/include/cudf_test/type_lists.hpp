@@ -302,9 +302,11 @@ using FixedWidthTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
 
 /**
  * @brief Provides a list of all fixed-width element types except for the
- * fixed-point types for use in GTest typed tests. Certain tests written for
- * fixed-width types don't work for fixed-point as fixed-point types aren't
- * constructible from other fixed-width types (a scale needs to be specified)
+ * fixed-point types for use in GTest typed tests.
+ *
+ * Certain tests written for fixed-width types don't work for fixed-point as
+ * fixed-point types aren't constructible from other fixed-width types
+ * (a scale needs to be specified)
  *
  * Example:
  * ```

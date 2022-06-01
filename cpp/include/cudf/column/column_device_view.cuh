@@ -1138,6 +1138,7 @@ __device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restri
 
 /**
  * @brief value accessor of column without null bitmask
+ *
  * A unary functor returns scalar value at `id`.
  * `operator() (cudf::size_type id)` computes `element`
  * This functor is only allowed for non-nullable columns.
@@ -1223,6 +1224,7 @@ struct optional_accessor {
 
 /**
  * @brief pair accessor of column with/without null bitmask
+ *
  * A unary functor returns pair with scalar value at `id` and boolean validity
  * `operator() (cudf::size_type id)` computes `element`  and
  * returns a `pair(element, validity)`
@@ -1262,6 +1264,7 @@ struct pair_accessor {
 
 /**
  * @brief pair accessor of column with/without null bitmask
+ *
  * A unary functor returns pair with representative scalar value at `id` and boolean validity
  * `operator() (cudf::size_type id)` computes `element`  and
  * returns a `pair(element, validity)`

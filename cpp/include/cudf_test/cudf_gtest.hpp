@@ -164,6 +164,7 @@ struct TypeList<Types<TYPES...>> {
 
 /**
  * @brief test macro to be expected as no exception.
+ *
  * The testing is same with EXPECT_NO_THROW() in gtest.
  * It also outputs captured error message, useful for debugging.
  *

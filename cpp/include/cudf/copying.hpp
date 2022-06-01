@@ -231,6 +231,7 @@ std::unique_ptr<column> empty_like(scalar const& input);
 
 /**
  * @brief Creates an uninitialized new column of the same size and type as the `input`.
+ *
  * Supports only fixed-width types.
  *
  * @param[in] input Immutable view of input column to emulate
@@ -246,6 +247,7 @@ std::unique_ptr<column> allocate_like(
 
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
+ *
  * Supports only fixed-width types.
  *
  * @param[in] input Immutable view of input column to emulate

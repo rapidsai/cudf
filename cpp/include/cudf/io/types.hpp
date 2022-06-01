@@ -116,6 +116,7 @@ struct column_name_info {
 
 /**
  * @brief Table metadata for io readers/writers (primarily column names)
+ *
  * For nested types (structs, maps, unions), the ordering of names in the column_names vector
  * corresponds to a pre-order traversal of the column tree.
  * In the example below (2 top-level columns: struct column "col1" and string column "col2"),

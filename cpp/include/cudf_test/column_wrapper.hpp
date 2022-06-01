@@ -81,6 +81,7 @@ class column_wrapper {
 
   /**
    * @brief Releases internal unique_ptr to wrapped column
+   *
    * @return unique_ptr to wrapped column
    */
   std::unique_ptr<cudf::column> release() { return std::move(wrapped); }
@@ -1059,17 +1060,20 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
  public:
   /**
    * @brief Cast to dictionary_column_view
+   *
    */
   operator dictionary_column_view() const { return cudf::dictionary_column_view{wrapped->view()}; }
 
   /**
    * @brief Access keys column view
+   *
    * @return column_view to keys column
    */
   column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
 
   /**
    * @brief Access indices column view
+   *
    * @return column_view to indices column
    */
   column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
