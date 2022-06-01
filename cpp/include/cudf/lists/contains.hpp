@@ -79,8 +79,8 @@ std::unique_ptr<column> contains(
  * Otherwise, `column[i]` is set to a non-null boolean value, depending on whether that list
  * contains a null element.
  *
- * Note that empty list rows are considered *NOT* to contain a null element, and nulls inside
- * non-null nested elements (such as lists or structs) are not considered.
+ * A row with an empty list will always return false.
+ * Nulls inside non-null nested elements (such as lists or structs) are not considered.
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param mr Device memory resource used to allocate the returned column's device memory.
@@ -142,7 +142,7 @@ std::unique_ptr<column> index_of(
  * Output `column[i]` contains a 0-based index indicating the position of each search key
  * row in its corresponding list row, counting from the beginning of the list.
  * Note:
- *   1. If `search_keys[i]` is null, `output[i]` is null.
+ *   1. If `search_keys[i]` is null, `output[i]` is also null.
  *   2. If the row `lists[i]` is null, `output[i]` is also null.
  *   3. If the row `lists[i]` does not contain `search_key[i]`, `output[i]` is set to `-1`.
  *   4. In all other cases, `output[i]` is set to a non-negative `size_type` index.
