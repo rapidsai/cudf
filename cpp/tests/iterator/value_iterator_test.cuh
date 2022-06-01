@@ -12,8 +12,11 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-#include "cudf/detail/utilities/vector_factories.hpp"
+#pragma once
+
 #include <tests/iterator/iterator_tests.cuh>
+
+#include <cudf/detail/utilities/vector_factories.hpp>
 
 #include <thrust/host_vector.h>
 
