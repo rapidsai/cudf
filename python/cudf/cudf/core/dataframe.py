@@ -6546,7 +6546,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result = (
             self.groupby(
                 by=columns,
-                sort=True,
                 dropna=dropna,
             )
             .size()
