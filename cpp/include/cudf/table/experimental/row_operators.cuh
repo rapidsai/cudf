@@ -169,7 +169,7 @@ struct sorting_physical_element_comparator : physical_element_comparator {
    * @return Indicates the relationship between the elements in
    * the `lhs` and `rhs` columns.
    */
-  template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
+  template <typename Element, CUDF_ENABLE_IF(not std::is_floating_point_v<Element>)>
   __device__ weak_ordering operator()(Element lhs, Element rhs)
   {
     return detail::compare_elements(lhs, rhs);
@@ -183,7 +183,7 @@ struct sorting_physical_element_comparator : physical_element_comparator {
    * @param rhs_is_null boolean representing if lhs is null
    * @return Indicates the relationship between null in lhs and rhs columns.
    */
-  template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
+  template <typename Element, CUDF_ENABLE_IF(std::is_floating_point_v<Element>)>
   __device__ weak_ordering operator()(Element lhs, Element rhs)
   {
     if (isnan(lhs) and isnan(rhs)) {
@@ -771,7 +771,7 @@ struct sorting_physical_equality_comparator : physical_equality_comparator {
    * @param rhs second element
    * @return `true` if `lhs` == `rhs` else `false`.
    */
-  template <typename Element, std::enable_if_t<not std::is_floating_point_v<Element>>* = nullptr>
+  template <typename Element, CUDF_ENABLE_IF(not std::is_floating_point_v<Element>)>
   __device__ bool operator()(Element const lhs, Element const rhs)
   {
     return lhs == rhs;
@@ -785,7 +785,7 @@ struct sorting_physical_equality_comparator : physical_equality_comparator {
    * @param rhs second element
    * @return `true` if `lhs` == `rhs` else `false`.
    */
-  template <typename Element, std::enable_if_t<std::is_floating_point_v<Element>>* = nullptr>
+  template <typename Element, CUDF_ENABLE_IF(std::is_floating_point_v<Element>)>
   __device__ bool operator()(Element lhs,
                              Element rhs,
                              nan_equality const nan_result = nan_equality::ALL_EQUAL)
