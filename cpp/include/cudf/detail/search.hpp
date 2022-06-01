@@ -73,9 +73,9 @@ std::unique_ptr<column> contains(column_view const& haystack,
  * This function is designed for nested types only. It can also work with non-nested types
  * but with lower performance due to the complexity of the implementation.
  *
- * @param haystack The column containing search space.
- * @param needle A scalar value to check for existence in the search space.
- * @return true if the given `needle` value exists in the `haystack` column.
+ * @param haystack The column containing search space
+ * @param needle A scalar value to check for existence in the search space
+ * @return true if the given `needle` value exists in the `haystack` column
  */
 bool contains_nested_element(column_view const& haystack,
                              column_view const& needle,
@@ -87,11 +87,11 @@ bool contains_nested_element(column_view const& haystack,
  * This function is designed for nested types only. It can also work with non-nested types
  * but with lower performance due to the complexity of the implementation.
  *
- * @param haystack The column containing search space.
- * @param needles A column of values to check for existence in the search space.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return A BOOL column indicating if each element in `needles` exists in the search space.
+ * @param haystack The column containing search space
+ * @param needles A column of values to check for existence in the search space
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return A BOOL column indicating if each element in `needles` exists in the search space
  */
 std::unique_ptr<column> multi_contains_nested_elements(column_view const& haystack,
                                                        column_view const& needles,
