@@ -78,7 +78,7 @@ void label_segments(InputIterator offsets_begin,
 
   // If the offsets array has no more than 2 offset values, there will be at max 1 segment.
   // In such cases, the output will just be an array of all `0` values (which we already filled).
-  // We should terminate from here, otherwise the `inclusive_scan` call below still do its entire
+  // We should terminate from here, otherwise the `inclusive_scan` call below still does its entire
   // computation. That is unnecessary and may be expensive if we have the input offsets defining a
   // very large segment.
   if (thrust::distance(offsets_begin, offsets_end) <= 2) { return; }
@@ -145,14 +145,16 @@ void labels_to_offsets(InputIterator labels_begin,
   //  - If we have zero segment, `num_segments` computed below will be negative which may cascade to
   //    undefined behavior if we continue.
   //  - If we have all empty segments, the output offset values will be all `0`, which we already
-  //    filled above.
+  //    filled above. If we continue, the `exclusive_scan` call below still does its entire
+  //    computation. That is unnecessary and may be expensive if we have the input labels defining
+  //    a very large number of segments.
   if (thrust::distance(labels_begin, labels_end) == 0) { return; }
 
   auto const num_segments =
     static_cast<size_type>(thrust::distance(offsets_begin, offsets_end)) - 1;
 
   //================================================================================
-  // Let consider an example: Given input labels = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ].
+  // Let's consider an example: Given input labels = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ].
 
   // This stores the unique label values.
   // Given the example above, we will have this array containing [0, 1, 4].
