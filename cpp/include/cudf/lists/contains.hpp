@@ -37,8 +37,6 @@ namespace lists {
  * Output `column[i]` is set to null if one or more of the following are true:
  *   1. The search key `search_key` is null
  *   2. The list row `lists[i]` is null
- *   3. The list row `lists[i]` does not contain the search key, and contains at least
- *      one null.
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_key The scalar key to be looked up in each list row
@@ -61,8 +59,6 @@ std::unique_ptr<column> contains(
  * Output `column[i]` is set to null if one or more of the following are true:
  *   1. The row `search_keys[i]` is null
  *   2. The list row `lists[i]` is null
- *   3. The list row `lists[i]` does not contain the `search_keys[i]`, and contains at least
- *      one null.
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_keys Column of elements to be looked up in each list row
@@ -146,7 +142,7 @@ std::unique_ptr<column> index_of(
  * Output `column[i]` contains a 0-based index indicating the position of each search key
  * row in its corresponding list row, counting from the beginning of the list.
  * Note:
- *   1. If `search_keys[i]` is null, `output[i]` is also null.
+ *   1. If `search_keys[i]` is null, `output[i]` is null.
  *   2. If the row `lists[i]` is null, `output[i]` is also null.
  *   3. If the row `lists[i]` does not contain `search_key[i]`, `output[i]` is set to `-1`.
  *   4. In all other cases, `output[i]` is set to a non-negative `size_type` index.
