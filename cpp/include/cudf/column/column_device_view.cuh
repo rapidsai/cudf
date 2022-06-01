@@ -1155,6 +1155,7 @@ struct value_accessor {
 
   /**
    * @brief constructor
+   *
    * @param[in] _col column device view of cudf column
    */
   value_accessor(column_device_view const& _col) : col{_col}
@@ -1244,6 +1245,7 @@ struct pair_accessor {
 
   /**
    * @brief constructor
+   *
    * @param[in] _col column device view of cudf column
    */
   pair_accessor(column_device_view const& _col) : col{_col}
@@ -1284,6 +1286,7 @@ struct pair_rep_accessor {
 
   /**
    * @brief constructor
+   *
    * @param[in] _col column device view of cudf column
    */
   pair_rep_accessor(column_device_view const& _col) : col{_col}
@@ -1317,6 +1320,7 @@ struct mutable_value_accessor {
 
   /**
    * @brief constructor
+   *
    * @param[in] _col mutable column device view of cudf column
    */
   mutable_value_accessor(mutable_column_device_view& _col) : col{_col}

@@ -642,6 +642,7 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
@@ -652,6 +653,7 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum page size, in rows.
+   *
    * @param size_rows Maximum page size, in rows to set
    */
   void set_max_page_size_rows(size_type size_rows)
@@ -1075,6 +1077,7 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
@@ -1085,6 +1088,7 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum page size, in rows.
+   *
    * @param size_rows The maximum page size, in rows to set
    */
   void set_max_page_size_rows(size_type size_rows)
