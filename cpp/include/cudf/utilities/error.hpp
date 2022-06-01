@@ -54,6 +54,7 @@ struct logic_error : public std::logic_error {
 };
 /**
  * @brief Exception thrown when a CUDA error is encountered.
+ *
  */
 struct cuda_error : public std::runtime_error {
   /**

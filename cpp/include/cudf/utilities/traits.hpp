@@ -135,6 +135,7 @@ constexpr inline bool is_relationally_comparable()
 namespace detail {
 /**
  * @brief Helper functor to check if a specified type `T` supports relational comparisons.
+ *
  */
 struct unary_relationally_comparable_functor {
   /**
@@ -184,6 +185,7 @@ constexpr inline bool is_equality_comparable()
 namespace detail {
 /**
  * @brief Helper functor to check if a specified type `T` supports equality comparisons.
+ *
  */
 struct unary_equality_comparable_functor {
   /**

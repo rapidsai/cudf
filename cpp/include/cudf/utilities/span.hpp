@@ -31,14 +31,14 @@
 
 namespace cudf {
 
-/// A constant of type std::size_t that is used to differentiate std::span of static and dynamic
-/// extent
+/// A constant used to differentiate std::span of static and dynamic extent
 constexpr std::size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
 
 namespace detail {
 
 /**
  * @brief C++20 std::span with reduced feature set.
+ *
  */
 template <typename T, std::size_t Extent, typename Derived>
 class span_base {
@@ -78,6 +78,7 @@ class span_base {
   // not noexcept due to undefined behavior when size = 0
   /**
    * @brief Returns a reference to the first element in the span.
+   *
    * Calling front on an empty span results in undefined behavior.
    *
    * @return Reference to the first element in the span
@@ -86,6 +87,7 @@ class span_base {
   // not noexcept due to undefined behavior when size = 0
   /**
    * @brief Returns a reference to the last element in the span.
+   *
    * Calling last on an empty span results in undefined behavior.
    *
    * @return Reference to the last element in the span
@@ -94,6 +96,7 @@ class span_base {
   // not noexcept due to undefined behavior when idx < 0 || idx >= size
   /**
    * @brief Returns a reference to the idx-th element of the sequence.
+   *
    * The behavior is undefined if idx is out of range (i.e., if it is greater than or equal to
    * size()).
    *
@@ -104,6 +107,7 @@ class span_base {
 
   /**
    * @brief Returns an iterator to the first element of the span.
+   *
    * If the span is empty, the returned iterator will be equal to end().
    *
    * @return An iterator to the first element of the span
@@ -111,6 +115,7 @@ class span_base {
   constexpr iterator begin() const noexcept { return _data; }
   /**
    * @brief Returns an iterator to the element following the last element of the span.
+   *
    * This element acts as a placeholder; attempting to access it results in undefined behavior.
    *
    * @return An iterator to the element following the last element of the span
@@ -203,6 +208,7 @@ struct is_host_span_supported_container<  //
 
 /**
  * @brief C++20 std::span with reduced feature set.
+ *
  */
 template <typename T, std::size_t Extent = cudf::dynamic_extent>
 struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent>> {
@@ -273,6 +279,7 @@ struct is_device_span_supported_container<  //
 
 /**
  * @brief Device version of C++20 std::span with reduced feature set.
+ *
  */
 template <typename T, std::size_t Extent = cudf::dynamic_extent>
 struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Extent>> {
