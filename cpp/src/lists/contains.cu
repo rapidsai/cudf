@@ -173,8 +173,10 @@ struct dispatch_index_of {
     // This is because slicing offset has already been taken into account during row comparisons.
     auto const child = lists.child();
 
+    CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
+                 "Nested types not supported in list search operations.");
     CUDF_EXPECTS(child.type() == search_keys.type(),
-                 "Type of search key does not match with type of the list column element type.");
+                 "Type/Scale of search key does not match list column element type.");
     CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
