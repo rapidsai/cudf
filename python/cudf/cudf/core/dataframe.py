@@ -2719,12 +2719,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         [RangeIndex(start=0, stop=4, step=1),
             Index(['key', 'k2', 'val', 'temp'], dtype='object')]
 
-        **Series**
-
-        >>> csf1 = cudf.Series([1, 2, 3, 4])
-        >>> csf1.axes
-        [RangeIndex(start=0, stop=4, step=1)]
-
         """
         return [self._index, self._data.to_pandas_index()]
 

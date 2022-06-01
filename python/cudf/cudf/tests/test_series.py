@@ -1581,9 +1581,6 @@ def test_series_nunique_index(data):
     ],
 )
 def test_axes_series(data):
-
-    # print(data)
-    # psr = pd.Series(data)
     csr = cudf.Series(data)
     psr = csr.to_pandas()
 

@@ -260,9 +260,6 @@ def test_append_index(a, b):
     ],
 )
 def test_axes_dataframe(data):
-
-    # print(data)
-    # psr = pd.DataFrame(data)
     csr = cudf.DataFrame(data)
     psr = csr.to_pandas()
 
@@ -280,7 +277,7 @@ def test_axes_dataframe(data):
     # When the DataFrame is not empty, and column names are not available
     # The expected output is slightly different compared to logic
     # Expected - return [self.index, RangeIndex(0,1)]
-    # Actual - return [se;f.index, self.columns]
+    # Actual - return [self.index, self.columns]
 
 
 def test_series_init_none():
