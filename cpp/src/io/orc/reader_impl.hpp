@@ -17,8 +17,8 @@
 #pragma once
 
 #include "aggregate_orc_metadata.hpp"
-#include "orc.h"
-#include "orc_gpu.h"
+#include "orc.hpp"
+#include "orc_gpu.hpp"
 
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
@@ -84,6 +84,7 @@ class reader::impl {
    */
   explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
                 orc_reader_options const& options,
+                rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);
 
   /**

@@ -40,7 +40,8 @@ std::vector<uint8_t> decompress(compression_type compression, host_span<uint8_t 
 
 size_t decompress(compression_type compression,
                   host_span<uint8_t const> src,
-                  host_span<uint8_t> dst);
+                  host_span<uint8_t> dst,
+                  rmm::cuda_stream_view stream);
 
 /**
  * @brief GZIP header flags

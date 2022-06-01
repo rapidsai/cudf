@@ -16,13 +16,13 @@
 
 #pragma once
 
-#include "orc_common.h"
+#include "orc_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/comp/io_uncomp.h>
+#include <io/comp/io_uncomp.hpp>
 
 #include <thrust/optional.h>
 
@@ -538,10 +538,12 @@ class OrcDecompressor {
    * @brief ORC block decompression
    *
    * @param src compressed data
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return decompressed data
    */
-  host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src);
+  host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src,
+                                             rmm::cuda_stream_view stream);
   [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
   [[nodiscard]] uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
@@ -601,7 +603,7 @@ class metadata {
   };
 
  public:
-  explicit metadata(datasource* const src);
+  explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
 
   [[nodiscard]] size_t get_total_rows() const { return ff.numberOfRows; }
   [[nodiscard]] int get_num_stripes() const { return ff.stripes.size(); }

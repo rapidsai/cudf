@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "json_gpu.h"
+#include "json_gpu.hpp"
 
 #include <io/csv/datetime.cuh>
 #include <io/utilities/column_type_histogram.hpp>
