@@ -41,10 +41,13 @@
 
 #include <type_traits>
 
-namespace cudf {
-namespace lists {
+namespace cudf::lists {
 
 namespace {
+
+/**
+ * @brief A sentinel value used for marking that a given key has not been found in the search list.
+ */
 auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
 
 template <typename Type>
@@ -383,5 +386,4 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
   return detail::index_of(lists, search_keys, find_option, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace lists
-}  // namespace cudf
+}  // namespace cudf::lists
