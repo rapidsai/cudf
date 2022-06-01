@@ -178,6 +178,7 @@ class UniformRandomGenerator {
 
   /**
    * @brief Returns the next random number.
+   *
    * @return generated random number
    */
   template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()>* = nullptr>
