@@ -21,6 +21,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
@@ -32,17 +33,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/fill.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/scan.h>
-#include <thrust/scatter.h>
 #include <thrust/sequence.h>
-#include <thrust/uninitialized_fill.h>
 #include <thrust/unique.h>
 
 #include <algorithm>
@@ -223,22 +218,13 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
   _group_labels = std::make_unique<index_vector>(num_keys(stream), stream);
 
   auto& group_labels = *_group_labels;
-
   if (num_keys(stream) == 0) return group_labels;
 
-  thrust::uninitialized_fill(rmm::exec_policy(stream),
-                             group_labels.begin(),
-                             group_labels.end(),
-                             index_vector::value_type{0});
-  thrust::scatter(rmm::exec_policy(stream),
-                  thrust::make_constant_iterator(1, decltype(num_groups(stream))(1)),
-                  thrust::make_constant_iterator(1, num_groups(stream)),
-                  group_offsets(stream).begin() + 1,
-                  group_labels.begin());
-
-  thrust::inclusive_scan(
-    rmm::exec_policy(stream), group_labels.begin(), group_labels.end(), group_labels.begin());
-
+  cudf::detail::label_segments(group_offsets(stream).begin(),
+                               group_offsets(stream).end(),
+                               group_labels.begin(),
+                               group_labels.end(),
+                               stream);
   return group_labels;
 }
 
