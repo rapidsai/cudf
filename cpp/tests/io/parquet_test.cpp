@@ -3405,11 +3405,13 @@ TEST_F(ParquetReaderTest, EmptyColumnsParam)
 
   std::vector<char> out_buffer;
   cudf_io::parquet_writer_options args =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{out_buffer}, *expected);
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{&out_buffer}, *expected);
   cudf_io::write_parquet(args);
 
   cudf_io::parquet_reader_options read_opts =
-    cudf_io::parquet_reader_options::builder(cudf_io::source_info{out_buffer}).columns({});
+    cudf_io::parquet_reader_options::builder(
+      cudf_io::source_info{out_buffer.data(), out_buffer.size()})
+      .columns({});
   auto const result = cudf_io::read_parquet(read_opts);
 
   EXPECT_EQ(result.tbl->num_columns(), 0);
