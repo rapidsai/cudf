@@ -31,11 +31,27 @@ class structs_column_device_view : private column_device_view {
  public:
   structs_column_device_view()                                  = delete;
   ~structs_column_device_view()                                 = default;
-  structs_column_device_view(structs_column_device_view const&) = default;
-  structs_column_device_view(structs_column_device_view&&)      = default;
+  structs_column_device_view(structs_column_device_view const&) = default;  ///< Copy constructor
+  structs_column_device_view(structs_column_device_view&&)      = default;  ///< Move constructor
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return The reference to this structs column
+   */
   structs_column_device_view& operator=(structs_column_device_view const&) = default;
+
+  /**
+   * @brief Move assignment operator
+   *
+   * @return The reference to this structs column
+   */
   structs_column_device_view& operator=(structs_column_device_view&&) = default;
 
+  /**
+   * @brief Construct a new structs column device view object from a column device view.
+   *
+   * @param underlying_ The column device view to wrap
+   */
   CUDF_HOST_DEVICE structs_column_device_view(column_device_view const& underlying_)
     : column_device_view(underlying_)
   {
@@ -56,6 +72,9 @@ class structs_column_device_view : private column_device_view {
 
   /**
    * @brief Fetches the child column of the underlying struct column.
+   *
+   * @param idx The index of the child column to fetch
+   * @return The child column sliced relative to the parent's offset and size
    */
   [[nodiscard]] __device__ inline column_device_view get_sliced_child(size_type idx) const
   {
