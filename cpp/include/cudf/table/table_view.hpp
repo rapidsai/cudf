@@ -82,7 +82,7 @@ class table_view_base {
   /**
    * @brief Returns an iterator to the first view in the `table`.
    *
-   * @return An iterator to the first view in the `table`
+   * @return An iterator to the first column_view
    */
   iterator begin() noexcept { return std::begin(_columns); }
 

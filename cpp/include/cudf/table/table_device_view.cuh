@@ -187,6 +187,7 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
 
 /**
  * @brief Mutable table device view that is usable in device memory
+ 
  * Elements of the table can be modified in device memory.
  */
 class mutable_table_device_view
