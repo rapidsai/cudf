@@ -144,8 +144,8 @@ using rhs_iterator = strong_index_iterator<rhs_index_type>;
  * recognizing the corresponding type, we need to convert the negative indices into their original
  * values.
  *
- * @param idx The negative index iterating in reverse order in the range `[-1, -size-1)`.
- * @return The converted index iterating in forward order in the range `[0, size)`.
+ * @param idx The negative index iterating in reverse order in the range `[-1, -size-1)`
+ * @return The converted index iterating in forward order in the range `[0, size)`
  */
 [[nodiscard]] __device__ auto constexpr remap_negative_index(size_type const idx)
 {
@@ -995,7 +995,7 @@ struct strong_index_comparator_adapter {
  *  - The negative index will be converted into a non-negative value using the
  *    @ref `remap_negative_index` function and then converted to `rhs_index_type`.
  *
- * @tparam Comparator A class of device row comparator with strong index types.
+ * @tparam Comparator A class of device row comparator with strong index types
  */
 template <typename Comparator>
 struct negative_index_comparator_adapter {
@@ -1013,9 +1013,9 @@ struct negative_index_comparator_adapter {
    * responsible to make sure that the indices `i` and `j` having exactly one non-negative and one
    * negative values. Otherwise, the output is undefined.
    *
-   * @param i Index of a row in one table to compare.
-   * @param j Index of a row in the other table to compare.
-   * @return The row equality comparison result.
+   * @param i Index of a row in one table to compare
+   * @param j Index of a row in the other table to compare
+   * @return The row equality comparison result
    */
   __device__ auto operator()(size_type const i, size_type const j) const noexcept
   {
@@ -1254,7 +1254,7 @@ class device_row_hasher {
  * In order to call the underlying hasher, the input negative index will be converted back to a
  * non-negative value using the @ref `remap_negative_index` utility function.
  *
- * @tparam RowHasher A class of device row hasher.
+ * @tparam Hasher A class of device row hasher
  */
 template <typename Hasher>
 struct negative_index_hasher_adapter {
@@ -1268,8 +1268,8 @@ struct negative_index_hasher_adapter {
    * Note that the is not any validity check for the input value `idx`, assuming that it is always
    * negative. Otherwise, the output is undefined.
    *
-   * @param idx A row index that is given in a range of negative values.
-   * @return The resulting hash value.
+   * @param idx A row index that is given in a range of negative values
+   * @return The resulting hash value
    */
   __device__ auto operator()(size_type const idx) const noexcept
   {
