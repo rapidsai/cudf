@@ -7114,6 +7114,28 @@ def test_dataframe_append_dataframe_lists(df, other, sort, ignore_index):
             expected, actual, check_index_type=False if gdf.empty else True
         )
 
+@pytest.mark.parametrize(
+    "df",
+    [pd.DataFrame({"A": [1, 2, 3, np.nan, None, 6]})]
+)
+def test_dataframe_bfill(df):
+    gdf = cudf.from_pandas(df)
+
+    actual = df.bfill()
+    expected = gdf.bfill()
+    assert_eq(expected, actual)
+
+@pytest.mark.parametrize(
+    "df",
+    [pd.DataFrame({"A": [1, 2, 3, np.nan, None, 6]})]
+)
+def test_dataframe_ffill(df):
+    print(df)
+    gdf = cudf.from_pandas(df)
+
+    actual = df.ffill()
+    expected = gdf.ffill()
+    assert_eq(expected, actual)
 
 @pytest.mark.parametrize(
     "df",

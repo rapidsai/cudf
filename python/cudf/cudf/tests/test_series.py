@@ -984,6 +984,31 @@ def test_fillna_with_nan(data, nan_as_null, fill_value):
 
     assert_eq(expected, actual)
 
+@pytest.mark.parametrize(
+    "data",
+    [1, None, 11, 2.0, np.nan]
+)
+def test_bfill(data):
+    gs = cudf.Series(data, dtype="float64")
+    ps = gs.to_pandas()
+
+    expected = ps.bfill()
+    actual = gs.bfill()
+
+    assert_eq(expected, actual)
+
+@pytest.mark.parametrize(
+    "data",
+    [None, 1, 2, np.nan, np.nan, 5, np.nan]
+)
+def test_ffill(data):
+    gs = cudf.Series(data, dtype="float64")
+    ps = gs.to_pandas()
+
+    expected = ps.ffill()
+    actual = gs.ffill()
+
+    assert_eq(expected, actual)
 
 def test_series_mask_mixed_dtypes_error():
     s = cudf.Series(["a", "b", "c"])
