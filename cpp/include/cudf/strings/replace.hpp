@@ -91,7 +91,7 @@ std::unique_ptr<column> replace(
  * @throw cudf::logic_error if start is greater than stop.
  *
  * @param strings Strings column for this operation
- * @param repl Replacement string for specified positions found
+ * @param repl Replacement string for specified positions found;
  *        Default is empty string.
  * @param start Start position where repl will be added;
  *        Default is 0, first character position.
