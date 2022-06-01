@@ -537,8 +537,9 @@ class parquet_writer_options {
   }
 
   /**
-   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
-   * will return the row group size.
+   * @brief Returns maximum page size, in rows. 
+   *
+   * If set larger than the row group size, then this will return the row group size.
    *
    * @return Maximum page size, in rows
    */
@@ -642,6 +643,7 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   *
    * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
