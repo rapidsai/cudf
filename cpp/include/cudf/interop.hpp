@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ namespace cudf {
  * @throw cudf::logic_error if the any of the DLTensor fields are unsupported
  *
  * @param managed_tensor a 1D or 2D column-major (Fortran order) tensor
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @return Table with a copy of the tensor data
  */
@@ -67,7 +67,7 @@ std::unique_ptr<table> from_dlpack(
  * or if any of columns have non-zero null count
  *
  * @param input Table to convert to DLPack
- * @param mr Device memory resource used to allocate the returned DLPack tensor's device memory.
+ * @param mr Device memory resource used to allocate the returned DLPack tensor's device memory
  *
  * @return 1D or 2D DLPack tensor with a copy of the table data, or nullptr
  */
@@ -84,15 +84,20 @@ DLManagedTensor* to_dlpack(
  */
 
 /**
- * @brief Detailed meta data information for arrow array.
+ * @brief Detailed metadata information for arrow array.
  *
  * As of now this contains only name in the hierarchy of children of cudf column,
  * but in future this can be updated as per requirement.
  */
 struct column_metadata {
-  std::string name;
-  std::vector<column_metadata> children_meta;
+  std::string name;                            ///< Name of the column
+  std::vector<column_metadata> children_meta;  ///< Metadata of children of the column
 
+  /**
+   * @brief Construct a new column metadata object
+   *
+   * @param _name Name of the column
+   */
   column_metadata(std::string const& _name) : name(_name) {}
   column_metadata() = default;
 };
@@ -119,7 +124,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  *
  * @param input arrow:Table that needs to be converted to `cudf::table`
  * @param mr    Device memory resource used to allocate `cudf::table`
- * @return cudf table generated from given arrow Table.
+ * @return cudf table generated from given arrow Table
  */
 
 std::unique_ptr<table> from_arrow(
