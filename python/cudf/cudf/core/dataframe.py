@@ -2734,7 +2734,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         [RangeIndex(start=0, stop=4, step=1)]
 
         """
-        return [self.index, self.columns]
+        return [self._index, self._data.to_pandas_index()]
 
     def diff(self, periods=1, axis=0):
         """
