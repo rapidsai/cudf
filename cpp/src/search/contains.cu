@@ -110,7 +110,7 @@ struct multi_contains_dispatch {
   struct contains_fn {
     bool __device__ operator()(size_type const idx) const
     {
-      if (needles_has_nulls && needles.is_null_nocheck(idx)) {
+      if (needles_have_nulls && needles.is_null_nocheck(idx)) {
         // `true` or `false`: doesn't matter, this will be masked out as a null element.
         return true;
       }
@@ -120,7 +120,7 @@ struct multi_contains_dispatch {
 
     Haystack const haystack;
     column_device_view const needles;
-    bool const needles_has_nulls;
+    bool const needles_have_nulls;
   };
 
   template <typename Type, CUDF_ENABLE_IF(!is_nested<Type>())>
