@@ -314,6 +314,9 @@ class device_row_comparator {
  */
 template <typename Comparator, weak_ordering... values>
 struct weak_ordering_comparator_impl {
+  static_assert(not((weak_ordering::EQUIVALENT == values) && ...),
+                "weak_ordering_comparator should not be used for pure equality comparisons. The "
+                "`row_equality_comparator` should be used instead");
   __device__ bool operator()(size_type const lhs, size_type const rhs) const noexcept
   {
     weak_ordering const result = comparator(lhs, rhs);
