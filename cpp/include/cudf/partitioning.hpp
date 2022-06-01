@@ -58,8 +58,8 @@ namespace cudf {
  * @param t The table to partition
  * @param partition_map Non-nullable column of integer values that map each row
  * in `t` to it's partition.
- * @param num_partitions The total number of partitions.
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param num_partitions The total number of partitions
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Pair containing the reordered table and vector of `num_partitions +
  * 1` offsets to each partition such that the size of partition `i` is
  * determined by `offset[i+1] - offset[i]`.
@@ -86,7 +86,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
  * @param hash_function Optional hash id that chooses the hash function to use
  * @param seed Optional seed value to the hash function
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @returns An output table and a vector of row offsets to each partition
  */
