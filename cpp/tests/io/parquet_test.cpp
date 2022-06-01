@@ -214,7 +214,7 @@ int read_footer(std::unique_ptr<cudf_io::datasource>& source,
   const auto footer_buffer =
     source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
   cudf_io::parquet::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
-  cp.read(file_meta_data);
+  if (not cp.read(file_meta_data)) return -1;
 
   return 0;
 }
@@ -3386,7 +3386,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   cudf_io::parquet::PageHeader ph;
   const auto pg_hdr_buf = source->host_read(first_chunk.data_page_offset, 1024);
   cudf_io::parquet::CompactProtocolReader cp(pg_hdr_buf->data(), pg_hdr_buf->size());
-  cp.read(&ph);
+  EXPECT_TRUE(cp.read(&ph));
 
   EXPECT_EQ(ph.data_page_header.num_values, page_rows);
 }
