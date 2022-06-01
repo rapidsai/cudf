@@ -144,8 +144,8 @@ using rhs_iterator = strong_index_iterator<rhs_index_type>;
  * recognizing the corresponding type, we need to convert the negative indices into their original
  * values.
  *
- * @param idx The negative index iterating in reverse order in the range `[-1, -size-1)`
- * @return The converted index iterating in forward order in the range `[0, size)`
+ * @param idx The negative index iterating in reverse order in the range `[-1, -size-1)`.
+ * @return The converted index iterating in forward order in the range `[0, size)`.
  */
 [[nodiscard]] __device__ auto constexpr remap_negative_index(size_type const idx)
 {
@@ -992,8 +992,8 @@ struct strong_index_comparator_adapter {
  * indices to the functor must be given such that one index must be non-negative and the other must
  * be negative:
  *  - The non-negative index will be converted to `lhs_index_type`.
- *  - The negative index will be normalized using @ref `remap_negative_index` and converted to
- *    `rhs_index_type`.
+ *  - The negative index will be converted into a non-negative value using the
+ *    @ref `remap_negative_index` function and then converted to `rhs_index_type`.
  *
  * @tparam Comparator A class of device row comparator with strong index types.
  */
@@ -1004,14 +1004,14 @@ struct negative_index_comparator_adapter {
    * @brief Call the underlying row comparator with strong index types from row indices of
    *        `size_type` type.
    *
-   * From two row indices `i` and `j`, the non-negative index is converted into `lhs_index_type`
-   * while the negative index is normalized using @ref `remap_negative_index` then converted to
-   * `rhs_index_type`. The underlying row comparator will be called using these strong type
-   * indices.
+   * From two row indices `i` and `j`, the non-negative index is converted to `lhs_index_type`
+   * while the negative index is firstly converted into a non-negative value using the
+   * @ref `remap_negative_index` function then further converted to `rhs_index_type`. The underlying
+   * row comparator will be called using these strong type indices.
    *
    * Note that there is not any validity check to be performed in this function. Caller is
-   * responsible to make sure that one index must be non-negative and the other must be negative.
-   * Otherwise, the output is undefined.
+   * responsible to make sure that the indices `i` and `j` having exactly one non-negative and one
+   * negative values. Otherwise, the output is undefined.
    *
    * @param i Index of a row in one table to compare.
    * @param j Index of a row in the other table to compare.
