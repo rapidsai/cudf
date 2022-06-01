@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_LT_140
 from cudf.testing._utils import _create_pandas_series, assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -522,8 +522,10 @@ def test_rolling_custom_index_support():
     "indexer",
     [
         pd.api.indexers.FixedForwardWindowIndexer(window_size=2),
-        pd.core.window.indexers.ExpandingIndexer(),
-        pd.core.window.indexers.FixedWindowIndexer(window_size=3),
+        pd.core.window.expanding.ExpandingIndexer(),
+        pd.core.window.indexers.FixedWindowIndexer(window_size=3)
+        if PANDAS_LT_140
+        else pd.core.indexers.objects.FixedWindowIndexer(window_size=3),
     ],
 )
 def test_rolling_indexer_support(indexer):

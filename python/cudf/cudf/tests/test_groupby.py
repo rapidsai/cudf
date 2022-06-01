@@ -1350,7 +1350,7 @@ def test_groupby_nth(n, by):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    condition=PANDAS_GE_130,
     reason="https://github.com/pandas-dev/pandas/issues/43209",
 )
 def test_raise_data_error():
@@ -1890,6 +1890,7 @@ def test_groupby_shift_row(nelem, shift_perc, direction, fill_value):
 @pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
 @pytest.mark.parametrize("direction", [1, -1])
 @pytest.mark.parametrize("fill_value", [None, 0, 42])
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10608")
 def test_groupby_shift_row_mixed_numerics(
     nelem, shift_perc, direction, fill_value
 ):

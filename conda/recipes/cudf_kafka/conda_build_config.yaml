@@ -1,0 +1,8 @@
+c_compiler_version:
+  - 9
+
+cxx_compiler_version:
+  - 9
+
+sysroot_version:
+  - "2.17"

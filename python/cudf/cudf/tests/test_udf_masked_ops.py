@@ -7,7 +7,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.core.scalar import NA
+from cudf.core.missing import NA
 from cudf.core.udf._ops import (
     arith_ops,
     bitwise_ops,

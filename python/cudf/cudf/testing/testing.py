@@ -20,6 +20,7 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core._compat import PANDAS_GE_110
+from cudf.core.missing import NA
 
 
 def dtype_can_compare_equal_to_other(dtype):
@@ -290,7 +291,7 @@ def assert_column_equal(
 
 
 def null_safe_scalar_equals(left, right):
-    if left in {cudf.NA, np.nan} or right in {cudf.NA, np.nan}:
+    if left in {NA, np.nan} or right in {NA, np.nan}:
         return left is right
     return left == right
 
