@@ -9414,9 +9414,9 @@ def test_value_counts(
         # Convert the Pandas series to a cuDF one due to difference
         # in the handling of NaNs between the two (<NA> in cuDF and
         # NaN in Pandas) when dropna=False.
-        assert_eq(got, cudf.from_pandas(expected))
+        assert_eq(got.sort_index(), cudf.from_pandas(expected).sort_index())
     else:
-        assert_eq(got, expected)
+        assert_eq(got.sort_index(), expected.sort_index())
 
     with pytest.raises(KeyError):
         gdf.value_counts(subset=["not_a_column_name"])
