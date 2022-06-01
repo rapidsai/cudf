@@ -28,6 +28,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/data_sink.hpp>
+#include <cudf/io/datasource.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -35,6 +36,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <src/io/parquet/compact_protocol_reader.hpp>
+#include <src/io/parquet/parquet.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -190,6 +192,31 @@ std::unique_ptr<cudf::column> make_parquet_list_col(
                cudf::test::detail::make_null_mask(valids, valids + offsets_size))
            : cudf::make_lists_column(
                offsets_size, offsets.release(), std::move(child), 0, rmm::device_buffer{});
+}
+
+// function to read parquet file metadata from the footer.
+int read_footer(std::unique_ptr<cudf_io::datasource>& source,
+                cudf_io::parquet::FileMetaData* file_meta_data)
+{
+  constexpr auto header_len = sizeof(cudf_io::parquet::file_header_s);
+  constexpr auto ender_len  = sizeof(cudf_io::parquet::file_ender_s);
+
+  const auto len           = source->size();
+  const auto header_buffer = source->host_read(0, header_len);
+  const auto header =
+    reinterpret_cast<const cudf_io::parquet::file_header_s*>(header_buffer->data());
+  const auto ender_buffer = source->host_read(len - ender_len, ender_len);
+  const auto ender = reinterpret_cast<const cudf_io::parquet::file_ender_s*>(ender_buffer->data());
+
+  if (not(header->magic == cudf_io::parquet::parquet_magic)) return -1;
+  if (not(ender->magic == cudf_io::parquet::parquet_magic)) return -1;
+
+  const auto footer_buffer =
+    source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
+  cudf_io::parquet::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
+  cp.read(file_meta_data);
+
+  return 0;
 }
 
 // Base test fixture for tests
@@ -3346,56 +3373,22 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   cudf_io::write_parquet(out_opts);
 
   // check first page header and make sure it has only 5000 values
-  int fd = open(filepath.c_str(), O_RDONLY);
-  unsigned char buf[1024];
-  read(fd, buf, sizeof(buf));
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
 
-  // check magic
-  EXPECT_EQ(buf[0], 0x50);  // P
-  EXPECT_EQ(buf[1], 0x41);  // A
-  EXPECT_EQ(buf[2], 0x52);  // R
-  EXPECT_EQ(buf[3], 0x31);  // 1
+  EXPECT_EQ(read_footer(source, &fmd), 0);
+  EXPECT_GT(fmd.row_groups.size(), 0);
+  EXPECT_GT(fmd.row_groups[0].columns.size(), 0);
+  auto& first_chunk = fmd.row_groups[0].columns[0].meta_data;
+  EXPECT_GT(first_chunk.data_page_offset, 0);
 
-  cudf_io::parquet::CompactProtocolReader reader(&buf[4], sizeof(buf) - 4);
-  reader.get_i32();  // fld 1
-  int32_t page_type = reader.get_i32();
-  reader.get_i32();  // fld 2
-  reader.get_i32();  // uncomp_size
-  reader.get_i32();  // fld 3
-  int32_t comp_size = reader.get_i32();
+  // read first data page header. 1024 bytes should be plenty
+  cudf_io::parquet::PageHeader ph;
+  const auto pg_hdr_buf = source->host_read(first_chunk.data_page_offset, 1024);
+  cudf_io::parquet::CompactProtocolReader cp(pg_hdr_buf->data(), pg_hdr_buf->size());
+  cp.read(&ph);
 
-  // check to see if first page is data page, if not, then skip
-  if (page_type != 0) {
-    // read rest of header, get file pos, and seek to next header
-    reader.get_i32();  // struct start
-    reader.get_i32();  // fld 1
-    reader.get_i32();  // nvals
-    reader.get_i32();  // fld 2
-    reader.get_i32();  // encoding
-    reader.getb();     // end of struct
-    reader.getb();     // end of struct
-
-    // seek to next page header and read
-    int32_t pos = 4 + reader.bytecount() + comp_size;
-    lseek(fd, pos, SEEK_SET);
-    read(fd, buf, sizeof(buf));
-    reader.init(buf, sizeof(buf));
-
-    reader.get_i32();  // fld 1
-    page_type = reader.get_i32();
-    reader.get_i32();  // fld 2
-    reader.get_i32();  // uncomp_size
-    reader.get_i32();  // fld 3
-    comp_size = reader.get_i32();
-  }
-
-  EXPECT_EQ(page_type, 0);
-  reader.get_i32();                  // struct start
-  reader.get_i32();                  // fld 1
-  int32_t nvals = reader.get_i32();  // numvals
-  close(fd);
-
-  EXPECT_EQ(nvals, page_rows);
+  EXPECT_EQ(ph.data_page_header.num_values, page_rows);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
