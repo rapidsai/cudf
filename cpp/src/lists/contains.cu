@@ -169,13 +169,9 @@ struct dispatch_index_of {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const
   {
-    // Access the child column through `child()` method, not `get_sliced_child()`.
-    // This is because slicing offset has already been taken into account during row comparisons.
-    auto const child = lists.child();
-
     CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
                  "Nested types not supported in list search operations.");
-    CUDF_EXPECTS(child.type() == search_keys.type(),
+    CUDF_EXPECTS(lists.child().type() == search_keys.type(),
                  "Type/Scale of search key does not match list column element type.");
     CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
