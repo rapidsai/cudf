@@ -54,6 +54,7 @@ class temp_directory {
   temp_directory(temp_directory const&)            = delete;
   /**
    * @brief Move assignment operator
+   *
    * @return Reference to this object
    */
   temp_directory& operator=(temp_directory&&) = default;

@@ -96,12 +96,16 @@ struct TypeList<Types<TYPES...>> {
 #include <gtest/gtest.h>
 
 /**
- * @brief test macro to be expected to return cudaSuccess, fails if not
+ * @brief test macro to be expects `expr` to return cudaSuccess
+ *
+ * This will stop the test process on failure.
+ *
  * @param expr expression to be tested
  */
 #define ASSERT_CUDA_SUCCEEDED(expr) ASSERT_EQ(cudaSuccess, expr)
 /**
- * @brief test macro to be expected to return cudaSuccess
+ * @brief test macro to be expects `expr` to return cudaSuccess
+ *
  * @param expr expression to be tested
  */
 #define EXPECT_CUDA_SUCCEEDED(expr) EXPECT_EQ(cudaSuccess, expr)

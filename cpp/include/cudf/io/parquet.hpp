@@ -526,8 +526,9 @@ class parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
-   * @brief Returns the maximum uncompressed page size, in bytes. If set larger than the row group
-   * size, then this will return the row group size.
+   * @brief Returns the maximum uncompressed page size, in bytes. 
+   *
+   * If set larger than the row group size, then this will return the row group size.
    *
    * @return Maximum uncompressed page size, in bytes
    */
