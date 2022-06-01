@@ -1304,7 +1304,7 @@ class IndexedFrame(Frame):
 
         Parameters
         ----------
-        columns : array-like
+        columns_names : array-like
             The list of columns to select from the Frame,
             if ``columns`` is a superset of ``Frame.columns`` new
             columns are created.
