@@ -120,25 +120,25 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
   }
 
   // Check for existence of needles in haystack.
-  // During this, we will use `index_normalized_comparator_adapter` to convert the existing indices
+  // During this, we will use `negative_index_comparator_adapter` to convert the existing indices
   // in the hash map (i.e., indices of haystack elements) into `lhs_index_type`, and indices of the
   // searching needles into `rhs_index_type` for row comparisons.
   {
     // A reverse iterator constructed from `0` value will begin from `-1`.
     // Thus, needle indices will iterate in reverse order in the range `[-1, -1-needles.size())`.
     // They will be converted back to the range `[0, needles.size())` then into `rhs_index_type`
-    // automatically by `index_normalized_hasher_adapter` and `index_normalized_comparator_adapter`.
+    // automatically by `negative_index_hasher_adapter` and `negative_index_comparator_adapter`.
     auto const needles_it =
       thrust::make_reverse_iterator(thrust::make_counting_iterator(size_type{0}));
 
     auto const hasher   = cudf::experimental::row::hash::row_hasher(needles_tv, stream);
-    auto const d_hasher = cudf::experimental::row::hash::index_normalized_hasher_adapter{
+    auto const d_hasher = cudf::experimental::row::hash::negative_index_hasher_adapter{
       detail::experimental::compaction_hash(
         hasher.device_hasher(nullate::DYNAMIC{needles_has_nulls}))};
 
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack_tv, needles_tv, stream);
-    auto const d_comp = cudf::experimental::row::equality::index_normalized_comparator_adapter{
+    auto const d_comp = cudf::experimental::row::equality::negative_index_comparator_adapter{
       comparator.device_comparator(nullate::DYNAMIC{haystack_has_nulls || needles_has_nulls})};
 
     haystack_map.contains(

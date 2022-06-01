@@ -147,7 +147,10 @@ using rhs_iterator = strong_index_iterator<rhs_index_type>;
  * @param idx The negative index iterating in reverse order in the range `[-1, -size-1)`
  * @return The converted index iterating in forward order in the range `[0, size)`
  */
-[[nodiscard]] __device__ auto constexpr normalize_index(size_type const idx) { return -(idx + 1); }
+[[nodiscard]] __device__ auto constexpr remap_negative_index(size_type const idx)
+{
+  return -(idx + 1);
+}
 
 namespace lexicographic {
 
@@ -989,22 +992,20 @@ struct strong_index_comparator_adapter {
  * indices to the functor must be given such that one index must be non-negative and the other must
  * be negative:
  *  - The non-negative index will be converted to `lhs_index_type`.
- *  - The negative index will be normalized using @ref `normalize_index` and converted to
+ *  - The negative index will be normalized using @ref `remap_negative_index` and converted to
  *    `rhs_index_type`.
  *
  * @tparam Comparator A class of device row comparator with strong index types.
  */
 template <typename Comparator>
-struct index_normalized_comparator_adapter {
-  index_normalized_comparator_adapter(Comparator&& comparator) : comparator(std::move(comparator))
-  {
-  }
+struct negative_index_comparator_adapter {
+  negative_index_comparator_adapter(Comparator&& comparator) : comparator(std::move(comparator)) {}
   /**
    * @brief Call the underlying row comparator with strong index types from row indices of
    *        `size_type` type.
    *
    * From two row indices `i` and `j`, the non-negative index is converted into `lhs_index_type`
-   * while the negative index is normalized using @ref `normalize_index` then converted to
+   * while the negative index is normalized using @ref `remap_negative_index` then converted to
    * `rhs_index_type`. The underlying row comparator will be called using these strong type
    * indices.
    *
@@ -1019,7 +1020,7 @@ struct index_normalized_comparator_adapter {
   __device__ auto operator()(size_type const i, size_type const j) const noexcept
   {
     auto const lhs_idx = static_cast<lhs_index_type>(i >= 0 ? i : j);
-    auto const rhs_idx = static_cast<rhs_index_type>(normalize_index(i < 0 ? i : j));
+    auto const rhs_idx = static_cast<rhs_index_type>(remap_negative_index(i < 0 ? i : j));
     return comparator(lhs_idx, rhs_idx);
   }
 
@@ -1251,17 +1252,18 @@ class device_row_hasher {
  *        values.
  *
  * In order to call the underlying hasher, the input negative index will be converted back to a
- * non-negative value using the @ref `normalize_index` utility function.
+ * non-negative value using the @ref `remap_negative_index` utility function.
  *
  * @tparam RowHasher A class of device row hasher.
  */
 template <typename Hasher>
-struct index_normalized_hasher_adapter {
-  index_normalized_hasher_adapter(Hasher&& hasher_) : hasher(std::move(hasher_)) {}
+struct negative_index_hasher_adapter {
+  negative_index_hasher_adapter(Hasher&& hasher_) : hasher(std::move(hasher_)) {}
 
   /**
    * Given a negative row index `idx`, this functor converts the index into a (valid) non-negative
-   * value using the @ref `normalize_index` function before calling to the underlying row hasher.
+   * value using the @ref `remap_negative_index` function before calling to the underlying row
+   * hasher.
    *
    * Note that the is not any validity check for the input value `idx`, assuming that it is always
    * negative. Otherwise, the output is undefined.
@@ -1271,7 +1273,7 @@ struct index_normalized_hasher_adapter {
    */
   __device__ auto operator()(size_type const idx) const noexcept
   {
-    return hasher(normalize_index(idx));
+    return hasher(remap_negative_index(idx));
   }
 
  private:
