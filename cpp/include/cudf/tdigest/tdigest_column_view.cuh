@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,18 @@
 namespace cudf {
 namespace tdigest {
 
+/**
+ * @brief Functor to compute the size of each tdigest of a column.
+ *
+ */
 struct tdigest_size {
-  size_type const* offsets;
+  size_type const* offsets;  ///< Offsets of the t-digest column
+  /**
+   * @brief Returns size of the each tdigest in the column
+   *
+   * @param tdigest_index Index of the tdigest in the column
+   * @return Size of the tdigest
+   */
   __device__ size_type operator()(size_type tdigest_index)
   {
     return offsets[tdigest_index + 1] - offsets[tdigest_index];
@@ -58,50 +68,70 @@ struct tdigest_size {
  */
 class tdigest_column_view : private column_view {
  public:
-  tdigest_column_view(column_view const& col);
-  tdigest_column_view(tdigest_column_view&& tdigest_view)      = default;
-  tdigest_column_view(const tdigest_column_view& tdigest_view) = default;
-  ~tdigest_column_view()                                       = default;
+  tdigest_column_view(column_view const&);  ///< Construct tdigest_column_view from a column_view
+  tdigest_column_view(tdigest_column_view&&)      = default;  ///< Move constructor
+  tdigest_column_view(const tdigest_column_view&) = default;  ///< Copy constructor
+  ~tdigest_column_view()                          = default;
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return this object after copying the contents of the other object (copy)
+   */
   tdigest_column_view& operator=(tdigest_column_view const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return this object after moving the contents of the other object (transfer ownership)
+   */
   tdigest_column_view& operator=(tdigest_column_view&&) = default;
 
   using column_view::size;
   static_assert(std::is_same_v<offset_type, size_type>,
                 "offset_type is expected to be the same as size_type.");
-  using offset_iterator = offset_type const*;
+  using offset_iterator = offset_type const*;  ///< Iterator over offsets
 
   // mean and weight column indices within tdigest inner struct columns
-  static constexpr size_type mean_column_index{0};
-  static constexpr size_type weight_column_index{1};
+  static constexpr size_type mean_column_index{0};    ///< Mean column index
+  static constexpr size_type weight_column_index{1};  ///< Weight column index
 
   // min and max column indices within tdigest outer struct columns
-  static constexpr size_type centroid_column_index{0};
-  static constexpr size_type min_column_index{1};
-  static constexpr size_type max_column_index{2};
+  static constexpr size_type centroid_column_index{0};  ///< Centroid column index
+  static constexpr size_type min_column_index{1};       ///< Min column index
+  static constexpr size_type max_column_index{2};       ///< Max column index
 
   /**
    * @brief Returns the parent column.
+   *
+   * @return The parent column
    */
   [[nodiscard]] column_view parent() const;
 
   /**
    * @brief Returns the column of centroids
+   *
+   * @return The list column of centroids
    */
   [[nodiscard]] lists_column_view centroids() const;
 
   /**
    * @brief Returns the internal column of mean values
+   *
+   * @return The internal column of mean values
    */
   [[nodiscard]] column_view means() const;
 
   /**
    * @brief Returns the internal column of weight values
+   *
+   * @return The internal column of weight values
    */
   [[nodiscard]] column_view weights() const;
 
   /**
    * @brief Returns an iterator that returns the size of each tdigest
    * in the column (each row is 1 digest)
+   *
+   * @return An iterator that returns the size of each tdigest in the column
    */
   [[nodiscard]] auto size_begin() const
   {
@@ -112,12 +142,16 @@ class tdigest_column_view : private column_view {
   /**
    * @brief Returns the first min value for the column. Each row corresponds
    * to the minimum value for the accompanying digest.
+   *
+   * @return const pointer to the first min value for the column
    */
   [[nodiscard]] double const* min_begin() const;
 
   /**
    * @brief Returns the first max value for the column. Each row corresponds
    * to the maximum value for the accompanying digest.
+   *
+   * @return const pointer to the first max value for the column
    */
   [[nodiscard]] double const* max_begin() const;
 };
