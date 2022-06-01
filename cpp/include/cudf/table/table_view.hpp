@@ -302,6 +302,7 @@ inline bool nullable(table_view const& view)
  * @brief Returns True if the table has nulls in any of its columns.
  *
  * This checks for nulls in the columns and but not in any of the columns' children.
+ *
  * @param view The table to check for nulls
  * @return True if the table has nulls in any of its columns, false otherwise
  */
