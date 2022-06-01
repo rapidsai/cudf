@@ -2204,9 +2204,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         labels : Index, Series-convertible, optional, default None
             New labels / index to conform the axis specified by ``axis`` to.
         index : Index, Series-convertible, optional, default None
-            Return a new object with rows conformed to ``index``
+            The index labels specifying the index to conform to.
         columns : array-like, optional, default None
-            Return a new object with columns conformed to ``columns``
+            The column labels specifying the columns to conform to.
         axis : Axis to target.
             Can be either the axis name
             (``index``, ``columns``) or number (0, 1).
