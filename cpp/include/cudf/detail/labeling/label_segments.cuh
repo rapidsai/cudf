@@ -78,7 +78,7 @@ void label_segments(InputIterator offsets_begin,
 
   // If the offsets array has no more than 2 offset values, there will be at max 1 segment.
   // In such cases, the output will just be an array of all `0` values (which we already filled).
-  // We should terminate here, otherwise the `inclusive_scan` call below still do its entire
+  // We should terminate from here, otherwise the `inclusive_scan` call below still do its entire
   // computation. That is unnecessary and may be expensive if we have the input offsets defining a
   // very large segment.
   if (thrust::distance(offsets_begin, offsets_end) <= 2) { return; }
@@ -125,24 +125,31 @@ void label_segments(InputIterator offsets_begin,
  *
  * @param labels_begin The beginning of the labels that define segments.
  * @param labels_end The end of the labels that define segments.
- * @param out_begin The beginning of the output offset range.
- * @param out_end The end of the output offset range.
+ * @param offsets_begin The beginning of the output offset range.
+ * @param offsets_end The end of the output offset range.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 template <typename InputIterator, typename OutputIterator>
 void labels_to_offsets(InputIterator labels_begin,
                        InputIterator labels_end,
-                       OutputIterator out_begin,
-                       OutputIterator out_end,
+                       OutputIterator offsets_begin,
+                       OutputIterator offsets_end,
                        rmm::cuda_stream_view stream)
 {
   // Always fill the entire output array with `0` value regardless of the input.
   using OutputType = typename thrust::iterator_value<OutputIterator>::type;
-  thrust::uninitialized_fill(rmm::exec_policy(stream), out_begin, out_end, OutputType{0});
+  thrust::uninitialized_fill(rmm::exec_policy(stream), offsets_begin, offsets_end, OutputType{0});
 
+  // If there is not any label value, we will have zero segment or all empty segments. We should
+  // terminate from here because:
+  //  - If we have zero segment, `num_segments` computed below will be negative which may cascade to
+  //    undefined behavior if we continue.
+  //  - If we have all empty segments, the output offset values will be all `0`, which we already
+  //    filled above.
   if (thrust::distance(labels_begin, labels_end) == 0) { return; }
 
-  auto const num_segments = static_cast<size_type>(thrust::distance(out_begin, out_end)) - 1;
+  auto const num_segments =
+    static_cast<size_type>(thrust::distance(offsets_begin, offsets_end)) - 1;
 
   //================================================================================
   // Let consider an example: Given input labels = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ].
@@ -155,27 +162,27 @@ void labels_to_offsets(InputIterator labels_begin,
   // Given the example above, we will have this array containing [4, 2, 4].
   auto list_sizes = rmm::device_uvector<size_type>(num_segments, stream);
 
-  // Count the numbers of unique labels in the input.
+  // Count the numbers of labels in the each segment.
   auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream),
                                          labels_begin,  // keys
                                          labels_end,    // keys
                                          thrust::make_constant_iterator<size_type>(1),
-                                         list_indices.begin(),  // output unique input labels
+                                         list_indices.begin(),  // output unique label values
                                          list_sizes.begin());  // count for each label
   auto const num_non_empty_segments = thrust::distance(list_indices.begin(), end.first);
 
   // Scatter segment sizes into the end position of their corresponding segment indices.
-  // Given the example above, we scatter [4, 2, 4] by the scatter_map [0, 1, 4], resulting
+  // Given the example above, we scatter [4, 2, 4] by the scatter map [0, 1, 4], resulting
   // output = [4, 2, 0, 0, 4, 0].
   thrust::scatter(rmm::exec_policy(stream),
                   list_sizes.begin(),
                   list_sizes.begin() + num_non_empty_segments,
                   list_indices.begin(),
-                  out_begin);
+                  offsets_begin);
 
   // Generate offsets from sizes.
   // Given the example above, the final output is [0, 4, 6, 6, 6, 10].
-  thrust::exclusive_scan(rmm::exec_policy(stream), out_begin, out_end, out_begin);
+  thrust::exclusive_scan(rmm::exec_policy(stream), offsets_begin, offsets_end, offsets_begin);
 }
 
 }  // namespace cudf::detail
