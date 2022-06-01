@@ -142,10 +142,11 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
 
 /// Expected values for tdigest tests
 struct expected_tdigest {
-  column_view mean;    ///< mean column
-  column_view weight;  ///< weight column
-  double min,          ///< min value
-    max;               ///< max value
+  // @cond
+  column_view mean;
+  column_view weight;
+  double min, max;
+  // @endcond
 };
 
 /**
