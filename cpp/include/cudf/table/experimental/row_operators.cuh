@@ -149,7 +149,7 @@ struct physical_element_comparator {
    * the `lhs` and `rhs` columns.
    */
   template <typename Element>
-  __device__ weak_ordering operator()(Element lhs, Element rhs)
+  __device__ constexpr weak_ordering operator()(Element const lhs, Element const rhs) const noexcept
   {
     return detail::compare_elements(lhs, rhs);
   }
@@ -159,7 +159,7 @@ struct physical_element_comparator {
  * @brief Relational comparator functor that evaluates `NaN` as equivalent to other `NaN`s and
  * greater than all other values.
  */
-struct sorting_physical_element_comparator : physical_element_comparator {
+struct sorting_physical_element_comparator {
   /**
    * @brief A specialization for non-floating-point `Element` type relational
    * comparison to derive the order of the elements with respect to `lhs`.
@@ -170,7 +170,7 @@ struct sorting_physical_element_comparator : physical_element_comparator {
    * the `lhs` and `rhs` columns.
    */
   template <typename Element, CUDF_ENABLE_IF(not std::is_floating_point_v<Element>)>
-  __device__ weak_ordering operator()(Element lhs, Element rhs)
+  __device__ constexpr weak_ordering operator()(Element const lhs, Element const rhs) const noexcept
   {
     return detail::compare_elements(lhs, rhs);
   }
@@ -184,7 +184,7 @@ struct sorting_physical_element_comparator : physical_element_comparator {
    * @return Indicates the relationship between null in lhs and rhs columns.
    */
   template <typename Element, CUDF_ENABLE_IF(std::is_floating_point_v<Element>)>
-  __device__ weak_ordering operator()(Element lhs, Element rhs)
+  __device__ constexpr weak_ordering operator()(Element const lhs, Element const rhs) const noexcept
   {
     if (isnan(lhs) and isnan(rhs)) {
       return weak_ordering::EQUIVALENT;
@@ -371,8 +371,8 @@ class device_row_comparator {
    * @return weak ordering comparison of the row in the `lhs` table relative to the row in the `rhs`
    * table
    */
-  __device__ weak_ordering operator()(size_type const lhs_index,
-                                      size_type const rhs_index) const noexcept
+  __device__ constexpr weak_ordering operator()(size_type const lhs_index,
+                                                size_type const rhs_index) const noexcept
   {
     int last_null_depth = std::numeric_limits<int>::max();
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
@@ -597,7 +597,7 @@ class self_comparator {
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   less_comparator<device_row_comparator<Nullate, PhysicalElementComparator>> device_comparator(
-    Nullate nullate = {}) const
+    Nullate nullate = {}) const noexcept
   {
     return less_comparator<device_row_comparator<Nullate, PhysicalElementComparator>>{
       device_row_comparator<Nullate, PhysicalElementComparator>(
@@ -714,7 +714,7 @@ class two_table_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   less_comparator<
     strong_index_comparator_adapter<device_row_comparator<Nullate, PhysicalElementComparator>>>
-  device_comparator(Nullate nullate = {}) const
+  device_comparator(Nullate nullate = {}) const noexcept
   {
     return less_comparator<
       strong_index_comparator_adapter<device_row_comparator<Nullate, PhysicalElementComparator>>>{
@@ -753,7 +753,7 @@ struct physical_equality_comparator {
    * @return `true` if `lhs` == `rhs` else `false`.
    */
   template <typename Element>
-  __device__ bool operator()(Element const lhs, Element const rhs)
+  __device__ constexpr bool operator()(Element const lhs, Element const rhs) const noexcept
   {
     return lhs == rhs;
   }
@@ -762,7 +762,7 @@ struct physical_equality_comparator {
 /**
  * @brief Equality comparator functor that evaluates `NaN` as equivalent to other `NaN`s .
  */
-struct sorting_physical_equality_comparator : physical_equality_comparator {
+struct nan_equal_physical_equality_comparator {
   /**
    * @brief A specialization for non-floating-point `Element` type to check if
    * `lhs` is equivalent to `rhs`.
@@ -772,7 +772,7 @@ struct sorting_physical_equality_comparator : physical_equality_comparator {
    * @return `true` if `lhs` == `rhs` else `false`.
    */
   template <typename Element, CUDF_ENABLE_IF(not std::is_floating_point_v<Element>)>
-  __device__ bool operator()(Element const lhs, Element const rhs)
+  __device__ constexpr bool operator()(Element const lhs, Element const rhs) const noexcept
   {
     return lhs == rhs;
   }
@@ -786,9 +786,7 @@ struct sorting_physical_equality_comparator : physical_equality_comparator {
    * @return `true` if `lhs` == `rhs` else `false`.
    */
   template <typename Element, CUDF_ENABLE_IF(std::is_floating_point_v<Element>)>
-  __device__ bool operator()(Element lhs,
-                             Element rhs,
-                             nan_equality const nan_result = nan_equality::ALL_EQUAL)
+  __device__ constexpr bool operator()(Element const lhs, Element const rhs) const noexcept
   {
     return isnan(lhs) and isnan(rhs) ? true : lhs == rhs;
   }
@@ -807,7 +805,7 @@ struct sorting_physical_equality_comparator : physical_equality_comparator {
  * equality comparator.
  */
 template <typename Nullate,
-          typename PhysicalEqualityComparator = sorting_physical_equality_comparator>
+          typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
 class device_row_comparator {
   friend class self_comparator;
   friend class two_table_comparator;
@@ -821,7 +819,8 @@ class device_row_comparator {
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table is equal to the row in the `rhs` table
    */
-  __device__ bool operator()(size_type const lhs_index, size_type const rhs_index) const noexcept
+  __device__ constexpr bool operator()(size_type const lhs_index,
+                                       size_type const rhs_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(
@@ -1081,9 +1080,9 @@ class self_comparator {
    * equality comparator.
    */
   template <typename Nullate,
-            typename PhysicalEqualityComparator = sorting_physical_equality_comparator>
+            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
   device_row_comparator<Nullate, PhysicalEqualityComparator> device_comparator(
-    Nullate nullate = {}, null_equality nulls_are_equal = null_equality::EQUAL) const
+    Nullate nullate = {}, null_equality nulls_are_equal = null_equality::EQUAL) const noexcept
   {
     return device_row_comparator<Nullate, PhysicalEqualityComparator>(
       nullate, *d_t, *d_t, nulls_are_equal);
@@ -1175,9 +1174,9 @@ class two_table_comparator {
    * equality comparator.
    */
   template <typename Nullate,
-            typename PhysicalEqualityComparator = sorting_physical_equality_comparator>
+            typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
   auto device_comparator(Nullate nullate               = {},
-                         null_equality nulls_are_equal = null_equality::EQUAL) const
+                         null_equality nulls_are_equal = null_equality::EQUAL) const noexcept
   {
     return strong_index_comparator_adapter<
       device_row_comparator<Nullate, PhysicalEqualityComparator>>{
