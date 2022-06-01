@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ enum class replace_policy : bool { PRECEDING, FOLLOWING };
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replacement A cudf::column whose values will replace null values in input
- * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column
  *
  * @returns A copy of `input` with the null values replaced with corresponding values from
  * `replacement`.
@@ -59,10 +59,10 @@ std::unique_ptr<column> replace_nulls(
  * `input` and `replacement` must have the same type.
  *
  * @param[in] input A column whose null values will be replaced
- * @param[in] replacement Scalar used to replace null values in `input`.
- * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+ * @param[in] replacement Scalar used to replace null values in `input`
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column
  *
- * @returns Copy of `input` with null values replaced by `replacement`.
+ * @returns Copy of `input` with null values replaced by `replacement`
  */
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
@@ -75,11 +75,11 @@ std::unique_ptr<column> replace_nulls(
  * If `input[i]` is NULL, then `output[i]` will contain the first non-null value that precedes or
  * follows the null value, based on `replace_policy`.
  *
- * @param[in] input A column whose null values will be replaced.
- * @param[in] replace_policy Specify the position of replacement values relative to null values.
- * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+ * @param[in] input A column whose null values will be replaced
+ * @param[in] replace_policy Specify the position of replacement values relative to null values
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column
  *
- * @returns Copy of `input` with null values replaced based on `replace_policy`.
+ * @returns Copy of `input` with null values replaced based on `replace_policy`
  */
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
@@ -130,7 +130,7 @@ std::unique_ptr<column> replace_nans(
  * @param input A column whose NaN values will be replaced
  * @param replacement A cudf::scalar whose value will replace NaN values in input
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return A copy of `input` with the NaN values replaced by `replacement`.
+ * @return A copy of `input` with the NaN values replaced by `replacement`
  */
 std::unique_ptr<column> replace_nans(
   column_view const& input,
@@ -141,12 +141,12 @@ std::unique_ptr<column> replace_nans(
  * @brief Return a copy of `input_col` replacing any `values_to_replace[i]`
  * found with `replacement_values[i]`.
  *
- * @param input_col The column to find and replace values in.
+ * @param input_col The column to find and replace values in
  * @param values_to_replace The values to replace
  * @param replacement_values The values to replace with
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @returns Copy of `input_col` with specified values replaced.
+ * @returns Copy of `input_col` with specified values replaced
  */
 std::unique_ptr<column> find_and_replace_all(
   column_view const& input_col,
@@ -189,13 +189,13 @@ std::unique_ptr<column> find_and_replace_all(
  * @throws cudf::logic_error if `lo.type() != input.type()`
  *
  * @param[in] input Column whose elements will be clamped
- * @param[in] lo Minimum clamp value. All elements less than `lo` will be replaced by `lo_replace`.
+ * @param[in] lo Minimum clamp value. All elements less than `lo` will be replaced by `lo_replace`
  * Ignored if null.
- * @param[in] lo_replace All elements less than `lo` will be replaced by `lo_replace`.
+ * @param[in] lo_replace All elements less than `lo` will be replaced by `lo_replace`
  * @param[in] hi Maximum clamp value. All elements greater than `hi` will be replaced by
  * `hi_replace`. Ignored if null.
- * @param[in] hi_replace All elements greater than `hi` will be replaced by `hi_replace`.
- * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+ * @param[in] hi_replace All elements greater than `hi` will be replaced by `hi_replace`
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column
  *
  * @return Returns a clamped column as per `lo` and `hi` boundaries
  */
@@ -237,11 +237,11 @@ std::unique_ptr<column> clamp(
  * @throws cudf::logic_error if `lo.type() != input.type()`
  *
  * @param[in] input Column whose elements will be clamped
- * @param[in] lo Minimum clamp value. All elements less than `lo` will be replaced by `lo`. Ignored
+ * @param[in] lo Minimum clamp value. All elements less than `lo` will be replaced by `lo` Ignored
  * if null.
- * @param[in] hi Maximum clamp value. All elements greater than `hi` will be replaced by `hi`.
+ * @param[in] hi Maximum clamp value. All elements greater than `hi` will be replaced by `hi`
  * Ignored if null.
- * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column
  *
  * @return Returns a clamped column as per `lo` and `hi` boundaries
  */

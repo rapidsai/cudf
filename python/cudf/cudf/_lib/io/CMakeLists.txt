@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -11,7 +11,20 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 # =============================================================================
-file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.08/RAPIDS.cmake
-     ${CMAKE_BINARY_DIR}/RAPIDS.cmake
+
+set(cython_sources datasource.pyx utils.pyx)
+set(linked_libraries cudf::cudf)
+rapids_cython_create_modules(
+  CXX
+  SOURCE_FILES "${cython_sources}"
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX io_
 )
-include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+
+set(targets_using_numpy io_datasource io_utils)
+foreach(target IN LISTS targets_using_numpy)
+  target_include_directories(${target} PRIVATE "${Python_NumPy_INCLUDE_DIRS}")
+endforeach()
+
+foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
+  set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/../cpp")
+endforeach()

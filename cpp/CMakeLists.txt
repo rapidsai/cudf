@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.06.00
+  VERSION 22.08.00
   LANGUAGES C CXX CUDA
 )
 
@@ -752,7 +752,7 @@ install(
 )
 
 install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+                  ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 install(
