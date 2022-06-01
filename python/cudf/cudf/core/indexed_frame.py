@@ -1347,9 +1347,11 @@ class IndexedFrame(Frame):
             else:
                 lhs = cudf.DataFrame._from_data({}, index=index)
                 rhs = cudf.DataFrame._from_data(
-                    ColumnAccessor(
-                        {name or 0: col for name, col in df._data.items()}
-                    ),
+                    {
+                        # bookkeeping workaround for unnamed series
+                        name or 0: col
+                        for name, col in df._data.items()
+                    },
                     index=df._index,
                 )
                 df = lhs.join(rhs, how="left", sort=True)

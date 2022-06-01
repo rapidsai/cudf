@@ -2252,10 +2252,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         IE10                  404          0.08
         Chrome                200          0.02
 
-        Note: One difference from Pandas is that ``NA`` is used for rows
-        that do not match, rather than ``NaN``. One side effect of this is
-        that the column ``http_status`` retains an integer dtype in cuDF
-        where it is cast to float in Pandas.
+        .. pandas-compat::
+            **DataFrame.reindex**
+
+            Note: One difference from Pandas is that ``NA`` is used for rows
+            that do not match, rather than ``NaN``. One side effect of this is
+            that the column ``http_status`` retains an integer dtype in cuDF
+            where it is cast to float in Pandas.
 
         We can fill in the missing values by
         passing a value to the keyword ``fill_value``.

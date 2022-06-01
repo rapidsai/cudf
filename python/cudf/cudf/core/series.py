@@ -732,6 +732,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         y    <NA>
         z    <NA>
         dtype: int64
+
+        .. pandas-compat::
+            **Series.reindex**
+
+            Note: One difference from Pandas is that ``NA`` is used for rows
+            that do not match, rather than ``NaN``. One side effect of this is
+            that the series retains an integer dtype in cuDF
+            where it is cast to float in Pandas.
+
         """
         if len(args) > 1:
             raise TypeError(
