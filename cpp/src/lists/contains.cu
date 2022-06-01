@@ -53,17 +53,16 @@ auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
 template <typename Type>
 auto constexpr is_supported_non_nested_type()
 {
-  return cudf::is_numeric<Type>() || cudf::is_chrono<Type>() || cudf::is_fixed_point<Type>() ||
-         std::is_same_v<Type, cudf::string_view>;
+  return cudf::is_fixed_width<Type>() || std::is_same_v<Type, cudf::string_view>;
 }
 
 /**
  * @brief Return a pair of index iterators {begin, end} to loop through elements within a list.
  *
  * Depending on the value of `find_first`, a pair of forward or reverse iterators will be returned,
- * allowing to loop through elements in the list by first-to-last or last-to-first order.
+ * allowing to loop through elements in the list in first-to-last or last-to-first order.
  *
- * Note that the indices are `0`-based: The first element in any list is always at `0` index.
+ * Note that the element indices always restart to `0` at the first position in each list.
  *
  * @tparam find_first A boolean value indicating whether we want to find the first or last
  *         appearance of a given key in the list.
@@ -166,21 +165,28 @@ auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
  * @brief Dispatch functor to search for key element(s) in the corresponding rows of a lists column.
  */
 struct dispatch_index_of {
-  template <typename Type, typename... Args>
-  std::enable_if_t<!is_supported_non_nested_type<Type>(), std::unique_ptr<column>> operator()(
-    Args&&...) const
+  template <typename Type,
+            typename SearchKeyType,
+            CUDF_ENABLE_IF(!is_supported_non_nested_type<Type>())>
+  std::unique_ptr<column> operator()(lists_column_view const&,
+                                     SearchKeyType const&,
+                                     bool,
+                                     duplicate_find_option,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
   {
     CUDF_FAIL("Unsupported type in `dispatch_index_of` functor.");
   }
 
-  template <typename Type, typename SearchKeyType>
-  std::enable_if_t<is_supported_non_nested_type<Type>(), std::unique_ptr<column>> operator()(
-    lists_column_view const& lists,
-    SearchKeyType const& search_keys,
-    bool search_keys_have_nulls,
-    duplicate_find_option find_option,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const
+  template <typename Type,
+            typename SearchKeyType,
+            CUDF_ENABLE_IF(is_supported_non_nested_type<Type>())>
+  std::unique_ptr<column> operator()(lists_column_view const& lists,
+                                     SearchKeyType const& search_keys,
+                                     bool search_keys_have_nulls,
+                                     duplicate_find_option find_option,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
                  "Nested types not supported in list search operations.");
@@ -191,7 +197,7 @@ struct dispatch_index_of {
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
     if (search_key_is_scalar && search_keys_have_nulls) {
       // If the scalar key is invalid/null, the entire output column will be all nulls.
-      return make_numeric_column(data_type(type_id::INT32),
+      return make_numeric_column(data_type{cudf::type_to_id<size_type>()},
                                  lists.size(),
                                  cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
                                  lists.size(),
