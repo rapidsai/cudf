@@ -291,46 +291,44 @@ void apply_struct_binary_op(mutable_column_view& out,
                             bool is_rhs_scalar,
                             rmm::cuda_stream_view stream)
 {
-  auto op_order        = detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
+  auto compare_orders = std::vector<order>(lhs.size(), detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
                            ? order::DESCENDING
-                           : order::ASCENDING;
-  auto accept_equality = detail::is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>;
-  auto const nullability =
-    structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
-      ? structs::detail::column_nullability::FORCE
-      : structs::detail::column_nullability::MATCH_INCOMING;
-  auto const lhs_flattened =
-    structs::detail::flatten_nested_columns(table_view{{lhs}}, {}, {}, nullability);
-  auto const rhs_flattened =
-    structs::detail::flatten_nested_columns(table_view{{rhs}}, {}, {}, nullability);
-
-  auto lhsd = table_device_view::create(lhs_flattened);
-  auto rhsd = table_device_view::create(rhs_flattened);
-  auto compare_orders =
-    cudf::detail::make_device_uvector_async(std::vector<order>(lhs.size(), op_order), stream);
-  auto comparator = experimental::row::lexicographic::device_row_comparator<nullate::DYNAMIC, true>{
-    nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
-    *lhsd,
-    *rhsd,
-    std::nullopt,
-    device_span<order const>{compare_orders},
-    std::nullopt};
-
+                           : order::ASCENDING);
+  auto table_comparator = cudf::experimental::row::lexicographic::two_table_comparator{
+    table_view{{lhs}}, table_view{{rhs}}, compare_orders, {}, stream};
   auto outd = column_device_view::create(out, stream);
   auto optional_iter =
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    out.begin<bool>(),
-    out.end<bool>(),
-    [optional_iter, is_lhs_scalar, is_rhs_scalar, accept_equality, comparator] __device__(
-      size_type i) {
-      auto lhs = is_lhs_scalar ? 0 : i;
-      auto rhs = is_rhs_scalar ? 0 : i;
-      return optional_iter[i].has_value() &&
-             (accept_equality ? comparator(lhs, rhs) != weak_ordering::GREATER
-                              : comparator(lhs, rhs) == weak_ordering::LESS);
-    });
+
+  if (detail::is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>) {
+    auto device_comparator = table_comparator.device_less_equal_comparator<
+      nullate::DYNAMIC,
+      cudf::experimental::row::lexicographic::physical_element_comparator>(
+      nullate::DYNAMIC{out.has_nulls()});
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      out.begin<bool>(),
+      out.end<bool>(),
+      [optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator] __device__(
+        size_type i) {
+        return optional_iter[i].has_value() && device_comparator(cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i}, cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i});
+      });
+
+  } else {
+    auto device_comparator =
+      table_comparator
+        .device_less\_comparator<nullate::DYNAMIC,
+                           cudf::experimental::row::lexicographic::physical_element_comparator>(
+          nullate::DYNAMIC{out.has_nulls()});
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      out.begin<bool>(),
+      out.end<bool>(),
+      [optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator] __device__(
+        size_type i) {
+        return optional_iter[i].has_value() && device_comparator(cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i}, cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i});
+      });
+  }
   return;
 }
 
