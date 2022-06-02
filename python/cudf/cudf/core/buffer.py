@@ -20,6 +20,15 @@ if TYPE_CHECKING:
     from cudf.core.spill_manager import SpillManager
 
 
+def format_bytes(nbytes: int) -> str:
+    n = float(nbytes)
+    for unit in ["B", "KiB", "MiB", "GiB"]:
+        if abs(n) < 1024:
+            return f"{n:.2f}{unit}"
+        n /= 1024
+    return f"{n:.2f} TiB"
+
+
 def get_base_buffer(obj: Any) -> Optional[Buffer]:
     if isinstance(obj, Buffer):
         if obj._sole_owner:
@@ -322,8 +331,9 @@ class Buffer(Serializable):
         else:
             data_info = str(hex(self._ptr))
         return (
-            f"<cudf.core.buffer.Buffer size={self._size} "
-            f"spillable={self.spillable} ptr_exposed={self.ptr_exposed} "
+            f"<cudf.core.buffer.Buffer size={format_bytes(self._size)} "
+            f"spillable={self.spillable} sole_owner={self.sole_owner} "
+            f"ptr_exposed={self.ptr_exposed} "
             f"access_counter={self._access_counter.use_count()} "
             f"ptr={data_info} owner={repr(self._owner)}>"
         )

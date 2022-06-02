@@ -11,16 +11,7 @@ from typing import MutableMapping, Optional, Tuple
 
 import rmm.mr
 
-from cudf.core.buffer import Buffer
-
-
-def format_bytes(nbytes: int) -> str:
-    n = float(nbytes)
-    for unit in ["", "KiB", "MiB", "GiB"]:
-        if abs(n) < 1024:
-            return f"{n:.2f} {unit}"
-        n /= 1024
-    return f"{n:.2f} TiB"
+from cudf.core.buffer import Buffer, format_bytes
 
 
 class SpillManager:
