@@ -966,6 +966,31 @@ class IndexedFrame(Frame):
             ret._index = old_index
         return ret
 
+    @_cudf_nvtx_annotate
+    def bfill(self, value=None, method=None, axis=None, inplace=None, limit=None):
+        """
+        Synonym for :meth:`Series.fillna` with ``method='bfill'``.
+
+        Returns
+        -------
+            Object with missing values filled or None if ``inplace=True``.
+        """
+        return self.fillna(method="bfill", value=value, axis=axis, inplace=inplace, limit=limit)
+        
+    @_cudf_nvtx_annotate
+    def ffill(self, value=None, method=None, axis=None, inplace=None, limit=None):
+            """
+            Synonym for :meth:`Series.fillna` with ``method='bfill'``.
+            
+            Returns
+            -------
+                Object with missing values filled or None if ``inplace=True``.
+            """
+            return self.fillna(method="ffill", value=value, axis=axis, inplace=inplace, limit=limit)         
+
+    backfill = bfill
+    pad = ffill
+
     def add_prefix(self, prefix):
         """
         Prefix labels with string `prefix`.

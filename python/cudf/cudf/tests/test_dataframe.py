@@ -7116,7 +7116,9 @@ def test_dataframe_append_dataframe_lists(df, other, sort, ignore_index):
 
 @pytest.mark.parametrize(
     "df",
-    [pd.DataFrame({"A": [1, 2, 3, np.nan, None, 6]})]
+    [pd.DataFrame({"A": [1, 2, 3, np.nan, None, 6]}),
+    pd.Series([1, 2, 3, None, np.nan, 5, 6, np.nan])
+    ],
 )
 def test_dataframe_bfill(df):
     gdf = cudf.from_pandas(df)
@@ -7127,10 +7129,11 @@ def test_dataframe_bfill(df):
 
 @pytest.mark.parametrize(
     "df",
-    [pd.DataFrame({"A": [1, 2, 3, np.nan, None, 6]})]
+    [pd.DataFrame({"A": [1, 2, 3, np.nan, None, 6]}),
+    pd.Series([1, 2, 3, None, np.nan, 5, 6, np.nan])
+    ],
 )
 def test_dataframe_ffill(df):
-    print(df)
     gdf = cudf.from_pandas(df)
 
     actual = df.ffill()
