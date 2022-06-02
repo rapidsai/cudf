@@ -69,11 +69,11 @@ For `cudf version == 22.06` :
 ```bash
 # for CUDA 11.0
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=21.08 python=3.8 cudatoolkit=11.0
+    cudf=21.08 python=3.9 cudatoolkit=11.0
 
 # or, for CUDA 11.2
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=21.08 python=3.8 cudatoolkit=11.2
+    cudf=21.08 python=3.9 cudatoolkit=11.2
 
 ```
 
@@ -81,11 +81,11 @@ For the nightly version of `cudf` :
 ```bash
 # for CUDA 11.0
 conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.8 cudatoolkit=11.0
+    cudf python=3.9 cudatoolkit=11.0
 
 # or, for CUDA 11.2
 conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.8 cudatoolkit=11.2
+    cudf python=3.9 cudatoolkit=11.2
 ```
 
 Note: cuDF is supported only on Linux, and with Python versions 3.8 and later.
