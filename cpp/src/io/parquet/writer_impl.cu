@@ -186,7 +186,7 @@ struct aggregate_writer_metadata {
     std::vector<RowGroup> row_groups;
     std::vector<KeyValue> key_value_metadata;
     std::vector<OffsetIndex> offset_indexes;
-    std::vector<ColumnIndex> column_indexes;
+    std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
   std::string created_by         = "";
@@ -1644,9 +1644,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           auto& column_chunk_meta = row_group.columns[i].meta_data;
 
           // start transfer of column index
-          ColumnIndex column_idx;
-          column_idx.column_index_blob.resize(ck.column_index_size);
-          CUDF_CUDA_TRY(cudaMemcpyAsync(column_idx.column_index_blob.data(),
+          std::vector<uint8_t> column_idx;
+          column_idx.resize(ck.column_index_size);
+          CUDF_CUDA_TRY(cudaMemcpyAsync(column_idx.data(),
                                         ck.column_index_blob,
                                         ck.column_index_size,
                                         cudaMemcpyDeviceToHost,
@@ -1716,10 +1716,10 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
       int chunkidx = 0;
       for (auto& r : fmd.row_groups) {
         for (auto& c : r.columns) {
-          ColumnIndex& index    = fmd.column_indexes[chunkidx++];
+          auto& index    = fmd.column_indexes[chunkidx++];
           c.column_index_offset = out_sink_[p]->bytes_written();
-          c.column_index_length = index.column_index_blob.size();
-          out_sink_[p]->host_write(index.column_index_blob.data(), index.column_index_blob.size());
+          c.column_index_length = index.size();
+          out_sink_[p]->host_write(index.data(), index.size());
         }
       }
 
