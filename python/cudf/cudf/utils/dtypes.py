@@ -12,6 +12,7 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
+from cudf.core.missing import NA
 
 _NA_REP = "<NA>"
 
@@ -591,7 +592,7 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
-    if from_dtype in {None, cudf.NA}:
+    if from_dtype in {None, NA}:
         return True
     if isinstance(from_dtype, type):
         from_dtype = cudf.dtype(from_dtype)

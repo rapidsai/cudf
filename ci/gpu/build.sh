@@ -32,10 +32,10 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 unset GIT_DESCRIBE_TAG
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
-export INSTALL_DASK_MAIN=1
+export INSTALL_DASK_MAIN=0
 
 # ucx-py version
-export UCX_PY_VERSION='0.26.*'
+export UCX_PY_VERSION='0.27.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -94,8 +94,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.03.0 conda-forge::distributed>=2022.03.0 conda-forge::dask-core>=2022.03.0 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask>=2022.03.0 conda-forge::distributed>=2022.03.0 conda-forge::dask-core>=2022.03.0 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.05.2 conda-forge::distributed==2022.05.2 conda-forge::dask-core==2022.05.2 --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask==2022.05.2 conda-forge::distributed==2022.05.2 conda-forge::dask-core==2022.05.2 --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
@@ -127,7 +127,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     ################################################################################
 
     gpuci_logger "Build from source"
-    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
+    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds --cmake-args=\"-DFIND_CUDF_CPP=ON\"
 
     ################################################################################
     # TEST - Run GoogleTest
@@ -169,12 +169,14 @@ else
     gpuci_logger "Installing libcudf, libcudf_kafka and libcudf-tests"
     gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
 
+    # TODO: Move boa install to gpuci/rapidsai
+    gpuci_mamba_retry install boa
     gpuci_logger "Building cudf, dask-cudf, cudf_kafka and custreamz"
     export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
-    gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
 
     gpuci_logger "Installing cudf, dask-cudf, cudf_kafka and custreamz"
     gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"

@@ -81,7 +81,6 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(offsets.size() > 0, "`offsets` should have at least 1 element.");
-  if (segmented_values.is_empty()) { return empty_like(segmented_values); }
 
   return aggregation_dispatcher(
     agg.kind,

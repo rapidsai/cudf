@@ -76,6 +76,7 @@ from cudf.core.indexed_frame import (
     _indices_from_labels,
     doc_reset_index_template,
 )
+from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
@@ -266,7 +267,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 tmp_arg = arg
                 if is_scalar(arg[0]):
                     # If a scalar, there is possibility of having duplicates.
-                    # Join would get all the duplicates. So, coverting it to
+                    # Join would get all the duplicates. So, converting it to
                     # an array kind.
                     tmp_arg = ([tmp_arg[0]], tmp_arg[1])
                 if len(tmp_arg[0]) == 0:
@@ -364,9 +365,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 scatter_map = _indices_from_labels(self._frame, key[0])
                 for col in columns_df._column_names:
                     columns_df[col][scatter_map] = (
-                        value._data[col]
-                        if col in value_column_names
-                        else cudf.NA
+                        value._data[col] if col in value_column_names else NA
                     )
 
             else:
@@ -479,7 +478,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             value_column_names = set(value._column_names)
             for col in columns_df._column_names:
                 columns_df[col][key[0]] = (
-                    value._data[col] if col in value_column_names else cudf.NA
+                    value._data[col] if col in value_column_names else NA
                 )
 
         else:
@@ -790,9 +789,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         data.extend([o for o in initial_data])
                 else:
                     raise ValueError(
-                        f"Shape of passed values is "
-                        f"{(data_length, len(data[0]))}, "
-                        f"indices imply {(index_length, len(data[0]))}"
+                        f"Length of values ({data_length}) does "
+                        f"not match length of index ({index_length})"
                     )
 
             final_index = as_index(index)
@@ -1101,7 +1099,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         except RuntimeError as e:
             # TODO: This allows setting properties that are marked as forbidden
-            # for internal usage. It is necesary because the __getattribute__
+            # for internal usage. It is necessary because the __getattribute__
             # call in the try block will trigger the error. We should see if
             # setting these variables can also always be disabled
             if "External-only API" not in str(e):
@@ -1615,7 +1613,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Get a list of the combined index and table column indices
         indices = list(range(functools.reduce(max, map(len, columns))))
-        # The position of the first table colum in each
+        # The position of the first table column in each
         # combined index + table columns list
         first_data_column_position = len(indices) - len(names)
 
@@ -1788,7 +1786,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _get_renderable_dataframe(self):
         """
         takes rows and columns from pandas settings or estimation from size.
-        pulls quadrents based off of some known parameters then style for
+        pulls quadrants based off of some known parameters then style for
         multiindex as well producing an efficient representative string
         for printing with the dataframe.
         """
@@ -2500,7 +2498,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if len(columns_to_add) == 0:
             raise ValueError("No valid columns to be added to index.")
-        elif len(columns_to_add) == 1:
+        elif (
+            len(columns_to_add) == 1
+            and len(keys) == 1
+            and not isinstance(keys[0], (cudf.MultiIndex, pd.MultiIndex))
+        ):
             idx = cudf.Index(columns_to_add[0], name=names[0])
         else:
             idx = MultiIndex._from_data(
@@ -2911,7 +2913,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Difference from pandas:
             * Not supporting: level
 
-        Rename will not overwite column names. If a list with duplicates is
+        Rename will not overwrite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
 
         Examples
@@ -3868,8 +3870,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # bytecode to generate the equivalent PTX
             # as a null-ignoring version of the function
             def _func(x):  # pragma: no cover
-                if x is cudf.NA:
-                    return cudf.NA
+                if x is NA:
+                    return NA
                 else:
                     return devfunc(x)
 
@@ -4508,7 +4510,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Parameters
         ----------
         dataframe : Pandas DataFrame object
-            A Pandads DataFrame object which has to be converted
+            A Pandas DataFrame object which has to be converted
             to cuDF DataFrame.
         nan_as_null : bool, Default True
             If ``True``, converts ``np.nan`` values to ``null`` values.
@@ -6487,6 +6489,76 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ret._data[name] = col
         if not inplace:
             return ret
+
+    def value_counts(
+        self,
+        subset=None,
+        normalize=False,
+        sort=True,
+        ascending=False,
+        dropna=True,
+    ):
+        """
+        Return a Series containing counts of unique rows in the DataFrame.
+
+        Parameters
+        ----------
+        subset: list-like, optional
+            Columns to use when counting unique combinations.
+        normalize: bool, default False
+            Return proportions rather than frequencies.
+        sort: bool, default True
+            Sort by frequencies.
+        ascending: bool, default False
+            Sort in ascending order.
+        dropna: bool, default True
+            Don't include counts of rows that contain NA values.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        The returned Series will have a MultiIndex with one level per input
+        column. By default, rows that contain any NA values are omitted from
+        the result. By default, the resulting Series will be in descending
+        order so that the first element is the most frequently-occurring row.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'num_legs': [2, 4, 4, 6],
+        ...                    'num_wings': [2, 0, 0, 0]},
+        ...                    index=['falcon', 'dog', 'cat', 'ant'])
+        >>> df.value_counts()
+        num_legs  num_wings
+        4         0            2
+        2         2            1
+        6         0            1
+        dtype: int64
+        """
+        if subset:
+            diff = set(subset) - set(self._data)
+            if len(diff) != 0:
+                raise KeyError(f"columns {diff} do not exist")
+        columns = list(self._data.names) if subset is None else subset
+        result = (
+            self.groupby(
+                by=columns,
+                dropna=dropna,
+            )
+            .size()
+            .astype("int64")
+        )
+        if sort:
+            result = result.sort_values(ascending=ascending)
+        if normalize:
+            result = result / result._column.sum()
+        # Pandas always returns MultiIndex even if only one column.
+        if not isinstance(result.index, MultiIndex):
+            result.index = MultiIndex._from_data(result._index._data)
+        return result
 
 
 def from_dataframe(df, allow_copy=False):

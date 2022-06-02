@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.06.00
+  VERSION 22.08.00
   LANGUAGES C CXX CUDA
 )
 
@@ -42,12 +42,20 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google & nvbench) benchmarks" OFF)
 option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+option(CUDF_USE_PROPRIETARY_NVCOMP "Download and use NVCOMP with proprietary extensions" ON)
 option(CUDF_USE_ARROW_STATIC "Build and statically link Arrow libraries" OFF)
 option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
 option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+option(
+  CUDF_USE_PER_THREAD_DEFAULT_STREAM
+  "Build cuDF with per-thread default stream, including passing the per-thread default
+         stream to external libraries."
+  OFF
+)
+option(PER_THREAD_DEFAULT_STREAM "[DEPRECATED] Build with per-thread default stream" OFF)
+mark_as_advanced(FORCE, PER_THREAD_DEFAULT_STREAM)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
@@ -57,6 +65,16 @@ option(CUDA_ENABLE_LINEINFO
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
+# PER_THREAD_DEFAULT_STREAM will be replaced with CUDF_USE_PER_THREAD_DEFAULT_STREAM
+if(PER_THREAD_DEFAULT_STREAM)
+  set(CUDF_USE_PER_THREAD_DEFAULT_STREAM ON)
+  message(
+    DEPRECATION
+      "CUDF: PER_THREAD_DEFAULT_STREAM is deprecated, and will be removed in a future release,
+        please use CUDF_USE_PER_THREAD_DEFAULT_STREAM instead."
+  )
+endif()
+
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
@@ -64,7 +82,7 @@ message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
 message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
-message(VERBOSE "CUDF: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
+message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
@@ -427,7 +445,9 @@ add_library(
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
-  src/search/search.cu
+  src/search/contains.cu
+  src/search/contains_nested.cu
+  src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
   src/sort/segmented_sort.cu
@@ -578,8 +598,10 @@ if(JITIFY_USE_CACHE)
 endif()
 
 # Per-thread default stream
-if(PER_THREAD_DEFAULT_STREAM)
-  target_compile_definitions(cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
+  target_compile_definitions(
+    cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM
+  )
 endif()
 
 # Disable NVTX if necessary
@@ -730,7 +752,7 @@ install(
 )
 
 install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+                  ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 install(

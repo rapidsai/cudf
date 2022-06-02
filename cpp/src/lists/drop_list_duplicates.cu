@@ -20,6 +20,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
@@ -35,17 +36,15 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
 #include <thrust/count.h>
 #include <thrust/distance.h>
+#include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
-#include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
 
 #include <optional>
@@ -151,44 +150,6 @@ struct replace_negative_nans_dispatch {
                                      stream);
   }
 };
-
-/**
- * @brief Populate 1-based list indices for all list entries.
- *
- * Given a number of total list entries in a lists column and an array containing list offsets,
- * generate an array that maps each list entry to a 1-based index of the list containing
- * that entry.
- *
- * Instead of regular 0-based indices, we need to use 1-based indices for later post-processing.
- *
- * @code{.pseudo}
- * num_lists = 3, num_entries = 10, offsets = { 0, 4, 6, 10 }
- * output = { 1, 1, 1, 1, 2, 2, 3, 3, 3, 3 }
- * @endcode
- *
- * @param num_lists The size of the input lists column.
- * @param num_entries The number of entries in the lists column.
- * @param offsets_begin The pointer refers to data of list offsets.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return An array containing 1-based list indices corresponding to each list entry.
- */
-rmm::device_uvector<size_type> generate_entry_list_indices(size_type num_lists,
-                                                           size_type num_entries,
-                                                           offset_type const* offsets_begin,
-                                                           rmm::cuda_stream_view stream)
-{
-  auto entry_list_indices = rmm::device_uvector<size_type>(num_entries, stream);
-
-  auto const input = thrust::make_transform_iterator(
-    offsets_begin, [offsets_begin] __device__(auto const idx) { return idx - *offsets_begin; });
-  thrust::upper_bound(rmm::exec_policy(stream),
-                      input,
-                      input + num_lists,
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(num_entries),
-                      entry_list_indices.begin());
-  return entry_list_indices;
-}
 
 /**
  * @brief Perform an equality comparison between two entries in a lists column, specialized from
@@ -533,7 +494,7 @@ std::unique_ptr<column> generate_output_offsets(size_type num_lists,
 
   // Generate offsets from sizes.
   // Given the example above, we will have new_offsets = [0, 3, 3, 3, 4, 7, 7, 9]
-  thrust::inclusive_scan(
+  thrust::exclusive_scan(
     rmm::exec_policy(stream), new_offsets.begin(), new_offsets.end(), new_offsets.begin());
 
   // Done. Hope that your head didn't explode after reading till this point.
@@ -570,9 +531,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   // The child column containing list entries.
   auto const keys_child = keys.get_sliced_child(stream);
 
-  // Generate a mapping from list entries to their 1-based list indices for the keys column.
-  auto const entries_list_indices =
-    generate_entry_list_indices(keys.size(), keys_child.size(), keys.offsets_begin(), stream);
+  // Generate a mapping from list entries to their list indices for the keys column.
+  auto const entries_list_indices = [&] {
+    auto labels = rmm::device_uvector<size_type>(keys_child.size(), stream);
+    cudf::detail::label_segments(
+      keys.offsets_begin(), keys.offsets_end(), labels.begin(), labels.end(), stream);
+    return labels;
+  }();
 
   // Generate segmented sorted order for key entries.
   // The keys column will be sorted (gathered) using this order.

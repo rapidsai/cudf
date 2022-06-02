@@ -10,17 +10,17 @@ import versioneer
 
 install_requires = [
     "cudf",
-    "dask>=2022.03.0",
-    "distributed>=2022.03.0",
+    "dask==2022.05.2",
+    "distributed==2022.05.2",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<1.4.0dev0",
+    "pandas>=1.0,<1.5.0dev0",
 ]
 
 extras_require = {
     "test": [
         "numpy",
-        "pandas>=1.0,<1.4.0dev0",
+        "pandas>=1.0,<1.5.0dev0",
         "pytest",
         "numba>=0.53.1",
         "dask>=2021.09.1",

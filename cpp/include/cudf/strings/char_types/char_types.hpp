@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,11 +51,19 @@ enum string_character_types : uint32_t {
 
 /**
  * @brief OR operator for combining string_character_types
+ *
+ * @param lhs left-hand side of OR operation
+ * @param rhs right-hand side of OR operation
+ * @return combined string_character_types
  */
 string_character_types operator|(string_character_types lhs, string_character_types rhs);
 
 /**
  * @brief Compound assignment OR operator for combining string_character_types
+ *
+ * @param lhs left-hand side of OR operation
+ * @param rhs right-hand side of OR operation
+ * @return Reference to `lhs` after combining `lhs` and `rhs`
  */
 string_character_types& operator|=(string_character_types& lhs, string_character_types rhs);
 

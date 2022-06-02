@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "avro.h"
-#include "avro_gpu.h"
+#include "avro.hpp"
+#include "avro_gpu.hpp"
 
-#include <io/comp/gpuinflate.h>
+#include <io/comp/gpuinflate.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -574,7 +574,8 @@ table_with_metadata read_avro(std::unique_ptr<cudf::io::datasource>&& source,
     metadata_out.column_names[i] = selected_columns[i].second;
   }
   // Return user metadata
-  metadata_out.user_data = meta.user_data;
+  metadata_out.user_data          = meta.user_data;
+  metadata_out.per_file_user_data = {{meta.user_data.begin(), meta.user_data.end()}};
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata_out)};
 }

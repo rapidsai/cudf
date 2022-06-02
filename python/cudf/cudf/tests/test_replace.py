@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_134, PANDAS_LT_140
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -56,7 +57,12 @@ def test_series_replace_all(gsr, to_replace, value):
         pd_value = value
 
     actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
-    expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
+    if pd_value is None:
+        # TODO: Remove this workaround once cudf
+        # introduces `no_default` values
+        expected = psr.replace(to_replace=pd_to_replace)
+    else:
+        expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
 
     assert_eq(
         expected.sort_values().reset_index(drop=True),
@@ -160,12 +166,18 @@ def test_series_replace_with_nulls():
                 "c": ["abc", "def", ".", None, None],
             }
         ),
-        cudf.DataFrame(
-            {
-                "a": ["one", "two", None, "three"],
-                "b": ["one", None, "two", "three"],
-            },
-            dtype="category",
+        pytest.param(
+            cudf.DataFrame(
+                {
+                    "a": ["one", "two", None, "three"],
+                    "b": ["one", None, "two", "three"],
+                },
+                dtype="category",
+            ),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_LT_140,
+                reason="https://github.com/pandas-dev/pandas/issues/46672",
+            ),
         ),
         cudf.DataFrame(
             {
@@ -229,7 +241,10 @@ def test_dataframe_replace(df, to_replace, value):
     else:
         gd_to_replace = to_replace
 
-    expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
+    if pd_value is None:
+        expected = pdf.replace(to_replace=pd_to_replace)
+    else:
+        expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
     actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
     expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
@@ -986,7 +1001,8 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
             pd.Series(["one", "two", "three"], dtype="category"),
             {"to_replace": "one", "value": "two", "inplace": True},
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/43232"
+                condition=not PANDAS_GE_134,
+                reason="https://github.com/pandas-dev/pandas/issues/43232",
             ),
         ),
         (

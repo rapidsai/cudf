@@ -30,21 +30,48 @@ namespace text {
  */
 class byte_range_info {
  private:
-  int64_t _offset;
-  int64_t _size;
+  int64_t _offset;  ///< offset in bytes
+  int64_t _size;    ///< size in bytes
 
  public:
   constexpr byte_range_info() noexcept : _offset(0), _size(0) {}
+  /**
+   * @brief Constructs a byte_range_info object
+   *
+   * @param offset offset in bytes
+   * @param size size in bytes
+   */
   constexpr byte_range_info(int64_t offset, int64_t size) : _offset(offset), _size(size)
   {
     CUDF_EXPECTS(offset >= 0, "offset must be non-negative");
     CUDF_EXPECTS(size >= 0, "size must be non-negative");
   }
 
+  /**
+   * @brief Copy constructor
+   *
+   * @param other byte_range_info object to copy
+   */
   constexpr byte_range_info(byte_range_info const& other) noexcept = default;
+  /**
+   * @brief  Copy assignment operator
+   *
+   * @param other byte_range_info object to copy
+   * @return this object after copying
+   */
   constexpr byte_range_info& operator=(byte_range_info const& other) noexcept = default;
 
+  /**
+   * @brief Get the offset in bytes
+   *
+   * @return Offset in bytes
+   */
   [[nodiscard]] constexpr int64_t offset() { return _offset; }
+  /**
+   * @brief Get the size in bytes
+   *
+   * @return Size in bytes
+   */
   [[nodiscard]] constexpr int64_t size() { return _size; }
 };
 
