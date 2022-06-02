@@ -237,6 +237,12 @@ struct ParquetWriterNumericTypeTest : public ParquetWriterTest {
   auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
+// Typed test fixture for comparable type tests
+template <typename T>
+struct ParquetWriterComparableTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
 // Typed test fixture for timestamp type tests
 template <typename T>
 struct ParquetWriterChronoTypeTest : public ParquetWriterTest {
@@ -258,6 +264,7 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 // Declare typed test cases
 using SupportedTypes = cudf::test::NumericTypes;
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
+TYPED_TEST_SUITE(ParquetWriterComparableTypeTest, cudf::test::ComparableTypes);
 TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, cudf::test::ChronoTypes);
 using SupportedTimestampTypes =
   cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
@@ -3377,7 +3384,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
 
   EXPECT_EQ(read_footer(source, &fmd), 0);
   EXPECT_GT(fmd.row_groups.size(), 0);
-  EXPECT_GT(fmd.row_groups[0].columns.size(), 0);
+  EXPECT_EQ(fmd.row_groups[0].columns.size(), 1);
   auto& first_chunk = fmd.row_groups[0].columns[0].meta_data;
   EXPECT_GT(first_chunk.data_page_offset, 0);
 
@@ -3388,6 +3395,209 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   EXPECT_TRUE(cp.read(&ph));
 
   EXPECT_EQ(ph.data_page_header.num_values, page_rows);
+}
+
+// =============================================================================
+// ---- test data --------------------------------------------------------------
+// took this from is_sorted_tests.cpp
+
+namespace {
+namespace testdata {
+// ----- most numerics
+
+template <typename T>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<T>>
+ascending()
+{
+  if (std::is_signed_v<T>) {
+    auto elements = cudf::detail::make_counting_transform_iterator(T(-100), [](auto i){return i;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+  } else {
+    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return i;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+  }
+}
+
+template <typename T>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<T>>
+descending()
+{
+  if (std::is_signed_v<T>) {
+    auto elements = cudf::detail::make_counting_transform_iterator(T(-100), [](auto i){return -i;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+  } else {
+    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return 200-i;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+  }
+}
+
+template <typename T>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<T>>
+unordered()
+{
+  if (std::is_signed_v<T>) {
+    auto elements = cudf::detail::make_counting_transform_iterator(T(-100), [](auto i){return i%2 ? i : -i;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+  } else {
+    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return i%2 ? i : 200-i;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+  }
+}
+
+// ----- bool
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> ascending()
+{
+  return cudf::test::fixed_width_column_wrapper<bool>({false, false, true, true});
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> descending()
+{
+  return cudf::test::fixed_width_column_wrapper<bool>({true, true, false, false});
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> unordered()
+{
+  return cudf::test::fixed_width_column_wrapper<bool>({true, false, true, false});
+}
+
+// ----- chrono types
+
+template <typename T>
+std::enable_if_t<cudf::is_chrono<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+{
+  return cudf::test::fixed_width_column_wrapper<T>({T::min(), T::max()});
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_chrono<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+{
+  return cudf::test::fixed_width_column_wrapper<T>({T::max(), T::min()});
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_chrono<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+{
+  return cudf::test::fixed_width_column_wrapper<T>({T::max(), T::min()});
+}
+
+// ----- string_view
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper> ascending()
+{
+  return cudf::test::strings_column_wrapper({"A", "B", "C", "D"});
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper> descending()
+{
+  return cudf::test::strings_column_wrapper({"D", "C", "B", "A"});
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper> unordered()
+{
+  return cudf::test::strings_column_wrapper({"B", "A", "D", "C"});
+}
+
+// ----- struct_view {"nestedInt" : {"Int" : 0 }, "float" : 1}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper> ascending()
+{
+  using T1           = int32_t;
+  auto int_col       = cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::lowest(),
+                                                      T1(-100),
+                                                      T1(-10),
+                                                      T1(-10),
+                                                      T1(0),
+                                                      T1(10),
+                                                      T1(10),
+                                                      T1(100),
+                                                      std::numeric_limits<T1>::max()});
+  auto nestedInt_col = cudf::test::structs_column_wrapper{{int_col}};
+  auto float_col     = ascending<float>();
+  return cudf::test::structs_column_wrapper{{nestedInt_col, float_col}};
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper> descending()
+{
+  using T1           = int32_t;
+  auto int_col       = cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::max(),
+                                                      T1(100),
+                                                      T1(10),
+                                                      T1(10),
+                                                      T1(0),
+                                                      T1(-10),
+                                                      T1(-10),
+                                                      T1(-100),
+                                                      std::numeric_limits<T1>::lowest()});
+  auto nestedInt_col = cudf::test::structs_column_wrapper{{int_col}};
+  auto float_col     = descending<float>();
+  return cudf::test::structs_column_wrapper{{nestedInt_col, float_col}};
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper> unordered()
+{
+  using T1           = int32_t;
+  auto int_col       = cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::max(),
+                                                      T1(-100),
+                                                      T1(10),
+                                                      T1(-10),
+                                                      T1(0),
+                                                      T1(10),
+                                                      T1(-10),
+                                                      T1(100),
+                                                      std::numeric_limits<T1>::lowest()});
+  auto nestedInt_col = cudf::test::structs_column_wrapper{{int_col}};
+  auto float_col     = unordered<float>();
+  return cudf::test::structs_column_wrapper{{nestedInt_col, float_col}};
+}
+
+}  // namespace testdata
+}  // anonymous namespace
+
+// TODO create three columns in acending, descending, and random order
+// write out, then read column indexes and make sure boundary order is correct
+TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
+{
+  using T = TypeParam;
+
+  auto col1 = testdata::ascending<T>();
+  auto col2 = testdata::descending<T>();
+  auto col3 = testdata::unordered<T>();
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto filepath = temp_env->get_temp_filepath("ThreeColumnSorted.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  EXPECT_EQ(read_footer(source, &fmd), 0);
+  EXPECT_GT(fmd.row_groups.size(), 0);
+  EXPECT_EQ(fmd.row_groups[0].columns.size(), 3);
+
+  // now chunk that the boundary order for chunk 1 is ascending,
+  // chunk 2 is descending, and chunk 3 is unordered
+  auto& first_chunk = fmd.row_groups[0].columns[0].meta_data;
+  EXPECT_GT(first_chunk.data_page_offset, 0);
+
+  EXPECT_EQ(0,0);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
