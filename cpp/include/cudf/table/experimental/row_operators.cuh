@@ -242,20 +242,22 @@ class device_row_comparator {
    * @param null_precedence Optional, device array the same length as a row and indicates how null
    * values compare to all other for every column. If `nullopt`, then null precedence would be
    * `null_order::BEFORE` for all columns.
+   * @param comparator Physical element relational comparison functor.
    */
-  device_row_comparator(
-    Nullate check_nulls,
-    table_device_view lhs,
-    table_device_view rhs,
-    std::optional<device_span<int const>> depth                  = std::nullopt,
-    std::optional<device_span<order const>> column_order         = std::nullopt,
-    std::optional<device_span<null_order const>> null_precedence = std::nullopt) noexcept
+  device_row_comparator(Nullate check_nulls,
+                        table_device_view lhs,
+                        table_device_view rhs,
+                        std::optional<device_span<int const>> depth                  = std::nullopt,
+                        std::optional<device_span<order const>> column_order         = std::nullopt,
+                        std::optional<device_span<null_order const>> null_precedence = std::nullopt,
+                        PhysicalElementComparator comparator                         = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _check_nulls{check_nulls},
       _depth{depth},
       _column_order{column_order},
-      _null_precedence{null_precedence}
+      _null_precedence{null_precedence},
+      _comparator{comparator}
   {
   }
 
@@ -276,17 +278,20 @@ class device_row_comparator {
      * @param null_precedence Indicates how null values are ordered with other values
      * @param depth The depth of the column if part of a nested column @see
      * preprocessed_table::depths
+     * @param comparator Physical element relational comparison functor.
      */
     __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
-                                  null_order null_precedence = null_order::BEFORE,
-                                  int depth                  = 0)
+                                  null_order null_precedence           = null_order::BEFORE,
+                                  int depth                            = 0,
+                                  PhysicalElementComparator comparator = {})
       : _lhs{lhs},
         _rhs{rhs},
         _check_nulls{check_nulls},
         _null_precedence{null_precedence},
-        _depth{depth}
+        _depth{depth},
+        _comparator{comparator}
     {
     }
 
@@ -312,8 +317,8 @@ class device_row_comparator {
         }
       }
 
-      return cuda::std::pair(PhysicalElementComparator{}(_lhs.element<Element>(lhs_element_index),
-                                                         _rhs.element<Element>(rhs_element_index)),
+      return cuda::std::pair(_comparator(_lhs.element<Element>(lhs_element_index),
+                                         _rhs.element<Element>(rhs_element_index)),
                              std::numeric_limits<int>::max());
     }
 
@@ -352,15 +357,18 @@ class device_row_comparator {
         ++depth;
       }
 
-      auto const comparator = element_comparator{_check_nulls, lcol, rcol, _null_precedence, depth};
       return cudf::type_dispatcher<dispatch_void_if_nested>(
-        lcol.type(), comparator, lhs_element_index, rhs_element_index);
+        lcol.type(),
+        element_comparator{_check_nulls, lcol, rcol, _null_precedence, depth, _comparator},
+        lhs_element_index,
+        rhs_element_index);
     }
 
    private:
     column_device_view const _lhs;
     column_device_view const _rhs;
     Nullate const _check_nulls;
+    PhysicalElementComparator const _comparator;
     null_order const _null_precedence;
     int const _depth;
   };
@@ -389,11 +397,13 @@ class device_row_comparator {
       null_order const null_precedence =
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
-      auto const comparator =
-        element_comparator{_check_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
       weak_ordering state;
-      cuda::std::tie(state, last_null_depth) =
-        cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
+      cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher(
+        _lhs.column(i).type(),
+        element_comparator{
+          _check_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth, _comparator},
+        lhs_index,
+        rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 
@@ -407,7 +417,8 @@ class device_row_comparator {
  private:
   table_device_view const _lhs;
   table_device_view const _rhs;
-  Nullate const _check_nulls{};
+  Nullate const _check_nulls;
+  PhysicalElementComparator const _comparator;
   std::optional<device_span<int const>> const _depth;
   std::optional<device_span<order const>> const _column_order;
   std::optional<device_span<null_order const>> const _null_precedence;
@@ -619,22 +630,25 @@ class self_comparator {
    * values rather than logical elements, defaults to `NaN` aware relational comparator that
    * evaluates `NaN` as greater than all other values.
    * @param nullate Indicates if either input column contains nulls.
+   * @param comparator Physical element relational comparison functor.
    * @return A binary callable object.
    */
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto device_less_comparator(Nullate nullate = {}) const noexcept
+  auto device_less_comparator(Nullate nullate                      = {},
+                              PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_comparator{device_row_comparator<Nullate, PhysicalElementComparator>{
-      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence()}};
+    return less_comparator{device_row_comparator{
+      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence(), comparator}};
   }
 
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto device_less_equivalent_comparator(Nullate nullate = {}) const noexcept
+  auto device_less_equivalent_comparator(Nullate nullate                      = {},
+                                         PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_equivalent_comparator{device_row_comparator<Nullate, PhysicalElementComparator>(
-      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
+    return less_equivalent_comparator{device_row_comparator{
+      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence(), comparator}};
   }
 
  private:
@@ -748,32 +762,37 @@ class two_table_comparator {
    * values rather than logical elements, defaults to `NaN` aware relational comparator that
    * evaluates `NaN` as greater than all other values.
    * @param nullate Indicates if either input column contains nulls.
+   * @param comparator Physical element relational comparison functor.
    * @return A binary callable object.
    */
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto device_less_comparator(Nullate nullate = {}) const noexcept
+  auto device_less_comparator(Nullate nullate                      = {},
+                              PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_comparator{strong_index_comparator_adapter{
-      device_row_comparator<Nullate, PhysicalElementComparator>{nullate,
-                                                                *d_left_table,
-                                                                *d_right_table,
-                                                                d_left_table->depths(),
-                                                                d_left_table->column_order(),
-                                                                d_left_table->null_precedence()}}};
+    return less_comparator{
+      strong_index_comparator_adapter{device_row_comparator{nullate,
+                                                            *d_left_table,
+                                                            *d_right_table,
+                                                            d_left_table->depths(),
+                                                            d_left_table->column_order(),
+                                                            d_left_table->null_precedence(),
+                                                            comparator}}};
   }
 
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto device_less_equivalent_comparator(Nullate nullate = {}) const noexcept
+  auto device_less_equivalent_comparator(Nullate nullate                      = {},
+                                         PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_equivalent_comparator{strong_index_comparator_adapter{
-      device_row_comparator<Nullate, PhysicalElementComparator>{nullate,
-                                                                *d_left_table,
-                                                                *d_right_table,
-                                                                d_left_table->depths(),
-                                                                d_left_table->column_order(),
-                                                                d_left_table->null_precedence()}}};
+    return less_equivalent_comparator{
+      strong_index_comparator_adapter{device_row_comparator{nullate,
+                                                            *d_left_table,
+                                                            *d_right_table,
+                                                            d_left_table->depths(),
+                                                            d_left_table->column_order(),
+                                                            d_left_table->null_precedence(),
+                                                            comparator}}};
   }
 
  private:
@@ -854,7 +873,7 @@ struct nan_equal_physical_equality_comparator {
  * - If the rows are compared without mismatched elements, the rows are equivalent
  *
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
- * @tparam PhysicalElementComparator A equality comparator functor that compares individual values
+ * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual values
  * rather than logical elements, defaults to a comparator for which `NaN == NaN`.
  */
 template <typename Nullate,
@@ -877,7 +896,10 @@ class device_row_comparator {
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(
-        l.type(), element_comparator{check_nulls, l, r, nulls_are_equal}, lhs_index, rhs_index);
+        l.type(),
+        element_comparator{check_nulls, l, r, nulls_are_equal, comparator},
+        lhs_index,
+        rhs_index);
     };
 
     return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
@@ -892,12 +914,18 @@ class device_row_comparator {
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+   * @param comparator Physical element equality comparison functor.
    */
   device_row_comparator(Nullate check_nulls,
                         table_device_view lhs,
                         table_device_view rhs,
-                        null_equality nulls_are_equal = null_equality::EQUAL) noexcept
-    : lhs{lhs}, rhs{rhs}, check_nulls{check_nulls}, nulls_are_equal{nulls_are_equal}
+                        null_equality nulls_are_equal         = null_equality::EQUAL,
+                        PhysicalEqualityComparator comparator = {}) noexcept
+    : lhs{lhs},
+      rhs{rhs},
+      check_nulls{check_nulls},
+      nulls_are_equal{nulls_are_equal},
+      comparator{comparator}
   {
   }
 
@@ -916,12 +944,18 @@ class device_row_comparator {
      * @param lhs The column containing the first element
      * @param rhs The column containing the second element (may be the same as lhs)
      * @param nulls_are_equal Indicates if two null elements are treated as equivalent
+     * @param comparator Physical element equality comparison functor.
      */
     __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
-                                  null_equality nulls_are_equal = null_equality::EQUAL) noexcept
-      : lhs{lhs}, rhs{rhs}, check_nulls{check_nulls}, nulls_are_equal{nulls_are_equal}
+                                  null_equality nulls_are_equal         = null_equality::EQUAL,
+                                  PhysicalEqualityComparator comparator = {}) noexcept
+      : lhs{lhs},
+        rhs{rhs},
+        check_nulls{check_nulls},
+        nulls_are_equal{nulls_are_equal},
+        comparator{comparator}
     {
     }
 
@@ -947,8 +981,8 @@ class device_row_comparator {
         }
       }
 
-      return PhysicalEqualityComparator{}(lhs.element<Element>(lhs_element_index),
-                                          rhs.element<Element>(rhs_element_index));
+      return comparator(lhs.element<Element>(lhs_element_index),
+                        rhs.element<Element>(rhs_element_index));
     }
 
     template <typename Element,
@@ -1004,8 +1038,8 @@ class device_row_comparator {
         }
       }
 
-      auto comp = column_comparator{element_comparator{check_nulls, lcol, rcol, nulls_are_equal},
-                                    lcol.size()};
+      auto comp = column_comparator{
+        element_comparator{check_nulls, lcol, rcol, nulls_are_equal, comparator}, lcol.size()};
       return type_dispatcher<dispatch_void_if_nested>(lcol.type(), comp);
     }
 
@@ -1048,12 +1082,14 @@ class device_row_comparator {
     column_device_view const rhs;
     Nullate const check_nulls;
     null_equality const nulls_are_equal;
+    PhysicalEqualityComparator const comparator;
   };
 
   table_device_view const lhs;
   table_device_view const rhs;
   Nullate const check_nulls;
   null_equality const nulls_are_equal;
+  PhysicalEqualityComparator const comparator;
 };
 
 /**
@@ -1139,19 +1175,20 @@ class self_comparator {
    * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
-   * @tparam PhysicalElementComparator A equality comparator functor that compares individual values
-   * rather than logical elements, defaults to a comparator for which `NaN == NaN`.
+   * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
+   * values rather than logical elements, defaults to a comparator for which `NaN == NaN`.
    * @param nullate Indicates if either input column contains nulls.
    * @param nulls_are_equal Indicates if nulls are equal.
+   * @param comparator Physical element equality comparison functor.
    * @return A binary callable object
    */
   template <typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
-  device_row_comparator<Nullate, PhysicalEqualityComparator> device_comparator(
-    Nullate nullate = {}, null_equality nulls_are_equal = null_equality::EQUAL) const noexcept
+  auto device_comparator(Nullate nullate                       = {},
+                         null_equality nulls_are_equal         = null_equality::EQUAL,
+                         PhysicalEqualityComparator comparator = {}) const noexcept
   {
-    return device_row_comparator<Nullate, PhysicalEqualityComparator>(
-      nullate, *d_t, *d_t, nulls_are_equal);
+    return device_row_comparator{nullate, *d_t, *d_t, nulls_are_equal, comparator};
   }
 
  private:
@@ -1240,20 +1277,21 @@ class two_table_comparator {
    * right table compares equal to row `j` of the left table.
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
-   * @tparam PhysicalElementComparator A equality comparator functor that compares individual values
-   * rather than logical elements, defaults to a `NaN == NaN` equality comparator.
+   * @tparam PhysicalEqualityComparator A equality comparator functor that compares individual
+   * values rather than logical elements, defaults to a `NaN == NaN` equality comparator.
    * @param nullate Indicates if either input column contains nulls.
    * @param nulls_are_equal Indicates if nulls are equal.
+   * @param comparator Physical element equality comparison functor.
    * @return A binary callable object
    */
   template <typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
-  auto device_comparator(Nullate nullate               = {},
-                         null_equality nulls_are_equal = null_equality::EQUAL) const noexcept
+  auto device_comparator(Nullate nullate                       = {},
+                         null_equality nulls_are_equal         = null_equality::EQUAL,
+                         PhysicalEqualityComparator comparator = {}) const noexcept
   {
     return strong_index_comparator_adapter{
-      device_row_comparator<Nullate, PhysicalEqualityComparator>(
-        nullate, *d_left_table, *d_right_table, nulls_are_equal)};
+      device_row_comparator(nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
   }
 
  private:

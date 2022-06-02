@@ -50,14 +50,14 @@ template <typename Comparator>
 void row_comparison(cudf::table_view input1,
                     cudf::table_view input2,
                     cudf::mutable_column_view output,
-                    std::vector<cudf::order> const& column_order)
+                    std::vector<cudf::order> const& column_order,
+                    Comparator c)
 {
   rmm::cuda_stream_view stream{};
 
   auto table_comparator =
     lexicographic::two_table_comparator{input1, input2, column_order, {}, stream};
-  auto comparator =
-    table_comparator.device_less_comparator<cudf::nullate::NO, Comparator>(cudf::nullate::NO{});
+  auto comparator   = table_comparator.device_less_comparator(cudf::nullate::NO{}, c);
   auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
   auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
   thrust::transform(rmm::exec_policy(stream),
@@ -71,13 +71,13 @@ void row_comparison(cudf::table_view input1,
 template <typename Comparator>
 void self_comparison(cudf::table_view input,
                      cudf::mutable_column_view output,
-                     std::vector<cudf::order> const& column_order)
+                     std::vector<cudf::order> const& column_order,
+                     Comparator c)
 {
   rmm::cuda_stream_view stream{};
 
   auto table_comparator = lexicographic::self_comparator{input, column_order, {}, stream};
-  auto comparator =
-    table_comparator.device_less_comparator<cudf::nullate::NO, Comparator>(cudf::nullate::NO{});
+  auto comparator       = table_comparator.device_less_comparator(cudf::nullate::NO{}, c);
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(input.num_rows()),
@@ -90,13 +90,14 @@ template <typename Comparator>
 void row_equality(cudf::table_view input1,
                   cudf::table_view input2,
                   cudf::mutable_column_view output,
-                  std::vector<cudf::order> const& column_order)
+                  std::vector<cudf::order> const& column_order,
+                  Comparator c)
 {
   rmm::cuda_stream_view stream{};
 
   auto table_comparator = equality::two_table_comparator{input1, input2, stream};
   auto comparator =
-    table_comparator.device_comparator<cudf::nullate::NO, Comparator>(cudf::nullate::NO{});
+    table_comparator.device_comparator(cudf::nullate::NO{}, cudf::null_equality::EQUAL, c);
   auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
   auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
   thrust::transform(rmm::exec_policy(stream),
@@ -110,13 +111,14 @@ void row_equality(cudf::table_view input1,
 template <typename Comparator>
 void self_equality(cudf::table_view input,
                    cudf::mutable_column_view output,
-                   std::vector<cudf::order> const& column_order)
+                   std::vector<cudf::order> const& column_order,
+                   Comparator c)
 {
   rmm::cuda_stream_view stream{};
 
   auto table_comparator = equality::self_comparator{input, stream};
   auto comparator =
-    table_comparator.device_comparator<cudf::nullate::NO, Comparator>(cudf::nullate::NO{});
+    table_comparator.device_comparator(cudf::nullate::NO{}, cudf::null_equality::EQUAL, c);
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(input.num_rows()),
@@ -150,12 +152,18 @@ TYPED_TEST(TypedTableViewTest, TestLexicographicalComparatorTwoTableCase)
     cudf::data_type(cudf::type_id::INT8), input_table_1.num_rows(), cudf::mask_state::UNALLOCATED);
   fixed_width_column_wrapper<int8_t> expected{{1, 1, 0, 1}};
 
-  row_comparison<lexicographic::physical_element_comparator>(
-    input_table_1, input_table_2, got->mutable_view(), column_order);
+  row_comparison(input_table_1,
+                 input_table_2,
+                 got->mutable_view(),
+                 column_order,
+                 lexicographic::physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
-  row_comparison<lexicographic::sorting_physical_element_comparator>(
-    input_table_1, input_table_2, got->mutable_view(), column_order);
+  row_comparison(input_table_1,
+                 input_table_2,
+                 got->mutable_view(),
+                 column_order,
+                 lexicographic::sorting_physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
@@ -172,12 +180,14 @@ TYPED_TEST(TypedTableViewTest, TestLexicographicalComparatorSameTable)
     cudf::data_type(cudf::type_id::INT8), input_table_1.num_rows(), cudf::mask_state::UNALLOCATED);
   fixed_width_column_wrapper<int8_t> expected{{0, 0, 0, 0}};
 
-  self_comparison<lexicographic::physical_element_comparator>(
-    input_table_1, got->mutable_view(), column_order);
+  self_comparison(
+    input_table_1, got->mutable_view(), column_order, lexicographic::physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
-  self_comparison<lexicographic::sorting_physical_element_comparator>(
-    input_table_1, got->mutable_view(), column_order);
+  self_comparison(input_table_1,
+                  got->mutable_view(),
+                  column_order,
+                  lexicographic::sorting_physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 }
 
@@ -244,13 +254,19 @@ TYPED_TEST(NaNTableViewTest, TestLexicographicalComparatorTwoTableNaNCase)
     cudf::data_type(cudf::type_id::INT8), input_table_1.num_rows(), cudf::mask_state::UNALLOCATED);
 
   cudf::test::fixed_width_column_wrapper<int8_t> expected{{0, 0, 0, 0}};
-  row_comparison<lexicographic::physical_element_comparator>(
-    input_table_1, input_table_2, got->mutable_view(), column_order);
+  row_comparison(input_table_1,
+                 input_table_2,
+                 got->mutable_view(),
+                 column_order,
+                 lexicographic::physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
   cudf::test::fixed_width_column_wrapper<int8_t> sorting_expected{{0, 1, 0, 0}};
-  row_comparison<lexicographic::sorting_physical_element_comparator>(
-    input_table_1, input_table_2, got->mutable_view(), column_order);
+  row_comparison(input_table_1,
+                 input_table_2,
+                 got->mutable_view(),
+                 column_order,
+                 lexicographic::sorting_physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorting_expected, got->view());
 }
 
@@ -269,12 +285,18 @@ TYPED_TEST(NaNTableViewTest, TestEqualityComparatorTwoTableNaNCase)
     cudf::data_type(cudf::type_id::INT8), input_table_1.num_rows(), cudf::mask_state::UNALLOCATED);
 
   cudf::test::fixed_width_column_wrapper<int8_t> expected{{0, 0, 0, 1}};
-  row_equality<equality::physical_equality_comparator>(
-    input_table_1, input_table_2, got->mutable_view(), column_order);
+  row_equality(input_table_1,
+               input_table_2,
+               got->mutable_view(),
+               column_order,
+               equality::physical_equality_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
   cudf::test::fixed_width_column_wrapper<int8_t> sorting_expected{{1, 0, 0, 1}};
-  row_equality<equality::nan_equal_physical_equality_comparator>(
-    input_table_1, input_table_2, got->mutable_view(), column_order);
+  row_equality(input_table_1,
+               input_table_2,
+               got->mutable_view(),
+               column_order,
+               equality::nan_equal_physical_equality_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorting_expected, got->view());
 }
