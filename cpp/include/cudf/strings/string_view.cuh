@@ -112,6 +112,7 @@ __device__ inline size_type string_view::length() const
   return _length;
 }
 
+// @cond
 // this custom iterator knows about UTF8 encoding
 __device__ inline string_view::const_iterator::const_iterator(const string_view& str, size_type pos)
   : p{str.data()}, bytes{str.size_bytes()}, char_pos{pos}, byte_pos{str.byte_offset(pos)}
@@ -243,6 +244,7 @@ __device__ inline string_view::const_iterator string_view::end() const
 {
   return const_iterator(*this, length());
 }
+// @endcond
 
 __device__ inline char_utf8 string_view::operator[](size_type pos) const
 {
