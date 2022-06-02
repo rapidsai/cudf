@@ -64,6 +64,9 @@ conda list --show-channel-urls
 # FIX Added to deal with Anancoda SSL verification issues during conda builds
 conda config --set ssl_verify False
 
+# TODO: Move boa install to gpuci/rapidsai
+gpuci_mamba_retry install boa
+
 ################################################################################
 # BUILD - Conda package builds
 ################################################################################
@@ -78,7 +81,7 @@ fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for libcudf"
-  gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
+  gpuci_conda_retry mambabuild --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
   gpuci_logger "sccache stats"
@@ -97,16 +100,16 @@ fi
 
 if [ "$BUILD_CUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for cudf"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for dask-cudf"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for cudf_kafka"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for custreamz"
-  gpuci_conda_retry build --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
+  gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 fi
 ################################################################################
 # UPLOAD - Conda packages

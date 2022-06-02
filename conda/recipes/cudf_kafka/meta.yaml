@@ -45,8 +45,8 @@ test:                                   # [linux64]
     - cudf_kafka                        # [linux64]
 
 about:
-  home: http://rapids.ai/
+  home: https://rapids.ai/
   license: Apache-2.0
-  license_family: Apache
+  license_family: APACHE
   license_file: LICENSE
   summary: libcudf_kafka library
