@@ -110,7 +110,7 @@ struct strong_index_iterator : public thrust::iterator_facade<strong_index_itera
   __device__ constexpr bool equal(strong_index_iterator<Index> const& other) const noexcept
   {
     return begin == other.begin;
-  }
+  }q
 
   __device__ constexpr Index dereference() const noexcept { return static_cast<Index>(begin); }
 
@@ -136,9 +136,9 @@ using rhs_iterator = strong_index_iterator<rhs_index_type>;
 namespace lexicographic {
 
 /**
- * @brief Relational comparator functor that compares individual physical values rather than logical
- * elements like lists, strings, or structs. It evaluates `NaN` as not less than, equal to, or
- * greater than other values and is IEEE-754 compliant.
+ * @brief Relational comparator functor that compares physical values rather than logical
+ * elements like lists, strings, or structs. It evaluates `NaN` as not less than, equal to, or greater
+ * than other values and is IEEE-754 compliant.
  */
 struct physical_element_comparator {
   /**
@@ -156,9 +156,9 @@ struct physical_element_comparator {
 };
 
 /**
- * @brief Relational comparator functor that compares individual physical values rather than logical
+ * @brief Relational comparator functor that compares physical values rather than logical
  * elements like lists, strings, or structs. It evaluates `NaN` as equivalent to other `NaN`s and
- *       greater than all other values.
+ * greater than all other values.
  */
 struct sorting_physical_element_comparator {
   /**
@@ -771,7 +771,7 @@ class row_hasher;
 namespace equality {
 
 /**
- * @brief Equality comparator functor that compares individual physical values rather than logical
+ * @brief Equality comparator functor that compares physical values rather than logical
  * elements like lists, strings, or structs. It evaluates `NaN` not equal to all other values for
  * IEEE-754. compliance.
  */
@@ -793,7 +793,7 @@ struct physical_equality_comparator {
 };
 
 /**
- * @brief Equality comparator functor that compares individual physical values rather than logical
+ * @brief Equality comparator functor that compares physical values rather than logical
  * elements like lists, strings, or structs. It evaluates `NaN` as equal to other `NaN`s.
  */
 struct nan_equal_physical_equality_comparator {
