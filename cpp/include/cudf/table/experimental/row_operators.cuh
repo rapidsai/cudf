@@ -1265,7 +1265,7 @@ struct negative_index_hasher_adapter {
    * value using the @ref `remap_negative_index` function before calling to the underlying row
    * hasher.
    *
-   * Note that the is not any validity check for the input value `idx`, assuming that it is always
+   * Note that there is not any validity check for the input value `idx`, assuming that it is always
    * negative. Otherwise, the output is undefined.
    *
    * @param idx A row index that is given in a range of negative values
