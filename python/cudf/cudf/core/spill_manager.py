@@ -88,9 +88,10 @@ class SpillManager:
 
     def spill_device_memory(self) -> int:
         for buf in self.base_buffers(order_by_access_time=True):
-            if not buf.is_spilled and buf.spillable:
-                buf.move_inplace(target="cpu")
-                return buf.size
+            with buf._lock:
+                if not buf.is_spilled and buf.spillable:
+                    buf.move_inplace(target="cpu")
+                    return buf.size
         return 0
 
     def spill_to_device_limit(self, device_limit: int = None) -> int:
