@@ -213,6 +213,8 @@ TEST_F(FstTest, GroundTruth)
 
 
 
+
+
   // Prepare input & output buffers
   constexpr std::size_t single_item = 1;
   hostdevice_vector<SymbolT> output_gpu(input.size(), stream_view);
