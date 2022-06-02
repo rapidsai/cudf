@@ -3411,10 +3411,10 @@ std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test
 ascending()
 {
   if (std::is_signed_v<T>) {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(-10000), [](auto i){return i/100;});
+    auto elements = cudf::detail::make_counting_transform_iterator(-10000, [](auto i){return i/100;});
     return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   } else {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return i/100;});
+    auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i/100;});
     return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   }
 }
@@ -3424,10 +3424,10 @@ std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test
 descending()
 {
   if (std::is_signed_v<T>) {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(-10000), [](auto i){return -i/100;});
+    auto elements = cudf::detail::make_counting_transform_iterator(-10000, [](auto i){return -i/100;});
     return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   } else {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return (20000-i)/100;});
+    auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return (20000-i)/100;});
     return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   }
 }
@@ -3437,10 +3437,10 @@ std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test
 unordered()
 {
   if (std::is_signed_v<T>) {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(-10000), [](auto i){return (i%2 ? i : -i)/100;});
+    auto elements = cudf::detail::make_counting_transform_iterator(-10000, [](auto i){return (i%2 ? i : -i)/100;});
     return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   } else {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return (i%2 ? i : 20000-i)/100;});
+    auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return (i%2 ? i : 20000-i)/100;});
     return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   }
 }
@@ -3450,14 +3450,14 @@ unordered()
 template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> ascending()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return i < 10000 ? false : true;});
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i < 10000 ? false : true;});
   return cudf::test::fixed_width_column_wrapper<bool>(elements, elements+20000);
 }
 
 template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> descending()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return i < 10000 ? true : false;});
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i < 10000 ? true : false;});
   return cudf::test::fixed_width_column_wrapper<bool>(elements, elements+20000);
 }
 
