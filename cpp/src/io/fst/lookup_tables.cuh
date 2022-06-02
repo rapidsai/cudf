@@ -421,8 +421,8 @@ class TransducerLookupTable {
  * translation table that specifies which state transitions cause which output to be written).
  *
  * @tparam OutSymbolT The symbol type being output by the finite-state transducer
- * @tparam NUM_SYMBOLS The number of symbol groups amongst which to differentiate (one dimension of
- * the transition table)
+ * @tparam NUM_SYMBOLS The number of symbol groups amongst which to differentiate including the
+ * wildcard symbol group (one dimension of the transition table)
  * @tparam NUM_STATES The number of states defined by the DFA (the other dimension of the
  * transition table)
  */
@@ -439,16 +439,16 @@ class Dfa {
   using SymbolGroupIdInitT   = typename SymbolGroupIdLookupT::KernelParameter;
 
   // Transition table
-  using TransitionTableT     = detail::TransitionTable<NUM_SYMBOLS + 1, NUM_STATES>;
+  using TransitionTableT     = detail::TransitionTable<NUM_SYMBOLS, NUM_STATES>;
   using TransitionTableInitT = typename TransitionTableT::KernelParameter;
 
   // Translation lookup table
   using OutSymbolOffsetT      = uint32_t;
   using TranslationTableT     = detail::TransducerLookupTable<OutSymbolT,
                                                           OutSymbolOffsetT,
-                                                          NUM_SYMBOLS + 1,
+                                                          NUM_SYMBOLS,
                                                           NUM_STATES,
-                                                          (NUM_SYMBOLS + 1) * NUM_STATES>;
+                                                          NUM_SYMBOLS * NUM_STATES>;
   using TranslationTableInitT = typename TranslationTableT::KernelParameter;
 
   auto get_device_view()
