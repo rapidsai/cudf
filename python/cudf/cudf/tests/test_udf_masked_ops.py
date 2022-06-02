@@ -647,18 +647,16 @@ def test_masked_udf_caching():
     # recompile
 
     data = cudf.Series([1, 2, 3])
-    expect = data**2
-    with pytest.warns(FutureWarning):
-        got = data.applymap(lambda x: x**2)
 
+    expect = data**2
+    got = data.apply(lambda x: x**2)
     assert_eq(expect, got, check_dtype=False)
 
     # update the constant value being used and make sure
     # it does not result in a cache hit
 
     expect = data**3
-    with pytest.warns(FutureWarning):
-        got = data.applymap(lambda x: x**3)
+    got = data.apply(lambda x: x**3)
     assert_eq(expect, got, check_dtype=False)
 
     # make sure we get a hit when reapplying

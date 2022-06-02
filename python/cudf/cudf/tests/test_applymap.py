@@ -13,7 +13,7 @@ from cudf.testing import _utils as utils
 @pytest.mark.parametrize(
     "nelem,masked", list(product([2, 10, 100, 1000], [True, False]))
 )
-def test_applymap_round(nelem, masked):
+def test_apply_round(nelem, masked):
     # Generate data
     np.random.seed(0)
     data = np.random.random(nelem) * 100
@@ -28,9 +28,9 @@ def test_applymap_round(nelem, masked):
 
     sr = Series(data)
 
-    # Call applymap
+    # Call apply
     with pytest.warns(FutureWarning):
-        out = sr.applymap(
+        out = sr.apply(
             lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x))
         )
 
@@ -44,15 +44,14 @@ def test_applymap_round(nelem, masked):
     np.testing.assert_array_almost_equal(expect, got)
 
 
-def test_applymap_change_out_dtype():
-    # Test for changing the out_dtype using applymap
+def test_apply_change_out_dtype():
+    # Test for changing the out_dtype using apply
 
     data = list(range(10))
 
     sr = Series(data)
 
-    with pytest.warns(FutureWarning):
-        out = sr.applymap(lambda x: float(x), out_dtype=float)
+    out = sr.apply(lambda x: float(x), out_dtype=float)
 
     # Check
     expect = np.array(data, dtype=float)
