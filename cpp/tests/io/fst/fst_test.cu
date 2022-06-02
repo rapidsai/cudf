@@ -26,6 +26,7 @@
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/cuda_stream.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
@@ -209,6 +210,8 @@ TEST_F(FstTest, GroundTruth)
   auto d_input_string                = cudf::strings::repeat_string(d_string_scalar, repeat_times);
   auto& d_input = static_cast<cudf::scalar_type_t<std::string>&>(*d_input_string);
   input         = d_input.to_string(stream);
+
+
 
   // Prepare input & output buffers
   constexpr std::size_t single_item = 1;
