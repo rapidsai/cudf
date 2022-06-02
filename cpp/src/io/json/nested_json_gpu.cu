@@ -334,7 +334,7 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
 
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
   using ToStackOpFstT = cudf::io::fst::detail::Dfa<StackSymbolT,
-                                                   (to_stack_op::DFA_SGID::NUM_SYMBOL_GROUPS - 1),
+                                                   to_stack_op::DFA_SGID::NUM_SYMBOL_GROUPS,
                                                    to_stack_op::DFA_STATES::TT_NUM_STATES>;
   ToStackOpFstT json_to_stack_ops_fst{to_stack_op::symbol_groups,
                                       to_stack_op::transition_table,
@@ -386,7 +386,7 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
 
   // PDA transducer alias
   using ToTokenStreamFstT = cudf::io::fst::detail::
-    Dfa<StackSymbolT, (tokenizer_pda::NUM_PDA_SGIDS - 1), tokenizer_pda::PD_NUM_STATES>;
+    Dfa<StackSymbolT, tokenizer_pda::NUM_PDA_SGIDS, tokenizer_pda::PD_NUM_STATES>;
 
   // Instantiating PDA transducer
   ToTokenStreamFstT json_to_tokens_fst{tokenizer_pda::pda_sgids,
