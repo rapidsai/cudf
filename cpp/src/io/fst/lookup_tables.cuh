@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <type_traits>
 #include <vector>
 
 namespace cudf {
@@ -171,15 +172,18 @@ class TransitionTable {
     ItemT transitions[MAX_NUM_STATES * MAX_NUM_SYMBOLS];
   };
 
+  // defined only for non-narrowing conversion
+  // TODO: replace int with ItemT
+  template <typename StateIdT, typename = std::void_t<decltype(int{std::declval<StateIdT>()})>>
   static void InitDeviceTransitionTable(hostdevice_vector<KernelParameter>& transition_table_init,
-                                        const std::vector<std::vector<int>>& trans_table,
+                                        const std::vector<std::vector<StateIdT>>& trans_table,
                                         rmm::cuda_stream_view stream)
   {
     // trans_table[state][symbol] -> new state
     for (std::size_t state = 0; state < trans_table.size(); ++state) {
       for (std::size_t symbol = 0; symbol < trans_table[state].size(); ++symbol) {
         transition_table_init.host_ptr()->transitions[symbol * MAX_NUM_STATES + state] =
-          trans_table[state][symbol];
+          int{trans_table[state][symbol]};
       }
     }
 
