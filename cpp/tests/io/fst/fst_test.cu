@@ -93,14 +93,15 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
     // Iterate over symbol groups and search for the first symbol group containing the current
     // symbol
     for (auto const& sg : symbol_group_lut) {
-      for (auto const& s : sg)
-        if (s == symbol) found = true;
+      for (auto const& s : sg) {        // TODO if sg is sorted vector, use binary search.
+        if (s == symbol) found = true;  // TODO: each symbol listed? why no range checking?
+      }
       if (found) break;
       symbol_group++;
     }
 
     // Output the translated symbols to the output tape
-    size_t inserted = 0;
+    size_t inserted = 0;  // TODO: Where is number of symbols inserted tracked in output?
     for (auto out : translation_table[state][symbol_group]) {
       // std::cout << in_offset << ": " << out << "\n";
       *out_tape = out;
