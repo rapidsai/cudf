@@ -110,7 +110,7 @@ struct strong_index_iterator : public thrust::iterator_facade<strong_index_itera
   __device__ constexpr bool equal(strong_index_iterator<Index> const& other) const noexcept
   {
     return begin == other.begin;
-  }q
+  }
 
   __device__ constexpr Index dereference() const noexcept { return static_cast<Index>(begin); }
 
@@ -137,8 +137,8 @@ namespace lexicographic {
 
 /**
  * @brief Relational comparator functor that compares physical values rather than logical
- * elements like lists, strings, or structs. It evaluates `NaN` as not less than, equal to, or greater
- * than other values and is IEEE-754 compliant.
+ * elements like lists, strings, or structs. It evaluates `NaN` as not less than, equal to, or
+ * greater than other values and is IEEE-754 compliant.
  */
 struct physical_element_comparator {
   /**
