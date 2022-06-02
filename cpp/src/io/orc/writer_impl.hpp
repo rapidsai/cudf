@@ -184,7 +184,7 @@ class writer::impl {
   static constexpr const char* MAGIC = "ORC";
 
   // ORC compresses streams into independent chunks
-  static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 256 * 1024;
+  static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 64 * 1024;
 
  public:
   /**

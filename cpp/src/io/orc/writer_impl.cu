@@ -48,6 +48,7 @@
 #include <thrust/transform.h>
 
 #include <nvcomp/snappy.h>
+#include <nvcomp/deflate.h>
 
 #include <algorithm>
 #include <cstring>
@@ -88,6 +89,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
   switch (compression) {
     case compression_type::AUTO:
     case compression_type::SNAPPY: return orc::CompressionKind::SNAPPY;
+    case compression_type::ZLIB: return orc::CompressionKind::ZLIB;
     case compression_type::NONE: return orc::CompressionKind::NONE;
     default: CUDF_FAIL("Unsupported compression type"); return orc::CompressionKind::NONE;
   }
@@ -2104,9 +2106,15 @@ void writer::impl::write(table_view const& table)
     size_t compressed_bfr_size       = 0;
     size_t num_compressed_blocks     = 0;
     size_t max_compressed_block_size = 0;
-    if (compression_kind_ != NONE) {
-      nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
+    if (compression_kind_ == SNAPPY) {
+      auto status = nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
         compression_blocksize_, nvcompBatchedSnappyDefaultOpts, &max_compressed_block_size);
+        CUDF_EXPECTS(status == 0, "failed to get max uncomppressed chunk size");
+      }
+    if (compression_kind_ == ZLIB) {
+      auto status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
+        compression_blocksize_, nvcompBatchedDeflateDefaultOpts, &max_compressed_block_size);
+        CUDF_EXPECTS(status == 0, "failed to get max uncomppressed chunk size");
     }
     auto stream_output = [&]() {
       size_t max_stream_size = 0;

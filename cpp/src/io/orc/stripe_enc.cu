@@ -28,6 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <nvcomp/deflate.h>
 #include <nvcomp/snappy.h>
 
 #include <thrust/for_each.h>
@@ -1387,6 +1388,70 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
 
     } else {
       gpu_snap(comp_in, comp_out, comp_stat, stream);
+    }
+  }
+  if (compression == ZLIB) {
+    if (detail::nvcomp_integration::is_all_enabled()) {
+      try {
+        size_t temp_size;
+        nvcompStatus_t nvcomp_status = nvcompBatchedDeflateCompressGetTempSize(
+          num_compressed_blocks, comp_blk_size, nvcompBatchedDeflateDefaultOpts, &temp_size);
+
+        CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
+                     "Error in getting snappy compression scratch size");
+
+        rmm::device_buffer scratch(temp_size, stream);
+        rmm::device_uvector<void const*> uncompressed_data_ptrs(num_compressed_blocks, stream);
+        rmm::device_uvector<size_t> uncompressed_data_sizes(num_compressed_blocks, stream);
+        rmm::device_uvector<void*> compressed_data_ptrs(num_compressed_blocks, stream);
+        rmm::device_uvector<size_t> compressed_bytes_written(num_compressed_blocks, stream);
+
+        auto comp_it = thrust::make_zip_iterator(uncompressed_data_ptrs.begin(),
+                                                 uncompressed_data_sizes.begin());
+        thrust::transform(
+          rmm::exec_policy(stream),
+          comp_in.begin(),
+          comp_in.end(),
+          comp_it,
+          [] __device__(auto const& in) { return thrust::make_tuple(in.data(), in.size()); });
+        thrust::transform(rmm::exec_policy(stream),
+                          comp_out.begin(),
+                          comp_out.end(),
+                          compressed_data_ptrs.begin(),
+                          [] __device__(auto const& out) { return out.data(); });
+        nvcomp_status = nvcompBatchedDeflateCompressAsync(uncompressed_data_ptrs.data(),
+                                                          uncompressed_data_sizes.data(),
+                                                          comp_blk_size,
+                                                          num_compressed_blocks,
+                                                          scratch.data(),
+                                                          scratch.size(),
+                                                          compressed_data_ptrs.data(),
+                                                          compressed_bytes_written.data(),
+                                                          nvcompBatchedDeflateDefaultOpts,
+                                                          stream.value());
+
+        CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in snappy compression");
+
+        thrust::transform(rmm::exec_policy(stream),
+                          compressed_bytes_written.begin(),
+                          compressed_bytes_written.end(),
+                          comp_stat.begin(),
+                          [] __device__(size_t size) {
+                            decompress_status status{};
+                            status.bytes_written = size;
+                            return status;
+                          });
+      } catch (...) {
+        // If we reach this then there was an error in compressing so set an error status for each
+        // block
+        thrust::for_each(rmm::exec_policy(stream),
+                         comp_stat.begin(),
+                         comp_stat.end(),
+                         [] __device__(decompress_status & stat) { stat.status = 1; });
+      };
+
+    } else {
+      CUDF_FAIL("Unsupported compression type");
     }
   }
   dim3 dim_block_compact(1024, 1);
