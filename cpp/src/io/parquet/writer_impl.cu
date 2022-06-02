@@ -246,15 +246,17 @@ struct leaf_schema_fn {
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int32_t>, void> operator()()
   {
-    col_schema.type        = Type::INT32;
-    col_schema.stats_dtype = statistics_dtype::dtype_int32;
+    col_schema.type           = Type::INT32;
+    col_schema.converted_type = ConvertedType::INT_32;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int32;
   }
 
   template <typename T>
   std::enable_if_t<std::is_same_v<T, int64_t>, void> operator()()
   {
-    col_schema.type        = Type::INT64;
-    col_schema.stats_dtype = statistics_dtype::dtype_int64;
+    col_schema.type           = Type::INT64;
+    col_schema.converted_type = ConvertedType::INT_64;
+    col_schema.stats_dtype    = statistics_dtype::dtype_int64;
   }
 
   template <typename T>
@@ -661,6 +663,7 @@ struct parquet_column_view {
 
   [[nodiscard]] column_view cudf_column_view() const { return cudf_col; }
   [[nodiscard]] parquet::Type physical_type() const { return schema_node.type; }
+  [[nodiscard]] parquet::ConvertedType converted_type() const { return schema_node.converted_type; }
 
   std::vector<std::string> const& get_path_in_schema() { return path_in_schema; }
 
@@ -816,8 +819,9 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
     desc.rep_values    = _rep_level.data();
     desc.def_values    = _def_level.data();
   }
-  desc.num_rows      = cudf_col.size();
-  desc.physical_type = physical_type();
+  desc.num_rows       = cudf_col.size();
+  desc.physical_type  = physical_type();
+  desc.converted_type = converted_type();
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());
