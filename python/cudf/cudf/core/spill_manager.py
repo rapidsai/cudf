@@ -14,6 +14,15 @@ import rmm.mr
 from cudf.core.buffer import Buffer
 
 
+def format_bytes(nbytes: int) -> str:
+    n = float(nbytes)
+    for unit in ["", "KiB", "MiB", "GiB"]:
+        if abs(n) < 1024:
+            return f"{n:.2f} {unit}"
+        n /= 1024
+    return f"{n:.2f} TiB"
+
+
 class SpillManager:
     def __init__(
         self, *, spill_on_demand=False, device_memory_limit=None
@@ -126,10 +135,17 @@ class SpillManager:
 
     def __repr__(self) -> str:
         spilled, unspilled = self.spilled_and_unspilled()
+        unspillable = 0
+        for buf in self.base_buffers():
+            if not (buf.is_spilled or buf.spillable):
+                unspillable += buf.size
+        unspillable_ratio = unspillable / unspilled if unspilled else 0
         return (
             f"<SpillManager spill_on_demand={self._spill_on_demand} "
-            f"device_memory_limit={self._device_memory_limit} "
-            f"spilled: {spilled} unspilled: {unspilled}>"
+            f"device_memory_limit={self._device_memory_limit} | "
+            f"{format_bytes(spilled)} spilled | "
+            f"{format_bytes(unspilled)} ({unspillable_ratio:.0%}) "
+            "unspilled (unspillable)>"
         )
 
 
