@@ -765,6 +765,31 @@ def _merge_sorted(
     ascending=True,
     na_position="last",
 ):
+    """Merge a list of sorted DataFrame or Series objects.
+
+    Dataframes/Series in objs list MUST be pre-sorted by columns
+    listed in `keys`, or by the index (if `by_index=True`).
+
+    Parameters
+    ----------
+    objs : list of DataFrame or Series
+    keys : list, default None
+        List of Column names to sort by. If None, all columns used
+        (Ignored if `by_index=True`)
+    by_index : bool, default False
+        Use index for sorting. `keys` input will be ignored if True
+    ignore_index : bool, default False
+        Drop and ignore index during merge. Default range index will
+        be used in the output dataframe.
+    ascending : bool, default True
+        Sorting is in ascending order, otherwise it is descending
+    na_position : {'first', 'last'}, default 'last'
+        'first' nulls at the beginning, 'last' nulls at the end
+
+    Returns
+    -------
+    A new, lexicographically sorted, DataFrame/Series.
+    """
     if not pd.api.types.is_list_like(objs):
         raise TypeError("objs must be a list-like of Frame-like objects")
 
