@@ -137,7 +137,7 @@ namespace lexicographic {
 
 /**
  * @brief Relational comparator functor that evaluates `NaN` as not less than, equal to, or
- * greater than other values. This is IEEE-754 compliant.
+ *       greater than other values. This is IEEE-754 compliant.
  */
 struct physical_element_comparator {
   /**
@@ -145,8 +145,7 @@ struct physical_element_comparator {
    *
    * @param lhs First element
    * @param rhs Second element
-   * @return Indicates the relationship between the elements in
-   * the `lhs` and `rhs` columns.
+   * @return Relation between elements
    */
   template <typename Element>
   __device__ constexpr weak_ordering operator()(Element const lhs, Element const rhs) const noexcept
@@ -157,7 +156,7 @@ struct physical_element_comparator {
 
 /**
  * @brief Relational comparator functor that evaluates `NaN` as equivalent to other `NaN`s and
- * greater than all other values.
+ *       greater than all other values.
  */
 struct sorting_physical_element_comparator {
   /**
@@ -183,12 +182,10 @@ struct sorting_physical_element_comparator {
   template <typename Element, CUDF_ENABLE_IF(std::is_floating_point_v<Element>)>
   __device__ constexpr weak_ordering operator()(Element const lhs, Element const rhs) const noexcept
   {
-    if (isnan(lhs) and isnan(rhs)) {
-      return weak_ordering::EQUIVALENT;
+    if (isnan(lhs)) {
+      return isnan(rhs) ? weak_ordering::EQUIVALENT : weak_ordering::GREATER;
     } else if (isnan(rhs)) {
       return weak_ordering::LESS;
-    } else if (isnan(lhs)) {
-      return weak_ordering::GREATER;
     }
 
     return detail::compare_elements(lhs, rhs);
@@ -212,7 +209,7 @@ struct sorting_physical_element_comparator {
  *
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  * @tparam PhysicalElementComparator A relational comparator functor, defaults to `NaN` aware
- * relational comparator that evaluates `NaN` as greater than standard values.
+ * relational comparator that evaluates `NaN` as greater than all non-null values.
  */
 template <typename Nullate,
           typename PhysicalElementComparator = sorting_physical_element_comparator>
@@ -1031,7 +1028,7 @@ class device_row_comparator {
   table_device_view const rhs;
   Nullate const check_nulls;
   null_equality const nulls_are_equal;
-};  // class device_row_comparator
+};
 
 struct preprocessed_table {
   /**

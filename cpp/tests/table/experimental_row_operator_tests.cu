@@ -103,7 +103,7 @@ void row_equality(cudf::table_view input1,
                     lhs_it,
                     lhs_it + input1.num_rows(),
                     rhs_it,
-                    output.data<int8_t>(),
+                    output.data<bool>(),
                     comparator);
 }
 
@@ -121,7 +121,7 @@ void self_equality(cudf::table_view input,
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(input.num_rows()),
                     thrust::make_counting_iterator(0),
-                    output.data<int8_t>(),
+                    output.data<bool>(),
                     comparator);
 }
 
