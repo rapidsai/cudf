@@ -22,11 +22,10 @@
 
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
-
-#include "cub/cub.cuh"
 
 #include <cstdlib>
 #include <vector>
@@ -192,8 +191,7 @@ TEST_F(FstTest, GroundTruth)
   using DfaFstT = cudf::io::fst::detail::Dfa<char, (NUM_SYMBOL_GROUPS - 1), TT_NUM_STATES>;
 
   // Prepare cuda stream for data transfers & kernels
-  cudaStream_t stream = nullptr;
-  cudaStreamCreate(&stream);
+  rmm::cuda_stream stream{};
   rmm::cuda_stream_view stream_view(stream);
 
   // Test input
@@ -213,6 +211,7 @@ TEST_F(FstTest, GroundTruth)
                       R"(}  {} [] [ ])";
 
   // Repeat input sample 1024x
+  input.reserve(input.size() * (1 << 10));
   for (std::size_t i = 0; i < 10; i++)
     input += input;
 
@@ -222,11 +221,14 @@ TEST_F(FstTest, GroundTruth)
   hostdevice_vector<SymbolT> output_gpu(input.size(), stream_view);
   hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
   hostdevice_vector<SymbolOffsetT> out_indexes_gpu(input.size(), stream_view);
-  ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
-    d_input.data(), input.data(), input.size() * sizeof(SymbolT), cudaMemcpyHostToDevice, stream));
+  ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(d_input.data(),
+                                        input.data(),
+                                        input.size() * sizeof(SymbolT),
+                                        cudaMemcpyHostToDevice,
+                                        stream.value()));
 
   // Run algorithm
-  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream};
+  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
 
   // Allocate device-side temporary storage & run algorithm
   parser.Transduce(d_input.data(),
@@ -235,7 +237,7 @@ TEST_F(FstTest, GroundTruth)
                    out_indexes_gpu.device_ptr(),
                    output_gpu_size.device_ptr(),
                    start_state,
-                   stream);
+                   stream.value());
 
   // Async copy results from device to host
   output_gpu.device_to_host(stream_view);
@@ -259,7 +261,7 @@ TEST_F(FstTest, GroundTruth)
                std::back_inserter(out_index_cpu));
 
   // Make sure results have been copied back to host
-  cudaStreamSynchronize(stream);
+  stream.synchronize();
 
   // Verify results
   ASSERT_EQ(output_gpu_size[0], output_cpu.size());
