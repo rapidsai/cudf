@@ -554,7 +554,7 @@ cdef class Column:
         data_owner = owner
         if column_owner:
             data_owner = owner.base_data
-            base_size = owner.base_size
+            base_nbytes = owner.base_size * dtype.itemsize
         if data_ptr:
             if data_owner is None:
                 data = Buffer(
@@ -564,10 +564,18 @@ cdef class Column:
                     ),
                     sole_owner=True
                 )
+            elif (
+                column_owner and
+                data_owner._ptr == data_ptr and
+                data_owner.size == base_nbytes
+            ):
+                # No need to create a new Buffer that represent
+                # the same memory as the owner.
+                data = data_owner
             else:
                 data = Buffer(
                     data=data_ptr,
-                    size=(base_size) * dtype.itemsize,
+                    size=base_nbytes,
                     owner=data_owner,
                     sole_owner=False
                 )

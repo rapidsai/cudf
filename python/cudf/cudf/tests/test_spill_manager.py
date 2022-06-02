@@ -71,8 +71,8 @@ def test_spillable_df_views():
     df_view = df.loc[1:]
     # TODO: support spillable views, for now we mark the view
     #       and its base as unspillable
-    assert not gen_df.is_spillable(df)
     assert not gen_df.is_spillable(df_view)
+    assert not gen_df.is_spillable(df)
 
 
 def test_spilling_buffer():
@@ -186,5 +186,5 @@ def test_spilling_df_views():
     gen_df.buffer(df).move_inplace(target="cpu")
     assert gen_df.is_spilled(df)
     df_view = df.loc[1:]
-    assert not gen_df.is_spillable(df)
     assert not gen_df.is_spillable(df_view)
+    assert not gen_df.is_spillable(df)
