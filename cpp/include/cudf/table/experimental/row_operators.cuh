@@ -136,8 +136,9 @@ using rhs_iterator = strong_index_iterator<rhs_index_type>;
 namespace lexicographic {
 
 /**
- * @brief Relational comparator functor that evaluates `NaN` as not less than, equal to, or
- *       greater than other values. This is IEEE-754 compliant.
+ * @brief Relational comparator functor that compares individual physical values rather than logical
+ * elements like lists, strings, or structs. It evaluates `NaN` as not less than, equal to, or
+ * greater than other values and is IEEE-754 compliant.
  */
 struct physical_element_comparator {
   /**
@@ -155,7 +156,8 @@ struct physical_element_comparator {
 };
 
 /**
- * @brief Relational comparator functor that evaluates `NaN` as equivalent to other `NaN`s and
+ * @brief Relational comparator functor that compares individual physical values rather than logical
+ * elements like lists, strings, or structs. It evaluates `NaN` as equivalent to other `NaN`s and
  *       greater than all other values.
  */
 struct sorting_physical_element_comparator {
@@ -208,8 +210,9 @@ struct sorting_physical_element_comparator {
  * `aac < abb`.
  *
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
- * @tparam PhysicalElementComparator A relational comparator functor, defaults to `NaN` aware
- * relational comparator that evaluates `NaN` as greater than all non-null values.
+ * @tparam PhysicalElementComparator A relational comparator functor that compares individual values
+ * rather than logical elements, defaults to `NaN` aware relational comparator that evaluates `NaN`
+ * as greater than all non-null values.
  */
 template <typename Nullate,
           typename PhysicalElementComparator = sorting_physical_element_comparator>
@@ -599,8 +602,9 @@ class self_comparator {
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
-   * @tparam PhysicalElementComparator A relational comparator functor, defaults to `NaN` aware
-   * relational comparator that evaluates `NaN` as greater than all other values.
+   * @tparam PhysicalElementComparator A relational comparator functor that compares individual
+   * values rather than logical elements, defaults to `NaN` aware relational comparator that
+   * evaluates `NaN` as greater than all other values.
    */
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
@@ -723,8 +727,9 @@ class two_table_comparator {
    * `j` of the left table.
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
-   * @tparam PhysicalElementComparator A relational comparator functor, defaults to `NaN` aware
-   * relational comparator that evaluates `NaN` as greater than all other values.
+   * @tparam PhysicalElementComparator A relational comparator functor that compares individual
+   * values rather than logical elements, defaults to `NaN` aware relational comparator that
+   * evaluates `NaN` as greater than all other values.
    */
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
@@ -766,8 +771,9 @@ class row_hasher;
 namespace equality {
 
 /**
- * @brief Equality comparator functor that evaluates `NaN` not equal to all other values for IEEE-754
- * compliance.
+ * @brief Equality comparator functor that compares individual physical values rather than logical
+ * elements like lists, strings, or structs. It evaluates `NaN` not equal to all other values for
+ * IEEE-754. compliance.
  */
 struct physical_equality_comparator {
   /**
@@ -787,7 +793,8 @@ struct physical_equality_comparator {
 };
 
 /**
- * @brief Equality comparator functor that evaluates `NaN` as equal to other `NaN`s.
+ * @brief Equality comparator functor that compares individual physical values rather than logical
+ * elements like lists, strings, or structs. It evaluates `NaN` as equal to other `NaN`s.
  */
 struct nan_equal_physical_equality_comparator {
   /**
@@ -828,8 +835,8 @@ struct nan_equal_physical_equality_comparator {
  * - If the rows are compared without mismatched elements, the rows are equivalent
  *
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
- * @tparam PhysicalElementComparator A equality comparator functor, defaults to a comparator for
- * which `NaN == NaN`.
+ * @tparam PhysicalElementComparator A equality comparator functor that compares individual values
+ * rather than logical elements, defaults to a comparator for which `NaN == NaN`.
  */
 template <typename Nullate,
           typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
@@ -1103,8 +1110,8 @@ class self_comparator {
    * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
-   * @tparam PhysicalElementComparator A equality comparator functor, defaults to a comparator for
-   * which `NaN == NaN`.
+   * @tparam PhysicalElementComparator A equality comparator functor that compares individual values
+   * rather than logical elements, defaults to a comparator for which `NaN == NaN`.
    */
   template <typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
@@ -1199,8 +1206,8 @@ class two_table_comparator {
    * right table compares equal to row `j` of the left table.
    *
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
-   * @tparam PhysicalElementComparator A equality comparator functor, defaults to a `NaN == NaN`
-   * equality comparator.
+   * @tparam PhysicalElementComparator A equality comparator functor that compares individual values
+   * rather than logical elements, defaults to a `NaN == NaN` equality comparator.
    */
   template <typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
