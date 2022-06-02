@@ -528,6 +528,66 @@ def test_dataframe_drop_error():
     )
 
 
+def test_dataframe_swaplevels():
+    midx = cudf.MultiIndex(
+        levels=[
+            ["Work"],
+            ["Final exam", "Coursework"],
+            ["History", "Geography"],
+            ["January", "February", "March", "April"],
+        ],
+        codes=[[0, 0, 0, 0], [0, 0, 1, 1], [0, 1, 0, 1], [0, 1, 2, 3]],
+    )
+    cdf = cudf.DataFrame(
+        {
+            "Grade": ["A", "B", "A", "C"],
+            "Percentage": ["95", "85", "95", "75"],
+        },
+        index=midx,
+    )
+    pdf = cdf.to_pandas()
+
+    midx1 = cudf.MultiIndex(
+        levels=[
+            ["lama", "cow", "falcon"],
+            ["speed", "weight", "length"],
+            ["first", "second"],
+        ],
+        codes=[
+            [0, 0, 0, 1, 1, 1, 2, 2, 2],
+            [0, 1, 2, 0, 1, 2, 0, 1, 2],
+            [0, 0, 0, 0, 0, 0, 1, 1, 1],
+        ],
+    )
+    cdf1 = cudf.DataFrame(
+        index=midx1,
+        columns=["big", "small"],
+        data=[
+            [45, 30],
+            [200, 100],
+            [1.5, 1],
+            [30, 20],
+            [250, 150],
+            [1.5, 0.8],
+            [320, 250],
+            [1, 0.8],
+            [0.3, 0.2],
+        ],
+    )
+    pdf1 = cdf1.to_pandas()
+
+    assert_eq(pdf.swaplevel(1, 2), cdf.swaplevel(1, 2))
+    assert_eq(pdf.swaplevel(2, 1), cdf.swaplevel(2, 1))
+    assert_eq(cdf.swaplevel(2, 1), cdf.swaplevel(1, 2))
+    assert_eq(pdf.swaplevel(0, 2), cdf.swaplevel(0, 2))
+    assert_eq(pdf.swaplevel(2, 0), cdf.swaplevel(2, 0))
+    assert_eq(cdf.swaplevel(1, 1), cdf.swaplevel(1, 1))
+
+    assert_eq(pdf1.swaplevel(1, 2), cdf1.swaplevel(1, 2))
+    assert_eq(pdf1.swaplevel(2, 1), cdf1.swaplevel(2, 1))
+    assert_eq(cdf1.swaplevel(2, 1), cdf1.swaplevel(1, 2))
+
+
 def test_dataframe_drop_raises():
     df = cudf.DataFrame(
         {"a": [1, 2, 3], "c": [10, 20, 30]}, index=["x", "y", "z"]

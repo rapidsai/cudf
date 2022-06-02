@@ -3272,6 +3272,37 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._n_largest_or_smallest(False, n, columns, keep)
 
     @_cudf_nvtx_annotate
+    def swaplevel(self, i=0, j=1, axis=0):
+        """
+        Swap level i with level j.
+        Calling this method does not change the ordering of the values.
+
+        Parameters
+        ----------
+        i : int, str, default 0
+            First level of index to be swapped.
+        j : int, str, default 1
+            Second level of index to be swapped.
+        axis : The axis to swap levels on.
+        0 or 'index' for row-wise, 1 or 'columns' for column-wise.
+
+        """
+        result = self.copy()
+        if not isinstance(result.index, MultiIndex):
+            raise TypeError("Can only swap levels on a hierarchical axis.")
+
+        if axis == 0:
+            assert isinstance(result.index, MultiIndex)
+            result.index = MultiIndex.swapij(result.index, i, j)
+        else:
+            assert isinstance(result._data.to_pandas_index(), MultiIndex)
+            result.columns = MultiIndex.swapij(
+                self._data.to_pandas_index(), i, j
+            )
+
+        return result
+
+    @_cudf_nvtx_annotate
     def transpose(self):
         """Transpose index and columns.
 

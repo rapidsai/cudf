@@ -1303,6 +1303,54 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return popped
 
     @_cudf_nvtx_annotate
+    def swapij(self, i=0, j=1):
+        """
+        Swap level i with level j.
+        Calling this method does not change the ordering of the values.
+
+        Parameters
+        ----------
+        i : int, str, default 0
+            First level of index to be swapped.
+        j : int, str, default 1
+            Second level of index to be swapped.
+
+        Returns
+        -------
+        MultiIndex
+            A new MultiIndex.
+
+
+        Examples
+        --------
+        >>> import cudf
+        >>> mi = cudf.MultiIndex(levels=[['a', 'b'], ['bb', 'aa']],
+        ...                    codes=[[0, 0, 1, 1], [0, 1, 0, 1]])
+        >>> mi
+        MultiIndex([('a', 'bb'),
+            ('a', 'aa'),
+            ('b', 'bb'),
+            ('b', 'aa')],
+           )
+        >>> mi.swapij(0, 1)
+        MultiIndex([('bb', 'a'),
+            ('aa', 'a'),
+            ('bb', 'b'),
+            ('aa', 'b')],
+           )
+        """
+        result = self.copy()
+        new_levels = result.levels
+        new_codes = result.codes
+        new_names = list(result.names)
+
+        new_levels[i], new_levels[j] = new_levels[j], new_levels[i]
+        new_codes[i], new_codes[j] = new_codes[j], new_codes[i]
+        new_names[i], new_names[j] = new_names[j], new_names[i]
+
+        return MultiIndex(levels=new_levels, codes=new_codes, names=new_names)
+
+    @_cudf_nvtx_annotate
     def droplevel(self, level=-1):
         """
         Removes the specified levels from the MultiIndex.
