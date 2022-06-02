@@ -67,6 +67,7 @@ namespace experimental {
  */
 template <cudf::type_id t>
 struct dispatch_void_if_nested {
+  /// The type to dispatch to if the type is nested
   using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
 };
 
@@ -95,11 +96,17 @@ struct strong_index_iterator : public thrust::iterator_facade<strong_index_itera
                                                               thrust::random_access_traversal_tag,
                                                               Index,
                                                               Underlying> {
-  using super_t = thrust::iterator_adaptor<strong_index_iterator<Index>, Index>;
+  using super_t =
+    thrust::iterator_adaptor<strong_index_iterator<Index>, Index>;  ///< The base class
 
+  /**
+   * @brief Constructs a strong index iterator
+   *
+   * @param n The beginning index
+   */
   explicit constexpr strong_index_iterator(Underlying n) : begin{n} {}
 
-  friend class thrust::iterator_core_access;
+  friend class thrust::iterator_core_access;  ///< Allow access to the base class
 
  private:
   __device__ constexpr void increment() { ++begin; }
@@ -217,8 +224,8 @@ struct sorting_physical_element_comparator {
 template <typename Nullate,
           typename PhysicalElementComparator = sorting_physical_element_comparator>
 class device_row_comparator {
-  friend class self_comparator;
-  friend class two_table_comparator;
+  friend class self_comparator;       ///< Allow self_comparator to access private members
+  friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
   /**
    * @brief Construct a function object for performing a lexicographic
@@ -455,7 +462,12 @@ struct less_equivalent_comparator
   }
 };
 
+/**
+ * @brief Preprocessed table for use with lexicographical comparison
+ *
+ */
 struct preprocessed_table {
+  /// Type of table device view owner for the preprocessed table.
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
 
@@ -473,6 +485,7 @@ struct preprocessed_table {
    * values compare to all other for every column. If it is nullptr, then null precedence would be
    * `null_order::BEFORE` for all columns.
    * @param stream The stream to launch kernels and h->d copies on while preprocessing.
+   * @return A shared pointer to a preprocessed table
    */
   static std::shared_ptr<preprocessed_table> create(table_view const& table,
                                                     host_span<order const> column_order,
@@ -480,8 +493,8 @@ struct preprocessed_table {
                                                     rmm::cuda_stream_view stream);
 
  private:
-  friend class self_comparator;
-  friend class two_table_comparator;
+  friend class self_comparator;       ///< Allow self_comparator to access private members
+  friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
@@ -605,6 +618,8 @@ class self_comparator {
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
    * values rather than logical elements, defaults to `NaN` aware relational comparator that
    * evaluates `NaN` as greater than all other values.
+   * @param nullate Indicates if either input column contains nulls.
+   * @return A binary callable object.
    */
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
@@ -626,6 +641,7 @@ class self_comparator {
   std::shared_ptr<preprocessed_table> d_t;
 };
 
+// @cond
 template <typename Comparator>
 struct strong_index_comparator_adapter {
   strong_index_comparator_adapter(Comparator const& c) : comparator{c} {}
@@ -654,6 +670,7 @@ struct strong_index_comparator_adapter {
 
   Comparator const comparator;
 };
+// @endcond
 
 /**
  * @brief An owning object that can be used to lexicographically compare rows of two different
@@ -730,6 +747,8 @@ class two_table_comparator {
    * @tparam PhysicalElementComparator A relational comparator functor that compares individual
    * values rather than logical elements, defaults to `NaN` aware relational comparator that
    * evaluates `NaN` as greater than all other values.
+   * @param nullate Indicates if either input column contains nulls.
+   * @return A binary callable object.
    */
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
@@ -841,8 +860,8 @@ struct nan_equal_physical_equality_comparator {
 template <typename Nullate,
           typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
 class device_row_comparator {
-  friend class self_comparator;
-  friend class two_table_comparator;
+  friend class self_comparator;       ///< Allow self_comparator to access private members
+  friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
  public:
   /**
@@ -1037,9 +1056,14 @@ class device_row_comparator {
   null_equality const nulls_are_equal;
 };
 
+/**
+ * @brief Preprocessed table for use with row equality comparison or row hashing
+ *
+ */
 struct preprocessed_table {
   /**
-   * @brief Preprocess table for use with row equality comparison or row hashing
+   * @brief Factory to construct preprocessed_table for use with
+   * row equality comparison or row hashing
    *
    * Sets up the table for use with row equality comparison or row hashing. The resulting
    * preprocessed table can be passed to the constructor of `equality::self_comparator` to
@@ -1047,14 +1071,15 @@ struct preprocessed_table {
    *
    * @param table The table to preprocess
    * @param stream The cuda stream to use while preprocessing.
+   * @return A preprocessed table as shared pointer
    */
   static std::shared_ptr<preprocessed_table> create(table_view const& table,
                                                     rmm::cuda_stream_view stream);
 
  private:
-  friend class self_comparator;
-  friend class two_table_comparator;
-  friend class hash::row_hasher;
+  friend class self_comparator;       ///< Allow self_comparator to access private members
+  friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
+  friend class hash::row_hasher;      ///< Allow row_hasher to access private members
 
   using table_device_view_owner =
     std::invoke_result_t<decltype(table_device_view::create), table_view, rmm::cuda_stream_view>;
@@ -1076,6 +1101,10 @@ struct preprocessed_table {
   std::vector<rmm::device_buffer> _null_buffers;
 };
 
+/**
+ * @brief Comparator for performing equality comparisons between two rows of the same table.
+ *
+ */
 class self_comparator {
  public:
   /**
@@ -1112,6 +1141,9 @@ class self_comparator {
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalElementComparator A equality comparator functor that compares individual values
    * rather than logical elements, defaults to a comparator for which `NaN == NaN`.
+   * @param nullate Indicates if either input column contains nulls.
+   * @param nulls_are_equal Indicates if nulls are equal.
+   * @return A binary callable object
    */
   template <typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
@@ -1126,6 +1158,7 @@ class self_comparator {
   std::shared_ptr<preprocessed_table> d_t;
 };
 
+// @cond
 template <typename Comparator>
 struct strong_index_comparator_adapter {
   strong_index_comparator_adapter(Comparator const& c) : comparator{c} {}
@@ -1145,6 +1178,7 @@ struct strong_index_comparator_adapter {
 
   Comparator const comparator;
 };
+// @endcond
 
 /**
  * @brief An owning object that can be used to equality compare rows of two different tables.
@@ -1208,6 +1242,9 @@ class two_table_comparator {
    * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
    * @tparam PhysicalElementComparator A equality comparator functor that compares individual values
    * rather than logical elements, defaults to a `NaN == NaN` equality comparator.
+   * @param nullate Indicates if either input column contains nulls.
+   * @param nulls_are_equal Indicates if nulls are equal.
+   * @return A binary callable object
    */
   template <typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
@@ -1237,6 +1274,13 @@ namespace hash {
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
  public:
+  /**
+   * @brief Constructs an element_hasher object.
+   *
+   * @param nulls Indicates whether to check for nulls
+   * @param seed  The seed to use for the hash function
+   * @param null_hash The hash value to use for nulls
+   */
   __device__ element_hasher(
     Nullate nulls,
     uint32_t seed             = DEFAULT_HASH_SEED,
@@ -1245,6 +1289,14 @@ class element_hasher {
   {
   }
 
+  /**
+   * @brief Returns the hash value of the given element.
+   *
+   * @tparam T The type of the element to hash
+   * @param col The column to hash
+   * @param row_index The index of the row to hash
+   * @return The hash value of the given element
+   */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view const& col,
                                         size_type row_index) const noexcept
@@ -1253,6 +1305,14 @@ class element_hasher {
     return hash_function<T>{_seed}(col.element<T>(row_index));
   }
 
+  /**
+   * @brief Returns the hash value of the given element.
+   *
+   * @tparam T The type of the element to hash
+   * @param col The column to hash
+   * @param row_index The index of the row to hash
+   * @return The hash value of the given element
+   */
   template <typename T, CUDF_ENABLE_IF(not column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view const& col,
                                         size_type row_index) const noexcept
@@ -1260,9 +1320,9 @@ class element_hasher {
     CUDF_UNREACHABLE("Unsupported type in hash.");
   }
 
-  uint32_t _seed;
-  hash_value_type _null_hash;
-  Nullate _check_nulls;
+  uint32_t _seed;              ///< The seed to use for hashing
+  hash_value_type _null_hash;  ///< Hash value to use for null elements
+  Nullate _check_nulls;        ///< Whether to check for nulls
 };
 
 /**
@@ -1273,11 +1333,17 @@ class element_hasher {
  */
 template <template <typename> class hash_function, typename Nullate>
 class device_row_hasher {
-  friend class row_hasher;
+  friend class row_hasher;  ///< Allow row_hasher to access private members.
 
  public:
   device_row_hasher() = delete;
 
+  /**
+   * @brief Return the hash value of a row in the given table.
+   *
+   * @param row_index The row index to compute the hash value of
+   * @return The hash value of the row
+   */
   __device__ auto operator()(size_type row_index) const noexcept
   {
     auto it = thrust::make_transform_iterator(_table.begin(), [=](auto const& column) {
@@ -1374,6 +1440,10 @@ class device_row_hasher {
 // type and are interchangeable.
 using preprocessed_table = row::equality::preprocessed_table;
 
+/**
+ * @brief Computes the hash value of a row in the given table.
+ *
+ */
 class row_hasher {
  public:
   /**
@@ -1406,7 +1476,10 @@ class row_hasher {
    *
    * `F(i)` returns the hash of row i.
    *
-   * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+   * @tparam Nullate A cudf::nullate type describing whether to check for nulls
+   * @param nullate Indicates if either input column contains nulls
+   * @param seed The seed to use for the hash function
+   * @return A hash operator to use on the device
    */
   template <template <typename> class hash_function = detail::default_hash, typename Nullate>
   device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
