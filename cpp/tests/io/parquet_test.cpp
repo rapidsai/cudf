@@ -3404,17 +3404,18 @@ TEST_F(ParquetWriterTest, CheckPageRows)
 namespace {
 namespace testdata {
 // ----- most numerics
+// need 3 pages, and min page count is 5000, so need at least 15000 values
 
 template <typename T>
 std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<T>>
 ascending()
 {
   if (std::is_signed_v<T>) {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(-100), [](auto i){return i;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+    auto elements = cudf::detail::make_counting_transform_iterator(T(-10000), [](auto i){return i/100;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   } else {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return i;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return i/100;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   }
 }
 
@@ -3423,11 +3424,11 @@ std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test
 descending()
 {
   if (std::is_signed_v<T>) {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(-100), [](auto i){return -i;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+    auto elements = cudf::detail::make_counting_transform_iterator(T(-10000), [](auto i){return -i/100;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   } else {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return 200-i;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return (20000-i)/100;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   }
 }
 
@@ -3436,11 +3437,11 @@ std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test
 unordered()
 {
   if (std::is_signed_v<T>) {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(-100), [](auto i){return i%2 ? i : -i;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+    auto elements = cudf::detail::make_counting_transform_iterator(T(-10000), [](auto i){return (i%2 ? i : -i)/100;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   } else {
-    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return i%2 ? i : 200-i;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+200);
+    auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return (i%2 ? i : 20000-i)/100;});
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
   }
 }
 
@@ -3449,19 +3450,29 @@ unordered()
 template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> ascending()
 {
-  return cudf::test::fixed_width_column_wrapper<bool>({false, false, true, true});
+  auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return i < 10000 ? false : true;});
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements+20000);
 }
 
 template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> descending()
 {
-  return cudf::test::fixed_width_column_wrapper<bool>({true, true, false, false});
+  auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){return i < 10000 ? true : false;});
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements+20000);
 }
 
 template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> unordered()
 {
-  return cudf::test::fixed_width_column_wrapper<bool>({true, false, true, false});
+  auto elements = cudf::detail::make_counting_transform_iterator(T(0), [](auto i){
+    switch (i/5000) {
+      case 0: return true;
+      case 1: return false;
+      case 2: return true;
+      default: return false;
+    }
+  });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements+20000);
 }
 
 // ----- chrono types
@@ -3582,6 +3593,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   auto filepath = temp_env->get_temp_filepath("ThreeColumnSorted.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .max_page_size_rows(5000)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
   cudf_io::write_parquet(out_opts);
 
@@ -3594,10 +3606,31 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   // now chunk that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
-  auto& first_chunk = fmd.row_groups[0].columns[0].meta_data;
-  EXPECT_GT(first_chunk.data_page_offset, 0);
+  cudf_io::parquet::BoundaryOrder expected_orders[] = {
+    cudf_io::parquet::BoundaryOrder::ASCENDING,
+    cudf_io::parquet::BoundaryOrder::DESCENDING,
+    cudf_io::parquet::BoundaryOrder::UNORDERED
+  };
 
-  EXPECT_EQ(0,0);
+  for (int i = 0; i < 3; i++) {
+    auto& chunk = fmd.row_groups[0].columns[i];
+    EXPECT_GT(chunk.column_index_offset, 0);
+    EXPECT_GT(chunk.column_index_length, 0);
+
+    cudf_io::parquet::ColumnIndex ci;
+    const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
+    cudf_io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
+#if 0
+    for (size_t j=0; j < ci_buf->size(); j+=16) {
+      for (size_t k=0; k < 16 && k+j < ci_buf->size(); k++)
+        printf(" %02x", ci_buf->data()[j+k]);
+      printf("\n");
+    }
+#endif
+    EXPECT_TRUE(cp.read(&ci));
+
+    EXPECT_EQ(ci.boundary_order, expected_orders[i]);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
