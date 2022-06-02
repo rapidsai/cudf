@@ -57,7 +57,7 @@ void row_comparison(cudf::table_view input1,
   auto table_comparator =
     lexicographic::two_table_comparator{input1, input2, column_order, {}, stream};
   auto comparator =
-    table_comparator.device_comparator<cudf::nullate::NO, Comparator>(cudf::nullate::NO{});
+    table_comparator.device_less_comparator<cudf::nullate::NO, Comparator>(cudf::nullate::NO{});
   auto const lhs_it = cudf::experimental::row::lhs_iterator(0);
   auto const rhs_it = cudf::experimental::row::rhs_iterator(0);
   thrust::transform(rmm::exec_policy(stream),
@@ -77,7 +77,7 @@ void self_comparison(cudf::table_view input,
 
   auto table_comparator = lexicographic::self_comparator{input, column_order, {}, stream};
   auto comparator =
-    table_comparator.device_comparator<cudf::nullate::NO, Comparator>(cudf::nullate::NO{});
+    table_comparator.device_less_comparator<cudf::nullate::NO, Comparator>(cudf::nullate::NO{});
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(input.num_rows()),

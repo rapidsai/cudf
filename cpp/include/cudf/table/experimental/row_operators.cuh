@@ -421,6 +421,10 @@ class device_row_comparator {
  */
 template <typename Comparator, weak_ordering... values>
 struct weak_ordering_comparator_impl {
+  static_assert(not((weak_ordering::EQUIVALENT == values) && ...),
+                "weak_ordering_comparator should not be used for pure equality comparisons. The "
+                "`row_equality_comparator` should be used instead");
+
   template <typename LhsType, typename RhsType>
   __device__ constexpr bool operator()(LhsType const lhs_index,
                                        RhsType const rhs_index) const noexcept
@@ -438,11 +442,21 @@ struct weak_ordering_comparator_impl {
  * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
  */
 template <typename Comparator>
-using less_comparator = weak_ordering_comparator_impl<Comparator, weak_ordering::LESS>;
+struct less_comparator : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS> {
+  less_comparator(Comparator const& c)
+    : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS>{c}
+  {
+  }
+};
 
 template <typename Comparator>
-using less_equivalent_comparator =
-  weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT>;
+struct less_equivalent_comparator
+  : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT> {
+  less_equivalent_comparator(Comparator const& c)
+    : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT>{c}
+  {
+  }
+};
 
 struct preprocessed_table {
   using table_device_view_owner =
@@ -596,12 +610,18 @@ class self_comparator {
    */
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  less_comparator<device_row_comparator<Nullate, PhysicalElementComparator>> device_comparator(
-    Nullate nullate = {}) const noexcept
+  auto device_less_comparator(Nullate nullate = {}) const noexcept
   {
-    return less_comparator<device_row_comparator<Nullate, PhysicalElementComparator>>{
-      device_row_comparator<Nullate, PhysicalElementComparator>(
-        nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
+    return less_comparator{device_row_comparator<Nullate, PhysicalElementComparator>{
+      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence()}};
+  }
+
+  template <typename Nullate,
+            typename PhysicalElementComparator = sorting_physical_element_comparator>
+  auto device_less_equivalent_comparator(Nullate nullate = {}) const noexcept
+  {
+    return less_equivalent_comparator{device_row_comparator<Nullate, PhysicalElementComparator>(
+      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence())};
   }
 
  private:
@@ -610,6 +630,8 @@ class self_comparator {
 
 template <typename Comparator>
 struct strong_index_comparator_adapter {
+  strong_index_comparator_adapter(Comparator const& c) : comparator{c} {}
+
   __device__ constexpr weak_ordering operator()(lhs_index_type const lhs_index,
                                                 rhs_index_type const rhs_index) const noexcept
   {
@@ -712,18 +734,28 @@ class two_table_comparator {
    */
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  less_comparator<
-    strong_index_comparator_adapter<device_row_comparator<Nullate, PhysicalElementComparator>>>
-  device_comparator(Nullate nullate = {}) const noexcept
+  auto device_less_comparator(Nullate nullate = {}) const noexcept
   {
-    return less_comparator<
-      strong_index_comparator_adapter<device_row_comparator<Nullate, PhysicalElementComparator>>>{
-      device_row_comparator<Nullate, PhysicalElementComparator>(nullate,
+    return less_comparator{strong_index_comparator_adapter{
+      device_row_comparator<Nullate, PhysicalElementComparator>{nullate,
                                                                 *d_left_table,
                                                                 *d_right_table,
                                                                 d_left_table->depths(),
                                                                 d_left_table->column_order(),
-                                                                d_left_table->null_precedence())};
+                                                                d_left_table->null_precedence()}}};
+  }
+
+  template <typename Nullate,
+            typename PhysicalElementComparator = sorting_physical_element_comparator>
+  auto device_less_equivalent_comparator(Nullate nullate = {}) const noexcept
+  {
+    return less_equivalent_comparator{strong_index_comparator_adapter{
+      device_row_comparator<Nullate, PhysicalElementComparator>{nullate,
+                                                                *d_left_table,
+                                                                *d_right_table,
+                                                                d_left_table->depths(),
+                                                                d_left_table->column_order(),
+                                                                d_left_table->null_precedence()}}};
   }
 
  private:
@@ -1094,6 +1126,8 @@ class self_comparator {
 
 template <typename Comparator>
 struct strong_index_comparator_adapter {
+  strong_index_comparator_adapter(Comparator const& c) : comparator{c} {}
+
   __device__ constexpr bool operator()(lhs_index_type const lhs_index,
                                        rhs_index_type const rhs_index) const noexcept
   {
@@ -1178,8 +1212,7 @@ class two_table_comparator {
   auto device_comparator(Nullate nullate               = {},
                          null_equality nulls_are_equal = null_equality::EQUAL) const noexcept
   {
-    return strong_index_comparator_adapter<
-      device_row_comparator<Nullate, PhysicalEqualityComparator>>{
+    return strong_index_comparator_adapter{
       device_row_comparator<Nullate, PhysicalEqualityComparator>(
         nullate, *d_left_table, *d_right_table, nulls_are_equal)};
   }
