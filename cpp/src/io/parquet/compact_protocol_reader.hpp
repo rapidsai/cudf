@@ -206,7 +206,7 @@ class ParquetFieldBoolList {
     for (int32_t i = 0; i < n; i++) {
       current_byte = cpr->getb();
       if (current_byte != ST_FLD_TRUE && current_byte != ST_FLD_FALSE) return true;
-      val[i] = cpr->getb() == ST_FLD_TRUE ? true : false;
+      val[i] = current_byte == ST_FLD_TRUE ? true : false;
     }
     return false;
   }
