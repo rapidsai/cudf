@@ -118,7 +118,7 @@ inline void test_hash_based_sum_agg(column_view const& keys,
 
   auto const null_keys_are_equal =
     include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
-  auto row_equal = comparator.device_comparator(nullate::DYNAMIC{true}, null_keys_are_equal);
+  auto row_equal = comparator.equal_to(nullate::DYNAMIC{true}, null_keys_are_equal);
   auto func      = match_expected_fn{num_rows, row_equal};
 
   // For each row in expected table `t[0, num_rows)`, there must be a match

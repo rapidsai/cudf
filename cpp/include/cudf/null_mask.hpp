@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ size_type num_bitmask_words(size_type number_of_bits);
  *
  * @param size The number of elements to be represented by the mask
  * @param state The desired state of the mask
- * @param mr Device memory resource used to allocate the returned device_buffer.
+ * @param mr Device memory resource used to allocate the returned device_buffer
  * @return rmm::device_buffer A `device_buffer` for use as a null bitmask
  * satisfying the desired size and state
  */
@@ -93,10 +93,10 @@ rmm::device_buffer create_null_mask(
  * Sets `[begin_bit, end_bit)` bits of bitmask to valid if `valid==true`
  * or null otherwise.
  *
- * @param bitmask Pointer to bitmask (e.g. returned by `column_view.null_mask()`)
+ * @param bitmask Pointer to bitmask (e.g. returned by `column_viewnull_mask()`)
  * @param begin_bit Index of the first bit to set (inclusive)
  * @param end_bit Index of the last bit to set (exclusive)
- * @param valid If true set all entries to valid; otherwise, set all to null.
+ * @param valid If true set all entries to valid; otherwise, set all to null
  */
 void set_null_mask(bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid);
 

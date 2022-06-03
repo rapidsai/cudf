@@ -6490,6 +6490,76 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not inplace:
             return ret
 
+    def value_counts(
+        self,
+        subset=None,
+        normalize=False,
+        sort=True,
+        ascending=False,
+        dropna=True,
+    ):
+        """
+        Return a Series containing counts of unique rows in the DataFrame.
+
+        Parameters
+        ----------
+        subset: list-like, optional
+            Columns to use when counting unique combinations.
+        normalize: bool, default False
+            Return proportions rather than frequencies.
+        sort: bool, default True
+            Sort by frequencies.
+        ascending: bool, default False
+            Sort in ascending order.
+        dropna: bool, default True
+            Don't include counts of rows that contain NA values.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        The returned Series will have a MultiIndex with one level per input
+        column. By default, rows that contain any NA values are omitted from
+        the result. By default, the resulting Series will be in descending
+        order so that the first element is the most frequently-occurring row.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'num_legs': [2, 4, 4, 6],
+        ...                    'num_wings': [2, 0, 0, 0]},
+        ...                    index=['falcon', 'dog', 'cat', 'ant'])
+        >>> df.value_counts()
+        num_legs  num_wings
+        4         0            2
+        2         2            1
+        6         0            1
+        dtype: int64
+        """
+        if subset:
+            diff = set(subset) - set(self._data)
+            if len(diff) != 0:
+                raise KeyError(f"columns {diff} do not exist")
+        columns = list(self._data.names) if subset is None else subset
+        result = (
+            self.groupby(
+                by=columns,
+                dropna=dropna,
+            )
+            .size()
+            .astype("int64")
+        )
+        if sort:
+            result = result.sort_values(ascending=ascending)
+        if normalize:
+            result = result / result._column.sum()
+        # Pandas always returns MultiIndex even if only one column.
+        if not isinstance(result.index, MultiIndex):
+            result.index = MultiIndex._from_data(result._index._data)
+        return result
+
 
 def from_dataframe(df, allow_copy=False):
     return df_protocol.from_dataframe(df, allow_copy=allow_copy)
