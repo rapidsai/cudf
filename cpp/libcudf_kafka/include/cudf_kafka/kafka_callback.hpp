@@ -58,11 +58,11 @@ class python_oauth_refresh_callback : public RdKafka::OAuthBearerTokenRefreshCb 
   /**
    * @brief Construct a new python oauth refresh callback object
    *
-   * @param callback_wrapper `kafka_oauth_callback_wrapper_type` Cython wrapper that will
+   * @param callback_wrapper Cython wrapper that will
    *                 be used to invoke the `python_callable`. This wrapper serves the purpose
    *                 of preventing us from having to link against the Python development library
    *                 in libcudf_kafka.
-   * @param python_callable `python_callable_type` pointer to a Python functools.partial object
+   * @param python_callable pointer to a Python `functools.partial` object
    */
   python_oauth_refresh_callback(kafka_oauth_callback_wrapper_type callback_wrapper,
                                 python_callable_type python_callable);

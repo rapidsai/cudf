@@ -306,7 +306,7 @@ using FixedWidthTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
  *
  * Certain tests written for fixed-width types don't work for fixed-point as
  * fixed-point types aren't constructible from other fixed-width types
- * (a scale needs to be specified)
+ * because a scale needs to be specified.
  *
  * Example:
  * ```
