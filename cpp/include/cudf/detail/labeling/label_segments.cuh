@@ -151,24 +151,24 @@ void labels_to_offsets(InputIterator labels_begin,
   if (thrust::distance(labels_begin, labels_end) == 0) { return; }
 
   auto const num_segments =
-    static_cast<size_type>(thrust::distance(offsets_begin, offsets_end)) - 1;
+    static_cast<OutputType>(thrust::distance(offsets_begin, offsets_end)) - 1;
 
   //================================================================================
   // Let's consider an example: Given input labels = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ].
 
   // This stores the unique label values.
   // Given the example above, we will have this array containing [0, 1, 4].
-  auto list_indices = rmm::device_uvector<size_type>(num_segments, stream);
+  auto list_indices = rmm::device_uvector<OutputType>(num_segments, stream);
 
   // Stores the non-zero segment sizes.
   // Given the example above, we will have this array containing [4, 2, 4].
-  auto list_sizes = rmm::device_uvector<size_type>(num_segments, stream);
+  auto list_sizes = rmm::device_uvector<OutputType>(num_segments, stream);
 
   // Count the numbers of labels in the each segment.
   auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream),
                                          labels_begin,  // keys
                                          labels_end,    // keys
-                                         thrust::make_constant_iterator<size_type>(1),
+                                         thrust::make_constant_iterator<OutputType>(1),
                                          list_indices.begin(),  // output unique label values
                                          list_sizes.begin());  // count for each label
   auto const num_non_empty_segments = thrust::distance(list_indices.begin(), end.first);
