@@ -1,13 +1,17 @@
-import dask
-from distributed import Client, wait, LocalCluster
+# Copyright (c) 2022, NVIDIA CORPORATION.
 
-import cudf
-import dask.dataframe
-import time
 import argparse
 import os
+import time
+
+import dask
+import dask.dataframe
+from distributed import Client, LocalCluster, wait
+
+import cudf
 
 NROWS = 130_000_000
+
 
 def main(args):
     os.environ["CUDF_SPILL"] = "on" if args.spill == "cudf" else "off"
@@ -28,6 +32,7 @@ def main(args):
         )
     else:
         import dask_cuda
+
         cluster = dask_cuda.LocalCUDACluster(
             protocol="tcp",
             n_workers=1,
@@ -71,4 +76,3 @@ if __name__ == "__main__":
     )
 
     main(parser.parse_args())
-
