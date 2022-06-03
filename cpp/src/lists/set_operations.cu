@@ -18,10 +18,17 @@
 #include <stream_compaction/stream_compaction_common.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
+
+#include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
+#include <thrust/reduce.h>
+#include <thrust/scatter.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -117,10 +124,23 @@ auto reconstruct_offsets(rmm::device_uvector<size_type> const& labels,
  * @brief Extract rows from the input table based on the boolean values in the input `condition`
  * column.
  */
-auto extract_if()
+auto extract_if(table_view const& input,
+                rmm::device_uvector<bool> const& condition,
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr)
 
 {
-  //
+  auto gather_map = rmm::device_uvector<size_type>(input.num_rows(), stream);
+  auto const gather_map_end =
+    thrust::copy_if(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(input.num_rows()),
+                    condition.begin(),
+                    gather_map.begin(),
+                    thrust::identity{});
+
+  return cudf::detail::gather(
+    input, gather_map.begin(), gather_map_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 }  // namespace
@@ -134,7 +154,40 @@ std::unique_ptr<column> overlap(lists_column_view const& lhs,
   // - Check contains for rhs child elements.
   // - Generate labels for rhs child elements.
   // - `reduce_by_key` with `logical_or` functor and keys are labels, values are contains.
-  return nullptr;
+
+  auto const lhs_child = lhs.get_sliced_child(stream);
+  auto const rhs_child = rhs.get_sliced_child(stream);
+  auto const map       = create_map(lhs_child, stream);
+  auto const contained = check_contains(map, lhs_child.has_nulls(), rhs_child, stream);
+  auto const labels    = generate_labels(rhs_child, stream);
+
+  // This stores the unique label values, used as scatter map.
+  auto list_indices = rmm::device_uvector<size_type>(lhs.size(), stream);
+
+  // Stores the overlap check for non-empty lists.
+  auto overlap_result = rmm::device_uvector<bool>(lhs.size(), stream);
+
+  auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream),
+                                         labels.begin(),
+                                         labels.end(),
+                                         contained.begin(),
+                                         thrust::make_discard_iterator(),
+                                         overlap_result.begin(),
+                                         thrust::equal_to{},
+                                         thrust::logical_or{});
+  auto const num_non_empty_segments = thrust::distance(list_indices.begin(), end.first);
+
+  // todo fix null mask null count
+  auto result = make_numeric_column(
+    data_type{type_to_id<bool>()}, lhs.size(), copy_bitmask(lhs), lhs.null_count(), stream, mr);
+
+  thrust::scatter(rmm::exec_policy(stream),
+                  overlap_result.begin(),
+                  overlap_result.begin() + num_non_empty_segments,
+                  list_indices.begin(),
+                  result->mutable_view().template begin<bool>());
+
+  return result;
 }
 
 std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
@@ -158,7 +211,9 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
-  // - concatenate_row lhs and set_except(rhs, lhs)
+  // - concatenate_row(lhs, set_except(rhs, lhs))
+  // - Alternative: concatenate_row(lhs, rhs) then `drop_list_duplicates`, however,
+  //   `drop_list_duplicates` currently doesn't support nested types.
   return nullptr;
 }
 
