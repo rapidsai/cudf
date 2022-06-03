@@ -1538,13 +1538,10 @@ __device__ int32_t calculateBoundaryOrder(const statistics_chunk* s,
 
 // blockDim(1024, 1, 1)
 __global__ void __launch_bounds__(1024)
-  gpuGatherPages(device_span<EncColumnChunk> chunks,
-                 device_span<gpu::EncPage const> pages,
-                 device_span<statistics_chunk const> column_stats)
+  gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<gpu::EncPage const> pages)
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
-  __shared__ __align__(8) float fp_scratch[2];
 
   uint32_t t = threadIdx.x;
   uint8_t *dst, *dst_base;
@@ -1585,53 +1582,68 @@ __global__ void __launch_bounds__(1024)
     chunks[blockIdx.x].bfr_size        = uncompressed_size;
     chunks[blockIdx.x].compressed_size = (dst - dst_base);
     if (ck_g.use_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
-
-    // TODO should this be a separate kernel at this point?
-    if (not column_stats.empty()) {
-      parquet_column_device_view col_g = *ck_g.col_desc;
-      const void *vmin, *vmax;
-      uint32_t lmin, lmax;
-      uint8_t* col_idx_end;
-
-      size_t first_data_page = ck_g.use_dictionary ? 1 : 0;
-      uint32_t pageidx       = ck_g.first_page;
-      header_encoder encoder(ck_g.column_index_blob);
-      // null_pages
-      encoder.field_list_begin(1, num_pages - first_data_page, ST_FLD_TRUE);
-      for (uint32_t page = first_data_page; page < num_pages; page++)
-        encoder.put_bool(column_stats[pageidx + page].non_nulls == 0);
-      encoder.field_list_end(1);
-      // min_values
-      encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
-      for (uint32_t page = first_data_page; page < num_pages; page++) {
-        get_min_max(
-          &column_stats[pageidx + page], col_g.stats_dtype, fp_scratch, &vmin, &vmax, &lmin, &lmax);
-        encoder.put_binary(vmin, lmin);
-      }
-      encoder.field_list_end(2);
-      // max_values
-      encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
-      for (uint32_t page = first_data_page; page < num_pages; page++) {
-        get_min_max(
-          &column_stats[pageidx + page], col_g.stats_dtype, fp_scratch, &vmin, &vmax, &lmin, &lmax);
-        encoder.put_binary(vmax, lmax);
-      }
-      encoder.field_list_end(3);
-      encoder.field_int32(4,
-                          calculateBoundaryOrder(&column_stats[first_data_page + pageidx],
-                                                 col_g.physical_type,
-                                                 col_g.converted_type,
-                                                 num_pages - first_data_page));
-      // null_counts
-      encoder.field_list_begin(5, num_pages - first_data_page, ST_FLD_I64);
-      for (uint32_t page = first_data_page; page < num_pages; page++)
-        encoder.put_int64(column_stats[pageidx + page].null_count);
-      encoder.field_list_end(5);
-      encoder.end(&col_idx_end, false);
-
-      chunks[blockIdx.x].column_index_size = (uint32_t)(col_idx_end - ck_g.column_index_blob);
-    }
   }
+}
+
+// blockDim(1, 1, 1)
+__global__ void __launch_bounds__(1)
+  gpuCalculateColumnIndexes(device_span<EncColumnChunk> chunks,
+                            device_span<gpu::EncPage const> pages,
+                            device_span<statistics_chunk const> column_stats)
+{
+  const void *vmin, *vmax;
+  uint32_t lmin, lmax;
+  uint8_t* col_idx_end;
+  float fp_scratch[2];
+
+  if (column_stats.empty())
+    return;
+
+  EncCoumnChunk ck_g = chunks[blockIdx.x];
+
+  const EncPage* first_page = ck_g.pages;
+  uint32_t num_pages  = ck_g.num_pages;
+
+  parquet_column_device_view col_g = *ck_g.col_desc;
+
+  size_t first_data_page = ck_g.use_dictionary ? 1 : 0;
+  uint32_t pageidx       = ck_g.first_page;
+  header_encoder encoder(ck_g.column_index_blob);
+
+  // null_pages
+  encoder.field_list_begin(1, num_pages - first_data_page, ST_FLD_TRUE);
+  for (uint32_t page = first_data_page; page < num_pages; page++)
+    encoder.put_bool(column_stats[pageidx + page].non_nulls == 0);
+  encoder.field_list_end(1);
+  // min_values
+  encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
+  for (uint32_t page = first_data_page; page < num_pages; page++) {
+    get_min_max(
+      &column_stats[pageidx + page], col_g.stats_dtype, fp_scratch, &vmin, &vmax, &lmin, &lmax);
+    encoder.put_binary(vmin, lmin);
+  }
+  encoder.field_list_end(2);
+  // max_values
+  encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
+  for (uint32_t page = first_data_page; page < num_pages; page++) {
+    get_min_max(
+      &column_stats[pageidx + page], col_g.stats_dtype, fp_scratch, &vmin, &vmax, &lmin, &lmax);
+    encoder.put_binary(vmax, lmax);
+  }
+  encoder.field_list_end(3);
+  encoder.field_int32(4,
+                      calculateBoundaryOrder(&column_stats[first_data_page + pageidx],
+                                              col_g.physical_type,
+                                              col_g.converted_type,
+                                              num_pages - first_data_page));
+  // null_counts
+  encoder.field_list_begin(5, num_pages - first_data_page, ST_FLD_I64);
+  for (uint32_t page = first_data_page; page < num_pages; page++)
+    encoder.put_int64(column_stats[pageidx + page].null_count);
+  encoder.field_list_end(5);
+  encoder.end(&col_idx_end, false);
+
+  chunks[blockIdx.x].column_index_size = (uint32_t)(col_idx_end - ck_g.column_index_blob);
 }
 
 /**
@@ -2215,10 +2227,17 @@ void EncodePageHeaders(device_span<EncPage> pages,
 
 void GatherPages(device_span<EncColumnChunk> chunks,
                  device_span<gpu::EncPage const> pages,
-                 device_span<statistics_chunk const> column_stats,
                  rmm::cuda_stream_view stream)
 {
-  gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages, column_stats);
+  gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
+}
+
+void CalculateColumnIndexes(device_span<EncColumnChunk> chunks,
+                            device_span<gpu::EncPage const> pages,
+                            device_span<statistics_chunk const> column_stats,
+                            rmm::cuda_stream_view stream)
+{
+  gpuCalculateColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(chunks, pages, column_stats);
 }
 
 }  // namespace gpu

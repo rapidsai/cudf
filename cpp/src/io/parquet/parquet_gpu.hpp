@@ -627,13 +627,24 @@ void EncodePageHeaders(device_span<EncPage> pages,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] pages Device array of EncPages
- * @param[in] column_stats Optional page-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  */
 void GatherPages(device_span<EncColumnChunk> chunks,
                  device_span<gpu::EncPage const> pages,
-                 device_span<statistics_chunk const> column_stats,
                  rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel to calculate ColumnIndex information per chunk
+ *
+ * @param[in,out] chunks Column chunks
+ * @param[in] pages Device array of EncPages
+ * @param[in] column_stats Page-level statistics to be encoded
+ * @param[in] stream CUDA stream to use, default 0
+ */
+void CalculateColumnIndexes(device_span<EncColumnChunk> chunks,
+                            device_span<gpu::EncPage const> pages,
+                            device_span<statistics_chunk const> column_stats,
+                            rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace parquet

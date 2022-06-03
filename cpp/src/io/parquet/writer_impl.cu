@@ -1097,11 +1097,6 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
       ? device_span<statistics_chunk const>(page_stats + first_page_in_batch, pages_in_batch)
       : device_span<statistics_chunk const>();
 
-  auto batch_column_stats =
-    (column_stats != nullptr)
-      ? device_span<statistics_chunk const>(column_stats + first_page_in_batch, pages_in_batch)
-      : device_span<statistics_chunk const>();
-
   uint32_t max_comp_pages =
     (compression_ != parquet::Compression::UNCOMPRESSED) ? pages_in_batch : 0;
 
@@ -1125,7 +1120,13 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
   DecideCompression(d_chunks_in_batch.flat_view(), stream);
   EncodePageHeaders(batch_pages, comp_stats, batch_pages_stats, chunk_stats, stream);
-  GatherPages(d_chunks_in_batch.flat_view(), pages, batch_column_stats, stream);
+  GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
+
+  if (column_stats != nullptr) {
+    auto batch_column_stats =
+      device_span<statistics_chunk const>(column_stats + first_page_in_batch, pages_in_batch);
+    CalculateColumnIndexes(d_chunks_in_batch.flat_view(), pages, batch_column_stats, stream);
+  }
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
   CUDF_CUDA_TRY(cudaMemcpyAsync(h_chunks_in_batch.data(),
