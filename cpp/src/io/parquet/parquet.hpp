@@ -342,10 +342,11 @@ struct OffsetIndex {
  * @brief Thrift-derived struct describing the column index.
  */
 struct ColumnIndex {
-  std::vector<bool> null_pages; // Boolean used to determine if a page contains only null values
-  std::vector<std::vector<uint8_t>> min_values; // lower bound for values in each page
-  std::vector<std::vector<uint8_t>> max_values; // upper bound for values in each page
-  BoundaryOrder boundary_order = BoundaryOrder::UNORDERED; // Indicates if min and max values are ordered
+  std::vector<bool> null_pages;  // Boolean used to determine if a page contains only null values
+  std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
+  std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
+  BoundaryOrder boundary_order =
+    BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
   std::vector<int64_t> null_counts;  // Optional count of null values per page
 };
 

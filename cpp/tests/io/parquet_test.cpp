@@ -3408,41 +3408,50 @@ namespace testdata {
 // need at least 3 pages, and min page count is 5000, so need at least 15000 values
 
 template <typename T>
-std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<T>>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+                 cudf::test::fixed_width_column_wrapper<T>>
 ascending()
 {
   if (std::is_signed_v<T>) {
-    auto elements = cudf::detail::make_counting_transform_iterator(-10000, [](auto i){return i/100;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
+    auto elements =
+      cudf::detail::make_counting_transform_iterator(-10000, [](auto i) { return i / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
   } else {
-    auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i/100;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
+    auto elements =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
   }
 }
 
 template <typename T>
-std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<T>>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+                 cudf::test::fixed_width_column_wrapper<T>>
 descending()
 {
   if (std::is_signed_v<T>) {
-    auto elements = cudf::detail::make_counting_transform_iterator(-10000, [](auto i){return -i/100;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
+    auto elements =
+      cudf::detail::make_counting_transform_iterator(-10000, [](auto i) { return -i / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
   } else {
-    auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return (20000-i)/100;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
+    auto elements =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (20000 - i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
   }
 }
 
 template <typename T>
-std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<T>>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+                 cudf::test::fixed_width_column_wrapper<T>>
 unordered()
 {
   if (std::is_signed_v<T>) {
-    auto elements = cudf::detail::make_counting_transform_iterator(-10000, [](auto i){return (i%2 ? i : -i)/100;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
+    auto elements = cudf::detail::make_counting_transform_iterator(
+      -10000, [](auto i) { return (i % 2 ? i : -i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
   } else {
-    auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return (i%2 ? i : 20000-i)/100;});
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
+    auto elements = cudf::detail::make_counting_transform_iterator(
+      0, [](auto i) { return (i % 2 ? i : 20000 - i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
   }
 }
 
@@ -3451,29 +3460,31 @@ unordered()
 template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> ascending()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i < 10000 ? false : true;});
-  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements+20000);
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i < 10000 ? false : true; });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + 20000);
 }
 
 template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> descending()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i < 10000 ? true : false;});
-  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements+20000);
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i < 10000 ? true : false; });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + 20000);
 }
 
 template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> unordered()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){
-    switch (i/5000) {
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    switch (i / 5000) {
       case 0: return true;
       case 1: return false;
       case 2: return true;
       default: return false;
     }
   });
-  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements+20000);
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + 20000);
 }
 
 // ----- chrono types
@@ -3481,117 +3492,127 @@ std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper
 template <typename T>
 std::enable_if_t<cudf::is_chrono<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i < 10000 ? T::min() : T::max();});
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i < 10000 ? T::min() : T::max(); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_chrono<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){return i < 10000 ? T::max() : T::min();});
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i < 10000 ? T::max() : T::min(); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_chrono<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i){
-    switch (i/5000) {
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    switch (i / 5000) {
       case 0: return T::max();
       case 1: return T::min();
       case 2: return T::max();
       default: return T::min();
     }
   });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements+20000);
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
 // ----- string_view
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper> ascending()
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
+ascending()
 {
   char buf[10];
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i){
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
     sprintf(buf, "%09d", i);
     return std::string(buf);
   });
-  return cudf::test::strings_column_wrapper(elements, elements+20000);
+  return cudf::test::strings_column_wrapper(elements, elements + 20000);
 }
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper> descending()
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
+descending()
 {
   char buf[10];
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i){
-    sprintf(buf, "%09d", 20000-i);
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
+    sprintf(buf, "%09d", 20000 - i);
     return std::string(buf);
   });
-  return cudf::test::strings_column_wrapper(elements, elements+20000);
+  return cudf::test::strings_column_wrapper(elements, elements + 20000);
 }
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper> unordered()
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
+unordered()
 {
   char buf[10];
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i){
-    sprintf(buf, "%09d", (i%2 == 0) ? i : (20000-i));
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
+    sprintf(buf, "%09d", (i % 2 == 0) ? i : (20000 - i));
     return std::string(buf);
   });
-  return cudf::test::strings_column_wrapper(elements, elements+20000);
+  return cudf::test::strings_column_wrapper(elements, elements + 20000);
 }
 
 // ----- struct_view {"nestedInt" : {"Int" : 0 }, "float" : 1}
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper> ascending()
+std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper>
+ascending()
 {
-  using T1           = int32_t;
-  auto int_col       = cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::lowest(),
-                                                      T1(-100),
-                                                      T1(-10),
-                                                      T1(-10),
-                                                      T1(0),
-                                                      T1(10),
-                                                      T1(10),
-                                                      T1(100),
-                                                      std::numeric_limits<T1>::max()});
+  using T1     = int32_t;
+  auto int_col = cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::lowest(),
+                                                                  T1(-100),
+                                                                  T1(-10),
+                                                                  T1(-10),
+                                                                  T1(0),
+                                                                  T1(10),
+                                                                  T1(10),
+                                                                  T1(100),
+                                                                  std::numeric_limits<T1>::max()});
   auto nestedInt_col = cudf::test::structs_column_wrapper{{int_col}};
   auto float_col     = ascending<float>();
   return cudf::test::structs_column_wrapper{{nestedInt_col, float_col}};
 }
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper> descending()
+std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper>
+descending()
 {
-  using T1           = int32_t;
-  auto int_col       = cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::max(),
-                                                      T1(100),
-                                                      T1(10),
-                                                      T1(10),
-                                                      T1(0),
-                                                      T1(-10),
-                                                      T1(-10),
-                                                      T1(-100),
-                                                      std::numeric_limits<T1>::lowest()});
+  using T1 = int32_t;
+  auto int_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::max(),
+                                                     T1(100),
+                                                     T1(10),
+                                                     T1(10),
+                                                     T1(0),
+                                                     T1(-10),
+                                                     T1(-10),
+                                                     T1(-100),
+                                                     std::numeric_limits<T1>::lowest()});
   auto nestedInt_col = cudf::test::structs_column_wrapper{{int_col}};
   auto float_col     = descending<float>();
   return cudf::test::structs_column_wrapper{{nestedInt_col, float_col}};
 }
 
 template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper> unordered()
+std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper>
+unordered()
 {
-  using T1           = int32_t;
-  auto int_col       = cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::max(),
-                                                      T1(-100),
-                                                      T1(10),
-                                                      T1(-10),
-                                                      T1(0),
-                                                      T1(10),
-                                                      T1(-10),
-                                                      T1(100),
-                                                      std::numeric_limits<T1>::lowest()});
+  using T1 = int32_t;
+  auto int_col =
+    cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::max(),
+                                                     T1(-100),
+                                                     T1(10),
+                                                     T1(-10),
+                                                     T1(0),
+                                                     T1(10),
+                                                     T1(-10),
+                                                     T1(100),
+                                                     std::numeric_limits<T1>::lowest()});
   auto nestedInt_col = cudf::test::structs_column_wrapper{{int_col}};
   auto float_col     = unordered<float>();
   return cudf::test::structs_column_wrapper{{nestedInt_col, float_col}};
@@ -3632,11 +3653,9 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   // now chunk that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
-  cudf_io::parquet::BoundaryOrder expected_orders[] = {
-    cudf_io::parquet::BoundaryOrder::ASCENDING,
-    cudf_io::parquet::BoundaryOrder::DESCENDING,
-    cudf_io::parquet::BoundaryOrder::UNORDERED
-  };
+  cudf_io::parquet::BoundaryOrder expected_orders[] = {cudf_io::parquet::BoundaryOrder::ASCENDING,
+                                                       cudf_io::parquet::BoundaryOrder::DESCENDING,
+                                                       cudf_io::parquet::BoundaryOrder::UNORDERED};
 
   for (int i = 0; i < 3; i++) {
     auto& chunk = fmd.row_groups[0].columns[i];

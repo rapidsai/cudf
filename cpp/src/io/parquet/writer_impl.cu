@@ -1721,7 +1721,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
       int chunkidx = 0;
       for (auto& r : fmd.row_groups) {
         for (auto& c : r.columns) {
-          auto& index    = fmd.column_indexes[chunkidx++];
+          auto& index           = fmd.column_indexes[chunkidx++];
           c.column_index_offset = out_sink_[p]->bytes_written();
           c.column_index_length = index.size();
           out_sink_[p]->host_write(index.data(), index.size());
