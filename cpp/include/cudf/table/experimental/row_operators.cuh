@@ -370,9 +370,9 @@ class device_row_comparator {
     column_device_view const _lhs;
     column_device_view const _rhs;
     Nullate const _check_nulls;
-    PhysicalElementComparator const _comparator;
     null_order const _null_precedence;
     int const _depth;
+    PhysicalElementComparator const _comparator;
   };
 
  public:
@@ -420,10 +420,10 @@ class device_row_comparator {
   table_device_view const _lhs;
   table_device_view const _rhs;
   Nullate const _check_nulls;
-  PhysicalElementComparator const _comparator;
   std::optional<device_span<int const>> const _depth;
   std::optional<device_span<order const>> const _column_order;
   std::optional<device_span<null_order const>> const _null_precedence;
+  PhysicalElementComparator const _comparator;
 };  // class device_row_comparator
 
 /**
