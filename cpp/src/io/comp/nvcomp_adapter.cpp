@@ -116,14 +116,14 @@ void batched_decompress(compression_type compression,
   rmm::device_buffer scratch(
     batched_decompress_temp_size(compression, num_chunks, max_uncomp_chunk_size), stream);
   auto const nvcomp_status = batched_decompress_async(compression,
-                                                      nvcomp_args.compressed_data_ptrs.data(),
-                                                      nvcomp_args.compressed_data_sizes.data(),
-                                                      nvcomp_args.uncompressed_data_sizes.data(),
+                                                      nvcomp_args.input_data_ptrs.data(),
+                                                      nvcomp_args.input_data_sizes.data(),
+                                                      nvcomp_args.output_data_sizes.data(),
                                                       actual_uncompressed_data_sizes.data(),
                                                       num_chunks,
                                                       scratch.data(),
                                                       scratch.size(),
-                                                      nvcomp_args.uncompressed_data_ptrs.data(),
+                                                      nvcomp_args.output_data_ptrs.data(),
                                                       nvcomp_statuses.data(),
                                                       stream.value());
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "unable to perform decompression");
@@ -240,13 +240,13 @@ void batched_compress(compression_type compression,
   auto const nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
 
   batched_compress_async(compression,
-                         nvcomp_args.compressed_data_ptrs.data(),
-                         nvcomp_args.compressed_data_sizes.data(),
+                         nvcomp_args.input_data_ptrs.data(),
+                         nvcomp_args.input_data_sizes.data(),
                          max_block_size,
                          num_chunks,
                          scratch.data(),
                          scratch.size(),
-                         nvcomp_args.uncompressed_data_ptrs.data(),
+                         nvcomp_args.output_data_ptrs.data(),
                          actual_compressed_data_sizes.data(),
                          stream.value());
 
