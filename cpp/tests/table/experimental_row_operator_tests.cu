@@ -146,21 +146,19 @@ TYPED_TEST(TypedTableViewTest, TestLexicographicalComparatorTwoTables)
 {
   using T = TypeParam;
 
-  auto const col1 = fixed_width_column_wrapper<T>{{1, 2, 3, 4}};
-  auto const col2 = fixed_width_column_wrapper<T>{{0, 1, 4, 3}};
+  auto const col1         = fixed_width_column_wrapper<T>{{1, 2, 3, 4}};
+  auto const col2         = fixed_width_column_wrapper<T>{{0, 1, 4, 3}};
   auto const column_order = std::vector{cudf::order::DESCENDING};
-  auto const lhs = cudf::table_view{{col1}};
-  auto const rhs = cudf::table_view{{col2}};
+  auto const lhs          = cudf::table_view{{col1}};
+  auto const rhs          = cudf::table_view{{col2}};
 
   auto const expected = fixed_width_column_wrapper<bool>{{1, 1, 0, 1}};
-  auto const got = two_table_comparison(
-    lhs, rhs, column_order, lexicographic::physical_element_comparator{});
+  auto const got =
+    two_table_comparison(lhs, rhs, column_order, lexicographic::physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
-  auto const sorting_got = two_table_comparison(lhs,
-                       rhs,
-                       column_order,
-                       lexicographic::sorting_physical_element_comparator{});
+  auto const sorting_got = two_table_comparison(
+    lhs, rhs, column_order, lexicographic::sorting_physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, sorting_got->view());
 }
 
@@ -168,9 +166,9 @@ TYPED_TEST(TypedTableViewTest, TestLexicographicalComparatorSameTable)
 {
   using T = TypeParam;
 
-  auto const col1 = fixed_width_column_wrapper<T>{{1, 2, 3, 4}};
+  auto const col1         = fixed_width_column_wrapper<T>{{1, 2, 3, 4}};
   auto const column_order = std::vector{cudf::order::DESCENDING};
-  auto const input_table = cudf::table_view{{col1}};
+  auto const input_table  = cudf::table_view{{col1}};
 
   auto const expected = fixed_width_column_wrapper<bool>{{0, 0, 0, 0}};
   auto const got =
@@ -192,24 +190,21 @@ TYPED_TEST(NaNTableViewTest, TestLexicographicalComparatorTwoTableNaNCase)
 {
   using T = TypeParam;
 
-  auto const col1 = fixed_width_column_wrapper<T>{{T(NAN), T(NAN), T(1), T(1)}};
-  auto const col2 = fixed_width_column_wrapper<T>{{T(NAN), T(1), T(NAN), T(1)}};
+  auto const col1         = fixed_width_column_wrapper<T>{{T(NAN), T(NAN), T(1), T(1)}};
+  auto const col2         = fixed_width_column_wrapper<T>{{T(NAN), T(1), T(NAN), T(1)}};
   auto const column_order = std::vector{cudf::order::DESCENDING};
 
   auto const lhs = cudf::table_view{{col1}};
   auto const rhs = cudf::table_view{{col2}};
 
   auto const expected = fixed_width_column_wrapper<bool>{{0, 0, 0, 0}};
-  auto const got = two_table_comparison(
-    lhs, rhs, column_order, lexicographic::physical_element_comparator{});
+  auto const got =
+    two_table_comparison(lhs, rhs, column_order, lexicographic::physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
   auto const sorting_expected = fixed_width_column_wrapper<bool>{{0, 1, 0, 0}};
-  auto const sorting_got =
-    two_table_comparison(lhs,
-                         rhs,
-                         column_order,
-                         lexicographic::sorting_physical_element_comparator{});
+  auto const sorting_got      = two_table_comparison(
+    lhs, rhs, column_order, lexicographic::sorting_physical_element_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorting_expected, sorting_got->view());
 }
 
@@ -230,7 +225,7 @@ TYPED_TEST(NaNTableViewTest, TestEqualityComparatorTwoTableNaNCase)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
   auto const nan_equal_expected = fixed_width_column_wrapper<bool>{{1, 0, 0, 1}};
-  auto const nan_equal_got = two_table_equality(
-    lhs, rhs, column_order, equality::nan_equal_physical_equality_comparator{});
+  auto const nan_equal_got =
+    two_table_equality(lhs, rhs, column_order, equality::nan_equal_physical_equality_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(nan_equal_expected, nan_equal_got->view());
 }
