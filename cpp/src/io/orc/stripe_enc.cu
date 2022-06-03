@@ -1179,9 +1179,9 @@ __global__ void __launch_bounds__(256)
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
   for (uint32_t b = t; b < num_blocks; b += 256) {
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
-    inputs[ss.first_block + b]  = {src + b * comp_blk_size, blk_size};
-    outputs[ss.first_block + b] = {
-      dst + b * (BLOCK_HEADER_SIZE + max_comp_blk_size) + BLOCK_HEADER_SIZE, max_comp_blk_size};
+    inputs[ss.first_block + b] = {src + b * comp_blk_size, blk_size};
+    auto const dst_offset = b * compressed_block_size(max_comp_blk_size) + padded_block_header_size;
+    outputs[ss.first_block + b]  = {dst + dst_offset, max_comp_blk_size};
     statuses[ss.first_block + b] = {blk_size, 1, 0};
   }
 }
@@ -1234,7 +1234,7 @@ __global__ void __launch_bounds__(1024)
                        ? statuses[ss.first_block + b].bytes_written
                        : src_len;
       uint32_t blk_size24{};
-      if (dst_len >= src_len) {
+      if (statuses[ss.first_block + b].status == 0) {
         // Copy from uncompressed source
         src                                        = inputs[ss.first_block + b].data();
         statuses[ss.first_block + b].bytes_written = src_len;

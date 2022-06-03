@@ -47,8 +47,8 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
-#include <nvcomp/snappy.h>
 #include <nvcomp/deflate.h>
+#include <nvcomp/snappy.h>
 
 #include <algorithm>
 #include <cstring>
@@ -1355,10 +1355,10 @@ void writer::impl::write_index_stream(int32_t stripe_id,
       record.pos += stream.lengths[type];
       while ((record.pos >= 0) && (record.blk_pos >= 0) &&
              (static_cast<size_t>(record.pos) >= compression_blocksize_) &&
-             (record.comp_pos + BLOCK_HEADER_SIZE + comp_out[record.blk_pos].bytes_written <
+             (record.comp_pos + block_header_size + comp_out[record.blk_pos].bytes_written <
               static_cast<size_t>(record.comp_size))) {
         record.pos -= compression_blocksize_;
-        record.comp_pos += BLOCK_HEADER_SIZE + comp_out[record.blk_pos].bytes_written;
+        record.comp_pos += block_header_size + comp_out[record.blk_pos].bytes_written;
         record.blk_pos += 1;
       }
     }
@@ -2107,14 +2107,14 @@ void writer::impl::write(table_view const& table)
     size_t num_compressed_blocks     = 0;
     size_t max_compressed_block_size = 0;
     if (compression_kind_ == SNAPPY) {
-      auto status = nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
+      auto const status = nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
         compression_blocksize_, nvcompBatchedSnappyDefaultOpts, &max_compressed_block_size);
-        CUDF_EXPECTS(status == 0, "failed to get max uncomppressed chunk size");
-      }
+      CUDF_EXPECTS(status == 0, "failed to get max uncomppressed chunk size");
+    }
     if (compression_kind_ == ZLIB) {
-      auto status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
+      auto const status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
         compression_blocksize_, nvcompBatchedDeflateDefaultOpts, &max_compressed_block_size);
-        CUDF_EXPECTS(status == 0, "failed to get max uncomppressed chunk size");
+      CUDF_EXPECTS(status == 0, "failed to get max uncomppressed chunk size");
     }
     auto stream_output = [&]() {
       size_t max_stream_size = 0;
@@ -2129,9 +2129,9 @@ void writer::impl::write(table_view const& table)
 
           auto num_blocks = std::max<uint32_t>(
             (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
-          stream_size += num_blocks * BLOCK_HEADER_SIZE;
+          stream_size += num_blocks * block_header_size;
           num_compressed_blocks += num_blocks;
-          compressed_bfr_size += (max_compressed_block_size + BLOCK_HEADER_SIZE) * num_blocks;
+          compressed_bfr_size += compressed_block_size(max_compressed_block_size) * num_blocks;
         }
         max_stream_size = std::max(max_stream_size, stream_size);
       }
