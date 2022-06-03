@@ -290,11 +290,11 @@ TYPED_TEST(NaNTableViewTest, TestEqualityComparatorTwoTableNaNCase)
                equality::physical_equality_comparator{});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
-  cudf::test::fixed_width_column_wrapper<int8_t> sorting_expected{{1, 0, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<int8_t> nan_equal_expected{{1, 0, 0, 1}};
   row_equality(input_table_1,
                input_table_2,
                got->mutable_view(),
                column_order,
                equality::nan_equal_physical_equality_comparator{});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorting_expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(nan_equal_expected, got->view());
 }
