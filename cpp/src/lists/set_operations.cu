@@ -28,66 +28,63 @@ namespace detail {
 namespace {
 
 /**
- * @brief
+ * @brief Create a hash map with keys are indices of all elements in the input column.
  */
-enum class operation_type { INTERSECTION, UNION, DIFFERENCE };
-
-/**
- * @brief
- */
-struct set_operation_fn {
-  template <operation_type op_type>
-  static std::unique_ptr<column> invoke(lists_column_view const&,
-                                        lists_column_view const&,
-                                        rmm::cuda_stream_view,
-                                        rmm::mr::device_memory_resource*)
-  {
-    CUDF_UNREACHABLE("Base implementation of `set_operation_fn` should not be reached.");
-  }
-};
-
-template <typename... Args>
-auto dispatch_operation(operation_type op_type, Args&&... args)
+auto create_map(column_view const& input, rmm::cuda_stream_view stream)
 {
-  switch (op_type) {
-    case operation_type::INTERSECTION:
-      return set_operation_fn::invoke<operation_type::INTERSECTION>(std::forward<Args>(args)...);
-    case operation_type::UNION:
-      return set_operation_fn::invoke<operation_type::UNION>(std::forward<Args>(args)...);
-    case operation_type::DIFFERENCE:
-      return set_operation_fn::invoke<operation_type::DIFFERENCE>(std::forward<Args>(args)...);
-  }
-
-  CUDF_UNREACHABLE("Unsupported type.");
+  //
 }
 
-template <>
-std::unique_ptr<column> set_operation_fn::invoke<operation_type::INTERSECTION>(
-  lists_column_view const& lhs,
-  lists_column_view const& rhs,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
+                                    lists_column_view const& rhs,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
+  // - Insert lhs child elements into map.
+  // - Check contains for rhs child elements.
+  // - Generate labels for rhs child elements.
+  // - `reduce_by_key` with `logical_or` functor and keys are labels, values are contains.
   return nullptr;
 }
 
-template <>
-std::unique_ptr<column> set_operation_fn::invoke<operation_type::UNION>(
-  lists_column_view const& lhs,
-  lists_column_view const& rhs,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
+                                      lists_column_view const& rhs,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
+  // - Insert lhs child elements into map.
+  // - Check contains for rhs child element.
+  // - Generate labels for rhs child elements.
+  // - copy_if {indices, labels} for rhs child elements using contains conditions to {gather_map,
+  //   intersect_labels}.
+  // - output_child = pull rhs child elements from gather_map.
+  // - output_offsets = reconstruct offsets from intersect_labels.
+  // - return lists_column(output_child, output_offsets)
   return nullptr;
 }
 
-template <>
-std::unique_ptr<column> set_operation_fn::invoke<operation_type::DIFFERENCE>(
-  lists_column_view const& lhs,
-  lists_column_view const& rhs,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> set_union(lists_column_view const& lhs,
+                                  lists_column_view const& rhs,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
+  // - concatenate_row lhs and set_except(rhs, lhs)
+  return nullptr;
+}
+
+std::unique_ptr<column> set_except(lists_column_view const& lhs,
+                                   lists_column_view const& rhs,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  // - Insert rhs child elements.
+  // - Check contains for lhs child element.
+  // - Invert contains for lhs child element.
+  // - Generate labels for lhs child elements.
+  // - copy_if {indices, labels} using the inverted contains conditions to {gather_map,
+  //   except_labels} for lhs child elements.
+  // - Pull lhs child elements from gather_map.
+  // - Reconstruct output offsets from except_labels for lhs.
   return nullptr;
 }
 
@@ -95,28 +92,32 @@ std::unique_ptr<column> set_operation_fn::invoke<operation_type::DIFFERENCE>(
 
 }  // namespace detail
 
+std::unique_ptr<column> overlap(lists_column_view const& lhs,
+                                lists_column_view const& rhs,
+                                rmm::mr::device_memory_resource* mr)
+{
+  return detail::set_overlap(lhs, rhs, rmm::cuda_stream_default, mr);
+}
+
 std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                       lists_column_view const& rhs,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return detail::dispatch_operation(
-    detail::operation_type::INTERSECTION, lhs, rhs, rmm::cuda_stream_default, mr);
+  return detail::set_intersect(lhs, rhs, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> set_union(lists_column_view const& lhs,
                                   lists_column_view const& rhs,
                                   rmm::mr::device_memory_resource* mr)
 {
-  return detail::dispatch_operation(
-    detail::operation_type::UNION, lhs, rhs, rmm::cuda_stream_default, mr);
+  return detail::set_union(lhs, rhs, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> set_difference(lists_column_view const& lhs,
-                                       lists_column_view const& rhs,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> set_except(lists_column_view const& lhs,
+                                   lists_column_view const& rhs,
+                                   rmm::mr::device_memory_resource* mr)
 {
-  return detail::dispatch_operation(
-    detail::operation_type::DIFFERENCE, lhs, rhs, rmm::cuda_stream_default, mr);
+  return detail::set_except(lhs, rhs, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf::lists

@@ -38,6 +38,11 @@ namespace cudf::lists {
  * @throws cudf::logic_error
  *
  */
+std::unique_ptr<column> overlap(
+  lists_column_view const& lhs,
+  lists_column_view const& rhs,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 std::unique_ptr<column> set_intersect(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
@@ -48,7 +53,7 @@ std::unique_ptr<column> set_union(
   lists_column_view const& rhs,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<column> set_difference(
+std::unique_ptr<column> set_except(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
