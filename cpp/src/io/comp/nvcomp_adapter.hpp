@@ -29,7 +29,7 @@ enum class compression_type { SNAPPY, ZSTD, DEFLATE };
 /**
  * @brief Device batch decompression of given type.
  *
- * @param[in] type Compression type
+ * @param[in] compression Compression type
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
  * @param[out] statuses List of output status structures
@@ -51,5 +51,22 @@ void batched_decompress(compression_type compression,
  */
 size_t batched_compress_get_max_output_chunk_size(compression_type compression,
                                                   uint32_t compression_blocksize);
+
+/**
+ * @brief Interface for compressing data
+ *
+ * @param[in] compression Compression type
+ * @param[in] inputs List of input buffers
+ * @param[out] outputs List of output buffers
+ * @param[out] statuses List of output status structures
+ * @param[in] max_block_size TODO
+ * @param[in] stream CUDA stream to use
+ */
+void batched_compress(compression_type compression,
+                      device_span<device_span<uint8_t const> const> inputs,
+                      device_span<device_span<uint8_t> const> outputs,
+                      device_span<decompress_status> statuses,
+                      uint32_t max_block_size,
+                      rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::nvcomp

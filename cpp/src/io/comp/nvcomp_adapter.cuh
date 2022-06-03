@@ -48,7 +48,7 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
 /**
  * @brief Convert nvcomp statuses into cuIO compression statuses.
  */
-void convert_status(device_span<nvcompStatus_t const> nvcomp_stats,
+void convert_status(std::optional<device_span<nvcompStatus_t const>> nvcomp_stats,
                     device_span<size_t const> actual_uncompressed_sizes,
                     device_span<decompress_status> cudf_stats,
                     rmm::cuda_stream_view stream);

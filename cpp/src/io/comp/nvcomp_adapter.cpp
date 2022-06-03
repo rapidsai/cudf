@@ -152,4 +152,38 @@ size_t batched_compress_get_max_output_chunk_size(compression_type compression,
   return max_compressed_chunk_size;
 }
 
+void batched_compress(compression_type compression,
+                      device_span<device_span<uint8_t const> const> inputs,
+                      device_span<device_span<uint8_t> const> outputs,
+                      device_span<decompress_status> statuses,
+                      uint32_t max_block_size,
+                      rmm::cuda_stream_view stream)
+{
+  auto const num_compressed_blocks = inputs.size();
+  size_t temp_size;
+  nvcompStatus_t nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(
+    num_compressed_blocks, max_block_size, nvcompBatchedSnappyDefaultOpts, &temp_size);
+
+  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
+               "Error in getting compression scratch size");
+
+  rmm::device_buffer scratch(temp_size, stream);
+  auto nvcomp_args = create_batched_nvcomp_args(inputs, outputs, stream);
+
+  nvcomp_status = nvcompBatchedSnappyCompressAsync(nvcomp_args.compressed_data_ptrs.data(),
+                                                   nvcomp_args.compressed_data_sizes.data(),
+                                                   max_block_size,
+                                                   num_compressed_blocks,
+                                                   scratch.data(),
+                                                   scratch.size(),
+                                                   nvcomp_args.uncompressed_data_ptrs.data(),
+                                                   nvcomp_args.uncompressed_data_sizes.data(),
+                                                   nvcompBatchedSnappyDefaultOpts,
+                                                   stream.value());
+
+  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in compression");
+
+  convert_status(std::nullopt, nvcomp_args.uncompressed_data_sizes, statuses, stream);
+}
+
 }  // namespace cudf::io::nvcomp
