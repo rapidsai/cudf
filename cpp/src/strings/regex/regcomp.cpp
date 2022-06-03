@@ -19,6 +19,9 @@
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -106,16 +109,16 @@ int32_t reprog::add_inst(int32_t t)
   return add_inst(inst);
 }
 
-int32_t reprog::add_inst(reinst inst)
+int32_t reprog::add_inst(reinst const& inst)
 {
   _insts.push_back(inst);
-  return static_cast<int>(_insts.size() - 1);
+  return static_cast<int32_t>(_insts.size() - 1);
 }
 
-int32_t reprog::add_class(reclass cls)
+int32_t reprog::add_class(reclass const& cls)
 {
   _classes.push_back(cls);
-  return static_cast<int>(_classes.size() - 1);
+  return static_cast<int32_t>(_classes.size() - 1);
 }
 
 reinst& reprog::inst_at(int32_t id) { return _insts[id]; }
@@ -134,9 +137,11 @@ void reprog::set_groups_count(int32_t groups) { _num_capturing_groups = groups; 
 
 int32_t reprog::groups_count() const { return _num_capturing_groups; }
 
-const reinst* reprog::insts_data() const { return _insts.data(); }
+reinst const* reprog::insts_data() const { return _insts.data(); }
 
-const int32_t* reprog::starts_data() const { return _startinst_ids.data(); }
+reclass const* reprog::classes_data() const { return _classes.data(); }
+
+int32_t const* reprog::starts_data() const { return _startinst_ids.data(); }
 
 int32_t reprog::starts_count() const { return static_cast<int>(_startinst_ids.size()); }
 
@@ -178,28 +183,25 @@ class regex_parser {
   int bldcclass()
   {
     int type = CCLASS;
-    std::vector<char32_t> cls;
+    std::vector<char32_t> literals;
     int builtins = 0;
 
-    /* look ahead for negation */
-    /* SPECIAL CASE!!! negated classes don't match \n */
-    char32_t c = 0;
-    int quoted = nextc(c);
+    // look ahead for negation
+    char32_t c  = 0;
+    auto quoted = nextc(c);
     if (!quoted && c == '^') {
       type   = NCCLASS;
       quoted = nextc(c);
-      cls.push_back('\n');
-      cls.push_back('\n');
+      // negated classes also don't match '\n'
+      literals.push_back('\n');
+      literals.push_back('\n');
     }
 
-    /* parse class into a set of spans */
+    // parse class into a set of spans
     int count_char = 0;
     while (true) {
       count_char++;
-      if (c == 0) {
-        // malformed '[]'
-        return 0;
-      }
+      if (c == 0) { return 0; }  // malformed '[]'
       if (quoted) {
         switch (c) {
           case 'n': c = '\n'; break;
@@ -236,55 +238,47 @@ class regex_parser {
       }
       if (!quoted && c == ']' && count_char > 1) break;
       if (!quoted && c == '-') {
-        if (cls.size() < 1) {
-          // malformed '[]'
-          return 0;
-        }
+        if (literals.empty()) { return 0; }  // malformed '[]'
         quoted = nextc(c);
-        if ((!quoted && c == ']') || c == 0) {
-          // malformed '[]'
-          return 0;
-        }
-        cls[cls.size() - 1] = c;
+        if ((!quoted && c == ']') || c == 0) { return 0; }  // malformed '[]'
+        literals.back() = c;
       } else {
-        cls.push_back(c);
-        cls.push_back(c);
+        literals.push_back(c);
+        literals.push_back(c);
       }
       quoted = nextc(c);
     }
 
-    /* sort on span start */
-    for (std::size_t p = 0; p < cls.size(); p += 2)
-      for (std::size_t np = p + 2; np < cls.size(); np += 2)
-        if (cls[np] < cls[p]) {
-          c           = cls[np];
-          cls[np]     = cls[p];
-          cls[p]      = c;
-          c           = cls[np + 1];
-          cls[np + 1] = cls[p + 1];
-          cls[p + 1]  = c;
-        }
-
-    /* merge spans */
-    reclass yycls{builtins};
-    if (cls.size() >= 2) {
-      int np        = 0;
-      std::size_t p = 0;
-      yycls.literals += cls[p++];
-      yycls.literals += cls[p++];
-      for (; p < cls.size(); p += 2) {
-        /* overlapping or adjacent ranges? */
-        if (cls[p] <= yycls.literals[np + 1] + 1) {
-          if (cls[p + 1] >= yycls.literals[np + 1])
-            yycls.literals.replace(np + 1, 1, 1, cls[p + 1]); /* coalesce */
-        } else {
-          np += 2;
-          yycls.literals += cls[p];
-          yycls.literals += cls[p + 1];
+    // transform pairs of literals to spans
+    std::vector<reclass_span> spans;
+    auto const evens = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                                       [](auto i) { return i * 2; });
+    std::transform(
+      evens, evens + (literals.size() / 2), std::back_inserter(spans), [&literals](auto idx) {
+        return reclass_span{literals[idx], literals[idx + 1]};
+      });
+    // sort the spans to help with detecting overlapping entries
+    std::sort(spans.begin(), spans.end(), [](auto l, auto r) {
+      return l.first == r.first ? l.last < r.last : l.first < r.first;
+    });
+    // combine overlapping entries
+    if (spans.size() > 1) {
+      for (auto itr = spans.begin() + 1; itr < spans.end(); ++itr) {
+        auto const prev = *(itr - 1);
+        auto const curr = *itr;
+        if (curr.first <= prev.last + 1) {
+          // if these 2 spans intersect, expand the current one
+          *itr = reclass_span{prev.first, std::max(prev.last, curr.last)};
         }
       }
     }
-    yyclass_id = m_prog.add_class(yycls);
+    // remove duplicates
+    std::reverse(spans.begin(), spans.end());  // moves larger overlaps forward
+    auto const end =  // this relies on std::unique keeping the first entry in a repeated sequence
+      std::unique(spans.begin(), spans.end(), [](auto l, auto r) { return l.first == r.first; });
+    spans.erase(end, spans.end());
+
+    yyclass_id = m_prog.add_class(reclass{builtins, std::move(spans)});
     return type;
   }
 
@@ -340,8 +334,7 @@ class regex_parser {
           case 'W': {
             if (id_ccls_W < 0) {
               reclass cls = ccls_w;
-              cls.literals += '\n';
-              cls.literals += '\n';
+              cls.literals.push_back({'\n', '\n'});
               yyclass_id = m_prog.add_class(cls);
               id_ccls_W  = yyclass_id;
             } else
@@ -375,8 +368,7 @@ class regex_parser {
           case 'D': {
             if (id_ccls_D < 0) {
               reclass cls = ccls_d;
-              cls.literals += '\n';
-              cls.literals += '\n';
+              cls.literals.push_back({'\n', '\n'});
               yyclass_id = m_prog.add_class(cls);
               id_ccls_D  = yyclass_id;
             } else
@@ -1086,15 +1078,16 @@ void reprog::print(regex_flags const flags)
     const reclass& cls = _classes[i];
     auto const size    = static_cast<int>(cls.literals.size());
     printf("%2d: ", i);
-    for (int j = 0; j < size; j += 2) {
-      char32_t c1 = cls.literals[j];
-      char32_t c2 = cls.literals[j + 1];
+    for (int j = 0; j < size; ++j) {
+      auto const l = cls.literals[j];
+      char32_t c1  = l.first;
+      char32_t c2  = l.last;
       if (c1 <= 32 || c1 >= 127 || c2 <= 32 || c2 >= 127) {
         printf("0x%02x-0x%02x", static_cast<unsigned>(c1), static_cast<unsigned>(c2));
       } else {
         printf("%c-%c", static_cast<char>(c1), static_cast<char>(c2));
       }
-      if ((j + 2) < size) { printf(", "); }
+      if ((j + 1) < size) { printf(", "); }
     }
     printf("\n");
     if (cls.builtins) {
