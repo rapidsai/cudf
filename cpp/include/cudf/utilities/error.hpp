@@ -35,8 +35,18 @@ namespace cudf {
  * CUDF_EXPECTS macro.
  */
 struct logic_error : public std::logic_error {
+  /**
+   * @brief Constructs a logic_error with the error message.
+   *
+   * @param message Message to be associated with the exception
+   */
   logic_error(char const* const message) : std::logic_error(message) {}
 
+  /**
+   * @brief Construct a new logic error object with error message
+   *
+   * @param message Message to be associated with the exception
+   */
   logic_error(std::string const& message) : std::logic_error(message) {}
 
   // TODO Add an error code member? This would be useful for translating an
@@ -44,29 +54,41 @@ struct logic_error : public std::logic_error {
 };
 /**
  * @brief Exception thrown when a CUDA error is encountered.
+ *
  */
 struct cuda_error : public std::runtime_error {
+  /**
+   * @brief Construct a new cuda error object with error message and code.
+   *
+   * @param message Error message
+   * @param error CUDA error code
+   */
   cuda_error(std::string const& message, cudaError_t const& error)
     : std::runtime_error(message), _cudaError(error)
   {
   }
 
  public:
+  /**
+   * @brief Returns the CUDA error code associated with the exception.
+   *
+   * @return CUDA error code
+   */
   cudaError_t error_code() const { return _cudaError; }
 
  protected:
-  cudaError_t _cudaError;
+  cudaError_t _cudaError;  //!< CUDA error code
 };
 
 struct fatal_cuda_error : public cuda_error {
-  using cuda_error::cuda_error;
+  using cuda_error::cuda_error;  // Inherit constructors
 };
 /** @} */
 
 }  // namespace cudf
 
-#define STRINGIFY_DETAIL(x) #x
-#define CUDF_STRINGIFY(x)   STRINGIFY_DETAIL(x)
+#define STRINGIFY_DETAIL(x) #x                   ///< Stringify a macro argument
+#define CUDF_STRINGIFY(x)   STRINGIFY_DETAIL(x)  ///< Stringify a macro argument
 
 /**
  * @addtogroup utility_error
@@ -111,7 +133,7 @@ struct fatal_cuda_error : public cuda_error {
 
 namespace cudf {
 namespace detail {
-
+// @cond
 inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line)
 {
   // Calls cudaGetLastError twice. It is nearly certain that a fatal error occurred if the second
@@ -129,6 +151,7 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
     throw cuda_error{msg, error};
   }
 }
+// @endcond
 }  // namespace detail
 }  // namespace cudf
 
