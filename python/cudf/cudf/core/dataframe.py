@@ -3286,18 +3286,52 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         axis : The axis to swap levels on.
         0 or 'index' for row-wise, 1 or 'columns' for column-wise.
 
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(levels=[['lama', 'cow', 'falcon'],
+        ...   ['speed', 'weight', 'length'],['first','second']],
+        ...   codes=[[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2],
+        ...             [0, 0, 0, 0, 0, 0, 1, 1, 1]])
+        >>> cdf = cudf.DataFrame(index=midx, columns=['big', 'small'],
+        ...  data=[[45, 30], [200, 100], [1.5, 1], [30, 20],
+        ...         [250, 150], [1.5, 0.8], [320, 250], [1, 0.8], [0.3, 0.2]])
+
+        >>> cdf
+                                     big  small
+             lama   speed  first    45.0   30.0
+                    weight first   200.0  100.0
+                    length first     1.5    1.0
+             cow    speed  first    30.0   20.0
+                    weight first   250.0  150.0
+                    length first     1.5    0.8
+             falcon speed  second  320.0  250.0
+                    weight second    1.0    0.8
+                    length second    0.3    0.2
+
+        >>> cdf.swaplevel()
+                                    big  small
+             speed  lama   first    45.0   30.0
+             weight lama   first   200.0  100.0
+             length lama   first     1.5    1.0
+             speed  cow    first    30.0   20.0
+             weight cow    first   250.0  150.0
+             length cow    first     1.5    0.8
+             speed  falcon second  320.0  250.0
+             weight falcon second    1.0    0.8
+             length falcon second    0.3    0.2
         """
         result = self.copy()
-        if not isinstance(result.index, MultiIndex):
-            raise TypeError("Can only swap levels on a hierarchical axis.")
 
         if axis == 0:
-            assert isinstance(result.index, MultiIndex)
+            if not isinstance(result.index, MultiIndex):
+                raise TypeError("Can only swap levels on a hierarchical axis.")
             result.index = MultiIndex.swapij(result.index, i, j)
         else:
-            assert isinstance(result._data.to_pandas_index(), MultiIndex)
+            if not isinstance(result._data.to_pandas_index(), MultiIndex):
+                raise TypeError("Can only swap levels on a hierarchical axis.")
             result.columns = MultiIndex.swapij(
-                self._data.to_pandas_index(), i, j
+                result._data.to_pandas_index(), i, j
             )
 
         return result
