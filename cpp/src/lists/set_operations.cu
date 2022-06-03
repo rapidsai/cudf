@@ -17,7 +17,9 @@
 #include <stream_compaction/stream_compaction_common.cuh>
 #include <stream_compaction/stream_compaction_common.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 
@@ -83,9 +85,32 @@ auto check_contains(detail::hash_map_type const& map,
  * @brief Generate labels for elements in the child column of the input lists column.
  * @param input
  */
-auto generate_labels(lists_column_view const& input)
+auto generate_labels(lists_column_view const& input, rmm::cuda_stream_view stream)
 {
-  //
+  auto labels = rmm::device_uvector<size_type>(input.size(), stream);
+  cudf::detail::label_segments(
+    input.offsets_begin(), input.offsets_end(), labels.begin(), labels.end(), stream);
+  return labels;
+}
+
+/**
+ * @brief Reconstruct an offsets column from the input labels array.
+ */
+auto reconstruct_offsets(rmm::device_uvector<size_type> const& labels,
+                         size_type n_rows,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr)
+
+{
+  auto out_offsets = make_numeric_column(
+    data_type{type_to_id<offset_type>()}, n_rows + 1, mask_state::UNALLOCATED, stream, mr);
+  auto const offsets = out_offsets->mutable_view();
+  cudf::detail::labels_to_offsets(labels.begin(),
+                                  labels.end(),
+                                  offsets.template begin<size_type>(),
+                                  offsets.template end<size_type>(),
+                                  stream);
+  return out_offsets;
 }
 
 /**
@@ -94,14 +119,6 @@ auto generate_labels(lists_column_view const& input)
  */
 auto extract_if()
 
-{
-  //
-}
-
-/**
- * @brief Reconstruct an offsets column from the input labels array.
- */
-auto reconstruct_offsets()
 {
   //
 }
