@@ -18,6 +18,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 namespace lists {
 namespace detail {

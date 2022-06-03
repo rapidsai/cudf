@@ -19,6 +19,8 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 /**
  * @addtogroup aggregation_reduction

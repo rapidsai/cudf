@@ -21,6 +21,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 #include <memory>
 #include <string>
 #include <unordered_map>
