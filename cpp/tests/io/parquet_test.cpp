@@ -3388,9 +3388,10 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   auto& first_chunk = fmd.row_groups[0].columns[0].meta_data;
   EXPECT_GT(first_chunk.data_page_offset, 0);
 
-  // read first data page header. 1024 bytes should be plenty
+  // read first data page header.  sizeof(ph) is not exact, but the thrift encoded
+  // version should be smaller than size of the struct.
   cudf_io::parquet::PageHeader ph;
-  const auto pg_hdr_buf = source->host_read(first_chunk.data_page_offset, 1024);
+  const auto pg_hdr_buf = source->host_read(first_chunk.data_page_offset, sizeof(ph));
   cudf_io::parquet::CompactProtocolReader cp(pg_hdr_buf->data(), pg_hdr_buf->size());
   EXPECT_TRUE(cp.read(&ph));
 
