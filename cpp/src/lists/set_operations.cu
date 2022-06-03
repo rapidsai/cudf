@@ -145,10 +145,10 @@ auto extract_if(table_view const& input,
 
 }  // namespace
 
-std::unique_ptr<column> overlap(lists_column_view const& lhs,
-                                lists_column_view const& rhs,
-                                rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
+                                    lists_column_view const& rhs,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   // - Insert lhs child elements into map.
   // - Check contains for rhs child elements.
@@ -217,10 +217,10 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
   return nullptr;
 }
 
-std::unique_ptr<column> set_except(lists_column_view const& lhs,
-                                   lists_column_view const& rhs,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> set_difference(lists_column_view const& lhs,
+                                       lists_column_view const& rhs,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   // - Insert rhs child elements.
   // - Check contains for lhs child element.
@@ -235,11 +235,11 @@ std::unique_ptr<column> set_except(lists_column_view const& lhs,
 
 }  // namespace detail
 
-std::unique_ptr<column> overlap(lists_column_view const& lhs,
-                                lists_column_view const& rhs,
-                                rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
+                                    lists_column_view const& rhs,
+                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::overlap(lhs, rhs, rmm::cuda_stream_default, mr);
+  return detail::set_overlap(lhs, rhs, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
@@ -256,11 +256,11 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
   return detail::set_union(lhs, rhs, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> set_except(lists_column_view const& lhs,
-                                   lists_column_view const& rhs,
-                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> set_difference(lists_column_view const& lhs,
+                                       lists_column_view const& rhs,
+                                       rmm::mr::device_memory_resource* mr)
 {
-  return detail::set_except(lhs, rhs, rmm::cuda_stream_default, mr);
+  return detail::set_difference(lhs, rhs, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf::lists
