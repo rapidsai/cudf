@@ -1813,3 +1813,17 @@ def test_series_digitize_invalid_bins():
         ValueError, match="`bins` cannot contain null entries."
     ):
         _ = s.digitize(bins)
+
+
+@pytest.mark.parametrize("data", [[0, 1, 2, 3, 4, 5, 10]])
+@pytest.mark.parametrize("left", [0, 2, 5])
+@pytest.mark.parametrize("right", [10, 1, 4])
+@pytest.mark.parametrize("inclusive", ["both", "neither", "left", "right"])
+def test_series_between(data, left, right, inclusive):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.between(left, right, inclusive=inclusive)
+    actual = gs.between(left, right, inclusive=inclusive)
+
+    assert_eq(expected, actual)
