@@ -146,8 +146,8 @@ namespace lexicographic {
  * @brief Computes a weak ordering of two values with special sorting behavior.
  *
  * This relational comparator functor compares physical values rather than logical
- * elements like lists, strings, or structs. It evaluates `NaN` as equivalent to other `NaN`s and
- * greater than all other values.
+ * elements like lists, strings, or structs. It evaluates `NaN` as not less than, equal to, or
+ * greater than other values and is IEEE-754 compliant.
  */
 struct physical_element_comparator {
   /**
