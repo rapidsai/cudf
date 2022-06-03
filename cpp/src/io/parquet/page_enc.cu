@@ -1588,7 +1588,6 @@ __global__ void __launch_bounds__(1024)
 // blockDim(1, 1, 1)
 __global__ void __launch_bounds__(1)
   gpuCalculateColumnIndexes(device_span<EncColumnChunk> chunks,
-                            device_span<gpu::EncPage const> pages,
                             device_span<statistics_chunk const> column_stats)
 {
   const void *vmin, *vmax;
@@ -1599,9 +1598,7 @@ __global__ void __launch_bounds__(1)
   if (column_stats.empty())
     return;
 
-  EncCoumnChunk ck_g = chunks[blockIdx.x];
-
-  const EncPage* first_page = ck_g.pages;
+  EncColumnChunk ck_g = chunks[blockIdx.x];
   uint32_t num_pages  = ck_g.num_pages;
 
   parquet_column_device_view col_g = *ck_g.col_desc;
@@ -2233,11 +2230,10 @@ void GatherPages(device_span<EncColumnChunk> chunks,
 }
 
 void CalculateColumnIndexes(device_span<EncColumnChunk> chunks,
-                            device_span<gpu::EncPage const> pages,
                             device_span<statistics_chunk const> column_stats,
                             rmm::cuda_stream_view stream)
 {
-  gpuCalculateColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(chunks, pages, column_stats);
+  gpuCalculateColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(chunks, column_stats);
 }
 
 }  // namespace gpu
