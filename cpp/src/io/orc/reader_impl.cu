@@ -369,8 +369,17 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     device_span<device_span<uint8_t>> inflate_out_view{inflate_out.data(), num_compressed_blocks};
     switch (decompressor.compression()) {
       case compression_type::ZLIB:
-        gpuinflate(
-          inflate_in_view, inflate_out_view, inflate_stats, gzip_header_included::NO, stream);
+        if (nvcomp_integration::is_all_enabled()) {
+          nvcomp::batched_decompress(nvcomp::compression_type::DEFLATE,
+                                     inflate_in_view,
+                                     inflate_out_view,
+                                     inflate_stats,
+                                     max_uncomp_block_size,
+                                     stream);
+        } else {
+          gpuinflate(
+            inflate_in_view, inflate_out_view, inflate_stats, gzip_header_included::NO, stream);
+        }
         break;
       case compression_type::SNAPPY:
         if (nvcomp_integration::is_stable_enabled()) {

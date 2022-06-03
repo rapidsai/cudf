@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,8 +58,8 @@ class table_view_base {
   size_type _num_rows{};               ///< The number of elements in every column
 
  public:
-  using iterator       = decltype(std::begin(_columns));
-  using const_iterator = decltype(std::cbegin(_columns));
+  using iterator       = decltype(std::begin(_columns));   ///< Iterator type for the table
+  using const_iterator = decltype(std::cbegin(_columns));  ///< const iterator type for the table
 
   /**
    * @brief Construct a table from a vector of column views
@@ -81,11 +81,15 @@ class table_view_base {
 
   /**
    * @brief Returns an iterator to the first view in the `table`.
+   *
+   * @return An iterator to the first column_view
    */
   iterator begin() noexcept { return std::begin(_columns); }
 
   /**
    * @brief Returns an iterator to the first view in the `table`.
+   *
+   * @return An iterator to the first view in the `table`
    */
   [[nodiscard]] const_iterator begin() const noexcept { return std::begin(_columns); }
 
@@ -94,6 +98,8 @@ class table_view_base {
    *
    * `end()` acts as a place holder. Attempting to dereference it results in
    * undefined behavior.
+   *
+   * @return An iterator to one past the last column view in the `table`
    */
   iterator end() noexcept { return std::end(_columns); }
 
@@ -102,6 +108,8 @@ class table_view_base {
    *
    * `end()` acts as a place holder. Attempting to dereference it results in
    * undefined behavior.
+   *
+   * @return An iterator to one past the last column view in the `table`
    */
   [[nodiscard]] const_iterator end() const noexcept { return std::end(_columns); }
 
@@ -118,16 +126,22 @@ class table_view_base {
 
   /**
    * @brief Returns the number of columns
+   *
+   * @return The number of columns
    */
   [[nodiscard]] size_type num_columns() const noexcept { return _columns.size(); }
 
   /**
    * @brief Returns the number of rows
+   *
+   * @return The number of rows
    */
   [[nodiscard]] size_type num_rows() const noexcept { return _num_rows; }
 
   /**
    * @brief Returns true if `num_columns()` returns zero, or false otherwise
+   *
+   * @return True if `num_columns()` returns zero, or false otherwise
    */
   [[nodiscard]] size_type is_empty() const noexcept { return num_columns() == 0; }
 
@@ -135,10 +149,20 @@ class table_view_base {
 
   ~table_view_base() = default;
 
-  table_view_base(table_view_base const&) = default;
+  table_view_base(table_view_base const&) = default;  ///< Copy constructor
 
-  table_view_base(table_view_base&&) = default;
+  table_view_base(table_view_base&&) = default;  ///< Move constructor
+  /**
+   * @brief Copy assignment operator
+   *
+   * @return Reference to this object
+   */
   table_view_base& operator=(table_view_base const&) = default;
+  /**
+   * @brief Move assignment operator
+   *
+   * @return Reference to this object (after transferring ownership)
+   */
   table_view_base& operator=(table_view_base&&) = default;
 };
 }  // namespace detail
@@ -155,7 +179,7 @@ class table_view : public detail::table_view_base<column_view> {
   using detail::table_view_base<column_view>::table_view_base;
 
  public:
-  using ColumnView = column_view;
+  using ColumnView = column_view;  ///< The type of column view the table contains
 
   table_view() = default;
 
@@ -223,10 +247,16 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
 
  public:
-  using ColumnView = mutable_column_view;
+  using ColumnView = mutable_column_view;  ///< The type of column views in the table
 
   mutable_table_view() = default;
 
+  /**
+   * @brief Returns column at specified index
+   *
+   * @param column_index The index of the desired column
+   * @return A mutable column view reference to the desired column
+   */
   [[nodiscard]] mutable_column_view& column(size_type column_index) const
   {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
@@ -257,16 +287,36 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   mutable_table_view(std::vector<mutable_table_view> const& views);
 };
 
+/**
+ * @brief Returns True if any of the columns in the table is nullable. (not entire hierarchy)
+ *
+ * @param view The table to check for nullability
+ * @return True if any of the columns in the table is nullable, false otherwise
+ */
 inline bool nullable(table_view const& view)
 {
   return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.nullable(); });
 }
 
+/**
+ * @brief Returns True if the table has nulls in any of its columns.
+ *
+ * This checks for nulls in the columns and but not in any of the columns' children.
+ *
+ * @param view The table to check for nulls
+ * @return True if the table has nulls in any of its columns, false otherwise
+ */
 inline bool has_nulls(table_view const& view)
 {
   return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.has_nulls(); });
 }
 
+/**
+ * @brief Returns True if the table has nulls in any of its columns hierarchy
+ *
+ * @param input The table to check for nulls
+ * @return True if the table has nulls in any of its columns hierarchy, false otherwise
+ */
 inline bool has_nested_nulls(table_view const& input)
 {
   return std::any_of(input.begin(), input.end(), [](auto const& col) {
@@ -322,10 +372,11 @@ namespace detail {
  */
 template <typename TableView>
 bool is_relationally_comparable(TableView const& lhs, TableView const& rhs);
-
+// @cond
 extern template bool is_relationally_comparable<table_view>(table_view const& lhs,
                                                             table_view const& rhs);
 extern template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
                                                                     mutable_table_view const& rhs);
+// @endcond
 }  // namespace detail
 }  // namespace cudf

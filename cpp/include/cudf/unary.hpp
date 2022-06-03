@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,9 @@ namespace cudf {
  * @brief Column APIs for unary ops
  */
 
+/**
+ * @brief Types of unary operations that can be performed on data.
+ */
 enum class unary_operator : int32_t {
   SIN,         ///< Trigonometric sine
   COS,         ///< Trigonometric cosine
@@ -121,7 +124,7 @@ std::unique_ptr<column> cast(
  * @throws cudf::logic_error if `input` is a non-floating point type
  *
  * @param input A column of floating-point elements
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A non-nullable column of `type_id::BOOL8` elements with `true` representing `NAN` values
  */
@@ -137,7 +140,7 @@ std::unique_ptr<column> is_nan(
  * @throws cudf::logic_error if `input` is a non-floating point type
  *
  * @param input A column of floating-point elements
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A non-nullable column of `type_id::BOOL8` elements with `false` representing `NAN`
  * values

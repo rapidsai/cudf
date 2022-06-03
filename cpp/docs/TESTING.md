@@ -411,12 +411,12 @@ auto struct_col {struct_column_wrapper.release()};
 A common operation in testing is verifying that two columns are equal, or equivalent, or that they
 have the same metadata.
 
-#### `expect_column_properties_equal`
+#### `CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL`
 
 Verifies that two columns have the same type, size, and nullability. For nested types, recursively
 verifies the equality of type, size and nullability of all nested children.
 
-#### `expect_column_properties_equivalent`
+#### `CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT`
 
 Verifies that two columns have equivalent type and equal size, ignoring nullability. For nested
 types, recursively verifies the equivalence of type, and equality of size of all nested children,
@@ -428,17 +428,17 @@ different scales. Nested type columns can be equivalent in the case where they b
 but one has children (also empty) and the other does not. For columns with nonzero size, both equals
 and equivalent expect equal number of children.
 
-#### `expect_columns_equal`
+#### `CUDF_TEST_EXPECT_COLUMNS_EQUAL`
 
 Verifies that two columns have equal properties and verifies elementwise equality of the column
 data. Null elements are treated as equal.
 
-#### `expect_columns_equivalent`
+#### `CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT`
 
 Verifies that two columns have equivalent properties and verifies elementwise equivalence of the
 column data. Null elements are treated as equivalent.
 
-#### `expect_equal_buffers`
+#### `CUDF_TEST_EXPECT_EQUAL_BUFFERS`
 
 Verifies the bitwise equality of two device memory buffers.
 

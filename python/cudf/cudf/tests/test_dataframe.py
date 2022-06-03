@@ -4269,7 +4269,7 @@ def test_df_values_property(data):
     np.testing.assert_array_equal(pmtr, gmtr)
 
 
-def test_value_counts():
+def test_numeric_alpha_value_counts():
     pdf = pd.DataFrame(
         {
             "numeric": [1, 2, 3, 4, 5, 6, 1, 2, 4] * 10,
@@ -9356,3 +9356,67 @@ def test_dataframe_eval(df_eval, expr, dtype):
 def test_dataframe_eval_errors(df_eval, expr):
     with pytest.raises(ValueError):
         df_eval.eval(expr)
+
+
+@pytest.mark.parametrize(
+    "gdf,subset",
+    [
+        (
+            cudf.DataFrame(
+                {"num_legs": [2, 4, 4, 6], "num_wings": [2, 0, 0, 0]},
+                index=["falcon", "dog", "cat", "ant"],
+            ),
+            ["num_legs"],
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "first_name": ["John", "Anne", "John", "Beth"],
+                    "middle_name": ["Smith", None, None, "Louise"],
+                }
+            ),
+            ["first_name"],
+        ),
+    ],
+)
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("normalize", [True, False])
+@pytest.mark.parametrize("dropna", [True, False])
+@pytest.mark.parametrize("use_subset", [True, False])
+def test_value_counts(
+    gdf,
+    subset,
+    sort,
+    ascending,
+    normalize,
+    dropna,
+    use_subset,
+):
+    pdf = gdf.to_pandas()
+
+    got = gdf.value_counts(
+        subset=subset if (use_subset) else None,
+        sort=sort,
+        ascending=ascending,
+        normalize=normalize,
+        dropna=dropna,
+    )
+    expected = pdf.value_counts(
+        subset=subset if (use_subset) else None,
+        sort=sort,
+        ascending=ascending,
+        normalize=normalize,
+        dropna=dropna,
+    )
+
+    if not dropna:
+        # Convert the Pandas series to a cuDF one due to difference
+        # in the handling of NaNs between the two (<NA> in cuDF and
+        # NaN in Pandas) when dropna=False.
+        assert_eq(got.sort_index(), cudf.from_pandas(expected).sort_index())
+    else:
+        assert_eq(got.sort_index(), expected.sort_index())
+
+    with pytest.raises(KeyError):
+        gdf.value_counts(subset=["not_a_column_name"])

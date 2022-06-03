@@ -40,6 +40,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
 
 #include <utility>
 #include <vector>
@@ -79,23 +80,13 @@ std::unique_ptr<table> distinct(table_view const& input,
   // insert distinct indices into the map.
   key_map.insert(iter, iter + num_rows, hash_key, key_equal, stream.value());
 
-  auto counting_iter = thrust::make_counting_iterator<size_type>(0);
-  rmm::device_uvector<bool> index_exists_in_map(num_rows, stream, mr);
-  // enumerate all indices to check if they are present in the map.
-  key_map.contains(counting_iter, counting_iter + num_rows, index_exists_in_map.begin(), hash_key);
-
   auto const output_size{key_map.get_size()};
-
-  // write distinct indices to a numeric column
   auto distinct_indices = cudf::make_numeric_column(
     data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
-  auto mutable_view = mutable_column_device_view::create(*distinct_indices, stream);
-  thrust::copy_if(rmm::exec_policy(stream),
-                  counting_iter,
-                  counting_iter + num_rows,
-                  index_exists_in_map.begin(),
-                  mutable_view->begin<size_type>(),
-                  thrust::identity<bool>{});
+  // write distinct indices to a numeric column
+  key_map.retrieve_all(distinct_indices->mutable_view().begin<cudf::size_type>(),
+                       thrust::make_discard_iterator(),
+                       stream.value());
 
   // run gather operation to establish new order
   return detail::gather(input,
