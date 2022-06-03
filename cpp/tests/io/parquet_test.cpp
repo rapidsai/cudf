@@ -3646,6 +3646,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
     const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
     cudf_io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
 #if 0
+    printf("%d %d\n", fmd.schema[i+1].type, fmd.schema[i+1].converted_type);
     for (size_t j=0; j < ci_buf->size(); j+=16) {
       for (size_t k=0; k < 16 && k+j < ci_buf->size(); k++)
         printf(" %02x", ci_buf->data()[j+k]);
