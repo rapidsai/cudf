@@ -233,7 +233,7 @@ class device_row_comparator {
    * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
-   * @param check_nulls Indicates if any input column contains columns with nulls.
+   * @param check_nulls Indicates if any input column contains nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
    * @param depth Optional, device array the same length as a row that contains starting depths of
@@ -907,7 +907,7 @@ class device_row_comparator {
    * @brief Construct a function object for performing equality comparison between the rows of two
    * tables.
    *
-   * @param check_nulls Indicates if any input column contains columns with nulls.
+   * @param check_nulls Indicates if any input column contains nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
