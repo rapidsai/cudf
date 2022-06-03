@@ -21,6 +21,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
+#include <cudf/lists/combine.hpp>
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 
@@ -29,6 +30,7 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scatter.h>
+#include <thrust/transform.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -65,6 +67,7 @@ auto create_map(column_view const& input, rmm::cuda_stream_view stream)
 /**
  * @brief Check the existence of rows in the keys column in the hash map.
  */
+// todo: keys must be table with the first col is labels
 auto check_contains(detail::hash_map_type const& map,
                     bool map_has_nulls,
                     column_view const& keys,
@@ -124,17 +127,18 @@ auto reconstruct_offsets(rmm::device_uvector<size_type> const& labels,
  * @brief Extract rows from the input table based on the boolean values in the input `condition`
  * column.
  */
-auto extract_if(table_view const& input,
+auto extract_if(column_view const& input,
+                rmm::device_uvector<size_type> const& labels,
                 rmm::device_uvector<bool> const& condition,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr)
 
 {
-  auto gather_map = rmm::device_uvector<size_type>(input.num_rows(), stream);
+  auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
   auto const gather_map_end =
     thrust::copy_if(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.num_rows()),
+                    thrust::make_counting_iterator<size_type>(input.size()),
                     condition.begin(),
                     gather_map.begin(),
                     thrust::identity{});
@@ -203,7 +207,19 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
   // - output_child = pull rhs child elements from gather_map.
   // - output_offsets = reconstruct offsets from intersect_labels.
   // - return lists_column(output_child, output_offsets)
-  return nullptr;
+
+  auto const lhs_child = lhs.get_sliced_child(stream);
+  auto const rhs_child = rhs.get_sliced_child(stream);
+  auto const map       = create_map(lhs_child, stream);
+  auto const contained = check_contains(map, lhs_child.has_nulls(), rhs_child, stream);
+  auto const labels    = generate_labels(rhs_child, stream);
+
+  auto [out_child, intersect_labels] = extract_if(rhs_child, labels, contained, stream, mr);
+  auto out_offsets = reconstruct_offsets(intersect_labels, lhs.size(), stream, mr);
+
+  // todo : fix null
+  return make_lists_column(
+    lhs.size(), std::move(out_offsets), std::move(out_child), 0, {}, stream, mr);
 }
 
 std::unique_ptr<column> set_union(lists_column_view const& lhs,
@@ -214,7 +230,8 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
   // - concatenate_row(lhs, set_except(rhs, lhs))
   // - Alternative: concatenate_row(lhs, rhs) then `drop_list_duplicates`, however,
   //   `drop_list_duplicates` currently doesn't support nested types.
-  return nullptr;
+  // todo: add stream in detail version
+  return lists::concatenate_rows(table_view{{lhs, set_difference(rhs, lhs, stream)}}, stream, mr);
 }
 
 std::unique_ptr<column> set_difference(lists_column_view const& lhs,
@@ -230,7 +247,25 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
   //   except_labels} for lhs child elements.
   // - Pull lhs child elements from gather_map.
   // - Reconstruct output offsets from except_labels for lhs.
-  return nullptr;
+
+  auto const lhs_child = lhs.get_sliced_child(stream);
+  auto const rhs_child = rhs.get_sliced_child(stream);
+  auto const map       = create_map(rhs_child, stream);
+  auto inv_contained   = check_contains(map, rhs_child.has_nulls(), lhs_child, stream);
+  thrust::transform(rmm::exec_policy(stream),
+                    inv_contained.begin(),
+                    inv_contained.end(),
+                    inv_contained.begin(),
+                    thrust::logical_not{});
+
+  auto const labels = generate_labels(lhs_child, stream);
+
+  auto [out_child, except_labels] = extract_if(lhs_child, labels, inv_contained, stream, mr);
+  auto out_offsets                = reconstruct_offsets(except_labels, lhs.size(), stream, mr);
+
+  // todo : fix null
+  return make_lists_column(
+    lhs.size(), std::move(out_offsets), std::move(out_child), 0, {}, stream, mr);
 }
 
 }  // namespace detail
