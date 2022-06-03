@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -277,20 +276,17 @@ class device_row_comparator {
      * @param null_precedence Indicates how null values are ordered with other values
      * @param depth The depth of the column if part of a nested column @see
      * preprocessed_table::depths
-     * @param nan_result Specifies what value should be returned if either element is `nan`
      */
     __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
                                   null_order null_precedence = null_order::BEFORE,
-                                  int depth                  = 0,
-                                  weak_ordering nan_result   = weak_ordering::EQUIVALENT)
+                                  int depth                  = 0)
       : _lhs{lhs},
         _rhs{rhs},
         _check_nulls{check_nulls},
         _null_precedence{null_precedence},
-        _depth{depth},
-        _nan_result{nan_result}
+        _depth{depth}
     {
     }
 
@@ -356,8 +352,7 @@ class device_row_comparator {
         ++depth;
       }
 
-      auto const comparator =
-        element_comparator{_check_nulls, lcol, rcol, _null_precedence, depth, _nan_result};
+      auto const comparator = element_comparator{_check_nulls, lcol, rcol, _null_precedence, depth};
       return cudf::type_dispatcher<dispatch_void_if_nested>(
         lcol.type(), comparator, lhs_element_index, rhs_element_index);
     }
@@ -368,7 +363,6 @@ class device_row_comparator {
     Nullate const _check_nulls;
     null_order const _null_precedence;
     int const _depth;
-    weak_ordering _nan_result;
   };
 
  public:
@@ -396,20 +390,7 @@ class device_row_comparator {
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
       auto const comparator =
-        NanConfig ? element_comparator{_check_nulls,
-                                       _lhs.column(i),
-                                       _rhs.column(i),
-                                       null_precedence,
-                                       depth,
-                                       ascending ? weak_ordering::GREATER : weak_ordering::LESS}
-
-                  : element_comparator{_check_nulls,
-                                       _lhs.column(i),
-                                       _rhs.column(i),
-                                       null_precedence,
-                                       depth,
-                                       weak_ordering::EQUIVALENT};
-
+        element_comparator{_check_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth};
       weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
         cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
