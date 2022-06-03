@@ -55,7 +55,7 @@ auto batched_decompress_get_temp_size(compression_type compression, Args&&... ar
 #endif
     default: CUDF_FAIL("Unsupported compression type");
   }
-};
+}
 
 template <typename... Args>
 auto batched_decompress_async(compression_type compression, Args&&... args)
@@ -73,7 +73,7 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
 #endif
     default: CUDF_FAIL("Unsupported compression type");
   }
-};
+}
 
 size_t get_temp_size(compression_type compression, size_t num_chunks, size_t max_uncomp_chunk_size)
 {
@@ -127,4 +127,29 @@ void batched_decompress(compression_type compression,
 
   convert_status(nvcomp_statuses, actual_uncompressed_data_sizes, statuses, stream);
 }
+
+size_t batched_compress_get_max_output_chunk_size(compression_type compression,
+                                                  uint32_t compression_blocksize)
+{
+  size_t max_compressed_chunk_size = 0;
+  nvcompStatus_t status            = nvcompStatus_t::nvcompSuccess;
+  switch (compression) {
+    case compression_type::SNAPPY:
+      status = nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
+        compression_blocksize, nvcompBatchedSnappyDefaultOpts, &max_compressed_chunk_size);
+      break;
+#if NVCOMP_HAS_DEFLATE
+    case compression_type::DEFLATE:
+      status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
+        compression_blocksize, nvcompBatchedDeflateDefaultOpts, &max_compressed_chunk_size);
+      break;
+#endif
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+
+  CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,
+               "failed to get max uncompressed chunk size");
+  return max_compressed_chunk_size;
+}
+
 }  // namespace cudf::io::nvcomp

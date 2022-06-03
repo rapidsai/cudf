@@ -42,4 +42,14 @@ void batched_decompress(compression_type compression,
                         device_span<decompress_status> statuses,
                         size_t max_uncomp_page_size,
                         rmm::cuda_stream_view stream);
+
+/**
+ * @brief TODO
+ *
+ * @param compression Compression type
+ * @param compression_blocksize TODO
+ */
+size_t batched_compress_get_max_output_chunk_size(compression_type compression,
+                                                  uint32_t compression_blocksize);
+
 }  // namespace cudf::io::nvcomp

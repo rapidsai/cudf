@@ -21,6 +21,7 @@
 
 #include "writer_impl.hpp"
 
+#include <io/comp/nvcomp_adapter.hpp>
 #include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 
@@ -46,9 +47,6 @@
 #include <thrust/optional.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-
-#include <nvcomp/deflate.h>
-#include <nvcomp/snappy.h>
 
 #include <algorithm>
 #include <cstring>
@@ -1988,6 +1986,22 @@ __global__ void copy_string_data(char* string_pool,
   }
 }
 
+auto to_nvcomp_compression_type(CompressionKind compression_kind)
+{
+  if (compression_kind == SNAPPY) return nvcomp::compression_type::SNAPPY;
+  if (compression_kind == ZLIB) return nvcomp::compression_type::DEFLATE;
+  CUDF_FAIL("Unsupported compression type");
+}
+
+size_t get_compress_max_output_chunk_size(CompressionKind compression_kind,
+                                          uint32_t compression_blocksize)
+{
+  if (compression_kind == NONE) return 0;
+
+  return batched_compress_get_max_output_chunk_size(to_nvcomp_compression_type(compression_kind),
+                                                    compression_blocksize);
+}
+
 void writer::impl::persisted_statistics::persist(int num_table_rows,
                                                  bool single_write_mode,
                                                  intermediate_statistics& intermediate_stats,
@@ -2103,19 +2117,11 @@ void writer::impl::write(table_view const& table)
 
   if (num_rows > 0) {
     // Allocate intermediate output stream buffer
-    size_t compressed_bfr_size       = 0;
-    size_t num_compressed_blocks     = 0;
-    size_t max_compressed_block_size = 0;
-    if (compression_kind_ == SNAPPY) {
-      auto const status = nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
-        compression_blocksize_, nvcompBatchedSnappyDefaultOpts, &max_compressed_block_size);
-      CUDF_EXPECTS(status == 0, "failed to get max uncomppressed chunk size");
-    }
-    if (compression_kind_ == ZLIB) {
-      auto const status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
-        compression_blocksize_, nvcompBatchedDeflateDefaultOpts, &max_compressed_block_size);
-      CUDF_EXPECTS(status == 0, "failed to get max uncomppressed chunk size");
-    }
+    size_t compressed_bfr_size   = 0;
+    size_t num_compressed_blocks = 0;
+    auto const max_compressed_block_size =
+      get_compress_max_output_chunk_size(compression_kind_, compression_blocksize_);
+
     auto stream_output = [&]() {
       size_t max_stream_size = 0;
       bool all_device_write  = true;
