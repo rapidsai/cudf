@@ -127,8 +127,8 @@ mixed_join(
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{
     compute_hash_table_size(build.num_rows()),
-    std::numeric_limits<hash_value_type>::max(),
-    cudf::detail::JoinNoneValue,
+    cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
+    cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
     stream.value(),
     detail::hash_table_allocator_type{default_allocator<char>{}, stream}};
 
@@ -375,8 +375,8 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{
     compute_hash_table_size(build.num_rows()),
-    std::numeric_limits<hash_value_type>::max(),
-    cudf::detail::JoinNoneValue,
+    cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
+    cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
     stream.value(),
     detail::hash_table_allocator_type{default_allocator<char>{}, stream}};
 

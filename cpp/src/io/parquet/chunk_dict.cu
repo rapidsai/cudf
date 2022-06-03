@@ -238,8 +238,10 @@ __global__ void __launch_bounds__(block_size)
 
   column_device_view const& data_col = *col->leaf_column;
 
-  auto map = map_type::device_view(
-    chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+  auto map = map_type::device_view(chunk->dict_map_slots,
+                                   chunk->dict_map_size,
+                                   cuco::sentinel::empty_key{KEY_SENTINEL},
+                                   cuco::sentinel::empty_value{VALUE_SENTINEL});
 
   auto val_idx = s_start_value_idx + t;
   while (val_idx < end_value_idx) {
