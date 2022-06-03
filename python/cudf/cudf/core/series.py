@@ -5,7 +5,6 @@ from __future__ import annotations
 import functools
 import inspect
 import pickle
-from turtle import begin_fill
 import warnings
 from collections import abc
 from shutil import get_terminal_size
@@ -1509,8 +1508,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return super().fillna(
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
-        )
-        
+        )       
     @_cudf_nvtx_annotate
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         if bool_only not in (None, True):
