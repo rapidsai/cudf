@@ -142,16 +142,15 @@ void labels_to_offsets(InputIterator labels_begin,
 
   // If there is not any label value, we will have zero segment or all empty segments. We should
   // terminate from here because:
-  //  - If we have zero segment, `num_segments` computed below will be negative which may cascade to
-  //    undefined behavior if we continue.
+  //  - If we have zero segment, the output array is empty thus `num_segments` computed below is
+  //    wrong and may cascade to undefined behavior if we continue.
   //  - If we have all empty segments, the output offset values will be all `0`, which we already
   //    filled above. If we continue, the `exclusive_scan` call below still does its entire
   //    computation. That is unnecessary and may be expensive if we have the input labels defining
   //    a very large number of segments.
   if (thrust::distance(labels_begin, labels_end) == 0) { return; }
 
-  auto const num_segments =
-    static_cast<OutputType>(thrust::distance(offsets_begin, offsets_end)) - 1;
+  auto const num_segments = thrust::distance(offsets_begin, offsets_end) - 1;
 
   //================================================================================
   // Let's consider an example: Given input labels = [ 0, 0, 0, 0, 1, 1, 4, 4, 4, 4 ].
