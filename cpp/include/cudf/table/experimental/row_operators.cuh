@@ -252,7 +252,7 @@ class device_row_comparator {
                         std::optional<device_span<int const>> depth                  = std::nullopt,
                         std::optional<device_span<order const>> column_order         = std::nullopt,
                         std::optional<device_span<null_order const>> null_precedence = std::nullopt,
-                        PhysicalElementComparator comparator                          = {}) noexcept
+                        PhysicalElementComparator comparator                         = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _check_nulls{check_nulls},
@@ -285,8 +285,8 @@ class device_row_comparator {
     __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
-                                  null_order null_precedence  = null_order::BEFORE,
-                                  int depth                   = 0,
+                                  null_order null_precedence           = null_order::BEFORE,
+                                  int depth                            = 0,
                                   PhysicalElementComparator comparator = {})
       : _lhs{lhs},
         _rhs{rhs},
@@ -470,7 +470,8 @@ template <typename Comparator>
 struct less_equivalent_comparator
   : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT> {
   less_equivalent_comparator(Comparator const& comparator)
-    : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT>{comparator}
+    : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT>{
+        comparator}
   {
   }
 };
@@ -645,7 +646,8 @@ class self_comparator {
 
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
+  auto less_equivalent(Nullate nullate                      = {},
+                       PhysicalElementComparator comparator = {}) const noexcept
   {
     return less_equivalent_comparator{device_row_comparator{
       nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence(), comparator}};
@@ -781,7 +783,8 @@ class two_table_comparator {
 
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
-  auto less_equivalent(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
+  auto less_equivalent(Nullate nullate                      = {},
+                       PhysicalElementComparator comparator = {}) const noexcept
   {
     return less_equivalent_comparator{
       strong_index_comparator_adapter{device_row_comparator{nullate,
@@ -916,9 +919,13 @@ class device_row_comparator {
   device_row_comparator(Nullate check_nulls,
                         table_device_view lhs,
                         table_device_view rhs,
-                        null_equality nulls_are_equal = null_equality::EQUAL,
-                        PhysicalEqualityComparator comparator  = {}) noexcept
-    : lhs{lhs}, rhs{rhs}, check_nulls{check_nulls}, nulls_are_equal{nulls_are_equal}, comparator{comparator}
+                        null_equality nulls_are_equal         = null_equality::EQUAL,
+                        PhysicalEqualityComparator comparator = {}) noexcept
+    : lhs{lhs},
+      rhs{rhs},
+      check_nulls{check_nulls},
+      nulls_are_equal{nulls_are_equal},
+      comparator{comparator}
   {
   }
 
@@ -942,8 +949,8 @@ class device_row_comparator {
     __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
-                                  null_equality nulls_are_equal = null_equality::EQUAL,
-                                  PhysicalEqualityComparator comparator  = {}) noexcept
+                                  null_equality nulls_are_equal         = null_equality::EQUAL,
+                                  PhysicalEqualityComparator comparator = {}) noexcept
       : lhs{lhs},
         rhs{rhs},
         check_nulls{check_nulls},
@@ -1177,9 +1184,9 @@ class self_comparator {
    */
   template <typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
-  auto equal_to(Nullate nullate               = {},
-                null_equality nulls_are_equal = null_equality::EQUAL,
-                PhysicalEqualityComparator comparator  = {}) const noexcept
+  auto equal_to(Nullate nullate                       = {},
+                null_equality nulls_are_equal         = null_equality::EQUAL,
+                PhysicalEqualityComparator comparator = {}) const noexcept
   {
     return device_row_comparator{nullate, *d_t, *d_t, nulls_are_equal, comparator};
   }
@@ -1279,9 +1286,9 @@ class two_table_comparator {
    */
   template <typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
-  auto equal_to(Nullate nullate               = {},
-                null_equality nulls_are_equal = null_equality::EQUAL,
-                PhysicalEqualityComparator comparator  = {}) const noexcept
+  auto equal_to(Nullate nullate                       = {},
+                null_equality nulls_are_equal         = null_equality::EQUAL,
+                PhysicalEqualityComparator comparator = {}) const noexcept
   {
     return strong_index_comparator_adapter{
       device_row_comparator(nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
