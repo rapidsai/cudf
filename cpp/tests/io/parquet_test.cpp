@@ -3348,7 +3348,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   // check first page header and make sure it has only 5000 values
   int fd = open(filepath.c_str(), O_RDONLY);
   unsigned char buf[1024];
-  read(fd, buf, sizeof(buf));
+  (void)!read(fd, buf, sizeof(buf));
 
   // check magic
   EXPECT_EQ(buf[0], 0x50);  // P
@@ -3378,7 +3378,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
     // seek to next page header and read
     int32_t pos = 4 + reader.bytecount() + comp_size;
     lseek(fd, pos, SEEK_SET);
-    read(fd, buf, sizeof(buf));
+    (void)!read(fd, buf, sizeof(buf));
     reader.init(buf, sizeof(buf));
 
     reader.get_i32();  // fld 1
