@@ -1177,9 +1177,9 @@ class self_comparator {
    */
   template <typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
-  auto device_comparator(Nullate nullate               = {},
-                         null_equality nulls_are_equal = null_equality::EQUAL,
-                         PhysicalEqualityComparator c  = {}) const noexcept
+  auto equal_to(Nullate nullate               = {},
+                null_equality nulls_are_equal = null_equality::EQUAL,
+                PhysicalEqualityComparator c  = {}) const noexcept
   {
     return device_row_comparator{nullate, *d_t, *d_t, nulls_are_equal, c};
   }
@@ -1279,9 +1279,9 @@ class two_table_comparator {
    */
   template <typename Nullate,
             typename PhysicalEqualityComparator = nan_equal_physical_equality_comparator>
-  auto device_comparator(Nullate nullate               = {},
-                         null_equality nulls_are_equal = null_equality::EQUAL,
-                         PhysicalEqualityComparator c  = {}) const noexcept
+  auto equal_to(Nullate nullate               = {},
+                null_equality nulls_are_equal = null_equality::EQUAL,
+                PhysicalEqualityComparator c  = {}) const noexcept
   {
     return strong_index_comparator_adapter{
       device_row_comparator(nullate, *d_left_table, *d_right_table, nulls_are_equal, c)};
