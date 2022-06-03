@@ -290,8 +290,9 @@ def test_df_merge_sorted_index(nparts, index, ascending):
     )
 
     expect = df.sort_index(ascending=ascending)
-    with pytest.warns(FutureWarning, match="deprecated and will be removed"):
-        result = cudf.merge_sorted(dfs, by_index=True, ascending=ascending)
+    result = cudf.core.reshape._merge_sorted(
+        dfs, by_index=True, ascending=ascending
+    )
 
     assert_eq(expect.index, result.index)
 
