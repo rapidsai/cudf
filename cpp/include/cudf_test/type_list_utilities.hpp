@@ -42,10 +42,10 @@
  * The test `mytest` will be invoked 3 times, once for each of the types `int,
  * char, float`.
  *
- * Instead of using @code ::testing::Types @endcode directly, we provide
- * `cudf::testing::Types`. This is a drop in replacement for GTest's
- * @code ::testing::Types @endcode. In lieu of including `gtest/gtest.h`, include
- * `cudf_gtest.hpp` to ensure `cudf::testing::Types` is used.
+ * Instead of using \::testing::Types directly, we provide
+ * `cudf::test::Types`. This is a drop in replacement for GTest's
+ * \::testing::Types. In lieu of including `gtest/gtest.h`, include
+ * `cudf_gtest.hpp` to ensure `cudf::test::Types` is used.
  *
  * Using the utilities in this file, you can compose complex type lists.
  *
