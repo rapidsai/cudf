@@ -35,7 +35,44 @@ auto create_map(column_view const& input, rmm::cuda_stream_view stream)
   //
 }
 
-std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
+/**
+ * @brief Check the existence of rows in the keys column in the hash map.
+ */
+auto check_contains(map_type const& map, column_view const& keys)
+{
+  //
+}
+
+/**
+ * @brief Generate labels for elements in the child column of the input lists column.
+ * @param input
+ */
+auto generate_labels(lists_column_view const& input)
+{
+  //
+}
+
+/**
+ * @brief Extract rows from the input table based on the boolean values in the input `condition`
+ * column.
+ */
+auto extract_if()
+
+{
+  //
+}
+
+/**
+ * @brief Reconstruct an offsets column from the input labels array.
+ */
+auto reconstruct_offsets()
+{
+  //
+}
+
+}  // namespace
+
+std::unique_ptr<column> overlap(lists_column_view const& lhs,
                                     lists_column_view const& rhs,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
@@ -88,15 +125,13 @@ std::unique_ptr<column> set_except(lists_column_view const& lhs,
   return nullptr;
 }
 
-}  // namespace
-
 }  // namespace detail
 
 std::unique_ptr<column> overlap(lists_column_view const& lhs,
                                 lists_column_view const& rhs,
                                 rmm::mr::device_memory_resource* mr)
 {
-  return detail::set_overlap(lhs, rhs, rmm::cuda_stream_default, mr);
+  return detail::overlap(lhs, rhs, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
