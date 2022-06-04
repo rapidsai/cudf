@@ -23,7 +23,7 @@
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
-constexpr int64_t data_size        = 256 << 20;
+constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
 namespace cudf_io = cudf::io;
@@ -36,8 +36,9 @@ void BM_orc_read_varying_input(benchmark::State& state)
   auto const data_types             = get_type_or_group(state.range(0));
   cudf::size_type const cardinality = state.range(1);
   cudf::size_type const run_length  = state.range(2);
-  auto const compression            = cudf_io::compression_type(state.range(3));
-  auto const source_type            = static_cast<io_type>(state.range(4));
+  cudf_io::compression_type const compression =
+    state.range(3) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
+  auto const source_type = static_cast<io_type>(state.range(4));
 
   data_profile table_data_profile;
   table_data_profile.set_cardinality(cardinality);
@@ -151,17 +152,12 @@ void BM_orc_read_varying_options(benchmark::State& state)
   state.counters["encoded_file_size"] = source_sink.size();
 }
 
-#define ORC_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)                                 \
-  BENCHMARK_DEFINE_F(OrcRead, name)                                                            \
-  (::benchmark::State & state) { BM_orc_read_varying_input(state); }                           \
-  BENCHMARK_REGISTER_F(OrcRead, name)                                                          \
-    ->ArgsProduct(                                                                             \
-      {{int32_t(type_or_group)},                                                               \
-       {0, 1000},                                                                              \
-       {1, 32},                                                                                \
-       {(int32_t)cudf_io::compression_type::SNAPPY, (int32_t)cudf_io::compression_type::ZLIB}, \
-       {src_type}})                                                                            \
-    ->Unit(benchmark::kMillisecond)                                                            \
+#define ORC_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)                               \
+  BENCHMARK_DEFINE_F(OrcRead, name)                                                          \
+  (::benchmark::State & state) { BM_orc_read_varying_input(state); }                         \
+  BENCHMARK_REGISTER_F(OrcRead, name)                                                        \
+    ->ArgsProduct({{int32_t(type_or_group)}, {0, 1000}, {1, 32}, {true, false}, {src_type}}) \
+    ->Unit(benchmark::kMillisecond)                                                          \
     ->UseManualTime();
 
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL_SIGNED);
