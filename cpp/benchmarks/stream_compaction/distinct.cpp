@@ -8,6 +8,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
 
+namespace {
 static constexpr cudf::size_type num_struct_members = 8;
 static constexpr cudf::size_type max_str_length     = 32;
 
@@ -28,7 +29,7 @@ static auto create_random_structs_column(cudf::size_type n_rows)
   return cudf::make_structs_column(n_rows, table->release(), 0, {});
 }
 
-void BM_contains(benchmark::State& state)
+void BM_fn(benchmark::State& state)
 {
   auto const size{static_cast<cudf::size_type>(state.range(0))};
 
@@ -38,26 +39,27 @@ void BM_contains(benchmark::State& state)
 
   auto const needles = create_random_structs_column(size);
 
-  auto haystack        = create_random_structs_column(size / repeat_times);
-  auto const haystack0 = std::make_unique<cudf::column>(*haystack);
+  auto input        = create_random_structs_column(size / repeat_times);
+  auto const input0 = std::make_unique<cudf::column>(*input);
 
   for (int i = 0; i < repeat_times - 1; ++i) {
-    haystack =
-      cudf::concatenate(std::vector<cudf::column_view>{haystack0->view(), haystack->view()});
+    input = cudf::concatenate(std::vector<cudf::column_view>{input0->view(), input->view()});
   }
 
   for ([[maybe_unused]] auto _ : state) {
     [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
-    auto const result = cudf::distinct(cudf::table_view{{*haystack}}, std::vector<int>{0});
+    auto const result = cudf::distinct(cudf::table_view{{*input}}, std::vector<int>{0});
   }
 }
 
-class Search : public cudf::benchmark {
+}  // namespace
+
+class Distinct : public cudf::benchmark {
 };
 
-BENCHMARK_DEFINE_F(Search, ColumnContains)(::benchmark::State& state) { BM_contains(state); }
+BENCHMARK_DEFINE_F(Distinct, BM)(::benchmark::State& state) { BM_fn(state); }
 
-BENCHMARK_REGISTER_F(Search, ColumnContains)
+BENCHMARK_REGISTER_F(Distinct, BM)
   ->RangeMultiplier(8)
   ->Ranges({{1 << 10, 1 << 26}})
   ->UseManualTime()
