@@ -1,3 +1,4 @@
+#if 0
 
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
@@ -37,8 +38,6 @@ void BM_fn(benchmark::State& state)
   //  constexpr cudf::size_type repeat_times = 2;  // <50% unique rows
   //  constexpr int repeat_times = 1;  // <100% unique rows
 
-  auto const needles = create_random_structs_column(size);
-
   auto input        = create_random_structs_column(size / repeat_times);
   auto const input0 = std::make_unique<cudf::column>(*input);
 
@@ -64,3 +63,5 @@ BENCHMARK_REGISTER_F(Distinct, BM)
   ->Ranges({{1 << 10, 1 << 26}})
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond);
+
+#endif
