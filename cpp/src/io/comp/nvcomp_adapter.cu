@@ -25,11 +25,11 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
                                         device_span<device_span<uint8_t> const> outputs,
                                         rmm::cuda_stream_view stream)
 {
-  size_t num_comp_pages = inputs.size();
-  rmm::device_uvector<void const*> input_data_ptrs(num_comp_pages, stream);
-  rmm::device_uvector<size_t> input_data_sizes(num_comp_pages, stream);
-  rmm::device_uvector<void*> output_data_ptrs(num_comp_pages, stream);
-  rmm::device_uvector<size_t> output_data_sizes(num_comp_pages, stream);
+  size_t num_comp_chunks = inputs.size();
+  rmm::device_uvector<void const*> input_data_ptrs(num_comp_chunks, stream);
+  rmm::device_uvector<size_t> input_data_sizes(num_comp_chunks, stream);
+  rmm::device_uvector<void*> output_data_ptrs(num_comp_chunks, stream);
+  rmm::device_uvector<size_t> output_data_sizes(num_comp_chunks, stream);
 
   // Prepare the input vectors
   auto ins_it = thrust::make_zip_iterator(input_data_ptrs.begin(), input_data_sizes.begin());

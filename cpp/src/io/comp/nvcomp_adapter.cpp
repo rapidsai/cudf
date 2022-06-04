@@ -39,6 +39,7 @@
 
 namespace cudf::io::nvcomp {
 
+// Dispatcher for nvcompBatched<format>DecompressGetTempSize
 template <typename... Args>
 auto batched_decompress_get_temp_size(compression_type compression, Args&&... args)
 {
@@ -57,6 +58,7 @@ auto batched_decompress_get_temp_size(compression_type compression, Args&&... ar
   }
 }
 
+// Dispatcher for nvcompBatched<format>DecompressAsync
 template <typename... Args>
 auto batched_decompress_async(compression_type compression, Args&&... args)
 {
@@ -131,6 +133,7 @@ void batched_decompress(compression_type compression,
   convert_status(nvcomp_statuses, actual_uncompressed_data_sizes, statuses, stream);
 }
 
+// Dispatcher for nvcompBatched<format>CompressGetTempSize
 auto batched_compress_temp_size(compression_type compression,
                                 size_t batch_size,
                                 size_t max_uncompressed_chunk_bytes)
@@ -156,20 +159,21 @@ auto batched_compress_temp_size(compression_type compression,
   return temp_size;
 }
 
+// Dispatcher for nvcompBatched<format>CompressGetMaxOutputChunkSize
 size_t batched_compress_get_max_output_chunk_size(compression_type compression,
-                                                  uint32_t compression_blocksize)
+                                                  uint32_t max_uncompressed_chunk_bytes)
 {
-  size_t max_compressed_chunk_size = 0;
-  nvcompStatus_t status            = nvcompStatus_t::nvcompSuccess;
+  size_t max_comp_chunk_size = 0;
+  nvcompStatus_t status      = nvcompStatus_t::nvcompSuccess;
   switch (compression) {
     case compression_type::SNAPPY:
       status = nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
-        compression_blocksize, nvcompBatchedSnappyDefaultOpts, &max_compressed_chunk_size);
+        max_uncompressed_chunk_bytes, nvcompBatchedSnappyDefaultOpts, &max_comp_chunk_size);
       break;
 #if NVCOMP_HAS_DEFLATE
     case compression_type::DEFLATE:
       status = nvcompBatchedDeflateCompressGetMaxOutputChunkSize(
-        compression_blocksize, nvcompBatchedDeflateDefaultOpts, &max_compressed_chunk_size);
+        max_uncompressed_chunk_bytes, nvcompBatchedDeflateDefaultOpts, &max_comp_chunk_size);
       break;
 #endif
     default: CUDF_FAIL("Unsupported compression type");
@@ -177,19 +181,20 @@ size_t batched_compress_get_max_output_chunk_size(compression_type compression,
 
   CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,
                "failed to get max uncompressed chunk size");
-  return max_compressed_chunk_size;
+  return max_comp_chunk_size;
 }
 
-void batched_compress_async(compression_type compression,
-                            const void* const* device_uncompressed_ptrs,
-                            const size_t* device_uncompressed_bytes,
-                            size_t max_uncompressed_chunk_bytes,
-                            size_t batch_size,
-                            void* device_temp_ptr,
-                            size_t temp_bytes,
-                            void* const* device_compressed_ptrs,
-                            size_t* device_compressed_bytes,
-                            rmm::cuda_stream_view stream)
+// Dispatcher for nvcompBatched<format>CompressAsync
+static void batched_compress_async(compression_type compression,
+                                   const void* const* device_uncompressed_ptrs,
+                                   const size_t* device_uncompressed_bytes,
+                                   size_t max_uncompressed_chunk_bytes,
+                                   size_t batch_size,
+                                   void* device_temp_ptr,
+                                   size_t temp_bytes,
+                                   void* const* device_compressed_ptrs,
+                                   size_t* device_compressed_bytes,
+                                   rmm::cuda_stream_view stream)
 {
   nvcompStatus_t nvcomp_status = nvcompStatus_t::nvcompSuccess;
   switch (compression) {
@@ -228,12 +233,12 @@ void batched_compress(compression_type compression,
                       device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
                       device_span<decompress_status> statuses,
-                      uint32_t max_block_size,
+                      uint32_t max_uncomp_chunk_size,
                       rmm::cuda_stream_view stream)
 {
   auto const num_chunks = inputs.size();
 
-  auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_block_size);
+  auto const temp_size = batched_compress_temp_size(compression, num_chunks, max_uncomp_chunk_size);
   rmm::device_buffer scratch(temp_size, stream);
 
   rmm::device_uvector<size_t> actual_compressed_data_sizes(num_chunks, stream);
@@ -242,7 +247,7 @@ void batched_compress(compression_type compression,
   batched_compress_async(compression,
                          nvcomp_args.input_data_ptrs.data(),
                          nvcomp_args.input_data_sizes.data(),
-                         max_block_size,
+                         max_uncomp_chunk_size,
                          num_chunks,
                          scratch.data(),
                          scratch.size(),
