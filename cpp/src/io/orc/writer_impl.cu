@@ -94,6 +94,20 @@ orc::CompressionKind to_orc_compression(compression_type compression)
 }
 
 /**
+ * @brief Returns the block size for a given compression kind.
+ *
+ * The nvCOMP ZLIB compression is limited to blocks up to 64KiB.
+ */
+size_t compression_block_size(orc::CompressionKind compression)
+{
+  switch (compression) {
+    case orc::CompressionKind::NONE: return 0;
+    case orc::CompressionKind::ZLIB: return 65 * 1024;
+    default: return 256 * 1024;
+  }
+}
+
+/**
  * @brief Function that translates GDF dtype to ORC datatype
  */
 constexpr orc::TypeKind to_orc_type(cudf::type_id id, bool list_column_as_map)
@@ -1474,6 +1488,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
     row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
+    compression_blocksize_(compression_block_size(compression_kind_)),
     stats_freq_(options.get_statistics_freq()),
     single_write_mode(mode == SingleWriteMode::YES),
     kv_meta(options.get_key_value_metadata()),
@@ -1495,6 +1510,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
     row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
+    compression_blocksize_(compression_block_size(compression_kind_)),
     stats_freq_(options.get_statistics_freq()),
     single_write_mode(mode == SingleWriteMode::YES),
     kv_meta(options.get_key_value_metadata()),
