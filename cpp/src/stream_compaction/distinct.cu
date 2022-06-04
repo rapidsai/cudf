@@ -115,11 +115,17 @@ std::unique_ptr<table> distinct(table_view const& input,
     thrust::make_counting_iterator<size_type>(key_size),
     [distinct_indices = distinct_indices.begin(), d_map, hash_key, key_equal] __device__(auto key) {
       // iter should always be valid, because all keys have been inserted.
+      // Here idx is the index of the unique elements that has been inserted into the map.
+      // As such, `find` calling for all duplicate keys will return the same idx value.
       auto const idx =
         d_map.find(key, hash_key, key_equal)->second.load(cuda::std::memory_order_relaxed);
+
+      // Store the minimum index of all keys that are equal.
       atomicMin(&distinct_indices[idx], key);
     });
 
+  // Filter out the invalid indices, which are indices of the duplicate keys
+  // (except the first one that has valid index being written in the previous step).
   auto gather_map = rmm::device_uvector<size_type>(key_size, stream);
   auto const gather_map_end =
     thrust::copy_if(rmm::exec_policy(stream),
