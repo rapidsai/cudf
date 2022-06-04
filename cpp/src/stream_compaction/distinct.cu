@@ -46,8 +46,6 @@
 #include <utility>
 #include <vector>
 
-#include <cudf_test/column_utilities.hpp>
-
 namespace cudf {
 namespace detail {
 std::unique_ptr<table> distinct(table_view const& input,
@@ -100,53 +98,35 @@ std::unique_ptr<table> distinct(table_view const& input,
                         mr);
 #else
 
-  auto const output_size{keys_view.num_rows()};
-  auto distinct_indices = rmm::device_uvector<size_type>(output_size, stream);
+  auto const key_size{keys_view.num_rows()};
+  auto distinct_indices = rmm::device_uvector<size_type>(key_size, stream);
 
+  // Fill `key_size` if keep_first
+  // Fill `INT_MIN` if keep_last
   thrust::uninitialized_fill(rmm::exec_policy(stream),
                              distinct_indices.begin(),
-                             distinct_indices.begin() + output_size,
-                             output_size);
+                             distinct_indices.begin() + key_size,
+                             key_size);
 
   auto const d_map = key_map.get_device_view();
   thrust::for_each(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(output_size),
-    [out_begin = distinct_indices.begin(), d_map, hash_key, key_equal] __device__(auto key) {
-      // iter should always be valid
+    thrust::make_counting_iterator<size_type>(key_size),
+    [distinct_indices = distinct_indices.begin(), d_map, hash_key, key_equal] __device__(auto key) {
+      // iter should always be valid, because all keys have been inserted.
       auto const idx =
         d_map.find(key, hash_key, key_equal)->second.load(cuda::std::memory_order_relaxed);
-      atomicMin(&out_begin[idx], key);
+      atomicMin(&distinct_indices[idx], key);
     });
 
-  {
-    auto const t = column_view(data_type{type_to_id<size_type>()},
-                               static_cast<size_type>(distinct_indices.size()),
-                               distinct_indices.data());
-    printf("\n\nline %d\n", __LINE__);
-    cudf::test::print(t);
-  }
-
-  auto gather_map           = rmm::device_uvector<size_type>(output_size, stream);
-  auto const gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
-                                              distinct_indices.begin(),
-                                              distinct_indices.begin() + output_size,
-                                              gather_map.begin(),
-                                              [output_size] __device__(auto const idx) {
-                                                printf("idx %d, %d\n", idx, output_size);
-                                                return idx != output_size;
-                                              });
-  printf("size %d\n", static_cast<size_type>(thrust::distance(gather_map.begin(), gather_map_end)));
-
-  {
-    auto const t =
-      column_view(data_type{type_to_id<size_type>()},
-                  static_cast<size_type>(thrust::distance(gather_map.begin(), gather_map_end)),
-                  gather_map.data());
-    printf("\n\nline %d\n", __LINE__);
-    cudf::test::print(t);
-  }
+  auto gather_map = rmm::device_uvector<size_type>(key_size, stream);
+  auto const gather_map_end =
+    thrust::copy_if(rmm::exec_policy(stream),
+                    distinct_indices.begin(),
+                    distinct_indices.end(),
+                    gather_map.begin(),
+                    [key_size] __device__(auto const idx) { return idx != key_size; });
 
   return cudf::detail::gather(
     input, gather_map.begin(), gather_map_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
