@@ -1465,8 +1465,8 @@ __device__ int32_t compare(T& v1, T& v2)
 
 // FIXME...need to make sure all data types are handled properly.  not sure how nested stats are
 // done
-__device__ int32_t compareValues(uint8_t ptype,
-                                 uint8_t ctype,
+__device__ int32_t compareValues(int8_t ptype,
+                                 int8_t ctype,
                                  const statistics_val& v1,
                                  const statistics_val& v2)
 {
@@ -1475,16 +1475,12 @@ __device__ int32_t compareValues(uint8_t ptype,
     case Type::INT32:
     case Type::INT64:
       switch (ctype) {
-        case ConvertedType::INT_8:
-        case ConvertedType::INT_16:
-        case ConvertedType::INT_32:
-        case ConvertedType::INT_64: return compare(v1.i_val, v2.i_val);
         case ConvertedType::UINT_8:
         case ConvertedType::UINT_16:
         case ConvertedType::UINT_32:
-        case ConvertedType::UINT_64:
-        default:  // assume everything else is unsigned
-          return compare(v1.u_val, v2.u_val);
+        case ConvertedType::UINT_64: return compare(v1.u_val, v2.u_val);
+        default:  // assume everything else is signed
+          return compare(v1.i_val, v2.i_val);
       }
     case Type::FLOAT:
     case Type::DOUBLE: return compare(v1.fp_val, v2.fp_val);
@@ -1498,8 +1494,8 @@ __device__ int32_t compareValues(uint8_t ptype,
 }
 
 __device__ bool isAscending(const statistics_chunk* s,
-                            uint8_t ptype,
-                            uint8_t ctype,
+                            int8_t ptype,
+                            int8_t ctype,
                             uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
@@ -1511,8 +1507,8 @@ __device__ bool isAscending(const statistics_chunk* s,
 }
 
 __device__ bool isDescending(const statistics_chunk* s,
-                             uint8_t ptype,
-                             uint8_t ctype,
+                             int8_t ptype,
+                             int8_t ctype,
                              uint32_t num_pages)
 {
   for (uint32_t i = 1; i < num_pages; i++) {
@@ -1524,8 +1520,8 @@ __device__ bool isDescending(const statistics_chunk* s,
 }
 
 __device__ int32_t calculateBoundaryOrder(const statistics_chunk* s,
-                                          uint8_t ptype,
-                                          uint8_t ctype,
+                                          int8_t ptype,
+                                          int8_t ctype,
                                           uint32_t num_pages)
 {
   if (isAscending(s, ptype, ctype, num_pages))
@@ -1595,8 +1591,7 @@ __global__ void __launch_bounds__(1)
   uint8_t* col_idx_end;
   float fp_scratch[2];
 
-  if (column_stats.empty())
-    return;
+  if (column_stats.empty()) return;
 
   EncColumnChunk ck_g = chunks[blockIdx.x];
   uint32_t num_pages  = ck_g.num_pages;
@@ -1630,9 +1625,9 @@ __global__ void __launch_bounds__(1)
   encoder.field_list_end(3);
   encoder.field_int32(4,
                       calculateBoundaryOrder(&column_stats[first_data_page + pageidx],
-                                              col_g.physical_type,
-                                              col_g.converted_type,
-                                              num_pages - first_data_page));
+                                             col_g.physical_type,
+                                             col_g.converted_type,
+                                             num_pages - first_data_page));
   // null_counts
   encoder.field_list_begin(5, num_pages - first_data_page, ST_FLD_I64);
   for (uint32_t page = first_data_page; page < num_pages; page++)
