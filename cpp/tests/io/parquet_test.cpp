@@ -3489,31 +3489,74 @@ std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper
 
 // ----- chrono types
 
+// because values can be scaled when passing to parquet, can't just use T::min() and T::max()
 template <typename T>
-std::enable_if_t<cudf::is_chrono<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
 {
+  constexpr T min(typename T::duration(-1000));
+  constexpr T max(typename T::duration(1000));
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i < 10000 ? T::min() : T::max(); });
+    0, [&](auto i) { return i < 10000 ? min : max; });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_chrono<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
 {
+  constexpr T min(typename T::duration(-1000));
+  constexpr T max(typename T::duration(1000));
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i < 10000 ? T::max() : T::min(); });
+    0, [&](auto i) { return i < 10000 ? max : min; });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_chrono<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+  constexpr T min(typename T::duration(-1000));
+  constexpr T max(typename T::duration(1000));
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
     switch (i / 5000) {
-      case 0: return T::max();
-      case 1: return T::min();
-      case 2: return T::max();
-      default: return T::min();
+      case 0: return max;
+      case 1: return min;
+      case 2: return max;
+      default: return min;
+    }
+  });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+{
+  constexpr T min(-1000);
+  constexpr T max(1000);
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return i < 10000 ? min : max; });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+{
+  constexpr T min(-1000);
+  constexpr T max(1000);
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) { return i < 10000 ? max : min; });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+{
+  constexpr T min(-1000);
+  constexpr T max(1000);
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    switch (i / 5000) {
+      case 0: return max;
+      case 1: return min;
+      case 2: return max;
+      default: return min;
     }
   });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
