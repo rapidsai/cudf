@@ -102,7 +102,7 @@ size_t compression_block_size(orc::CompressionKind compression)
 {
   switch (compression) {
     case orc::CompressionKind::NONE: return 0;
-    case orc::CompressionKind::ZLIB: return 65 * 1024;
+    case orc::CompressionKind::ZLIB: return 64 * 1024;
     default: return 256 * 1024;
   }
 }
