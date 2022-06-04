@@ -1,98 +1,64 @@
-/*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/column/column_view.hpp>
-#include <cudf/detail/stream_compaction.hpp>
-#include <cudf/lists/list_view.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/concatenate.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
 
-#include <nvbench/nvbench.cuh>
+static constexpr cudf::size_type num_struct_members = 8;
+static constexpr cudf::size_type max_str_length     = 32;
 
-NVBENCH_DECLARE_TYPE_STRINGS(cudf::timestamp_ms, "cudf::timestamp_ms", "cudf::timestamp_ms");
-
-template <typename Type>
-void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
+static auto create_random_structs_column(cudf::size_type n_rows)
 {
-  cudf::rmm_pool_raii pool_raii;
+  data_profile table_profile;
+  table_profile.set_distribution_params(cudf::type_id::INT32, distribution_id::UNIFORM, 0, n_rows);
+  table_profile.set_distribution_params(
+    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
 
-  cudf::size_type const num_rows = state.get_int64("NumRows");
-
-  data_profile profile;
-  profile.set_null_frequency(0.01);
-  profile.set_cardinality(0);
-  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
-
-  auto source_table =
-    create_random_table(cycle_dtypes({cudf::type_to_id<Type>()}, 1), row_count{num_rows}, profile);
-
-  auto input_column = cudf::column_view(source_table->get_column(0));
-  auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
-
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    rmm::cuda_stream_view stream_view{launch.get_stream()};
-    auto result = cudf::detail::distinct(input_table, {0}, cudf::null_equality::EQUAL, stream_view);
-  });
+  // The first two struct members are int32 and string.
+  // The first column is also used as keys in groupby.
+  // The subsequent struct members are int32 and string again.
+  auto table = create_random_table(
+    cycle_dtypes({cudf::type_id::INT32, cudf::type_id::STRING}, num_struct_members),
+    row_count{n_rows},
+    table_profile);
+  return cudf::make_structs_column(n_rows, table->release(), 0, {});
 }
 
-using data_type = nvbench::type_list<bool, int8_t, int32_t, int64_t, float, cudf::timestamp_ms>;
-
-NVBENCH_BENCH_TYPES(nvbench_distinct, NVBENCH_TYPE_AXES(data_type))
-  .set_name("distinct")
-  .set_type_axes_names({"Type"})
-  .add_int64_axis("NumRows", {10'000, 100'000, 1'000'000, 10'000'000});
-
-template <typename Type>
-void nvbench_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
+void BM_contains(benchmark::State& state)
 {
-  cudf::rmm_pool_raii pool_raii;
+  auto const size{static_cast<cudf::size_type>(state.range(0))};
 
-  auto const size             = state.get_int64("ColumnSize");
-  auto const dtype            = cudf::type_to_id<Type>();
-  double const null_frequency = state.get_float64("null_frequency");
+  constexpr cudf::size_type repeat_times = 4;  // <25% unique rows
+  //  constexpr cudf::size_type repeat_times = 2;  // <50% unique rows
+  //  constexpr int repeat_times = 1;  // <100% unique rows
 
-  data_profile table_data_profile;
-  if (dtype == cudf::type_id::LIST) {
-    table_data_profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 4);
-    table_data_profile.set_distribution_params(
-      cudf::type_id::INT32, distribution_id::UNIFORM, 0, 4);
-    table_data_profile.set_list_depth(1);
-  } else {
-    // We're comparing distinct() on a non-nested column to that on a list column with the same
-    // number of distinct rows. The max list size is 4 and the number of distinct values in the
-    // list's child is 5. So the number of distinct rows in the list = 1 + 5 + 5^2 + 5^3 + 5^4 = 781
-    // We want this column to also have 781 distinct values.
-    table_data_profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 781);
+  auto const needles = create_random_structs_column(size);
+
+  auto haystack        = create_random_structs_column(size / repeat_times);
+  auto const haystack0 = std::make_unique<cudf::column>(*haystack);
+
+  for (int i = 0; i < repeat_times - 1; ++i) {
+    haystack =
+      cudf::concatenate(std::vector<cudf::column_view>{haystack0->view(), haystack->view()});
   }
-  table_data_profile.set_null_frequency(null_frequency);
 
-  auto const table = create_random_table(
-    {dtype}, table_size_bytes{static_cast<size_t>(size)}, table_data_profile, 0);
-
-  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    rmm::cuda_stream_view stream_view{launch.get_stream()};
-    auto result = cudf::detail::distinct(*table, {0}, cudf::null_equality::EQUAL, stream_view);
-  });
+  for ([[maybe_unused]] auto _ : state) {
+    [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
+    auto const result = cudf::distinct(cudf::table_view{{*haystack}}, std::vector<int>{0});
+  }
 }
 
-NVBENCH_BENCH_TYPES(nvbench_distinct_list,
-                    NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, cudf::list_view>))
-  .set_name("distinct_list")
-  .set_type_axes_names({"Type"})
-  .add_float64_axis("null_frequency", {0.0, 0.1})
-  .add_int64_axis("ColumnSize", {100'000'000});
+class Search : public cudf::benchmark {
+};
+
+BENCHMARK_DEFINE_F(Search, ColumnContains)(::benchmark::State& state) { BM_contains(state); }
+
+BENCHMARK_REGISTER_F(Search, ColumnContains)
+  ->RangeMultiplier(8)
+  ->Ranges({{1 << 10, 1 << 26}})
+  ->UseManualTime()
+  ->Unit(benchmark::kMillisecond);
