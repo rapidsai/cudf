@@ -140,6 +140,22 @@ using lhs_iterator = strong_index_iterator<lhs_index_type>;
  */
 using rhs_iterator = strong_index_iterator<rhs_index_type>;
 
+/**
+ * @brief Convert an index `idx` iterating in reverse order in the range `[-1, -size-1)` into the
+ *        valid index range `[0, size)`.
+ *
+ * This conversion is needed in situations when we want to use two strong index types but are
+ * limited to use only one. One example of such limitation is using row indices of both tables as
+ * keys in a hash table. To overcome such limitation, we can use non-negative indices to
+ * denote one strong index type and negative indices (offset by one) to denote the other. After
+ * recognizing the corresponding type, we need to convert the negative indices into their original
+ * values.
+ *
+ * @param idx The negative index iteraring in reverse order in the range `[-1, -size-1)`
+ * @return The converted index iterating in forward order in the range `[0, size)`
+ */
+[[nodiscard]] __device__ auto constexpr normalize_index(size_type const idx) { return -(idx + 1); }
+
 namespace lexicographic {
 
 /**
@@ -517,7 +533,9 @@ struct preprocessed_table {
     : _t(std::move(table)),
       _column_order(std::move(column_order)),
       _null_precedence(std::move(null_precedence)),
-      _depths(std::move(depths)){};
+      _depths(std::move(depths))
+  {
+  }
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -1218,6 +1236,52 @@ struct strong_index_comparator_adapter {
 // @endcond
 
 /**
+ * @brief The adapter functor for calling a row comparator with strong index types from just one
+ *        type of integer index.
+ *
+ * In order to call the underlying row comparator with strong index types, the input integer
+ * indices to the functor must be given such that one index must be non-negative and the other must
+ * be negative:
+ *  - The non-negative index will be converted to `lhs_index_type`.
+ *  - The negative index will be normalized using @ref `normalize_index` and converted to
+ *    `rhs_index_type`.
+ *
+ * @tparam Comparator A class of device row comparator with strong index types.
+ */
+template <typename Comparator>
+struct index_normalized_comparator_adapter {
+  index_normalized_comparator_adapter(Comparator&& comparator_) : comparator(std::move(comparator_))
+  {
+  }
+  /**
+   * @brief Call the underlying row comparator with strong index types from row indices of
+   *        `size_type` type.
+   *
+   * From two row indices `i` and `j`, the non-negative index is converted into `lhs_index_type`
+   * while the negative index is normalized using @ref `normalize_index` then converted to
+   * `rhs_index_type`. The underlying row comparator will be called using these strong type
+   * indices.
+   *
+   * Note that there is not any validity check to be performed in this function. Caller is
+   * responsible to make sure that one index must be non-negative and the other must be negative.
+   * Otherwise, the output is undefined.
+   *
+   * @param i Index of a row in one table to compare.
+   * @param j Index of a row in the other table to compare.
+   * @return The row equality comparison result.
+   */
+  __device__ auto operator()(size_type const i, size_type const j) const noexcept
+  {
+    auto const lhs_idx = static_cast<lhs_index_type>(i >= 0 ? i : j);
+    auto const rhs_idx = static_cast<rhs_index_type>(normalize_index(i < 0 ? i : j));
+    return comparator(lhs_idx, rhs_idx);
+  }
+
+ private:
+  Comparator const comparator;
+};
+
+/**
  * @brief An owning object that can be used to equality compare rows of two different tables.
  *
  * This class takes two table_views and preprocesses certain columns to allow for equality
@@ -1471,6 +1535,38 @@ class device_row_hasher {
   table_device_view const _table;
   Nullate const _check_nulls;
   uint32_t const _seed;
+};
+
+/**
+ * @brief The adapter functor for calling a row hasher from row index given in a range of negative
+ *        values.
+ *
+ * In order to call the underlying hasher, the input negative index will be converted back to a
+ * non-negative value using the @ref `normalize_index` utility function.
+ *
+ * @tparam RowHasher A class of device row hasher.
+ */
+template <typename Hasher>
+struct index_normalized_hasher_adapter {
+  index_normalized_hasher_adapter(Hasher&& hasher_) : hasher(std::move(hasher_)) {}
+
+  /**
+   * Given a negative row index `idx`, this functor converts the index into a (valid) non-negative
+   * value using the @ref `normalize_index` function before calling to the underlying row hasher.
+   *
+   * Note that the is not any validity check for the input value `idx`, assuming that it is always
+   * negative. Otherwise, the output is undefined.
+   *
+   * @param idx A row index that is given in a range of negative values.
+   * @return The resulting hash value.
+   */
+  __device__ auto operator()(size_type const idx) const noexcept
+  {
+    return hasher(normalize_index(idx));
+  }
+
+ private:
+  Hasher const hasher;
 };
 
 // Inject row::equality::preprocessed_table into the row::hash namespace
