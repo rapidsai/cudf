@@ -1004,8 +1004,9 @@ class chunked_parquet_writer_options {
   }
 
   /**
-   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
-   * will return the row group size.
+   * @brief Returns maximum page size, in rows. 
+   *
+   * If set larger than the row group size, then this will return the row group size.
    *
    * @return Maximum page size, in rows
    */
