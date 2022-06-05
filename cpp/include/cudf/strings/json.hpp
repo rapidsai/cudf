@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,8 @@ class get_json_object_options {
   /**
    * @brief Returns true/false depending on whether single-quotes for representing strings
    * are allowed.
+   *
+   * @return true if single-quotes are allowed, false otherwise.
    */
   [[nodiscard]] CUDF_HOST_DEVICE inline bool get_allow_single_quotes() const
   {
@@ -74,6 +76,8 @@ class get_json_object_options {
    * Output = b
    *
    * @endcode
+   *
+   * @return true if individually returned string values have their quotes stripped.
    */
   [[nodiscard]] CUDF_HOST_DEVICE inline bool get_strip_quotes_from_single_strings() const
   {

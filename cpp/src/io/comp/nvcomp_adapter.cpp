@@ -29,6 +29,14 @@
 #define NVCOMP_HAS_ZSTD 0
 #endif
 
+#define NVCOMP_DEFLATE_HEADER <nvcomp/deflate.h>
+#if __has_include(NVCOMP_DEFLATE_HEADER)
+#include NVCOMP_DEFLATE_HEADER
+#define NVCOMP_HAS_DEFLATE 1
+#else
+#define NVCOMP_HAS_DEFLATE 0
+#endif
+
 namespace cudf::io::nvcomp {
 
 template <typename... Args>
@@ -40,6 +48,10 @@ auto batched_decompress_get_temp_size(compression_type compression, Args&&... ar
 #if NVCOMP_HAS_ZSTD
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressGetTempSize(std::forward<Args>(args)...);
+#endif
+#if NVCOMP_HAS_DEFLATE
+    case compression_type::DEFLATE:
+      return nvcompBatchedDeflateDecompressGetTempSize(std::forward<Args>(args)...);
 #endif
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -54,6 +66,10 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
 #if NVCOMP_HAS_ZSTD
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressAsync(std::forward<Args>(args)...);
+#endif
+#if NVCOMP_HAS_DEFLATE
+    case compression_type::DEFLATE:
+      return nvcompBatchedDeflateDecompressAsync(std::forward<Args>(args)...);
 #endif
     default: CUDF_FAIL("Unsupported compression type");
   }
