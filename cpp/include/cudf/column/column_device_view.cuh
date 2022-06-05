@@ -1432,7 +1432,8 @@ struct pair_rep_accessor {
 /**
  * @brief Mutable value accessor of column without null bitmask
  *
- * A unary functor that accepts an index and returns a reference to the element at that index in the column.
+ * A unary functor that accepts an index and returns a reference to the element at that index in the
+ * column.
  *
  * @throws cudf::logic_error if the column is nullable
  * @throws cudf::logic_error if column datatype and template T type mismatch
