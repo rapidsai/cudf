@@ -137,7 +137,7 @@ class column_view_base {
    *
    * @return True if `size()` returns zero, or false otherwise
    */
-  [[nodiscard]] size_type is_empty() const noexcept { return size() == 0; }
+  [[nodiscard]] bool is_empty() const noexcept { return size() == 0; }
 
   /**
    * @brief Returns the element `data_type`
@@ -217,7 +217,7 @@ class column_view_base {
    * @note This function does *not* account for the `offset()`.
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
-   * @return Raw Pointer to the bitmask
+   * @return Raw pointer to the bitmask
    */
   [[nodiscard]] bitmask_type const* null_mask() const noexcept { return _null_mask; }
 
@@ -413,7 +413,7 @@ class column_view : public detail::column_view_base {
   /**
    * @brief Returns iterator to the end of the ordered sequence of child column-views.
    *
-   * @return An iterator to a `column_view` to the element following the last child column
+   * @return An iterator to a `column_view` one past the end of the child columns
    */
   auto child_end() const noexcept { return _children.cend(); }
 

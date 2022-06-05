@@ -559,7 +559,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * For columns with null elements, use `make_null_replacement_iterator`.
    *
    * @tparam T Type of the elements in the column
-   * @return An iterator to the first element of the column.
+   * @return An iterator to the first element of the column
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   [[nodiscard]] const_iterator<T> begin() const
@@ -1432,11 +1432,7 @@ struct pair_rep_accessor {
 /**
  * @brief Mutable value accessor of column without null bitmask
  *
- * A unary functor returns scalar value at `id`.
- * `operator() (cudf::size_type id)` computes reference to `element`
- * This functor is only allowed for non-nullable columns.
- *
- * the return value for element `i` will return `column[i]`
+ * A unary functor that accepts an index and returns a reference to the element at that index in the column.
  *
  * @throws cudf::logic_error if the column is nullable
  * @throws cudf::logic_error if column datatype and template T type mismatch
@@ -1459,7 +1455,7 @@ struct mutable_value_accessor {
   /**
    * @brief Accessor
    *
-   * @param[in] i index of element to access
+   * @param i index of element to access
    * @return reference to element at `i`
    */
   __device__ T& operator()(cudf::size_type i) { return col.element<T>(i); }

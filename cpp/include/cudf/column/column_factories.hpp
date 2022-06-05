@@ -591,7 +591,7 @@ std::unique_ptr<cudf::column> make_structs_column(
  * @param[in] size The number of rows for the output column.
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr Device memory resource used to allocate the returned column's device memory.
- * @return Constructed column of scalar type
+ * @return Constructed column whose rows all contain the scalar value
  */
 std::unique_ptr<column> make_column_from_scalar(
   scalar const& s,
