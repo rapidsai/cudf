@@ -480,6 +480,11 @@ ConfigureTest(
   lists/explode_tests.cpp
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
+  lists/set_operations/common.cpp
+  lists/set_operations/set_difference.cpp
+  lists/set_operations/set_intersect.cpp
+  lists/set_operations/set_overlap.cpp  
+  lists/set_operations/set_union.cpp
   lists/sort_lists_tests.cpp
 )
 
