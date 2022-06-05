@@ -151,6 +151,8 @@ auto extract_if(column_view const& input,
 
 std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
                                     lists_column_view const& rhs,
+                                    null_equality nulls_equal,
+                                    nan_equality nans_equal,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -196,6 +198,8 @@ std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
 
 std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                       lists_column_view const& rhs,
+                                      null_equality nulls_equal,
+                                      nan_equality nans_equal,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
@@ -224,6 +228,8 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
 
 std::unique_ptr<column> set_union(lists_column_view const& lhs,
                                   lists_column_view const& rhs,
+                                  null_equality nulls_equal,
+                                  nan_equality nans_equal,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
@@ -236,6 +242,8 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
 
 std::unique_ptr<column> set_difference(lists_column_view const& lhs,
                                        lists_column_view const& rhs,
+                                       null_equality nulls_equal,
+                                       nan_equality nans_equal,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -272,6 +280,8 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
 
 std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
                                     lists_column_view const& rhs,
+                                    null_equality nulls_equal,
+                                    nan_equality nans_equal,
                                     rmm::mr::device_memory_resource* mr)
 {
   return detail::set_overlap(lhs, rhs, rmm::cuda_stream_default, mr);
@@ -279,6 +289,8 @@ std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
 
 std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                       lists_column_view const& rhs,
+                                      null_equality nulls_equal,
+                                      nan_equality nans_equal,
                                       rmm::mr::device_memory_resource* mr)
 {
   return detail::set_intersect(lhs, rhs, rmm::cuda_stream_default, mr);
@@ -286,6 +298,8 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
 
 std::unique_ptr<column> set_union(lists_column_view const& lhs,
                                   lists_column_view const& rhs,
+                                  null_equality nulls_equal,
+                                  nan_equality nans_equal,
                                   rmm::mr::device_memory_resource* mr)
 {
   return detail::set_union(lhs, rhs, rmm::cuda_stream_default, mr);
@@ -293,6 +307,8 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
 
 std::unique_ptr<column> set_difference(lists_column_view const& lhs,
                                        lists_column_view const& rhs,
+                                       null_equality nulls_equal,
+                                       nan_equality nans_equal,
                                        rmm::mr::device_memory_resource* mr)
 {
   return detail::set_difference(lhs, rhs, rmm::cuda_stream_default, mr);

@@ -41,21 +41,29 @@ namespace cudf::lists {
 std::unique_ptr<column> set_overlap(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::UNEQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> set_intersect(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::UNEQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> set_union(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::UNEQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> set_difference(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::UNEQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
