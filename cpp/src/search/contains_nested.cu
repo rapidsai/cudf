@@ -139,7 +139,7 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack_tv, needles_tv, stream);
     auto const d_eqcomp = cudf::experimental::row::equality::negative_index_comparator_adapter{
-      comparator.device_comparator(nullate::DYNAMIC{haystack_has_nulls || needles_has_nulls})};
+      comparator.equal_to(nullate::DYNAMIC{haystack_has_nulls || needles_has_nulls})};
 
     haystack_map.contains(
       needles_it, needles_it + needles.size(), out_begin, d_hasher, d_eqcomp, stream.value());
