@@ -119,6 +119,7 @@ class CompactProtocolReader {
   bool read(PageLocation* p);
   bool read(OffsetIndex* o);
   bool read(ColumnIndex* c);
+  bool read(Statistics* s);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept
@@ -158,6 +159,7 @@ class CompactProtocolReader {
   template <typename T>
   friend class ParquetFieldEnumListFunctor;
   friend class ParquetFieldStringList;
+  friend class ParquetFieldBinary;
   friend class ParquetFieldBinaryList;
   friend class ParquetFieldStructBlob;
 };
@@ -574,7 +576,37 @@ class ParquetFieldStringList {
 };
 
 /**
- * @brief Functor to read a vector of strings from CompactProtocolReader
+ * @brief Functor to read a binary from CompactProtocolReader
+ *
+ * @return True if field type mismatches or if size of string exceeds bounds
+ * of the CompactProtocolReader
+ */
+class ParquetFieldBinary {
+  int field_val;
+  std::vector<uint8_t>& val;
+
+ public:
+  ParquetFieldBinary(int f, std::vector<uint8_t>& v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    if (field_type != ST_FLD_BINARY) return true;
+    uint32_t n = cpr->get_u32();
+    if (n < (size_t)(cpr->m_end - cpr->m_cur)) {
+      val.resize(n);
+      val.assign(cpr->m_cur, cpr->m_cur+n);
+      cpr->m_cur += n;
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to read a vector of binaries from CompactProtocolReader
  *
  * @return True if field types mismatch or if the process of reading a
  * string fails

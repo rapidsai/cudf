@@ -305,6 +305,17 @@ bool CompactProtocolReader::read(ColumnIndex* c)
   return function_builder(this, op);
 }
 
+bool CompactProtocolReader::read(Statistics* s)
+{
+  auto op = std::make_tuple(ParquetFieldBinary(1, s->min),
+                            ParquetFieldBinary(2, s->max),
+                            ParquetFieldInt64(3, s->null_count),
+                            ParquetFieldInt64(4, s->distinct_count),
+                            ParquetFieldBinary(5, s->min_value),
+                            ParquetFieldBinary(6, s->max_value));
+  return function_builder(this, op);
+}
+
 /**
  * @brief Constructs the schema from the file-level metadata
  *
