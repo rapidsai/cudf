@@ -117,6 +117,7 @@ struct column_name_info {
 
 /**
  * @brief Table metadata for io readers/writers (primarily column names)
+ *
  * For nested types (structs, maps, unions), the ordering of names in the column_names vector
  * corresponds to a pre-order traversal of the column tree.
  * In the example below (2 top-level columns: struct column "col1" and string column "col2"),
@@ -520,6 +521,7 @@ class column_in_metadata {
 
   /**
    * @brief Gets the explicitly set nullability for this column.
+   *
    * @throws If nullability is not explicitly defined for this column.
    *         Check using `is_nullability_defined()` first.
    * @return Boolean indicating whether this column is nullable
@@ -550,6 +552,7 @@ class column_in_metadata {
 
   /**
    * @brief Get the decimal precision that was set for this column.
+   *
    * @throws If decimal precision was not set for this column.
    *         Check using `is_decimal_precision_set()` first.
    * @return The decimal precision that was set for this column
@@ -565,6 +568,7 @@ class column_in_metadata {
 
   /**
    * @brief Get the parquet field id that was set for this column.
+   *
    * @throws If parquet field id was not set for this column.
    *         Check using `is_parquet_field_id_set()` first.
    * @return The parquet field id that was set for this column

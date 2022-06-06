@@ -818,6 +818,12 @@ INPUT                  = main_page.md \
                          regex.md \
                          unicode.md \
                          ../include \
+                         ../include/cudf_test/column_wrapper.hpp \
+                         ../include/cudf_test/column_utilities.hpp \
+                          ../include/cudf_test/iterator_utilities.hpp \
+                          ../include/cudf_test/table_utilities.hpp \
+                          ../include/cudf_test/type_lists.hpp \
+                          ../include/cudf_test/type_list_utilities.hpp \
                          ../libcudf_kafka/include
 
 # This tag can be used to specify the character encoding of the source files
@@ -881,7 +887,7 @@ EXCLUDE_SYMLINKS       = NO
 # Note that the wildcards are matched against the file with absolute path, so to
 # exclude all test directories for example use the pattern */test/*
 
-EXCLUDE_PATTERNS       = */nvtx/* */detail/*
+EXCLUDE_PATTERNS       = */nvtx/* */detail/* */cudf_test/*
 
 # The EXCLUDE_SYMBOLS tag can be used to specify one or more symbol names
 # (namespaces, classes, functions, etc.) that should be excluded from the
