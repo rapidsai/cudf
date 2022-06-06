@@ -594,7 +594,7 @@ class ParquetFieldBinary {
     uint32_t n = cpr->get_u32();
     if (n <= (size_t)(cpr->m_end - cpr->m_cur)) {
       val.resize(n);
-      val.assign(cpr->m_cur, cpr->m_cur+n);
+      val.assign(cpr->m_cur, cpr->m_cur + n);
       cpr->m_cur += n;
       return false;
     } else {
