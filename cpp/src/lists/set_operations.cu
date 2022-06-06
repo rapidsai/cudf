@@ -45,23 +45,24 @@ namespace {
 /**
  * @brief Create a hash map with keys are indices of all elements in the input column.
  */
-auto create_map(column_view const& input, rmm::cuda_stream_view stream)
+std::unique_ptr<cudf::detail::hash_map_type> create_map(column_view const& input,
+                                                        rmm::cuda_stream_view stream)
 {
-  auto map =
-    detail::hash_map_type{compute_hash_table_size(input.size()),
-                          detail::COMPACTION_EMPTY_KEY_SENTINEL,
-                          detail::COMPACTION_EMPTY_VALUE_SENTINEL,
-                          detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-                          stream.value()};
+  auto map = std::make_unique<cudf::detail::hash_map_type>(
+    compute_hash_table_size(input.size()),
+    cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL,
+    cudf::detail::COMPACTION_EMPTY_VALUE_SENTINEL,
+    cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+    stream.value());
 
   auto const input_tv = table_view{{input}};
   auto const hasher   = cudf::experimental::row::hash::row_hasher(input_tv, stream);
-  auto const d_hasher = detail::experimental::compaction_hash(
+  auto const d_hasher = cudf::detail::experimental::compaction_hash(
     hasher.device_hasher(nullate::DYNAMIC{input.has_nulls()}));
   auto const kv_it = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
 
-  map.insert(kv_it, kv_it + input.size(), d_hasher, thrust::equal_to<size_type>{}, stream.value());
+  map->insert(kv_it, kv_it + input.size(), d_hasher, thrust::equal_to<size_type>{}, stream.value());
   return map;
 }
 
@@ -70,7 +71,7 @@ auto create_map(column_view const& input, rmm::cuda_stream_view stream)
  *        of the lhs column.
  */
 // todo: keys must be table with the first col is labels
-auto check_contains(detail::hash_map_type const& map,
+auto check_contains(std::unique_ptr<cudf::detail::hash_map_type> const& map,
                     column_view const& lhs,
                     column_view const& rhs,
                     rmm::cuda_stream_view stream)
@@ -81,14 +82,15 @@ auto check_contains(detail::hash_map_type const& map,
   auto const rhs_tv   = table_view{{rhs}};
   auto const hasher   = cudf::experimental::row::hash::row_hasher(rhs_tv, stream);
   auto const d_hasher = cudf::experimental::row::hash::index_normalized_hasher_adapter{
-    detail::experimental::compaction_hash(hasher.device_hasher(nullate::DYNAMIC{rhs.has_nulls()}))};
+    cudf::detail::experimental::compaction_hash(
+      hasher.device_hasher(nullate::DYNAMIC{rhs.has_nulls()}))};
   auto const comparator =
     cudf::experimental::row::equality::two_table_comparator(lhs_tv, rhs_tv, stream);
   auto const d_eqcomp = cudf::experimental::row::equality::index_normalized_comparator_adapter{
     comparator.equal_to(nullate::DYNAMIC{lhs.has_nulls() || rhs.has_nulls()})};
   auto const rhs_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(size_type{0}));
 
-  map.contains(rhs_it, rhs_it + rhs.size(), contained.begin(), d_hasher, d_eqcomp, stream.value());
+  map->contains(rhs_it, rhs_it + rhs.size(), contained.begin(), d_hasher, d_eqcomp, stream.value());
   return contained;
 }
 
@@ -147,11 +149,11 @@ auto extract_if(column_view const& data,
                                         input_it,
                                         input_it + data.size(),
                                         condition.begin(),
-                                        output_it.begin(),
+                                        output_it,
                                         thrust::identity{});
 
-  auto const gather_map_size = thrust::distance(input_it, copy_end);
-  auto out_data              = cudf::detail::gather(input,
+  auto const gather_map_size = thrust::distance(output_it, copy_end);
+  auto out_data              = cudf::detail::gather(table_view{{data}},
                                        gather_map.begin(),
                                        gather_map.begin() + gather_map_size,
                                        out_of_bounds_policy::DONT_CHECK,
@@ -195,11 +197,15 @@ std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
                                          overlap_result.begin(),
                                          thrust::equal_to{},
                                          thrust::logical_or{});
-  auto const num_non_empty_segments = thrust::distance(list_indices.begin(), end.first);
+  auto const num_non_empty_segments = thrust::distance(overlap_result.begin(), end.second);
 
   // todo fix null mask null count
-  auto result = make_numeric_column(
-    data_type{type_to_id<bool>()}, lhs.size(), copy_bitmask(lhs), lhs.null_count(), stream, mr);
+  auto result = make_numeric_column(data_type{type_to_id<bool>()},
+                                    lhs.size(),
+                                    copy_bitmask(lhs.parent()),
+                                    lhs.null_count(),
+                                    stream,
+                                    mr);
 
   thrust::scatter(rmm::exec_policy(stream),
                   overlap_result.begin(),
@@ -251,8 +257,9 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
   // - Alternative: concatenate_row(lhs, rhs) then `drop_list_duplicates`, however,
   //   `drop_list_duplicates` currently doesn't support nested types.
   // todo: add stream in detail version
-  return lists::concatenate_rows(
-    table_view{{lhs, set_difference(rhs, lhs, nulls_equal, nans_equal, stream, mr)}}, stream, mr);
+  // fix concatenate_rows params.
+  auto const diff = set_difference(rhs, lhs, nulls_equal, nans_equal, mr);
+  return lists::concatenate_rows(table_view{{lhs.parent(), diff->view()}});
 }
 
 std::unique_ptr<column> set_difference(lists_column_view const& lhs,
