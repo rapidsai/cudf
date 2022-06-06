@@ -166,7 +166,6 @@ class writer::impl {
                           hostdevice_vector<size_type>& comp_page_sizes,
                           statistics_chunk* page_stats,
                           statistics_chunk* frag_stats,
-                          size_t max_page_comp_data_size,
                           uint32_t num_columns,
                           uint32_t num_pages,
                           uint32_t num_stats_bfr);

@@ -581,7 +581,6 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       size_type max_page_size_rows,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
-                      size_t max_page_comp_data_size,
                       rmm::cuda_stream_view stream);
 
 /**

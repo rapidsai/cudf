@@ -241,7 +241,6 @@ __global__ void __launch_bounds__(128)
                device_span<parquet_column_device_view const> col_desc,
                statistics_merge_group* page_grstats,
                statistics_merge_group* chunk_grstats,
-               size_t max_page_comp_data_size,
                int32_t num_columns,
                size_t max_page_size_bytes,
                size_type max_page_size_rows)
@@ -1999,7 +1998,6 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       size_type max_page_size_rows,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
-                      size_t max_page_comp_data_size,
                       rmm::cuda_stream_view stream)
 {
   auto num_rowgroups = chunks.size().first;
@@ -2011,7 +2009,6 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                                                      col_desc,
                                                      page_grstats,
                                                      chunk_grstats,
-                                                     max_page_comp_data_size,
                                                      num_columns,
                                                      max_page_size_bytes,
                                                      max_page_size_rows);

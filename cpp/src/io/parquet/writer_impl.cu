@@ -885,7 +885,6 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         max_page_size_rows,
                         nullptr,
                         nullptr,
-                        0,
                         stream);
   chunks.device_to_host(stream, true);
 
@@ -914,7 +913,6 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         max_page_size_rows,
                         nullptr,
                         nullptr,
-                        0,
                         stream);
   page_sizes.device_to_host(stream, true);
 
@@ -940,7 +938,6 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         max_page_size_rows,
                         nullptr,
                         nullptr,
-                        0,
                         stream);
   chunks.device_to_host(stream, true);
   return comp_page_sizes;
@@ -1038,7 +1035,6 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
                                       hostdevice_vector<size_type>& comp_page_sizes,
                                       statistics_chunk* page_stats,
                                       statistics_chunk* frag_stats,
-                                      size_t max_page_comp_data_size,
                                       uint32_t num_columns,
                                       uint32_t num_pages,
                                       uint32_t num_stats_bfr)
@@ -1055,7 +1051,6 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
                    max_page_size_rows,
                    (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
-                   max_page_comp_data_size,
                    stream);
   if (num_stats_bfr > 0) {
     detail::merge_group_statistics<detail::io_file_format::PARQUET>(
@@ -1502,18 +1497,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                       return std::max(max_page_size, chunk.max_page_data_size);
                     });
 
-  // std::cout << "Max page uncompressed data size: " << std::setw(10) << max_page_uncomp_data_size
-  //           << std::endl;
-  // size_t max_page_comp_data_size = 0;
-  // if (compression_ != parquet::Compression::UNCOMPRESSED) {
-  //   auto status = nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
-  //     max_page_uncomp_data_size, nvcompBatchedSnappyDefaultOpts, &max_page_comp_data_size);
-  //   CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,
-  //                "Error in getting compressed size from nvcomp");
-  // }
-  // std::cout << "Max page compressed data size: " << std::setw(10) << max_page_comp_data_size
-  //           << std::endl;
-
   // Find which partition a rg belongs to
   std::vector<int> rg_to_part;
   for (size_t p = 0; p < num_rg_in_part.size(); ++p) {
@@ -1540,12 +1523,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         num_pages += ck->num_pages;
         pages_in_batch += ck->num_pages;
         rowgroup_size += ck->bfr_size;
-        // ck->compressed_size =
-        //   ck->ck_stat_size + ck->page_headers_size + max_page_comp_data_size * ck->num_pages;
         comp_rowgroup_size += ck->compressed_size;
-        std::cout << "RG " << r << " Col " << i << " Num pages: " << ck->num_pages
-                  << " Uncompressed size: " << ck->bfr_size
-                  << " Compressed size: " << ck->compressed_size << std::endl;
         max_chunk_bfr_size =
           std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
       }
@@ -1604,7 +1582,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                        comp_page_sizes,
                        (num_stats_bfr) ? page_stats.data() : nullptr,
                        (num_stats_bfr) ? frag_stats.data() : nullptr,
-                       0,
                        num_columns,
                        num_pages,
                        num_stats_bfr);
