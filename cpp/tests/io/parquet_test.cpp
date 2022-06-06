@@ -3750,19 +3750,28 @@ int32_t compare_binary(std::vector<uint8_t>& v1,
         case cudf_io::parquet::UINT_8:
         case cudf_io::parquet::UINT_16:
         case cudf_io::parquet::UINT_32:
-          return compare(*((uint32_t*)v1.data()), *((uint32_t*)v2.data()));
-        default: return compare(*((int32_t*)v1.data()), *((int32_t*)v2.data()));
+          return compare(*(reinterpret_cast<uint32_t*>(v1.data())),
+                         *(reinterpret_cast<uint32_t*>(v2.data())));
+        default:
+          return compare(*(reinterpret_cast<int32_t*>(v1.data())),
+                         *(reinterpret_cast<int32_t*>(v2.data())));
       }
 
     case cudf_io::parquet::INT64:
       if (ctype == cudf_io::parquet::UINT_64)
-        return compare(*((uint64_t*)v1.data()), *((uint64_t*)v2.data()));
+        return compare(*(reinterpret_cast<uint64_t*>(v1.data())),
+                       *(reinterpret_cast<uint64_t*>(v2.data())));
       else
-        return compare(*((int64_t*)v1.data()), *((int64_t*)v2.data()));
+        return compare(*(reinterpret_cast<int64_t*>(v1.data())),
+                       *(reinterpret_cast<int64_t*>(v2.data())));
 
-    case cudf_io::parquet::FLOAT: return compare(*((float*)v1.data()), *((float*)v2.data()));
+    case cudf_io::parquet::FLOAT:
+      return compare(*(reinterpret_cast<float*>(v1.data())),
+                     *(reinterpret_cast<float*>(v2.data())));
 
-    case cudf_io::parquet::DOUBLE: return compare(*((double*)v1.data()), *((double*)v2.data()));
+    case cudf_io::parquet::DOUBLE:
+      return compare(*(reinterpret_cast<double*>(v1.data())),
+                     *(reinterpret_cast<double*>(v2.data())));
 
     case cudf_io::parquet::BYTE_ARRAY: {
       int32_t v1sz = v1.size();
@@ -3782,12 +3791,13 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
 {
   constexpr auto num_rows = 100000;
 
-  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+  // fixed length strings
+  auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
     char buf[30];
     sprintf(buf, "%012d", i);
     return std::string(buf);
   });
-  auto col0     = cudf::test::strings_column_wrapper(elements, elements + num_rows);
+  auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
 
   auto col1_data = random_values<int8_t>(num_rows);
   auto col2_data = random_values<int16_t>(num_rows);
@@ -3796,14 +3806,20 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
   auto col5_data = random_values<float>(num_rows);
   auto col6_data = random_values<double>(num_rows);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto col1 = cudf::test::fixed_width_column_wrapper<int8_t>(col1_data.begin(), col1_data.end());
+  auto col2 = cudf::test::fixed_width_column_wrapper<int16_t>(col2_data.begin(), col2_data.end());
+  auto col3 = cudf::test::fixed_width_column_wrapper<int32_t>(col3_data.begin(), col3_data.end());
+  auto col4 = cudf::test::fixed_width_column_wrapper<int64_t>(col4_data.begin(), col4_data.end());
+  auto col5 = cudf::test::fixed_width_column_wrapper<float>(col5_data.begin(), col5_data.end());
+  auto col6 = cudf::test::fixed_width_column_wrapper<double>(col6_data.begin(), col6_data.end());
 
-  column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), validity};
-  column_wrapper<int16_t> col2{col2_data.begin(), col2_data.end(), validity};
-  column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), validity};
-  column_wrapper<uint64_t> col4{col4_data.begin(), col4_data.end(), validity};
-  column_wrapper<float> col5{col5_data.begin(), col5_data.end(), validity};
-  column_wrapper<double> col6{col6_data.begin(), col6_data.end(), validity};
+  // mixed length strings
+  auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%d", i);
+    return std::string(buf);
+  });
+  auto col7          = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col0.release());
@@ -3813,23 +3829,14 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
   cols.push_back(col4.release());
   cols.push_back(col5.release());
   cols.push_back(col6.release());
+  cols.push_back(col7.release());
   auto expected = std::make_unique<table>(std::move(cols));
-
-  cudf_io::table_input_metadata expected_metadata(*expected);
-  expected_metadata.column_metadata[0].set_name("strings");
-  expected_metadata.column_metadata[1].set_name("int8s");
-  expected_metadata.column_metadata[2].set_name("int16s");
-  expected_metadata.column_metadata[3].set_name("int32s");
-  expected_metadata.column_metadata[4].set_name("uint64s");
-  expected_metadata.column_metadata[5].set_name("floats");
-  expected_metadata.column_metadata[6].set_name("doubles");
 
   auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndex.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-      .max_page_size_rows(20000)
-      .metadata(&expected_metadata);
+      .max_page_size_rows(20000);
   cudf_io::write_parquet(out_opts);
 
   auto source = cudf_io::datasource::create(filepath);
