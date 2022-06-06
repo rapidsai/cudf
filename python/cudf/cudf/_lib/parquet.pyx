@@ -410,6 +410,26 @@ cdef class ParquetWriter:
     ParquetWriter lets you incrementally write out a Parquet file from a series
     of cudf tables
 
+    Parameters
+    ----------
+    filepath_or_buffer : str, io.IOBase, os.PathLike, or list
+        File path or buffer to write to. The argument may also correspond
+        to a list of file paths or buffers.
+    index : bool or None, default None
+        If ``True``, include a dataframe's index(es) in the file output.
+        If ``False``, they will not be written to the file. If ``None``,
+        index(es) other than RangeIndex will be saved as columns.
+    compression : {'snappy', None}, default 'snappy'
+        Name of the compression to use. Use ``None`` for no compression.
+    statistics : {'ROWGROUP', 'PAGE', 'NONE'}, default 'ROWGROUP'
+        Level at which column statistics should be included in file.
+    row_group_size_bytes: int, default 134217728
+        Maximum size of each stripe of the output.
+        By default, 134217728 (128MB) will be used.
+    row_group_size_rows: int, default 1000000
+        Maximum number of rows of each stripe of the output.
+        By default, 1000000 (10^6 rows) will be used.
+
     See Also
     --------
     cudf.io.parquet.write_parquet
@@ -422,19 +442,25 @@ cdef class ParquetWriter:
     cdef cudf_io_types.statistics_freq stat_freq
     cdef cudf_io_types.compression_type comp_type
     cdef object index
+    cdef size_t row_group_size_bytes
+    cdef size_type row_group_size_rows
 
-    def __cinit__(self, object filepaths_or_buffers, object index=None,
-                  object compression=None, str statistics="ROWGROUP"):
+    def __cinit__(self, object filepath_or_buffer, object index=None,
+                  object compression=None, str statistics="ROWGROUP",
+                  int row_group_size_bytes=134217728,
+                  int row_group_size_rows=1000000):
         filepaths_or_buffers = (
-            list(filepaths_or_buffers)
-            if is_list_like(filepaths_or_buffers)
-            else [filepaths_or_buffers]
+            list(filepath_or_buffer)
+            if is_list_like(filepath_or_buffer)
+            else [filepath_or_buffer]
         )
         self.sink = make_sinks_info(filepaths_or_buffers, self._data_sink)
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
         self.initialized = False
+        self.row_group_size_bytes = row_group_size_bytes
+        self.row_group_size_rows = row_group_size_rows
 
     def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
@@ -547,6 +573,8 @@ cdef class ParquetWriter:
                 .key_value_metadata(move(user_data))
                 .compression(self.comp_type)
                 .stats_level(self.stat_freq)
+                .row_group_size_bytes(self.row_group_size_bytes)
+                .row_group_size_rows(self.row_group_size_rows)
                 .build()
             )
             self.writer.reset(new cpp_parquet_chunked_writer(args))
