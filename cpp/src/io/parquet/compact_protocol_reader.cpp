@@ -307,12 +307,12 @@ bool CompactProtocolReader::read(ColumnIndex* c)
 
 bool CompactProtocolReader::read(Statistics* s)
 {
-  auto op = std::make_tuple(ParquetFieldBinary(1, s->min),
-                            ParquetFieldBinary(2, s->max),
+  auto op = std::make_tuple(ParquetFieldBinary(1, s->max),
+                            ParquetFieldBinary(2, s->min),
                             ParquetFieldInt64(3, s->null_count),
                             ParquetFieldInt64(4, s->distinct_count),
-                            ParquetFieldBinary(5, s->min_value),
-                            ParquetFieldBinary(6, s->max_value));
+                            ParquetFieldBinary(5, s->max_value),
+                            ParquetFieldBinary(6, s->min_value));
   return function_builder(this, op);
 }
 
