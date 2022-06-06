@@ -70,7 +70,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
     h_prog.classes_data() + h_prog.classes_count(),
     classes_count * sizeof(_classes[0]),
     std::plus<std::size_t>{},
-    [&h_prog](auto& cls) { return cls.literals.size() * sizeof(reclass_span); });
+    [&h_prog](auto& cls) { return cls.literals.size() * sizeof(reclass_range); });
   // make sure each section is aligned for the subsequent section's data type
   auto const memsize = cudf::util::round_up_safe(insts_size, sizeof(_startinst_ids[0])) +
                        cudf::util::round_up_safe(startids_size, sizeof(_classes[0])) +
@@ -112,11 +112,11 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
     auto h_class = h_prog.class_at(idx);
     reclass_device d_class{h_class.builtins,
                            static_cast<int32_t>(h_class.literals.size()),
-                           reinterpret_cast<reclass_span*>(d_end)};
+                           reinterpret_cast<reclass_range*>(d_end)};
     *classes++ = d_class;
-    memcpy(h_end, h_class.literals.data(), h_class.literals.size() * sizeof(reclass_span));
-    h_end += h_class.literals.size() * sizeof(reclass_span);
-    d_end += h_class.literals.size() * sizeof(reclass_span);
+    memcpy(h_end, h_class.literals.data(), h_class.literals.size() * sizeof(reclass_range));
+    h_end += h_class.literals.size() * sizeof(reclass_range);
+    d_end += h_class.literals.size() * sizeof(reclass_range);
   }
 
   // initialize the rest of the elements

@@ -50,7 +50,7 @@ enum InstType {
 /**
  * @brief Range used for literals in reclass classes.
  */
-struct reclass_span {
+struct reclass_range {
   char32_t first{};  /// first character in span
   char32_t last{};   /// last character in span (inclusive)
 };
@@ -60,10 +60,10 @@ struct reclass_span {
  */
 struct reclass {
   int32_t builtins{0};  // bit mask identifying builtin classes
-  std::vector<reclass_span> literals;
+  std::vector<reclass_range> literals;
   reclass() {}
   reclass(int m) : builtins(m) {}
-  reclass(int m, std::vector<reclass_span>&& l) : builtins(m), literals(std::move(l)) {}
+  reclass(int m, std::vector<reclass_range>&& l) : builtins(m), literals(std::move(l)) {}
 };
 
 constexpr int32_t CCLASS_W{1 << 0};   // [a-z], [A-Z], [0-9], and '_'

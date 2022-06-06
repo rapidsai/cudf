@@ -205,7 +205,7 @@ __device__ __forceinline__ void reprog_device::store(void* buffer) const
   auto classes     = reinterpret_cast<reclass_device*>(ptr);
   result->_classes = classes;
   // fill in each class
-  auto d_ptr = reinterpret_cast<reclass_span*>(classes + _classes_count);
+  auto d_ptr = reinterpret_cast<reclass_range*>(classes + _classes_count);
   for (int idx = 0; idx < _classes_count; ++idx) {
     classes[idx]          = _classes[idx];
     classes[idx].literals = d_ptr;

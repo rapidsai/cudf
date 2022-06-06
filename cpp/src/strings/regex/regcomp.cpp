@@ -250,12 +250,12 @@ class regex_parser {
     }
 
     // transform pairs of literals to spans
-    std::vector<reclass_span> spans;
+    std::vector<reclass_range> spans;
     auto const evens = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                        [](auto i) { return i * 2; });
     std::transform(
       evens, evens + (literals.size() / 2), std::back_inserter(spans), [&literals](auto idx) {
-        return reclass_span{literals[idx], literals[idx + 1]};
+        return reclass_range{literals[idx], literals[idx + 1]};
       });
     // sort the spans to help with detecting overlapping entries
     std::sort(spans.begin(), spans.end(), [](auto l, auto r) {
@@ -268,7 +268,7 @@ class regex_parser {
         auto const curr = *itr;
         if (curr.first <= prev.last + 1) {
           // if these 2 spans intersect, expand the current one
-          *itr = reclass_span{prev.first, std::max(prev.last, curr.last)};
+          *itr = reclass_range{prev.first, std::max(prev.last, curr.last)};
         }
       }
     }
