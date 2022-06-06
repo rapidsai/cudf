@@ -30,7 +30,7 @@ namespace cudf {
 
 /**
  * @brief Computes quantiles with interpolation.
-
+ *
  * Computes the specified quantiles by interpolating values between which they
  * lie, using the interpolation strategy specified in `interp`.
  *

@@ -23,9 +23,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <memory>
 #include <rmm/cuda_stream_view.hpp>
 
+#include <memory>
 #include <utility>
 #include <vector>
 
