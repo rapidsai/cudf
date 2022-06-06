@@ -526,8 +526,11 @@ class parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
-   * @brief Returns the maximum uncompressed page size, in bytes. If set larger than the row group
-   * size, then this will return the row group size.
+   * @brief Returns the maximum uncompressed page size, in bytes.
+   *
+   * If set larger than the row group size, then this will return the row group size.
+   *
+   * @return Maximum uncompressed page size, in bytes
    */
   auto get_max_page_size_bytes() const
   {
@@ -535,8 +538,11 @@ class parquet_writer_options {
   }
 
   /**
-   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
-   * will return the row group size.
+   * @brief Returns maximum page size, in rows.
+   *
+   * If set larger than the row group size, then this will return the row group size.
+   *
+   * @return Maximum page size, in rows
    */
   auto get_max_page_size_rows() const
   {
@@ -638,6 +644,8 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
   {
@@ -647,6 +655,8 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum page size, in rows.
+   *
+   * @param size_rows Maximum page size, in rows to set
    */
   void set_max_page_size_rows(size_type size_rows)
   {
@@ -788,9 +798,11 @@ class parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets the maximum uncompressed page size, in bytes. Serves as a hint to the writer,
-   * and can be exceeded under certain circumstances. Cannot be larger than the row group size in
-   * bytes, and will be adjusted to match if it is.
+   * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * Serves as a hint to the writer, * and can be exceeded under certain circumstances.
+   * Cannot be larger than the row group size in bytes, and will be adjusted to
+   * match if it is.
    *
    * @param val maximum page size
    * @return this for chaining
@@ -979,8 +991,12 @@ class chunked_parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
-   * @brief Returns maximum uncompressed page size, in bytes. If set larger than the row group size,
-   * then this will return the row group size.
+   * @brief Returns maximum uncompressed page size, in bytes.
+   *
+   * If set larger than the row group size, then this will return the
+   * row group size.
+   *
+   * @return Maximum uncompressed page size, in bytes
    */
   auto get_max_page_size_bytes() const
   {
@@ -988,8 +1004,11 @@ class chunked_parquet_writer_options {
   }
 
   /**
-   * @brief Returns maximum page size, in rows. If set larger than the row group size, then this
-   * will return the row group size.
+   * @brief Returns maximum page size, in rows.
+   *
+   * If set larger than the row group size, then this will return the row group size.
+   *
+   * @return Maximum page size, in rows
    */
   auto get_max_page_size_rows() const
   {
@@ -1030,8 +1049,9 @@ class chunked_parquet_writer_options {
   void set_compression(compression_type compression) { _compression = compression; }
 
   /**
-   * @brief Sets timestamp writing preferences. INT96 timestamps will be written
-   * if `true` and TIMESTAMP_MICROS will be written if `false`.
+   * @brief Sets timestamp writing preferences.
+   *
+   * INT96 timestamps will be written if `true` and TIMESTAMP_MICROS will be written if `false`.
    *
    * @param req Boolean value to enable/disable writing of INT96 timestamps
    */
@@ -1065,6 +1085,8 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * @param size_bytes Maximum uncompressed page size, in bytes to set
    */
   void set_max_page_size_bytes(size_t size_bytes)
   {
@@ -1074,6 +1096,8 @@ class chunked_parquet_writer_options {
 
   /**
    * @brief Sets the maximum page size, in rows.
+   *
+   * @param size_rows The maximum page size, in rows to set
    */
   void set_max_page_size_rows(size_type size_rows)
   {
@@ -1205,9 +1229,10 @@ class chunked_parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets the maximum uncompressed page size, in bytes. Serves as a hint to the writer,
-   * and can be exceeded under certain circumstances. Cannot be larger than the row group size in
-   * bytes, and will be adjusted to match if it is.
+   * @brief Sets the maximum uncompressed page size, in bytes.
+   *
+   * Serves as a hint to the writer, and can be exceeded under certain circumstances. Cannot be
+   * larger than the row group size in bytes, and will be adjusted to match if it is.
    *
    * @param val maximum page size
    * @return this for chaining
