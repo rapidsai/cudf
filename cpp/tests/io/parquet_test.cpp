@@ -3722,4 +3722,105 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   }
 }
 
+TEST_F(ParquetWriterTest, CheckOffsetIndex)
+{
+  constexpr auto num_rows = 100000;
+
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%012d", i);
+    return std::string(buf);
+  });
+  auto col0 = cudf::test::strings_column_wrapper(elements, elements + num_rows);
+
+  auto col1_data = random_values<int8_t>(num_rows);
+  auto col2_data = random_values<int16_t>(num_rows);
+  auto col3_data = random_values<int32_t>(num_rows);
+  auto col4_data = random_values<float>(num_rows);
+  auto col5_data = random_values<double>(num_rows);
+  auto col6_vals = random_values<int16_t>(num_rows);
+  auto col7_vals = random_values<int32_t>(num_rows);
+  auto col8_vals = random_values<int64_t>(num_rows);
+  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [col6_vals](auto i) {
+    return numeric::decimal32{col6_vals[i], numeric::scale_type{5}};
+  });
+  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [col7_vals](auto i) {
+    return numeric::decimal64{col7_vals[i], numeric::scale_type{-5}};
+  });
+  auto col8_data = cudf::detail::make_counting_transform_iterator(0, [col8_vals](auto i) {
+    return numeric::decimal128{col8_vals[i], numeric::scale_type{-6}};
+  });
+  auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), validity};
+  column_wrapper<int16_t> col2{col2_data.begin(), col2_data.end(), validity};
+  column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), validity};
+  column_wrapper<float> col4{col4_data.begin(), col4_data.end(), validity};
+  column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
+  column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, validity};
+  column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, validity};
+  column_wrapper<numeric::decimal128> col8{col8_data, col8_data + num_rows, validity};
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  cols.push_back(col4.release());
+  cols.push_back(col5.release());
+  cols.push_back(col6.release());
+  cols.push_back(col7.release());
+  cols.push_back(col8.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  cudf_io::table_input_metadata expected_metadata(*expected);
+  expected_metadata.column_metadata[0].set_name("strings");
+  expected_metadata.column_metadata[1].set_name("int8s");
+  expected_metadata.column_metadata[2].set_name("int16s");
+  expected_metadata.column_metadata[3].set_name("int32s");
+  expected_metadata.column_metadata[4].set_name("floats");
+  expected_metadata.column_metadata[5].set_name("doubles");
+  expected_metadata.column_metadata[6].set_name("decimal32s").set_decimal_precision(10);
+  expected_metadata.column_metadata[7].set_name("decimal64s").set_decimal_precision(20);
+  expected_metadata.column_metadata[8].set_name("decimal128s").set_decimal_precision(40);
+
+  auto filepath = temp_env->get_temp_filepath("CheckOffsetIndex.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(20000)
+      .metadata(&expected_metadata);
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  EXPECT_EQ(read_footer(source, &fmd), 0);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      // read in offset index
+      cudf_io::parquet::OffsetIndex oi;
+      auto& chunk = rg.columns[c];
+      const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
+      cudf_io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
+      EXPECT_TRUE(cp.read(&oi));
+
+      // loop over offsets, read page header, make sure it's a data page
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        cudf_io::parquet::PageHeader ph;
+        auto& page_loc = oi.page_locations[o];
+        const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
+        cudf_io::parquet::CompactProtocolReader cp2(page_buf->data(), page_buf->size());
+        EXPECT_TRUE(cp2.read(&ph));
+        EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+    }
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()
