@@ -193,7 +193,7 @@ std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
                                          labels.begin(),
                                          labels.end(),
                                          contained.begin(),
-                                         thrust::make_discard_iterator(),
+                                         list_indices.begin(),
                                          overlap_result.begin(),
                                          thrust::equal_to{},
                                          thrust::logical_or{});
