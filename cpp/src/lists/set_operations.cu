@@ -28,6 +28,7 @@
 #include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
@@ -65,29 +66,29 @@ auto create_map(column_view const& input, rmm::cuda_stream_view stream)
 }
 
 /**
- * @brief Check the existence of rows in the keys column in the hash map.
+ * @brief Check the existence of rows in the rhs column in the hash map, which was created by rows
+ *        of the lhs column.
  */
 // todo: keys must be table with the first col is labels
 auto check_contains(detail::hash_map_type const& map,
-                    bool map_has_nulls,
-                    column_view const& keys,
+                    column_view const& lhs,
+                    column_view const& rhs,
                     rmm::cuda_stream_view stream)
 {
-  auto contained = rmm::device_uvector<bool>(keys.size(), stream);
+  auto contained = rmm::device_uvector<bool>(rhs.size(), stream);
 
-  auto const keys_tv  = table_view{{keys}};
-  auto const hasher   = cudf::experimental::row::hash::row_hasher(keys_tv, stream);
-  auto const d_hasher = cudf::experimental::row::hash::negative_index_hasher_adapter{
-    detail::experimental::compaction_hash(
-      hasher.device_hasher(nullate::DYNAMIC{keys.has_nulls()}))};
+  auto const lhs_tv   = table_view{{lhs}};
+  auto const rhs_tv   = table_view{{rhs}};
+  auto const hasher   = cudf::experimental::row::hash::row_hasher(rhs_tv, stream);
+  auto const d_hasher = cudf::experimental::row::hash::index_normalized_hasher_adapter{
+    detail::experimental::compaction_hash(hasher.device_hasher(nullate::DYNAMIC{rhs.has_nulls()}))};
   auto const comparator =
-    cudf::experimental::row::equality::two_table_comparator(haystack_tv, keys_tv, stream);
-  auto const d_eqcomp = cudf::experimental::row::equality::negative_index_comparator_adapter{
-    comparator.device_comparator(nullate::DYNAMIC{map_has_nulls || keys.has_nulls()})};
-  auto const keys_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(size_type{0}));
+    cudf::experimental::row::equality::two_table_comparator(lhs_tv, rhs_tv, stream);
+  auto const d_eqcomp = cudf::experimental::row::equality::index_normalized_comparator_adapter{
+    comparator.equal_to(nullate::DYNAMIC{lhs.has_nulls() || rhs.has_nulls()})};
+  auto const rhs_it = thrust::make_reverse_iterator(thrust::make_counting_iterator(size_type{0}));
 
-  map.contains(
-    keys_it, keys_it + keys.size(), contained.begin(), d_hasher, d_eqcomp, stream.value());
+  map.contains(rhs_it, rhs_it + rhs.size(), contained.begin(), d_hasher, d_eqcomp, stream.value());
   return contained;
 }
 
@@ -124,27 +125,40 @@ auto reconstruct_offsets(rmm::device_uvector<size_type> const& labels,
 }
 
 /**
- * @brief Extract rows from the input table based on the boolean values in the input `condition`
- * column.
+ * @brief Extract rows from the input data column and labels array based on the boolean values in
+ *        the input `condition` column.
  */
-auto extract_if(column_view const& input,
+auto extract_if(column_view const& data,
                 rmm::device_uvector<size_type> const& labels,
                 rmm::device_uvector<bool> const& condition,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr)
 
 {
-  auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
-  auto const gather_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
-                    condition.begin(),
-                    gather_map.begin(),
-                    thrust::identity{});
+  CUDF_EXPECTS(static_cast<std::size_t>(data.size()) == labels.size(), "TBA");
 
-  return cudf::detail::gather(
-    input, gather_map.begin(), gather_map_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
+  auto gather_map = rmm::device_uvector<size_type>(data.size(), stream);
+  auto out_labels = rmm::device_uvector<size_type>(labels.size(), stream);
+
+  auto const input_it =
+    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), labels.begin());
+  auto const output_it = thrust::make_zip_iterator(gather_map.begin(), out_labels.begin());
+  auto const copy_end  = thrust::copy_if(rmm::exec_policy(stream),
+                                        input_it,
+                                        input_it + data.size(),
+                                        condition.begin(),
+                                        output_it.begin(),
+                                        thrust::identity{});
+
+  auto const gather_map_size = thrust::distance(input_it, copy_end);
+  auto out_data              = cudf::detail::gather(input,
+                                       gather_map.begin(),
+                                       gather_map.begin() + gather_map_size,
+                                       out_of_bounds_policy::DONT_CHECK,
+                                       stream,
+                                       mr);
+
+  return std::pair(std::move(out_data->release().front()), std::move(out_labels));
 }
 
 }  // namespace
@@ -164,7 +178,7 @@ std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
   auto const lhs_child = lhs.get_sliced_child(stream);
   auto const rhs_child = rhs.get_sliced_child(stream);
   auto const map       = create_map(lhs_child, stream);
-  auto const contained = check_contains(map, lhs_child.has_nulls(), rhs_child, stream);
+  auto const contained = check_contains(map, lhs_child, rhs_child, stream);
   auto const labels    = generate_labels(rhs_child, stream);
 
   // This stores the unique label values, used as scatter map.
@@ -215,7 +229,7 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
   auto const lhs_child = lhs.get_sliced_child(stream);
   auto const rhs_child = rhs.get_sliced_child(stream);
   auto const map       = create_map(lhs_child, stream);
-  auto const contained = check_contains(map, lhs_child.has_nulls(), rhs_child, stream);
+  auto const contained = check_contains(map, lhs_child, rhs_child, stream);
   auto const labels    = generate_labels(rhs_child, stream);
 
   auto [out_child, intersect_labels] = extract_if(rhs_child, labels, contained, stream, mr);
@@ -259,7 +273,7 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
   auto const lhs_child = lhs.get_sliced_child(stream);
   auto const rhs_child = rhs.get_sliced_child(stream);
   auto const map       = create_map(rhs_child, stream);
-  auto inv_contained   = check_contains(map, rhs_child.has_nulls(), lhs_child, stream);
+  auto inv_contained   = check_contains(map, rhs_child, lhs_child, stream);
   thrust::transform(rmm::exec_policy(stream),
                     inv_contained.begin(),
                     inv_contained.end(),
