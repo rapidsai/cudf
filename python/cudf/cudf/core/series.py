@@ -1577,26 +1577,27 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    False
         dtype: bool
         """
+        left_operand = left if is_scalar(left) else as_column(left)
+        right_operand = right if is_scalar(right) else as_column(right)
 
         if inclusive == "both":
-            lmask = self >= left
-            rmask = self <= right
+            lmask = self._column >= left_operand
+            rmask = self._column <= right_operand
         elif inclusive == "left":
-            lmask = self >= left
-            rmask = self < right
+            lmask = self._column >= left_operand
+            rmask = self._column < right_operand
         elif inclusive == "right":
-            lmask = self > left
-            rmask = self <= right
+            lmask = self._column > left_operand
+            rmask = self._column <= right_operand
         elif inclusive == "neither":
-            lmask = self > left
-            rmask = self < right
+            lmask = self._column > left_operand
+            rmask = self._column < right_operand
         else:
             raise ValueError(
                 "Inclusive has to be either string of 'both', "
                 "'left', 'right', or 'neither'."
             )
-
-        return lmask & rmask
+        return self._from_data({self.name: lmask & rmask}, self._index)
 
     @_cudf_nvtx_annotate
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
