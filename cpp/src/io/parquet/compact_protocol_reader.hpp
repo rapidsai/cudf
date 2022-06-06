@@ -592,7 +592,7 @@ class ParquetFieldBinary {
   {
     if (field_type != ST_FLD_BINARY) return true;
     uint32_t n = cpr->get_u32();
-    if (n < (size_t)(cpr->m_end - cpr->m_cur)) {
+    if (n <= (size_t)(cpr->m_end - cpr->m_cur)) {
       val.resize(n);
       val.assign(cpr->m_cur, cpr->m_cur+n);
       cpr->m_cur += n;
@@ -626,7 +626,7 @@ class ParquetFieldBinaryList {
     val.resize(n);
     for (int32_t i = 0; i < n; i++) {
       uint32_t l = cpr->get_u32();
-      if (l < (size_t)(cpr->m_end - cpr->m_cur)) {
+      if (l <= (size_t)(cpr->m_end - cpr->m_cur)) {
         val[i].resize(l);
         val[i].assign(cpr->m_cur, cpr->m_cur + l);
         cpr->m_cur += l;
