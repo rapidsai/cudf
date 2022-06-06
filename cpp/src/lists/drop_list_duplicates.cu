@@ -40,12 +40,7 @@
 #include <thrust/distance.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/reduce.h>
-#include <thrust/scan.h>
-#include <thrust/scatter.h>
-#include <thrust/uninitialized_fill.h>
 
 #include <optional>
 
@@ -437,72 +432,6 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_indices(
 }
 
 /**
- * @brief Generate list offsets from entry list indices for the final result lists column(s).
- *
- * @param num_lists The number of lists.
- * @param entries_list_indices The mapping from list entries to their (1-based) list indices.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device resource used to allocate memory.
- */
-std::unique_ptr<column> generate_output_offsets(size_type num_lists,
-                                                column_view const& entries_list_indices,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
-{
-  // Let consider an example:
-  // Given the original offsets of the input lists column is [0, 4, 5, 6, 7, 10, 11, 13].
-  // The original entries_list_indices is [1, 1, 1, 1, 2, 3, 4, 5, 5, 5, 6, 7, 7], and after
-  // extracting unique entries we have the entries_list_indices becomes [1, 1, 1, 4, 5, 5, 5, 7, 7]
-  // and num_lists is 7. These are the input to this function.
-  //
-  // Through extracting unique list entries, one entry in the list index 1 has been removed (first
-  // list, as we are using 1-based list index), and entries in the lists with indices {3, 3, 6} have
-  // been removed completely.
-
-  // This variable stores the (1-based) list indices of the unique entries but only one index value
-  // per non-empty list. Given the example above, we will have this array hold the values
-  // [1, 4, 5, 7].
-  auto list_indices = rmm::device_uvector<size_type>(num_lists, stream);
-
-  // Stores the non-zero numbers of unique entries per list.
-  // Given the example above, we will have this array contains the values [3, 1, 3, 2]
-  auto list_sizes = rmm::device_uvector<size_type>(num_lists, stream);
-
-  // Count the numbers of unique entries for each non-empty list.
-  auto const end                 = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                         entries_list_indices.template begin<size_type>(),
-                                         entries_list_indices.template end<size_type>(),
-                                         thrust::make_constant_iterator<size_type>(1),
-                                         list_indices.begin(),
-                                         list_sizes.begin());
-  auto const num_non_empty_lists = thrust::distance(list_indices.begin(), end.first);
-
-  // The output offsets for the output lists column(s).
-  auto new_offsets = rmm::device_uvector<offset_type>(num_lists + 1, stream, mr);
-
-  // The new offsets need to be filled with 0 value first.
-  thrust::uninitialized_fill_n(
-    rmm::exec_policy(stream), new_offsets.begin(), num_lists + 1, offset_type{0});
-
-  // Scatter non-zero sizes of the output lists into the correct positions.
-  // Given the example above, we will have new_offsets = [0, 3, 0, 0, 1, 3, 0, 2]
-  thrust::scatter(rmm::exec_policy(stream),
-                  list_sizes.begin(),
-                  list_sizes.begin() + num_non_empty_lists,
-                  list_indices.begin(),
-                  new_offsets.begin());
-
-  // Generate offsets from sizes.
-  // Given the example above, we will have new_offsets = [0, 3, 3, 3, 4, 7, 7, 9]
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), new_offsets.begin(), new_offsets.end(), new_offsets.begin());
-
-  // Done. Hope that your head didn't explode after reading till this point.
-  return std::make_unique<column>(
-    data_type{type_to_id<offset_type>()}, num_lists + 1, new_offsets.release());
-}
-
-/**
  * @brief Common execution code called by all public `drop_list_duplicates` APIs.
  */
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates_common(
@@ -594,11 +523,19 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
                                                                              mr);
 
   // Generate offsets for the output lists column(s).
-  auto output_offsets = generate_output_offsets(
-    keys.size(),
-    unique_entries_and_list_indices.back()->view(),  // unique entries' list indices
-    stream,
-    mr);
+  auto output_offsets = [&] {
+    auto out_offsets = make_numeric_column(
+      data_type{type_to_id<offset_type>()}, keys.size() + 1, mask_state::UNALLOCATED, stream, mr);
+    auto const offsets = out_offsets->mutable_view();
+    auto const labels =
+      unique_entries_and_list_indices.back()->view();  // unique entries' list indices
+    cudf::detail::labels_to_offsets(labels.template begin<size_type>(),
+                                    labels.template end<size_type>(),
+                                    offsets.template begin<size_type>(),
+                                    offsets.template end<size_type>(),
+                                    stream);
+    return out_offsets;
+  }();
 
   // If the values lists column is not given, its corresponding output will be nullptr.
   auto out_values =
