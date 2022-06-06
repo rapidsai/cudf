@@ -251,7 +251,8 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
   // - Alternative: concatenate_row(lhs, rhs) then `drop_list_duplicates`, however,
   //   `drop_list_duplicates` currently doesn't support nested types.
   // todo: add stream in detail version
-  return lists::concatenate_rows(table_view{{lhs, set_difference(rhs, lhs, stream)}}, stream, mr);
+  return lists::concatenate_rows(
+    table_view{{lhs, set_difference(rhs, lhs, nulls_equal, nans_equal, stream, mr)}}, stream, mr);
 }
 
 std::unique_ptr<column> set_difference(lists_column_view const& lhs,
@@ -270,15 +271,18 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
   // - Pull lhs child elements from gather_map.
   // - Reconstruct output offsets from except_labels for lhs.
 
-  auto const lhs_child = lhs.get_sliced_child(stream);
-  auto const rhs_child = rhs.get_sliced_child(stream);
-  auto const map       = create_map(rhs_child, stream);
-  auto inv_contained   = check_contains(map, rhs_child, lhs_child, stream);
-  thrust::transform(rmm::exec_policy(stream),
-                    inv_contained.begin(),
-                    inv_contained.end(),
-                    inv_contained.begin(),
-                    thrust::logical_not{});
+  auto const lhs_child     = lhs.get_sliced_child(stream);
+  auto const rhs_child     = rhs.get_sliced_child(stream);
+  auto const map           = create_map(rhs_child, stream);
+  auto const inv_contained = [&] {
+    auto contained = check_contains(map, rhs_child, lhs_child, stream);
+    thrust::transform(rmm::exec_policy(stream),
+                      contained.begin(),
+                      contained.end(),
+                      contained.begin(),
+                      thrust::logical_not{});
+    return contained;
+  }();
 
   auto const labels = generate_labels(lhs_child, stream);
 
