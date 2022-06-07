@@ -46,31 +46,50 @@
 #include <utility>
 #include <vector>
 
+#include <cudf_test/column_utilities.hpp>
+
 namespace cudf {
 namespace detail {
 
 namespace {
 template <duplicate_keep_option keep, typename MapDeviceView, typename Hash, typename KeyEqual>
 struct reduce_index_fn {
-  __device__ void operator()(size_type const key) const
+  __device__ void operator()(size_type const idx) const
   {
     // iter should always be valid, because all keys have been inserted.
-    auto const iter = d_map.find(key, d_hash, d_eqcomp);
+    auto const iter = d_map.find(idx, d_hash, d_eqcomp);
 
     // Here idx is the index of the unique elements that has been inserted into the map.
     // As such, `find` calling for all duplicate keys will return the same idx value.
-    auto const idx = iter->second.load(cuda::std::memory_order_relaxed);
+    auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
 
     if constexpr (keep == duplicate_keep_option::KEEP_FIRST) {
       // Store the smallest index of all keys that are equal.
-      atomicMin(&d_output[idx], key);
+      atomicMin(&d_output[inserted_idx], idx);
     } else if constexpr (keep == duplicate_keep_option::KEEP_LAST) {
       // Store the greatest index of all keys that are equal.
-      atomicMax(&d_output[idx], key);
+      //      auto x = atomicMax(&d_output[inserted_idx], idx);
+      auto const atomic_idx = cuda::atomic_ref<size_type, cuda::thread_scope::thread_scope_device>{
+        d_output[inserted_idx]};
+      auto x = atomic_idx.fetch_max(idx, cuda::std::memory_order_relaxed);
+      printf("last %d, %d => %d\n", inserted_idx, idx, x);
     } else {
       // Count the number of duplicates for key.
-      atomicAdd(&d_output[idx], size_type{1});
+      atomicAdd(&d_output[inserted_idx], size_type{1});
     }
+
+    //    if constexpr (keep == duplicate_keep_option::KEEP_FIRST) {
+    //      // Store the smallest index of all keys that are equal.
+    //      atomic_idx.fetch_min(key, cuda::std::memory_order_relaxed);
+    //    } else if constexpr (keep == duplicate_keep_option::KEEP_LAST) {
+    //      // Store the greatest index of all keys that are equal.
+    //      auto x = atomic_idx.fetch_max(key, cuda::std::memory_order_relaxed);
+    //      printf("last %d, %d => %d\n", idx, key, x);
+    //    } else {
+    //      printf("none\n");
+    //      // Count the number of duplicates for key.
+    //      atomic_idx.fetch_add(size_type{1}, cuda::std::memory_order_relaxed);
+    //    }
   }
 
   size_type* const d_output;
@@ -177,6 +196,15 @@ std::unique_ptr<table> distinct(table_view const& input,
                         decltype(key_equal)>{reduced_indices.begin(), d_map, hash_key, key_equal});
       break;
     default:;  // KEEP_ANY has already been handled
+  }
+
+  {
+    auto const t = column_view(data_type{type_to_id<size_type>()},
+                               static_cast<size_type>(reduced_indices.size()),
+                               reduced_indices.data());
+
+    printf("\n\n kep %d, line %d\n", static_cast<int>(keep), __LINE__);
+    cudf::test::print(t);
   }
 
   // Filter out the invalid indices, which are indices of the duplicate keys
