@@ -597,7 +597,16 @@ def test_groupby_column_numeral():
 
 @pytest.mark.parametrize(
     "series",
-    [[0, 1, 0], [1, 1, 1], [0, 1, 1], [1, 2, 3], [4, 3, 2], [0, 2, 0]],
+    [
+        [0, 1, 0],
+        [1, 1, 1],
+        [0, 1, 1],
+        [1, 2, 3],
+        [4, 3, 2],
+        [0, 2, 0],
+        pd.Series([0, 2, 0]),
+        pd.Series([0, 2, 0], index=[0, 2, 1]),
+    ],
 )  # noqa: E501
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
