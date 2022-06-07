@@ -45,9 +45,31 @@ TEST_F(Distinct, StringKeyColumn)
   cudf::test::fixed_width_column_wrapper<int32_t> key_col{5, 4, 4, 5, 5, 8, 1};
   cudf::table_view input{{col, key_col}};
   std::vector<cudf::size_type> keys{1};
+  // clang-format on
 
-  auto r= cudf::distinct(input, keys);
-  cudf::test::print(r->get_column(0).view());
+  {
+    auto r = cudf::distinct(input, keys, cudf::duplicate_keep_option::KEEP_ANY);
+    printf("\n\n any line %d\n", __LINE__);
+    cudf::test::print(r->get_column(0).view());
+  }
+
+  {
+    auto r = cudf::distinct(input, keys, cudf::duplicate_keep_option::KEEP_NONE);
+    printf("\n\n none line %d\n", __LINE__);
+    cudf::test::print(r->get_column(0).view());
+  }
+
+  {
+    auto r = cudf::distinct(input, keys, cudf::duplicate_keep_option::KEEP_FIRST);
+    printf("\n\n first line %d\n", __LINE__);
+    cudf::test::print(r->get_column(0).view());
+  }
+
+  {
+    auto r = cudf::distinct(input, keys, cudf::duplicate_keep_option::KEEP_LAST);
+    printf("\n\n last line %d\n", __LINE__);
+    cudf::test::print(r->get_column(0).view());
+  }
+
   exit(0);
-
 }
