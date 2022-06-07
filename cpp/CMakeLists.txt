@@ -520,6 +520,7 @@ add_library(
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
   src/table/row_operators.cu
+  src/table/row_operators2.cu
   src/table/table.cpp
   src/table/table_device_view.cu
   src/table/table_view.cpp
