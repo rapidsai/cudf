@@ -25,6 +25,7 @@ std::unique_ptr<cudf::column> segmented_all(column_view const& col,
                                             device_span<size_type const> offsets,
                                             cudf::data_type const output_dtype,
                                             null_policy null_handling,
+                                            std::optional<const scalar*> init,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
@@ -38,6 +39,7 @@ std::unique_ptr<cudf::column> segmented_all(column_view const& col,
     col,
     offsets,
     null_handling,
+    init,
     stream,
     mr);
 }

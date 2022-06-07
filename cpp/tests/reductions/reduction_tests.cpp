@@ -27,6 +27,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
@@ -119,6 +120,34 @@ struct ReductionTest : public cudf::test::BaseFixture {
       EXPECT_ANY_THROW(statement());
     }
   }
+
+  // Test with initial value
+  template <typename T_out>
+  void reduction_test(const cudf::column_view underlying_column,
+                      cudf::scalar const& initial_value,
+                      T_out expected_value,
+                      bool succeeded_condition,
+                      std::unique_ptr<reduce_aggregation> const& agg,
+                      cudf::data_type output_dtype = cudf::data_type{},
+                      bool expected_null           = false)
+  {
+    if (cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
+
+    auto statement = [&]() {
+      std::unique_ptr<cudf::scalar> result =
+        cudf::reduce(underlying_column, agg, output_dtype, initial_value);
+      using ScalarType = cudf::scalar_type_t<T_out>;
+      auto result1     = static_cast<ScalarType*>(result.get());
+      EXPECT_EQ(expected_null, !result1->is_valid());
+      if (result1->is_valid()) { EXPECT_EQ(expected_value, T_out{result1->value()}); }
+    };
+
+    if (succeeded_condition) {
+      CUDF_EXPECT_NO_THROW(statement());
+    } else {
+      EXPECT_ANY_THROW(statement());
+    }
+  }
 };
 
 template <typename T>
@@ -136,6 +165,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 0, 1});
   std::vector<bool> all_null({0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
   std::vector<T> v = convert_values<T>(int_values);
+  T init_value     = v.back();
+  auto init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
 
   // Min/Max succeeds for any gdf types including
   // non-arithmetic types (date32, date64, timestamp, category)
@@ -144,12 +175,27 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
-  T expected_min_result = *(std::min_element(v.begin(), v.end()));
-  T expected_max_result = *(std::max_element(v.begin(), v.end()));
+  T expected_min_result      = *(std::min_element(v.begin(), v.end()));
+  T expected_max_result      = *(std::max_element(v.begin(), v.end()));
+  T expected_min_init_result = std::accumulate(
+    v.begin(), v.end(), init_value, [](const T& a, const T& b) { return std::min<T>(a, b); });
+  T expected_max_init_result = std::accumulate(
+    v.begin(), v.end(), init_value, [](const T& a, const T& b) { return std::max<T>(a, b); });
+
   this->reduction_test(
     col, expected_min_result, result_error, cudf::make_min_aggregation<reduce_aggregation>());
   this->reduction_test(
     col, expected_max_result, result_error, cudf::make_max_aggregation<reduce_aggregation>());
+  this->reduction_test(col,
+                       *init_scalar,
+                       expected_min_init_result,
+                       result_error,
+                       cudf::make_min_aggregation<reduce_aggregation>());
+  this->reduction_test(col,
+                       *init_scalar,
+                       expected_max_init_result,
+                       result_error,
+                       cudf::make_max_aggregation<reduce_aggregation>());
 
   auto res = cudf::minmax(col);
 
@@ -167,6 +213,14 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
 
   T expected_min_null_result = *(std::min_element(r_min.begin(), r_min.end()));
   T expected_max_null_result = *(std::max_element(r_max.begin(), r_max.end()));
+  T expected_min_init_null_result =
+    std::accumulate(r_min.begin(), r_min.end(), init_value, [](const T& a, const T& b) {
+      return std::min<T>(a, b);
+    });
+  T expected_max_init_null_result =
+    std::accumulate(r_max.begin(), r_max.end(), init_value, [](const T& a, const T& b) {
+      return std::max<T>(a, b);
+    });
 
   this->reduction_test(col_nulls,
                        expected_min_null_result,
@@ -174,6 +228,16 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
                        cudf::make_min_aggregation<reduce_aggregation>());
   this->reduction_test(col_nulls,
                        expected_max_null_result,
+                       result_error,
+                       cudf::make_max_aggregation<reduce_aggregation>());
+  this->reduction_test(col_nulls,
+                       *init_scalar,
+                       expected_min_init_null_result,
+                       result_error,
+                       cudf::make_min_aggregation<reduce_aggregation>());
+  this->reduction_test(col_nulls,
+                       *init_scalar,
+                       expected_max_init_null_result,
                        result_error,
                        cudf::make_max_aggregation<reduce_aggregation>());
 
@@ -190,11 +254,20 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
 
   auto all_null_r_min = replace_nulls(v, all_null, std::numeric_limits<T>::max());
   auto all_null_r_max = replace_nulls(v, all_null, std::numeric_limits<T>::lowest());
+  init_scalar->set_valid_async(false);
 
   T expected_min_all_null_result =
     *(std::min_element(all_null_r_min.begin(), all_null_r_min.end()));
   T expected_max_all_null_result =
     *(std::max_element(all_null_r_max.begin(), all_null_r_max.end()));
+  T expected_min_init_all_null_result = std::accumulate(
+    all_null_r_min.begin(), all_null_r_min.end(), init_value, [](const T& a, const T& b) {
+      return std::min<T>(a, b);
+    });
+  T expected_max_init_all_null_result = std::accumulate(
+    all_null_r_max.begin(), all_null_r_max.end(), init_value, [](const T& a, const T& b) {
+      return std::max<T>(a, b);
+    });
 
   this->reduction_test(col_all_nulls,
                        expected_min_all_null_result,
@@ -208,7 +281,20 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
                        cudf::make_max_aggregation<reduce_aggregation>(),
                        cudf::data_type{},
                        true);
-
+  this->reduction_test(col_all_nulls,
+                       *init_scalar,
+                       expected_min_init_all_null_result,
+                       result_error,
+                       cudf::make_min_aggregation<reduce_aggregation>(),
+                       cudf::data_type{},
+                       true);
+  this->reduction_test(col_all_nulls,
+                       *init_scalar,
+                       expected_max_init_all_null_result,
+                       result_error,
+                       cudf::make_max_aggregation<reduce_aggregation>(),
+                       cudf::data_type{},
+                       true);
   auto all_null_res = cudf::minmax(col_all_nulls);
 
   using ScalarType         = cudf::scalar_type_t<T>;
@@ -230,12 +316,20 @@ TYPED_TEST(SumReductionTest, Sum)
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
   std::vector<T> v = convert_values<T>(int_values);
+  T init_value     = v.back();
+  auto init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  T expected_value = std::accumulate(v.begin(), v.end(), T{0});
+  T expected_value      = std::accumulate(v.begin(), v.end(), T{0});
+  T expected_init_value = std::accumulate(v.begin(), v.end(), init_value);
   this->reduction_test(col,
                        expected_value,
+                       this->ret_non_arithmetic,
+                       cudf::make_sum_aggregation<reduce_aggregation>());
+  this->reduction_test(col,
+                       *init_scalar,
+                       expected_init_value,
                        this->ret_non_arithmetic,
                        cudf::make_sum_aggregation<reduce_aggregation>());
 
@@ -243,8 +337,14 @@ TYPED_TEST(SumReductionTest, Sum)
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   auto r                                              = replace_nulls(v, host_bools, T{0});
   T expected_null_value                               = std::accumulate(r.begin(), r.end(), T{0});
+  init_scalar->set_valid_async(false);
 
   this->reduction_test(col_nulls,
+                       expected_null_value,
+                       this->ret_non_arithmetic,
+                       cudf::make_sum_aggregation<reduce_aggregation>());
+  this->reduction_test(col_nulls,
+                       *init_scalar,
                        expected_null_value,
                        this->ret_non_arithmetic,
                        cudf::make_sum_aggregation<reduce_aggregation>());
@@ -258,6 +358,8 @@ TYPED_TEST(ReductionTest, Product)
   std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1});
   std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
+  T init_value             = v.back();
+  auto init_scalar         = cudf::make_fixed_width_scalar<T>(init_value);
 
   auto calc_prod = [](std::vector<T>& v) {
     T expected_value =
@@ -265,12 +367,24 @@ TYPED_TEST(ReductionTest, Product)
     return expected_value;
   };
 
+  auto calc_prod_init = [](std::vector<T>& v, T init) {
+    T expected_value =
+      std::accumulate(v.begin(), v.end(), init, [](T acc, T i) { return acc * i; });
+    return expected_value;
+  };
+
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  TypeParam expected_value = calc_prod(v);
+  TypeParam expected_value      = calc_prod(v);
+  TypeParam expected_init_value = calc_prod_init(v, init_value);
 
   this->reduction_test(col,
                        expected_value,
+                       this->ret_non_arithmetic,
+                       cudf::make_product_aggregation<reduce_aggregation>());
+  this->reduction_test(col,
+                       *init_scalar,
+                       expected_init_value,
                        this->ret_non_arithmetic,
                        cudf::make_product_aggregation<reduce_aggregation>());
 
@@ -278,8 +392,14 @@ TYPED_TEST(ReductionTest, Product)
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   auto r                                              = replace_nulls(v, host_bools, T{1});
   TypeParam expected_null_value                       = calc_prod(r);
+  init_scalar->set_valid_async(false);
 
   this->reduction_test(col_nulls,
+                       expected_null_value,
+                       this->ret_non_arithmetic,
+                       cudf::make_product_aggregation<reduce_aggregation>());
+  this->reduction_test(col_nulls,
+                       *init_scalar,
                        expected_null_value,
                        this->ret_non_arithmetic,
                        cudf::make_product_aggregation<reduce_aggregation>());
@@ -291,18 +411,30 @@ TYPED_TEST(ReductionTest, SumOfSquare)
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
   std::vector<T> v = convert_values<T>(int_values);
+  T init_value     = v.back();
+  auto init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
 
   auto calc_reduction = [](std::vector<T>& v) {
     T value = std::accumulate(v.begin(), v.end(), T{0}, [](T acc, T i) { return acc + i * i; });
     return value;
   };
+  auto calc_reduction_init = [](std::vector<T>& v, T init) {
+    T value = std::accumulate(v.begin(), v.end(), init, [](T acc, T i) { return acc + i * i; });
+    return value;
+  };
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  T expected_value = calc_reduction(v);
+  T expected_value      = calc_reduction(v);
+  T expected_init_value = calc_reduction_init(v, init_value);
 
   this->reduction_test(col,
                        expected_value,
+                       this->ret_non_arithmetic,
+                       cudf::make_sum_of_squares_aggregation<reduce_aggregation>());
+  this->reduction_test(col,
+                       *init_scalar,
+                       expected_init_value,
                        this->ret_non_arithmetic,
                        cudf::make_sum_of_squares_aggregation<reduce_aggregation>());
 
@@ -310,8 +442,14 @@ TYPED_TEST(ReductionTest, SumOfSquare)
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   auto r                                              = replace_nulls(v, host_bools, T{0});
   T expected_null_value                               = calc_reduction(r);
+  init_scalar->set_valid_async(false);
 
   this->reduction_test(col_nulls,
+                       expected_null_value,
+                       this->ret_non_arithmetic,
+                       cudf::make_sum_of_squares_aggregation<reduce_aggregation>());
+  this->reduction_test(col_nulls,
+                       *init_scalar,
                        expected_null_value,
                        this->ret_non_arithmetic,
                        cudf::make_sum_of_squares_aggregation<reduce_aggregation>());
@@ -329,6 +467,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
   std::vector<int> int_values({true, true, true, true});
   std::vector<bool> host_bools({1, 1, 0, 1});
   std::vector<T> v = convert_values<T>(int_values);
+  auto init_scalar = cudf::make_fixed_width_scalar<T>(v.back());
 
   // Min/Max succeeds for any gdf types including
   // non-arithmetic types (date32, date64, timestamp, category)
@@ -343,9 +482,22 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
     col, expected, result_error, cudf::make_any_aggregation<reduce_aggregation>(), output_dtype);
   this->reduction_test(
     col, expected, result_error, cudf::make_all_aggregation<reduce_aggregation>(), output_dtype);
+  this->reduction_test(col,
+                       *init_scalar,
+                       expected,
+                       result_error,
+                       cudf::make_any_aggregation<reduce_aggregation>(),
+                       output_dtype);
+  this->reduction_test(col,
+                       *init_scalar,
+                       expected,
+                       result_error,
+                       cudf::make_all_aggregation<reduce_aggregation>(),
+                       output_dtype);
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+  init_scalar->set_valid_async(false);
 
   this->reduction_test(col_nulls,
                        expected,
@@ -353,6 +505,18 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
                        cudf::make_any_aggregation<reduce_aggregation>(),
                        output_dtype);
   this->reduction_test(col_nulls,
+                       expected,
+                       result_error,
+                       cudf::make_all_aggregation<reduce_aggregation>(),
+                       output_dtype);
+  this->reduction_test(col_nulls,
+                       *init_scalar,
+                       expected,
+                       result_error,
+                       cudf::make_any_aggregation<reduce_aggregation>(),
+                       output_dtype);
+  this->reduction_test(col_nulls,
+                       *init_scalar,
                        expected,
                        result_error,
                        cudf::make_all_aggregation<reduce_aggregation>(),
@@ -365,6 +529,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
   std::vector<int> int_values({false, false, false, false});
   std::vector<bool> host_bools({1, 1, 0, 1});
   std::vector<T> v = convert_values<T>(int_values);
+  auto init_scalar = cudf::make_fixed_width_scalar<T>(v.back());
 
   // Min/Max succeeds for any gdf types including
   // non-arithmetic types (date32, date64, timestamp, category)
@@ -379,9 +544,22 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
     col, expected, result_error, cudf::make_any_aggregation<reduce_aggregation>(), output_dtype);
   this->reduction_test(
     col, expected, result_error, cudf::make_all_aggregation<reduce_aggregation>(), output_dtype);
+  this->reduction_test(col,
+                       *init_scalar,
+                       expected,
+                       result_error,
+                       cudf::make_any_aggregation<reduce_aggregation>(),
+                       output_dtype);
+  this->reduction_test(col,
+                       *init_scalar,
+                       expected,
+                       result_error,
+                       cudf::make_all_aggregation<reduce_aggregation>(),
+                       output_dtype);
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+  init_scalar->set_valid_async(false);
 
   this->reduction_test(col_nulls,
                        expected,
@@ -389,6 +567,18 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
                        cudf::make_any_aggregation<reduce_aggregation>(),
                        output_dtype);
   this->reduction_test(col_nulls,
+                       expected,
+                       result_error,
+                       cudf::make_all_aggregation<reduce_aggregation>(),
+                       output_dtype);
+  this->reduction_test(col_nulls,
+                       *init_scalar,
+                       expected,
+                       result_error,
+                       cudf::make_any_aggregation<reduce_aggregation>(),
+                       output_dtype);
+  this->reduction_test(col_nulls,
+                       *init_scalar,
                        expected,
                        result_error,
                        cudf::make_all_aggregation<reduce_aggregation>(),

@@ -58,12 +58,16 @@ template <typename Op,
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
+                               std::optional<const scalar*> init,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op  = sop.get_binary_op();
-  auto identity   = sop.template get_identity<OutputType>();
-  auto dev_result = rmm::device_scalar<OutputType>{identity, stream, mr};
+  auto binary_op = sop.get_binary_op();
+  auto initial_value =
+    (init.has_value() && init.value()->is_valid())
+      ? static_cast<const cudf::scalar_type_t<OutputType>*>(init.value())->value()
+      : sop.template get_identity<OutputType>();
+  auto dev_result = rmm::device_scalar<OutputType>{initial_value, stream, mr};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -74,7 +78,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             dev_result.data(),
                             num_items,
                             binary_op,
-                            identity,
+                            initial_value,
                             stream.value());
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
@@ -85,7 +89,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             dev_result.data(),
                             num_items,
                             binary_op,
-                            identity,
+                            initial_value,
                             stream.value());
 
   // only for string_view, data is copied
@@ -100,6 +104,7 @@ template <typename Op,
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
+                               std::optional<const scalar*> init,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
@@ -116,12 +121,16 @@ template <typename Op,
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
+                               std::optional<const scalar*> init,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op  = sop.get_binary_op();
-  auto identity   = sop.template get_identity<OutputType>();
-  auto dev_result = rmm::device_scalar<OutputType>{identity, stream};
+  auto binary_op = sop.get_binary_op();
+  auto initial_value =
+    (init.has_value() && init.value()->is_valid())
+      ? static_cast<const cudf::scalar_type_t<OutputType>*>(init.value())->value()
+      : sop.template get_identity<OutputType>();
+  auto dev_result = rmm::device_scalar<OutputType>{initial_value, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -132,7 +141,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             dev_result.data(),
                             num_items,
                             binary_op,
-                            identity,
+                            initial_value,
                             stream.value());
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
@@ -143,7 +152,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             dev_result.data(),
                             num_items,
                             binary_op,
-                            identity,
+                            initial_value,
                             stream.value());
 
   using ScalarType = cudf::scalar_type_t<OutputType>;
@@ -181,12 +190,16 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                op::compound_op<Op> cop,
                                cudf::size_type valid_count,
                                cudf::size_type ddof,
+                               std::optional<const scalar*> init,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op            = cop.get_binary_op();
-  IntermediateType identity = cop.template get_identity<IntermediateType>();
-  rmm::device_scalar<IntermediateType> intermediate_result{identity, stream};
+  auto binary_op = cop.get_binary_op();
+  auto initial_value =
+    (init.has_value() && init.value()->is_valid())
+      ? static_cast<const cudf::scalar_type_t<OutputType>*>(init.value())->value()
+      : cop.template get_identity<OutputType>();
+  rmm::device_scalar<IntermediateType> intermediate_result{initial_value, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -197,7 +210,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             intermediate_result.data(),
                             num_items,
                             binary_op,
-                            identity,
+                            initial_value,
                             stream.value());
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
@@ -208,7 +221,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             intermediate_result.data(),
                             num_items,
                             binary_op,
-                            identity,
+                            initial_value,
                             stream.value());
 
   // compute the result value from intermediate value in device
@@ -253,7 +266,7 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
                                          OffsetIterator d_offset,
                                          cudf::size_type num_segments,
                                          BinaryOp binary_op,
-                                         OutputType identity,
+                                         OutputType initial_value,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
@@ -272,7 +285,7 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
                                      d_offset,
                                      d_offset + 1,
                                      binary_op,
-                                     identity,
+                                     initial_value,
                                      stream.value());
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
@@ -285,7 +298,7 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
                                      d_offset,
                                      d_offset + 1,
                                      binary_op,
-                                     identity,
+                                     initial_value,
                                      stream.value());
 
   return dev_result;

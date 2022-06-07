@@ -25,6 +25,7 @@ namespace reduction {
 
 std::unique_ptr<cudf::scalar> mean(column_view const& col,
                                    cudf::data_type const output_dtype,
+                                   std::optional<const scalar*> init,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
@@ -32,7 +33,15 @@ std::unique_ptr<cudf::scalar> mean(column_view const& col,
   auto col_type =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
   return cudf::type_dispatcher(
-    col_type, reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, stream, mr);
+    col_type, reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, init, stream, mr);
+}
+
+std::unique_ptr<cudf::scalar> mean(column_view const& col,
+                                   cudf::data_type const output_dtype,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  return mean(col, output_dtype, std::nullopt, stream, mr);
 }
 
 }  // namespace reduction

@@ -66,6 +66,7 @@ template <typename InputType, typename ResultType, typename Op>
 std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
                                                    device_span<size_type const> offsets,
                                                    null_policy null_handling,
+                                                   std::optional<const scalar*> init,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
@@ -77,7 +78,10 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
   size_type num_segments = offsets.size() - 1;
 
   auto binary_op = simple_op.get_binary_op();
-  auto identity  = simple_op.template get_identity<ResultType>();
+  auto initial_value =
+    (init.has_value() && init.value()->is_valid())
+      ? static_cast<const cudf::scalar_type_t<ResultType>*>(init.value())->value()
+      : simple_op.template get_identity<ResultType>();
 
   // TODO: Explore rewriting null_replacing_element_transformer/element_transformer with nullate
   auto result = [&] {
@@ -85,12 +89,12 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
       auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
       auto it = thrust::make_transform_iterator(dcol->pair_begin<InputType, true>(), f);
       return cudf::reduction::detail::segmented_reduce(
-        it, offsets.begin(), num_segments, binary_op, identity, stream, mr);
+        it, offsets.begin(), num_segments, binary_op, initial_value, stream, mr);
     } else {
       auto f  = simple_op.template get_element_transformer<ResultType>();
       auto it = thrust::make_transform_iterator(dcol->begin<InputType>(), f);
       return cudf::reduction::detail::segmented_reduce(
-        it, offsets.begin(), num_segments, binary_op, identity, stream, mr);
+        it, offsets.begin(), num_segments, binary_op, initial_value, stream, mr);
     }
   }();
 
@@ -138,6 +142,7 @@ template <typename InputType,
 std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                                                    device_span<size_type const> offsets,
                                                    null_policy null_handling,
+                                                   std::optional<const scalar*> init,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
@@ -152,13 +157,17 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
     cudf::detail::element_argminmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
   auto constexpr identity =
     is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
+  auto initial_value =
+    (init.has_value() && init.value()->is_valid())
+      ? static_cast<const cudf::scalar_type_t<string_view>*>(init.value())->value()
+      : identity;
 
   auto gather_map =
     cudf::reduction::detail::segmented_reduce(it,
                                               offsets.begin(),
                                               num_segments,
                                               string_comparator,
-                                              identity,
+                                              initial_value,
                                               stream,
                                               rmm::mr::get_current_device_resource());
   auto result = std::move(cudf::detail::gather(table_view{{col}},
@@ -231,17 +240,19 @@ struct bool_result_column_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
+                                     std::optional<const scalar*> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     return simple_segmented_reduction<ElementType, bool, Op>(
-      col, offsets, null_handling, stream, mr);
+      col, offsets, null_handling, init, stream, mr);
   }
 
   template <typename ElementType, std::enable_if_t<not cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,
+                                     std::optional<const scalar*>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -274,11 +285,12 @@ struct same_column_type_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
+                                     std::optional<const scalar*> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     return simple_segmented_reduction<ElementType, ElementType, Op>(
-      col, offsets, null_handling, stream, mr);
+      col, offsets, null_handling, init, stream, mr);
   }
 
   template <typename ElementType,
@@ -286,16 +298,19 @@ struct same_column_type_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
+                                     std::optional<const scalar*> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return string_segmented_reduction<ElementType, Op>(col, offsets, null_handling, stream, mr);
+    return string_segmented_reduction<ElementType, Op>(
+      col, offsets, null_handling, init, stream, mr);
   }
 
   template <typename ElementType, CUDF_ENABLE_IF(!is_supported<ElementType>())>
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,
+                                     std::optional<const scalar*>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -323,12 +338,13 @@ struct column_type_dispatcher {
                                          device_span<size_type const> offsets,
                                          data_type const output_type,
                                          null_policy null_handling,
+                                         std::optional<const scalar*> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
     // TODO: per gh-9988, we should change the compute precision to `output_type`.
-    auto result =
-      simple_segmented_reduction<ElementType, double, Op>(col, offsets, null_handling, stream, mr);
+    auto result = simple_segmented_reduction<ElementType, double, Op>(
+      col, offsets, null_handling, init, stream, mr);
     if (output_type == result->type()) { return result; }
     return cudf::detail::cast(*result, output_type, stream, mr);
   }
@@ -342,12 +358,13 @@ struct column_type_dispatcher {
                                          device_span<size_type const> offsets,
                                          data_type const output_type,
                                          null_policy null_handling,
+                                         std::optional<const scalar*> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
     // TODO: per gh-9988, we should change the compute precision to `output_type`.
-    auto result =
-      simple_segmented_reduction<ElementType, int64_t, Op>(col, offsets, null_handling, stream, mr);
+    auto result = simple_segmented_reduction<ElementType, int64_t, Op>(
+      col, offsets, null_handling, init, stream, mr);
     if (output_type == result->type()) { return result; }
     return cudf::detail::cast(*result, output_type, stream, mr);
   }
@@ -372,15 +389,16 @@ struct column_type_dispatcher {
                                      device_span<size_type const> offsets,
                                      data_type const output_type,
                                      null_policy null_handling,
+                                     std::optional<const scalar*> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     if (output_type.id() == cudf::type_to_id<ElementType>()) {
       return simple_segmented_reduction<ElementType, ElementType, Op>(
-        col, offsets, null_handling, stream, mr);
+        col, offsets, null_handling, init, stream, mr);
     }
     // reduce and map to output type
-    return reduce_numeric<ElementType>(col, offsets, output_type, null_handling, stream, mr);
+    return reduce_numeric<ElementType>(col, offsets, output_type, null_handling, init, stream, mr);
   }
 
   template <typename ElementType,
@@ -389,6 +407,7 @@ struct column_type_dispatcher {
                                      device_span<size_type const>,
                                      data_type const,
                                      null_policy,
+                                     std::optional<const scalar*>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {

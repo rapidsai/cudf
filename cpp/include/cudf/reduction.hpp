@@ -72,6 +72,14 @@ std::unique_ptr<scalar> reduce(
   data_type output_dtype,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+// TODO: Add comments
+std::unique_ptr<scalar> reduce(
+  column_view const& col,
+  std::unique_ptr<reduce_aggregation> const& agg,
+  data_type output_dtype,
+  scalar const& init,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief  Compute reduction of each segment in the input column
  *
@@ -120,6 +128,15 @@ std::unique_ptr<column> segmented_reduce(
   segmented_reduce_aggregation const& agg,
   data_type output_dtype,
   null_policy null_handling,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<column> segmented_reduce(
+  column_view const& segmented_values,
+  device_span<size_type const> offsets,
+  segmented_reduce_aggregation const& agg,
+  data_type output_dtype,
+  null_policy null_handling,
+  scalar const& init,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

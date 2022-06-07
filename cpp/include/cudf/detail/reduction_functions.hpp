@@ -34,6 +34,7 @@ namespace reduction {
  *
  * @param col input column to compute sum
  * @param output_dtype data type of return type and typecast elements of input column
+ * @param init initial value of the sum
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Sum as scalar of type `output_dtype`.
@@ -41,6 +42,7 @@ namespace reduction {
 std::unique_ptr<scalar> sum(
   column_view const& col,
   data_type const output_dtype,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -53,6 +55,7 @@ std::unique_ptr<scalar> sum(
  *
  * @param col input column to compute minimum.
  * @param output_dtype data type of return type and typecast elements of input column
+ * @param init initial value of the min
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Minimum element as scalar of type `output_dtype`.
@@ -60,6 +63,7 @@ std::unique_ptr<scalar> sum(
 std::unique_ptr<scalar> min(
   column_view const& col,
   data_type const output_dtype,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -72,6 +76,7 @@ std::unique_ptr<scalar> min(
  *
  * @param col input column to compute maximum.
  * @param output_dtype data type of return type and typecast elements of input column
+ * @param init initial value of the max
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Maximum element as scalar of type `output_dtype`.
@@ -79,6 +84,7 @@ std::unique_ptr<scalar> min(
 std::unique_ptr<scalar> max(
   column_view const& col,
   data_type const output_dtype,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -92,6 +98,7 @@ std::unique_ptr<scalar> max(
  *
  * @param col input column to compute any_of.
  * @param output_dtype data type of return type and typecast elements of input column
+ * @param init initial value of the any
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return bool scalar if any of elements is true when typecasted to bool
@@ -99,6 +106,7 @@ std::unique_ptr<scalar> max(
 std::unique_ptr<scalar> any(
   column_view const& col,
   data_type const output_dtype,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -112,6 +120,7 @@ std::unique_ptr<scalar> any(
  *
  * @param col input column to compute all_of.
  * @param output_dtype data type of return type and typecast elements of input column
+ * @param init initial value of the all
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return bool scalar if all of elements is true when typecasted to bool
@@ -119,6 +128,7 @@ std::unique_ptr<scalar> any(
 std::unique_ptr<scalar> all(
   column_view const& col,
   data_type const output_dtype,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -132,6 +142,7 @@ std::unique_ptr<scalar> all(
  *
  * @param col input column to compute product.
  * @param output_dtype data type of return type and typecast elements of input column
+ * @param init initial value of the product
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Product as scalar of type `output_dtype`.
@@ -139,6 +150,7 @@ std::unique_ptr<scalar> all(
 std::unique_ptr<scalar> product(
   column_view const& col,
   data_type const output_dtype,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -152,6 +164,7 @@ std::unique_ptr<scalar> product(
  *
  * @param col input column to compute sum of squares.
  * @param output_dtype data type of return type and typecast elements of input column
+ * @param init initial value of the sum of sqaures
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Sum of squares as scalar of type `output_dtype`.
@@ -159,6 +172,7 @@ std::unique_ptr<scalar> product(
 std::unique_ptr<scalar> sum_of_squares(
   column_view const& col,
   data_type const output_dtype,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -172,10 +186,18 @@ std::unique_ptr<scalar> sum_of_squares(
  *
  * @param col input column to compute mean.
  * @param output_dtype data type of return type and typecast elements of input column.
+ * @param init initial value of the mean
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Mean as scalar of type `output_dtype`.
  */
+std::unique_ptr<scalar> mean(
+  column_view const& col,
+  data_type const output_dtype,
+  std::optional<const scalar*> init,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 std::unique_ptr<scalar> mean(
   column_view const& col,
   data_type const output_dtype,
@@ -192,12 +214,21 @@ std::unique_ptr<scalar> mean(
  *
  * @param col input column to compute variance.
  * @param output_dtype data type of return type and typecast elements of input column.
+ * @param init initial value of the variance
  * @param ddof Delta degrees of freedom. The divisor used is N - ddof, where N represents the number
  * of elements.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Variance as scalar of type `output_dtype`.
  */
+std::unique_ptr<scalar> variance(
+  column_view const& col,
+  data_type const output_dtype,
+  cudf::size_type ddof,
+  std::optional<const scalar*> init,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 std::unique_ptr<scalar> variance(
   column_view const& col,
   data_type const output_dtype,
@@ -215,12 +246,21 @@ std::unique_ptr<scalar> variance(
  *
  * @param col input column to compute standard deviation.
  * @param output_dtype data type of return type and typecast elements of input column.
+ * @param init initial value of the min
  * @param ddof Delta degrees of freedom. The divisor used is N - ddof, where N represents the number
  * of elements.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Standard deviation as scalar of type `output_dtype`.
  */
+std::unique_ptr<scalar> standard_deviation(
+  column_view const& col,
+  data_type const output_dtype,
+  cudf::size_type ddof,
+  std::optional<const scalar*> init,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 std::unique_ptr<scalar> standard_deviation(
   column_view const& col,
   data_type const output_dtype,
@@ -346,6 +386,7 @@ std::unique_ptr<column> segmented_sum(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -372,6 +413,7 @@ std::unique_ptr<column> segmented_product(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -397,6 +439,7 @@ std::unique_ptr<column> segmented_min(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -422,6 +465,7 @@ std::unique_ptr<column> segmented_max(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -448,6 +492,7 @@ std::unique_ptr<column> segmented_any(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -474,6 +519,7 @@ std::unique_ptr<column> segmented_all(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
+  std::optional<const scalar*> init,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
