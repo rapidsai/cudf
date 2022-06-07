@@ -305,7 +305,7 @@ def get_grouper_cudf(obj):
 try:
     from dask.dataframe.dispatch import pyarrow_schema_dispatch
 
-    @pyarrow_schema_dispatch.register((cudf.DataFrame, ))
+    @pyarrow_schema_dispatch.register((cudf.DataFrame,))
     def get_pyarrow_schema_cudf(obj):
         return obj.to_arrow().schema
 
