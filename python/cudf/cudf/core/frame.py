@@ -1869,47 +1869,6 @@ class Frame(BinaryOperand, Scannable):
         return self._unaryop("abs")
 
     @_cudf_nvtx_annotate
-    def scale(self):
-        """
-        Scale values to [0, 1] in float64
-
-        Returns
-        -------
-        DataFrame or Series
-            Values scaled to [0, 1].
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 0.5, 1])
-        >>> series
-        0    10.0
-        1    11.0
-        2    12.0
-        3     0.5
-        4     1.0
-        dtype: float64
-        >>> series.scale()
-        0    0.826087
-        1    0.913043
-        2    1.000000
-        3    0.000000
-        4    0.043478
-        dtype: float64
-        """
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                "Index.scale is deprecated and will be removed.",
-                FutureWarning,
-            )
-
-        vmin = self.min()
-        vmax = self.max()
-        scaled = (self - vmin) / (vmax - vmin)
-        scaled._index = self._index.copy(deep=False)
-        return scaled
-
-    @_cudf_nvtx_annotate
     def _merge(
         self,
         right,
