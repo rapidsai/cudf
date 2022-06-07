@@ -43,6 +43,7 @@ from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.index import Index, RangeIndex, _index_from_columns
+from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
 from cudf.utils import docutils
@@ -1287,6 +1288,103 @@ class IndexedFrame(Frame):
         result.index.names = self.index.names
 
         return result
+
+    @_cudf_nvtx_annotate
+    def _reindex(
+        self,
+        column_names,
+        dtypes=None,
+        deep=False,
+        index=None,
+        inplace=False,
+        fill_value=NA,
+    ):
+        """
+        Helper for `.reindex`
+
+        Parameters
+        ----------
+        columns_names : array-like
+            The list of columns to select from the Frame,
+            if ``columns`` is a superset of ``Frame.columns`` new
+            columns are created.
+        dtypes : dict
+            Mapping of dtypes for the empty columns being created.
+        deep : boolean, optional, default False
+            Whether to make deep copy or shallow copy of the columns.
+        index : Index or array-like, default None
+            The ``index`` to be used to reindex the Frame with.
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
+        fill_value : value with which to replace nulls in the result
+
+        Returns
+        -------
+        Series or DataFrame
+        """
+        if dtypes is None:
+            dtypes = {}
+
+        df = self
+        if index is not None:
+            index = cudf.core.index.as_index(index)
+
+            idx_dtype_match = (df.index.nlevels == index.nlevels) and all(
+                left_dtype == right_dtype
+                for left_dtype, right_dtype in zip(
+                    (col.dtype for col in df.index._data.columns),
+                    (col.dtype for col in index._data.columns),
+                )
+            )
+
+            if not idx_dtype_match:
+                column_names = (
+                    column_names
+                    if column_names is not None
+                    else list(df._column_names)
+                )
+                df = cudf.DataFrame()
+            else:
+                lhs = cudf.DataFrame._from_data({}, index=index)
+                rhs = cudf.DataFrame._from_data(
+                    {
+                        # bookkeeping workaround for unnamed series
+                        name or 0: col
+                        for name, col in df._data.items()
+                    },
+                    index=df._index,
+                )
+                df = lhs.join(rhs, how="left", sort=True)
+                # double-argsort to map back from sorted to unsorted positions
+                df = df.take(index.argsort(ascending=True).argsort())
+
+        index = index if index is not None else df.index
+        names = (
+            column_names if column_names is not None else list(df._data.names)
+        )
+        cols = {
+            name: (
+                df._data[name].copy(deep=deep)
+                if name in df._data
+                else cudf.core.column.column.column_empty(
+                    dtype=dtypes.get(name, np.float64),
+                    masked=True,
+                    row_count=len(index),
+                )
+            )
+            for name in names
+        }
+        result = self.__class__._from_data(
+            data=cudf.core.column_accessor.ColumnAccessor(
+                cols,
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
+            ),
+            index=index,
+        )
+
+        result.fillna(fill_value, inplace=True)
+        return self._mimic_inplace(result, inplace=inplace)
 
     def round(self, decimals=0, how="half_even"):
         """
