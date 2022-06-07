@@ -91,8 +91,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
 
   // Create hash table.
   semi_map_type hash_table{compute_hash_table_size(right_num_rows),
-                           std::numeric_limits<hash_value_type>::max(),
-                           cudf::detail::JoinNoneValue,
+                           cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
+                           cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
                            hash_table_allocator_type{default_allocator<char>{}, stream},
                            stream.value()};
 
