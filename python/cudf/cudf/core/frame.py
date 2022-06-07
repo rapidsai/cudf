@@ -998,28 +998,6 @@ class Frame(BinaryOperand, Scannable):
             column_names=self._column_names,
         )
 
-    @_cudf_nvtx_annotate
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values by `periods` positions."""
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                "Index.shift is deprecated and will be removed.",
-                FutureWarning,
-            )
-
-        axis = self._get_axis_from_axis_arg(axis)
-        if axis != 0:
-            raise ValueError("Only axis=0 is supported.")
-        if freq is not None:
-            raise ValueError("The freq argument is not yet supported.")
-
-        data_columns = (
-            col.shift(periods, fill_value) for col in self._columns
-        )
-        return self.__class__._from_data(
-            zip(self._column_names, data_columns), self._index
-        )
-
     @classmethod
     @_cudf_nvtx_annotate
     def from_arrow(cls, data):
