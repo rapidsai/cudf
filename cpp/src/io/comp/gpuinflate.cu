@@ -46,6 +46,7 @@ Mark Adler    madler@alumni.caltech.edu
 #include "gpuinflate.hpp"
 #include "io_uncomp.hpp"
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -1218,6 +1219,28 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
   if (inputs.size() > 0) {
     copy_uncompressed_kernel<<<inputs.size(), 1024, 0, stream.value()>>>(inputs, outputs);
   }
+}
+
+__global__ void decompress_check_kernel(device_span<decompress_status const> stats,
+                                        bool* any_block_failure)
+{
+  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < stats.size()) {
+    if (stats[tid].status != 0) {
+      *any_block_failure = true;  // Doesn't need to be atomic
+    }
+  }
+}
+
+void decompress_check(device_span<decompress_status> stats,
+                      bool* any_block_failure,
+                      rmm::cuda_stream_view stream)
+{
+  if (stats.empty()) { return; }  // early exit for empty stats
+
+  dim3 block(128);
+  dim3 grid(cudf::util::div_rounding_up_safe(stats.size(), static_cast<size_t>(block.x)));
+  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
 }
 
 }  // namespace io

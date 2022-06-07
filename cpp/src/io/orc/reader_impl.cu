@@ -262,28 +262,6 @@ auto decimal_column_type(std::vector<std::string> const& decimal128_columns,
 
 }  // namespace
 
-__global__ void decompress_check_kernel(device_span<decompress_status const> stats,
-                                        bool* any_block_failure)
-{
-  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < stats.size()) {
-    if (stats[tid].status != 0) {
-      *any_block_failure = true;  // Doesn't need to be atomic
-    }
-  }
-}
-
-void decompress_check(device_span<decompress_status> stats,
-                      bool* any_block_failure,
-                      rmm::cuda_stream_view stream)
-{
-  if (stats.empty()) { return; }  // early exit for empty stats
-
-  dim3 block(128);
-  dim3 grid(cudf::util::div_rounding_up_safe(stats.size(), static_cast<size_t>(block.x)));
-  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
-}
-
 rmm::device_buffer reader::impl::decompress_stripe_data(
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   const std::vector<rmm::device_buffer>& stripe_data,

@@ -1064,15 +1064,6 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& 
   pages.device_to_host(stream, true);
 }
 
-void decompress_check(device_span<decompress_status const> stats, rmm::cuda_stream_view stream)
-{
-  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
-                              stats.begin(),
-                              stats.end(),
-                              [] __device__(auto const& stat) { return stat.status == 0; }),
-               "Error during decompression");
-}
-
 /**
  * @copydoc cudf::io::detail::parquet::decompress_page_data
  */
@@ -1151,6 +1142,11 @@ rmm::device_buffer reader::impl::decompress_page_data(
                comp_stats.end(),
                decompress_status{0, static_cast<uint32_t>(-1000), 0});
 
+  // For checking whether we decompress successfully
+  hostdevice_vector<bool> any_block_failure(1, stream);
+  any_block_failure[0] = false;
+  any_block_failure.host_to_device(stream);
+
   size_t decomp_offset = 0;
   int32_t start_pos    = 0;
   for (const auto& codec : codecs) {
@@ -1213,7 +1209,9 @@ rmm::device_buffer reader::impl::decompress_page_data(
     start_pos += codec.num_pages;
   }
 
-  decompress_check(comp_stats, stream);
+  decompress_check(comp_stats, any_block_failure.device_ptr(), stream);
+  any_block_failure.device_to_host(stream, true);
+  CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
