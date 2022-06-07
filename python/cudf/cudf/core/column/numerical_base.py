@@ -11,6 +11,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
+from cudf.core.missing import NA
 from cudf.core.mixins import Scannable
 
 
@@ -62,7 +63,7 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             return 0
 
         term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
-        term_one_section_two = m4_numerator / (V ** 2)
+        term_one_section_two = m4_numerator / (V**2)
         term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
@@ -113,10 +114,11 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         else:
             result = self._numeric_quantile(q, interpolation, exact)
         if return_scalar:
+            scalar_result = result.element_indexing(0)
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-                if result[0] is cudf.NA
-                else result[0]
+                if scalar_result is NA
+                else scalar_result
             )
         return result
 
@@ -160,7 +162,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         sorted_indices = self.as_frame()._get_sorted_inds(
             ascending=True, na_position="first"
         )
-        sorted_indices = sorted_indices[self.null_count :]
+        sorted_indices = sorted_indices.slice(
+            self.null_count, len(sorted_indices)
+        )
 
         return libcudf.quantiles.quantile(
             self, q, interpolation, sorted_indices, exact

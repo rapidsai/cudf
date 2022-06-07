@@ -30,7 +30,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace groupby {

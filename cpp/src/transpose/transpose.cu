@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+
 namespace cudf {
 namespace detail {
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
@@ -34,7 +37,7 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
 {
   // If there are no rows in the input, return successfully
   if (input.num_columns() == 0 || input.num_rows() == 0) {
-    return std::make_pair(std::make_unique<column>(), table_view{});
+    return std::pair(std::make_unique<column>(), table_view{});
   }
 
   // Check datatype homogeneity
@@ -51,7 +54,7 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
   auto splits = std::vector<size_type>(splits_iter, splits_iter + input.num_rows() - 1);
   auto output_column_views = split(output_column->view(), splits, stream);
 
-  return std::make_pair(std::move(output_column), table_view(output_column_views));
+  return std::pair(std::move(output_column), table_view(output_column_views));
 }
 }  // namespace detail
 

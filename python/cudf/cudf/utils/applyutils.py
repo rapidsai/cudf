@@ -103,7 +103,7 @@ def apply_chunks(
     return applychunks.run(df, chunks=chunks, tpb=tpb)
 
 
-def make_aggregate_nullmask(df, columns=None, op="and"):
+def make_aggregate_nullmask(df, columns=None, op="__and__"):
 
     out_mask = None
     for k in columns or df._data:

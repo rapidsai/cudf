@@ -22,6 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -33,8 +34,15 @@
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/find.h>
 #include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/merge.h>
+#include <thrust/pair.h>
+#include <thrust/scan.h>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -137,8 +145,8 @@ struct byte_pair_encoding_fn {
    * @param rhs Second string.
    * @return The hash value to match with `d_map`.
    */
-  __device__ hash_value_type compute_hash(cudf::string_view const& lhs,
-                                          cudf::string_view const& rhs)
+  __device__ cudf::hash_value_type compute_hash(cudf::string_view const& lhs,
+                                                cudf::string_view const& rhs)
   {
     __shared__ char shmem[48 * 1024];  // max for Pascal
     auto const total_size         = lhs.size_bytes() + rhs.size_bytes() + 1;

@@ -25,7 +25,13 @@
 
 #include <tests/groupby/groupby_test_util.hpp>
 
+#include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include <rmm/exec_policy.hpp>
 
@@ -430,7 +436,7 @@ void tdigest_merge_simple(Func op, MergeFunc merge_op)
 
   int const delta = 1000;
 
-  // generate seperate digests
+  // generate separate digests
   std::vector<std::unique_ptr<column>> parts;
   auto iter = thrust::make_counting_iterator(0);
   std::transform(

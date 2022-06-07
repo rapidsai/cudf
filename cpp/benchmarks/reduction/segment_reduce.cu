@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
+#include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <nvbench/nvbench.cuh>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -33,7 +31,6 @@
 
 #include <memory>
 #include <type_traits>
-#include <vector>
 
 namespace cudf {
 
@@ -71,20 +68,21 @@ std::pair<std::unique_ptr<column>, thrust::device_vector<size_type>> make_test_d
 
   auto segment_length = column_size / num_segments;
 
-  test::UniformRandomGenerator<InputType> rand_gen(0, 100);
-  auto data_it = detail::make_counting_transform_iterator(
-    0, [&rand_gen](auto i) { return rand_gen.generate(); });
+  auto const dtype = cudf::type_to_id<InputType>();
+  data_profile profile;
+  profile.set_null_frequency(std::nullopt);
+  profile.set_cardinality(0);
+  profile.set_distribution_params(dtype, distribution_id::UNIFORM, 0, 100);
+  auto input = create_random_table({dtype}, row_count{column_size}, profile);
 
   auto offset_it =
-    detail::make_counting_transform_iterator(0, [&column_size, &segment_length](auto i) {
+    detail::make_counting_transform_iterator(0, [column_size, segment_length] __device__(auto i) {
       return column_size < i * segment_length ? column_size : i * segment_length;
     });
 
-  test::fixed_width_column_wrapper<InputType> input(data_it, data_it + column_size);
-  std::vector<size_type> h_offsets(offset_it, offset_it + num_segments + 1);
-  thrust::device_vector<size_type> d_offsets(h_offsets);
+  thrust::device_vector<size_type> d_offsets(offset_it, offset_it + num_segments + 1);
 
-  return std::make_pair(input.release(), d_offsets);
+  return std::pair(std::move((input->release())[0]), d_offsets);
 }
 
 template <typename InputType, typename OutputType, aggregation::Kind kind>

@@ -308,8 +308,10 @@ def test_character_tokenize_series():
             "hello world",
             "sdf",
             None,
-            "goodbye, one-two:three~four+five_six@sev"
-            "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ",
+            (
+                "goodbye, one-two:three~four+five_six@sev"
+                "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
+            ),
         ]
     )
     expected = cudf.Series(
@@ -423,8 +425,10 @@ def test_character_tokenize_index():
             "hello world",
             "sdf",
             None,
-            "goodbye, one-two:three~four+five_six@sev"
-            "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ",
+            (
+                "goodbye, one-two:three~four+five_six@sev"
+                "en#eight^nine heŒŽ‘•™œ$µ¾ŤƠé Ǆ"
+            ),
         ]
     )
     expected = cudf.core.index.as_index(
@@ -822,10 +826,10 @@ def test_read_text_byte_range(datadir):
     assert_eq(expected, actual)
 
 
-def test_read_text_byte_range_large(datadir):
-    content = str(("\n" if x % 5 == 0 else "x") for x in range(0, 300000000))
+def test_read_text_byte_range_large(tmpdir):
+    content = str([["\n" if x % 5 == 0 else "x"] for x in range(0, 3000)])
     delimiter = "1."
-    temp_file = str(datadir) + "/temp.txt"
+    temp_file = str(tmpdir) + "/temp.txt"
 
     with open(temp_file, "w") as f:
         f.write(content)

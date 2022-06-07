@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import numbers
 import operator
+import textwrap
 import warnings
 from collections import Counter, abc
 from functools import cached_property
@@ -44,6 +45,7 @@ from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.core.udf.utils import _compile_or_get, _supported_cols_from_frame
+from cudf.utils import docutils
 from cudf.utils.utils import _cudf_nvtx_annotate
 
 doc_reset_index_template = """
@@ -72,6 +74,55 @@ doc_reset_index_template = """
 """
 
 
+doc_binop_template = textwrap.dedent(
+    """
+    Get {operation} of DataFrame or Series and other, element-wise (binary
+    operator `{op_name}`).
+
+    Equivalent to ``frame + other``, but with support to substitute a
+    ``fill_value`` for missing data in one of the inputs.
+
+    Parameters
+    ----------
+    other : scalar, sequence, Series, or DataFrame
+        Any single or multiple element data structure, or list-like object.
+    axis : int or string
+        Only ``0`` is supported for series, ``1`` or ``columns`` supported
+        for dataframe
+    level : int or name
+        Broadcast across a level, matching Index values on the
+        passed MultiIndex level. Not yet supported.
+    fill_value  : float or None, default None
+        Fill existing missing (NaN) values, and any new element needed
+        for successful DataFrame alignment, with this value before
+        computation. If data in both corresponding DataFrame locations
+        is missing the result will be missing.
+
+    Returns
+    -------
+    DataFrame or Series
+        Result of the arithmetic operation.
+
+    Examples
+    --------
+
+    **DataFrame**
+
+    >>> df = cudf.DataFrame(
+    ...     {{'angles': [0, 3, 4], 'degrees': [360, 180, 360]}},
+    ...     index=['circle', 'triangle', 'rectangle']
+    ... )
+    {df_op_example}
+
+    **Series**
+
+    >>> a = cudf.Series([1, 1, 1, None], index=['a', 'b', 'c', 'd'])
+    >>> b = cudf.Series([1, None, 1, None], index=['a', 'b', 'd', 'e'])
+    {ser_op_example}
+    """
+)
+
+
 def _get_host_unique(array):
     if isinstance(array, (cudf.Series, cudf.Index, ColumnBase)):
         return array.unique.to_pandas()
@@ -93,7 +144,6 @@ def _drop_columns(f: Frame, columns: abc.Iterable, errors: str):
 
 
 def _indices_from_labels(obj, labels):
-
     if not isinstance(labels, cudf.MultiIndex):
         labels = cudf.core.column.as_column(labels)
 
@@ -194,7 +244,9 @@ class IndexedFrame(Frame):
 
     @classmethod
     def _from_data(
-        cls, data: MutableMapping, index: Optional[BaseIndex] = None,
+        cls,
+        data: MutableMapping,
+        index: Optional[BaseIndex] = None,
     ):
         out = super()._from_data(data)
         out._index = RangeIndex(out._data.nrows) if index is None else index
@@ -702,10 +754,7 @@ class IndexedFrame(Frame):
         >>> s.memory_usage(index=False)
         24
         """
-        usage = super().memory_usage(deep=deep)
-        if index:
-            usage["Index"] = self.index.memory_usage()
-        return usage
+        raise NotImplementedError
 
     def hash_values(self, method="murmur3"):
         """Compute the hash of values in this column.
@@ -768,7 +817,8 @@ class IndexedFrame(Frame):
         # calculation, necessitating the unfortunate circular reference to the
         # child class here.
         return cudf.Series._from_data(
-            {None: libcudf.hash.hash(self, method)}, index=self.index
+            {None: libcudf.hash.hash([*self._columns], method)},
+            index=self.index,
         )
 
     def _gather(
@@ -941,6 +991,7 @@ class IndexedFrame(Frame):
         Examples
         --------
         **Series**
+
         >>> s = cudf.Series([1, 2, 3, 4])
         >>> s
         0    1
@@ -956,6 +1007,7 @@ class IndexedFrame(Frame):
         dtype: int64
 
         **DataFrame**
+
         >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
         >>> df
            A  B
@@ -1174,9 +1226,9 @@ class IndexedFrame(Frame):
 
             # argsort the `by` column
             return self._gather(
-                self._get_columns_by_label(columns)._get_sorted_inds(
-                    ascending=not largest
-                )[:n],
+                self._get_columns_by_label(columns)
+                ._get_sorted_inds(ascending=not largest)
+                .slice(*slice(None, n).indices(len(self))),
                 keep_index=True,
                 check_bounds=False,
             )
@@ -1187,9 +1239,11 @@ class IndexedFrame(Frame):
 
             if n <= 0:
                 # Empty slice.
-                indices = indices[0:0]
+                indices = indices.slice(0, 0)
             else:
-                indices = indices[: -n - 1 : -1]
+                indices = indices.slice(
+                    *slice(None, -n - 1, -1).indices(len(self))
+                )
             return self._gather(indices, keep_index=True, check_bounds=False)
         else:
             raise ValueError('keep must be either "first", "last"')
@@ -1758,7 +1812,10 @@ class IndexedFrame(Frame):
             index_names,
         ) = self._index._split_columns_by_levels(level)
         if index_columns:
-            index = _index_from_columns(index_columns, name=self._index.name,)
+            index = _index_from_columns(
+                index_columns,
+                name=self._index.name,
+            )
             if isinstance(index, MultiIndex):
                 index.names = index_names
             else:
@@ -1806,7 +1863,9 @@ class IndexedFrame(Frame):
             return self.copy()
 
         pd_offset = pd.tseries.frequencies.to_offset(offset)
-        to_search = op(pd.Timestamp(self._index._column[idx]), pd_offset)
+        to_search = op(
+            pd.Timestamp(self._index._column.element_indexing(idx)), pd_offset
+        )
         if (
             idx == 0
             and not isinstance(pd_offset, pd.tseries.offsets.Tick)
@@ -1830,7 +1889,7 @@ class IndexedFrame(Frame):
         Parameters
         ----------
         offset: str
-            The offset length of the data that will be selected. For intance,
+            The offset length of the data that will be selected. For instance,
             '1M' will display all rows having their index within the first
             month.
 
@@ -2118,9 +2177,7 @@ class IndexedFrame(Frame):
         *args,
         **kwargs,
     ):
-        reflect = self._is_reflected_op(op)
-        if reflect:
-            op = op[:2] + op[3:]
+        reflect, op = self._check_reflected_op(op)
         operands, out_index = self._make_operands_and_index_for_binop(
             other, op, fill_value, reflect, can_reindex
         )
@@ -2149,7 +2206,7 @@ class IndexedFrame(Frame):
         Optional[cudf.BaseIndex],
     ]:
         raise NotImplementedError(
-            "Binary operations are not supported for {self.__class__}"
+            f"Binary operations are not supported for {self.__class__}"
         )
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -2269,8 +2326,8 @@ class IndexedFrame(Frame):
         self, other, ignore_index=False, verify_integrity=False, sort=None
     ):
         warnings.warn(
-            "append is deprecated and will be removed in a future version. "
-            "Use concat instead.",
+            "The append method is deprecated and will be removed in a future "
+            "version. Use cudf.concat instead.",
             FutureWarning,
         )
         if verify_integrity not in (None, False):
@@ -2291,10 +2348,10 @@ class IndexedFrame(Frame):
         Parameters
         ----------
         dtype : data type, or dict of column name -> data type
-            Use a numpy.dtype or Python type to cast entire DataFrame object to
-            the same type. Alternatively, use ``{col: dtype, ...}``, where col
-            is a column label and dtype is a numpy.dtype or Python type
-            to cast one or more of the DataFrame's columns to
+            Use a :class:`numpy.dtype` or Python type to cast entire DataFrame
+            object to the same type. Alternatively, use ``{col: dtype, ...}``,
+            where col is a column label and dtype is a :class:`numpy.dtype`
+            or Python type to cast one or more of the DataFrame's columns to
             column-specific types.
         copy : bool, default False
             Return a deep-copy when ``copy=True``. Note by default
@@ -2306,8 +2363,6 @@ class IndexedFrame(Frame):
             -   ``raise`` : allow exceptions to be raised
             -   ``ignore`` : suppress exceptions. On error return original
                 object.
-            -   ``warn`` : prints last exceptions as warnings and
-                return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
@@ -2395,25 +2450,14 @@ class IndexedFrame(Frame):
         1     2
         dtype: int64
         """
-        if errors not in ("ignore", "warn", "raise"):
+        if errors not in ("ignore", "raise"):
             raise ValueError("invalid error value specified")
-        elif errors == "warn":
-            warnings.warn(
-                "Specifying errors='warn' is deprecated and will be removed "
-                "in a future release.",
-                FutureWarning,
-            )
 
         try:
             data = super().astype(dtype, copy, **kwargs)
         except Exception as e:
             if errors == "raise":
                 raise e
-            elif errors == "warn":
-                import traceback
-
-                tb = traceback.format_exc()
-                warnings.warn(tb)
             return self
 
         return self._from_data(data, index=self._index)
@@ -2646,21 +2690,978 @@ class IndexedFrame(Frame):
         if not ignore_index and self._index is not None:
             explode_column_num += self._index.nlevels
 
-        data, index = libcudf.lists.explode_outer(
-            self, explode_column_num, ignore_index
-        )
-        res = self.__class__._from_data(
-            ColumnAccessor(
-                data,
-                multiindex=self._data.multiindex,
-                level_names=self._data._level_names,
-            ),
-            index=index,
+        exploded = libcudf.lists.explode_outer(
+            [
+                *(self._index._data.columns if not ignore_index else ()),
+                *self._columns,
+            ],
+            explode_column_num,
         )
 
-        if not ignore_index and self._index is not None:
-            res.index.names = self._index.names
-        return res
+        return self._from_columns_like_self(
+            exploded,
+            self._column_names,
+            self._index_names if not ignore_index else None,
+        )
+
+    @_cudf_nvtx_annotate
+    def tile(self, count):
+        """Repeats the rows `count` times to form a new Frame.
+
+        Parameters
+        ----------
+        self : input Table containing columns to interleave.
+        count : Number of times to tile "rows". Must be non-negative.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df  = cudf.Dataframe([[8, 4, 7], [5, 2, 3]])
+        >>> count = 2
+        >>> df.tile(df, count)
+           0  1  2
+        0  8  4  7
+        1  5  2  3
+        0  8  4  7
+        1  5  2  3
+
+        Returns
+        -------
+        The indexed frame containing the tiled "rows".
+        """
+        return self._from_columns_like_self(
+            libcudf.reshape.tile(
+                [*self._index._columns, *self._columns], count
+            ),
+            column_names=self._column_names,
+            index_names=self._index_names,
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Addition",
+            op_name="add",
+            equivalent_op="frame + other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.add(1)
+                        angles  degrees
+                circle          1      361
+                triangle        4      181
+                rectangle       5      361
+                """,
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.add(b)
+                a       2
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.add(b, fill_value=0)
+                a       2
+                b       1
+                c       1
+                d       1
+                e    <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def add(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__add__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Addition",
+            op_name="radd",
+            equivalent_op="other + frame",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.radd(1)
+                        angles  degrees
+                circle          1      361
+                triangle        4      181
+                rectangle       5      361
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.radd(b)
+                a       2
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.radd(b, fill_value=0)
+                a       2
+                b       1
+                c       1
+                d       1
+                e    <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def radd(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__radd__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Subtraction",
+            op_name="sub",
+            equivalent_op="frame - other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.sub(1)
+                        angles  degrees
+                circle         -1      359
+                triangle        2      179
+                rectangle       3      359
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.sub(b)
+                a       0
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.sub(b, fill_value=0)
+                a       2
+                b       1
+                c       1
+                d      -1
+                e    <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def subtract(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__sub__", fill_value)
+
+    sub = subtract
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Subtraction",
+            op_name="rsub",
+            equivalent_op="other - frame",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.rsub(1)
+                        angles  degrees
+                circle          1     -359
+                triangle       -2     -179
+                rectangle      -3     -359
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.rsub(b)
+                a       0
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.rsub(b, fill_value=0)
+                a       0
+                b      -1
+                c      -1
+                d       1
+                e    <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def rsub(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rsub__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Multiplication",
+            op_name="mul",
+            equivalent_op="frame * other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.multiply(1)
+                        angles  degrees
+                circle          0      360
+                triangle        3      180
+                rectangle       4      360
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.multiply(b)
+                a       1
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.multiply(b, fill_value=0)
+                a       1
+                b       0
+                c       0
+                d       0
+                e    <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def multiply(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__mul__", fill_value)
+
+    mul = multiply
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Multiplication",
+            op_name="rmul",
+            equivalent_op="other * frame",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.rmul(1)
+                        angles  degrees
+                circle          0      360
+                triangle        3      180
+                rectangle       4      360
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.rmul(b)
+                a       1
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.rmul(b, fill_value=0)
+                a       1
+                b       0
+                c       0
+                d       0
+                e    <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def rmul(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rmul__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Modulo",
+            op_name="mod",
+            equivalent_op="frame % other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.mod(1)
+                        angles  degrees
+                circle          0        0
+                triangle        0        0
+                rectangle       0        0
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.mod(b)
+                a       0
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.mod(b, fill_value=0)
+                a             0
+                b    4294967295
+                c    4294967295
+                d             0
+                e          <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def mod(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__mod__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Modulo",
+            op_name="rmod",
+            equivalent_op="other % frame",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.rmod(1)
+                            angles  degrees
+                circle     4294967295        1
+                triangle            1        1
+                rectangle           1        1
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.rmod(b)
+                a       0
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.rmod(b, fill_value=0)
+                a             0
+                b             0
+                c             0
+                d    4294967295
+                e          <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def rmod(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rmod__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Exponential",
+            op_name="pow",
+            equivalent_op="frame ** other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.pow(1)
+                        angles  degrees
+                circle          0      360
+                triangle        2      180
+                rectangle       4      360
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.pow(b)
+                a       1
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.pow(b, fill_value=0)
+                a       1
+                b       1
+                c       1
+                d       0
+                e    <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def pow(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__pow__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Exponential",
+            op_name="rpow",
+            equivalent_op="other ** frame",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.rpow(1)
+                        angles  degrees
+                circle          1        1
+                triangle        1        1
+                rectangle       1        1
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.rpow(b)
+                a       1
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.rpow(b, fill_value=0)
+                a       1
+                b       0
+                c       0
+                d       1
+                e    <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def rpow(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rpow__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Integer division",
+            op_name="floordiv",
+            equivalent_op="frame // other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.floordiv(1)
+                        angles  degrees
+                circle          0      360
+                triangle        3      180
+                rectangle       4      360
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.floordiv(b)
+                a       1
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.floordiv(b, fill_value=0)
+                a                      1
+                b    9223372036854775807
+                c    9223372036854775807
+                d                      0
+                e                   <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def floordiv(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__floordiv__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Integer division",
+            op_name="rfloordiv",
+            equivalent_op="other // frame",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.rfloordiv(1)
+                                        angles  degrees
+                circle     9223372036854775807        0
+                triangle                     0        0
+                rectangle                    0        0
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.rfloordiv(b)
+                a       1
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: int64
+                >>> a.rfloordiv(b, fill_value=0)
+                a                      1
+                b                      0
+                c                      0
+                d    9223372036854775807
+                e                   <NA>
+                dtype: int64
+                """
+            ),
+        )
+    )
+    def rfloordiv(
+        self, other, axis, level=None, fill_value=None
+    ):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rfloordiv__", fill_value)
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Floating division",
+            op_name="truediv",
+            equivalent_op="frame / other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.truediv(1)
+                        angles  degrees
+                circle        0.0    360.0
+                triangle      3.0    180.0
+                rectangle     4.0    360.0
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.truediv(b)
+                a     1.0
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: float64
+                >>> a.truediv(b, fill_value=0)
+                a     1.0
+                b     Inf
+                c     Inf
+                d     0.0
+                e    <NA>
+                dtype: float64
+                """
+            ),
+        )
+    )
+    def truediv(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__truediv__", fill_value)
+
+    # Alias for truediv
+    div = truediv
+    divide = truediv
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Floating division",
+            op_name="rtruediv",
+            equivalent_op="other / frame",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.rtruediv(1)
+                            angles   degrees
+                circle          inf  0.002778
+                triangle   0.333333  0.005556
+                rectangle  0.250000  0.002778
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.rtruediv(b)
+                a     1.0
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: float64
+                >>> a.rtruediv(b, fill_value=0)
+                a     1.0
+                b     0.0
+                c     0.0
+                d     Inf
+                e    <NA>
+                dtype: float64
+                """
+            ),
+        )
+    )
+    def rtruediv(self, other, axis, level=None, fill_value=None):  # noqa: D102
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        return self._binaryop(other, "__rtruediv__", fill_value)
+
+    # Alias for rtruediv
+    rdiv = rtruediv
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Equal to",
+            op_name="eq",
+            equivalent_op="frame == other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.eq(1)
+                        angles  degrees
+                circle      False    False
+                triangle    False    False
+                rectangle   False    False
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.eq(b)
+                a    True
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: bool
+                >>> a.eq(b, fill_value=0)
+                a    True
+                b   False
+                c   False
+                d   False
+                e    <NA>
+                dtype: bool
+                """
+            ),
+        )
+    )
+    def eq(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__eq__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Not equal to",
+            op_name="ne",
+            equivalent_op="frame != other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.ne(1)
+                        angles  degrees
+                circle       True     True
+                triangle     True     True
+                rectangle    True     True
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.ne(b)
+                a    False
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: bool
+                >>> a.ne(b, fill_value=0)
+                a   False
+                b    True
+                c    True
+                d    True
+                e    <NA>
+                dtype: bool
+                """
+            ),
+        )
+    )
+    def ne(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__ne__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Less than",
+            op_name="lt",
+            equivalent_op="frame < other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.lt(1)
+                        angles  degrees
+                circle       True    False
+                triangle    False    False
+                rectangle   False    False
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.lt(b)
+                a   False
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: bool
+                >>> a.lt(b, fill_value=0)
+                a   False
+                b   False
+                c   False
+                d    True
+                e    <NA>
+                dtype: bool
+                """
+            ),
+        )
+    )
+    def lt(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__lt__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Less than or equal to",
+            op_name="le",
+            equivalent_op="frame <= other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.le(1)
+                        angles  degrees
+                circle       True    False
+                triangle    False    False
+                rectangle   False    False
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.le(b)
+                a    True
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: bool
+                >>> a.le(b, fill_value=0)
+                a    True
+                b   False
+                c   False
+                d    True
+                e    <NA>
+                dtype: bool
+                """
+            ),
+        )
+    )
+    def le(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__le__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Greater than",
+            op_name="gt",
+            equivalent_op="frame > other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.gt(1)
+                        angles  degrees
+                circle      False     True
+                triangle     True     True
+                rectangle    True     True
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.gt(b)
+                a   False
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: bool
+                >>> a.gt(b, fill_value=0)
+                a   False
+                b    True
+                c    True
+                d   False
+                e    <NA>
+                dtype: bool
+                """
+            ),
+        )
+    )
+    def gt(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__gt__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    @docutils.doc_apply(
+        doc_binop_template.format(
+            operation="Greater than or equal to",
+            op_name="ge",
+            equivalent_op="frame >= other",
+            df_op_example=textwrap.dedent(
+                """
+                >>> df.ge(1)
+                        angles  degrees
+                circle      False     True
+                triangle     True     True
+                rectangle    True     True
+                """
+            ),
+            ser_op_example=textwrap.dedent(
+                """
+                >>> a.ge(b)
+                a    True
+                b    <NA>
+                c    <NA>
+                d    <NA>
+                e    <NA>
+                dtype: bool
+                >>> a.ge(b, fill_value=0)
+                a   True
+                b    True
+                c    True
+                d   False
+                e    <NA>
+                dtype: bool
+                """
+            ),
+        )
+    )
+    def ge(
+        self, other, axis="columns", level=None, fill_value=None
+    ):  # noqa: D102
+        return self._binaryop(
+            other=other, op="__ge__", fill_value=fill_value, can_reindex=True
+        )
+
+    @_cudf_nvtx_annotate
+    def rank(
+        self,
+        axis=0,
+        method="average",
+        numeric_only=None,
+        na_option="keep",
+        ascending=True,
+        pct=False,
+    ):
+        """
+        Compute numerical data ranks (1 through n) along axis.
+
+        By default, equal values are assigned a rank that is the average of the
+        ranks of those values.
+
+        Parameters
+        ----------
+        axis : {0 or 'index'}, default 0
+            Index to direct ranking.
+        method : {'average', 'min', 'max', 'first', 'dense'}, default 'average'
+            How to rank the group of records that have the same value
+            (i.e. ties):
+            * average: average rank of the group
+            * min: lowest rank in the group
+            * max: highest rank in the group
+            * first: ranks assigned in order they appear in the array
+            * dense: like 'min', but rank always increases by 1 between groups.
+        numeric_only : bool, optional
+            For DataFrame objects, rank only numeric columns if set to True.
+        na_option : {'keep', 'top', 'bottom'}, default 'keep'
+            How to rank NaN values:
+            * keep: assign NaN rank to NaN values
+            * top: assign smallest rank to NaN values if ascending
+            * bottom: assign highest rank to NaN values if ascending.
+        ascending : bool, default True
+            Whether or not the elements should be ranked in ascending order.
+        pct : bool, default False
+            Whether or not to display the returned rankings in percentile
+            form.
+
+        Returns
+        -------
+        same type as caller
+            Return a Series or DataFrame with data ranks as values.
+        """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Index.rank is deprecated and will be removed.",
+                FutureWarning,
+            )
+
+        if method not in {"average", "min", "max", "first", "dense"}:
+            raise KeyError(method)
+
+        method_enum = libcudf.aggregation.RankMethod[method.upper()]
+        if na_option not in {"keep", "top", "bottom"}:
+            raise ValueError(
+                "na_option must be one of 'keep', 'top', or 'bottom'"
+            )
+
+        if axis not in (0, "index"):
+            raise NotImplementedError(
+                f"axis must be `0`/`index`, "
+                f"axis={axis} is not yet supported in rank"
+            )
+
+        source = self
+        if numeric_only:
+            numeric_cols = (
+                name
+                for name in self._data.names
+                if _is_non_decimal_numeric_dtype(self._data[name])
+            )
+            source = self._get_columns_by_label(numeric_cols)
+            if source.empty:
+                return source.astype("float64")
+
+        result_columns = libcudf.sort.rank_columns(
+            [*source._columns], method_enum, na_option, ascending, pct
+        )
+
+        return self.__class__._from_data(
+            dict(zip(source._column_names, result_columns)),
+            index=source._index,
+        ).astype(np.float64)
 
 
 def _check_duplicate_level_names(specified, level_names):

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/pair.h>
 #include <thrust/sort.h>
@@ -92,7 +93,7 @@ std::pair<std::vector<T>, std::vector<T>> gen_random_repeated_columns(
   std::mt19937 gen(rd());
   std::shuffle(left.begin(), left.end(), gen);
   std::shuffle(right.begin(), right.end(), gen);
-  return std::make_pair(std::move(left), std::move(right));
+  return std::pair(std::move(left), std::move(right));
 }
 
 // Generate a single pair of left/right nullable columns of random data
@@ -119,8 +120,8 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
     return uniform_dist(gen) > 0.5;
   });
 
-  return std::make_pair(std::make_pair(std::move(left), std::move(left_nulls)),
-                        std::make_pair(std::move(right), std::move(right_nulls)));
+  return std::pair(std::pair(std::move(left), std::move(left_nulls)),
+                   std::pair(std::move(right), std::move(right_nulls)));
 }
 
 }  // namespace

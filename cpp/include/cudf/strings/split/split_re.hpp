@@ -71,7 +71,7 @@ namespace strings {
  */
 std::unique_ptr<table> split_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -121,7 +121,7 @@ std::unique_ptr<table> split_re(
  */
 std::unique_ptr<table> rsplit_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -162,6 +162,8 @@ std::unique_ptr<table> rsplit_re(
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
  * @param input A column of string elements to be split.
  * @param pattern The regex pattern for delimiting characters within each string.
  * @param maxsplit Maximum number of splits to perform.
@@ -171,7 +173,7 @@ std::unique_ptr<table> rsplit_re(
  */
 std::unique_ptr<column> split_record_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -212,6 +214,8 @@ std::unique_ptr<column> split_record_re(
  *       ["ab_cd", ""] ]
  * @endcode
  *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
  * @throw cudf::logic_error if `pattern` is empty.
  *
  * @param input A column of string elements to be split.
@@ -223,7 +227,7 @@ std::unique_ptr<column> split_record_re(
  */
 std::unique_ptr<column> rsplit_record_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

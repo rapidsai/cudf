@@ -41,8 +41,8 @@ impossible, a ValueError exception is raised.
 
 Parameters
 ----------
-dtype : numpy dtype
-    Use a numpy.dtype to cast entire Index object to.
+dtype : :class:`numpy.dtype`
+    Use a :class:`numpy.dtype` to cast entire Index object to.
 copy : bool, default False
     By default, astype always returns a newly allocated object.
     If copy is set to False and internal requirements on dtype are
@@ -119,7 +119,7 @@ class BaseIndex(Serializable):
 
         See Also
         --------
-        cudf.core.multiindex.MultiIndex.get_level_values : Get values for
+        cudf.MultiIndex.get_level_values : Get values for
             a level of a MultiIndex.
 
         Notes
@@ -708,7 +708,18 @@ class BaseIndex(Serializable):
         if is_mixed_with_object_dtype(self, other):
             difference = self.copy()
         else:
-            difference = self.join(other, how="leftanti")
+            other = other.copy(deep=False)
+            other.names = self.names
+            difference = cudf.core.index._index_from_data(
+                cudf.DataFrame._from_data(self._data)
+                ._merge(
+                    cudf.DataFrame._from_data(other._data),
+                    how="leftanti",
+                    on=self.name,
+                )
+                ._data
+            )
+
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
@@ -990,7 +1001,17 @@ class BaseIndex(Serializable):
         return union_result
 
     def _intersection(self, other, sort=None):
-        intersection_result = self.unique().join(other.unique(), how="inner")
+        other_unique = other.unique()
+        other_unique.names = self.names
+        intersection_result = cudf.core.index._index_from_data(
+            cudf.DataFrame._from_data(self.unique()._data)
+            ._merge(
+                cudf.DataFrame._from_data(other_unique._data),
+                how="inner",
+                on=self.name,
+            )
+            ._data
+        )
 
         if sort is None and len(other):
             return intersection_result.sort_values()
@@ -1142,6 +1163,9 @@ class BaseIndex(Serializable):
                     (1, 2)],
                    names=['a', 'b'])
         """
+        warnings.warn(
+            "Index.join is deprecated and will be removed", FutureWarning
+        )
 
         if isinstance(self, cudf.MultiIndex) and isinstance(
             other, cudf.MultiIndex
@@ -1390,7 +1414,9 @@ class BaseIndex(Serializable):
         return cudf.MultiIndex
 
     def drop_duplicates(
-        self, keep="first", nulls_are_equal=True,
+        self,
+        keep="first",
+        nulls_are_equal=True,
     ):
         """
         Drop duplicate rows in index.
@@ -1436,7 +1462,11 @@ class BaseIndex(Serializable):
         ]
 
         return self._from_columns_like_self(
-            drop_nulls(data_columns, how=how, keys=range(len(data_columns)),),
+            drop_nulls(
+                data_columns,
+                how=how,
+                keys=range(len(data_columns)),
+            ),
             self._column_names,
         )
 
@@ -1555,27 +1585,6 @@ class BaseIndex(Serializable):
 
     def _split(self, splits):
         raise NotImplementedError
-
-    def sample(
-        self,
-        n=None,
-        frac=None,
-        replace=False,
-        weights=None,
-        random_state=None,
-        axis=None,
-        ignore_index=False,
-    ):
-        warnings.warn(
-            "Index.sample is deprecated and will be removed.", FutureWarning,
-        )
-        return cudf.core.index._index_from_data(
-            self.to_frame()
-            .sample(
-                n, frac, replace, weights, random_state, axis, ignore_index
-            )
-            ._data
-        )
 
 
 def _get_result_name(left_name, right_name):

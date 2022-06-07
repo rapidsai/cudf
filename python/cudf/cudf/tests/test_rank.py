@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from itertools import chain, combinations_with_replacement, product
 
@@ -62,12 +62,9 @@ def test_rank_all_arguments(
     else:
         expected = pdf.copy(deep=True)
 
-    # TODO: Remove per column iteration once the
-    # following issue is fixed :
-    # https://github.com/pandas-dev/pandas/issues/43310
-    for col in expected.columns:
-        expected[col] = pdf[col].rank(**kwargs)
     actual = gdf.rank(**kwargs)
+    expected = pdf.rank(**kwargs)
+
     assert_eq(expected, actual)
 
 
@@ -134,7 +131,8 @@ sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
     "elem,dtype",
     list(
         product(
-            combinations_with_replacement(sort_group_args, 4), sort_dtype_args,
+            combinations_with_replacement(sort_group_args, 4),
+            sort_dtype_args,
         )
     ),
 )

@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "io/comp/gpuinflate.h"
+#include "io/comp/gpuinflate.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_common.hpp"
 #include "io/statistics/statistics.cuh"
@@ -24,7 +24,7 @@
 #include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -305,9 +305,9 @@ inline size_type __device__ row_to_value_idx(size_type idx, column_device_view c
       idx += col.offset();
       col = col.child(0);
     } else {
-      auto offset_col = col.child(lists_column_view::offsets_column_index);
-      idx             = offset_col.element<size_type>(idx + col.offset());
-      col             = col.child(lists_column_view::child_column_index);
+      auto list_col = cudf::detail::lists_column_device_view(col);
+      idx           = list_col.offset_at(idx);
+      col           = list_col.child();
     }
   }
   return idx;
@@ -378,7 +378,7 @@ struct EncPage {
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
-  gpu_inflate_status_s* comp_stat;  //!< Ptr to compression status
+  decompress_status* comp_stat;  //!< Ptr to compression status
 };
 
 /**
@@ -529,12 +529,10 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
 /**
  * @brief Insert chunk values into their respective hash maps
  *
- * @param chunks Column chunks [rowgroup][column]
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                              cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void populate_chunk_hash_maps(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                               rmm::cuda_stream_view stream);
 
 /**
@@ -554,12 +552,10 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
  * Since dict_data itself contains indices into the original cudf column, this means that
  * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
  *
- * @param chunks Column chunks [rowgroup][column]
  * @param frags Column fragments
  * @param stream CUDA stream to use
  */
-void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                            cudf::detail::device_2dspan<gpu::PageFragment const> frags,
+void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
 /**
@@ -579,6 +575,8 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
+                      size_t max_page_size_bytes,
+                      size_type max_page_size_rows,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       size_t max_page_comp_data_size,
@@ -588,13 +586,15 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @brief Launches kernel for packing column data into parquet pages
  *
  * @param[in,out] pages Device array of EncPages (unordered)
- * @param[out] comp_in Optionally initializes compressor input params
- * @param[out] comp_out Optionally initializes compressor output params
+ * @param[out] comp_in Compressor input buffers
+ * @param[out] comp_in Compressor output buffers
+ * @param[out] comp_stats Compressor statuses
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePages(device_span<EncPage> pages,
-                 device_span<gpu_inflate_input_s> comp_in,
-                 device_span<gpu_inflate_status_s> comp_out,
+                 device_span<device_span<uint8_t const>> comp_in,
+                 device_span<device_span<uint8_t>> comp_out,
+                 device_span<decompress_status> comp_stats,
                  rmm::cuda_stream_view stream);
 
 /**
@@ -609,13 +609,13 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in] comp_out Compressor status or nullptr if no compression
+ * @param[in] comp_stats Compressor status
  * @param[in] page_stats Optional page-level statistics to be included in page header
  * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       device_span<gpu_inflate_status_s const> comp_out,
+                       device_span<decompress_status const> comp_stats,
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk* chunk_stats,
                        rmm::cuda_stream_view stream);

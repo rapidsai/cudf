@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import pandas as pd
 import pytest
@@ -17,7 +17,7 @@ class PointsAccessor:
     @staticmethod
     def _validate(obj):
         cols = obj.columns
-        if not all([vertex in cols for vertex in ["x", "y"]]):
+        if not all(vertex in cols for vertex in ["x", "y"]):
             raise AttributeError("Must have vertices 'x', 'y'.")
 
     @property

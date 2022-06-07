@@ -1,7 +1,7 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
-import collections
 import enum
+from collections import abc
 from typing import (
     Any,
     Dict,
@@ -438,7 +438,9 @@ class _CuDFColumn:
                 f"See {self.__class__.__name__}.describe_null method."
             )
 
-    def _get_offsets_buffer(self,) -> Optional[Tuple[_CuDFBuffer, ProtoDtype]]:
+    def _get_offsets_buffer(
+        self,
+    ) -> Optional[Tuple[_CuDFBuffer, ProtoDtype]]:
         """
         Return the buffer containing the offset values for
         variable-size binary data (e.g., variable-length strings)
@@ -464,7 +466,9 @@ class _CuDFColumn:
 
         return buffer, dtype
 
-    def _get_data_buffer(self,) -> Tuple[_CuDFBuffer, ProtoDtype]:
+    def _get_data_buffer(
+        self,
+    ) -> Tuple[_CuDFBuffer, ProtoDtype]:
         """
         Return the buffer containing the data and
                the buffer's associated dtype.
@@ -565,13 +569,13 @@ class _CuDFDataFrame:
         ]
 
     def select_columns(self, indices: Sequence[int]) -> "_CuDFDataFrame":
-        if not isinstance(indices, collections.abc.Sequence):
+        if not isinstance(indices, abc.Sequence):
             raise ValueError("`indices` is not a sequence")
 
         return _CuDFDataFrame(self._df.iloc[:, indices])
 
     def select_columns_by_name(self, names: Sequence[str]) -> "_CuDFDataFrame":
-        if not isinstance(names, collections.Sequence):
+        if not isinstance(names, abc.Sequence):
             raise ValueError("`names` is not a sequence")
 
         return _CuDFDataFrame(

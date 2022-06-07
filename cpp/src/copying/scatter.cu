@@ -25,7 +25,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/search.hpp>
-#include <cudf/lists/list_view.cuh>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -35,7 +35,11 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/count.h>
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
 namespace cudf {

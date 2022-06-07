@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import copy
 import io
@@ -69,7 +69,7 @@ class OrcReader(IOFuzz):
             )
 
             self._current_params["dtypes_meta"] = dtypes_meta
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_cols"] = num_cols
@@ -188,7 +188,7 @@ class OrcWriter(IOFuzz):
                 self, dtypes_list
             )
             self._current_params["dtypes_meta"] = dtypes_meta
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_cols"] = num_cols

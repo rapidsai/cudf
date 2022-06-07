@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+// Can be removed once we use Thrust 1.16+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wsizeof-array-div"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -35,9 +40,12 @@
 #include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/transform.h>
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
+
+#pragma GCC diagnostic pop
 
 #include <memory>
 #include <optional>

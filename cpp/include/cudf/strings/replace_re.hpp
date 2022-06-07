@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ namespace strings {
  */
 std::unique_ptr<column> replace_re(
   strings_column_view const& strings,
-  std::string const& pattern,
+  std::string_view pattern,
   string_scalar const& replacement           = string_scalar(""),
   std::optional<size_type> max_replace_count = std::nullopt,
   regex_flags const flags                    = regex_flags::DEFAULT,
@@ -86,7 +86,8 @@ std::unique_ptr<column> replace_re(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @throw cudf::logic_error if capture index values in `replacement` are not in range 1-99
+ * @throw cudf::logic_error if capture index values in `replacement` are not in range 0-99, and also
+ * if the index exceeds the group count specified in the pattern
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression patterns to search within each string.
@@ -97,8 +98,8 @@ std::unique_ptr<column> replace_re(
  */
 std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& strings,
-  std::string const& pattern,
-  std::string const& replacement,
+  std::string_view pattern,
+  std::string_view replacement,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

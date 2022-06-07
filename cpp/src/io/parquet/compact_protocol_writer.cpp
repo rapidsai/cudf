@@ -144,6 +144,7 @@ size_t CompactProtocolWriter::write(const SchemaElement& s)
       c.field_int(8, s.decimal_precision);
     }
   }
+  if (s.field_id) { c.field_int(9, s.field_id.value()); }
   auto const isset = s.logical_type.isset;
   // TODO: add handling for all logical types
   // if (isset.STRING or isset.MAP or isset.LIST or isset.ENUM or isset.DECIMAL or isset.DATE or

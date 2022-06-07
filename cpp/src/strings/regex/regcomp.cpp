@@ -16,11 +16,16 @@
 
 #include <strings/regex/regcomp.h>
 
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
 #include <array>
-#include <cstring>
+#include <cctype>
+#include <numeric>
+#include <stack>
+#include <string>
+#include <vector>
 
 namespace cudf {
 namespace strings {
@@ -42,21 +47,53 @@ enum OperatorType {
   COUNTED_LAZY = 0215,
   NOP          = 0302,  // No operation, internal use only
 };
+#define ITEM_MASK 0300
 
-static reclass ccls_w(1);   // [a-z], [A-Z], [0-9], and '_'
-static reclass ccls_W(8);   // now ccls_w plus '\n'
-static reclass ccls_s(2);   // all spaces or ctrl characters
-static reclass ccls_S(16);  // not ccls_s
-static reclass ccls_d(4);   // digits [0-9]
-static reclass ccls_D(32);  // not ccls_d plus '\n'
+static reclass ccls_w(CCLASS_W);   // \w
+static reclass ccls_s(CCLASS_S);   // \s
+static reclass ccls_d(CCLASS_D);   // \d
+static reclass ccls_W(NCCLASS_W);  // \W
+static reclass ccls_S(NCCLASS_S);  // \S
+static reclass ccls_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
 const std::array<int, 6> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL, RBRA}};
 const std::array<char, 5> quantifiers{{'*', '?', '+', '{', '|'}};
-// Valid regex characters that can be escaping to be used as literals
+// Valid regex characters that can be escaped and used as literals
 const std::array<char, 33> escapable_chars{
   {'.', '-', '+',  '*', '\\', '?', '^', '$', '|', '{', '}', '(', ')', '[', ']', '<', '>',
    '"', '~', '\'', '`', '_',  '@', '=', ';', ':', '!', '#', '%', '&', ',', '/', ' '}};
+
+/**
+ * @brief Converts UTF-8 string into fixed-width 32-bit character vector.
+ *
+ * No character conversion occurs.
+ * Each UTF-8 character is promoted into a 32-bit value.
+ * The last entry in the returned vector will be a 0 value.
+ * The fixed-width vector makes it easier to compile and faster to execute.
+ *
+ * @param pattern Regular expression encoded with UTF-8.
+ * @return Fixed-width 32-bit character vector.
+ */
+std::vector<char32_t> string_to_char32_vector(std::string_view pattern)
+{
+  size_type size  = static_cast<size_type>(pattern.size());
+  size_type count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
+    return is_begin_utf8_char(static_cast<uint8_t>(ch));
+  });
+  std::vector<char32_t> result(count + 1);
+  char32_t* output_ptr  = result.data();
+  const char* input_ptr = pattern.data();
+  for (size_type idx = 0; idx < size; ++idx) {
+    char_utf8 output_character = 0;
+    size_type ch_width         = to_char_utf8(input_ptr, output_character);
+    input_ptr += ch_width;
+    idx += ch_width - 1;
+    *output_ptr++ = output_character;
+  }
+  result[count] = 0;  // last entry set to 0
+  return result;
+}
 
 }  // namespace
 
@@ -118,10 +155,10 @@ class regex_parser {
   int id_ccls_d = -1;  // digit
   int id_ccls_D = -1;  // not digit
 
-  char32_t yy;    /* last lex'd Char */
-  int yyclass_id; /* last lex'd class */
-  short yy_min_count;
-  short yy_max_count;
+  char32_t yy{};    /* last lex'd Char */
+  int yyclass_id{}; /* last lex'd class */
+  int16_t yy_min_count{};
+  int16_t yy_max_count{};
 
   bool nextc(char32_t& c)  // return "quoted" == backslash-escape prefix
   {
@@ -420,41 +457,69 @@ class regex_parser {
           return PLUS_LAZY;
         }
         return PLUS;
-      case '{':  // counted repetition
+      case '{':  // counted repetition: {n,m}
       {
-        if (*exprp < '0' || *exprp > '9') break;
-        const char32_t* exprp_backup = exprp;  // in case '}' is not found
-        char buff[8]                 = {0};
-        for (int i = 0; i < 7 && *exprp != '}' && *exprp != ',' && *exprp != 0; i++, exprp++) {
-          buff[i]     = *exprp;
-          buff[i + 1] = 0;
-        }
-        if (*exprp != '}' && *exprp != ',') {
-          exprp = exprp_backup;
-          break;
-        }
-        sscanf(buff, "%hd", &yy_min_count);
-        if (*exprp != ',')
-          yy_max_count = yy_min_count;
-        else {
-          yy_max_count = -1;
-          exprp++;
-          buff[0] = 0;
-          for (int i = 0; i < 7 && *exprp != '}' && *exprp != 0; i++, exprp++) {
-            buff[i]     = *exprp;
-            buff[i + 1] = 0;
+        if (!std::isdigit(*exprp)) { break; }
+
+        // transform char32 to char until null, delimiter, non-digit or end is reached;
+        // returns the number of chars read/transformed
+        auto transform_until = [](char32_t const* input,
+                                  char32_t const* end,
+                                  char* output,
+                                  std::string_view const delimiters) -> int32_t {
+          int32_t count = 0;
+          while (*input != 0 && input < end) {
+            auto const ch = static_cast<char>(*input++);
+            // if ch not a digit or ch is a delimiter, we are done
+            if (!std::isdigit(ch) || delimiters.find(ch) != delimiters.npos) { break; }
+            output[count] = ch;
+            ++count;
           }
-          if (*exprp != '}') {
-            exprp = exprp_backup;
-            break;
-          }
-          if (buff[0] != 0) sscanf(buff, "%hd", &yy_max_count);
+          output[count] = 0;  // null-terminate (for the atoi call)
+          return count;
+        };
+
+        constexpr auto max_read               = 4;    // 3 digits plus the delimiter
+        constexpr auto max_value              = 999;  // support only 3 digits
+        std::array<char, max_read + 1> buffer = {0};  //(max_read + 1);
+
+        // get left-side (n) value => min_count
+        auto bytes_read = transform_until(exprp, exprp + max_read, buffer.data(), "},");
+        if (exprp[bytes_read] != '}' && exprp[bytes_read] != ',') {
+          break;  // re-interpret as CHAR
         }
-        exprp++;
+        auto count = std::atoi(buffer.data());
+        CUDF_EXPECTS(count <= max_value,
+                     "unsupported repeat value at " + std::to_string(exprp - pattern - 1));
+        yy_min_count = static_cast<int16_t>(count);
+
+        auto const exprp_backup = exprp;  // save in case ending '}' is not found
+        exprp += bytes_read;
+
+        // get optional right-side (m) value => max_count
+        yy_max_count = yy_min_count;
+        if (*exprp++ == ',') {
+          bytes_read = transform_until(exprp, exprp + max_read, buffer.data(), "}");
+          if (exprp[bytes_read] != '}') {
+            exprp = exprp_backup;  // abort, rollback and
+            break;                 // re-interpret as CHAR
+          }
+
+          count = std::atoi(buffer.data());
+          CUDF_EXPECTS(count <= max_value,
+                       "unsupported repeat value at " + std::to_string(exprp - pattern - 1));
+
+          // {n,m} and {n,} are both valid
+          yy_max_count = buffer[0] == 0 ? -1 : static_cast<int16_t>(count);
+          exprp += bytes_read + 1;
+        }
+
+        // {n,m}? pattern is lazy counted quantifier
         if (*exprp == '?') {
           exprp++;
           return COUNTED_LAZY;
         }
+        // otherwise, fixed counted quantifier
         return COUNTED;
       }
       case '|': return OR;
@@ -527,6 +592,9 @@ class regex_compiler {
   int nbra;
 
   regex_flags flags;
+
+  char32_t yy;
+  int yyclass_id;
 
   inline void pushand(int f, int l) { andstack.push_back({f, l}); }
 
@@ -680,97 +748,70 @@ class regex_compiler {
     lastwasand = true;
   }
 
-  char32_t yy;
-  int yyclass_id;
-
-  void expand_counted(const std::vector<regex_parser::Item>& in,
-                      std::vector<regex_parser::Item>& out)
+  std::vector<regex_parser::Item> expand_counted(std::vector<regex_parser::Item> const& in)
   {
-    std::vector<int> lbra_stack;
-    int rep_start = -1;
+    std::vector<regex_parser::Item> out;
+    std::stack<int> lbra_stack;
+    auto repeat_start_index = -1;
 
-    out.clear();
-    for (std::size_t i = 0; i < in.size(); i++) {
-      if (in[i].t != COUNTED && in[i].t != COUNTED_LAZY) {
-        out.push_back(in[i]);
-        if (in[i].t == LBRA || in[i].t == LBRA_NC) {
-          lbra_stack.push_back(i);
-          rep_start = -1;
-        } else if (in[i].t == RBRA) {
-          rep_start = lbra_stack[lbra_stack.size() - 1];
-          lbra_stack.pop_back();
-        } else if ((in[i].t & 0300) != OPERATOR_MASK) {
-          rep_start = i;
+    for (std::size_t index = 0; index < in.size(); index++) {
+      auto const item = in[index];
+
+      if (item.t != COUNTED && item.t != COUNTED_LAZY) {
+        out.push_back(item);
+        if (item.t == LBRA || item.t == LBRA_NC) {
+          lbra_stack.push(index);
+          repeat_start_index = -1;
+        } else if (item.t == RBRA) {
+          repeat_start_index = lbra_stack.top();
+          lbra_stack.pop();
+        } else if ((item.t & ITEM_MASK) != OPERATOR_MASK) {
+          repeat_start_index = index;
         }
       } else {
-        if (rep_start < 0)  // broken regex
-          return;
+        // item is of type COUNTED or COUNTED_LAZY
+        // here we repeat the previous item(s) based on the count range in item
 
-        regex_parser::Item item = in[i];
-        if (item.d.yycount.n <= 0) {
-          // need to erase
-          for (std::size_t j = 0; j < i - rep_start; j++)
-            out.pop_back();
-        } else {
-          // repeat
-          for (int j = 1; j < item.d.yycount.n; j++)
-            for (std::size_t k = rep_start; k < i; k++)
-              out.push_back(in[k]);
+        CUDF_EXPECTS(repeat_start_index >= 0, "regex: invalid counted quantifier location");
+
+        // range of affected item(s) to repeat
+        auto const begin = in.begin() + repeat_start_index;
+        auto const end   = in.begin() + index;
+        // count range values
+        auto const n = item.d.yycount.n;  // minimum count
+        auto const m = item.d.yycount.m;  // maximum count
+
+        assert(n >= 0 && "invalid repeat count value n");
+        // zero-repeat edge-case: need to erase the previous items
+        if (n == 0) { out.erase(out.end() - (index - repeat_start_index), out.end()); }
+
+        // minimum repeats (n)
+        for (int j = 1; j < n; j++) {
+          out.insert(out.end(), begin, end);
         }
 
-        // optional repeats
-        if (item.d.yycount.m >= 0) {
-          for (int j = item.d.yycount.n; j < item.d.yycount.m; j++) {
-            regex_parser::Item o_item;
-            o_item.t    = LBRA_NC;
-            o_item.d.yy = 0;
-            out.push_back(o_item);
-            for (std::size_t k = rep_start; k < i; k++)
-              out.push_back(in[k]);
+        // optional maximum repeats (m)
+        if (m >= 0) {
+          for (int j = n; j < m; j++) {
+            out.push_back(regex_parser::Item{LBRA_NC, 0});
+            out.insert(out.end(), begin, end);
           }
-          for (int j = item.d.yycount.n; j < item.d.yycount.m; j++) {
-            regex_parser::Item o_item;
-            o_item.t    = RBRA;
-            o_item.d.yy = 0;
-            out.push_back(o_item);
-            if (item.t == COUNTED) {
-              o_item.t = QUEST;
-              out.push_back(o_item);
-            } else {
-              o_item.t = QUEST_LAZY;
-              out.push_back(o_item);
-            }
+          for (int j = n; j < m; j++) {
+            out.push_back(regex_parser::Item{RBRA, 0});
+            out.push_back(regex_parser::Item{item.t == COUNTED ? QUEST : QUEST_LAZY, 0});
           }
-        } else  // infinite repeat
-        {
-          regex_parser::Item o_item;
-          o_item.d.yy = 0;
-
-          if (item.d.yycount.n > 0)  // put '+' after last repetition
-          {
-            if (item.t == COUNTED) {
-              o_item.t = PLUS;
-              out.push_back(o_item);
-            } else {
-              o_item.t = PLUS_LAZY;
-              out.push_back(o_item);
-            }
-          } else  // copy it once then put '*'
-          {
-            for (std::size_t k = rep_start; k < i; k++)
-              out.push_back(in[k]);
-
-            if (item.t == COUNTED) {
-              o_item.t = STAR;
-              out.push_back(o_item);
-            } else {
-              o_item.t = STAR_LAZY;
-              out.push_back(o_item);
-            }
+        } else {
+          // infinite repeats
+          if (n > 0) {  // append '+' after last repetition
+            out.push_back(regex_parser::Item{item.t == COUNTED ? PLUS : PLUS_LAZY, 0});
+          } else {  // copy it once then append '*'
+            out.insert(out.end(), begin, end);
+            out.push_back(regex_parser::Item{item.t == COUNTED ? STAR : STAR_LAZY, 0});
           }
         }
       }
     }
+    return out;
   }
 
  public:
@@ -785,23 +826,17 @@ class regex_compiler {
       yyclass_id(0)
   {
     // Parse
-    std::vector<regex_parser::Item> items;
-    {
+    std::vector<regex_parser::Item> const items = [&] {
       regex_parser parser(pattern, is_dotall(flags) ? ANYNL : ANY, m_prog);
-
-      // Expand counted repetitions
-      if (parser.m_has_counted)
-        expand_counted(parser.m_items, items);
-      else
-        items = parser.m_items;
-    }
+      return parser.m_has_counted ? expand_counted(parser.m_items) : parser.m_items;
+    }();
 
     /* Start with a low priority operator to prime parser */
     pushator(START - 1);
 
     for (int i = 0; i < static_cast<int>(items.size()); i++) {
-      regex_parser::Item item = items[i];
-      int token               = item.t;
+      auto const item = items[i];
+      int token       = item.t;
       if (token == CCLASS || token == NCCLASS)
         yyclass_id = item.d.yyclass_id;
       else
@@ -830,98 +865,95 @@ class regex_compiler {
       ;  // "unmatched left paren";
     /* points to first and only operand */
     m_prog.set_start_inst(andstack[andstack.size() - 1].id_first);
-    m_prog.optimize1();
-    m_prog.optimize2();
+    m_prog.finalize();
     m_prog.check_for_errors();
     m_prog.set_groups_count(cursubid);
   }
 };
 
 // Convert pattern into program
-reprog reprog::create_from(const char32_t* pattern, regex_flags const flags)
+reprog reprog::create_from(std::string_view pattern, regex_flags const flags)
 {
   reprog rtn;
-  regex_compiler compiler(pattern, flags, rtn);
+  auto pattern32 = string_to_char32_vector(pattern);
+  regex_compiler compiler(pattern32.data(), flags, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
 }
 
-//
-void reprog::optimize1()
+void reprog::finalize()
 {
-  // Treat non-capturing LBRAs/RBRAs as NOOP
-  for (int i = 0; i < static_cast<int>(_insts.size()); i++) {
-    if (_insts[i].type == LBRA || _insts[i].type == RBRA) {
-      if (_insts[i].u1.subid < 1) { _insts[i].type = NOP; }
-    }
-  }
+  collapse_nops();
+  build_start_ids();
+}
 
-  // get rid of NOP chains
-  for (int i = 0; i < insts_count(); i++) {
-    if (_insts[i].type != NOP) {
-      {
-        int target_id = _insts[i].u2.next_id;
-        while (_insts[target_id].type == NOP)
-          target_id = _insts[target_id].u2.next_id;
-        _insts[i].u2.next_id = target_id;
-      }
-      if (_insts[i].type == OR) {
-        int target_id = _insts[i].u1.right_id;
-        while (_insts[target_id].type == NOP)
-          target_id = _insts[target_id].u2.next_id;
-        _insts[i].u1.right_id = target_id;
-      }
+void reprog::collapse_nops()
+{
+  // treat non-capturing LBRAs/RBRAs as NOP
+  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [](auto inst) {
+    if ((inst.type == LBRA || inst.type == RBRA) && (inst.u1.subid < 1)) { inst.type = NOP; }
+    return inst;
+  });
+
+  // functor for finding the next valid op
+  auto find_next_op = [insts = _insts](int id) {
+    while (insts[id].type == NOP) {
+      id = insts[id].u2.next_id;
     }
-  }
-  // skip NOPs from the beginning
-  {
-    int target_id = _startinst_id;
-    while (_insts[target_id].type == NOP)
-      target_id = _insts[target_id].u2.next_id;
-    _startinst_id = target_id;
-  }
-  // actually remove the no-ops
+    return id;
+  };
+
+  // create new routes around NOP chains
+  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [find_next_op](auto inst) {
+    if (inst.type != NOP) {
+      inst.u2.next_id = find_next_op(inst.u2.next_id);
+      if (inst.type == OR) { inst.u1.right_id = find_next_op(inst.u1.right_id); }
+    }
+    return inst;
+  });
+
+  // find starting op
+  _startinst_id = find_next_op(_startinst_id);
+
+  // build a map of op ids
+  // these are used to fix up the ids after the NOPs are removed
   std::vector<int> id_map(insts_count());
-  int j = 0;  // compact the ops (non no-ops)
-  for (int i = 0; i < insts_count(); i++) {
-    id_map[i] = j;
-    if (_insts[i].type != NOP) {
-      _insts[j] = _insts[i];
-      j++;
-    }
-  }
-  _insts.resize(j);
-  // fix up the ORs
-  for (int i = 0; i < insts_count(); i++) {
-    {
-      int target_id        = _insts[i].u2.next_id;
-      _insts[i].u2.next_id = id_map[target_id];
-    }
-    if (_insts[i].type == OR) {
-      int target_id         = _insts[i].u1.right_id;
-      _insts[i].u1.right_id = id_map[target_id];
-    }
-  }
-  // set the new start id
+  std::transform_exclusive_scan(
+    _insts.begin(), _insts.end(), id_map.begin(), 0, std::plus<int>{}, [](auto inst) {
+      return static_cast<int>(inst.type != NOP);
+    });
+
+  // remove the NOP instructions
+  auto end = std::remove_if(_insts.begin(), _insts.end(), [](auto i) { return i.type == NOP; });
+  _insts.resize(std::distance(_insts.begin(), end));
+
+  // fix up the ids on the remaining instructions using the id_map
+  std::transform(_insts.begin(), _insts.end(), _insts.begin(), [id_map](auto inst) {
+    inst.u2.next_id = id_map[inst.u2.next_id];
+    if (inst.type == OR) { inst.u1.right_id = id_map[inst.u1.right_id]; }
+    return inst;
+  });
+
+  // fix up the start instruction id too
   _startinst_id = id_map[_startinst_id];
 }
 
 // expand leading ORs to multiple startinst_ids
-void reprog::optimize2()
+void reprog::build_start_ids()
 {
   _startinst_ids.clear();
-  std::vector<int> stack;
-  stack.push_back(_startinst_id);
-  while (!stack.empty()) {
-    int id = stack.back();
-    stack.pop_back();
+  std::stack<int> ids;
+  ids.push(_startinst_id);
+  while (!ids.empty()) {
+    int id = ids.top();
+    ids.pop();
     const reinst& inst = _insts[id];
     if (inst.type == OR) {
       if (inst.u2.left_id != id)  // prevents infinite while-loop here
-        stack.push_back(inst.u2.left_id);
+        ids.push(inst.u2.left_id);
       if (inst.u1.right_id != id)  // prevents infinite while-loop here
-        stack.push_back(inst.u1.right_id);
+        ids.push(inst.u1.right_id);
     } else {
       _startinst_ids.push_back(id);
     }
@@ -1078,12 +1110,12 @@ void reprog::print(regex_flags const flags)
     if (cls.builtins) {
       int mask = cls.builtins;
       printf("   builtins(x%02X):", static_cast<unsigned>(mask));
-      if (mask & 1) printf(" \\w");
-      if (mask & 2) printf(" \\s");
-      if (mask & 4) printf(" \\d");
-      if (mask & 8) printf(" \\W");
-      if (mask & 16) printf(" \\S");
-      if (mask & 32) printf(" \\D");
+      if (mask & CCLASS_W) printf(" \\w");
+      if (mask & CCLASS_S) printf(" \\s");
+      if (mask & CCLASS_D) printf(" \\d");
+      if (mask & NCCLASS_W) printf(" \\W");
+      if (mask & NCCLASS_S) printf(" \\S");
+      if (mask & NCCLASS_D) printf(" \\D");
     }
     printf("\n");
   }

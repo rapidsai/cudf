@@ -20,6 +20,7 @@ package ai.rapids.cudf;
 
 import ai.rapids.cudf.ColumnView.FindOptions;
 import ai.rapids.cudf.HostColumnVector.*;
+import com.google.common.collect.Lists;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -2860,16 +2861,31 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expect, result);
     }
 
-    assertThrows(CudfException.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3);
-           ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
-      }
-    });
-
-    assertThrows(CudfException.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.ListType(true,
               new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(1)));
+         ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv);
+         ColumnVector expect = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(1), Arrays.asList(1)))){
+      assertColumnsAreEqual(expect, result);
+    }
+
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(1, null, 2)));
+         ColumnVector cv2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(null, null, 5, 6, null)));
+         ColumnVector result = ColumnVector.listConcatenateByRow(cv1, cv2);
+         ColumnVector expect = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(1, null, 2), Arrays.asList(null, null, 5, 6, null)))){
+      assertColumnsAreEqual(expect, result);
+    }
+
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3);
            ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
       }
     });
@@ -4987,6 +5003,22 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, actual);
     }
 
+    // test zero as group index
+    try (ColumnVector v = ColumnVector.fromStrings("aa-11 b2b-345", "aa-11a 1c-2b2 b2-c3", "11-aa", null);
+         ColumnVector expected = ColumnVector.fromStrings("aa-11:aa:11; b2b-345:b:345;",
+             "aa-11:aa:11;a 1c-2:c:2;b2 b2-c3", "11-aa", null);
+         ColumnVector actual = v.stringReplaceWithBackrefs(
+             "([a-z]+)-([0-9]+)", "${0}:${1}:${2};")) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    // group index exceeds group count
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("ABC123defgh");
+           ColumnVector r = v.stringReplaceWithBackrefs("([A-Z]+)([0-9]+)([a-z]+)", "\\4")) {
+      }
+    });
+
   }
 
   @Test
@@ -6242,5 +6274,138 @@ public class ColumnVectorTest extends CudfTestBase {
       }
     });
     assertTrue(x.getMessage().contains("Exemplar and validity columns must have the same size"));
+  }
+
+  @Test
+  void testSegmentedGather() {
+    HostColumnVector.DataType dt = new ListType(true, new BasicType(true, DType.STRING));
+    try (ColumnVector source = ColumnVector.fromLists(dt,
+        Lists.newArrayList("a", "b", null, "c"),
+        null,
+        Lists.newArrayList(),
+        Lists.newArrayList(null, "A", "B", "C", "D"));
+         ColumnVector gatherMap = ColumnVector.fromLists(
+             new ListType(false, new BasicType(false, DType.INT32)),
+             Lists.newArrayList(-3, 0, 2, 3, 4),
+             Lists.newArrayList(),
+             Lists.newArrayList(1),
+             Lists.newArrayList(1, -4, 5, -1, -6));
+         ColumnVector actual = source.segmentedGather(gatherMap);
+         ColumnVector expected = ColumnVector.fromLists(dt,
+             Lists.newArrayList("b", "a", null, "c", null),
+             null,
+             Lists.newArrayList((String) null),
+             Lists.newArrayList("A", "A", null, "D", null))) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testGenerateListOffsets() {
+    try (ColumnVector index = ColumnVector.fromInts(1, 3, 3, 0, 2, 0, 0, 5, 10, 25);
+         ColumnVector actual = index.generateListOffsets();
+         ColumnVector expected = ColumnVector.fromInts(0, 1, 4, 7, 7, 9, 9, 9, 14, 24, 49)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+
+    try (ColumnVector index = ColumnVector.fromInts(0, 0, 1, 0, 0);
+         ColumnVector actual = index.generateListOffsets();
+         ColumnVector expected = ColumnVector.fromInts(0, 0, 0, 1, 1, 1)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testApplyBooleanMaskFromListOfInt() {
+    try (
+        ColumnVector elementCv = ColumnVector.fromBoxedInts(
+            11, 12, // list1
+            21, 22, 23, // list2
+            null, 32, 33, null, 35, // list3
+            null, 42, 43, null, 45 // list 4
+            // list5 (empty)
+        );
+        ColumnVector offsetsCv = ColumnVector.fromInts(0, 2, 5, 10, 15, 15);
+        ColumnVector listOfIntCv = elementCv.makeListFromOffsets(5, offsetsCv);
+
+        ColumnVector boolCv = ColumnVector.fromBoxedBooleans(
+            true, false, // list1
+            true, false, true, // list2
+            true, false, true, false, true, // list3
+            true, false, true, false, true // list 4
+            // list5 (empty)
+        );
+        ColumnVector listOfBoolCv = boolCv.makeListFromOffsets(5, offsetsCv);
+
+        // apply boolean mask
+        ColumnVector actualCv = listOfIntCv.applyBooleanMask(listOfBoolCv);
+
+        ColumnVector expectedElementCv = ColumnVector.fromBoxedInts(
+            11, // list1
+            21, 23, // list2
+            null, 33, 35, // list3
+            null, 43, 45 // list 4
+            // list5 (empty)
+        );
+        ColumnVector expectedOffsetsCv = ColumnVector.fromInts(0, 1, 3, 6, 9, 9);
+        ColumnVector expectedCv = expectedElementCv.makeListFromOffsets(5, expectedOffsetsCv)
+    ) {
+      assertColumnsAreEqual(expectedCv, actualCv);
+    }
+  }
+
+  @Test
+  void testApplyBooleanMaskFromListOfStructure() {
+    try (
+        ColumnVector keyCv = ColumnVector.fromBoxedInts(
+            11, 12, // list1
+            21, 22, 23, // list2
+            null, 32, 33, null, 35, // list3
+            null, 42, 43, null, 45 // list 4
+            // list5 (empty)
+        );
+        ColumnVector valCv = ColumnVector.fromBoxedInts(
+            11, 12, // list1
+            21, 22, 23, // list2
+            31, 32, 33, 34, 35, // list3
+            41, 42, 43, 44, 45 // list4
+            // list5 (empty)
+        );
+        ColumnVector structCv = ColumnVector.makeStruct(keyCv, valCv);
+        ColumnVector offsetsCv = ColumnVector.fromInts(0, 2, 5, 10, 15, 15);
+        ColumnVector listOfStructCv = structCv.makeListFromOffsets(5, offsetsCv);
+
+        ColumnVector boolCv = ColumnVector.fromBoxedBooleans(
+            true, false, // list1
+            true, false, true, // list2
+            true, false, true, false, true, // list3
+            true, false, true, false, true // list 4
+            // list5 (empty)
+        );
+        ColumnVector listOfBoolCv = boolCv.makeListFromOffsets(5, offsetsCv);
+
+        // apply boolean mask
+        ColumnVector actualCv = listOfStructCv.applyBooleanMask(listOfBoolCv);
+
+        ColumnVector expectedKeyCv = ColumnVector.fromBoxedInts(
+            11, // list1
+            21, 23, // list2
+            null, 33, 35, // list3
+            null, 43, 45 // list 4
+            // list5 (empty)
+        );
+        ColumnVector expectedValCv = ColumnVector.fromBoxedInts(
+            11, // list1
+            21, 23, // list2
+            31, 33, 35, // list3
+            41, 43, 45 // list4
+            // list5 (empty)
+        );
+        ColumnVector expectedStructCv = ColumnVector.makeStruct(expectedKeyCv, expectedValCv);
+        ColumnVector expectedOffsetsCv = ColumnVector.fromInts(0, 1, 3, 6, 9, 9);
+        ColumnVector expectedCv = expectedStructCv.makeListFromOffsets(5, expectedOffsetsCv)
+    ) {
+      assertColumnsAreEqual(expectedCv, actualCv);
+    }
   }
 }
