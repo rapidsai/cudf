@@ -295,15 +295,17 @@ void apply_struct_binary_op(mutable_column_view& out,
     lhs.size(),
     detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual> ? order::DESCENDING
                                                                       : order::ASCENDING);
+  auto tlhs = table_view{{lhs}};
+  auto trhs = table_view{{rhs}};
   auto table_comparator = cudf::experimental::row::lexicographic::two_table_comparator{
-    table_view{{lhs}}, table_view{{rhs}}, compare_orders, {}, stream};
+    tlhs, trhs, compare_orders, {}, stream};
   auto outd = column_device_view::create(out, stream);
   auto optional_iter =
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
 
   if (detail::is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>) {
     auto device_comparator = table_comparator.less_equivalent(
-      nullate::DYNAMIC{out.has_nulls()},
+      nullate::DYNAMIC{nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)}},
       cudf::experimental::row::lexicographic::physical_element_comparator{});
     thrust::tabulate(
       rmm::exec_policy(stream),
@@ -317,7 +319,7 @@ void apply_struct_binary_op(mutable_column_view& out,
 
   } else {
     auto device_comparator = table_comparator.less(
-      nullate::DYNAMIC{out.has_nulls()},
+      nullate::DYNAMIC{nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)}},
       cudf::experimental::row::lexicographic::physical_element_comparator{});
     thrust::tabulate(
       rmm::exec_policy(stream),

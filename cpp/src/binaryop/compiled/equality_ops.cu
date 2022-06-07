@@ -32,10 +32,12 @@ void struct_equality_op(mutable_column_view& out,
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL,
                "Unsupported operator for these types");
 
-  auto table_comparator = cudf::experimental::row::equality::two_table_comparator{
-    table_view{{lhs}}, table_view{{rhs}}, stream};
-  auto device_comparator = table_comparator.device_comparator(
-    nullate::DYNAMIC{out.has_nulls()},
+  auto tlhs = table_view{{lhs}};
+  auto trhs = table_view{{rhs}};
+  auto table_comparator =
+    cudf::experimental::row::equality::two_table_comparator{tlhs, trhs, stream};
+  auto device_comparator = table_comparator.equal_to(
+    nullate::DYNAMIC{nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)}},
     null_equality::EQUAL,
     cudf::experimental::row::equality::physical_equality_comparator{});
 
@@ -52,7 +54,7 @@ void struct_equality_op(mutable_column_view& out,
      flip_output = (op == binary_operator::NOT_EQUAL),
      device_comparator] __device__(size_type i) {
       auto lhs = cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i};
-      auto rhs = cudf::experimental::row::lhs_index_type{is_rhs_scalar ? 0 : i};
+      auto rhs = cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i};
       return optional_iter[i].has_value() and
              (flip_output ? not device_comparator(lhs, rhs) : device_comparator(lhs, rhs));
     });
