@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,19 @@
 
 #include "string_bench_args.hpp"
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
-#include <limits>
 
 #include <thrust/iterator/constant_iterator.h>
+
+#include <limits>
 
 class StringSubstring : public cudf::benchmark {
 };
@@ -43,8 +42,7 @@ static void BM_substring(benchmark::State& state, substring_type rt)
   data_profile table_profile;
   table_profile.set_distribution_params(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const table =
-    create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
+  auto const table = create_random_table({cudf::type_id::STRING}, row_count{n_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
   auto starts_itr = thrust::constant_iterator<cudf::size_type>(1);
   auto stops_itr  = thrust::constant_iterator<cudf::size_type>(max_str_length / 2);

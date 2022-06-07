@@ -1344,6 +1344,23 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return this;
     }
 
+    /**
+     * Accepts a byte array containing the two's-complement representation of the unscaled value, which
+     * is in big-endian byte-order. Then, transforms it into the representation of cuDF Decimal128 for
+     * appending.
+     * This method is more efficient than `append(BigInteger unscaledVal)` if we can directly access the
+     * two's-complement representation of a BigDecimal without encoding via the method `toByteArray`.
+     */
+    public ColumnBuilder appendDecimal128(byte[] binary) {
+      growFixedWidthBuffersAndRows();
+      assert type.getTypeId().equals(DType.DTypeEnum.DECIMAL128);
+      assert currentIndex < rows;
+      assert binary.length <= type.getSizeInBytes();
+      byte[] cuBinary = convertDecimal128FromJavaToCudf(binary);
+      data.setBytes(currentIndex++ << bitShiftBySize, cuBinary, 0, cuBinary.length);
+      return this;
+    }
+
     public ColumnBuilder getChild(int index) {
       return childBuilders.get(index);
     }

@@ -21,10 +21,14 @@
 
 #include "reader_impl.hpp"
 
-#include <io/comp/gpuinflate.h>
+#include "compact_protocol_reader.hpp"
+
+#include <io/comp/gpuinflate.hpp>
+#include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
@@ -35,7 +39,11 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <nvcomp/snappy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/logical.h>
+#include <thrust/transform.h>
+#include <thrust/tuple.h>
 
 #include <algorithm>
 #include <array>
@@ -105,13 +113,14 @@ type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id)
 {
-  parquet::Type physical                = schema.type;
-  parquet::ConvertedType converted_type = schema.converted_type;
-  int32_t decimal_scale                 = schema.decimal_scale;
+  parquet::Type const physical            = schema.type;
+  parquet::LogicalType const logical_type = schema.logical_type;
+  parquet::ConvertedType converted_type   = schema.converted_type;
+  int32_t decimal_scale                   = schema.decimal_scale;
 
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
-  auto inferred_converted_type = logical_type_to_converted_type(schema.logical_type);
+  auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
   if (inferred_converted_type != parquet::UNKNOWN) converted_type = inferred_converted_type;
   if (inferred_converted_type == parquet::DECIMAL && decimal_scale == 0)
     decimal_scale = schema.logical_type.DECIMAL.scale;
@@ -130,12 +139,12 @@ type_id to_type_id(SchemaElement const& schema,
     case parquet::TIME_MICROS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::DURATION_MICROSECONDS;
-    case parquet::TIMESTAMP_MICROS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_MICROSECONDS;
     case parquet::TIMESTAMP_MILLIS:
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
+    case parquet::TIMESTAMP_MICROS:
+      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
+                                                   : type_id::TIMESTAMP_MICROSECONDS;
     case parquet::DECIMAL:
       if (physical == parquet::INT32) { return type_id::DECIMAL32; }
       if (physical == parquet::INT64) { return type_id::DECIMAL64; }
@@ -159,6 +168,12 @@ type_id to_type_id(SchemaElement const& schema,
     case parquet::NA: return type_id::STRING;
     // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
     default: break;
+  }
+
+  if (inferred_converted_type == parquet::UNKNOWN and physical == parquet::INT64 and
+      logical_type.TIMESTAMP.unit.isset.NANOS) {
+    return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
+                                                 : type_id::TIMESTAMP_NANOSECONDS;
   }
 
   // is it simply a struct?
@@ -302,10 +317,10 @@ struct metadata : public FileMetaData {
 };
 
 class aggregate_reader_metadata {
-  std::vector<metadata> const per_file_metadata;
-  std::map<std::string, std::string> const agg_keyval_map;
-  size_type const num_rows;
-  size_type const num_row_groups;
+  std::vector<metadata> per_file_metadata;
+  std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
+  size_type num_rows;
+  size_type num_row_groups;
   /**
    * @brief Create a metadata object from each element in the source vector
    */
@@ -320,18 +335,26 @@ class aggregate_reader_metadata {
   }
 
   /**
-   * @brief Merge the keyvalue maps from each per-file metadata object into a single map.
+   * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
    */
-  auto merge_keyval_metadata()
+  [[nodiscard]] auto collect_keyval_metadata()
   {
-    std::map<std::string, std::string> merged;
-    // merge key/value maps TODO: warn/throw if there are mismatches?
-    for (auto const& pfm : per_file_metadata) {
-      for (auto const& kv : pfm.key_value_metadata) {
-        merged[kv.key] = kv.value;
-      }
-    }
-    return merged;
+    std::vector<std::unordered_map<std::string, std::string>> kv_maps;
+    std::transform(per_file_metadata.cbegin(),
+                   per_file_metadata.cend(),
+                   std::back_inserter(kv_maps),
+                   [](auto const& pfm) {
+                     std::unordered_map<std::string, std::string> kv_map;
+                     std::transform(pfm.key_value_metadata.cbegin(),
+                                    pfm.key_value_metadata.cend(),
+                                    std::inserter(kv_map, kv_map.end()),
+                                    [](auto const& kv) {
+                                      return std::pair{kv.key, kv.value};
+                                    });
+                     return kv_map;
+                   });
+
+    return kv_maps;
   }
 
   /**
@@ -359,7 +382,7 @@ class aggregate_reader_metadata {
  public:
   aggregate_reader_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
     : per_file_metadata(metadatas_from_sources(sources)),
-      agg_keyval_map(merge_keyval_metadata()),
+      keyval_maps(collect_keyval_metadata()),
       num_rows(calc_num_rows()),
       num_row_groups(calc_num_row_groups())
   {
@@ -410,7 +433,7 @@ class aggregate_reader_metadata {
     return per_file_metadata[0].schema[schema_idx];
   }
 
-  [[nodiscard]] auto const& get_key_value_metadata() const { return agg_keyval_map; }
+  [[nodiscard]] auto const& get_key_value_metadata() const { return keyval_maps; }
 
   /**
    * @brief Gets the concrete nesting depth of output cudf columns
@@ -446,8 +469,10 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::string get_pandas_index() const
   {
-    auto it = agg_keyval_map.find("pandas");
-    if (it != agg_keyval_map.end()) {
+    // Assumes that all input files have the same metadata
+    // TODO: verify this assumption
+    auto it = keyval_maps[0].find("pandas");
+    if (it != keyval_maps[0].end()) {
       // Captures a list of quoted strings found inside square brackets after `"index_columns":`
       // Inside quotes supports newlines, brackets, escaped quotes, etc.
       // One-liner regex:
@@ -664,6 +689,10 @@ class aggregate_reader_metadata {
           }
 
           std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
+
+          // pop off the extra nesting element.
+          if (schema_elem.is_one_level_list()) { nesting.pop_back(); }
+
           path_is_valid = true;  // If we're able to reach leaf then path is valid
         }
 
@@ -1035,71 +1064,13 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& 
   pages.device_to_host(stream, true);
 }
 
-void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
-                       device_span<gpu_inflate_status_s> comp_stat,
-                       size_t max_uncomp_page_size,
-                       rmm::cuda_stream_view stream)
+void decompress_check(device_span<decompress_status const> stats, rmm::cuda_stream_view stream)
 {
-  size_t num_comp_pages = comp_in.size();
-  size_t temp_size;
-
-  nvcompStatus_t nvcomp_status =
-    nvcompBatchedSnappyDecompressGetTempSize(num_comp_pages, max_uncomp_page_size, &temp_size);
-  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
-               "Unable to get scratch size for snappy decompression");
-
-  // Not needed now but nvcomp API makes no promises about future
-  rmm::device_buffer scratch(temp_size, stream);
-  // Analogous to comp_in.srcDevice
-  rmm::device_uvector<void const*> compressed_data_ptrs(num_comp_pages, stream);
-  // Analogous to comp_in.srcSize
-  rmm::device_uvector<size_t> compressed_data_sizes(num_comp_pages, stream);
-  // Analogous to comp_in.dstDevice
-  rmm::device_uvector<void*> uncompressed_data_ptrs(num_comp_pages, stream);
-  // Analogous to comp_in.dstSize
-  rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
-
-  // Analogous to comp_stat.bytes_written
-  rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_comp_pages, stream);
-  // Convertible to comp_stat.status
-  rmm::device_uvector<nvcompStatus_t> statuses(num_comp_pages, stream);
-
-  // Prepare the vectors
-  auto comp_it = thrust::make_zip_iterator(compressed_data_ptrs.begin(),
-                                           compressed_data_sizes.begin(),
-                                           uncompressed_data_ptrs.begin(),
-                                           uncompressed_data_sizes.data());
-  thrust::transform(rmm::exec_policy(stream),
-                    comp_in.begin(),
-                    comp_in.end(),
-                    comp_it,
-                    [] __device__(gpu_inflate_input_s in) {
-                      return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice, in.dstSize);
-                    });
-
-  nvcomp_status = nvcompBatchedSnappyDecompressAsync(compressed_data_ptrs.data(),
-                                                     compressed_data_sizes.data(),
-                                                     uncompressed_data_sizes.data(),
-                                                     actual_uncompressed_data_sizes.data(),
-                                                     num_comp_pages,
-                                                     scratch.data(),
-                                                     scratch.size(),
-                                                     uncompressed_data_ptrs.data(),
-                                                     statuses.data(),
-                                                     stream.value());
-  CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
-               "unable to perform snappy decompression");
-
-  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
-                             uncompressed_data_sizes.begin(),
-                             uncompressed_data_sizes.end(),
-                             actual_uncompressed_data_sizes.begin()),
-               "Mismatch in expected and actual decompressed size during snappy decompression");
-  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
-                             statuses.begin(),
-                             statuses.end(),
-                             thrust::make_constant_iterator(nvcompStatus_t::nvcompSuccess)),
-               "Error during snappy decompression");
+  CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
+                              stats.begin(),
+                              stats.end(),
+                              [] __device__(auto const& stat) { return stat.status == 0; }),
+               "Error during decompression");
 }
 
 /**
@@ -1135,9 +1106,23 @@ rmm::device_buffer reader::impl::decompress_page_data(
     int32_t max_decompressed_size;
   };
 
-  std::array<codec_stats, 3> codecs{codec_stats{parquet::GZIP, 0, 0},
-                                    codec_stats{parquet::SNAPPY, 0, 0},
-                                    codec_stats{parquet::BROTLI, 0, 0}};
+  std::array codecs{codec_stats{parquet::GZIP, 0, 0},
+                    codec_stats{parquet::SNAPPY, 0, 0},
+                    codec_stats{parquet::BROTLI, 0, 0},
+                    codec_stats{parquet::ZSTD, 0, 0}};
+
+  auto is_codec_supported = [&codecs](int8_t codec) {
+    if (codec == parquet::UNCOMPRESSED) return true;
+    return std::find_if(codecs.begin(), codecs.end(), [codec](auto& cstats) {
+             return codec == cstats.compression_type;
+           }) != codecs.end();
+  };
+  CUDF_EXPECTS(std::all_of(chunks.begin(),
+                           chunks.end(),
+                           [&is_codec_supported](auto const& chunk) {
+                             return is_codec_supported(chunk.codec);
+                           }),
+               "Unsupported compression type");
 
   for (auto& codec : codecs) {
     for_each_codec_page(codec.compression_type, [&](size_t page) {
@@ -1154,84 +1139,81 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   // Dispatch batches of pages to decompress for each codec
   rmm::device_buffer decomp_pages(total_decomp_size, stream);
-  hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_comp_pages, stream);
-  hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_comp_pages, stream);
 
-  device_span<gpu_inflate_input_s> inflate_in_view(inflate_in.device_ptr(), inflate_in.size());
-  device_span<gpu_inflate_status_s> inflate_out_view(inflate_out.device_ptr(), inflate_out.size());
+  std::vector<device_span<uint8_t const>> comp_in;
+  comp_in.reserve(num_comp_pages);
+  std::vector<device_span<uint8_t>> comp_out;
+  comp_out.reserve(num_comp_pages);
+
+  rmm::device_uvector<decompress_status> comp_stats(num_comp_pages, stream);
+  thrust::fill(rmm::exec_policy(stream),
+               comp_stats.begin(),
+               comp_stats.end(),
+               decompress_status{0, static_cast<uint32_t>(-1000), 0});
 
   size_t decomp_offset = 0;
-  int32_t argc         = 0;
+  int32_t start_pos    = 0;
   for (const auto& codec : codecs) {
-    if (codec.num_pages > 0) {
-      int32_t start_pos = argc;
+    if (codec.num_pages == 0) { continue; }
 
-      for_each_codec_page(codec.compression_type, [&](size_t page) {
-        auto dst_base              = static_cast<uint8_t*>(decomp_pages.data());
-        inflate_in[argc].srcDevice = pages[page].page_data;
-        inflate_in[argc].srcSize   = pages[page].compressed_page_size;
-        inflate_in[argc].dstDevice = dst_base + decomp_offset;
-        inflate_in[argc].dstSize   = pages[page].uncompressed_page_size;
+    for_each_codec_page(codec.compression_type, [&](size_t page) {
+      auto dst_base = static_cast<uint8_t*>(decomp_pages.data());
+      comp_in.emplace_back(pages[page].page_data,
+                           static_cast<size_t>(pages[page].compressed_page_size));
+      comp_out.emplace_back(dst_base + decomp_offset,
+                            static_cast<size_t>(pages[page].uncompressed_page_size));
 
-        inflate_out[argc].bytes_written = 0;
-        inflate_out[argc].status        = static_cast<uint32_t>(-1000);
-        inflate_out[argc].reserved      = 0;
+      pages[page].page_data = static_cast<uint8_t*>(comp_out.back().data());
+      decomp_offset += comp_out.back().size();
+    });
 
-        pages[page].page_data = static_cast<uint8_t*>(inflate_in[argc].dstDevice);
-        decomp_offset += inflate_in[argc].dstSize;
-        argc++;
-      });
+    host_span<device_span<uint8_t const> const> comp_in_view{comp_in.data() + start_pos,
+                                                             codec.num_pages};
+    auto const d_comp_in = cudf::detail::make_device_uvector_async(comp_in_view, stream);
+    host_span<device_span<uint8_t> const> comp_out_view(comp_out.data() + start_pos,
+                                                        codec.num_pages);
+    auto const d_comp_out = cudf::detail::make_device_uvector_async(comp_out_view, stream);
+    device_span<decompress_status> d_comp_stats_view(comp_stats.data() + start_pos,
+                                                     codec.num_pages);
 
-      CUDA_TRY(cudaMemcpyAsync(inflate_in.device_ptr(start_pos),
-                               inflate_in.host_ptr(start_pos),
-                               sizeof(decltype(inflate_in)::value_type) * (argc - start_pos),
-                               cudaMemcpyHostToDevice,
-                               stream.value()));
-      CUDA_TRY(cudaMemcpyAsync(inflate_out.device_ptr(start_pos),
-                               inflate_out.host_ptr(start_pos),
-                               sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
-                               cudaMemcpyHostToDevice,
-                               stream.value()));
-
-      switch (codec.compression_type) {
-        case parquet::GZIP:
-          CUDA_TRY(gpuinflate(inflate_in.device_ptr(start_pos),
-                              inflate_out.device_ptr(start_pos),
-                              argc - start_pos,
-                              1,
-                              stream))
-          break;
-        case parquet::SNAPPY:
-          if (nvcomp_integration::is_stable_enabled()) {
-            snappy_decompress(inflate_in_view.subspan(start_pos, argc - start_pos),
-                              inflate_out_view.subspan(start_pos, argc - start_pos),
-                              codec.max_decompressed_size,
-                              stream);
-          } else {
-            CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(start_pos),
-                                inflate_out.device_ptr(start_pos),
-                                argc - start_pos,
-                                stream));
-          }
-          break;
-        case parquet::BROTLI:
-          CUDA_TRY(gpu_debrotli(inflate_in.device_ptr(start_pos),
-                                inflate_out.device_ptr(start_pos),
-                                debrotli_scratch.data(),
-                                debrotli_scratch.size(),
-                                argc - start_pos,
-                                stream));
-          break;
-        default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
-      }
-      CUDA_TRY(cudaMemcpyAsync(inflate_out.host_ptr(start_pos),
-                               inflate_out.device_ptr(start_pos),
-                               sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
-                               cudaMemcpyDeviceToHost,
-                               stream.value()));
+    switch (codec.compression_type) {
+      case parquet::GZIP:
+        gpuinflate(d_comp_in, d_comp_out, d_comp_stats_view, gzip_header_included::YES, stream);
+        break;
+      case parquet::SNAPPY:
+        if (nvcomp_integration::is_stable_enabled()) {
+          nvcomp::batched_decompress(nvcomp::compression_type::SNAPPY,
+                                     d_comp_in,
+                                     d_comp_out,
+                                     d_comp_stats_view,
+                                     codec.max_decompressed_size,
+                                     stream);
+        } else {
+          gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, stream);
+        }
+        break;
+      case parquet::ZSTD:
+        nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
+                                   d_comp_in,
+                                   d_comp_out,
+                                   d_comp_stats_view,
+                                   codec.max_decompressed_size,
+                                   stream);
+        break;
+      case parquet::BROTLI:
+        gpu_debrotli(d_comp_in,
+                     d_comp_out,
+                     d_comp_stats_view,
+                     debrotli_scratch.data(),
+                     debrotli_scratch.size(),
+                     stream);
+        break;
+      default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
+    start_pos += codec.num_pages;
   }
-  stream.synchronize();
+
+  decompress_check(comp_stats, stream);
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
@@ -1669,11 +1651,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           continue;
         }
 
-        int32_t type_width;
-        int32_t clock_rate;
-        int8_t converted_type;
-
-        std::tie(type_width, clock_rate, converted_type) =
+        auto [type_width, clock_rate, converted_type] =
           conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
                           _timestamp_type.id(),
                           schema.type,
@@ -1699,6 +1677,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                            required_bits(schema.max_repetition_level),
                                            col_meta.codec,
                                            converted_type,
+                                           schema.logical_type,
                                            schema.decimal_scale,
                                            clock_rate,
                                            i,
@@ -1799,7 +1778,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   }
 
   // Return user metadata
-  out_metadata.user_data = _metadata->get_key_value_metadata();
+  out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
+  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
+                            out_metadata.per_file_user_data[0].end()};
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }

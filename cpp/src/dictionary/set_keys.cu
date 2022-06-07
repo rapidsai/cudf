@@ -32,9 +32,15 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
+
 #include <algorithm>
 #include <iterator>
-#include <thrust/binary_search.h>
 
 namespace cudf {
 namespace dictionary {
@@ -50,8 +56,7 @@ namespace {
  */
 struct dispatch_compute_indices {
   template <typename Element>
-  typename std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(dictionary_column_view const& input,
              column_view const& new_keys,
              rmm::cuda_stream_view stream,
@@ -100,8 +105,7 @@ struct dispatch_compute_indices {
   }
 
   template <typename Element, typename... Args>
-  typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(Args&&...)
   {
     CUDF_FAIL("dictionary set_keys not supported for this column type");
@@ -121,11 +125,11 @@ std::unique_ptr<column> set_keys(
   auto keys = dictionary_column.keys();
   CUDF_EXPECTS(keys.type() == new_keys.type(), "keys types must match");
 
-  // copy the keys -- use unordered_drop_duplicates to make sure they are unique, then
-  // sort the results.
-  auto unique_keys = cudf::detail::unordered_drop_duplicates(
+  // copy the keys -- use cudf::distinct to make sure there are no duplicates,
+  // then sort the results.
+  auto distinct_keys = cudf::detail::distinct(
     table_view{{new_keys}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr);
-  auto sorted_keys = cudf::detail::sort(unique_keys->view(),
+  auto sorted_keys = cudf::detail::sort(distinct_keys->view(),
                                         std::vector<order>{order::ASCENDING},
                                         std::vector<null_order>{null_order::BEFORE},
                                         stream,
@@ -134,7 +138,7 @@ std::unique_ptr<column> set_keys(
   std::unique_ptr<column> keys_column(std::move(sorted_keys.front()));
 
   // compute the new nulls
-  auto matches   = cudf::detail::contains(keys, keys_column->view(), stream, mr);
+  auto matches   = cudf::detail::contains(keys_column->view(), keys, stream, mr);
   auto d_matches = matches->view().data<bool>();
   auto indices_itr =
     cudf::detail::indexalator_factory::make_input_iterator(dictionary_column.indices());

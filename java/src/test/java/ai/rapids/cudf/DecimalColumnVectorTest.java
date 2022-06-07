@@ -42,6 +42,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   private static final BigDecimal[] decimal128Zoo = new BigDecimal[20];
   private static final int[] unscaledDec32Zoo = new int[decimal32Zoo.length];
   private static final long[] unscaledDec64Zoo = new long[decimal64Zoo.length];
+  private static final BigInteger[] unscaledDec128Zoo = new BigInteger[decimal128Zoo.length];
 
   private final BigDecimal[] boundaryDecimal32 = new BigDecimal[]{
       new BigDecimal("999999999"), new BigDecimal("-999999999")};
@@ -67,6 +68,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     for (int i = 0; i < decimal32Zoo.length; i++) {
       unscaledDec32Zoo[i] = rdSeed.nextInt() / 100;
       unscaledDec64Zoo[i] = rdSeed.nextLong() / 100;
+      unscaledDec128Zoo[i] = BigInteger.valueOf(rdSeed.nextLong()).multiply(BigInteger.valueOf(rdSeed.nextLong()));
       if (rdSeed.nextBoolean()) {
         // Create BigDecimal with slight variance on scale, in order to test building cv from inputs with different scales.
         decimal32Zoo[i] = BigDecimal.valueOf(rdSeed.nextInt() / 100, dec32Scale - rdSeed.nextInt(2));
@@ -245,7 +247,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  private void testDecimalFromInts() {
+  public void testDecimalFromInts() {
     try (ColumnVector cv = ColumnVector.decimalFromInts(-DecimalColumnVectorTest.dec32Scale, DecimalColumnVectorTest.unscaledDec32Zoo)) {
       try (HostColumnVector hcv = cv.copyToHost()) {
         for (int i = 0; i < DecimalColumnVectorTest.unscaledDec32Zoo.length; i++) {
@@ -257,13 +259,29 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  private static void testDecimalFromLongs() {
+  public void testDecimalFromLongs() {
     try (ColumnVector cv = ColumnVector.decimalFromLongs(-DecimalColumnVectorTest.dec64Scale, DecimalColumnVectorTest.unscaledDec64Zoo)) {
       try (HostColumnVector hcv = cv.copyToHost()) {
         for (int i = 0; i < DecimalColumnVectorTest.unscaledDec64Zoo.length; i++) {
           assertEquals(DecimalColumnVectorTest.unscaledDec64Zoo[i], hcv.getLong(i));
           assertEquals(BigDecimal.valueOf(DecimalColumnVectorTest.unscaledDec64Zoo[i], DecimalColumnVectorTest.dec64Scale), hcv.getBigDecimal(i));
         }
+      }
+    }
+  }
+
+  @Test
+  public void testDecimalFromBigInts() {
+    try (ColumnVector cv = ColumnVector.decimalFromBigInt(-DecimalColumnVectorTest.dec128Scale, DecimalColumnVectorTest.unscaledDec128Zoo)) {
+      try (HostColumnVector hcv = cv.copyToHost()) {
+        for (int i = 0; i < DecimalColumnVectorTest.unscaledDec128Zoo.length; i++) {
+          assertEquals(DecimalColumnVectorTest.unscaledDec128Zoo[i], hcv.getBigDecimal(i).unscaledValue());
+        }
+      }
+    }
+    try (HostColumnVector hcv = ColumnBuilderHelper.decimalFromBigInts(-DecimalColumnVectorTest.dec128Scale, DecimalColumnVectorTest.unscaledDec128Zoo)) {
+      for (int i = 0; i < DecimalColumnVectorTest.unscaledDec128Zoo.length; i++) {
+        assertEquals(DecimalColumnVectorTest.unscaledDec128Zoo[i], hcv.getBigDecimal(i).unscaledValue());
       }
     }
   }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 ##############################################
 # cuDF GPU build and test script for CI      #
 ##############################################
@@ -29,16 +29,13 @@ export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
+unset GIT_DESCRIBE_TAG
 
-# Dask & Distributed git tag
-export DASK_DISTRIBUTED_GIT_TAG='2022.01.0'
+# Dask & Distributed option to install main(nightly) or `conda-forge` packages.
+export INSTALL_DASK_MAIN=0
 
 # ucx-py version
-export UCX_PY_VERSION='0.25.*'
-
-export CMAKE_CUDA_COMPILER_LAUNCHER="sccache"
-export CMAKE_CXX_COMPILER_LAUNCHER="sccache"
-export CMAKE_C_COMPILER_LAUNCHER="sccache"
+export UCX_PY_VERSION='0.27.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -83,36 +80,25 @@ conda info
 conda config --show-sources
 conda list --show-channel-urls
 
-gpuci_logger "Install dependencies"
-gpuci_mamba_retry install -y \
-                  "cudatoolkit=$CUDA_REL" \
-                  "rapids-build-env=$MINOR_VERSION.*" \
-                  "rapids-notebook-env=$MINOR_VERSION.*" \
-                  "dask-cuda=${MINOR_VERSION}" \
-                  "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=${UCX_PY_VERSION}"
-
-# https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-# gpuci_mamba_retry install -y "your-pkg=1.0.0"
-
-
 gpuci_logger "Check compiler versions"
 python --version
 $CC --version
 $CXX --version
 
-gpuci_logger "Check conda environment"
-conda info
-conda config --show-sources
-conda list --show-channel-urls
-
 function install_dask {
-    # Install the main version of dask, distributed, and streamz
-    gpuci_logger "Install the main version of dask, distributed, and streamz"
+    # Install the conda-forge or nightly version of dask and distributed
+    gpuci_logger "Install the conda-forge or nightly version of dask and distributed"
     set -x
-    pip install "git+https://github.com/dask/distributed.git@$DASK_DISTRIBUTED_GIT_TAG" --upgrade --no-deps
-    pip install "git+https://github.com/dask/dask.git@$DASK_DISTRIBUTED_GIT_TAG" --upgrade --no-deps
+    if [[ "${INSTALL_DASK_MAIN}" == 1 ]]; then
+        gpuci_logger "gpuci_mamba_retry update dask"
+        gpuci_mamba_retry update dask
+        conda list
+    else
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.05.2 conda-forge::distributed==2022.05.2 conda-forge::dask-core==2022.05.2 --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask==2022.05.2 conda-forge::distributed==2022.05.2 conda-forge::dask-core==2022.05.2 --force-reinstall
+    fi
+    # Install the main version of streamz
+    gpuci_logger "Install the main version of streamz"
     # Need to uninstall streamz that is already in the env.
     pip uninstall -y streamz
     pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
@@ -121,6 +107,19 @@ function install_dask {
 
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
 
+    gpuci_logger "Install dependencies"
+    gpuci_mamba_retry install -y \
+                  "cudatoolkit=$CUDA_REL" \
+                  "rapids-build-env=$MINOR_VERSION.*" \
+                  "rapids-notebook-env=$MINOR_VERSION.*" \
+                  "dask-cuda=${MINOR_VERSION}" \
+                  "rmm=$MINOR_VERSION.*" \
+                  "ucx-py=${UCX_PY_VERSION}"
+
+    # https://docs.rapids.ai/maintainers/depmgmt/
+    # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
+    # gpuci_mamba_retry install -y "your-pkg=1.0.0"
+
     install_dask
 
     ################################################################################
@@ -128,11 +127,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     ################################################################################
 
     gpuci_logger "Build from source"
-    if [[ "${BUILD_MODE}" == "pull-request" ]]; then
-        "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
-    else
-        "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
-    fi
+    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
 
     ################################################################################
     # TEST - Run GoogleTest
@@ -162,8 +157,6 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     fi
 else
     #Project Flash
-    export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
-    export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 
     if hasArg --skip-tests; then
         gpuci_logger "Skipping Tests"
@@ -173,17 +166,29 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    set -x
-    cd $LIB_BUILD_DIR
+    gpuci_logger "Installing libcudf, libcudf_kafka and libcudf-tests"
+    gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
+
+    # TODO: Move boa install to gpuci/rapidsai
+    gpuci_mamba_retry install boa
+    gpuci_logger "Building cudf, dask-cudf, cudf_kafka and custreamz"
+    export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+
+    gpuci_logger "Installing cudf, dask-cudf, cudf_kafka and custreamz"
+    gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
     gpuci_logger "GoogleTests"
-
-    for gt in gtests/* ; do
-        test_name=$(basename ${gt})
+    # Run libcudf and libcudf_kafka gtests from libcudf-tests package
+    for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
+    export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
     # Copy libcudf build time results
     echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.xml"
     if [[ -f "$LIB_BUILD_DIR/ninja_log.xml" ]]; then
@@ -200,7 +205,7 @@ else
             export GTEST_CUDF_RMM_MODE=cuda
             COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
             mkdir -p "$WORKSPACE/test-results/"
-            for gt in gtests/*; do
+            for gt in "$CONDA_PREFIX/bin/gtests/libcudf"*/* ; do
                 test_name=$(basename ${gt})
                 if [[ "$test_name" == "ERROR_TEST" ]]; then
                   continue
@@ -212,26 +217,6 @@ else
             # test-results/*.cs.log are processed in gpuci
         fi
     fi
-
-    CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
-    CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
-    CUDF_CONDA_FILE=${CUDF_CONDA_FILE//-/=} #convert to conda install
-    KAFKA_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf_kafka-*.tar.bz2"`
-    KAFKA_CONDA_FILE=`basename "$KAFKA_CONDA_FILE" .tar.bz2` #get filename without extension
-    KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
-
-    gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
-
-    install_dask
-
-    gpuci_logger "Build python libs from source"
-    if [[ "${BUILD_MODE}" == "pull-request" ]]; then
-        "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka --ptds
-    else
-        "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka -l --ptds
-    fi
-
 fi
 
 # Both regular and Project Flash proceed here
@@ -247,17 +232,18 @@ fi
 # TEST - Run py.test, notebooks
 ################################################################################
 
-cd "$WORKSPACE/python/cudf"
+cd "$WORKSPACE/python/cudf/cudf"
+# It is essential to cd into $WORKSPACE/python/cudf/cudf as `pytest-xdist` + `coverage` seem to work only at this directory level.
 gpuci_logger "Python py.test for cuDF"
-py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope tests
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"
-py.test -n 8 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-dask-cudf.xml" -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:"$WORKSPACE/python/dask_cudf/dask-cudf-coverage.xml" --cov-report term
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/dask-cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-dask-cudf.xml" -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:"$WORKSPACE/python/dask_cudf/dask-cudf-coverage.xml" --cov-report term dask_cudf
 
 cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
-py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term
+py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
 
 gpuci_logger "Test notebooks"
 "$WORKSPACE/ci/gpu/test-notebooks.sh" 2>&1 | tee nbtest.log

@@ -31,8 +31,10 @@
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/lists/extract.hpp>
+#include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
+#include <cudf/lists/stream_compaction.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
@@ -61,6 +63,7 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/split/split.hpp>
+#include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
 #include <cudf/structs/structs_column_view.hpp>
@@ -74,6 +77,7 @@
 #include "dtype_utils.hpp"
 #include "jni_utils.hpp"
 #include "map_lookup.hpp"
+#include "maps_column_view.hpp"
 
 using cudf::jni::ptr_as_jlong;
 using cudf::jni::release_as_jlong;
@@ -256,7 +260,49 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclas
     auto col = reinterpret_cast<cudf::column_view *>(j_col_view);
     auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
     cudf::data_type out_dtype = cudf::jni::make_data_type(j_dtype, scale);
-    return release_as_jlong(cudf::reduce(*col, agg->clone(), out_dtype));
+    return release_as_jlong(
+        cudf::reduce(*col,
+                     std::unique_ptr<cudf::reduce_aggregation>(
+                         dynamic_cast<cudf::reduce_aggregation *>(agg->clone().release())),
+                     out_dtype));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedReduce(
+    JNIEnv *env, jclass, jlong j_data_view, jlong j_offsets_view, jlong j_agg,
+    jboolean include_nulls, jint j_dtype, jint scale) {
+  JNI_NULL_CHECK(env, j_data_view, "data column view is null", 0);
+  JNI_NULL_CHECK(env, j_offsets_view, "offsets column view is null", 0);
+  JNI_NULL_CHECK(env, j_agg, "aggregation is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto data = reinterpret_cast<cudf::column_view *>(j_data_view);
+    auto offsets = reinterpret_cast<cudf::column_view *>(j_offsets_view);
+    auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
+    auto s_agg = dynamic_cast<cudf::segmented_reduce_aggregation *>(agg);
+    JNI_ARG_CHECK(env, s_agg != nullptr, "agg is not a cudf::segmented_reduce_aggregation", 0)
+    auto null_policy = include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
+    cudf::data_type out_dtype = cudf::jni::make_data_type(j_dtype, scale);
+    return release_as_jlong(
+        cudf::segmented_reduce(*data, *offsets, *s_agg, out_dtype, null_policy));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_segmentedGather(
+    JNIEnv *env, jclass, jlong source_column, jlong gather_map_list, jboolean nullify_out_bounds) {
+  JNI_NULL_CHECK(env, source_column, "source column view is null", 0);
+  JNI_NULL_CHECK(env, gather_map_list, "gather map is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const &src_col =
+        cudf::lists_column_view(*reinterpret_cast<cudf::column_view *>(source_column));
+    auto const &gather_map =
+        cudf::lists_column_view(*reinterpret_cast<cudf::column_view *>(gather_map_list));
+    auto out_bounds_policy = nullify_out_bounds ? cudf::out_of_bounds_policy::NULLIFY :
+                                                  cudf::out_of_bounds_policy::DONT_CHECK;
+    return release_as_jlong(cudf::lists::segmented_gather(src_col, gather_map, out_bounds_policy));
   }
   CATCH_STD(env, 0);
 }
@@ -272,7 +318,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_scan(JNIEnv *env, jclass,
     auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
     auto scan_type = is_inclusive ? cudf::scan_type::INCLUSIVE : cudf::scan_type::EXCLUSIVE;
     auto null_policy = include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
-    return release_as_jlong(cudf::scan(*col, agg->clone(), scan_type, null_policy));
+    return release_as_jlong(
+        cudf::scan(*col,
+                   std::unique_ptr<cudf::scan_aggregation>(
+                       dynamic_cast<cudf::scan_aggregation *>(agg->clone().release())),
+                   scan_type, null_policy));
   }
   CATCH_STD(env, 0);
 }
@@ -387,6 +437,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractListElement(JNIEnv
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
     cudf::lists_column_view lcv(*cv);
     return release_as_jlong(cudf::lists::extract_list_element(lcv, index));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractListElementV(JNIEnv *env, jclass,
+                                                                           jlong column_view,
+                                                                           jlong indices_view) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, indices_view, "indices is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *indices = reinterpret_cast<cudf::column_view *>(indices_view);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    cudf::lists_column_view lcv(*cv);
+    return release_as_jlong(cudf::lists::extract_list_element(lcv, *indices));
   }
   CATCH_STD(env, 0);
 }
@@ -560,35 +625,90 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listSortRows(JNIEnv *env,
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
-                                                                        jlong column_view,
-                                                                        jlong delimiter_ptr,
-                                                                        jint max_split) {
-  JNI_NULL_CHECK(env, column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, delimiter_ptr, "string scalar delimiter is null", 0);
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_generateListOffsets(JNIEnv *env, jclass,
+                                                                           jlong handle) {
+  JNI_NULL_CHECK(env, handle, "handle is null", 0)
   try {
     cudf::jni::auto_set_device(env);
-    cudf::strings_column_view const scv{*reinterpret_cast<cudf::column_view *>(column_view)};
-    auto delimiter = reinterpret_cast<cudf::string_scalar *>(delimiter_ptr);
+    auto const cv = reinterpret_cast<cudf::column_view const *>(handle);
+    return release_as_jlong(cudf::jni::generate_list_offsets(*cv));
+  }
+  CATCH_STD(env, 0);
+}
 
-    return cudf::jni::convert_table_for_return(env,
-                                               cudf::strings::split(scv, *delimiter, max_split));
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
+                                                                        jlong input_handle,
+                                                                        jstring pattern_obj,
+                                                                        jint limit,
+                                                                        jboolean split_by_regex) {
+  JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
+
+  if (limit == 0 || limit == 1) {
+    // Cannot achieve the results of splitting with limit == 0 or limit == 1.
+    // This is because cudf operates on a different parameter (`max_split`) which is converted from
+    // limit. When limit == 0 or limit == 1, max_split will be non-positive and will result in an
+    // unlimited split.
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "limit == 0 and limit == 1 are not supported", 0);
+  }
+
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const input = reinterpret_cast<cudf::column_view *>(input_handle);
+    auto const strs_input = cudf::strings_column_view{*input};
+
+    auto const pattern_jstr = cudf::jni::native_jstring(env, pattern_obj);
+    if (pattern_jstr.is_empty()) {
+      // Java's split API produces different behaviors than cudf when splitting with empty
+      // pattern.
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Empty pattern is not supported", 0);
+    }
+
+    auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
+    auto const max_split = limit > 1 ? limit - 1 : limit;
+    auto result = split_by_regex ?
+                      cudf::strings::split_re(strs_input, pattern, max_split) :
+                      cudf::strings::split(strs_input, cudf::string_scalar{pattern}, max_split);
+    return cudf::jni::convert_table_for_return(env, std::move(result));
   }
   CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv *env, jclass,
-                                                                         jlong column_view,
-                                                                         jlong delimiter,
-                                                                         jint max_split) {
-  JNI_NULL_CHECK(env, column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, delimiter, "string scalar delimiter is null", 0);
+                                                                         jlong input_handle,
+                                                                         jstring pattern_obj,
+                                                                         jint limit,
+                                                                         jboolean split_by_regex) {
+  JNI_NULL_CHECK(env, input_handle, "input_handle is null", 0);
+
+  if (limit == 0 || limit == 1) {
+    // Cannot achieve the results of splitting with limit == 0 or limit == 1.
+    // This is because cudf operates on a different parameter (`max_split`) which is converted from
+    // limit. When limit == 0 or limit == 1, max_split will be non-positive and will result in an
+    // unlimited split.
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "limit == 0 and limit == 1 are not supported", 0);
+  }
+
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_view);
-    cudf::strings_column_view scv(*cv);
-    cudf::string_scalar *ss_scalar = reinterpret_cast<cudf::string_scalar *>(delimiter);
-    return release_as_jlong(cudf::strings::split_record(scv, *ss_scalar, max_split));
+    auto const input = reinterpret_cast<cudf::column_view *>(input_handle);
+    auto const strs_input = cudf::strings_column_view{*input};
+
+    auto const pattern_jstr = cudf::jni::native_jstring(env, pattern_obj);
+    if (pattern_jstr.is_empty()) {
+      // Java's split API produces different behaviors than cudf when splitting with empty
+      // pattern.
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Empty pattern is not supported", 0);
+    }
+
+    auto const pattern = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
+    auto const max_split = limit > 1 ? limit - 1 : limit;
+    auto result =
+        split_by_regex ?
+            cudf::strings::split_record_re(strs_input, pattern, max_split) :
+            cudf::strings::split_record(strs_input, cudf::string_scalar{pattern}, max_split);
+    return release_as_jlong(result);
   }
   CATCH_STD(env, 0);
 }
@@ -1047,15 +1167,18 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ColumnView_containsScalar(JNIEnv 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsVector(JNIEnv *env, jobject j_object,
-                                                                      jlong j_haystack_handle,
-                                                                      jlong j_needle_handle) {
-  JNI_NULL_CHECK(env, j_haystack_handle, "haystack vector is null", false);
-  JNI_NULL_CHECK(env, j_needle_handle, "needle vector is null", false);
+                                                                      jlong j_values_handle,
+                                                                      jlong j_search_space_handle) {
+  JNI_NULL_CHECK(env, j_values_handle, "values vector is null", false);
+  JNI_NULL_CHECK(env, j_search_space_handle, "search_space vector is null", false);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *haystack = reinterpret_cast<cudf::column_view *>(j_haystack_handle);
-    cudf::column_view *needle = reinterpret_cast<cudf::column_view *>(j_needle_handle);
-    return release_as_jlong(cudf::contains(*haystack, *needle));
+    auto const search_space_ptr =
+        reinterpret_cast<cudf::column_view const *>(j_search_space_handle);
+    auto const values_ptr = reinterpret_cast<cudf::column_view const *>(j_values_handle);
+
+    // The C++ API `cudf::contains` requires that the search space is the first parameter.
+    return release_as_jlong(cudf::contains(*search_space_ptr, *values_ptr));
   }
   CATCH_STD(env, 0);
 }
@@ -1272,12 +1395,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookup(JNIEnv *env, jc
                                                                  jlong map_column_view,
                                                                  jlong lookup_key) {
   JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "lookup key is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
-    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
-    return release_as_jlong(cudf::jni::map_lookup(*cv, *ss_key));
+    auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    auto const *scalar_key = reinterpret_cast<cudf::scalar *>(lookup_key);
+    auto const maps_view = cudf::jni::maps_column_view{*cv};
+    return release_as_jlong(maps_view.get_values_for(*scalar_key));
   }
   CATCH_STD(env, 0);
 }
@@ -1286,12 +1410,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapContains(JNIEnv *env, 
                                                                    jlong map_column_view,
                                                                    jlong lookup_key) {
   JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
-  JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "lookup key is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
-    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
-    return release_as_jlong(cudf::jni::map_contains(*cv, *ss_key));
+    auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    auto const *scalar_key = reinterpret_cast<cudf::scalar *>(lookup_key);
+    auto const maps_view = cudf::jni::maps_column_view{*cv};
+    return release_as_jlong(maps_view.contains(*scalar_key));
   }
   CATCH_STD(env, 0);
 }
@@ -1715,6 +1840,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getChildCvPointer(JNIEnv 
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getListOffsetCvPointer(JNIEnv *env,
+                                                                              jobject j_object,
+                                                                              jlong handle) {
+  JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::lists_column_view view = cudf::lists_column_view(*column);
+    cudf::column_view offsets_view = view.offsets();
+    return ptr_as_jlong(new cudf::column_view(offsets_view));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeOffsetsAddress(JNIEnv *env, jclass,
                                                                                jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
@@ -2084,6 +2223,27 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsSizes(
     results[0] = release_as_jlong(output_sizes);
     results[1] = static_cast<jlong>(total_bytes);
     return results.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_applyBooleanMask(
+    JNIEnv *env, jclass, jlong list_column_handle, jlong boolean_mask_list_column_handle) {
+  JNI_NULL_CHECK(env, list_column_handle, "list handle is null", 0);
+  JNI_NULL_CHECK(env, boolean_mask_list_column_handle, "boolean mask handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+
+    cudf::column_view const *list_column =
+        reinterpret_cast<cudf::column_view const *>(list_column_handle);
+    cudf::lists_column_view const list_view = cudf::lists_column_view(*list_column);
+
+    cudf::column_view const *boolean_mask_list_column =
+        reinterpret_cast<cudf::column_view const *>(boolean_mask_list_column_handle);
+    cudf::lists_column_view const boolean_mask_list_view =
+        cudf::lists_column_view(*boolean_mask_list_column);
+
+    return release_as_jlong(cudf::lists::apply_boolean_mask(list_view, boolean_mask_list_view));
   }
   CATCH_STD(env, 0);
 }

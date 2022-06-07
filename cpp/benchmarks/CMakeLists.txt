@@ -14,7 +14,7 @@
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cpp)
+add_library(cudf_datagen STATIC common/generate_input.cu)
 target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(
@@ -24,7 +24,7 @@ target_compile_options(
 
 target_link_libraries(
   cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
-                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf
+                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf cudftestutil
 )
 
 target_include_directories(
@@ -59,6 +59,12 @@ function(ConfigureBench CMAKE_BENCH_NAME)
     ${CMAKE_BENCH_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               # For std:: support of __int128_t. Can be removed once using cuda::std
+               CXX_EXTENSIONS ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
@@ -130,7 +136,7 @@ ConfigureBench(COPY_IF_ELSE_BENCH copying/copy_if_else.cpp)
 
 # ##################################################################################################
 # * transpose benchmark ---------------------------------------------------------------------------
-ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cu)
+ConfigureBench(TRANSPOSE_BENCH transpose/transpose.cpp)
 
 # ##################################################################################################
 # * apply_boolean_mask benchmark ------------------------------------------------------------------
@@ -138,7 +144,9 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask.cpp
 
 # ##################################################################################################
 # * stream_compaction benchmark -------------------------------------------------------------------
-ConfigureNVBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates.cpp)
+ConfigureNVBench(
+  STREAM_COMPACTION_NVBENCH stream_compaction/distinct.cpp stream_compaction/unique.cpp
+)
 
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
@@ -158,6 +166,7 @@ ConfigureBench(COMPARE_BENCH compare/comparator_benchmark.cu)
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH sort/rank.cpp sort/sort.cpp sort/sort_strings.cpp)
+ConfigureNVBench(SORT_NVBENCH sort/sort_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -171,9 +180,10 @@ ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher.cu)
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
 ConfigureBench(
-  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/reduce.cpp
-  reduction/scan.cpp reduction/minmax.cpp
+  REDUCTION_BENCH reduction/anyall.cpp reduction/dictionary.cpp reduction/minmax.cpp
+  reduction/reduce.cpp reduction/scan.cpp
 )
+ConfigureNVBench(REDUCTION_NVBENCH reduction/segment_reduce.cu reduction/rank.cpp)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
@@ -186,9 +196,11 @@ ConfigureBench(FILL_BENCH filling/repeat.cpp)
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(
-  GROUPBY_BENCH groupby/group_sum.cu groupby/group_nth.cu groupby/group_shift.cu
-  groupby/group_struct.cu groupby/group_no_requests.cu groupby/group_scan.cu
+  GROUPBY_BENCH groupby/group_sum.cpp groupby/group_nth.cpp groupby/group_shift.cpp
+  groupby/group_struct_values.cpp groupby/group_no_requests.cpp groupby/group_scan.cpp
 )
+
+ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank.cpp groupby/group_struct_keys.cpp)
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
@@ -227,6 +239,10 @@ ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
 ConfigureBench(ORC_WRITER_BENCH io/orc/orc_writer.cpp)
 
 # ##################################################################################################
+# * orc writer chunks benchmark ---------------------------------------------------------------
+ConfigureNVBench(ORC_WRITER_CHUNKS_NVBENCH io/orc/orc_writer_chunks.cpp)
+
+# ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------
 ConfigureBench(CSV_WRITER_BENCH io/csv/csv_writer.cpp)
 
@@ -256,7 +272,7 @@ ConfigureBench(
   string/convert_durations.cpp
   string/convert_fixed_point.cpp
   string/convert_numerics.cpp
-  string/copy.cpp
+  string/copy.cu
   string/extract.cpp
   string/factory.cu
   string/filter.cpp
@@ -267,12 +283,12 @@ ConfigureBench(
   string/split.cpp
   string/substring.cpp
   string/translate.cpp
-  string/url_decode.cpp
+  string/url_decode.cu
 )
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
-ConfigureBench(JSON_BENCH string/json.cpp)
+ConfigureBench(JSON_BENCH string/json.cu)
 
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------

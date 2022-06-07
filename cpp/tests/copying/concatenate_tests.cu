@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,9 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
 
 #include <numeric>
 #include <string>
@@ -60,9 +62,9 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
     std::iota(h_data.begin(), h_data.end(), char{0});
     std::vector<char> h_mask(mask.size());
     std::iota(h_mask.begin(), h_mask.end(), char{0});
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       typed_data, h_data.data(), data.size(), cudaMemcpyHostToDevice, stream.value()));
-    CUDA_TRY(cudaMemcpyAsync(
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
       typed_mask, h_mask.data(), mask.size(), cudaMemcpyHostToDevice, stream.value()));
     stream.synchronize();
   }
@@ -340,6 +342,22 @@ struct OverflowTest : public cudf::test::BaseFixture {
 TEST_F(OverflowTest, OverflowTest)
 {
   using namespace cudf;
+  // should concatenate up to size_type::max rows.
+  {
+    // 5 x size + size_last adds to size_type::max
+    constexpr auto size      = static_cast<size_type>(static_cast<uint32_t>(250) * 1024 * 1024);
+    constexpr auto size_last = static_cast<size_type>(836763647);
+
+    auto many_chars      = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
+    auto many_chars_last = cudf::make_fixed_width_column(data_type{type_id::INT8}, size_last);
+
+    table_view tbl({*many_chars});
+    table_view tbl_last({*many_chars_last});
+    std::vector<cudf::table_view> table_views_to_concat({tbl, tbl, tbl, tbl, tbl, tbl_last});
+    std::unique_ptr<cudf::table> concatenated_tables = cudf::concatenate(table_views_to_concat);
+    EXPECT_NO_THROW(rmm::cuda_stream_default.synchronize());
+    ASSERT_EQ(concatenated_tables->num_rows(), std::numeric_limits<size_type>::max());
+  }
 
   // primitive column
   {

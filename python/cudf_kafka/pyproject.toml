@@ -5,13 +5,12 @@
 requires = [
     "wheel",
     "setuptools",
-    "Cython>=0.29,<0.30",
+    "cython>=0.29,<0.30",
 ]
-
 
 [tool.black]
 line-length = 79
-target-version = ["py36"]
+target-version = ["py38"]
 include = '\.py?$'
 exclude = '''
 /(

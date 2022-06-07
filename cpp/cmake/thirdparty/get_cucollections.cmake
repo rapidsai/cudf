@@ -18,12 +18,17 @@ function(find_and_configure_cucollections)
   # Find or install cuCollections
   rapids_cpm_find(
     # cuCollections doesn't have a version yet
-    cuco 0.0
+    cuco 0.0.1
     GLOBAL_TARGETS cuco::cuco
+    BUILD_EXPORT_SET cudf-exports
     CPM_ARGS GITHUB_REPOSITORY NVIDIA/cuCollections
-    GIT_TAG 6ec8b6dcdeceea07ab4456d32461a05c18864411
+    GIT_TAG ebaba1ae378a5272116414b6d7ae5847e5cf5715
+    EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS}
     OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
+  if(NOT BUILD_SHARED_LIBS)
+    rapids_export_package(INSTALL cuco cudf-exports)
+  endif()
 
 endfunction()
 

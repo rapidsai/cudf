@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/distance.h>
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
 #include <cmath>
@@ -64,8 +67,8 @@ __device__ inline double stod(string_view const& d_str)
   // special strings: NaN, Inf
   if ((in_ptr < end) && *in_ptr > '9') {
     auto const inf_nan = string_view(in_ptr, static_cast<size_type>(thrust::distance(in_ptr, end)));
-    if (string::is_nan_str(inf_nan)) return std::numeric_limits<double>::quiet_NaN();
-    if (string::is_inf_str(inf_nan)) return sign * std::numeric_limits<double>::infinity();
+    if (is_nan_str(inf_nan)) return std::numeric_limits<double>::quiet_NaN();
+    if (is_inf_str(inf_nan)) return sign * std::numeric_limits<double>::infinity();
   }
 
   // Parse and store the mantissa as much as we can,
@@ -121,17 +124,28 @@ __device__ inline double stod(string_view const& d_str)
   exp_ten *= exp_sign;
   exp_ten += exp_off;
   exp_ten += num_digits - 1;
-  if (exp_ten > std::numeric_limits<double>::max_exponent10)
+  if (exp_ten > std::numeric_limits<double>::max_exponent10) {
     return sign > 0 ? std::numeric_limits<double>::infinity()
                     : -std::numeric_limits<double>::infinity();
-  else if (exp_ten < std::numeric_limits<double>::min_exponent10)
-    return double{0};
+  }
 
-  // exp10() is faster than pow(10.0,exp_ten)
-  double const base =
-    sign * static_cast<double>(digits) * exp10(static_cast<double>(1 - num_digits));
-  double const exponent = exp10(static_cast<double>(exp_ten));
-  return base * exponent;
+  double base = sign * static_cast<double>(digits);
+
+  exp_ten += 1 - num_digits;
+  // If 10^exp_ten would result in a subnormal value, the base and
+  // exponent should be adjusted so that 10^exp_ten is a normal value
+  auto const subnormal_shift = std::numeric_limits<double>::min_exponent10 - exp_ten;
+  if (subnormal_shift > 0) {
+    // Handle subnormal values. Ensure that both base and exponent are
+    // normal values before computing their product.
+    base = base / exp10(static_cast<double>(num_digits - 1 + subnormal_shift));
+    exp_ten += num_digits - 1;  // adjust exponent
+    auto const exponent = exp10(static_cast<double>(exp_ten + subnormal_shift));
+    return base * exponent;
+  }
+
+  double const exponent = exp10(static_cast<double>(std::abs(exp_ten)));
+  return exp_ten < 0 ? base / exponent : base * exponent;
 }
 
 /**
@@ -158,8 +172,7 @@ struct string_to_float_fn {
  * The output_column is expected to be one of the float types only.
  */
 struct dispatch_to_floats_fn {
-  template <typename FloatType,
-            std::enable_if_t<std::is_floating_point<FloatType>::value>* = nullptr>
+  template <typename FloatType, std::enable_if_t<std::is_floating_point_v<FloatType>>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
@@ -172,7 +185,7 @@ struct dispatch_to_floats_fn {
                       string_to_float_fn<FloatType>{strings_column});
   }
   // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
   void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Output for to_floats must be a float type.");
@@ -474,8 +487,7 @@ struct float_to_string_fn {
  * The template function declaration ensures only float types are allowed.
  */
 struct dispatch_from_floats_fn {
-  template <typename FloatType,
-            std::enable_if_t<std::is_floating_point<FloatType>::value>* = nullptr>
+  template <typename FloatType, std::enable_if_t<std::is_floating_point_v<FloatType>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& floats,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -512,7 +524,7 @@ struct dispatch_from_floats_fn {
   }
 
   // non-float types throw an exception
-  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_floating_point_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
@@ -566,7 +578,7 @@ std::unique_ptr<column> is_float(
                     d_results,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;
-                      return string::is_float(d_column.element<string_view>(idx));
+                      return strings::is_float(d_column.element<string_view>(idx));
                     });
   results->set_null_count(strings.null_count());
   return results;

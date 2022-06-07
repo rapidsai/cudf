@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/copy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+
 namespace cudf {
 namespace detail {
 namespace {
@@ -33,7 +38,7 @@ struct byte_list_conversion {
    * @brief Function object for converting primitive types and string columns to lists of bytes.
    */
   template <typename T>
-  std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>(), std::unique_ptr<column>>
+  std::enable_if_t<!std::is_integral_v<T> and !is_floating_point<T>(), std::unique_ptr<column>>
   operator()(column_view const&,
              flip_endianness,
              rmm::cuda_stream_view,
@@ -43,7 +48,7 @@ struct byte_list_conversion {
   }
 
   template <typename T>
-  std::enable_if_t<is_floating_point<T>() or std::is_integral<T>::value, std::unique_ptr<column>>
+  std::enable_if_t<is_floating_point<T>() or std::is_integral_v<T>, std::unique_ptr<column>>
   operator()(column_view const& input_column,
              flip_endianness configuration,
              rmm::cuda_stream_view stream,

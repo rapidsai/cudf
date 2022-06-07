@@ -15,15 +15,11 @@
  */
 
 #include <strings/count_matches.hpp>
-#include <strings/regex/regex.cuh>
+#include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/string_view.cuh>
-
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -31,71 +27,51 @@ namespace detail {
 
 namespace {
 /**
- * @brief Functor counts the total matches to the given regex in each string.
+ * @brief Kernel counts the total matches for the given regex in each string.
  */
-template <int stack_size>
-struct count_matches_fn {
+struct count_fn {
   column_device_view const d_strings;
-  reprog_device prog;
 
-  __device__ size_type operator()(size_type idx)
+  __device__ int32_t operator()(size_type const idx,
+                                reprog_device const prog,
+                                int32_t const thread_idx)
   {
-    if (d_strings.is_null(idx)) { return 0; }
-    size_type count  = 0;
-    auto const d_str = d_strings.element<string_view>(idx);
+    if (d_strings.is_null(idx)) return 0;
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
+    int32_t count     = 0;
 
-    int32_t begin = 0;
-    int32_t end   = d_str.length();
-    while ((begin < end) && (prog.find<stack_size>(idx, d_str, begin, end) > 0)) {
+    size_type begin = 0;
+    size_type end   = nchars;
+    while ((begin < end) && (prog.find(thread_idx, d_str, begin, end) > 0)) {
       ++count;
       begin = end + (begin == end);
-      end   = d_str.length();
+      end   = nchars;
     }
     return count;
   }
 };
+
 }  // namespace
 
-/**
- * @brief Returns a column of regex match counts for each string in the given column.
- *
- * A null entry will result in a zero count for that output row.
- *
- * @param d_strings Device view of the input strings column.
- * @param d_prog Regex instance to evaluate on each string.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- */
 std::unique_ptr<column> count_matches(column_device_view const& d_strings,
-                                      reprog_device const& d_prog,
+                                      reprog_device& d_prog,
+                                      size_type output_size,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  // Create output column
-  auto counts = make_numeric_column(
-    data_type{type_id::INT32}, d_strings.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  auto d_counts = counts->mutable_view().data<offset_type>();
+  assert(output_size >= d_strings.size() and "Unexpected output size");
 
-  auto begin = thrust::make_counting_iterator<size_type>(0);
-  auto end   = thrust::make_counting_iterator<size_type>(d_strings.size());
+  auto results = make_numeric_column(
+    data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
 
-  // Count matches
-  auto const regex_insts = d_prog.insts_counts();
-  if (regex_insts <= RX_SMALL_INSTS) {
-    count_matches_fn<RX_STACK_SMALL> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  } else if (regex_insts <= RX_MEDIUM_INSTS) {
-    count_matches_fn<RX_STACK_MEDIUM> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  } else if (regex_insts <= RX_LARGE_INSTS) {
-    count_matches_fn<RX_STACK_LARGE> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  } else {
-    count_matches_fn<RX_STACK_ANY> fn{d_strings, d_prog};
-    thrust::transform(rmm::exec_policy(stream), begin, end, d_counts, fn);
-  }
+  if (d_strings.size() == 0) return results;
 
-  return counts;
+  auto d_results = results->mutable_view().data<int32_t>();
+
+  launch_transform_kernel(count_fn{d_strings}, d_prog, d_results, d_strings.size(), stream);
+
+  return results;
 }
 
 }  // namespace detail

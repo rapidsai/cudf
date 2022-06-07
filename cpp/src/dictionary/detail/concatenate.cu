@@ -32,6 +32,14 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
 #include <algorithm>
@@ -122,8 +130,7 @@ struct compute_children_offsets_fn {
  */
 struct dispatch_compute_indices {
   template <typename Element>
-  typename std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(column_view const& all_keys,
              column_view const& all_indices,
              column_view const& new_keys,
@@ -184,8 +191,7 @@ struct dispatch_compute_indices {
   }
 
   template <typename Element, typename... Args>
-  typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
-                            std::unique_ptr<column>>
+  std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
   operator()(Args&&...)
   {
     CUDF_FAIL("dictionary concatenate not supported for this column type");
@@ -217,7 +223,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
-  auto table_keys = cudf::detail::unordered_drop_duplicates(
+  auto table_keys = cudf::detail::distinct(
     table_view{{all_keys->view()}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr);
   auto sorted_keys = cudf::detail::sort(table_keys->view(),
                                         std::vector<order>{order::ASCENDING},

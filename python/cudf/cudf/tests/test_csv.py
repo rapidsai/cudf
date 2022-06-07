@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import gzip
 import os
@@ -8,6 +8,7 @@ from collections import OrderedDict
 from io import BytesIO, StringIO
 from pathlib import Path
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -472,19 +473,26 @@ def test_csv_reader_usecols_int_char(tmpdir, pd_mixed_dataframe):
     assert_eq(df_out, out, check_names=False)
 
 
-def test_csv_reader_mangle_dupe_cols(tmpdir):
-    buffer = "abc,ABC,abc,abcd,abc\n1,2,3,4,5\n"
-
+@pytest.mark.parametrize(
+    "buffer",
+    [
+        "abc,ABC,abc,abcd,abc\n1,2,3,4,5\n",
+        "A,A,A.1,A,A.2,A,A.4,A,A\n1,2,3.1,4,a.2,a,a.4,a,a",
+        "A,A,A.1,,Unnamed: 4,A,A.4,A,A\n1,2,3.1,4,a.2,a,a.4,a,a",
+    ],
+)
+@pytest.mark.parametrize("mangle_dupe_cols", [True, False])
+def test_csv_reader_mangle_dupe_cols(tmpdir, buffer, mangle_dupe_cols):
     # Default: mangle_dupe_cols=True
-    pd_df = pd.read_csv(StringIO(buffer))
-    cu_df = read_csv(StringIO(buffer))
+    cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=mangle_dupe_cols)
+    if mangle_dupe_cols:
+        pd_df = pd.read_csv(StringIO(buffer))
+    else:
+        # Pandas does not support mangle_dupe_cols=False
+        head = buffer.split("\n")[0].split(",")
+        first_cols = np.unique(head, return_index=True)[1]
+        pd_df = pd.read_csv(StringIO(buffer), usecols=first_cols)
     assert_eq(cu_df, pd_df)
-
-    # Pandas does not support mangle_dupe_cols=False
-    cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=False)
-    # check that the dupe columns were removed
-    assert len(cu_df.columns) == 3
-    np.testing.assert_array_equal(cu_df["abc"].to_numpy(), [1])
 
 
 def test_csv_reader_float_decimal(tmpdir):
@@ -579,7 +587,9 @@ def test_csv_reader_NaN_values():
 
     # data type detection should evaluate the column to int8 (all nulls)
     gdf = read_csv(
-        StringIO(all_cells), header=None, na_values=custom_na_values,
+        StringIO(all_cells),
+        header=None,
+        na_values=custom_na_values,
     )
     assert gdf.dtypes[0] == "int8"
     assert all(gdf["0"][idx] is cudf.NA for idx in range(len(gdf["0"])))
@@ -1009,17 +1019,17 @@ def test_small_zip(tmpdir):
 def test_csv_reader_carriage_return(tmpdir):
     rows = 1000
     names = ["int_row", "int_double_row"]
-
     buffer = ",".join(names) + "\r\n"
     for row in range(rows):
         buffer += str(row) + ", " + str(2 * row) + "\r\n"
 
     df = read_csv(StringIO(buffer))
+    expect = cudf.DataFrame(
+        {"int_row": cp.arange(rows), "int_double_row": cp.arange(rows) * 2}
+    )
 
     assert len(df) == rows
-    for row in range(0, rows):
-        assert df[names[0]][row] == row
-        assert df[names[1]][row] == 2 * row
+    assert_eq(expect, df)
 
 
 def test_csv_reader_tabs():
@@ -1272,6 +1282,7 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/10618")
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a
@@ -1314,7 +1325,7 @@ def test_csv_reader_aligned_byte_range(tmpdir):
     [(None, None), ("int", "hex"), ("int32", "hex32"), ("int64", "hex64")],
 )
 def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
-    lines = ["0x0", "-0x1000", "0xfedcba", "0xABCDEF", "0xaBcDeF", "9512c20b"]
+    lines = ["0x0", "-0x1000", "0xfedcba", "0xABCDEF", "0xaBcDeF"]
     values = [int(hex_int, 16) for hex_int in lines]
 
     buffer = "\n".join(lines)
@@ -1331,6 +1342,35 @@ def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
         pdf = pd.read_csv(StringIO(buffer), names=["hex_int"])
         gdf = read_csv(StringIO(buffer), names=["hex_int"])
         assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "np_dtype, gdf_dtype",
+    [("int", "hex"), ("int32", "hex32"), ("int64", "hex64")],
+)
+def test_csv_reader_hexadecimal_overflow(np_dtype, gdf_dtype):
+    # This tests values which cause an overflow warning that will become an
+    # error in pandas. NumPy wraps the overflow silently up to the bounds of a
+    # signed int64.
+    lines = [
+        "0x0",
+        "-0x1000",
+        "0xfedcba",
+        "0xABCDEF",
+        "0xaBcDeF",
+        "0x9512c20b",
+        "0x7fffffff",
+        "0x7fffffffffffffff",
+        "-0x8000000000000000",
+    ]
+    values = [int(hex_int, 16) for hex_int in lines]
+    buffer = "\n".join(lines)
+
+    gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
+
+    expected = np.array(values, dtype=np_dtype)
+    actual = gdf["hex_int"].to_numpy()
+    np.testing.assert_array_equal(expected, actual)
 
 
 @pytest.mark.parametrize("quoting", [0, 1, 2, 3])

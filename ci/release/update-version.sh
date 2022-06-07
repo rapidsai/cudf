@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 ########################
 # cuDF Version Updater #
 ########################
@@ -32,6 +33,9 @@ function sed_runner() {
 
 # cpp update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/CMakeLists.txt
+
+# Python update
+sed_runner 's/'"cudf_version .*)"'/'"cudf_version ${NEXT_FULL_TAG})"'/g' python/cudf/CMakeLists.txt
 
 # cpp libcudf_kafka update
 sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/libcudf_kafka/CMakeLists.txt

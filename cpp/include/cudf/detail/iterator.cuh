@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,8 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/optional.h>
+#include <thrust/pair.h>
 
 #include <utility>
 
@@ -65,7 +67,8 @@ namespace detail {
  * @return A transform iterator that applies `f` to a counting iterator
  */
 template <typename UnaryFunction>
-inline auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
+CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(cudf::size_type start,
+                                                              UnaryFunction f)
 {
   return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
@@ -107,7 +110,7 @@ struct null_replaced_value_accessor {
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
-  __device__ inline Element operator()(cudf::size_type i) const
+  __device__ inline Element const operator()(cudf::size_type i) const
   {
     return has_nulls && col.is_null_nocheck(i) ? null_replacement : col.element<Element>(i);
   }
@@ -115,26 +118,42 @@ struct null_replaced_value_accessor {
 
 /**
  * @brief validity accessor of column with null bitmask
- * A unary functor returns validity at `id`.
- * `operator() (cudf::size_type id)` computes validity flag at `id`
- * This functor is only allowed for nullable columns.
+ * A unary functor that returns validity at index `i`.
  *
- * @throws cudf::logic_error if the column is not nullable.
+ * @tparam safe If false, the accessor will throw a logic_error if the column is not nullable. If
+ * true, the accessor checks for nullability and if col is not nullable, returns true.
  */
+template <bool safe = false>
 struct validity_accessor {
   column_device_view const col;
 
   /**
    * @brief constructor
+   *
+   * @throws cudf::logic_error if not safe and `col` does not have a validity bitmask
+   *
    * @param[in] _col column device view of cudf column
    */
-  validity_accessor(column_device_view const& _col) : col{_col}
+  CUDF_HOST_DEVICE validity_accessor(column_device_view const& _col) : col{_col}
   {
-    // verify valid is non-null, otherwise, is_valid() will crash
-    CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
+    if constexpr (not safe) {
+      // verify col is nullable, otherwise, is_valid_nocheck() will crash
+#if defined(__CUDA_ARCH__)
+      cudf_assert(_col.nullable() && "Unexpected non-nullable column.");
+#else
+      CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
+#endif
+    }
   }
 
-  __device__ inline bool operator()(cudf::size_type i) const { return col.is_valid_nocheck(i); }
+  __device__ inline bool operator()(cudf::size_type i) const
+  {
+    if constexpr (safe) {
+      return col.is_valid(i);
+    } else {
+      return col.is_valid_nocheck(i);
+    }
+  }
 };
 
 /**
@@ -287,16 +306,20 @@ auto make_pair_rep_iterator(column_device_view const& column)
  *
  * Dereferencing the returned iterator for element `i` will return the validity
  * of `column[i]`
- * This iterator is only allowed for nullable columns.
+ * If `safe` = false, the column must be nullable.
+ * When safe = true, if the column is not nullable then the validity is always true.
  *
- * @throws cudf::logic_error if the column is not nullable.
+ * @throws cudf::logic_error if the column is not nullable and safe = false
  *
+ * @tparam safe If false, the accessor will throw a logic_error if the column is not nullable. If
+ * true, the accessor checks for nullability and if col is not nullable, returns true.
  * @param column The column to iterate
  * @return auto Iterator that returns validities of column elements.
  */
-auto inline make_validity_iterator(column_device_view const& column)
+template <bool safe = false>
+CUDF_HOST_DEVICE auto inline make_validity_iterator(column_device_view const& column)
 {
-  return make_counting_transform_iterator(cudf::size_type{0}, validity_accessor{column});
+  return make_counting_transform_iterator(cudf::size_type{0}, validity_accessor<safe>{column});
 }
 
 /**
@@ -306,9 +329,12 @@ auto inline make_validity_iterator(column_device_view const& column)
  *
  * For `p = *(iter + i)`, `p` is the validity of the scalar.
  *
+ * @tparam bool unused. This template parameter exists to enforce the same
+ *         template interface as @ref make_validity_iterator(column_device_view const&).
  * @param scalar_value The scalar to iterate
  * @return auto Iterator that returns scalar validity
  */
+template <bool safe = false>
 auto inline make_validity_iterator(scalar const& scalar_value)
 {
   return thrust::make_constant_iterator(scalar_value.is_valid());
@@ -335,21 +361,7 @@ struct scalar_value_accessor {
                  "the data type mismatch");
   }
 
-  /**
-   * @brief returns the value of the scalar.
-   *
-   * @throw `cudf::logic_error` if this function is called in host.
-   *
-   * @return value of the scalar.
-   */
-  __device__ inline const Element operator()(size_type) const
-  {
-#if defined(__CUDA_ARCH__)
-    return dscalar.value();
-#else
-    CUDF_FAIL("unsupported device scalar iterator operation");
-#endif
-  }
+  __device__ inline Element const operator()(size_type) const { return dscalar.value(); }
 };
 
 /**
@@ -413,20 +425,19 @@ struct scalar_optional_accessor : public scalar_value_accessor<Element> {
   {
   }
 
-  /**
-   * @brief returns a thrust::optional<Element>.
-   *
-   * @throw `cudf::logic_error` if this function is called in host.
-   *
-   * @return a thrust::optional<Element> for the scalar value.
-   */
-  CUDF_HOST_DEVICE inline const value_type operator()(size_type) const
+  __device__ inline value_type const operator()(size_type) const
   {
-    if (has_nulls) {
-      return (super_t::dscalar.is_valid()) ? Element{super_t::dscalar.value()}
-                                           : value_type{thrust::nullopt};
+    if (has_nulls && !super_t::dscalar.is_valid()) { return value_type{thrust::nullopt}; }
+
+    if constexpr (cudf::is_fixed_point<Element>()) {
+      using namespace numeric;
+      using rep        = typename Element::rep;
+      auto const value = super_t::dscalar.rep();
+      auto const scale = scale_type{super_t::dscalar.type().scale()};
+      return Element{scaled_integer<rep>{value, scale}};
+    } else {
+      return Element{super_t::dscalar.value()};
     }
-    return Element{super_t::dscalar.value()};
   }
 
   Nullate has_nulls{};
@@ -446,20 +457,9 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
   using value_type = thrust::pair<Element, bool>;
   scalar_pair_accessor(scalar const& scalar_value) : scalar_value_accessor<Element>(scalar_value) {}
 
-  /**
-   * @brief returns a pair with value and validity of the scalar.
-   *
-   * @throw `cudf::logic_error` if this function is called in host.
-   *
-   * @return a pair with value and validity of the scalar.
-   */
-  CUDF_HOST_DEVICE inline const value_type operator()(size_type) const
+  __device__ inline value_type const operator()(size_type) const
   {
-#if defined(__CUDA_ARCH__)
     return {Element(super_t::dscalar.value()), super_t::dscalar.is_valid()};
-#else
-    CUDF_FAIL("unsupported device scalar iterator operation");
-#endif
   }
 };
 
@@ -497,14 +497,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
 
   scalar_representation_pair_accessor(scalar const& scalar_value) : base(scalar_value) {}
 
-  /**
-   * @brief returns a pair with representative value and validity of the scalar.
-   *
-   * @throw `cudf::logic_error` if this function is called in host.
-   *
-   * @return a pair with representative value and validity of the scalar.
-   */
-  __device__ inline const value_type operator()(size_type) const
+  __device__ inline value_type const operator()(size_type) const
   {
     return {get_rep(base::dscalar), base::dscalar.is_valid()};
   }

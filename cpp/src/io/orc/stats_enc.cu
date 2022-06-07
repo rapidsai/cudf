@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "orc_common.h"
-#include "orc_gpu.h"
+#include "orc_common.hpp"
+#include "orc_gpu.hpp"
 
 #include <io/utilities/block_utils.cuh>
 
@@ -81,8 +81,7 @@ __global__ void __launch_bounds__(block_size, 1)
     uint32_t stats_len = 0, stats_pos;
     uint32_t idx       = start + t;
     if (idx < statistics_count) {
-      const stats_column_desc* col = groups[idx].col;
-      statistics_dtype dtype       = col->stats_dtype;
+      statistics_dtype const dtype = groups[idx].stats_dtype;
       switch (dtype) {
         case dtype_bool: stats_len = pb_fldlen_common + pb_fld_hdrlen + pb_fldlen_bucket1; break;
         case dtype_int8:
@@ -126,7 +125,7 @@ struct stats_state_s {
   uint8_t* end;   ///< Output buffer end
   statistics_chunk chunk;
   statistics_merge_group group;
-  stats_column_desc col;
+  statistics_dtype stats_dtype;  //!< Statistics data type for this column
   // ORC stats
   uint64_t numberOfValues;
   uint8_t hasNull;
@@ -231,12 +230,12 @@ __global__ void __launch_bounds__(encode_threads_per_block)
   if (idx < statistics_count && t == 0) {
     s->chunk           = chunks[idx];
     s->group           = groups[idx];
-    s->col             = *(s->group.col);
+    s->stats_dtype     = s->group.stats_dtype;
     s->base            = blob_bfr + s->group.start_chunk;
     s->end             = blob_bfr + s->group.start_chunk + s->group.num_chunks;
     uint8_t* cur       = pb_put_uint(s->base, 1, s->chunk.non_nulls);
     uint8_t* fld_start = cur;
-    switch (s->col.stats_dtype) {
+    switch (s->stats_dtype) {
       case dtype_int8:
       case dtype_int16:
       case dtype_int32:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ namespace cudf {
  * @throws cudf::logic_error if input contains no columns.
  * @throws cudf::logic_error if input columns dtypes are not identical.
  *
- * @param[in] input Table containing columns to interleave.
+ * @param[in] input Table containing columns to interleave
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @return The interleaved columns as a single column
@@ -63,11 +63,11 @@ std::unique_ptr<column> interleave_columns(
  * return = [[8, 4, 7, 8, 4, 7], [5, 2, 3, 5, 2, 3]]
  * ```
  *
- * @param[in] input Table containing rows to be repeated.
- * @param[in] count Number of times to tile "rows". Must be non-negative.
+ * @param[in] input Table containing rows to be repeated
+ * @param[in] count Number of times to tile "rows". Must be non-negative
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
- * @return The table containing the tiled "rows".
+ * @return The table containing the tiled "rows"
  */
 std::unique_ptr<table> tile(
   table_view const& input,
@@ -88,11 +88,11 @@ enum class flip_endianness : bool { NO, YES };
  * return        = [[0x00, 0x00, 0x21, 0xe3], [0x00, 0x00, 0x01, 0x35]]
  * ```
  *
- * @param input_column Column to be converted to lists of bytes.
- * @param endian_configuration Whether to retain or flip the endianness of the elements.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input_column Column to be converted to lists of bytes
+ * @param endian_configuration Whether to retain or flip the endianness of the elements
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @return The column containing the lists of bytes.
+ * @return The column containing the lists of bytes
  */
 std::unique_ptr<column> byte_cast(
   column_view const& input_column,

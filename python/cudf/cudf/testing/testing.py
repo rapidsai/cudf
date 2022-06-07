@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from cudf.api.types import (
     is_struct_dtype,
 )
 from cudf.core._compat import PANDAS_GE_110
+from cudf.core.missing import NA
 
 
 def dtype_can_compare_equal_to_other(dtype):
@@ -215,7 +216,7 @@ def assert_column_equal(
                 msg1 = f"{left.ordered}"
                 msg2 = f"{right.ordered}"
                 raise_assert_detail(
-                    "{obj} category", "Orders are different", msg1, msg2
+                    f"{obj} category", "Orders are different", msg1, msg2
                 )
 
     if (
@@ -247,8 +248,12 @@ def assert_column_equal(
             if columns_equal and not check_exact and is_numeric_dtype(left):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
-                    left[left.isnull().unary_operator("not")].values,
-                    right[right.isnull().unary_operator("not")].values,
+                    left.apply_boolean_mask(
+                        left.isnull().unary_operator("not")
+                    ).values,
+                    right.apply_boolean_mask(
+                        right.isnull().unary_operator("not")
+                    ).values,
                 )
                 if columns_equal and (
                     left.dtype.kind == right.dtype.kind == "f"
@@ -286,7 +291,7 @@ def assert_column_equal(
 
 
 def null_safe_scalar_equals(left, right):
-    if left in {cudf.NA, np.nan} or right in {cudf.NA, np.nan}:
+    if left in {NA, np.nan} or right in {NA, np.nan}:
         return left is right
     return left == right
 
@@ -696,8 +701,8 @@ def assert_frame_equal(
 
     if PANDAS_GE_110:
         pd.testing.assert_index_equal(
-            left.columns,
-            right.columns,
+            left._data.to_pandas_index(),
+            right._data.to_pandas_index(),
             exact=check_column_type,
             check_names=check_names,
             check_exact=check_exact,
@@ -708,8 +713,8 @@ def assert_frame_equal(
         )
     else:
         pd.testing.assert_index_equal(
-            left.columns,
-            right.columns,
+            left._data.to_pandas_index(),
+            right._data.to_pandas_index(),
             exact=check_column_type,
             check_names=check_names,
             check_exact=check_exact,
@@ -717,7 +722,7 @@ def assert_frame_equal(
             obj=f"{obj}.columns",
         )
 
-    for col in left.columns:
+    for col in left._column_names:
         assert_column_equal(
             left._data[col],
             right._data[col],

@@ -23,7 +23,14 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               # For std:: support of __int128_t. Can be removed once using cuda::std
+               CXX_EXTENSIONS ON
+               CUDA_STANDARD 17
+               CUDA_STANDARD_REQUIRED ON
   )
+
   target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
   install(
@@ -41,8 +48,13 @@ endfunction()
 # ##################################################################################################
 # * column tests ----------------------------------------------------------------------------------
 ConfigureTest(
-  COLUMN_TEST column/bit_cast_test.cpp column/column_view_shallow_test.cpp column/column_test.cu
-  column/column_device_view_test.cu column/compound_test.cu
+  COLUMN_TEST
+  column/bit_cast_test.cpp
+  column/column_device_view_test.cu
+  column/column_test.cu
+  column/column_view_device_span_test.cpp
+  column/column_view_shallow_test.cpp
+  column/compound_test.cu
 )
 
 # ##################################################################################################
@@ -71,7 +83,7 @@ ConfigureTest(
   groupby/covariance_tests.cpp
   groupby/groups_tests.cpp
   groupby/keys_tests.cpp
-  groupby/lists_tests.cpp
+  groupby/lists_tests.cu
   groupby/m2_tests.cpp
   groupby/min_tests.cpp
   groupby/max_scan_tests.cpp
@@ -126,7 +138,7 @@ ConfigureTest(
 
 # ##################################################################################################
 # * hash_map tests --------------------------------------------------------------------------------
-ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu hash_map/multimap_test.cu)
+ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu)
 
 # ##################################################################################################
 # * quantiles tests -------------------------------------------------------------------------------
@@ -138,7 +150,14 @@ ConfigureTest(
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
-  REDUCTION_TEST reductions/rank_tests.cpp reductions/reduction_tests.cpp reductions/scan_tests.cpp
+  REDUCTION_TEST
+  reductions/collect_ops_tests.cpp
+  reductions/rank_tests.cpp
+  reductions/reduction_tests.cpp
+  reductions/scan_tests.cpp
+  reductions/segmented_reduction_tests.cpp
+  reductions/list_rank_test.cpp
+  reductions/tdigest_tests.cu
 )
 
 # ##################################################################################################
@@ -199,6 +218,7 @@ ConfigureTest(
 ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
 ConfigureTest(CSV_TEST io/csv_test.cpp)
+ConfigureTest(FILE_IO_TEST io/file_io_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
@@ -210,7 +230,10 @@ endif()
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
-ConfigureTest(SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/rank_test.cpp)
+ConfigureTest(
+  SORT_TEST sort/segmented_sort_tests.cpp sort/sort_test.cpp sort/stable_sort_tests.cpp
+  sort/rank_test.cpp
+)
 
 ConfigureTest(SORT2_TEST sort/sort2_test.cpp)
 
@@ -229,6 +252,7 @@ ConfigureTest(
   copying/gather_tests.cpp
   copying/get_value_tests.cpp
   copying/pack_tests.cpp
+  copying/purge_nonempty_nulls_tests.cpp
   copying/sample_tests.cpp
   copying/scatter_tests.cpp
   copying/scatter_list_tests.cpp
@@ -288,6 +312,7 @@ ConfigureTest(TRANSPOSE_TEST transpose/transpose_test.cpp)
 # * table tests -----------------------------------------------------------------------------------
 ConfigureTest(
   TABLE_TEST table/table_tests.cpp table/table_view_tests.cu table/row_operators_tests.cpp
+  table/experimental_row_operator_tests.cu
 )
 
 # ##################################################################################################
@@ -302,9 +327,11 @@ ConfigureTest(
   STREAM_COMPACTION_TEST
   stream_compaction/apply_boolean_mask_tests.cpp
   stream_compaction/distinct_count_tests.cpp
+  stream_compaction/distinct_tests.cpp
   stream_compaction/drop_nulls_tests.cpp
   stream_compaction/drop_nans_tests.cpp
-  stream_compaction/drop_duplicates_tests.cpp
+  stream_compaction/unique_count_tests.cpp
+  stream_compaction/unique_tests.cpp
 )
 
 # ##################################################################################################
@@ -399,6 +426,7 @@ ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_te
 # * nvtext test -----------------------------------------------------------------------------------
 ConfigureTest(
   TEXT_TEST
+  text/bpe_tests.cpp
   text/edit_distance_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
@@ -445,6 +473,7 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 # * lists tests ----------------------------------------------------------------------------------
 ConfigureTest(
   LISTS_TEST
+  lists/apply_boolean_mask_test.cpp
   lists/combine/concatenate_list_elements_tests.cpp
   lists/combine/concatenate_rows_tests.cpp
   lists/contains_tests.cpp

@@ -1,3 +1,4 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 import math
 import operator
 
@@ -6,7 +7,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.core.scalar import NA
+from cudf.core.missing import NA
 from cudf.core.udf._ops import (
     arith_ops,
     bitwise_ops,
@@ -14,7 +15,11 @@ from cudf.core.udf._ops import (
     unary_ops,
 )
 from cudf.core.udf.utils import precompiled
-from cudf.testing._utils import NUMERIC_TYPES, _decimal_series, assert_eq
+from cudf.testing._utils import (
+    _decimal_series,
+    assert_eq,
+    parametrize_numeric_dtypes_pairwise,
+)
 
 
 def run_masked_udf_test(func, data, args=(), **kwargs):
@@ -238,10 +243,9 @@ def test_masked_is_null_conditional():
     run_masked_udf_test(func, gdf, check_dtype=False)
 
 
-@pytest.mark.parametrize("dtype_a", list(NUMERIC_TYPES))
-@pytest.mark.parametrize("dtype_b", list(NUMERIC_TYPES))
+@parametrize_numeric_dtypes_pairwise
 @pytest.mark.parametrize("op", [operator.add, operator.and_, operator.eq])
-def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
+def test_apply_mixed_dtypes(left_dtype, right_dtype, op):
     """
     Test that operations can be performed between columns
     of different dtypes and return a column with the correct
@@ -251,7 +255,7 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
     # First perform the op on two dummy data on host, if numpy can
     # safely type cast, we should expect it to work in udf too.
     try:
-        op(getattr(np, dtype_a)(0), getattr(np, dtype_b)(42))
+        op(np.dtype(left_dtype).type(0), np.dtype(right_dtype).type(42))
     except TypeError:
         pytest.skip("Operation is unsupported for corresponding dtype.")
 
@@ -261,8 +265,8 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b, op):
         return op(x, y)
 
     gdf = cudf.DataFrame({"a": [1.5, None, 3, None], "b": [4, 5, None, None]})
-    gdf["a"] = gdf["a"].astype(dtype_a)
-    gdf["b"] = gdf["b"].astype(dtype_b)
+    gdf["a"] = gdf["a"].astype(left_dtype)
+    gdf["b"] = gdf["b"].astype(right_dtype)
 
     run_masked_udf_test(func, gdf, check_dtype=False)
 
@@ -363,9 +367,12 @@ def test_apply_everything():
 
 
 @pytest.mark.parametrize(
-    "data", [cudf.Series([1, 2, 3]), cudf.Series([1, cudf.NA, 3])]
+    "data,name",
+    [([1, 2, 3], None), ([1, cudf.NA, 3], None), ([1, 2, 3], "test_name")],
 )
-def test_series_apply_basic(data):
+def test_series_apply_basic(data, name):
+    data = cudf.Series(data, name=name)
+
     def func(x):
         return x + 1
 
@@ -640,16 +647,18 @@ def test_masked_udf_caching():
     # recompile
 
     data = cudf.Series([1, 2, 3])
-    expect = data ** 2
-    got = data.applymap(lambda x: x ** 2)
+    expect = data**2
+    with pytest.warns(FutureWarning):
+        got = data.applymap(lambda x: x**2)
 
     assert_eq(expect, got, check_dtype=False)
 
     # update the constant value being used and make sure
     # it does not result in a cache hit
 
-    expect = data ** 3
-    got = data.applymap(lambda x: x ** 3)
+    expect = data**3
+    with pytest.warns(FutureWarning):
+        got = data.applymap(lambda x: x**3)
     assert_eq(expect, got, check_dtype=False)
 
     # make sure we get a hit when reapplying

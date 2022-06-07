@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -61,14 +61,14 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
     return cudf::test::fixed_width_column_wrapper<T>(data_iter, data_iter + size, validity_iter);
   }
 
-  template <typename T, typename std::enable_if_t<!std::is_same_v<T, std::string>>* = nullptr>
+  template <typename T, std::enable_if_t<!std::is_same_v<T, std::string>>* = nullptr>
   auto make_random_wrapped_scalar()
   {
     cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
     return cudf::scalar_type_t<T>(rand_gen.generate());
   }
 
-  template <typename T, typename std::enable_if_t<std::is_same_v<T, std::string>>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_same_v<T, std::string>>* = nullptr>
   auto make_random_wrapped_scalar()
   {
     cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);

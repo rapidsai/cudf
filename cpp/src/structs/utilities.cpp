@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <bitset>
 #include <iterator>
@@ -308,6 +309,11 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  if (child.type().id() == cudf::type_id::EMPTY) {
+    // EMPTY columns should not have a null mask,
+    // so don't superimpose null mask on empty columns.
+    return;
+  }
   if (!child.nullable()) {
     // Child currently has no null mask. Copy parent's null mask.
     child.set_null_mask(cudf::detail::copy_bitmask(parent_null_mask, 0, child.size(), stream, mr));
@@ -327,8 +333,7 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
       masks,
       begin_bits,
       child.size(),
-      stream,
-      mr);
+      stream);
     auto const null_count = child.size() - valid_count;
     child.set_null_count(null_count);
   }
@@ -370,7 +375,7 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
     auto [new_child_mask, null_count] = [&] {
       if (not child.nullable()) {
         // Adopt parent STRUCT's null mask.
-        return std::make_pair(structs_column.null_mask(), 0);
+        return std::pair(structs_column.null_mask(), 0);
       }
 
       // Both STRUCT and child are nullable. AND() for the child's new null mask.
@@ -386,8 +391,8 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
                                                               stream,
                                                               mr);
       ret_validity_buffers.push_back(std::move(new_mask));
-      return std::make_pair(
-        reinterpret_cast<bitmask_type const*>(ret_validity_buffers.back().data()), null_count);
+      return std::pair(reinterpret_cast<bitmask_type const*>(ret_validity_buffers.back().data()),
+                       null_count);
     }();
 
     return cudf::column_view(
@@ -438,6 +443,12 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
                                   std::make_move_iterator(null_masks.end()));
   }
   return {table_view{superimposed_columns}, std::move(superimposed_nullmasks)};
+}
+
+bool contains_null_structs(column_view const& col)
+{
+  return (is_struct(col) && col.has_nulls()) ||
+         std::any_of(col.child_begin(), col.child_end(), contains_null_structs);
 }
 
 }  // namespace detail

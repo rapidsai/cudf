@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections import abc
 from functools import wraps
 from inspect import isclass
 from typing import List, Union
@@ -48,16 +48,12 @@ def is_numeric_dtype(obj):
         if issubclass(obj, _BaseDtype):
             return False
     else:
-        if isinstance(obj, cudf.Decimal128Dtype) or isinstance(
-            getattr(obj, "dtype", None), cudf.Decimal128Dtype
-        ):
-            return True
-        if isinstance(obj, cudf.Decimal64Dtype) or isinstance(
-            getattr(obj, "dtype", None), cudf.Decimal64Dtype
-        ):
-            return True
-        if isinstance(obj, cudf.Decimal32Dtype) or isinstance(
-            getattr(obj, "dtype", None), cudf.Decimal32Dtype
+        if isinstance(
+            obj,
+            (cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype),
+        ) or isinstance(
+            getattr(obj, "dtype", None),
+            (cudf.Decimal128Dtype, cudf.Decimal64Dtype, cudf.Decimal32Dtype),
         ):
             return True
         if isinstance(obj, _BaseDtype) or isinstance(
@@ -129,12 +125,14 @@ def is_scalar(val):
     bool
         Return True if given object is scalar.
     """
-    return (
-        isinstance(val, cudf._lib.scalar.DeviceScalar)
-        or isinstance(val, cudf.Scalar)
-        or isinstance(val, cudf.core.tools.datetimes.DateOffset)
-        or pd_types.is_scalar(val)
-    )
+    return isinstance(
+        val,
+        (
+            cudf.Scalar,
+            cudf._lib.scalar.DeviceScalar,
+            cudf.core.tools.datetimes.DateOffset,
+        ),
+    ) or pd_types.is_scalar(val)
 
 
 def _is_scalar_or_zero_d_array(val):
@@ -174,7 +172,7 @@ def is_list_like(obj):
     bool
         Return True if given object is list-like.
     """
-    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
+    return isinstance(obj, (abc.Sequence, np.ndarray)) and not isinstance(
         obj, (str, bytes)
     )
 
@@ -248,7 +246,7 @@ is_datetime64_ns_dtype = pd_types.is_datetime64_ns_dtype
 is_datetime64tz_dtype = pd_types.is_datetime64tz_dtype
 is_extension_type = pd_types.is_extension_type
 is_extension_array_dtype = pd_types.is_extension_array_dtype
-is_float_dtype = pd_types.is_float_dtype
+is_float_dtype = _wrap_pandas_is_dtype_api(pd_types.is_float_dtype)
 is_int64_dtype = pd_types.is_int64_dtype
 is_integer_dtype = _wrap_pandas_is_dtype_api(pd_types.is_integer_dtype)
 is_object_dtype = pd_types.is_object_dtype

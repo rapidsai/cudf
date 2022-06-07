@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+#include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -36,47 +35,36 @@ namespace {
 /**
  * @brief This functor handles replacing strings by applying the compiled regex pattern
  * and inserting the new string within the matched range of characters.
- *
- * The logic includes computing the size of each string and also writing the output.
- *
- * The stack is used to keep progress on evaluating the regex instructions on each string.
- * So the size of the stack is in proportion to the number of instructions in the given regex
- * pattern.
- *
- * There are three call types based on the number of regex instructions in the given pattern.
- * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
- * Longer patterns require global memory. Shorter patterns are common in data cleaning.
  */
-template <int stack_size>
 struct replace_regex_fn {
   column_device_view const d_strings;
-  reprog_device prog;
   string_view const d_repl;
   size_type const maxrepl;
   int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ void operator()(size_type idx)
+  __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
 
-    auto const d_str = d_strings.element<string_view>(idx);
-    auto nbytes      = d_str.size_bytes();                  // number of bytes in input string
-    auto mxn = maxrepl < 0 ? d_str.length() + 1 : maxrepl;  // max possible replaces for this string
-    auto in_ptr        = d_str.data();                      // input pointer (i)
-    auto out_ptr       = d_chars ? d_chars + d_offsets[idx]  // output pointer (o)
-                                 : nullptr;
+    auto const d_str  = d_strings.element<string_view>(idx);
+    auto const nchars = d_str.length();
+    auto nbytes       = d_str.size_bytes();             // number of bytes in input string
+    auto mxn     = maxrepl < 0 ? nchars + 1 : maxrepl;  // max possible replaces for this string
+    auto in_ptr  = d_str.data();                        // input pointer (i)
+    auto out_ptr = d_chars ? d_chars + d_offsets[idx]   // output pointer (o)
+                           : nullptr;
     size_type last_pos = 0;
-    int32_t begin      = 0;   // these are for calling prog.find
-    int32_t end        = -1;  // matches final word-boundary if at the end of the string
+    size_type begin    = 0;   // these are for calling prog.find
+    size_type end      = -1;  // matches final word-boundary if at the end of the string
 
     // copy input to output replacing strings as we go
-    while (mxn-- > 0) {  // maximum number of replaces
+    while (mxn-- > 0 && begin <= nchars) {  // maximum number of replaces
 
-      if (prog.is_empty() || prog.find<stack_size>(idx, d_str, begin, end) <= 0) {
+      if (prog.is_empty() || prog.find(prog_idx, d_str, begin, end) <= 0) {
         break;  // no more matches
       }
 
@@ -112,57 +100,34 @@ struct replace_regex_fn {
 
 //
 std::unique_ptr<column> replace_re(
-  strings_column_view const& strings,
-  std::string const& pattern,
+  strings_column_view const& input,
+  std::string_view pattern,
   string_scalar const& replacement,
   std::optional<size_type> max_replace_count,
   regex_flags const flags,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   string_view d_repl(replacement.data(), replacement.size());
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
   // compile regex into device object
-  auto prog =
-    reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
-  auto d_prog            = *prog;
-  auto const regex_insts = d_prog.insts_counts();
+  auto d_prog = reprog_device::create(pattern, flags, stream);
 
-  // copy null mask
-  auto null_mask        = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
-  auto const null_count = strings.null_count();
-  auto const maxrepl    = max_replace_count.value_or(-1);
+  auto const maxrepl = max_replace_count.value_or(-1);
 
-  // create child columns
-  auto children = [&] {
-    // Each invocation is predicated on the stack size which is dependent on the number of regex
-    // instructions
-    if (regex_insts <= RX_SMALL_INSTS) {
-      replace_regex_fn<RX_STACK_SMALL> fn{d_strings, d_prog, d_repl, maxrepl};
-      return make_strings_children(fn, strings_count, stream, mr);
-    } else if (regex_insts <= RX_MEDIUM_INSTS) {
-      replace_regex_fn<RX_STACK_MEDIUM> fn{d_strings, d_prog, d_repl, maxrepl};
-      return make_strings_children(fn, strings_count, stream, mr);
-    } else if (regex_insts <= RX_LARGE_INSTS) {
-      replace_regex_fn<RX_STACK_LARGE> fn{d_strings, d_prog, d_repl, maxrepl};
-      return make_strings_children(fn, strings_count, stream, mr);
-    } else {
-      replace_regex_fn<RX_STACK_ANY> fn{d_strings, d_prog, d_repl, maxrepl};
-      return make_strings_children(fn, strings_count, stream, mr);
-    }
-  }();
+  auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  return make_strings_column(strings_count,
+  auto children = make_strings_children(
+    replace_regex_fn{*d_strings, d_repl, maxrepl}, *d_prog, input.size(), stream, mr);
+
+  return make_strings_column(input.size(),
                              std::move(children.first),
                              std::move(children.second),
-                             null_count,
-                             std::move(null_mask));
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
 
 }  // namespace detail
@@ -170,7 +135,7 @@ std::unique_ptr<column> replace_re(
 // external API
 
 std::unique_ptr<column> replace_re(strings_column_view const& strings,
-                                   std::string const& pattern,
+                                   std::string_view pattern,
                                    string_scalar const& replacement,
                                    std::optional<size_type> max_replace_count,
                                    regex_flags const flags,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <join/hash_join.cuh>
-#include <join/join_common_utils.hpp>
+#include "join_common_utils.hpp"
 
 #include <cudf/detail/gather.cuh>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -26,6 +25,26 @@
 
 namespace cudf {
 namespace detail {
+namespace {
+std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table(
+  table_view const& probe, table_view const& build)
+{
+  std::unique_ptr<table> empty_probe = empty_like(probe);
+  std::unique_ptr<table> empty_build = empty_like(build);
+  return std::pair(std::move(empty_probe), std::move(empty_build));
+}
+
+std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
+                                                std::unique_ptr<cudf::table>&& right)
+{
+  auto joined_cols = left->release();
+  auto right_cols  = right->release();
+  joined_cols.insert(joined_cols.end(),
+                     std::make_move_iterator(right_cols.begin()),
+                     std::make_move_iterator(right_cols.end()));
+  return std::make_unique<cudf::table>(std::move(joined_cols));
+}
+}  // namespace
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -51,11 +70,11 @@ inner_join(table_view const& left_input,
   // build the hash map from the smaller table.
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left, compare_nulls, stream);
-    auto result = hj_obj.inner_join(right, compare_nulls, std::nullopt, stream, mr);
-    return std::make_pair(std::move(result.second), std::move(result.first));
+    auto [right_result, left_result] = hj_obj.inner_join(right, std::nullopt, stream, mr);
+    return std::pair(std::move(left_result), std::move(right_result));
   } else {
     cudf::hash_join hj_obj(right, compare_nulls, stream);
-    return hj_obj.inner_join(left, compare_nulls, std::nullopt, stream, mr);
+    return hj_obj.inner_join(left, std::nullopt, stream, mr);
   }
 }
 
@@ -78,16 +97,17 @@ std::unique_ptr<table> inner_join(table_view const& left_input,
   auto const left  = scatter_columns(matched.second.front(), left_on, left_input);
   auto const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  auto join_indices = inner_join(left.select(left_on), right.select(right_on), compare_nulls, mr);
+  auto const [left_join_indices, right_join_indices] = cudf::detail::inner_join(
+    left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
   std::unique_ptr<table> left_result  = detail::gather(left,
-                                                      join_indices.first->begin(),
-                                                      join_indices.first->end(),
+                                                      left_join_indices->begin(),
+                                                      left_join_indices->end(),
                                                       out_of_bounds_policy::DONT_CHECK,
                                                       stream,
                                                       mr);
   std::unique_ptr<table> right_result = detail::gather(right,
-                                                       join_indices.second->begin(),
-                                                       join_indices.second->end(),
+                                                       right_join_indices->begin(),
+                                                       right_join_indices->end(),
                                                        out_of_bounds_policy::DONT_CHECK,
                                                        stream,
                                                        mr);
@@ -113,7 +133,7 @@ left_join(table_view const& left_input,
   table_view const right = matched.second.back();
 
   cudf::hash_join hj_obj(right, compare_nulls, stream);
-  return hj_obj.left_join(left, compare_nulls, std::nullopt, stream, mr);
+  return hj_obj.left_join(left, std::nullopt, stream, mr);
 }
 
 std::unique_ptr<table> left_join(table_view const& left_input,
@@ -134,23 +154,24 @@ std::unique_ptr<table> left_join(table_view const& left_input,
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  auto join_indices = left_join(left.select(left_on), right.select(right_on), compare_nulls);
-
-  if ((left_on.empty() || right_on.empty()) ||
-      is_trivial_join(left, right, cudf::detail::join_kind::LEFT_JOIN)) {
-    auto probe_build_pair = get_empty_joined_table(left, right);
-    return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
-                                            std::move(probe_build_pair.second));
+  if ((left_on.empty() or right_on.empty()) or
+      cudf::detail::is_trivial_join(left, right, cudf::detail::join_kind::LEFT_JOIN)) {
+    auto [left_empty_table, right_empty_table] = get_empty_joined_table(left, right);
+    return cudf::detail::combine_table_pair(std::move(left_empty_table),
+                                            std::move(right_empty_table));
   }
+
+  auto const [left_join_indices, right_join_indices] = cudf::detail::left_join(
+    left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
   std::unique_ptr<table> left_result  = detail::gather(left,
-                                                      join_indices.first->begin(),
-                                                      join_indices.first->end(),
+                                                      left_join_indices->begin(),
+                                                      left_join_indices->end(),
                                                       out_of_bounds_policy::NULLIFY,
                                                       stream,
                                                       mr);
   std::unique_ptr<table> right_result = detail::gather(right,
-                                                       join_indices.second->begin(),
-                                                       join_indices.second->end(),
+                                                       right_join_indices->begin(),
+                                                       right_join_indices->end(),
                                                        out_of_bounds_policy::NULLIFY,
                                                        stream,
                                                        mr);
@@ -176,7 +197,7 @@ full_join(table_view const& left_input,
   table_view const right = matched.second.back();
 
   cudf::hash_join hj_obj(right, compare_nulls, stream);
-  return hj_obj.full_join(left, compare_nulls, std::nullopt, stream, mr);
+  return hj_obj.full_join(left, std::nullopt, stream, mr);
 }
 
 std::unique_ptr<table> full_join(table_view const& left_input,
@@ -197,96 +218,30 @@ std::unique_ptr<table> full_join(table_view const& left_input,
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  auto join_indices = full_join(left.select(left_on), right.select(right_on), compare_nulls);
-
-  if ((left_on.empty() || right_on.empty()) ||
-      is_trivial_join(left, right, cudf::detail::join_kind::FULL_JOIN)) {
-    auto probe_build_pair = get_empty_joined_table(left, right);
-    return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
-                                            std::move(probe_build_pair.second));
+  if ((left_on.empty() or right_on.empty()) or
+      cudf::detail::is_trivial_join(left, right, cudf::detail::join_kind::FULL_JOIN)) {
+    auto [left_empty_table, right_empty_table] = get_empty_joined_table(left, right);
+    return cudf::detail::combine_table_pair(std::move(left_empty_table),
+                                            std::move(right_empty_table));
   }
+
+  auto const [left_join_indices, right_join_indices] = cudf::detail::full_join(
+    left.select(left_on), right.select(right_on), compare_nulls, stream, mr);
   std::unique_ptr<table> left_result  = detail::gather(left,
-                                                      join_indices.first->begin(),
-                                                      join_indices.first->end(),
+                                                      left_join_indices->begin(),
+                                                      left_join_indices->end(),
                                                       out_of_bounds_policy::NULLIFY,
                                                       stream,
                                                       mr);
   std::unique_ptr<table> right_result = detail::gather(right,
-                                                       join_indices.second->begin(),
-                                                       join_indices.second->end(),
+                                                       right_join_indices->begin(),
+                                                       right_join_indices->end(),
                                                        out_of_bounds_policy::NULLIFY,
                                                        stream,
                                                        mr);
   return combine_table_pair(std::move(left_result), std::move(right_result));
 }
-
 }  // namespace detail
-
-hash_join::~hash_join() = default;
-
-hash_join::hash_join(cudf::table_view const& build,
-                     null_equality compare_nulls,
-                     rmm::cuda_stream_view stream)
-  : impl{std::make_unique<const hash_join::hash_join_impl>(build, compare_nulls, stream)}
-{
-}
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-hash_join::inner_join(cudf::table_view const& probe,
-                      null_equality compare_nulls,
-                      std::optional<std::size_t> output_size,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr) const
-{
-  return impl->inner_join(probe, compare_nulls, output_size, stream, mr);
-}
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-hash_join::left_join(cudf::table_view const& probe,
-                     null_equality compare_nulls,
-                     std::optional<std::size_t> output_size,
-                     rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr) const
-{
-  return impl->left_join(probe, compare_nulls, output_size, stream, mr);
-}
-
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-hash_join::full_join(cudf::table_view const& probe,
-                     null_equality compare_nulls,
-                     std::optional<std::size_t> output_size,
-                     rmm::cuda_stream_view stream,
-                     rmm::mr::device_memory_resource* mr) const
-{
-  return impl->full_join(probe, compare_nulls, output_size, stream, mr);
-}
-
-std::size_t hash_join::inner_join_size(cudf::table_view const& probe,
-                                       null_equality compare_nulls,
-                                       rmm::cuda_stream_view stream) const
-{
-  return impl->inner_join_size(probe, compare_nulls, stream);
-}
-
-std::size_t hash_join::left_join_size(cudf::table_view const& probe,
-                                      null_equality compare_nulls,
-                                      rmm::cuda_stream_view stream) const
-{
-  return impl->left_join_size(probe, compare_nulls, stream);
-}
-
-std::size_t hash_join::full_join_size(cudf::table_view const& probe,
-                                      null_equality compare_nulls,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr) const
-{
-  return impl->full_join_size(probe, compare_nulls, stream, mr);
-}
-
-// external APIs
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -356,5 +311,4 @@ std::unique_ptr<table> full_join(table_view const& left,
   return detail::full_join(
     left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
 }
-
 }  // namespace cudf

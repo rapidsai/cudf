@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,7 +138,7 @@ inline auto random_values(size_t size)
   using uniform_distribution =
     typename std::conditional_t<std::is_same_v<T1, bool>,
                                 std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point<T1>::value,
+                                std::conditional_t<std::is_floating_point_v<T1>,
                                                    std::uniform_real_distribution<T1>,
                                                    std::uniform_int_distribution<T1>>>;
 
@@ -262,7 +262,7 @@ void check_string_column(cudf::column_view const& col_lhs,
 }
 
 // Helper function to compare two floating-point column contents
-template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<std::is_floating_point_v<T>>* = nullptr>
 void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs)
 {
   EXPECT_THAT(cudf::test::to_host<T>(rhs).first,
@@ -270,7 +270,7 @@ void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const
 }
 
 // Helper function to compare two column contents
-template <typename T, typename std::enable_if_t<!std::is_floating_point<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<!std::is_floating_point_v<T>>* = nullptr>
 void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs)
 {
   EXPECT_THAT(cudf::test::to_host<T>(rhs).first, ::testing::ElementsAreArray(lhs));
@@ -2188,14 +2188,37 @@ TEST_F(CsvReaderTest, DtypesMap)
   expect_column_data_equal(std::vector<int16_t>{9, 8, 7}, result_table.column(1));
 }
 
-TEST_F(CsvReaderTest, DtypesMapInvalid)
+TEST_F(CsvReaderTest, DtypesMapPartial)
 {
-  std::string csv_in{""};
-
   cudf_io::csv_reader_options in_opts =
-    cudf_io::csv_reader_options::builder(cudf_io::source_info{csv_in.c_str(), csv_in.size()})
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{nullptr, 0})
       .names({"A", "B"})
       .dtypes({{"A", dtype<int16_t>()}});
+  {
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto view = result.tbl->view();
+    ASSERT_EQ(type_id::INT16, view.column(0).type().id());
+    // Default to String if there's no data
+    ASSERT_EQ(type_id::STRING, view.column(1).type().id());
+  }
+
+  in_opts.set_dtypes({{"B", dtype<uint32_t>()}});
+  {
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto view = result.tbl->view();
+    ASSERT_EQ(type_id::STRING, view.column(0).type().id());
+    ASSERT_EQ(type_id::UINT32, view.column(1).type().id());
+  }
+}
+
+TEST_F(CsvReaderTest, DtypesArrayInvalid)
+{
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{nullptr, 0})
+      .names({"A", "B", "C"})
+      .dtypes(std::vector<cudf::data_type>{dtype<int16_t>(), dtype<int8_t>()});
 
   EXPECT_THROW(cudf_io::read_csv(in_opts), cudf::logic_error);
 }
