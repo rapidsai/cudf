@@ -30,7 +30,6 @@ from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    is_decimal_dtype,
     is_dict_like,
     is_dtype_equal,
     is_scalar,
@@ -73,21 +72,6 @@ class Frame(BinaryOperand, Scannable):
     _names: Optional[List]
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
-
-    _VALID_SCANS = {
-        "cumsum",
-        "cumprod",
-        "cummin",
-        "cummax",
-    }
-
-    # Necessary because the function names don't directly map to the docs.
-    _SCAN_DOCSTRINGS = {
-        "cumsum": {"op_name": "cumulative sum"},
-        "cumprod": {"op_name": "cumulative product"},
-        "cummin": {"op_name": "cumulative min"},
-        "cummax": {"op_name": "cumulative max"},
-    }
 
     def __init__(self, data=None, index=None):
         if data is None:
@@ -2885,95 +2869,6 @@ class Frame(BinaryOperand, Scannable):
             numeric_only=numeric_only,
             **kwargs,
         )
-
-    # Scans
-    @_cudf_nvtx_annotate
-    def _scan(self, op, axis=None, skipna=True):
-        """
-        Return {op_name} of the {cls}.
-
-        Parameters
-        ----------
-
-        axis: {{index (0), columns(1)}}
-            Axis for the function to be applied on.
-        skipna: bool, default True
-            Exclude NA/null values. If an entire row/column is NA,
-            the result will be NA.
-
-
-        Returns
-        -------
-        {cls}
-
-        Examples
-        --------
-        **Series**
-
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.cumsum()
-        0    1
-        1    6
-        2    8
-        3    12
-        4    15
-
-        **DataFrame**
-
-        >>> import cudf
-        >>> df = cudf.DataFrame({{'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]}})
-        >>> s.cumsum()
-            a   b
-        0   1   7
-        1   3  15
-        2   6  24
-        3  10  34
-        """
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                f"Index.{op} is deprecated and will be removed.",
-                FutureWarning,
-            )
-
-        cast_to_int = op in ("cumsum", "cumprod")
-        skipna = True if skipna is None else skipna
-
-        results = {}
-        for name, col in self._data.items():
-            if skipna:
-                try:
-                    result_col = col.nans_to_nulls()
-                except AttributeError:
-                    result_col = col
-            else:
-                if col.has_nulls(include_nan=True):
-                    # Workaround as find_first_value doesn't seem to work
-                    # incase of bools.
-                    first_index = int(
-                        col.isnull().astype("int8").find_first_value(1)
-                    )
-                    result_col = col.copy()
-                    result_col[first_index:] = None
-                else:
-                    result_col = col
-
-            if (
-                cast_to_int
-                and not is_decimal_dtype(result_col.dtype)
-                and (
-                    np.issubdtype(result_col.dtype, np.integer)
-                    or np.issubdtype(result_col.dtype, np.bool_)
-                )
-            ):
-                # For reductions that accumulate a value (e.g. sum, not max)
-                # pandas returns an int64 dtype for all int or bool dtypes.
-                result_col = result_col.astype(np.int64)
-            results[name] = getattr(result_col, op)()
-        # TODO: This will work for Index because it's passing self._index
-        # (which is None), but eventually we may want to remove that parameter
-        # for Index._from_data and simplify.
-        return self._from_data(results, self._index)
 
     @_cudf_nvtx_annotate
     @ioutils.doc_to_json()
