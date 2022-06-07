@@ -310,6 +310,7 @@ ConfigureTest(TRANSPOSE_TEST transpose/transpose_test.cpp)
 # * table tests -----------------------------------------------------------------------------------
 ConfigureTest(
   TABLE_TEST table/table_tests.cpp table/table_view_tests.cu table/row_operators_tests.cpp
+  table/experimental_row_operator_tests.cu
 )
 
 # ##################################################################################################
