@@ -38,7 +38,7 @@ class get_json_object_options {
   // individual string values are returned with quotes stripped.
   bool strip_quotes_from_single_strings = true;
 
-  // nulls are returned when an object does not contain the requested field
+  // Whether to return nulls when an object does not contain the requested field.
   bool missing_fields_as_nulls = false;
 
  public:
@@ -84,11 +84,9 @@ class get_json_object_options {
   }
 
   /**
-   * @brief Returns true/false depending on whether a field not contained by an object is
-   * interpreted as null.
+   * @brief Whether a field not contained by an object is to be interpreted as null.
    *
-   * When set to true, if an object is queried for a field it does not contain a null is returned
-   * Example:
+   * When set to true, if an object is queried for a field it does not contain, a null is returned.
    *
    * @code{.pseudo}
    *

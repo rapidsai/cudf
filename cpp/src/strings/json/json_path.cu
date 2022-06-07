@@ -332,11 +332,9 @@ class json_state : private parser {
       // next
       parse_result result = next_element_internal(false);
       if (result != parse_result::SUCCESS) {
-        if (options.get_missing_fields_as_nulls() && result == parse_result::EMPTY) {
-          return parse_result::MISSING_FIELD;
-        } else {
-          return result;
-        }
+        return options.get_missing_fields_as_nulls() && result == parse_result::EMPTY
+                 ? parse_result::MISSING_FIELD
+                 : result;
       }
     } while (true);
 

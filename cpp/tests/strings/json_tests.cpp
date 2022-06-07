@@ -973,90 +973,34 @@ TEST_F(JsonPathTests, MissingFieldsAsNulls)
 {
   std::string input_string{
     // clang-format off
-  "{"
-    "\"tup\":"
-    "["
-        "{\"id\":\"1\",\"array\":[1,2]},"
-        "{\"id\":\"2\"},"
-        "{\"id\":\"3\",\"array\":[3,4]},"
-        "{\"id\":\"4\", \"a\": {\"x\": \"5\", \"y\": \"6\"}}"
-    "]"
-  "}"
+    "{"
+      "\"tup\":"
+      "["
+          "{\"id\":\"1\",\"array\":[1,2]},"
+          "{\"id\":\"2\"},"
+          "{\"id\":\"3\",\"array\":[3,4]},"
+          "{\"id\":\"4\", \"a\": {\"x\": \"5\", \"y\": \"6\"}}"
+      "]"
+    "}"
     // clang-format on
   };
-  {
+  auto do_test = [&input_string](auto const& json_path_string, auto const& expected_string) {
     cudf::test::strings_column_wrapper input{input_string};
-    {
-      std::string json_path("$.tup[1].array");
 
-      cudf::strings::get_json_object_options options;
-      options.set_missing_fields_as_nulls(true);
+    cudf::strings::get_json_object_options options;
+    options.set_missing_fields_as_nulls(true);
 
-      auto result =
-        cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
+    auto const result =
+      cudf::strings::get_json_object(cudf::strings_column_view(input), {json_path_string}, options);
 
-      // expect
-      result->set_null_count(cudf::UNKNOWN_NULL_COUNT);
-      cudf::test::strings_column_wrapper expected({"null"}, {1});
+    // expect
+    cudf::test::strings_column_wrapper expected({expected_string}, {1});
 
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
-    }
-  }
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
+  };
 
-  {
-    cudf::test::strings_column_wrapper input{input_string};
-    {
-      std::string json_path("$.tup[*].array");
-
-      cudf::strings::get_json_object_options options;
-      options.set_missing_fields_as_nulls(true);
-
-      auto result =
-        cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
-
-      // expect
-      result->set_null_count(cudf::UNKNOWN_NULL_COUNT);
-      cudf::test::strings_column_wrapper expected({"[[1,2],null,[3,4],null]"}, {1});
-
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
-    }
-  }
-
-  {
-    cudf::test::strings_column_wrapper input{input_string};
-    {
-      std::string json_path("$.x[*].array");
-
-      cudf::strings::get_json_object_options options;
-      options.set_missing_fields_as_nulls(true);
-
-      auto result =
-        cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
-
-      // expect
-      result->set_null_count(cudf::UNKNOWN_NULL_COUNT);
-      cudf::test::strings_column_wrapper expected({"null"}, {1});
-
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
-    }
-  }
-
-  {
-    cudf::test::strings_column_wrapper input{input_string};
-    {
-      std::string json_path("$.tup[*].a.x");
-
-      cudf::strings::get_json_object_options options;
-      options.set_missing_fields_as_nulls(true);
-
-      auto result =
-        cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
-
-      // expect
-      result->set_null_count(cudf::UNKNOWN_NULL_COUNT);
-      cudf::test::strings_column_wrapper expected({"[null,null,null,\"5\"]"}, {1});
-
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
-    }
-  }
+  do_test("$.tup[1].array", "null");
+  do_test("$.tup[*].array", "[[1,2],null,[3,4],null]");
+  do_test("$.x[*].array", "null");
+  do_test("$.tup[*].a.x", "[null,null,null,\"5\"]");
 }
