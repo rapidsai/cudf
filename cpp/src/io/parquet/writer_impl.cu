@@ -83,17 +83,6 @@ parquet::Compression to_parquet_compression(compression_type compression)
   }
 }
 
-template <typename T>
-void print(rmm::device_uvector<T> const& d_vec, std::string label = "")
-{
-  std::vector<T> h_vec(d_vec.size());
-  cudaMemcpy(h_vec.data(), d_vec.data(), d_vec.size() * sizeof(T), cudaMemcpyDeviceToHost);
-  printf("%s (%lu)\t", label.c_str(), h_vec.size());
-  for (auto&& i : h_vec)
-    std::cout << i << " ";
-  printf("\n");
-}
-
 }  // namespace
 
 struct aggregate_writer_metadata {
@@ -1106,7 +1095,6 @@ void snappy_compress(device_span<device_span<uint8_t const> const> comp_in,
                       comp_out.end(),
                       compressed_data_ptrs.begin(),
                       [] __device__(auto const& out) { return out.data(); });
-    // print(compressed_data_ptrs, "compressed_data_ptrs");
     nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
                                                      uncompressed_data_sizes.data(),
                                                      max_page_uncomp_data_size,
@@ -1117,7 +1105,6 @@ void snappy_compress(device_span<device_span<uint8_t const> const> comp_in,
                                                      compressed_bytes_written.data(),
                                                      nvcompBatchedSnappyDefaultOpts,
                                                      stream.value());
-    // print(compressed_bytes_written, "compressed_bytes_written");
     CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in snappy compression");
 
     // nvcomp also doesn't use comp_out.status . It guarantees that given enough output space,

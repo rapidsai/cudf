@@ -308,7 +308,6 @@ __global__ void __launch_bounds__(128)
       __syncwarp();
       if (t == 0) {
         if (not pages.empty()) pages[ck_g.first_page] = page_g;
-        // printf("pagesize %d\n", page_g.max_data_size);
         if (not page_sizes.empty()) page_sizes[ck_g.first_page] = page_g.max_data_size;
         if (page_grstats) page_grstats[ck_g.first_page] = pagestats_g;
       }
@@ -405,8 +404,6 @@ __global__ void __launch_bounds__(128)
         if (t == 0) {
           if (not pages.empty()) { pages[ck_g.first_page + num_pages] = page_g; }
           if (not page_sizes.empty()) {
-            // printf("page no %d pagesize %d\n", ck_g.first_page + num_pages,
-            // page_g.max_data_size);
             page_sizes[ck_g.first_page + num_pages] = page_g.max_data_size;
           }
           if (page_grstats) { page_grstats[ck_g.first_page + num_pages] = pagestats_g; }
@@ -442,7 +439,6 @@ __global__ void __launch_bounds__(128)
       ck_g.page_headers_size  = page_headers_size;
       ck_g.max_page_data_size = max_page_data_size;
       if (not comp_page_sizes.empty()) ck_g.compressed_size = comp_page_offset;
-      // printf("compressed_size %d\n", ck_g.compressed_size);
       pagestats_g.start_chunk = ck_g.first_page + ck_g.use_dictionary;  // Exclude dictionary
       pagestats_g.num_chunks  = num_pages - ck_g.use_dictionary;
     }
@@ -1107,7 +1103,6 @@ __global__ void __launch_bounds__(128, 8)
     if (not comp_in.empty()) {
       comp_in[blockIdx.x]  = {base, actual_data_size};
       comp_out[blockIdx.x] = {s->page.compressed_data + s->page.max_hdr_size, compressed_bfr_size};
-      // printf("compressed_bfr_size: %d\n", compressed_bfr_size);
     }
     pages[blockIdx.x] = s->page;
     if (not comp_stats.empty()) {
