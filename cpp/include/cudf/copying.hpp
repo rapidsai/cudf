@@ -86,6 +86,7 @@ std::unique_ptr<table> gather(
 
 /**
  * @brief Reverses the rows within a table.
+ *
  * Creates a new table that is the reverse of @p source_table.
  * Example:
  * ```
@@ -103,6 +104,7 @@ std::unique_ptr<table> reverse(
 
 /**
  * @brief Reverses the elements of a column
+ *
  * Creates a new column that is the reverse of @p source_column.
  * Example:
  * ```
@@ -229,6 +231,7 @@ std::unique_ptr<column> empty_like(scalar const& input);
 
 /**
  * @brief Creates an uninitialized new column of the same size and type as the `input`.
+ *
  * Supports only fixed-width types.
  *
  * @param[in] input Immutable view of input column to emulate
@@ -244,6 +247,7 @@ std::unique_ptr<column> allocate_like(
 
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
+ *
  * Supports only fixed-width types.
  *
  * @param[in] input Immutable view of input column to emulate
