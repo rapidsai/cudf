@@ -888,20 +888,15 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         stream);
   chunks.device_to_host(stream, true);
 
-  auto chunk_pages = ::cudf::detail::make_counting_transform_iterator(
-    0, [chunks = chunks.host_view().flat_view()](auto i) { return chunks[i].num_pages; });
-  auto num_pages = std::reduce(chunk_pages, chunk_pages + chunks.host_view().flat_view().size());
-  std::cout << "Total number of pages: " << num_pages << std::endl;
-
-  // TODO: replace with exclusive scan
-  int num_pages2 = 0;
+  int num_pages = 0;
   for (auto& chunk : chunks.host_view().flat_view()) {
-    chunk.first_page = num_pages2;
-    num_pages2 += chunk.num_pages;
+    chunk.first_page = num_pages;
+    num_pages += chunk.num_pages;
   }
-  std::cout << "Total number of pages: " << num_pages2 << std::endl;
   chunks.host_to_device(stream);
 
+  // Now that we know the number of pages, allocate an array to hold per page size and get it
+  // populated
   hostdevice_vector<size_type> page_sizes(num_pages, stream);
   gpu::InitEncoderPages(chunks,
                         {},
@@ -916,6 +911,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                         stream);
   page_sizes.device_to_host(stream, true);
 
+  // Get per-page max compressed size
   hostdevice_vector<size_type> comp_page_sizes(0, num_pages, stream);
   auto pages_comp_max_size = 0;
   for (auto page_size : page_sizes) {
@@ -925,9 +921,9 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
     pages_comp_max_size += page_comp_max_size;
     comp_page_sizes.insert(page_comp_max_size);
   }
-  std::cout << "Page compression max size: " << std::setw(10) << pages_comp_max_size << std::endl;
   comp_page_sizes.host_to_device(stream);
 
+  // Use per-page max compressed size to calculate chunk.compressed_size
   gpu::InitEncoderPages(chunks,
                         {},
                         {},
@@ -1549,8 +1545,6 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
   // Clear compressed buffer size if compression has been turned off
   if (compression_ == parquet::Compression::UNCOMPRESSED) { max_comp_bfr_size = 0; }
-
-  std::cout << "Max compressed buffer size: " << std::setw(10) << max_comp_bfr_size << std::endl;
 
   // Initialize data pointers in batch
   uint32_t num_stats_bfr =
