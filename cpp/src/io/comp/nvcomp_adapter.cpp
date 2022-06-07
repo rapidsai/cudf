@@ -37,8 +37,35 @@
 #define NVCOMP_HAS_DEFLATE 0
 #endif
 
+#if NVCOMP_MAJOR_VERSION > 2 or (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION > 3) or \
+  (NVCOMP_MAJOR_VERSION == 2 and NVCOMP_MINOR_VERSION == 3 and NVCOMP_PATCH_VERSION >= 1)
+#define NVCOMP_HAS_TEMPSIZE_EX 1
+#else
+#define NVCOMP_HAS_TEMPSIZE_EX 0
+#endif
+
 namespace cudf::io::nvcomp {
 
+#if NVCOMP_HAS_TEMPSIZE_EX
+// Dispatcher for nvcompBatched<format>DecompressGetTempSizeEx
+template <typename... Args>
+auto batched_decompress_get_temp_size_ex(compression_type compression, Args&&... args)
+{
+  switch (compression) {
+    case compression_type::SNAPPY:
+      return nvcompBatchedSnappyDecompressGetTempSizeEx(std::forward<Args>(args)...);
+#if NVCOMP_HAS_ZSTD
+    case compression_type::ZSTD:
+      return nvcompBatchedZstdDecompressGetTempSizeEx(std::forward<Args>(args)...);
+#endif
+#if NVCOMP_HAS_DEFLATE
+    case compression_type::DEFLATE:
+      return nvcompBatchedDeflateDecompressGetTempSizeEx(std::forward<Args>(args)...);
+#endif
+    default: CUDF_FAIL("Unsupported compression type");
+  }
+}
+#else
 // Dispatcher for nvcompBatched<format>DecompressGetTempSize
 template <typename... Args>
 auto batched_decompress_get_temp_size(compression_type compression, Args&&... args)
@@ -57,6 +84,7 @@ auto batched_decompress_get_temp_size(compression_type compression, Args&&... ar
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
+#endif
 
 // Dispatcher for nvcompBatched<format>DecompressAsync
 template <typename... Args>
@@ -79,11 +107,17 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
 
 size_t batched_decompress_temp_size(compression_type compression,
                                     size_t num_chunks,
-                                    size_t max_uncomp_chunk_size)
+                                    size_t max_uncomp_chunk_size,
+                                    size_t max_total_uncomp_size)
 {
   size_t temp_size = 0;
+#if NVCOMP_HAS_TEMPSIZE_EX
+  nvcompStatus_t nvcomp_status = batched_decompress_get_temp_size_ex(
+    compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
+#else
   nvcompStatus_t nvcomp_status =
     batched_decompress_get_temp_size(compression, num_chunks, max_uncomp_chunk_size, &temp_size);
+#endif
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
                "Unable to get scratch size for decompression");
 
@@ -95,6 +129,7 @@ void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t> const> outputs,
                         device_span<decompress_status> statuses,
                         size_t max_uncomp_chunk_size,
+                        size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream)
 {
   // TODO Consolidate config use to a common location
@@ -116,7 +151,9 @@ void batched_decompress(compression_type compression,
   rmm::device_uvector<nvcompStatus_t> nvcomp_statuses(num_chunks, stream);
   // Temporary space required for decompression
   rmm::device_buffer scratch(
-    batched_decompress_temp_size(compression, num_chunks, max_uncomp_chunk_size), stream);
+    batched_decompress_temp_size(
+      compression, num_chunks, max_uncomp_chunk_size, max_total_uncomp_size),
+    stream);
   auto const nvcomp_status = batched_decompress_async(compression,
                                                       nvcomp_args.input_data_ptrs.data(),
                                                       nvcomp_args.input_data_sizes.data(),
