@@ -46,8 +46,6 @@
 #include <utility>
 #include <vector>
 
-#include <cudf_test/column_utilities.hpp>
-
 namespace cudf {
 namespace detail {
 
@@ -68,28 +66,11 @@ struct reduce_index_fn {
       atomicMin(&d_output[inserted_idx], idx);
     } else if constexpr (keep == duplicate_keep_option::KEEP_LAST) {
       // Store the greatest index of all keys that are equal.
-      //      auto x = atomicMax(&d_output[inserted_idx], idx);
-      auto const atomic_idx = cuda::atomic_ref<size_type, cuda::thread_scope::thread_scope_device>{
-        d_output[inserted_idx]};
-      auto x = atomic_idx.fetch_max(idx, cuda::std::memory_order_relaxed);
-      printf("last %d, %d => %d\n", inserted_idx, idx, x);
+      atomicMax(&d_output[inserted_idx], idx);
     } else {
       // Count the number of duplicates for key.
       atomicAdd(&d_output[inserted_idx], size_type{1});
     }
-
-    //    if constexpr (keep == duplicate_keep_option::KEEP_FIRST) {
-    //      // Store the smallest index of all keys that are equal.
-    //      atomic_idx.fetch_min(key, cuda::std::memory_order_relaxed);
-    //    } else if constexpr (keep == duplicate_keep_option::KEEP_LAST) {
-    //      // Store the greatest index of all keys that are equal.
-    //      auto x = atomic_idx.fetch_max(key, cuda::std::memory_order_relaxed);
-    //      printf("last %d, %d => %d\n", idx, key, x);
-    //    } else {
-    //      printf("none\n");
-    //      // Count the number of duplicates for key.
-    //      atomic_idx.fetch_add(size_type{1}, cuda::std::memory_order_relaxed);
-    //    }
   }
 
   size_type* const d_output;
@@ -160,10 +141,8 @@ std::unique_ptr<table> distinct(table_view const& input,
     return size_type{0};  // keep == KEEP_NONE
   }();
 
-  thrust::uninitialized_fill(rmm::exec_policy(stream),
-                             reduced_indices.begin(),
-                             reduced_indices.begin() + key_size,
-                             init_value);
+  thrust::uninitialized_fill(
+    rmm::exec_policy(stream), reduced_indices.begin(), reduced_indices.end(), init_value);
 
   auto const do_reduce = [key_size, stream](auto const& fn) {
     thrust::for_each(rmm::exec_policy(stream),
@@ -198,32 +177,32 @@ std::unique_ptr<table> distinct(table_view const& input,
     default:;  // KEEP_ANY has already been handled
   }
 
-  {
-    auto const t = column_view(data_type{type_to_id<size_type>()},
-                               static_cast<size_type>(reduced_indices.size()),
-                               reduced_indices.data());
-
-    printf("\n\n kep %d, line %d\n", static_cast<int>(keep), __LINE__);
-    cudf::test::print(t);
-  }
-
   // Filter out the invalid indices, which are indices of the duplicate keys
   // (the first duplicate key already has valid index being written in the previous step).
-  if (keep == duplicate_keep_option::KEEP_FIRST || keep == duplicate_keep_option::KEEP_LAST) {
+  if (keep == duplicate_keep_option::KEEP_NONE) {
     return cudf::detail::copy_if(
       table_view{{input}},
-      [init_value, reduced_indices = reduced_indices.begin()] __device__(auto const idx) {
-        return reduced_indices[idx] != init_value;
+      [reduced_indices = reduced_indices.begin()] __device__(auto const idx) {
+        return reduced_indices[idx] == size_type{1};
       },
       stream,
       mr);
   }
 
+  auto out_markers = rmm::device_uvector<bool>(key_size, stream);
+  thrust::uninitialized_fill(
+    rmm::exec_policy(stream), out_markers.begin(), out_markers.end(), false);
+  thrust::scatter_if(rmm::exec_policy(stream),
+                     thrust::make_constant_iterator(true, 0),
+                     thrust::make_constant_iterator(true, key_size),
+                     reduced_indices.begin(),
+                     reduced_indices.begin(),
+                     out_markers.begin(),
+                     [init_value] __device__(auto const idx) { return idx != init_value; });
+
   return cudf::detail::copy_if(
     table_view{{input}},
-    [reduced_indices = reduced_indices.begin()] __device__(auto const idx) {
-      return reduced_indices[idx] == size_type{1};
-    },
+    [out_markers = out_markers.begin()] __device__(auto const idx) { return out_markers[idx]; },
     stream,
     mr);
 }
