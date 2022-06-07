@@ -3600,72 +3600,11 @@ unordered()
   return cudf::test::strings_column_wrapper(elements, elements + 20000);
 }
 
-// ----- struct_view {"nestedInt" : {"Int" : 0 }, "float" : 1}
-
-template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper>
-ascending()
-{
-  using T1     = int32_t;
-  auto int_col = cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::lowest(),
-                                                                  T1(-100),
-                                                                  T1(-10),
-                                                                  T1(-10),
-                                                                  T1(0),
-                                                                  T1(10),
-                                                                  T1(10),
-                                                                  T1(100),
-                                                                  std::numeric_limits<T1>::max()});
-  auto nestedInt_col = cudf::test::structs_column_wrapper{{int_col}};
-  auto float_col     = ascending<float>();
-  return cudf::test::structs_column_wrapper{{nestedInt_col, float_col}};
-}
-
-template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper>
-descending()
-{
-  using T1 = int32_t;
-  auto int_col =
-    cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::max(),
-                                                     T1(100),
-                                                     T1(10),
-                                                     T1(10),
-                                                     T1(0),
-                                                     T1(-10),
-                                                     T1(-10),
-                                                     T1(-100),
-                                                     std::numeric_limits<T1>::lowest()});
-  auto nestedInt_col = cudf::test::structs_column_wrapper{{int_col}};
-  auto float_col     = descending<float>();
-  return cudf::test::structs_column_wrapper{{nestedInt_col, float_col}};
-}
-
-template <typename T>
-std::enable_if_t<std::is_same_v<T, cudf::struct_view>, cudf::test::structs_column_wrapper>
-unordered()
-{
-  using T1 = int32_t;
-  auto int_col =
-    cudf::test::fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::max(),
-                                                     T1(-100),
-                                                     T1(10),
-                                                     T1(-10),
-                                                     T1(0),
-                                                     T1(10),
-                                                     T1(-10),
-                                                     T1(100),
-                                                     std::numeric_limits<T1>::lowest()});
-  auto nestedInt_col = cudf::test::structs_column_wrapper{{int_col}};
-  auto float_col     = unordered<float>();
-  return cudf::test::structs_column_wrapper{{nestedInt_col, float_col}};
-}
-
 }  // namespace testdata
 }  // anonymous namespace
 
 // for debugging tests
-void printHex(uint8_t* v, size_t len)
+void printHex(const uint8_t* v, size_t len)
 {
   for (size_t j = 0; j < len; j += 16) {
     for (size_t k = 0; k < 16 && k + j < len; k++)
@@ -3720,7 +3659,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
     cudf_io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
 #if 0
     printf("%d %d\n", fmd.schema[i+1].type, fmd.schema[i+1].converted_type);
-    printHex(ci_buf->data(), ci_buf.size());
+    printHex(ci_buf->data(), ci_buf->size());
 #endif
     EXPECT_TRUE(cp.read(&ci));
 
@@ -3809,7 +3748,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
   auto col1 = cudf::test::fixed_width_column_wrapper<int8_t>(col1_data.begin(), col1_data.end());
   auto col2 = cudf::test::fixed_width_column_wrapper<int16_t>(col2_data.begin(), col2_data.end());
   auto col3 = cudf::test::fixed_width_column_wrapper<int32_t>(col3_data.begin(), col3_data.end());
-  auto col4 = cudf::test::fixed_width_column_wrapper<int64_t>(col4_data.begin(), col4_data.end());
+  auto col4 = cudf::test::fixed_width_column_wrapper<uint64_t>(col4_data.begin(), col4_data.end());
   auto col5 = cudf::test::fixed_width_column_wrapper<float>(col5_data.begin(), col5_data.end());
   auto col6 = cudf::test::fixed_width_column_wrapper<double>(col6_data.begin(), col6_data.end());
 
@@ -3848,8 +3787,9 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
     auto& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
       // read in offset index
+      auto& chunk = rg.columns[c];
+
       cudf_io::parquet::OffsetIndex oi;
-      auto& chunk       = rg.columns[c];
       const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
       cudf_io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
       EXPECT_TRUE(cp.read(&oi));
@@ -3883,6 +3823,91 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
       int8_t ptype = fmd.schema[c + 1].type;
       int8_t ctype = fmd.schema[c + 1].converted_type;
       // printHex(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      for (size_t p = 0; p < ci.min_values.size(); p++)
+        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+      for (size_t p = 0; p < ci.max_values.size(); p++)
+        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+    }
+  }
+}
+
+TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
+{
+  auto c0  = testdata::ascending<uint32_t>();
+  auto sc0 = testdata::ascending<cudf::string_view>();
+  auto sc1 = testdata::descending<int32_t>();
+  auto sc2 = testdata::unordered<int64_t>();
+
+  auto listgen = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? i / 2 : 20000 - (i / 2); });
+  auto list    = cudf::test::fixed_width_column_wrapper<int32_t>(listgen, listgen + 40000);
+  auto offgen  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>(offgen, offgen + 20001);
+
+  auto c2 = cudf::make_lists_column(20000, offsets.release(), list.release(), 0, {});
+
+  std::vector<std::unique_ptr<cudf::column>> struct_children;
+  struct_children.push_back(sc0.release());
+  struct_children.push_back(sc1.release());
+  struct_children.push_back(sc2.release());
+  cudf::test::structs_column_wrapper c1(std::move(struct_children));
+
+  table_view expected({c0, c1, *c2});
+
+  auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexStruct.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(5000);
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  EXPECT_EQ(read_footer(source, &fmd), 0);
+
+  size_t colidxs[] = {1, 3, 4, 5, 8};
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      size_t colidx = colidxs[c];
+      auto& chunk = rg.columns[c];
+      cudf_io::parquet::CompactProtocolReader cp;
+
+      cudf_io::parquet::OffsetIndex oi;
+      const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
+      cp.init(oi_buf->data(), oi_buf->size());
+      EXPECT_TRUE(cp.read(&oi));
+
+      // loop over offsets, read page header, make sure it's a data page
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        cudf_io::parquet::PageHeader ph;
+        auto& page_loc      = oi.page_locations[o];
+        const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
+        cp.init(page_buf->data(), page_buf->size());
+        EXPECT_TRUE(cp.read(&ph));
+        EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
+        // last column has 2 values per row
+        EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size()-1 ? 2 : 1), num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+
+      // check column index.
+      cudf_io::parquet::ColumnIndex ci;
+      const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
+      cp.init(ci_buf->data(), ci_buf->size());
+      EXPECT_TRUE(cp.read(&ci));
+      auto& chunk_meta = chunk.meta_data;
+
+      // decode min and max from statistics blob
+      cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      cudf_io::parquet::Statistics stats;
+      EXPECT_TRUE(cp.read(&stats));
+
+      // loop over page stats.  stats.min <= page.min && stats.max >= page.max
+      int8_t ptype = fmd.schema[colidx].type;
+      int8_t ctype = fmd.schema[colidx].converted_type;
       for (size_t p = 0; p < ci.min_values.size(); p++)
         EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
       for (size_t p = 0; p < ci.max_values.size(); p++)
