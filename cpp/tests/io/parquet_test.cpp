@@ -3871,7 +3871,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
     auto& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
       size_t colidx = colidxs[c];
-      auto& chunk = rg.columns[c];
+      auto& chunk   = rg.columns[c];
       cudf_io::parquet::CompactProtocolReader cp;
 
       cudf_io::parquet::OffsetIndex oi;
@@ -3889,7 +3889,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
         EXPECT_TRUE(cp.read(&ph));
         EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
         // last column has 2 values per row
-        EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size()-1 ? 2 : 1), num_vals);
+        EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
         num_vals += ph.data_page_header.num_values;
       }
 
