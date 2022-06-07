@@ -1,7 +1,6 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import itertools
-import warnings
 from collections import abc
 from typing import Dict, Optional
 
@@ -758,7 +757,7 @@ def get_dummies(
         return cudf.DataFrame._from_data(data, index=ser._index)
 
 
-def merge_sorted(
+def _merge_sorted(
     objs,
     keys=None,
     by_index=False,
@@ -784,32 +783,13 @@ def merge_sorted(
         be used in the output dataframe.
     ascending : bool, default True
         Sorting is in ascending order, otherwise it is descending
-    na_position : {‘first’, ‘last’}, default ‘last’
+    na_position : {'first', 'last'}, default 'last'
         'first' nulls at the beginning, 'last' nulls at the end
 
     Returns
     -------
     A new, lexicographically sorted, DataFrame/Series.
     """
-
-    warnings.warn(
-        "merge_sorted is deprecated and will be removed in a "
-        "future release.",
-        FutureWarning,
-    )
-    return _merge_sorted(
-        objs, keys, by_index, ignore_index, ascending, na_position
-    )
-
-
-def _merge_sorted(
-    objs,
-    keys=None,
-    by_index=False,
-    ignore_index=False,
-    ascending=True,
-    na_position="last",
-):
     if not pd.api.types.is_list_like(objs):
         raise TypeError("objs must be a list-like of Frame-like objects")
 

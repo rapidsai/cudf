@@ -17,6 +17,7 @@
 #include "nvcomp_adapter.cuh"
 
 #include <cudf/utilities/error.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <nvcomp/snappy.h>
 
@@ -26,6 +27,14 @@
 #define NVCOMP_HAS_ZSTD 1
 #else
 #define NVCOMP_HAS_ZSTD 0
+#endif
+
+#define NVCOMP_DEFLATE_HEADER <nvcomp/deflate.h>
+#if __has_include(NVCOMP_DEFLATE_HEADER)
+#include NVCOMP_DEFLATE_HEADER
+#define NVCOMP_HAS_DEFLATE 1
+#else
+#define NVCOMP_HAS_DEFLATE 0
 #endif
 
 namespace cudf::io::nvcomp {
@@ -40,6 +49,10 @@ auto batched_decompress_get_temp_size(compression_type compression, Args&&... ar
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressGetTempSize(std::forward<Args>(args)...);
 #endif
+#if NVCOMP_HAS_DEFLATE
+    case compression_type::DEFLATE:
+      return nvcompBatchedDeflateDecompressGetTempSize(std::forward<Args>(args)...);
+#endif
     default: CUDF_FAIL("Unsupported compression type");
   }
 };
@@ -53,6 +66,10 @@ auto batched_decompress_async(compression_type compression, Args&&... args)
 #if NVCOMP_HAS_ZSTD
     case compression_type::ZSTD:
       return nvcompBatchedZstdDecompressAsync(std::forward<Args>(args)...);
+#endif
+#if NVCOMP_HAS_DEFLATE
+    case compression_type::DEFLATE:
+      return nvcompBatchedDeflateDecompressAsync(std::forward<Args>(args)...);
 #endif
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -76,6 +93,17 @@ void batched_decompress(compression_type compression,
                         size_t max_uncomp_chunk_size,
                         rmm::cuda_stream_view stream)
 {
+  // TODO Consolidate config use to a common location
+  if (compression == compression_type::ZSTD) {
+#if NVCOMP_HAS_ZSTD
+    CUDF_EXPECTS(cudf::io::detail::nvcomp_integration::is_all_enabled(),
+                 "Zstandard compression is experimental, you can enable it through "
+                 "`LIBCUDF_NVCOMP_POLICY` environment variable.");
+#else
+    CUDF_FAIL("nvCOMP 2.3 or newer is required for Zstandard compression");
+#endif
+  }
+
   auto const num_chunks = inputs.size();
 
   // cuDF inflate inputs converted to nvcomp inputs
