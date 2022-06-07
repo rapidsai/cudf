@@ -8,6 +8,7 @@ from functools import cached_property
 from typing import Any, Iterable, List, Tuple, Union
 
 import numpy as np
+import pandas as pd
 
 import cudf
 from cudf._lib import groupby as libgroupby
@@ -822,7 +823,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             result = result._align_to_index(
                 self.grouping.keys, how="right", allow_non_unique=True
             )
-            result = result.reset_index(drop=True)
+            result.index = self.obj.index
         return result
 
     def rolling(self, *args, **kwargs):
@@ -1663,6 +1664,10 @@ class _Grouping(Serializable):
                     self._handle_mapping(by)
                 elif isinstance(by, Grouper):
                     self._handle_grouper(by)
+                elif isinstance(by, pd.Series):
+                    self._handle_series(cudf.Series.from_pandas(by))
+                elif isinstance(by, pd.Index):
+                    self._handle_index(cudf.Index.from_pandas(by))
                 else:
                     try:
                         self._handle_label(by)
