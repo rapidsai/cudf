@@ -16,11 +16,10 @@
 
 #include <cudf_test/base_fixture.hpp>
 
+#include <cudf/filling.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream.hpp>
-
-#include <cstring>
 
 TEST(ExpectsTest, FalseCondition)
 {
@@ -82,6 +81,25 @@ TEST(StreamCheck, CatchFailedKernel)
   CUDA_EXPECT_THROW_MESSAGE(CUDF_CHECK_CUDA(stream.value()),
                             "cudaErrorInvalidConfiguration "
                             "invalid configuration argument");
+}
+
+__global__ void kernel(int* p) { *p = 42; }
+
+TEST(DeathTest, CudaFatalError)
+{
+  testing::FLAGS_gtest_death_test_style = "threadsafe";
+  auto call_kernel                      = []() {
+    int* p;
+    cudaMalloc(&p, 2 * sizeof(int));
+    int* misaligned = (int*)(reinterpret_cast<char*>(p) + 1);
+    kernel<<<1, 1>>>(misaligned);
+    try {
+      CUDF_CUDA_TRY(cudaDeviceSynchronize());
+    } catch (const cudf::fatal_cuda_error& fe) {
+      std::abort();
+    }
+  };
+  ASSERT_DEATH(call_kernel(), "");
 }
 
 #ifndef NDEBUG

@@ -639,7 +639,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if columns is not None:
                 self._data = data._data
                 self._reindex(
-                    columns=columns, index=index, deep=False, inplace=True
+                    column_names=columns, index=index, deep=False, inplace=True
                 )
             else:
                 self._data = data._data
@@ -2181,128 +2181,113 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_cudf_nvtx_annotate
-    def _reindex(
-        self, columns, dtypes=None, deep=False, index=None, inplace=False
-    ):
-        """
-        Helper for `.reindex`
-
-        Parameters
-        ----------
-        columns : array-like
-            The list of columns to select from the Frame,
-            if ``columns`` is a superset of ``Frame.columns`` new
-            columns are created.
-        dtypes : dict
-            Mapping of dtypes for the empty columns being created.
-        deep : boolean, optional, default False
-            Whether to make deep copy or shallow copy of the columns.
-        index : Index or array-like, default None
-            The ``index`` to be used to reindex the Frame with.
-        inplace : bool, default False
-            Whether to perform the operation in place on the data.
-
-        Returns
-        -------
-        DataFrame
-        """
-        if dtypes is None:
-            dtypes = {}
-
-        df = self
-        if index is not None:
-            index = cudf.core.index.as_index(index)
-
-            idx_dtype_match = (df.index.nlevels == index.nlevels) and all(
-                left_dtype == right_dtype
-                for left_dtype, right_dtype in zip(
-                    (col.dtype for col in df.index._data.columns),
-                    (col.dtype for col in index._data.columns),
-                )
-            )
-
-            if not idx_dtype_match:
-                columns = (
-                    columns if columns is not None else list(df._column_names)
-                )
-                df = DataFrame()
-            else:
-                df = DataFrame(None, index).join(df, how="left", sort=True)
-                # double-argsort to map back from sorted to unsorted positions
-                df = df.take(index.argsort(ascending=True).argsort())
-
-        index = index if index is not None else df.index
-        names = columns if columns is not None else list(df._data.names)
-        cols = {
-            name: (
-                df._data[name].copy(deep=deep)
-                if name in df._data
-                else column_empty(
-                    dtype=dtypes.get(name, np.float64),
-                    masked=True,
-                    row_count=len(index),
-                )
-            )
-            for name in names
-        }
-
-        result = self.__class__._from_data(
-            data=cudf.core.column_accessor.ColumnAccessor(
-                cols,
-                multiindex=self._data.multiindex,
-                level_names=self._data.level_names,
-            ),
-            index=index,
-        )
-
-        return self._mimic_inplace(result, inplace=inplace)
-
-    @_cudf_nvtx_annotate
     def reindex(
-        self, labels=None, axis=None, index=None, columns=None, copy=True
+        self,
+        labels=None,
+        index=None,
+        columns=None,
+        axis=None,
+        method=None,
+        copy=True,
+        level=None,
+        fill_value=NA,
+        limit=None,
+        tolerance=None,
     ):
         """
-        Return a new DataFrame whose axes conform to a new index
-
-        ``DataFrame.reindex`` supports two calling conventions:
-            - ``(index=index_labels, columns=column_names)``
-            - ``(labels, axis={0 or 'index', 1 or 'columns'})``
+        Conform DataFrame to new index. Places NA/NaN in locations
+        having no value in the previous index. A new object is produced
+        unless the new index is equivalent to the current one and copy=False.
 
         Parameters
         ----------
         labels : Index, Series-convertible, optional, default None
-        axis : {0 or 'index', 1 or 'columns'}, optional, default 0
+            New labels / index to conform the axis specified by ``axis`` to.
         index : Index, Series-convertible, optional, default None
-            Shorthand for ``df.reindex(labels=index_labels, axis=0)``
+            The index labels specifying the index to conform to.
         columns : array-like, optional, default None
-            Shorthand for ``df.reindex(labels=column_names, axis=1)``
-        copy : boolean, optional, default True
+            The column labels specifying the columns to conform to.
+        axis : Axis to target.
+            Can be either the axis name
+            (``index``, ``columns``) or number (0, 1).
+        method : Not supported
+        copy : boolean, default True
+            Return a new object, even if the passed indexes are the same.
+        level : Not supported
+        fill_value : Value to use for missing values.
+            Defaults to ``NA``, but can be any “compatible” value.
+        limit : Not supported
+        tolerance : Not supported
 
         Returns
         -------
-        A DataFrame whose axes conform to the new index(es)
+        DataFrame with changed index.
 
         Examples
         --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2, 3, 4]
-        >>> df['val'] = [float(i + 10) for i in range(5)]
-        >>> df_new = df.reindex(index=[0, 3, 4, 5],
-        ...                     columns=['key', 'val', 'sum'])
+        ``DataFrame.reindex`` supports two calling conventions
+        * ``(index=index_labels, columns=column_labels, ...)``
+        * ``(labels, axis={'index', 'columns'}, ...)``
+        We _highly_ recommend using keyword arguments to clarify your intent.
+
+        Create a dataframe with some fictional data.
+        >>> index = ['Firefox', 'Chrome', 'Safari', 'IE10', 'Konqueror']
+        >>> df = cudf.DataFrame({'http_status': [200, 200, 404, 404, 301],
+        ...                    'response_time': [0.04, 0.02, 0.07, 0.08, 1.0]},
+        ...                      index=index)
         >>> df
-           key   val
-        0    0  10.0
-        1    1  11.0
-        2    2  12.0
-        3    3  13.0
-        4    4  14.0
-        >>> df_new
-           key   val   sum
-        0     0  10.0  <NA>
-        3     3  13.0  <NA>
-        4     4  14.0  <NA>
-        5  <NA>  <NA>  <NA>
+                http_status  response_time
+        Firefox            200           0.04
+        Chrome             200           0.02
+        Safari             404           0.07
+        IE10               404           0.08
+        Konqueror          301           1.00
+        >>> new_index = ['Safari', 'Iceweasel', 'Comodo Dragon', 'IE10',
+        ...              'Chrome']
+        >>> df.reindex(new_index)
+                    http_status response_time
+        Safari                404          0.07
+        Iceweasel            <NA>          <NA>
+        Comodo Dragon        <NA>          <NA>
+        IE10                  404          0.08
+        Chrome                200          0.02
+
+        .. pandas-compat::
+            **DataFrame.reindex**
+
+            Note: One difference from Pandas is that ``NA`` is used for rows
+            that do not match, rather than ``NaN``. One side effect of this is
+            that the column ``http_status`` retains an integer dtype in cuDF
+            where it is cast to float in Pandas.
+
+        We can fill in the missing values by
+        passing a value to the keyword ``fill_value``.
+
+        >>> df.reindex(new_index, fill_value=0)
+                    http_status  response_time
+        Safari                 404           0.07
+        Iceweasel                0           0.00
+        Comodo Dragon            0           0.00
+        IE10                   404           0.08
+        Chrome                 200           0.02
+
+        We can also reindex the columns.
+        >>> df.reindex(columns=['http_status', 'user_agent'])
+                http_status user_agent
+        Firefox            200       <NA>
+        Chrome             200       <NA>
+        Safari             404       <NA>
+        IE10               404       <NA>
+        Konqueror          301       <NA>
+
+        Or we can use “axis-style” keyword arguments
+        >>> df.reindex(columns=['http_status', 'user_agent'])
+                http_status user_agent
+        Firefox            200       <NA>
+        Chrome             200       <NA>
+        Safari             404       <NA>
+        IE10               404       <NA>
+        Konqueror          301       <NA>
         """
 
         if labels is None and index is None and columns is None:
@@ -2329,11 +2314,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
         return df._reindex(
-            columns=columns,
+            column_names=columns,
             dtypes=self._dtypes,
             deep=copy,
             index=index,
             inplace=False,
+            fill_value=fill_value,
         )
 
     @_cudf_nvtx_annotate
@@ -3682,12 +3668,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Apply a function along an axis of the DataFrame.
         ``apply`` relies on Numba to JIT compile ``func``.
-        Thus the allowed operations within ``func`` are limited
-        to the ones specified
-        [here](https://numba.pydata.org/numba-doc/latest/cuda/cudapysupported.html).
-        For more information, see the cuDF guide
-        to user defined functions found
-        [here](https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html).
+        Thus the allowed operations within ``func`` are limited to `those
+        supported by the CUDA Python Numba target
+        <https://numba.pydata.org/numba-doc/latest/cuda/cudapysupported.html>`__.
+        For more information, see the `cuDF guide to user defined functions
+        <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
         Parameters
         ----------
@@ -6489,6 +6474,76 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             ret._data[name] = col
         if not inplace:
             return ret
+
+    def value_counts(
+        self,
+        subset=None,
+        normalize=False,
+        sort=True,
+        ascending=False,
+        dropna=True,
+    ):
+        """
+        Return a Series containing counts of unique rows in the DataFrame.
+
+        Parameters
+        ----------
+        subset: list-like, optional
+            Columns to use when counting unique combinations.
+        normalize: bool, default False
+            Return proportions rather than frequencies.
+        sort: bool, default True
+            Sort by frequencies.
+        ascending: bool, default False
+            Sort in ascending order.
+        dropna: bool, default True
+            Don't include counts of rows that contain NA values.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        The returned Series will have a MultiIndex with one level per input
+        column. By default, rows that contain any NA values are omitted from
+        the result. By default, the resulting Series will be in descending
+        order so that the first element is the most frequently-occurring row.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'num_legs': [2, 4, 4, 6],
+        ...                    'num_wings': [2, 0, 0, 0]},
+        ...                    index=['falcon', 'dog', 'cat', 'ant'])
+        >>> df.value_counts()
+        num_legs  num_wings
+        4         0            2
+        2         2            1
+        6         0            1
+        dtype: int64
+        """
+        if subset:
+            diff = set(subset) - set(self._data)
+            if len(diff) != 0:
+                raise KeyError(f"columns {diff} do not exist")
+        columns = list(self._data.names) if subset is None else subset
+        result = (
+            self.groupby(
+                by=columns,
+                dropna=dropna,
+            )
+            .size()
+            .astype("int64")
+        )
+        if sort:
+            result = result.sort_values(ascending=ascending)
+        if normalize:
+            result = result / result._column.sum()
+        # Pandas always returns MultiIndex even if only one column.
+        if not isinstance(result.index, MultiIndex):
+            result.index = MultiIndex._from_data(result._index._data)
+        return result
 
 
 def from_dataframe(df, allow_copy=False):

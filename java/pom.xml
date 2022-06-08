@@ -136,7 +136,7 @@
             <groupId>org.apache.arrow</groupId>
             <artifactId>arrow-vector</artifactId>
             <version>${arrow.version}</version>
-           <scope>test</scope>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.parquet</groupId>
@@ -185,6 +185,42 @@
             </properties>
         </profile>
         <profile>
+            <id>default-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/CudaFatalTest.java</exclude>
+                            </excludes>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>main-tests</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>fatal-cuda-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <includes>
+                                        <include>**/CudaFatalTest.java</include>
+                                    </includes>
+                                    <reuseForks>false</reuseForks>
+                                    <test>*/CudaFatalTest.java</test>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
             <id>no-cufile-tests</id>
             <activation>
                 <property>
@@ -199,8 +235,30 @@
                         <configuration>
                             <excludes>
                                 <exclude>**/CuFileTest.java</exclude>
+                                <exclude>**/CudaFatalTest.java</exclude>
                             </excludes>
                         </configuration>
+                        <executions>
+                            <execution>
+                                <id>main-tests</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>fatal-cuda-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <includes>
+                                        <include>**/CudaFatalTest.java</include>
+                                    </includes>
+                                    <reuseForks>false</reuseForks>
+                                    <test>*/CudaFatalTest.java</test>
+                                </configuration>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>
@@ -280,7 +338,7 @@
                             <nexusUrl>https://oss.sonatype.org/</nexusUrl>
                             <autoReleaseAfterClose>false</autoReleaseAfterClose>
                         </configuration>
-                        </plugin>
+                    </plugin>
                 </plugins>
             </build>
         </profile>
@@ -289,16 +347,16 @@
     <build>
         <resources>
             <resource>
-              <!-- Include the properties file to provide the build information. -->
-              <directory>${project.build.directory}/extra-resources</directory>
-              <filtering>true</filtering>
+                <!-- Include the properties file to provide the build information. -->
+                <directory>${project.build.directory}/extra-resources</directory>
+                <filtering>true</filtering>
             </resource>
             <resource>
-              <directory>${basedir}/..</directory>
-              <targetPath>META-INF</targetPath>
-              <includes>
-                <include>LICENSE</include>
-              </includes>
+                <directory>${basedir}/..</directory>
+                <targetPath>META-INF</targetPath>
+                <includes>
+                    <include>LICENSE</include>
+                </includes>
             </resource>
         </resources>
         <pluginManagement>
@@ -338,6 +396,12 @@
                             <groupId>org.junit.jupiter</groupId>
                             <artifactId>junit-jupiter-engine</artifactId>
                             <version>5.4.2</version>
+                        </dependency>
+                        <dependency>
+                            <!-- to get around bug https://github.com/junit-team/junit5/issues/1367 -->
+                            <groupId>org.apache.maven.surefire</groupId>
+                            <artifactId>surefire-logger-api</artifactId>
+                            <version>2.21.0</version>
                         </dependency>
                     </dependencies>
                 </plugin>
@@ -404,9 +468,10 @@
                                     <arg value="${parallel.level}"/>
                                 </exec>
                                 <mkdir dir="${project.build.directory}/extra-resources"/>
-                                <exec executable="bash" output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">
-                                  <arg value="${project.basedir}/buildscripts/build-info"/>
-                                  <arg value="${project.version}"/>
+                                <exec executable="bash"
+                                      output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">
+                                    <arg value="${project.basedir}/buildscripts/build-info"/>
+                                    <arg value="${project.version}"/>
                                 </exec>
                             </tasks>
                         </configuration>
@@ -428,31 +493,31 @@
                         </goals>
                         <configuration>
                             <source>
-                            def sout = new StringBuffer(), serr = new StringBuffer()
-                            //This only works on linux
-                            def proc = 'ldd ${native.build.path}/libcudfjni.so'.execute()
-                            proc.consumeProcessOutput(sout, serr)
-                            proc.waitForOrKill(10000)
-                            def libcudf = ~/libcudf.*\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
-                            def cudfm = libcudf.matcher(sout)
-                            if (cudfm.find()) {
-                                pom.properties['native.cudf.path'] = cudfm.group(1)
-                            } else {
-                                fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
-                            }
+                                def sout = new StringBuffer(), serr = new StringBuffer()
+                                //This only works on linux
+                                def proc = 'ldd ${native.build.path}/libcudfjni.so'.execute()
+                                proc.consumeProcessOutput(sout, serr)
+                                proc.waitForOrKill(10000)
+                                def libcudf = ~/libcudf.*\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
+                                def cudfm = libcudf.matcher(sout)
+                                if (cudfm.find()) {
+                                    pom.properties['native.cudf.path'] = cudfm.group(1)
+                                } else {
+                                    fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
+                                }
 
-                            def nvccout = new StringBuffer(), nvccerr = new StringBuffer()
-                            def nvccproc = 'nvcc --version'.execute()
-                            nvccproc.consumeProcessOutput(nvccout, nvccerr)
-                            nvccproc.waitForOrKill(10000)
-                            def cudaPattern = ~/Cuda compilation tools, release ([0-9]+)/
-                            def cm = cudaPattern.matcher(nvccout)
-                            if (cm.find()) {
-                                def classifier = 'cuda' + cm.group(1)
-                                pom.properties['cuda.classifier'] = classifier
-                            } else {
-                                fail('could not find CUDA version')
-                            }
+                                def nvccout = new StringBuffer(), nvccerr = new StringBuffer()
+                                def nvccproc = 'nvcc --version'.execute()
+                                nvccproc.consumeProcessOutput(nvccout, nvccerr)
+                                nvccproc.waitForOrKill(10000)
+                                def cudaPattern = ~/Cuda compilation tools, release ([0-9]+)/
+                                def cm = cudaPattern.matcher(nvccout)
+                                if (cm.find()) {
+                                    def classifier = 'cuda' + cm.group(1)
+                                    pom.properties['cuda.classifier'] = classifier
+                                } else {
+                                    fail('could not find CUDA version')
+                                }
                             </source>
                         </configuration>
                     </execution>
@@ -480,13 +545,13 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                  <!-- you can turn this off, by passing -DtrimStackTrace=true when running tests -->
-                  <trimStackTrace>false</trimStackTrace>
-                  <redirectTestOutputToFile>true</redirectTestOutputToFile>
-                  <systemPropertyVariables>
-                    <ai.rapids.refcount.debug>${ai.rapids.refcount.debug}</ai.rapids.refcount.debug>
-                    <ai.rapids.cudf.nvtx.enabled>${ai.rapids.cudf.nvtx.enabled}</ai.rapids.cudf.nvtx.enabled>
-                  </systemPropertyVariables>
+                    <!-- you can turn this off, by passing -DtrimStackTrace=true when running tests -->
+                    <trimStackTrace>false</trimStackTrace>
+                    <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                    <systemPropertyVariables>
+                        <ai.rapids.refcount.debug>${ai.rapids.refcount.debug}</ai.rapids.refcount.debug>
+                        <ai.rapids.cudf.nvtx.enabled>${ai.rapids.cudf.nvtx.enabled}</ai.rapids.cudf.nvtx.enabled>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
             <plugin>

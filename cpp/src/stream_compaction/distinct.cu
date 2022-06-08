@@ -64,8 +64,8 @@ std::unique_ptr<table> distinct(table_view const& input,
   auto const num_rows{keys_view.num_rows()};
 
   hash_map_type key_map{compute_hash_table_size(num_rows),
-                        COMPACTION_EMPTY_KEY_SENTINEL,
-                        COMPACTION_EMPTY_VALUE_SENTINEL,
+                        cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
+                        cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
                         detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                         stream.value()};
 
@@ -73,7 +73,7 @@ std::unique_ptr<table> distinct(table_view const& input,
   experimental::compaction_hash hash_key(row_hash.device_hasher(has_null));
 
   cudf::experimental::row::equality::self_comparator row_equal(preprocessed_keys);
-  auto key_equal = row_equal.device_comparator(has_null, nulls_equal);
+  auto key_equal = row_equal.equal_to(has_null, nulls_equal);
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0, [] __device__(size_type i) { return cuco::make_pair(i, i); });

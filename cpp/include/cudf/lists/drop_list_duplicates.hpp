@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,6 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
  * @param nulls_equal Flag to specify whether null key elements should be considered as equal.
  * @param nans_equal Flag to specify whether NaN key elements should be considered as equal
  *        (only applicable for floating point keys column).
- * @param keep_option Flag to specify which elements will be copied from the input to the output.
  * @param mr Device resource used to allocate memory.
  *
  * @code{.pseudo}

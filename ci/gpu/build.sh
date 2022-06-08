@@ -82,8 +82,6 @@ conda list --show-channel-urls
 
 gpuci_logger "Check compiler versions"
 python --version
-$CC --version
-$CXX --version
 
 function install_dask {
     # Install the conda-forge or nightly version of dask and distributed
@@ -127,7 +125,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     ################################################################################
 
     gpuci_logger "Build from source"
-    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds --cmake-args=\"-DFIND_CUDF_CPP=ON\"
+    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
 
     ################################################################################
     # TEST - Run GoogleTest
