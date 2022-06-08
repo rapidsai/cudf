@@ -54,11 +54,13 @@ template <typename MapDeviceView, typename Hash, typename KeyEqual>
 struct reduce_fn_gen {
   __device__ size_type& inserted_value(size_type const idx) const
   {
-    // iter should always be valid, because all keys have been inserted.
+    // Here we don't check `iter` validity for performance reason, assuming that it is always
+    // be valid because all input `idx` values have been inserted in to the map before.
     auto const iter = d_map.find(idx, d_hash, d_eqcomp);
 
-    // Here idx is the index of the unique elements that has been inserted into the map.
-    // As such, `find` calling for all duplicate keys will return the same idx value.
+    // Only one index value of the duplicate rows could be inserted into the map.
+    // As such, looking up for all indices of duplicate rows will return the same `inserted_idx`
+    // value, which is the index of that only inserted row.
     auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
 
     return d_output[inserted_idx];
@@ -176,23 +178,20 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
   }
 
   // Filter out the indices of the duplicate keys except one (so to keep one).
-  auto const copy_output_indicies = [&](auto const& fn) {
-    return thrust::copy_if(rmm::exec_policy(stream),
-                           reduced_indices.begin(),
-                           reduced_indices.end(),
-                           distinct_map.begin(),
-                           fn);
-  };
-  auto const map_end = [&] {
-    if (keep == duplicate_keep_option::KEEP_NONE) {
-      return copy_output_indicies(
-        [reduced_indices = reduced_indices.begin()] __device__(auto const idx) {
-          return reduced_indices[idx] == size_type{1};
-        });
-    }
-    return copy_output_indicies(
-      [init_value] __device__(auto const idx) { return idx != init_value; });
-  }();
+  auto const map_end =
+    keep == duplicate_keep_option::KEEP_NONE
+      ? thrust::copy_if(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator(0),
+                        thrust::make_counting_iterator(keys_size),
+                        distinct_map.begin(),
+                        [reduced_indices = reduced_indices.begin()] __device__(auto const idx) {
+                          return reduced_indices[idx] == size_type{1};
+                        })
+      : thrust::copy_if(rmm::exec_policy(stream),
+                        reduced_indices.begin(),
+                        reduced_indices.end(),
+                        distinct_map.begin(),
+                        [init_value] __device__(auto const idx) { return idx != init_value; });
 
   distinct_map.resize(thrust::distance(distinct_map.begin(), map_end), stream);
   return distinct_map;
