@@ -159,7 +159,7 @@ template <int32_t MAX_NUM_SYMBOLS, int32_t MAX_NUM_STATES>
 class TransitionTable {
  private:
   // Type used
-  using ItemT = char;
+  using ItemT = char;  // maximum 256 states.
 
   struct _TempStorage {
     ItemT transitions[MAX_NUM_STATES * MAX_NUM_SYMBOLS];
@@ -173,8 +173,7 @@ class TransitionTable {
   };
 
   // defined only for non-narrowing conversion
-  // TODO: replace int with ItemT
-  template <typename StateIdT, typename = std::void_t<decltype(int{std::declval<StateIdT>()})>>
+  template <typename StateIdT, typename = std::void_t<decltype(ItemT{std::declval<StateIdT>()})>>
   static void InitDeviceTransitionTable(hostdevice_vector<KernelParameter>& transition_table_init,
                                         const std::vector<std::vector<StateIdT>>& trans_table,
                                         rmm::cuda_stream_view stream)
@@ -183,7 +182,7 @@ class TransitionTable {
     for (std::size_t state = 0; state < trans_table.size(); ++state) {
       for (std::size_t symbol = 0; symbol < trans_table[state].size(); ++symbol) {
         transition_table_init.host_ptr()->transitions[symbol * MAX_NUM_STATES + state] =
-          int{trans_table[state][symbol]};
+          ItemT{trans_table[state][symbol]};
       }
     }
 

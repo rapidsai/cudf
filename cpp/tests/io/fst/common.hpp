@@ -23,7 +23,7 @@ namespace {
 // TEST FST SPECIFICATIONS
 //------------------------------------------------------------------------------
 // FST to check for brackets and braces outside of pairs of quotes
-enum DFA_STATES {
+enum DFA_STATES : char {
   // The state being active while being outside of a string. When encountering an opening bracket or
   // curly brace, we push it onto the stack. When encountering a closing bracket or brace, we pop it
   // from the stack.
