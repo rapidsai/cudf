@@ -125,5 +125,31 @@ cudf::size_type distinct_count(table_view const& input,
                                null_equality nulls_equal    = null_equality::EQUAL,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
+/**
+ * @brief Generate a gather map of distinct rows for the input table.
+ *
+ * Given an input table, this function returns a gather map such that gathering the input table
+ * using this gather map will produce an equivalent result (i.e., the same set of rows regarding of
+ * order) as the result of calling to `cudf::distinct`. As such, this function requires the same
+ * parameters as `cudf::distinct`.
+ *
+ * Note that the returning gather map is compact: all the indices are valid.
+ *
+ * @param input The input table_view to generate gather map for distinct rows
+ * @param keys Vector of indices representing key columns from `input`
+ * @param keep Keep the first, last, any, or no rows of the found duplicates
+ * @param nulls_equal Flag to specify whether null key elements should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return A device_uvector containing the compact gather map
+ */
+rmm::device_uvector<size_type> distinct_map(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  duplicate_keep_option keep,
+  null_equality nulls_equal,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
 }  // namespace cudf
