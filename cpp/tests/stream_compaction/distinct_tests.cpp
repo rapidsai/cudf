@@ -112,7 +112,7 @@ TEST_F(Distinct, EmptyInputTable)
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{1, 2};
 
-  auto got = cudf::distinct(input, keys, KEEP_ANY, null_equality::EQUAL);
+  auto got = cudf::distinct(input, keys, null_equality::EQUAL);
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
 
@@ -121,7 +121,7 @@ TEST_F(Distinct, NoColumnInputTable)
   cudf::table_view input{std::vector<cudf::column_view>()};
   std::vector<cudf::size_type> keys{1, 2};
 
-  auto got = cudf::distinct(input, keys, KEEP_ANY, null_equality::EQUAL);
+  auto got = cudf::distinct(input, keys, null_equality::EQUAL);
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
 
@@ -132,7 +132,7 @@ TEST_F(Distinct, EmptyKeys)
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{};
 
-  auto got = cudf::distinct(input, keys, KEEP_ANY, null_equality::EQUAL);
+  auto got = cudf::distinct(input, keys, null_equality::EQUAL);
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view{{empty_col}}, got->view());
 }
 
