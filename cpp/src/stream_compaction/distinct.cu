@@ -199,6 +199,15 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
 
 std::unique_ptr<table> distinct(table_view const& input,
                                 std::vector<size_type> const& keys,
+                                null_equality nulls_equal,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
+{
+  return distinct(input, keys, duplicate_keep_option::KEEP_ANY, nulls_equal, stream, mr);
+}
+
+std::unique_ptr<table> distinct(table_view const& input,
+                                std::vector<size_type> const& keys,
                                 duplicate_keep_option keep,
                                 null_equality nulls_equal,
                                 rmm::cuda_stream_view stream,
@@ -221,8 +230,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(
-    input, keys, duplicate_keep_option::KEEP_ANY, nulls_equal, rmm::cuda_stream_default, mr);
+  return detail::distinct(input, keys, nulls_equal, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<table> distinct(table_view const& input,
