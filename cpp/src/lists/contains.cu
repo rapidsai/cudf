@@ -83,52 +83,28 @@ auto __device__ element_index_pair_iter(size_type const size)
   }
 }
 
-/**
- * @brief Functor for searching indices of the given key(s) within each list row in a list column.
- */
-template <typename Type, typename Enable = void>
-struct search_index_fn {
-  template <typename... Args>
-  static void invoke(Args&&...)
-  {
-    CUDF_FAIL("Unsupported type in `search_index_fn`.");
-  }
-};
-
-template <typename Type>
-struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>()>> {
-  template <typename SearchKeyIter, typename OutputPairIter>
-  static void invoke(cudf::detail::lists_column_device_view const& lists,
-                     SearchKeyIter const keys_iter,
-                     OutputPairIter const out_iter,
-                     duplicate_find_option find_option,
-                     rmm::cuda_stream_view stream)
-  {
-    thrust::tabulate(rmm::exec_policy(stream),
-                     out_iter,
-                     out_iter + lists.size(),
-                     [lists, keys_iter, find_option] __device__(
-                       auto const list_idx) -> thrust::pair<size_type, bool> {
-                       auto const list = list_device_view{lists, list_idx};
-                       // A null list never contains any key, even null key.
-                       // In addition, a null list will result in a null output row.
-                       if (list.is_null()) { return {NOT_FOUND_SENTINEL, false}; }
-
-                       auto const key_opt = keys_iter[list_idx];
-                       // A null key will also result in a null output row.
-                       if (!key_opt) { return {NOT_FOUND_SENTINEL, false}; }
-
-                       auto const& key = key_opt.value();
-                       return {find_option == duplicate_find_option::FIND_FIRST
-                                 ? search_list<true>(list, key)
-                                 : search_list<false>(list, key),
-                               true};
-                     });
-  }
-
- private:
+template <typename Type, typename SearchKeyIter>
+struct search_lists_fn {
   template <bool find_first>
-  static __device__ size_type search_list(list_device_view const& list, Type const& search_key)
+
+  __device__ thrust::pair<size_type, bool> operator()(size_type const idx) const
+  {
+    auto const list = list_device_view{lists, idx};
+    // A null list never contains any key, even null key.
+    // In addition, a null list will result in a null output row.
+    if (list.is_null()) { return {NOT_FOUND_SENTINEL, false}; }
+
+    auto const key_opt = keys_iter[idx];
+    // A null key will also result in a null output row.
+    if (!key_opt) { return {NOT_FOUND_SENTINEL, false}; }
+
+    auto const& key = key_opt.value();
+    return {find_option == duplicate_find_option::FIND_FIRST ? search_list<true>(list, key)
+                                                             : search_list<false>(list, key),
+            true};
+  }
+
+  __device__ size_type search_list(list_device_view const& list, Type const& search_key) const
   {
     auto const [begin, end] = element_index_pair_iter<find_first>(list.size());
     auto const found_iter =
@@ -139,6 +115,10 @@ struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>
     // If the key is found, return its found position in the list from `found_iter`.
     return found_iter == end ? NOT_FOUND_SENTINEL : *found_iter;
   }
+
+  cudf::detail::lists_column_device_view const lists;
+  SearchKeyIter const keys_iter;
+  duplicate_find_option const find_option;
 };
 
 /**
@@ -217,7 +197,11 @@ struct dispatch_index_of {
 
     auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
       *keys_dv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
-    search_index_fn<Type>::invoke(lists_cdv, keys_iter, out_iter, find_option, stream);
+
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out_iter,
+                     out_iter + lists.size(),
+                     search_lists_fn<Type, decltype(keys_iter)>{lists_cdv, keys_iter, find_option});
 
     if (search_keys_have_nulls || lists.has_nulls()) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
