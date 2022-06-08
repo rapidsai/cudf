@@ -200,15 +200,14 @@ class ParquetFieldBoolList {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_LIST) return true;
-    int current_byte = cpr->getb();
-    if ((current_byte & 0xf) != ST_FLD_TRUE) return true;
-    int n = current_byte >> 4;
-    if (n == 0xf) n = cpr->get_u32();
+    uint8_t t;
+    int32_t n = cpr->get_listh(&t);
+    if (t != ST_FLD_TRUE) return true;
     val.resize(n);
     for (int32_t i = 0; i < n; i++) {
-      current_byte = cpr->getb();
+      unsigned int current_byte = cpr->getb();
       if (current_byte != ST_FLD_TRUE && current_byte != ST_FLD_FALSE) return true;
-      val[i] = current_byte == ST_FLD_TRUE ? true : false;
+      val[i] = current_byte == ST_FLD_TRUE;
     }
     return false;
   }
@@ -315,10 +314,9 @@ class ParquetFieldInt64List {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_LIST) return true;
-    int current_byte = cpr->getb();
-    if ((current_byte & 0xf) != ST_FLD_I64) return true;
-    int n = current_byte >> 4;
-    if (n == 0xf) n = cpr->get_u32();
+    uint8_t t;
+    int32_t n = cpr->get_listh(&t);
+    if (t != ST_FLD_I64) return true;
     val.resize(n);
     for (int32_t i = 0; i < n; i++) {
       val[i] = cpr->get_i64();
@@ -556,10 +554,9 @@ class ParquetFieldStringList {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_LIST) return true;
-    int current_byte = cpr->getb();
-    if ((current_byte & 0xf) != ST_FLD_BINARY) return true;
-    int n = current_byte >> 4;
-    if (n == 0xf) n = cpr->get_u32();
+    uint8_t t;
+    int32_t n = cpr->get_listh(&t);
+    if (t != ST_FLD_BINARY) return true;
     val.resize(n);
     for (int32_t i = 0; i < n; i++) {
       uint32_t l = cpr->get_u32();
