@@ -82,6 +82,18 @@ parquet::Compression to_parquet_compression(compression_type compression)
   }
 }
 
+/**
+ * @brief Function to calculate the memory needed to encode the column index of the given
+ * column chunk
+ */
+size_t column_index_buffer_size(gpu::EncColumnChunk* ck)
+{
+  // fixed 26 bytes + (sizeof(bool)+sizeof(int64)+2*max_statsize)*num_pages_in_chunk
+  // ck_stat_size is a good proxy for how much memory is needed for the min/max values
+  // calculating this per-chunk because the sizes can be wildly different
+  return 26 + (ck->ck_stat_size + 9) * ck->num_pages;
+}
+
 }  // namespace
 
 struct aggregate_writer_metadata {
@@ -1473,10 +1485,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         comp_rowgroup_size += ck->compressed_size;
         max_chunk_bfr_size =
           std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
-        // fixed 26 bytes + (sizeof(bool)+sizeof(int64)+2*max_statsize)*num_pages_in_chunk
-        // ck_stat_size is a good proxy for how much memory is needed for the min/max values
-        // calculating this per-chunk because the sizes can be wildly different
-        column_index_bfr_size += 26 + (ck->ck_stat_size + 9) * ck->num_pages;
+        column_index_bfr_size += column_index_buffer_size(ck);
       }
     }
     // TBD: We may want to also shorten the batch if we have enough pages (not just based on size)
@@ -1523,7 +1532,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         ck.column_index_blob    = bfr_i;
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
-        bfr_i += 26 + (ck.ck_stat_size + 9) * ck.num_pages;
+        bfr_i += column_index_buffer_size(ck);
       }
     }
   }
