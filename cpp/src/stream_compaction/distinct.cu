@@ -50,9 +50,9 @@ namespace cudf {
 namespace detail {
 
 namespace {
-template <duplicate_keep_option keep, typename MapDeviceView, typename Hash, typename KeyEqual>
-struct reduce_index_fn {
-  __device__ void operator()(size_type const idx) const
+template <typename MapDeviceView, typename Hash, typename KeyEqual>
+struct reduce_fn_gen {
+  __device__ size_type& inserted_value(size_type const idx) const
   {
     // iter should always be valid, because all keys have been inserted.
     auto const iter = d_map.find(idx, d_hash, d_eqcomp);
@@ -61,16 +61,32 @@ struct reduce_index_fn {
     // As such, `find` calling for all duplicate keys will return the same idx value.
     auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
 
-    if constexpr (keep == duplicate_keep_option::KEEP_FIRST) {
-      // Store the smallest index of all keys that are equal.
-      atomicMin(&d_output[inserted_idx], idx);
-    } else if constexpr (keep == duplicate_keep_option::KEEP_LAST) {
-      // Store the greatest index of all keys that are equal.
-      atomicMax(&d_output[inserted_idx], idx);
-    } else {
-      // Count the number of duplicates for key.
-      atomicAdd(&d_output[inserted_idx], size_type{1});
+    return d_output[inserted_idx];
+  }
+
+  template <duplicate_keep_option keep>
+  struct reduce_index_fn {
+    __device__ void operator()(size_type const idx) const
+    {
+      if constexpr (keep == duplicate_keep_option::KEEP_FIRST) {
+        // Store the smallest index of all keys that are equal.
+        atomicMin(&parent.inserted_value(idx), idx);
+      } else if constexpr (keep == duplicate_keep_option::KEEP_LAST) {
+        // Store the greatest index of all keys that are equal.
+        atomicMax(&parent.inserted_value(idx), idx);
+      } else {
+        // Count the number of duplicates for key.
+        atomicAdd(&parent.inserted_value(idx), size_type{1});
+      }
     }
+
+    reduce_fn_gen const parent;
+  };
+
+  template <duplicate_keep_option keep>
+  auto reduce_fn() const
+  {
+    return reduce_index_fn<keep>{*this};
   }
 
   size_type* const d_output;
@@ -80,6 +96,107 @@ struct reduce_index_fn {
 };
 
 }  // namespace
+
+// todo: add doxygen and detail interface
+// this will be userful for many follow up pr
+rmm::device_uvector<size_type> distinct_map(table_view const& input,
+                                            std::vector<size_type> const& keys,
+                                            duplicate_keep_option keep,
+                                            null_equality nulls_equal,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
+{
+  if (input.num_rows() == 0 or input.num_columns() == 0 or keys.empty()) {
+    return rmm::device_uvector<size_type>(0, stream);
+  }
+
+  auto const keys_tview = input.select(keys);
+  auto const preprocessed_keys =
+    cudf::experimental::row::hash::preprocessed_table::create(keys_tview, stream);
+  auto const has_null  = nullate::DYNAMIC{cudf::has_nested_nulls(keys_tview)};
+  auto const keys_size = keys_tview.num_rows();
+
+  auto key_map = hash_map_type{compute_hash_table_size(keys_size),
+                               COMPACTION_EMPTY_KEY_SENTINEL,
+                               COMPACTION_EMPTY_VALUE_SENTINEL,
+                               detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                               stream.value()};
+
+  auto const row_hash = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
+  auto const hash_key = experimental::compaction_hash(row_hash.device_hasher(has_null));
+
+  auto const row_comp  = cudf::experimental::row::equality::self_comparator(preprocessed_keys);
+  auto const key_equal = row_comp.device_comparator(has_null, nulls_equal);
+
+  auto const kv_iter = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
+  key_map.insert(kv_iter, kv_iter + keys_size, hash_key, key_equal, stream.value());
+
+  auto distinct_map = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
+  // If we don't care about order, just gather all rows having distinct keys taken from key_map.
+  if (keep == duplicate_keep_option::KEEP_ANY) {
+    key_map.retrieve_all(distinct_map.begin(), thrust::make_discard_iterator(), stream.value());
+    return distinct_map;
+  }
+
+  auto const init_value = [keep] {
+    if (keep == duplicate_keep_option::KEEP_FIRST) {
+      return std::numeric_limits<size_type>::max();
+    } else if (keep == duplicate_keep_option::KEEP_LAST) {
+      return std::numeric_limits<size_type>::min();
+    }
+    return size_type{0};  // keep == KEEP_NONE
+  }();
+
+  auto reduced_indices = rmm::device_uvector<size_type>(keys_tview.num_rows(), stream);
+  thrust::uninitialized_fill(
+    rmm::exec_policy(stream), reduced_indices.begin(), reduced_indices.end(), init_value);
+
+  auto const d_map  = key_map.get_device_view();
+  auto const fn_gen = reduce_fn_gen<decltype(d_map), decltype(hash_key), decltype(key_equal)>{
+    reduced_indices.begin(), d_map, hash_key, key_equal};
+
+  auto const do_reduce = [keys_size, stream](auto const& fn) {
+    thrust::for_each(rmm::exec_policy(stream),
+                     thrust::counting_iterator<size_type>(0),
+                     thrust::counting_iterator<size_type>(keys_size),
+                     fn);
+  };
+  switch (keep) {
+    case duplicate_keep_option::KEEP_FIRST:
+      do_reduce(fn_gen.reduce_fn<duplicate_keep_option::KEEP_FIRST>());
+      break;
+    case duplicate_keep_option::KEEP_LAST:
+      do_reduce(fn_gen.reduce_fn<duplicate_keep_option::KEEP_LAST>());
+      break;
+    case duplicate_keep_option::KEEP_NONE:
+      do_reduce(fn_gen.reduce_fn<duplicate_keep_option::KEEP_NONE>());
+      break;
+    default:;  // KEEP_ANY has already been handled
+  }
+
+  // Filter out the indices of the duplicate keys except one (so to keep one).
+  auto const copy_output_indicies = [&](auto const& fn) {
+    return thrust::copy_if(rmm::exec_policy(stream),
+                           reduced_indices.begin(),
+                           reduced_indices.end(),
+                           distinct_map.begin(),
+                           fn);
+  };
+  auto const map_end = [&] {
+    if (keep == duplicate_keep_option::KEEP_NONE) {
+      return copy_output_indicies(
+        [reduced_indices = reduced_indices.begin()] __device__(auto const idx) {
+          return reduced_indices[idx] == size_type{1};
+        });
+    }
+    return copy_output_indicies(
+      [init_value] __device__(auto const idx) { return idx != init_value; });
+  }();
+
+  distinct_map.resize(thrust::distance(distinct_map.begin(), map_end), stream);
+  return distinct_map;
+}
 
 std::unique_ptr<table> distinct(table_view const& input,
                                 std::vector<size_type> const& keys,
@@ -92,119 +209,10 @@ std::unique_ptr<table> distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto keys_view = input.select(keys);
-  auto preprocessed_keys =
-    cudf::experimental::row::hash::preprocessed_table::create(keys_view, stream);
-  auto const has_null = nullate::DYNAMIC{cudf::has_nested_nulls(keys_view)};
-  auto const num_rows{keys_view.num_rows()};
-
-  hash_map_type key_map{compute_hash_table_size(num_rows),
-                        COMPACTION_EMPTY_KEY_SENTINEL,
-                        COMPACTION_EMPTY_VALUE_SENTINEL,
-                        detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-                        stream.value()};
-
-  auto row_hash = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
-  experimental::compaction_hash hash_key(row_hash.device_hasher(has_null));
-
-  cudf::experimental::row::equality::self_comparator row_equal(preprocessed_keys);
-  auto key_equal = row_equal.device_comparator(has_null, nulls_equal);
-
-  auto iter = cudf::detail::make_counting_transform_iterator(
-    0, [] __device__(size_type i) { return cuco::make_pair(i, i); });
-  // insert distinct indices into the map.
-  key_map.insert(iter, iter + num_rows, hash_key, key_equal, stream.value());
-
-  // If we don't care about order, just gather all rows having distinct keys taken from key_map.
-  if (keep == duplicate_keep_option::KEEP_ANY) {
-    auto const output_size = key_map.get_size();
-    auto distinct_indices  = rmm::device_uvector<size_type>(output_size, stream);
-
-    key_map.retrieve_all(distinct_indices.begin(), thrust::make_discard_iterator(), stream.value());
-    return detail::gather(input,
-                          distinct_indices.begin(),
-                          distinct_indices.end(),
-                          out_of_bounds_policy::DONT_CHECK,
-                          stream,
-                          mr);
-  }
-
-  auto const key_size  = keys_view.num_rows();
-  auto reduced_indices = rmm::device_uvector<size_type>(key_size, stream);
-
-  auto const init_value = [keep] {
-    if (keep == duplicate_keep_option::KEEP_FIRST) {
-      return std::numeric_limits<size_type>::max();
-    } else if (keep == duplicate_keep_option::KEEP_LAST) {
-      return std::numeric_limits<size_type>::min();
-    }
-    return size_type{0};  // keep == KEEP_NONE
-  }();
-
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream), reduced_indices.begin(), reduced_indices.end(), init_value);
-
-  auto const do_reduce = [key_size, stream](auto const& fn) {
-    thrust::for_each(rmm::exec_policy(stream),
-                     thrust::counting_iterator<size_type>(0),
-                     thrust::counting_iterator<size_type>(key_size),
-                     fn);
-  };
-
-  auto const d_map = key_map.get_device_view();
-  switch (keep) {
-    case duplicate_keep_option::KEEP_FIRST:
-      do_reduce(
-        reduce_index_fn<duplicate_keep_option::KEEP_FIRST,
-                        decltype(d_map),
-                        decltype(hash_key),
-                        decltype(key_equal)>{reduced_indices.begin(), d_map, hash_key, key_equal});
-      break;
-    case duplicate_keep_option::KEEP_LAST:
-      do_reduce(
-        reduce_index_fn<duplicate_keep_option::KEEP_LAST,
-                        decltype(d_map),
-                        decltype(hash_key),
-                        decltype(key_equal)>{reduced_indices.begin(), d_map, hash_key, key_equal});
-      break;
-    case duplicate_keep_option::KEEP_NONE:
-      do_reduce(
-        reduce_index_fn<duplicate_keep_option::KEEP_NONE,
-                        decltype(d_map),
-                        decltype(hash_key),
-                        decltype(key_equal)>{reduced_indices.begin(), d_map, hash_key, key_equal});
-      break;
-    default:;  // KEEP_ANY has already been handled
-  }
-
-  // Filter out the invalid indices, which are indices of the duplicate keys
-  // (the first duplicate key already has valid index being written in the previous step).
-  if (keep == duplicate_keep_option::KEEP_NONE) {
-    return cudf::detail::copy_if(
-      table_view{{input}},
-      [reduced_indices = reduced_indices.begin()] __device__(auto const idx) {
-        return reduced_indices[idx] == size_type{1};
-      },
-      stream,
-      mr);
-  }
-
-  auto out_markers = rmm::device_uvector<bool>(key_size, stream);
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream), out_markers.begin(), out_markers.end(), false);
-  thrust::scatter_if(rmm::exec_policy(stream),
-                     thrust::make_constant_iterator(true, 0),
-                     thrust::make_constant_iterator(true, key_size),
-                     reduced_indices.begin(),
-                     reduced_indices.begin(),
-                     out_markers.begin(),
-                     [init_value] __device__(auto const idx) { return idx != init_value; });
-
-  return cudf::detail::copy_if(
-    table_view{{input}},
-    [out_markers = out_markers.begin()] __device__(auto const idx) { return out_markers[idx]; },
-    stream,
-    mr);
+  auto const gather_map =
+    distinct_map(input, keys, keep, nulls_equal, stream, rmm::mr::get_current_device_resource());
+  return detail::gather(
+    input, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 }  // namespace detail
