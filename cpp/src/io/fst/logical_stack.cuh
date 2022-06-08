@@ -267,6 +267,7 @@ auto make_value_iterator(StackOpItT it)
  * value_type)
  * @tparam OffsetT Signed or unsigned integer type large enough to index into both the sparse input
  * sequence and the top-of-stack output sequence
+ *
  * @param[in] d_symbols Sequence of symbols that represent stack operations. Memory may alias with
  * \p d_top_of_stack
  * @param[in,out] d_symbol_positions Sequence of symbol positions (for a sparse representation),
