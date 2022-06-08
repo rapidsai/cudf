@@ -16,12 +16,14 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf_test/print_utilities.cuh>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
@@ -32,6 +34,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <type_traits>
 
 namespace cudf {
 namespace io {
@@ -62,6 +65,9 @@ namespace detail {
  */
 template <typename StackLevelT, typename ValueT>
 struct StackOp {
+  // Must be signed type as any subsequence of stack operations must be able to be covered.
+  static_assert(std::is_signed_v<StackLevelT>, "StackLevelT has to be a signed type");
+
   StackLevelT stack_level;
   ValueT value;
 };
@@ -227,7 +233,7 @@ struct StackOpToStackLevel {
  * @brief Retrieves an iterator that returns only the `stack_level` part from a StackOp iterator.
  */
 template <typename StackOpItT>
-auto get_stack_level_iterator(StackOpItT it)
+auto make_stack_level_iterator(StackOpItT it)
 {
   return thrust::make_transform_iterator(it, StackOpToStackLevel{});
 }
@@ -236,7 +242,7 @@ auto get_stack_level_iterator(StackOpItT it)
  * @brief Retrieves an iterator that returns only the `value` part from a StackOp iterator.
  */
 template <typename StackOpItT>
-auto get_value_iterator(StackOpItT it)
+auto make_value_iterator(StackOpItT it)
 {
   return thrust::make_transform_iterator(it, StackOpToStackSymbol{});
 }
@@ -291,7 +297,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                      StackSymbolT const empty_stack_symbol,
                                      StackSymbolT const read_symbol,
                                      std::size_t const num_symbols_out,
-                                     rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                                     rmm::cuda_stream_view stream = cudf::default_stream_value)
 {
   rmm::device_buffer temp_storage{};
 
@@ -428,10 +434,10 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // Dump info on stack operations: (stack level change + symbol) -> (absolute stack level + symbol)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_stack_level_iterator(stack_symbols_in),
-                           get_value_iterator(stack_symbols_in),
-                           get_stack_level_iterator(d_kv_operations.Current()),
-                           get_value_iterator(d_kv_operations.Current()));
+                           make_stack_level_iterator(stack_symbols_in),
+                           make_value_iterator(stack_symbols_in),
+                           make_stack_level_iterator(d_kv_operations.Current()),
+                           make_value_iterator(d_kv_operations.Current()));
 
   // Stable radix sort, sorting by stack level of the operations
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
@@ -455,8 +461,8 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // operation)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_stack_level_iterator(kv_ops_scan_in),
-                           get_value_iterator(kv_ops_scan_in));
+                           make_stack_level_iterator(kv_ops_scan_in),
+                           make_value_iterator(kv_ops_scan_in));
 
   // Inclusive scan to match pop operations with the latest push operation of that level
   CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
@@ -472,13 +478,13 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
   // operation)
   test::print::print_array(num_symbols_in,
                            stream,
-                           get_stack_level_iterator(kv_ops_scan_in),
-                           get_value_iterator(kv_ops_scan_in),
-                           get_stack_level_iterator(kv_ops_scan_out),
-                           get_value_iterator(kv_ops_scan_out));
+                           make_stack_level_iterator(kv_ops_scan_in),
+                           make_value_iterator(kv_ops_scan_in),
+                           make_stack_level_iterator(kv_ops_scan_out),
+                           make_value_iterator(kv_ops_scan_out));
 
   // Fill the output tape with read-symbol
-  thrust::fill(thrust::cuda::par.on(stream),
+  thrust::fill(rmm::exec_policy(stream),
                thrust::device_ptr<StackSymbolT>{d_top_of_stack},
                thrust::device_ptr<StackSymbolT>{d_top_of_stack + num_symbols_out},
                read_symbol);
@@ -489,7 +495,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
 
   // Scatter the stack symbols to the output tape (spots that are not scattered to have been
   // pre-filled with the read-symbol)
-  thrust::scatter(thrust::cuda::par.on(stream),
+  thrust::scatter(rmm::exec_policy(stream),
                   kv_op_to_stack_sym_it,
                   kv_op_to_stack_sym_it + num_symbols_in,
                   d_symbol_positions_db.Current(),
