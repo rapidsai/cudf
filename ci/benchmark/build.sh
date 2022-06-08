@@ -92,8 +92,7 @@ pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade
 
 logger "Check versions..."
 python --version
-$CC --version
-$CXX --version
+
 conda info
 conda config --show-sources
 conda list --show-channel-urls

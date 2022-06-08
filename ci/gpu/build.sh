@@ -82,8 +82,6 @@ conda list --show-channel-urls
 
 gpuci_logger "Check compiler versions"
 python --version
-$CC --version
-$CXX --version
 
 function install_dask {
     # Install the conda-forge or nightly version of dask and distributed
