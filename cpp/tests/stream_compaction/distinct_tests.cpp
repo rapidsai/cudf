@@ -28,9 +28,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <algorithm>
 #include <cmath>
 
+// using int32s_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+auto constexpr KEEP_ANY = cudf::duplicate_keep_option::KEEP_ANY;
 using cudf::nan_policy;
 using cudf::null_equality;
 using cudf::null_policy;
@@ -51,7 +52,7 @@ TEST_F(Distinct, StringKeyColumn)
                                                       {0, 1, 1, 1, 1}};
   cudf::table_view expected_sort{{exp_sort_col, exp_sort_key_col}};
 
-  auto got_unordered = distinct(input, keys);
+  auto got_unordered = cudf::distinct(input, keys, KEEP_ANY);
   auto key_view      = got_unordered->select(keys.begin(), keys.end());
   auto sorted_result = cudf::sort_by_key(got_unordered->view(), key_view);
 
@@ -64,7 +65,7 @@ TEST_F(Distinct, EmptyInputTable)
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{1, 2};
 
-  auto got = distinct(input, keys, null_equality::EQUAL);
+  auto got = cudf::distinct(input, keys, KEEP_ANY, null_equality::EQUAL);
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
 
@@ -73,7 +74,7 @@ TEST_F(Distinct, NoColumnInputTable)
   cudf::table_view input{std::vector<cudf::column_view>()};
   std::vector<cudf::size_type> keys{1, 2};
 
-  auto got = distinct(input, keys, null_equality::EQUAL);
+  auto got = cudf::distinct(input, keys, KEEP_ANY, null_equality::EQUAL);
   CUDF_TEST_EXPECT_TABLES_EQUAL(input, got->view());
 }
 
@@ -84,7 +85,7 @@ TEST_F(Distinct, EmptyKeys)
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{};
 
-  auto got = distinct(input, keys, null_equality::EQUAL);
+  auto got = cudf::distinct(input, keys, KEEP_ANY, null_equality::EQUAL);
   CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view{{empty_col}}, got->view());
 }
 
@@ -105,7 +106,7 @@ TEST_F(Distinct, NonNullTable)
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col2_key{{21, 20, 19, 20, 9}};
   cudf::table_view expected{{exp_col1, exp_col2, exp_col1_key, exp_col2_key}};
 
-  auto result        = distinct(input, keys);
+  auto result        = cudf::distinct(input, keys, KEEP_ANY);
   auto key_view      = result->select(keys.begin(), keys.end());
   auto sorted_result = cudf::sort_by_key(result->view(), key_view);
 
@@ -134,7 +135,7 @@ TEST_F(Distinct, SlicedNonNullTable)
   auto const exp_col2_key = int32s_col{{21, 20, 19, 20, 9}};
   auto const expected     = cudf::table_view{{exp_col1, exp_col2, exp_col1_key, exp_col2_key}};
 
-  auto const result        = cudf::distinct(input, keys);
+  auto const result        = cudf::distinct(input, keys, KEEP_ANY);
   auto const key_view      = result->select(keys.begin(), keys.end());
   auto const sorted_result = cudf::sort_by_key(result->view(), key_view);
 
@@ -152,7 +153,7 @@ TEST_F(Distinct, WithNull)
   cudf::test::fixed_width_column_wrapper<int32_t> exp_equal_col{{4, 1, 5, 8}, {0, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_equal_key_col{{20, 19, 20, 21}, {0, 1, 1, 1}};
   cudf::table_view expected_equal{{exp_equal_col, exp_equal_key_col}};
-  auto res_equal    = distinct(input, keys, null_equality::EQUAL);
+  auto res_equal    = cudf::distinct(input, keys, KEEP_ANY, null_equality::EQUAL);
   auto equal_keys   = res_equal->select(keys.begin(), keys.end());
   auto sorted_equal = cudf::sort_by_key(res_equal->view(), equal_keys);
 
@@ -163,7 +164,7 @@ TEST_F(Distinct, WithNull)
   cudf::test::fixed_width_column_wrapper<int32_t> exp_unequal_key_col{{20, 19, 20, 20, 21},
                                                                       {0, 1, 0, 1, 1}};
   cudf::table_view expected_unequal{{exp_unequal_col, exp_unequal_key_col}};
-  auto res_unequal    = distinct(input, keys, null_equality::UNEQUAL);
+  auto res_unequal    = cudf::distinct(input, keys, KEEP_ANY, null_equality::UNEQUAL);
   auto sorted_unequal = cudf::sort(res_unequal->view());
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_unequal, sorted_unequal->view());
@@ -184,7 +185,7 @@ TEST_F(Distinct, BasicList)
   auto const exp_val = LCW{{}, {1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
   auto const expect  = cudf::table_view({exp_idx, exp_val});
 
-  auto result        = cudf::distinct(input, {1});
+  auto result        = cudf::distinct(input, {1}, KEEP_ANY);
   auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expect, *sorted_result);
@@ -206,7 +207,7 @@ TEST_F(Distinct, BasicSlicedLists)
   auto const exp_val  = lists_col{{1}, {1, 1}, {1, 2}, {2, 2}, {2}, {2, 1}};
   auto const expected = cudf::table_view({exp_idx, exp_val});
 
-  auto const result        = cudf::distinct(input, {1});
+  auto const result        = cudf::distinct(input, {1}, KEEP_ANY);
   auto const sorted_result = cudf::sort_by_key(*result, result->select({0}));
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *sorted_result);
@@ -231,7 +232,7 @@ TEST_F(Distinct, NullableList)
   auto const input  = cudf::table_view({idx, col});
   auto const expect = cudf::table_view({exp_idx, exp_val});
 
-  auto result        = cudf::distinct(input, {1});
+  auto result        = cudf::distinct(input, {1}, KEEP_ANY);
   auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expect, *sorted_result);
@@ -291,7 +292,7 @@ TEST_F(Distinct, ListOfStruct)
 
   auto expect_table = cudf::gather(input, expect_map);
 
-  auto result        = cudf::distinct(input, {1});
+  auto result        = cudf::distinct(input, {1}, KEEP_ANY);
   auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *sorted_result);
@@ -348,7 +349,7 @@ TEST_F(Distinct, SlicedListsOfStructs)
   auto const input_original = cudf::table_view({idx, lists});
   auto const input          = cudf::slice(input_original, {8, 15})[0];
 
-  auto const result        = cudf::distinct(input, {1});
+  auto const result        = cudf::distinct(input, {1}, KEEP_ANY);
   auto const sorted_result = cudf::sort_by_key(*result, result->select({0}));
 
   auto const exp_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 9, 10, 11, 13};
@@ -402,7 +403,7 @@ TEST_F(Distinct, StructOfStruct)
   auto expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2, 3, 4, 8};
   auto expect     = cudf::gather(input, expect_map);
 
-  auto result        = cudf::distinct(input, {1});
+  auto result        = cudf::distinct(input, {1}, KEEP_ANY);
   auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect->get_column(1), sorted_result->get_column(1));
 
@@ -410,7 +411,7 @@ TEST_F(Distinct, StructOfStruct)
   auto sliced_expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 2, 3, 4, 6};
   auto sliced_expect     = cudf::gather(input, sliced_expect_map);
 
-  auto sliced_result        = cudf::distinct(sliced_input, {1});
+  auto sliced_result        = cudf::distinct(sliced_input, {1}, KEEP_ANY);
   auto sorted_sliced_result = cudf::sort_by_key(*sliced_result, sliced_result->select({0}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sliced_expect->get_column(1), sorted_sliced_result->get_column(1));
 }
@@ -437,7 +438,7 @@ TEST_F(Distinct, SlicedStructsOfLists)
   }();
   auto const expected = cudf::table_view({expected_structs});
 
-  auto const result        = cudf::distinct(input, {1});
+  auto const result        = cudf::distinct(input, {1}, KEEP_ANY);
   auto const sorted_result = cudf::sort_by_key(*result, result->select({0}));
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, cudf::table_view{{sorted_result->get_column(1)}});
 }
@@ -477,7 +478,7 @@ TEST_F(Distinct, StructWithNullElement)
 
   auto input = cudf::table_view({idx, s1});
 
-  auto result        = cudf::distinct(input, {1});
+  auto result        = cudf::distinct(input, {1}, KEEP_ANY);
   auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(input.column(1), sorted_result->get_column(1));
 }
@@ -523,7 +524,7 @@ TEST_F(Distinct, ListOfEmptyStruct)
   auto expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 7, 9, 11};
   auto expect     = cudf::gather(input, expect_map);
 
-  auto result        = cudf::distinct(input, {1});
+  auto result        = cudf::distinct(input, {1}, KEEP_ANY);
   auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expect, *sorted_result);
 }
@@ -555,7 +556,7 @@ TEST_F(Distinct, EmptyDeepList)
   auto expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2};
   auto expect     = cudf::gather(input, expect_map);
 
-  auto result        = cudf::distinct(input, {1});
+  auto result        = cudf::distinct(input, {1}, KEEP_ANY);
   auto sorted_result = cudf::sort_by_key(*result, result->select({0}));
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expect, *sorted_result);
 }
