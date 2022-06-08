@@ -32,6 +32,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <thrust/iterator/discard_iterator.h>
+
 #include <cstdlib>
 #include <string>
 
@@ -65,6 +67,15 @@ auto make_test_json_data(nvbench::state& state)
   const size_type repeat_times = string_size / input.size();
   return cudf::strings::repeat_string(d_string_scalar, repeat_times);
 }
+
+// Type used to represent the atomic symbol type used within the finite-state machine
+using SymbolT = char;
+// Type sufficiently large to index symbols within the input and output (may be unsigned)
+using SymbolOffsetT = uint32_t;
+// Helper class to set up transition table, symbol group lookup table, and translation table
+using DfaFstT = cudf::io::fst::detail::Dfa<char, (NUM_SYMBOL_GROUPS - 1), TT_NUM_STATES>;
+constexpr std::size_t single_item = 1;
+
 }  // namespace
 
 void BM_FST_JSON(nvbench::state& state)
@@ -82,15 +93,7 @@ void BM_FST_JSON(nvbench::state& state)
 
   state.add_element_count(d_input.size());
 
-  // Type used to represent the atomic symbol type used within the finite-state machine
-  using SymbolT = char;
-  // Type sufficiently large to index symbols within the input and output (may be unsigned)
-  using SymbolOffsetT = uint32_t;
-  // Helper class to set up transition table, symbol group lookup table, and translation table
-  using DfaFstT = cudf::io::fst::detail::Dfa<char, (NUM_SYMBOL_GROUPS - 1), TT_NUM_STATES>;
-
   // Prepare input & output buffers
-  constexpr std::size_t single_item = 1;
   hostdevice_vector<SymbolT> output_gpu(d_input.size(), stream_view);
   hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
   hostdevice_vector<SymbolOffsetT> out_indexes_gpu(d_input.size(), stream_view);
@@ -110,7 +113,83 @@ void BM_FST_JSON(nvbench::state& state)
   });
 }
 
+void BM_FST_JSON_no_outidx(nvbench::state& state)
+{
+  // TODO: to be replaced by nvbench fixture once it's ready
+  cudf::rmm_pool_raii rmm_pool;
+
+  auto const string_size{size_type(state.get_int64("string_size"))};
+  // Prepare cuda stream for data transfers & kernels
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+
+  auto input_string = make_test_json_data(state);
+  auto& d_input     = static_cast<cudf::scalar_type_t<std::string>&>(*input_string);
+
+  state.add_element_count(d_input.size());
+
+  // Prepare input & output buffers
+  hostdevice_vector<SymbolT> output_gpu(d_input.size(), stream_view);
+  hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
+  hostdevice_vector<SymbolOffsetT> out_indexes_gpu(d_input.size(), stream_view);
+
+  // Run algorithm
+  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    // Allocate device-side temporary storage & run algorithm
+    parser.Transduce(d_input.data(),
+                     static_cast<SymbolOffsetT>(d_input.size()),
+                     output_gpu.device_ptr(),
+                     thrust::make_discard_iterator(),
+                     output_gpu_size.device_ptr(),
+                     start_state,
+                     stream.value());
+  });
+}
+
+void BM_FST_JSON_no_out(nvbench::state& state)
+{
+  // TODO: to be replaced by nvbench fixture once it's ready
+  cudf::rmm_pool_raii rmm_pool;
+
+  auto const string_size{size_type(state.get_int64("string_size"))};
+  // Prepare cuda stream for data transfers & kernels
+  rmm::cuda_stream stream{};
+  rmm::cuda_stream_view stream_view(stream);
+
+  auto input_string = make_test_json_data(state);
+  auto& d_input     = static_cast<cudf::scalar_type_t<std::string>&>(*input_string);
+
+  state.add_element_count(d_input.size());
+
+  // Prepare input & output buffers
+  hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
+
+  // Run algorithm
+  DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
+
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    // Allocate device-side temporary storage & run algorithm
+    parser.Transduce(d_input.data(),
+                     static_cast<SymbolOffsetT>(d_input.size()),
+                     thrust::make_discard_iterator(),
+                     thrust::make_discard_iterator(),
+                     output_gpu_size.device_ptr(),
+                     start_state,
+                     stream.value());
+  });
+}
+
 NVBENCH_BENCH(BM_FST_JSON)
   .set_name("FST_JSON")
-  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 32, 1));
+  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 31, 1));
+
+NVBENCH_BENCH(BM_FST_JSON_no_outidx)
+  .set_name("FST_JSON_no_outidx")
+  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 31, 1));
+
+NVBENCH_BENCH(BM_FST_JSON_no_out)
+  .set_name("FST_JSON_no_out")
+  .add_int64_power_of_two_axis("string_size", nvbench::range(20, 31, 1));
 }  // namespace cudf
