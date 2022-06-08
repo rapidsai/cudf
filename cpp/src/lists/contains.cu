@@ -108,7 +108,7 @@ struct search_lists_fn {
 
  private:
   template <bool find_first>
-  __device__ size_type search_list(list_device_view const& list, Type const& search_key) const
+  static __device__ size_type search_list(list_device_view const& list, Type const& search_key)
   {
     auto const [begin, end] = element_index_pair_iter<find_first>(list.size());
     auto const found_iter =
