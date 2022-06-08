@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,11 +121,15 @@ class column {
 
   /**
    * @brief Returns the column's logical element type
+   *
+   * @return The column's logical element type
    */
   [[nodiscard]] data_type type() const noexcept { return _type; }
 
   /**
    * @brief Returns the number of elements
+   *
+   * @return The number of elements
    */
   [[nodiscard]] size_type size() const noexcept { return _size; }
 
@@ -136,6 +140,8 @@ class column {
    * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
+   *
+   * @return The number of null elements
    */
   [[nodiscard]] size_type null_count() const;
 
@@ -211,6 +217,8 @@ class column {
 
   /**
    * @brief Returns the number of child columns
+   *
+   * @return The number of child columns
    */
   [[nodiscard]] size_type num_children() const noexcept { return _children.size(); }
 
@@ -239,9 +247,9 @@ class column {
    * Returned by `column::release()`.
    */
   struct contents {
-    std::unique_ptr<rmm::device_buffer> data;
-    std::unique_ptr<rmm::device_buffer> null_mask;
-    std::vector<std::unique_ptr<column>> children;
+    std::unique_ptr<rmm::device_buffer> data;       ///< data device memory buffer
+    std::unique_ptr<rmm::device_buffer> null_mask;  ///< null mask device memory buffer
+    std::vector<std::unique_ptr<column>> children;  ///< child columns
   };
 
   /**

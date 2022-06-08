@@ -42,16 +42,34 @@ namespace test {
 
 using expected_value = thrust::tuple<size_type, double, double>;
 
+/**
+ * @brief Device functor to compute min of a sequence of values serially.
+ */
 template <typename T>
 struct column_min {
+  /**
+   * @brief Computes the min of a sequence of values serially.
+   *
+   * @param vals The sequence of values to compute the min of
+   * @return The min value
+   */
   __device__ double operator()(device_span<T const> vals)
   {
     return static_cast<double>(*thrust::min_element(thrust::seq, vals.begin(), vals.end()));
   }
 };
 
+/**
+ * @brief Device functor to compute max of a sequence of values serially.
+ */
 template <typename T>
 struct column_max {
+  /**
+   * @brief Computes the max of a sequence of values serially.
+   *
+   * @param vals The sequence of values to compute the max of
+   * @return The max value
+   */
   __device__ double operator()(device_span<T const> vals)
   {
     return static_cast<double>(*thrust::max_element(thrust::seq, vals.begin(), vals.end()));
@@ -62,6 +80,7 @@ struct column_max {
  * @brief Functor to generate a tdigest.
  */
 struct tdigest_gen {
+  // @cond
   template <
     typename T,
     typename Func,
@@ -79,6 +98,7 @@ struct tdigest_gen {
   {
     CUDF_FAIL("Invalid tdigest test type");
   }
+  // @endcond
 };
 
 /**
@@ -120,10 +140,13 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_max, *expected_max);
 }
 
+/// Expected values for tdigest tests
 struct expected_tdigest {
+  // @cond
   column_view mean;
   column_view weight;
   double min, max;
+  // @endcond
 };
 
 /**
