@@ -231,7 +231,8 @@ enum class duplicate_keep_option {
  *
  * Performance hints:
  * - Always use `cudf::unique` instead of `cudf::distinct` if the input is pre-sorted.
- * - If the input is not pre-sorted, use `cudf::distinct` with a suitable `keep` option.
+ * - If the input is not pre-sorted, use `cudf::distinct` with or without `duplicate_keep_option`
+ *   depending the desired behavior.
  *
  * @throws cudf::logic_error if the `keys` column indices are out of bounds in the `input` table.
  *
@@ -256,6 +257,34 @@ std::unique_ptr<table> unique(
  * @brief Create a new table without duplicate rows.
  *
  * Given an `input` table_view, each row is copied to the output table if the corresponding
+ * row of `keys` columns is distinct (no other equivalent row exists in the table).
+ *
+ * The order of elements in the input table is not reserved when copied to the output.
+ *
+ * Performance hints:
+ * - Always use `cudf::unique` instead of `cudf::distinct` if the input is pre-sorted.
+ * - If the input is not pre-sorted, use `cudf::distinct` with or without `duplicate_keep_option`
+ *   depending the desired behavior.
+ *
+ * @param[in] input           input table_view to copy only distinct rows
+ * @param[in] keys            vector of indices representing key columns from `input`
+ * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
+ *                            equal if null_equality::UNEQUAL
+ * @param[in] mr              Device memory resource used to allocate the returned table's device
+ *                            memory
+ *
+ * @return Table with distinct rows in an unspecified order
+ */
+std::unique_ptr<table> distinct(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create a new table without duplicate rows.
+ *
+ * Given an `input` table_view, each row is copied to the output table if the corresponding
  * row of `keys` columns is distinct (no other equivalent row exists in the table). If duplicate
  * rows are present, depending on the value of `keep`:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
@@ -267,7 +296,8 @@ std::unique_ptr<table> unique(
  *
  * Performance hints:
  * - Always use `cudf::unique` instead of `cudf::distinct` if the input is pre-sorted.
- * - If the input is not pre-sorted, use `cudf::distinct` with a suitable `keep` option.
+ * - If the input is not pre-sorted, use `cudf::distinct` with or without `duplicate_keep_option`
+ *   depending the desired behavior.
  *
  * @param[in] input           input table_view to copy only distinct rows
  * @param[in] keys            vector of indices representing key columns from `input`

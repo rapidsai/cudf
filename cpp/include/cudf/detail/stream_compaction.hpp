@@ -75,7 +75,21 @@ std::unique_ptr<table> unique(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::distinct
+ * @copydoc cudf::distinct(table_view const&, std::vector<size_type> const&,
+ *                         null_equality, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+ *
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<table> distinct(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::distinct(table_view const&, std::vector<size_type> const&, duplicate_keep_option,
+ *                         null_equality, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
