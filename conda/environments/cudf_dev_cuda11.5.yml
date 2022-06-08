@@ -43,6 +43,7 @@ dependencies:
   - black=22.3.0
   - isort=5.6.4
   - mypy=0.782
+  - doxygen=1.8.20
   - pydocstyle=6.1.1
   - typing_extensions
   - pre-commit
