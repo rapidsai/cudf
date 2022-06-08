@@ -108,6 +108,7 @@ repos:
                 files: ^cpp/include/
                 types_or: [file]
                 language: system
+                pass_filenames: false
 
 default_language_version:
       python: python3
