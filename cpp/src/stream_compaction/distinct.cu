@@ -14,20 +14,13 @@
  * limitations under the License.
  */
 
-#include "stream_compaction_common.cuh"
+#include <stream_compaction/stream_compaction_common.cuh>
 
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/sorting.hpp>
-#include <cudf/detail/stream_compaction.hpp>
-#include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -38,10 +31,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
-#include <thrust/execution_policy.h>
-#include <thrust/functional.h>
+#include <thrust/distance.h>
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/uninitialized_fill.h>
 
 #include <utility>
 #include <vector>
@@ -160,8 +154,8 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
 
   auto const do_reduce = [keys_size, stream](auto const& fn) {
     thrust::for_each(rmm::exec_policy(stream),
-                     thrust::counting_iterator<size_type>(0),
-                     thrust::counting_iterator<size_type>(keys_size),
+                     thrust::make_counting_iterator(0),
+                     thrust::make_counting_iterator(keys_size),
                      fn);
   };
   switch (keep) {
