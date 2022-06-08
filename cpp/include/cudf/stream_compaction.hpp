@@ -222,7 +222,7 @@ enum class duplicate_keep_option {
  * on the value of `keep`:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
- * - KEEP_ANY: will be treated as KEEP_FIRST in this API
+ * - KEEP_ANY: an unspecified row in a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied
  *
  * A row is distinct if there are no equivalent rows in the table. A row is unique if there is no
@@ -260,7 +260,7 @@ std::unique_ptr<table> unique(
  * rows are present, depending on the value of `keep`:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
- * - KEEP_ANY: a row at an unspecified position in a sequence of duplicate rows is copied
+ * - KEEP_ANY: an unspecified row in a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied
  *
  * The order of elements in the input table is not reserved when copied to the output.
