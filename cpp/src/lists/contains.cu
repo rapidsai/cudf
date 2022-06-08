@@ -74,12 +74,10 @@ template <bool find_first>
 auto __device__ element_index_pair_iter(size_type const size)
 {
   if constexpr (find_first) {
-    return thrust::pair(thrust::make_counting_iterator<size_type>(0),
-                        thrust::make_counting_iterator<size_type>(size));
+    return thrust::pair(thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
   } else {
-    return thrust::pair(
-      thrust::make_reverse_iterator(thrust::make_counting_iterator<size_type>(size)),
-      thrust::make_reverse_iterator(thrust::make_counting_iterator<size_type>(0)));
+    return thrust::pair(thrust::make_reverse_iterator(thrust::make_counting_iterator(size)),
+                        thrust::make_reverse_iterator(thrust::make_counting_iterator(0)));
   }
 }
 
