@@ -1484,6 +1484,30 @@ __device__ int32_t compareValues(int8_t ptype,
       }
     case Type::FLOAT:
     case Type::DOUBLE: return compare(v1.fp_val, v2.fp_val);
+    // currently only used for decimal128, so length should always be 16
+    // FIXME  this will break if comparing byte arrays of differing lengths
+    case Type::FIXED_LEN_BYTE_ARRAY: {
+#if 0
+      string_view s1 = (string_view)v1.str_val;
+      string_view s2 = (string_view)v2.str_val;
+      printf("fixed %d %d\n", v1.str_val.length, v2.str_val.length);
+      for (int i=0; i < 16; i++) {
+        if (v1.str_val.ptr[i] != v2.str_val.ptr[i]) {
+          printf("%d %d %d\n", i, v1.str_val.ptr[i], v2.str_val.ptr[i]);
+          return v1.str_val.ptr[i] - v2.str_val.ptr[i];
+        }
+      }
+      return 0;
+#else
+      // FIXME: the stats buffer seems to have 64-bit int rather than
+      // 16-byte array!  I think this is a bug.
+      // look at typed_statistics_chunk union_member usage.  int128 is integral
+      // so just copies it to chunk as is, but ival is 64bit.  need to expand
+      // size of ival and uval in statistics_val to 128bit.  then need to encode
+      // decimal128 min/max vals as bigendian array of char's
+      return compare(v1.i_val, v2.i_val);
+#endif
+    }
     case Type::BYTE_ARRAY: {
       string_view s1 = (string_view)v1.str_val;
       string_view s2 = (string_view)v2.str_val;

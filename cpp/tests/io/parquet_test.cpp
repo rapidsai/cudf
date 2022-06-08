@@ -264,7 +264,8 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 // Declare typed test cases
 using SupportedTypes = cudf::test::NumericTypes;
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
-TYPED_TEST_SUITE(ParquetWriterComparableTypeTest, cudf::test::ComparableTypes);
+using ComparableAndFixedTypes = cudf::test::Concat<cudf::test::ComparableTypes, cudf::test::FixedPointTypes>;
+TYPED_TEST_SUITE(ParquetWriterComparableTypeTest, ComparableAndFixedTypes);
 TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, cudf::test::ChronoTypes);
 using SupportedTimestampTypes =
   cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
@@ -3488,6 +3489,35 @@ std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper
   return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + 20000);
 }
 
+// ----- fixed point types
+
+template <typename T>
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>>
+ascending()
+{
+  auto elements =
+    cudf::detail::make_counting_transform_iterator(-10000, [](auto i) { return T(i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>>
+descending()
+{
+  auto elements =
+    cudf::detail::make_counting_transform_iterator(-10000, [](auto i) { return T(-i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>>
+unordered()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    -10000, [](auto i) { return T(i % 2 ? i : -i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
 // ----- chrono types
 
 // because values can be scaled when passing to parquet, can't just use T::min() and T::max()
@@ -3665,6 +3695,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
     EXPECT_TRUE(cp.read(&ci));
 
     EXPECT_EQ(ci.boundary_order, expected_orders[i]);
+    //if (ci.boundary_order != expected_orders[i]) ((char*)0)[20]=0xff;
   }
 }
 
