@@ -118,7 +118,7 @@ struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>
                        // A null key will also result in a null output row.
                        if (!key_opt) { return {NOT_FOUND_SENTINEL, false}; }
 
-                       auto const key = key_opt.value();
+                       auto const& key = key_opt.value();
                        return {find_option == duplicate_find_option::FIND_FIRST
                                  ? search_list<true>(list, key)
                                  : search_list<false>(list, key),
@@ -298,13 +298,8 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return to_contains(index_of(lists,
-                              search_key,
-                              duplicate_find_option::FIND_FIRST,
-                              stream,
-                              rmm::mr::get_current_device_resource()),
-                     stream,
-                     mr);
+  return to_contains(
+    index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
 
 std::unique_ptr<column> contains(lists_column_view const& lists,
@@ -315,13 +310,8 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
 
-  return to_contains(index_of(lists,
-                              search_keys,
-                              duplicate_find_option::FIND_FIRST,
-                              stream,
-                              rmm::mr::get_current_device_resource()),
-                     stream,
-                     mr);
+  return to_contains(
+    index_of(lists, search_keys, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
 
 std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
