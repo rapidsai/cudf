@@ -110,7 +110,7 @@ struct search_lists_fn {
   {
     auto const [begin, end] = element_index_pair_iter<find_first>(list.size());
     auto const found_iter =
-      thrust::find_if(thrust::seq, begin, end, [&list, search_key] __device__(auto const idx) {
+      thrust::find_if(thrust::seq, begin, end, [&] __device__(auto const idx) {
         return !list.is_null(idx) &&
                cudf::equality_compare(list.template element<Type>(idx), search_key);
       });
