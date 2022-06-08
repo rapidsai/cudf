@@ -61,12 +61,6 @@
 
 constexpr auto JCUDF_ROW_ALIGNMENT = 8;
 
-constexpr auto NUM_TILES_PER_KERNEL_FROM_ROWS = 2;
-constexpr auto NUM_TILES_PER_KERNEL_TO_ROWS = 2;
-constexpr auto NUM_TILES_PER_KERNEL_LOADED = 2;
-constexpr auto NUM_VALIDITY_TILES_PER_KERNEL = 8;
-constexpr auto NUM_VALIDITY_TILES_PER_KERNEL_LOADED = 2;
-
 constexpr auto MAX_BATCH_SIZE = std::numeric_limits<cudf::size_type>::max();
 
 // Number of rows each block processes in the two kernels. Tuned via nsight
@@ -75,8 +69,8 @@ constexpr auto NUM_STRING_ROWS_PER_BLOCK_FROM_ROWS = 64;
 constexpr auto MIN_STRING_BLOCKS = 32;
 constexpr auto MAX_STRING_BLOCKS = MAX_BATCH_SIZE;
 
-constexpr auto NUM_THREADS = 256;
-constexpr auto NUM_VALIDITY_THREADS_PER_TILE = 32;
+constexpr auto NUM_THREADS_IN_WARP = 32;
+constexpr auto NUM_THREADS = 1024;
 
 // needed to suppress warning about cuda::barrier
 #pragma nv_diag_suppress static_var_with_dynamic_init
@@ -594,134 +588,106 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
   // This has been broken up for us in the tile_info struct, so we don't have
   // any calculation to do here, but it is important to note.
 
-  constexpr unsigned stages_count = NUM_TILES_PER_KERNEL_LOADED;
   auto group = cooperative_groups::this_thread_block();
+  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(group);
   extern __shared__ int8_t shared_data[];
-  int8_t *shared[stages_count] = {shared_data, shared_data + shmem_used_per_tile};
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
-  __shared__ cuda::barrier<cuda::thread_scope_block> tile_barrier[NUM_TILES_PER_KERNEL_LOADED];
+  __shared__ cuda::barrier<cuda::thread_scope_block> tile_barrier;
   if (group.thread_rank() == 0) {
-    for (int i = 0; i < NUM_TILES_PER_KERNEL_LOADED; ++i) {
-      init(&tile_barrier[i], group.size());
-    }
+    init(&tile_barrier, group.size());
   }
   group.sync();
 #endif // ASYNC_MEMCPY_SUPPORTED
 
-  auto const tiles_remaining =
-      std::min(static_cast<uint>(tile_infos.size()) - blockIdx.x * NUM_TILES_PER_KERNEL_TO_ROWS,
-               static_cast<uint>(NUM_TILES_PER_KERNEL_TO_ROWS));
+  auto const tile = tile_infos[blockIdx.x];
+  auto const num_tile_cols = tile.num_cols();
+  auto const num_tile_rows = tile.num_rows();
+  auto const tile_row_size = tile.get_shared_row_size(col_offsets, col_sizes);
+  auto const starting_column_offset = col_offsets[tile.start_col];
 
-  size_t fetch_index;      //< tile we are currently fetching
-  size_t processing_index; //< tile we are currently processing
-  for (processing_index = fetch_index = 0; processing_index < tiles_remaining; ++processing_index) {
-    // Fetch ahead up to NUM_TILES_PER_KERNEL_LOADED
-    for (; fetch_index < tiles_remaining && fetch_index < (processing_index + stages_count);
-         ++fetch_index) {
-      auto const fetch_tile = tile_infos[blockIdx.x * NUM_TILES_PER_KERNEL_TO_ROWS + fetch_index];
-      auto const num_fetch_cols = fetch_tile.num_cols();
-      auto const num_fetch_rows = fetch_tile.num_rows();
-      auto const num_elements_in_tile = num_fetch_cols * num_fetch_rows;
-      auto const fetch_tile_row_size = fetch_tile.get_shared_row_size(col_offsets, col_sizes);
-      auto const starting_column_offset = col_offsets[fetch_tile.start_col];
-#ifdef ASYNC_MEMCPY_SUPPORTED
-      auto &fetch_barrier = tile_barrier[fetch_index % NUM_TILES_PER_KERNEL_LOADED];
-      // wait for the last use of the memory to be completed
-      if (fetch_index >= NUM_TILES_PER_KERNEL_LOADED) {
-        fetch_barrier.arrive_and_wait();
+  // to do the copy we need to do n column copies followed by m element copies OR
+  // we have to do m element copies followed by r row copies. When going from column
+  // to row it is much easier to copy by elements first otherwise we would need a running
+  // total of the column sizes for our tile, which isn't readily available. This makes it
+  // more appealing to copy element-wise from input data into shared matching the end layout
+  // and do row-based memcopies out.
+
+  // read each column across the tile
+  // each warp takes a column with each thread of a warp taking a row
+  for (int relative_col = warp.meta_group_rank(); relative_col < num_tile_cols;
+       relative_col += warp.meta_group_size()) {
+    for (int relative_row = warp.thread_rank(); relative_row < num_tile_rows;
+         relative_row += warp.size()) {
+      auto const absolute_col = relative_col + tile.start_col;
+
+      if (input_data[absolute_col] == nullptr || relative_row >= num_tile_rows) {
+        // variable-width data
+        continue;
       }
-#else
-      // wait for the last use of the memory to be completed
-      if (fetch_index >= NUM_TILES_PER_KERNEL_LOADED) {
-        group.sync();
-      }
-#endif // ASYNC_MEMCPY_SUPPORTED
+      auto const absolute_row = relative_row + tile.start_row;
+      auto const col_size = col_sizes[absolute_col];
+      auto const col_offset = col_offsets[absolute_col];
+      auto const relative_col_offset = col_offset - starting_column_offset;
 
-      // to do the copy we need to do n column copies followed by m element copies OR
-      // we have to do m element copies followed by r row copies. When going from column
-      // to row it is much easier to copy by elements first otherwise we would need a running
-      // total of the column sizes for our tile, which isn't readily available. This makes it
-      // more appealing to copy element-wise from input data into shared matching the end layout
-      // and do row-based memcopies out.
+      auto const shared_offset = relative_row * tile_row_size + relative_col_offset;
+      auto const input_src = input_data[absolute_col] + col_size * absolute_row;
 
-      auto const shared_buffer_base = shared[fetch_index % stages_count];
-      for (auto el = static_cast<int>(threadIdx.x); el < num_elements_in_tile; el += blockDim.x) {
-        auto const relative_col = el / num_fetch_rows;
-        auto const relative_row = el % num_fetch_rows;
-        auto const absolute_col = relative_col + fetch_tile.start_col;
-        if (input_data[absolute_col] == nullptr) {
-          // variable-width data
-          continue;
+      // copy the element from global memory
+      switch (col_size) {
+        case 2: {
+          const int16_t *short_col_input = reinterpret_cast<const int16_t *>(input_src);
+          *reinterpret_cast<int16_t *>(&shared_data[shared_offset]) = *short_col_input;
+          break;
         }
-        auto const absolute_row = relative_row + fetch_tile.start_row;
-        auto const col_size = col_sizes[absolute_col];
-        auto const col_offset = col_offsets[absolute_col];
-        auto const relative_col_offset = col_offset - starting_column_offset;
-
-        auto const shared_offset = relative_row * fetch_tile_row_size + relative_col_offset;
-        auto const input_src = input_data[absolute_col] + col_size * absolute_row;
-
-        // copy the element from global memory
-        switch (col_size) {
-          case 2:
-            MEMCPY(&shared_buffer_base[shared_offset], input_src, aligned_size_t<2>(col_size),
-                   fetch_barrier);
-            break;
-          case 4:
-            MEMCPY(&shared_buffer_base[shared_offset], input_src, aligned_size_t<4>(col_size),
-                   fetch_barrier);
-            break;
-          case 8:
-            MEMCPY(&shared_buffer_base[shared_offset], input_src, aligned_size_t<8>(col_size),
-                   fetch_barrier);
-            break;
-          default:
-            MEMCPY(&shared_buffer_base[shared_offset], input_src, col_size, fetch_barrier);
-            break;
+        case 4: {
+          const int32_t *int_col_input = reinterpret_cast<const int32_t *>(input_src);
+          *reinterpret_cast<int32_t *>(&shared_data[shared_offset]) = *int_col_input;
+          break;
+        }
+        case 8: {
+          const int64_t *long_col_input = reinterpret_cast<const int64_t *>(input_src);
+          *reinterpret_cast<int64_t *>(&shared_data[shared_offset]) = *long_col_input;
+          break;
+        }
+        case 1: shared_data[shared_offset] = *input_src; break;
+        default: {
+          for (int i = 0; i < col_size; ++i) {
+            shared_data[shared_offset] = *input_src;
+          }
+          break;
         }
       }
     }
+  }
+
+  auto const tile_output_buffer = output_data[tile.batch_number];
+  auto const row_batch_start = tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
-    auto &processing_barrier = tile_barrier[processing_index % NUM_TILES_PER_KERNEL_LOADED];
-    processing_barrier.arrive_and_wait();
+  tile_barrier.arrive_and_wait();
 #else
-    group.sync();
+  group.sync();
 #endif // ASYNC_MEMCPY_SUPPORTED
 
-    auto const tile = tile_infos[blockIdx.x * NUM_TILES_PER_KERNEL_TO_ROWS + processing_index];
-    auto const tile_row_size = tile.get_shared_row_size(col_offsets, col_sizes);
-    auto const column_offset = col_offsets[tile.start_col];
-    auto const tile_output_buffer = output_data[tile.batch_number];
-    auto const row_batch_start =
-        tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
-
-    // copy entire row 8 bytes at a time
-    constexpr auto bytes_per_chunk = 8;
-    auto const chunks_per_row = util::div_rounding_up_unsafe(tile_row_size, bytes_per_chunk);
-    auto const total_chunks = chunks_per_row * tile.num_rows();
-
-    for (auto i = threadIdx.x; i < total_chunks; i += blockDim.x) {
-      // determine source address of my chunk
-      auto const relative_row = i / chunks_per_row;
-      auto const relative_chunk_offset = (i % chunks_per_row) * bytes_per_chunk;
-      auto const output_dest = tile_output_buffer +
-                               row_offsets(relative_row + tile.start_row, row_batch_start) +
-                               column_offset + relative_chunk_offset;
-      auto const input_src = &shared[processing_index % stages_count]
-                                    [tile_row_size * relative_row + relative_chunk_offset];
-
-      MEMCPY(output_dest, input_src, aligned_size_t<bytes_per_chunk>{bytes_per_chunk},
-             processing_barrier);
+  // each warp takes a row
+  for (int copy_row = warp.meta_group_rank(); copy_row < tile.num_rows();
+       copy_row += warp.meta_group_size()) {
+    auto const src = &shared_data[tile_row_size * copy_row];
+    auto const dst = tile_output_buffer + row_offsets(copy_row + tile.start_row, row_batch_start) +
+                     starting_column_offset;
+#ifdef ASYNC_MEMCPY_SUPPORTED
+    cuda::memcpy_async(warp, dst, src, tile_row_size, tile_barrier);
+#else
+    for (int b = warp.thread_rank(); b < tile_row_size; b += warp.size()) {
+      dst[b] = src[b];
     }
+#endif
   }
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
   // wait on the last copies to complete
-  for (uint i = 0; i < std::min(stages_count, tiles_remaining); ++i) {
-    tile_barrier[i].arrive_and_wait();
-  }
+  tile_barrier.arrive_and_wait();
 #else
   group.sync();
 #endif // ASYNC_MEMCPY_SUPPORTED
@@ -750,139 +716,95 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
                       const size_type validity_offset, device_span<const tile_info> tile_infos,
                       const bitmask_type **input_nm) {
   extern __shared__ int8_t shared_data[];
-  int8_t *shared_tiles[NUM_VALIDITY_TILES_PER_KERNEL_LOADED] = {
-      shared_data, shared_data + shmem_used_per_tile / 2};
-
-  using cudf::detail::warp_size;
 
   // each thread of warp reads a single int32 of validity - so we read 128 bytes
   // then ballot_sync the bits and write the result to shmem
   // after we fill shared mem memcpy it out in a blob.
-  // probably need knobs for number of rows vs columns to balance read/write
   auto group = cooperative_groups::this_thread_block();
-
-  int const tiles_remaining =
-      std::min(static_cast<uint>(tile_infos.size()) - blockIdx.x * NUM_VALIDITY_TILES_PER_KERNEL,
-               static_cast<uint>(NUM_VALIDITY_TILES_PER_KERNEL));
+  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(group);
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
   // Initialize cuda barriers for each tile.
-  __shared__ cuda::barrier<cuda::thread_scope_block>
-      shared_tile_barriers[NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
+  __shared__ cuda::barrier<cuda::thread_scope_block> shared_tile_barrier;
   if (group.thread_rank() == 0) {
-    for (int i = 0; i < NUM_VALIDITY_TILES_PER_KERNEL_LOADED; ++i) {
-      init(&shared_tile_barriers[i], group.size());
-    }
+    init(&shared_tile_barrier, group.size());
   }
   group.sync();
 #endif // ASYNC_MEMCPY_SUPPORTED
 
-  for (int validity_tile = 0; validity_tile < tiles_remaining; ++validity_tile) {
-    if (validity_tile >= NUM_VALIDITY_TILES_PER_KERNEL_LOADED) {
-#ifdef ASYNC_MEMCPY_SUPPORTED
-      shared_tile_barriers[validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED].arrive_and_wait();
-#else
-      group.sync();
-#endif // ASYNC_MEMCPY_SUPPORTED
-    }
-    int8_t *this_shared_tile = shared_tiles[validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
-    auto tile = tile_infos[blockIdx.x * NUM_VALIDITY_TILES_PER_KERNEL + validity_tile];
+  auto tile = tile_infos[blockIdx.x];
+  auto const num_tile_cols = tile.num_cols();
+  auto const num_tile_rows = tile.num_rows();
 
-    auto const num_tile_cols = tile.num_cols();
-    auto const num_tile_rows = tile.num_rows();
+  auto const threads_per_warp = warp.size();
+  auto const rows_per_read = cudf::detail::size_in_bits<bitmask_type>();
 
-    auto const num_sections_per_block = NUM_VALIDITY_THREADS_PER_TILE;
+  auto const num_sections_x = util::div_rounding_up_unsafe(num_tile_cols, threads_per_warp);
+  auto const num_sections_y = util::div_rounding_up_unsafe(num_tile_rows, rows_per_read);
+  auto const validity_data_row_length = util::round_up_unsafe(
+      util::div_rounding_up_unsafe(num_tile_cols, CHAR_BIT), JCUDF_ROW_ALIGNMENT);
+  auto const total_sections = num_sections_x * num_sections_y;
 
-    auto const num_sections_x = util::div_rounding_up_unsafe(num_tile_cols, num_sections_per_block);
-    auto const num_sections_y = util::div_rounding_up_unsafe(num_tile_rows, num_sections_per_block);
-    auto const validity_data_row_length = util::round_up_unsafe(
-        util::div_rounding_up_unsafe(num_tile_cols, CHAR_BIT), JCUDF_ROW_ALIGNMENT);
-    auto const total_sections = num_sections_x * num_sections_y;
+  // the tile is divided into sections. A warp operates on a section at a time.
+  for (int my_section_idx = warp.meta_group_rank(); my_section_idx < total_sections;
+       my_section_idx += warp.meta_group_size()) {
+    // convert to rows and cols
+    auto const section_x = my_section_idx % num_sections_x;
+    auto const section_y = my_section_idx / num_sections_x;
+    auto const relative_col = section_x * threads_per_warp + warp.thread_rank();
+    auto const relative_row = section_y * rows_per_read;
+    auto const absolute_col = relative_col + tile.start_col;
+    auto const absolute_row = relative_row + tile.start_row;
+    auto const participating = absolute_col < num_columns && absolute_row < num_rows;
+    auto const participation_mask = __ballot_sync(0xFFFFFFFF, participating);
 
-    int const warp_id = threadIdx.x / warp_size;
-    int const lane_id = threadIdx.x % warp_size;
-    auto const warps_per_tile = std::max(1u, blockDim.x / warp_size);
+    if (participating) {
+      auto my_data = input_nm[absolute_col] != nullptr ?
+                         input_nm[absolute_col][word_index(absolute_row)] :
+                         std::numeric_limits<uint32_t>::max();
 
-    // the tile is divided into sections. A warp operates on a section at a time.
-    for (int my_section_idx = warp_id; my_section_idx < total_sections;
-         my_section_idx += warps_per_tile) {
-      // convert to rows and cols
-      auto const section_x = my_section_idx % num_sections_x;
-      auto const section_y = my_section_idx / num_sections_x;
-      auto const relative_col = section_x * NUM_VALIDITY_THREADS_PER_TILE + lane_id;
-      auto const relative_row = section_y * NUM_VALIDITY_THREADS_PER_TILE;
-      auto const absolute_col = relative_col + tile.start_col;
-      auto const absolute_row = relative_row + tile.start_row;
-      auto const participating = absolute_col < num_columns && absolute_row < num_rows;
-      auto const participation_mask = __ballot_sync(0xFFFFFFFF, participating);
-
-      if (participating) {
-        auto my_data = input_nm[absolute_col] != nullptr ?
-                           input_nm[absolute_col][absolute_row / NUM_VALIDITY_THREADS_PER_TILE] :
-                           std::numeric_limits<uint32_t>::max();
-
-        // every thread that is participating in the warp has 4 bytes, but it's column-based
-        // data and we need it in row-based. So we shuffle the bits around with ballot_sync to
-        // make the bytes we actually write.
-        bitmask_type dw_mask = 1;
-        for (int i = 0; i < NUM_VALIDITY_THREADS_PER_TILE && relative_row + i < num_rows;
-             ++i, dw_mask <<= 1) {
-          auto validity_data = __ballot_sync(participation_mask, my_data & dw_mask);
-          // lead thread in each warp writes data
-          auto const validity_write_offset =
-              validity_data_row_length * (relative_row + i) + relative_col / CHAR_BIT;
-          if (threadIdx.x % warp_size == 0) {
-            *reinterpret_cast<int32_t *>(&this_shared_tile[validity_write_offset]) = validity_data;
-          }
+      // every thread that is participating in the warp has 4 bytes, but it's column-based
+      // data and we need it in row-based. So we shuffle the bits around with ballot_sync to
+      // make the bytes we actually write.
+      bitmask_type dw_mask = 1;
+      for (int i = 0; i < threads_per_warp && relative_row + i < num_rows; ++i, dw_mask <<= 1) {
+        auto validity_data = __ballot_sync(participation_mask, my_data & dw_mask);
+        // lead thread in each warp writes data
+        auto const validity_write_offset =
+            validity_data_row_length * (relative_row + i) + relative_col / CHAR_BIT;
+        if (warp.thread_rank() == 0) {
+          *reinterpret_cast<bitmask_type *>(&shared_data[validity_write_offset]) = validity_data;
         }
       }
     }
+  }
 
-    // make sure entire tile has finished copy
-    group.sync();
+  auto const output_data_base =
+      output_data[tile.batch_number] + validity_offset + tile.start_col / CHAR_BIT;
 
-    auto const output_data_base =
-        output_data[tile.batch_number] + validity_offset + tile.start_col / CHAR_BIT;
+  // each warp copies a row at a time
+  auto const row_bytes = util::div_rounding_up_unsafe(num_tile_cols, CHAR_BIT);
+  auto const row_batch_start = tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
-    // now async memcpy the shared memory out to the final destination 4 bytes at a time since we do
-    // 32-row chunks
-    constexpr auto bytes_per_chunk = 8;
-    auto const row_bytes = util::div_rounding_up_unsafe(num_tile_cols, CHAR_BIT);
-    auto const chunks_per_row = util::div_rounding_up_unsafe(row_bytes, bytes_per_chunk);
-    auto const total_chunks = chunks_per_row * tile.num_rows();
+  // make sure entire tile has finished copy
+  group.sync();
+
+  for (int relative_row = warp.meta_group_rank(); relative_row < num_tile_rows;
+       relative_row += warp.meta_group_size()) {
+    auto const src = &shared_data[validity_data_row_length * relative_row];
+    auto const dst = output_data_base + row_offsets(relative_row + tile.start_row, row_batch_start);
 #ifdef ASYNC_MEMCPY_SUPPORTED
-    auto &processing_barrier =
-        shared_tile_barriers[validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
-#endif // ASYNC_MEMCPY_SUPPORTED
-    auto const tail_bytes = row_bytes % bytes_per_chunk;
-    auto const row_batch_start =
-        tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
-
-    for (auto i = threadIdx.x; i < total_chunks; i += blockDim.x) {
-      // determine source address of my chunk
-      auto const relative_row = i / chunks_per_row;
-      auto const col_chunk = i % chunks_per_row;
-      auto const relative_chunk_offset = col_chunk * bytes_per_chunk;
-      auto const output_dest = output_data_base +
-                               row_offsets(relative_row + tile.start_row, row_batch_start) +
-                               relative_chunk_offset;
-      auto const input_src =
-          &this_shared_tile[validity_data_row_length * relative_row + relative_chunk_offset];
-
-      if (tail_bytes > 0 && col_chunk == chunks_per_row - 1)
-        MEMCPY(output_dest, input_src, tail_bytes, processing_barrier);
-      else
-        MEMCPY(output_dest, input_src, aligned_size_t<bytes_per_chunk>(bytes_per_chunk),
-               processing_barrier);
+    cuda::memcpy_async(warp, dst, src, row_bytes, shared_tile_barrier);
+#else
+    for (int b = warp.thread_rank(); b < row_bytes; b += warp.size()) {
+      dst[b] = src[b];
     }
+#endif
   }
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
-  // wait for last tiles of data to arrive
-  for (int validity_tile = 0;
-       validity_tile < tiles_remaining % NUM_VALIDITY_TILES_PER_KERNEL_LOADED; ++validity_tile) {
-    shared_tile_barriers[validity_tile].arrive_and_wait();
-  }
+  // wait for tile of data to arrive
+  shared_tile_barrier.arrive_and_wait();
 #else
   group.sync();
 #endif // ASYNC_MEMCPY_SUPPORTED
@@ -915,23 +837,23 @@ __global__ void copy_strings_to_rows(size_type const num_rows, size_type const n
   // fill out offset/length information for the column. Then all threads of the warp will
   // participate in the memcpy of the string data.
   auto my_block = cooperative_groups::this_thread_block();
-  auto my_tile = cooperative_groups::tiled_partition<32>(my_block);
+  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(my_block);
 #ifdef ASYNC_MEMCPY_SUPPORTED
   cuda::barrier<cuda::thread_scope_block> block_barrier;
 #endif
 
   auto const start_row =
-      blockIdx.x * NUM_STRING_ROWS_PER_BLOCK_TO_ROWS + my_tile.meta_group_rank() + batch_row_offset;
+      blockIdx.x * NUM_STRING_ROWS_PER_BLOCK_TO_ROWS + warp.meta_group_rank() + batch_row_offset;
   auto const end_row =
       std::min(num_rows, static_cast<size_type>(start_row + NUM_STRING_ROWS_PER_BLOCK_TO_ROWS));
 
-  for (int row = start_row; row < end_row; row += my_tile.meta_group_size()) {
+  for (int row = start_row; row < end_row; row += warp.meta_group_size()) {
     auto offset = fixed_width_row_size; // initial offset to variable-width data
     auto const base_row_offset = row_offsets(row, 0);
     for (int col = 0; col < num_variable_columns; ++col) {
       auto const string_start_offset = variable_col_offsets[col][row];
       auto const string_length = variable_col_offsets[col][row + 1] - string_start_offset;
-      if (my_tile.thread_rank() == 0) {
+      if (warp.thread_rank() == 0) {
         // write the offset/length to column
         uint32_t *output_dest = reinterpret_cast<uint32_t *>(
             &output_data[base_row_offset + variable_col_output_offsets[col]]);
@@ -940,11 +862,11 @@ __global__ void copy_strings_to_rows(size_type const num_rows, size_type const n
       }
       auto string_output_dest = &output_data[base_row_offset + offset];
       auto string_output_src = &variable_input_data[col][string_start_offset];
+      warp.sync();
 #ifdef ASYNC_MEMCPY_SUPPORTED
-      cuda::memcpy_async(my_tile, string_output_dest, string_output_src, string_length,
-                         block_barrier);
+      cuda::memcpy_async(warp, string_output_dest, string_output_src, string_length, block_barrier);
 #else
-      for (int c = my_tile.thread_rank(); c < string_length; c += my_tile.size()) {
+      for (int c = warp.thread_rank(); c < string_length; c += warp.size()) {
         string_output_dest[c] = string_output_src[c];
       }
 #endif
@@ -952,7 +874,6 @@ __global__ void copy_strings_to_rows(size_type const num_rows, size_type const n
     }
   }
 }
-
 /**
  * @brief copy data from row-based format to cudf columns
  *
@@ -986,74 +907,56 @@ __global__ void copy_from_rows(const size_type num_rows, const size_type num_col
   // to speed up some of the random access memory we do, we copy col_sizes and col_offsets
   // to shared memory for each of the tiles that we work on
 
-  constexpr unsigned stages_count = NUM_TILES_PER_KERNEL_LOADED;
   auto group = cooperative_groups::this_thread_block();
-  extern __shared__ int8_t shared_data[];
-  int8_t *shared[stages_count] = {shared_data, shared_data + shmem_used_per_tile};
+  auto warp = cooperative_groups::tiled_partition<32>(group);
+  extern __shared__ int8_t shared[];
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
   // Initialize cuda barriers for each tile.
-  __shared__ cuda::barrier<cuda::thread_scope_block> tile_barrier[NUM_TILES_PER_KERNEL_LOADED];
+  __shared__ cuda::barrier<cuda::thread_scope_block> tile_barrier;
   if (group.thread_rank() == 0) {
-    for (int i = 0; i < NUM_TILES_PER_KERNEL_LOADED; ++i) {
-      init(&tile_barrier[i], group.size());
-    }
+    init(&tile_barrier, group.size());
   }
   group.sync();
 #endif // ASYNC_MEMCPY_SUPPORTED
 
-  auto tiles_remaining =
-      std::min(static_cast<uint>(tile_infos.size()) - blockIdx.x * NUM_TILES_PER_KERNEL_FROM_ROWS,
-               static_cast<uint>(NUM_TILES_PER_KERNEL_FROM_ROWS));
+  {
+    auto const fetch_tile = tile_infos[blockIdx.x];
+    auto const fetch_tile_start_row = fetch_tile.start_row;
+    auto const starting_col_offset = col_offsets[fetch_tile.start_col];
+    auto const fetch_tile_row_size = fetch_tile.get_shared_row_size(col_offsets, col_sizes);
+    auto const row_batch_start =
+        fetch_tile.batch_number == 0 ? 0 : batch_row_boundaries[fetch_tile.batch_number];
 
-  size_t fetch_index;
-  size_t processing_index;
-  for (processing_index = fetch_index = 0; processing_index < tiles_remaining; ++processing_index) {
-    // Fetch ahead up to stages_count groups
-    for (; fetch_index < static_cast<size_t>(tiles_remaining) &&
-           fetch_index < (processing_index + stages_count);
-         ++fetch_index) {
-      auto const fetch_tile = tile_infos[blockIdx.x * NUM_TILES_PER_KERNEL_FROM_ROWS + fetch_index];
-      auto const fetch_tile_start_row = fetch_tile.start_row;
-      auto const starting_col_offset = col_offsets[fetch_tile.start_col];
-      auto const fetch_tile_row_size = fetch_tile.get_shared_row_size(col_offsets, col_sizes);
-      auto const row_batch_start =
-          fetch_tile.batch_number == 0 ? 0 : batch_row_boundaries[fetch_tile.batch_number];
+    for (int absolute_row = warp.meta_group_rank() + fetch_tile.start_row;
+         absolute_row <= fetch_tile.end_row; absolute_row += warp.meta_group_size()) {
+      warp.sync();
+      auto shared_offset = (absolute_row - fetch_tile_start_row) * fetch_tile_row_size;
+      auto dst = &shared[shared_offset];
+      auto src = &input_data[row_offsets(absolute_row, row_batch_start) + starting_col_offset];
+      // copy the data
 #ifdef ASYNC_MEMCPY_SUPPORTED
-      auto &fetch_barrier = tile_barrier[fetch_index % NUM_TILES_PER_KERNEL_LOADED];
-      // if we have fetched all buffers, we need to wait for processing
-      // to complete on them before we can use them again
-      if (fetch_index > NUM_TILES_PER_KERNEL_LOADED) {
-        fetch_barrier.arrive_and_wait();
-      }
+      cuda::memcpy_async(warp, dst, src, fetch_tile_row_size, tile_barrier);
 #else
-      if (fetch_index >= NUM_TILES_PER_KERNEL_LOADED) {
-        group.sync();
+      for (int b = warp.thread_rank(); b < fetch_tile_row_size; b += warp.size()) {
+        dst[b] = src[b];
       }
-#endif // ASYNC_MEMCPY_SUPPORTED
-
-      for (auto row = fetch_tile_start_row + static_cast<int>(threadIdx.x);
-           row <= fetch_tile.end_row; row += blockDim.x) {
-        auto shared_offset = (row - fetch_tile_start_row) * fetch_tile_row_size;
-        // copy the data
-        MEMCPY(&shared[fetch_index % stages_count][shared_offset],
-               &input_data[row_offsets(row, row_batch_start) + starting_col_offset],
-               fetch_tile_row_size, fetch_barrier);
-      }
+#endif
     }
+  }
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
-    auto &processing_barrier = tile_barrier[processing_index % NUM_TILES_PER_KERNEL_LOADED];
-    // ensure our data is ready
-    processing_barrier.arrive_and_wait();
-#else
-    group.sync();
-#endif // ASYNC_MEMCPY_SUPPORTED
-
-    auto const tile = tile_infos[blockIdx.x * NUM_TILES_PER_KERNEL_FROM_ROWS + processing_index];
+  {
+    auto const tile = tile_infos[blockIdx.x];
     auto const rows_in_tile = tile.num_rows();
     auto const cols_in_tile = tile.num_cols();
     auto const tile_row_size = tile.get_shared_row_size(col_offsets, col_sizes);
+
+#ifdef ASYNC_MEMCPY_SUPPORTED
+    // ensure our data is ready
+    tile_barrier.arrive_and_wait();
+#else
+    group.sync();
+#endif // ASYNC_MEMCPY_SUPPORTED
 
     // now we copy from shared memory to final destination.
     // the data is laid out in rows in shared memory, so the reads
@@ -1062,30 +965,29 @@ __global__ void copy_from_rows(const size_type num_rows, const size_type num_col
     // to prevent each thread working on a single row and also to ensure
     // that all threads can do work in the case of more threads than rows,
     // we do a global index instead of a double for loop with col/row.
-    for (int index = threadIdx.x; index < rows_in_tile * cols_in_tile; index += blockDim.x) {
-      auto const relative_col = index % cols_in_tile;
-      auto const relative_row = index / cols_in_tile;
-      auto const absolute_col = relative_col + tile.start_col;
-      auto const absolute_row = relative_row + tile.start_row;
+    for (int relative_row = warp.thread_rank(); relative_row < rows_in_tile;
+         relative_row += warp.size()) {
+      for (int relative_col = warp.meta_group_rank(); relative_col < cols_in_tile;
+           relative_col += warp.meta_group_size()) {
+        auto const absolute_col = relative_col + tile.start_col;
+        auto const absolute_row = relative_row + tile.start_row;
 
-      auto const shared_memory_row_offset = tile_row_size * relative_row;
-      auto const shared_memory_offset =
-          col_offsets[absolute_col] - col_offsets[tile.start_col] + shared_memory_row_offset;
-      auto const column_size = col_sizes[absolute_col];
+        auto const shared_memory_row_offset = tile_row_size * relative_row;
+        auto const shared_memory_offset =
+            col_offsets[absolute_col] - col_offsets[tile.start_col] + shared_memory_row_offset;
+        auto const column_size = col_sizes[absolute_col];
 
-      int8_t *shmem_src = &shared[processing_index % stages_count][shared_memory_offset];
-      int8_t *dst = &output_data[absolute_col][absolute_row * column_size];
+        int8_t *shmem_src = &shared[shared_memory_offset];
+        int8_t *dst = &output_data[absolute_col][absolute_row * column_size];
 
-      MEMCPY(dst, shmem_src, column_size, processing_barrier);
+        MEMCPY(dst, shmem_src, column_size, tile_barrier);
+      }
     }
-    group.sync();
   }
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
   // wait on the last copies to complete
-  for (uint i = 0; i < std::min(stages_count, tiles_remaining); ++i) {
-    tile_barrier[i].arrive_and_wait();
-  }
+  tile_barrier.arrive_and_wait();
 #else
   group.sync();
 #endif // ASYNC_MEMCPY_SUPPORTED
@@ -1113,9 +1015,7 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
                         size_type const *batch_row_boundaries, bitmask_type **output_nm,
                         const size_type validity_offset, device_span<const tile_info> tile_infos,
                         const int8_t *input_data) {
-  extern __shared__ int8_t shared_data[];
-  int8_t *shared_tiles[NUM_VALIDITY_TILES_PER_KERNEL_LOADED] = {
-      shared_data, shared_data + shmem_used_per_tile / 2};
+  extern __shared__ int8_t shared[];
 
   using cudf::detail::warp_size;
 
@@ -1124,125 +1024,93 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
   // after we fill shared mem memcpy it out in a blob.
   // probably need knobs for number of rows vs columns to balance read/write
   auto group = cooperative_groups::this_thread_block();
-
-  int const tiles_remaining =
-      std::min(static_cast<uint>(tile_infos.size()) - blockIdx.x * NUM_VALIDITY_TILES_PER_KERNEL,
-               static_cast<uint>(NUM_VALIDITY_TILES_PER_KERNEL));
+  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(group);
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
   // Initialize cuda barriers for each tile.
-  __shared__ cuda::barrier<cuda::thread_scope_block>
-      shared_tile_barriers[NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
+  __shared__ cuda::barrier<cuda::thread_scope_block> shared_tile_barrier;
   if (group.thread_rank() == 0) {
-    for (int i = 0; i < NUM_VALIDITY_TILES_PER_KERNEL_LOADED; ++i) {
-      init(&shared_tile_barriers[i], group.size());
-    }
+    init(&shared_tile_barrier, group.size());
   }
   group.sync();
 #endif // ASYNC_MEMCPY_SUPPORTED
 
-  for (int validity_tile = 0; validity_tile < tiles_remaining; ++validity_tile) {
-    if (validity_tile >= NUM_VALIDITY_TILES_PER_KERNEL_LOADED) {
-#ifdef ASYNC_MEMCPY_SUPPORTED
-      auto const validity_index = validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED;
-      shared_tile_barriers[validity_index].arrive_and_wait();
-#else
-      group.sync();
-#endif // ASYNC_MEMCPY_SUPPORTED
-    }
-    int8_t *this_shared_tile = shared_tiles[validity_tile % 2];
-    auto const tile = tile_infos[blockIdx.x * NUM_VALIDITY_TILES_PER_KERNEL + validity_tile];
-    auto const tile_start_col = tile.start_col;
-    auto const tile_start_row = tile.start_row;
-    auto const num_tile_cols = tile.num_cols();
-    auto const num_tile_rows = tile.num_rows();
-    constexpr auto rows_per_read = NUM_VALIDITY_THREADS_PER_TILE;
-    auto const num_sections_x = util::div_rounding_up_safe(num_tile_cols, CHAR_BIT);
-    auto const num_sections_y = util::div_rounding_up_safe(num_tile_rows, rows_per_read);
-    auto const validity_data_col_length = num_sections_y * 4; // words to bytes
-    auto const total_sections = num_sections_x * num_sections_y;
-    int const warp_id = threadIdx.x / warp_size;
-    int const lane_id = threadIdx.x % warp_size;
-    auto const warps_per_tile = std::max(1u, blockDim.x / warp_size);
+  auto const tile = tile_infos[blockIdx.x];
+  auto const tile_start_col = tile.start_col;
+  auto const tile_start_row = tile.start_row;
+  auto const num_tile_cols = tile.num_cols();
+  auto const num_tile_rows = tile.num_rows();
 
-    // the tile is divided into sections. A warp operates on a section at a time.
-    for (int my_section_idx = warp_id; my_section_idx < total_sections;
-         my_section_idx += warps_per_tile) {
-      // convert section to row and col
-      auto const section_x = my_section_idx % num_sections_x;
-      auto const section_y = my_section_idx / num_sections_x;
-      auto const relative_col = section_x * CHAR_BIT;
-      auto const relative_row = section_y * rows_per_read + lane_id;
-      auto const absolute_col = relative_col + tile_start_col;
-      auto const absolute_row = relative_row + tile_start_row;
-      auto const row_batch_start =
-          tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
+  auto const threads_per_warp = warp.size();
+  auto const cols_per_read = CHAR_BIT;
 
-      auto const participation_mask = __ballot_sync(0xFFFFFFFF, absolute_row < num_rows);
+  auto const rows_per_read = static_cast<size_type>(threads_per_warp);
+  auto const num_sections_x = util::div_rounding_up_safe(num_tile_cols, cols_per_read);
+  auto const num_sections_y = util::div_rounding_up_safe(num_tile_rows, rows_per_read);
+  auto const validity_data_col_length = num_sections_y * 4; // words to bytes
+  auto const total_sections = num_sections_x * num_sections_y;
 
-      if (absolute_row < num_rows) {
-        auto const my_byte = input_data[row_offsets(absolute_row, row_batch_start) +
-                                        validity_offset + absolute_col / CHAR_BIT];
+  // the tile is divided into sections. A warp operates on a section at a time.
+  for (int my_section_idx = warp.meta_group_rank(); my_section_idx < total_sections;
+       my_section_idx += warp.meta_group_size()) {
+    // convert section to row and col
+    auto const section_x = my_section_idx % num_sections_x;
+    auto const section_y = my_section_idx / num_sections_x;
+    auto const relative_col = section_x * cols_per_read;
+    auto const relative_row = section_y * rows_per_read + warp.thread_rank();
+    auto const absolute_col = relative_col + tile_start_col;
+    auto const absolute_row = relative_row + tile_start_row;
+    auto const row_batch_start =
+        tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
-        // so every thread that is participating in the warp has a byte, but it's row-based
-        // data and we need it in column-based. So we shuffle the bits around to make
-        // the bytes we actually write.
-        for (int i = 0, byte_mask = 1; i < CHAR_BIT && relative_col + i < num_columns;
-             ++i, byte_mask <<= 1) {
-          auto validity_data = __ballot_sync(participation_mask, my_byte & byte_mask);
-          // lead thread in each warp writes data
-          if (threadIdx.x % warp_size == 0) {
-            auto const validity_write_offset =
-                validity_data_col_length * (relative_col + i) + relative_row / CHAR_BIT;
+    auto const participation_mask = __ballot_sync(0xFFFFFFFF, absolute_row < num_rows);
 
-            *reinterpret_cast<int32_t *>(&this_shared_tile[validity_write_offset]) = validity_data;
-          }
+    if (absolute_row < num_rows) {
+      auto const my_byte = input_data[row_offsets(absolute_row, row_batch_start) + validity_offset +
+                                      absolute_col / cols_per_read];
+
+      // so every thread that is participating in the warp has a byte, but it's row-based
+      // data and we need it in column-based. So we shuffle the bits around to make
+      // the bytes we actually write.
+      for (int i = 0, byte_mask = 1; i < cols_per_read && relative_col + i < num_columns;
+           ++i, byte_mask <<= 1) {
+        auto const validity_data = __ballot_sync(participation_mask, my_byte & byte_mask);
+        // lead thread in each warp writes data
+        if (warp.thread_rank() == 0) {
+          auto const validity_write_offset =
+              validity_data_col_length * (relative_col + i) + relative_row / cols_per_read;
+          *reinterpret_cast<bitmask_type *>(&shared[validity_write_offset]) = validity_data;
         }
       }
     }
+  }
 
-    // make sure entire tile has finished copy
-    group.sync();
+  // now memcpy the shared memory out to the final destination
+  auto const col_words = util::div_rounding_up_unsafe(num_tile_rows, CHAR_BIT * 4);
 
-    // now async memcpy the shared memory out to the final destination 8 bytes at a time
-    constexpr auto bytes_per_chunk = 8;
-    auto const col_bytes = util::div_rounding_up_unsafe(num_tile_rows, CHAR_BIT);
-    auto const chunks_per_col = util::div_rounding_up_unsafe(col_bytes, bytes_per_chunk);
-    auto const total_chunks = chunks_per_col * num_tile_cols;
-    auto const tail_bytes = col_bytes % bytes_per_chunk;
+  // make sure entire tile has finished copy
+  group.sync();
+
+  for (int relative_col = warp.meta_group_rank(); relative_col < num_tile_cols;
+       relative_col += warp.meta_group_size()) {
+    auto const absolute_col = relative_col + tile_start_col;
+    auto dst = output_nm[absolute_col] + word_index(tile_start_row);
+    auto const src =
+        reinterpret_cast<bitmask_type *>(&shared[validity_data_col_length * relative_col]);
+
 #ifdef ASYNC_MEMCPY_SUPPORTED
-    auto &processing_barrier =
-        shared_tile_barriers[validity_tile % NUM_VALIDITY_TILES_PER_KERNEL_LOADED];
-#endif // ASYNC_MEMCPY_SUPPORTED
-
-    for (auto i = threadIdx.x; i < total_chunks; i += blockDim.x) {
-      // determine source address of my chunk
-      auto const relative_col = i / chunks_per_col;
-      auto const row_chunk = i % chunks_per_col;
-      auto const absolute_col = relative_col + tile_start_col;
-      auto const relative_chunk_byte_offset = row_chunk * bytes_per_chunk;
-      auto output_dest = reinterpret_cast<int8_t *>(output_nm[absolute_col] +
-                                                    word_index(tile_start_row) + row_chunk * 2);
-      auto const input_src =
-          &this_shared_tile[validity_data_col_length * relative_col + relative_chunk_byte_offset];
-
-      if (tail_bytes > 0 && row_chunk == chunks_per_col - 1) {
-        MEMCPY(output_dest, input_src, tail_bytes, processing_barrier);
-      } else {
-        MEMCPY(output_dest, input_src, aligned_size_t<bytes_per_chunk>(bytes_per_chunk),
-               processing_barrier);
-      }
+    cuda::memcpy_async(warp, dst, src, aligned_size_t<4>(validity_data_col_length),
+                       shared_tile_barrier);
+#else
+    for (int b = warp.thread_rank(); b < col_words; b += warp.size()) {
+      dst[b] = src[b];
     }
+#endif
   }
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
-  // wait for last tiles of data to arrive
-  auto const num_tiles_to_wait = tiles_remaining > NUM_VALIDITY_TILES_PER_KERNEL_LOADED ?
-                                     NUM_VALIDITY_TILES_PER_KERNEL_LOADED :
-                                     tiles_remaining;
-  for (int validity_tile = 0; validity_tile < num_tiles_to_wait; ++validity_tile) {
-    shared_tile_barriers[validity_tile].arrive_and_wait();
-  }
+  // wait for tile of data to arrive
+  shared_tile_barrier.arrive_and_wait();
 #else
   group.sync();
 #endif // ASYNC_MEMCPY_SUPPORTED
@@ -1271,7 +1139,7 @@ __global__ void copy_strings_from_rows(RowOffsetIter row_offsets, int32_t **stri
   // will not wrap around the bottom of the table. The warp will copy the strings for each row
   // in the tile. Traversing in row-major order to coalesce the offsets and size reads.
   auto my_block = cooperative_groups::this_thread_block();
-  auto my_partition = cooperative_groups::tiled_partition<32>(my_block);
+  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(my_block);
 #ifdef ASYNC_MEMCPY_SUPPORTED
   cuda::barrier<cuda::thread_scope_block> block_barrier;
 #endif
@@ -1279,10 +1147,9 @@ __global__ void copy_strings_from_rows(RowOffsetIter row_offsets, int32_t **stri
   // workaround for not being able to take a reference to a constexpr host variable
   auto const ROWS_PER_BLOCK = NUM_STRING_ROWS_PER_BLOCK_FROM_ROWS;
   auto const tiles_per_col = util::div_rounding_up_unsafe(num_rows, ROWS_PER_BLOCK);
-  auto const starting_tile =
-      blockIdx.x * my_partition.meta_group_size() + my_partition.meta_group_rank();
+  auto const starting_tile = blockIdx.x * warp.meta_group_size() + warp.meta_group_rank();
   auto const num_tiles = tiles_per_col * num_string_columns;
-  auto const tile_stride = my_partition.meta_group_size() * gridDim.x;
+  auto const tile_stride = warp.meta_group_size() * gridDim.x;
   // Each warp will copy strings in its tile. This is handled by all the threads of a warp passing
   // the same parameters to async_memcpy and all threads in the warp participating in the copy.
   for (auto my_tile = starting_tile; my_tile < num_tiles; my_tile += tile_stride) {
@@ -1297,9 +1164,9 @@ __global__ void copy_strings_from_rows(RowOffsetIter row_offsets, int32_t **stri
       auto dst = &str_col_data[str_col_off[row]];
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
-      cuda::memcpy_async(my_partition, dst, src, str_len[row], block_barrier);
+      cuda::memcpy_async(warp, dst, src, str_len[row], block_barrier);
 #else
-      for (int c = my_partition.thread_rank(); c < str_len[row]; c += my_partition.size()) {
+      for (int c = warp.thread_rank(); c < str_len[row]; c += warp.size()) {
         dst[c] = src[c];
       }
 #endif
@@ -1520,8 +1387,8 @@ build_validity_tile_infos(size_type const &num_columns, size_type const &num_row
   auto const column_stride = util::round_up_unsafe(
       [&]() {
         if (desired_rows_and_columns > num_columns) {
-          // not many columns, group it into 8s and ship it off
-          return std::min(CHAR_BIT, num_columns);
+          // not many columns, build a single tile for table width and ship it off
+          return num_columns;
         } else {
           return util::round_down_safe(desired_rows_and_columns, CHAR_BIT);
         }
@@ -1610,14 +1477,34 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
   thrust::inclusive_scan(rmm::exec_policy(stream), row_sizes, row_sizes + num_rows,
                          cumulative_row_sizes.begin());
 
-  while (static_cast<int>(batch_row_boundaries.size()) < num_offsets) {
+  // This needs to be split this into 2 gig batches. Care must be taken to avoid
+  // a batch larger than 2 gigs. Imagine a table with 900 meg rows. The batches
+  // should occur every 2 rows, but if a lower bound is run at 2 gigs, 4 gigs, 6 gigs.
+  // the batches will be 2 rows, 2 rows, 3 rows, which will be invalid. The previous
+  // batch size must be taken into account when building a new batch. One way is to
+  // pull the batch size back to the PC and add it to MAX_BATCH_SIZE for the lower
+  // bound search. The other method involves keeping everything on device, but subtracting
+  // the previous batch from cumulative_row_sizes based on index. This involves no
+  // synchronization between GPU and CPU, but involves more work on the GPU. These further
+  // need to be broken on a 32-row boundary to match the fixed_width optimized versions.
+
+  while (last_row_end < num_rows) {
+    auto offset_row_sizes = thrust::make_transform_iterator(
+        cumulative_row_sizes.begin(),
+        [last_row_end, cumulative_row_sizes = cumulative_row_sizes.data()] __device__(auto i) {
+          return i - cumulative_row_sizes[last_row_end];
+        });
+    auto search_start = offset_row_sizes + last_row_end;
+    auto search_end = offset_row_sizes + num_rows;
+
     // find the next MAX_BATCH_SIZE boundary
-    size_type const row_end =
-        ((thrust::lower_bound(rmm::exec_policy(stream), cumulative_row_sizes.begin(),
-                              cumulative_row_sizes.begin() + (num_rows - last_row_end),
-                              MAX_BATCH_SIZE) -
-          cumulative_row_sizes.begin()) +
-         last_row_end);
+    auto lb =
+        thrust::lower_bound(rmm::exec_policy(stream), search_start, search_end, MAX_BATCH_SIZE);
+    size_type const batch_size = lb - search_start;
+
+    size_type const row_end = lb == search_end ?
+                                  batch_size + last_row_end :
+                                  last_row_end + util::round_down_safe(batch_size, 32);
 
     // build offset list for each row in this batch
     auto const num_rows_in_batch = row_end - last_row_end;
@@ -1775,11 +1662,11 @@ void determine_tiles(std::vector<size_type> const &column_sizes,
   // tile as far as byte sizes. x * y = shared_mem_size. Which translates to x^2 =
   // shared_mem_size since we want them equal, so height and width are sqrt(shared_mem_size). The
   // trick is that it's in bytes, not rows or columns.
+  auto const square_bias = 32; // bias towards columns for performance reasons
   auto const optimal_square_len = static_cast<size_type>(sqrt(shmem_limit_per_tile));
-  auto const tile_height =
-      std::clamp(util::round_up_safe<int>(
-                     std::min(optimal_square_len / column_sizes[0], total_number_of_rows), 32),
-                 1, first_row_batch_size);
+  auto const desired_tile_height = util::round_up_safe<int>(
+      std::min(optimal_square_len / square_bias, total_number_of_rows), NUM_THREADS_IN_WARP);
+  auto const tile_height = std::clamp(desired_tile_height, 1, first_row_batch_size);
 
   int row_size = 0;
 
@@ -1844,13 +1731,12 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
 #ifndef __CUDA_ARCH__ // __host__ code.
   // Need to reduce total shmem available by the size of barriers in the kernel's shared memory
   total_shmem_in_bytes -=
-      sizeof(cuda::barrier<cuda::thread_scope_block>) * NUM_TILES_PER_KERNEL_LOADED;
+      util::round_up_unsafe(sizeof(cuda::barrier<cuda::thread_scope_block>), 16ul);
 #endif // __CUDA_ARCH__
 
-  auto const shmem_limit_per_tile = total_shmem_in_bytes / NUM_TILES_PER_KERNEL_LOADED;
+  auto const shmem_limit_per_tile = total_shmem_in_bytes;
 
   auto const num_rows = tbl.num_rows();
-
   auto const fixed_width_only = !variable_width_offsets.has_value();
 
   auto select_columns = [](auto const &tbl, auto column_predicate) {
@@ -1918,8 +1804,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
       });
 
   // blast through the entire table and convert it
-  dim3 const blocks(
-      util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_TO_ROWS));
+  dim3 const blocks(gpu_tile_infos.size());
   dim3 const threads(NUM_THREADS);
 
   // build validity tiles for ALL columns, variable and fixed width.
@@ -1927,10 +1812,8 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
       tbl.num_columns(), num_rows, shmem_limit_per_tile, batch_info.row_batches);
 
   auto dev_validity_tile_infos = make_device_uvector_async(validity_tile_infos, stream);
-  dim3 const validity_blocks(
-      util::div_rounding_up_unsafe(validity_tile_infos.size(), NUM_VALIDITY_TILES_PER_KERNEL));
-  dim3 const validity_threads(
-      std::min(validity_tile_infos.size() * NUM_VALIDITY_THREADS_PER_TILE, 128lu));
+  dim3 const validity_blocks(validity_tile_infos.size());
+  dim3 const validity_threads(NUM_THREADS);
 
   auto const validity_offset = column_info.column_starts.back();
 
@@ -2183,10 +2066,10 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
 #ifndef __CUDA_ARCH__ // __host__ code.
   // Need to reduce total shmem available by the size of barriers in the kernel's shared memory
   total_shmem_in_bytes -=
-      sizeof(cuda::barrier<cuda::thread_scope_block>) * NUM_TILES_PER_KERNEL_LOADED;
+      util::round_up_unsafe(sizeof(cuda::barrier<cuda::thread_scope_block>), 16ul);
 #endif // __CUDA_ARCH__
 
-  int shmem_limit_per_tile = total_shmem_in_bytes / NUM_TILES_PER_KERNEL_LOADED;
+  auto const shmem_limit_per_tile = total_shmem_in_bytes;
 
   auto column_info = detail::compute_column_information(string_schema.begin(), string_schema.end());
   auto const size_per_row = util::round_up_unsafe(column_info.size_per_row, JCUDF_ROW_ALIGNMENT);
@@ -2277,8 +2160,7 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
             gpu_batch_row_boundaries, start_col, end_col, tile_height, num_rows, stream);
       });
 
-  dim3 const blocks(
-      util::div_rounding_up_unsafe(gpu_tile_infos.size(), NUM_TILES_PER_KERNEL_FROM_ROWS));
+  dim3 const blocks(gpu_tile_infos.size());
   dim3 const threads(NUM_THREADS);
 
   // validity needs to be calculated based on the actual number of final table columns
@@ -2287,11 +2169,8 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
 
   auto dev_validity_tile_infos = make_device_uvector_async(validity_tile_infos, stream);
 
-  dim3 const validity_blocks(
-      util::div_rounding_up_unsafe(validity_tile_infos.size(), NUM_VALIDITY_TILES_PER_KERNEL));
-
-  dim3 const validity_threads(
-      std::min(validity_tile_infos.size() * NUM_VALIDITY_THREADS_PER_TILE, 128lu));
+  dim3 const validity_blocks(validity_tile_infos.size());
+  dim3 const validity_threads(NUM_THREADS);
 
   if (dev_string_row_offsets.size() == 0) {
     detail::fixed_width_row_offset_functor offset_functor(size_per_row);
@@ -2345,9 +2224,7 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
     auto dev_string_col_offsets = make_device_uvector_async(string_col_offset_ptrs, stream);
     auto dev_string_data_cols = make_device_uvector_async(string_data_col_ptrs, stream);
 
-    dim3 const string_blocks(
-        std::min(std::max(MIN_STRING_BLOCKS, num_rows / NUM_STRING_ROWS_PER_BLOCK_FROM_ROWS),
-                 MAX_STRING_BLOCKS));
+    dim3 const string_blocks(std::clamp(num_rows, MIN_STRING_BLOCKS, MAX_STRING_BLOCKS));
     dim3 const string_threads(NUM_THREADS);
 
     detail::copy_strings_from_rows<<<string_blocks, string_threads, 0, stream.value()>>>(
