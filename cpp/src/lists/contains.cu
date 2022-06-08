@@ -232,8 +232,8 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                       return i != NOT_FOUND_SENTINEL;
                     });
 
-  auto const null_count                    = key_positions->null_count();
-  [[maybe_unused]] auto [_, null_mask, __] = key_positions->release();
+  auto const null_count                             = key_positions->null_count();
+  [[maybe_unused]] auto [data, null_mask, children] = key_positions->release();
   result->set_null_mask(std::move(*null_mask.release()), null_count);
 
   return result;
