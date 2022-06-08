@@ -231,6 +231,7 @@ add_library(
   src/binaryop/compiled/NullMin.cu
   src/binaryop/compiled/PMod.cu
   src/binaryop/compiled/Pow.cu
+  src/binaryop/compiled/IntPow.cu
   src/binaryop/compiled/PyMod.cu
   src/binaryop/compiled/ShiftLeft.cu
   src/binaryop/compiled/ShiftRight.cu
