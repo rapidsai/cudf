@@ -257,27 +257,35 @@ def test_append_index(a, b):
         {"a": [1, None, None], "b": [3, np.nan, np.nan]},
         {1: ["a", "b", "c"], 2: ["q", "w", "u"]},
         {1: ["a", np.nan, "c"], 2: ["q", None, "u"]},
+        pytest.param(
+            {},
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/11080"
+            ),
+        ),
+        pytest.param(
+            {1: [], 2: [], 3: []},
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/11080"
+            ),
+        ),
+        pytest.param(
+            [1, 2, 3],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/11080"
+            ),
+        ),
     ],
 )
 def test_axes_dataframe(data):
     csr = cudf.DataFrame(data)
-    psr = csr.to_pandas()
+    psr = pd.DataFrame(data)
 
     expected = psr.axes
     actual = csr.axes
 
     for i in range(len(actual)):
         assert_eq(expected[i], actual[i])
-
-    # When the DataFrame is empty and when there are column names
-    # The expected output is slight different compared to logic
-    # Expected - return [Index([],dtype = 'object'), self.columns]
-    # Actual - return [self.index, self.columns]
-
-    # When the DataFrame is not empty, and column names are not available
-    # The expected output is slightly different compared to logic
-    # Expected - return [self.index, RangeIndex(0,1)]
-    # Actual - return [self.index, self.columns]
 
 
 def test_series_init_none():

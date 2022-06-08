@@ -562,17 +562,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def axes(self):
         """
-        Return a list representing the axes of DataFrame and Series.
-        DataFrame.axes returns a list of two elements:
-            element zero is the row index and element one is the columns.
-        Series.axes returns a list containing the row index.
+        Return a list representing the axes of the Series.
+            Series.axes returns a list containing the row index.
 
         Examples
         --------
-        **Series**
-
         >>> import cudf
-
         >>> csf1 = cudf.Series([1, 2, 3, 4])
         >>> print(csf1.axes)
         [RangeIndex(start=0, stop=4, step=1)]
