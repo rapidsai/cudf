@@ -975,20 +975,32 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        return self.fillna(method="bfill", value=value, axis=axis, inplace=inplace, limit=limit)
+        return self.fillna(
+            method="bfill",
+            value=value,
+            axis=axis,
+            inplace=inplace,
+            limit=limit,
+        )
 
     backfill = bfill
-        
+
     @_cudf_nvtx_annotate
     def ffill(self, value=None, axis=None, inplace=None, limit=None):
-            """
-            Synonym for :meth:`Series.fillna` with ``method='ffill'``.
-            
-            Returns
-            -------
-                Object with missing values filled or None if ``inplace=True``.
-            """
-            return self.fillna(method="ffill", value=value, axis=axis, inplace=inplace, limit=limit)         
+        """
+        Synonym for :meth:`Series.fillna` with ``method='ffill'``.
+
+        Returns
+        -------
+            Object with missing values filled or None if ``inplace=True``.
+        """
+        return self.fillna(
+            method="ffill",
+            value=value,
+            axis=axis,
+            inplace=inplace,
+            limit=limit,
+        )
 
     pad = ffill
 

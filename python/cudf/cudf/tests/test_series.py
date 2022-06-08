@@ -984,6 +984,7 @@ def test_fillna_with_nan(data, nan_as_null, fill_value):
 
     assert_eq(expected, actual)
 
+
 def test_series_mask_mixed_dtypes_error():
     s = cudf.Series(["a", "b", "c"])
     with pytest.raises(
