@@ -78,7 +78,7 @@ BUILD_ARG="-Dmaven.repo.local=\"$WORKSPACE/.m2\"\
  -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS\
  -DCUDA_STATIC_RUNTIME=$ENABLE_CUDA_STATIC_RUNTIME\
  -DCUDF_JNI_LIBCUDF_STATIC=ON\
- -DUSE_GDS=$ENABLE_GDS -Dtest=*,!CuFileTest"
+ -DUSE_GDS=$ENABLE_GDS -Dtest=*,!CuFileTest,!CudaFatalTest"
 
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
