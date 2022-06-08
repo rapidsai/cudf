@@ -263,9 +263,7 @@ std::unique_ptr<table> unique(
  * - KEEP_ANY: a row at an unspecified position in a sequence of duplicate rows is copied
  * - KEEP_NONE: no duplicate rows are copied
  *
- * `cudf::distinct` produces stable result in cases when `keep` is specified as KEEP_FIRST or
- * KEEP_LAST. That means the order of rows in the output table is reserved the same as they
- * appear in the input.
+ * The order of elements in the input table is not reserved when copied to the output.
  *
  * Performance hints:
  * - Always use `cudf::unique` instead of `cudf::distinct` if the input is pre-sorted.
