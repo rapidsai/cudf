@@ -99,8 +99,8 @@ template <typename Type>
 struct search_index_fn<Type, std::enable_if_t<is_supported_non_nested_type<Type>()>> {
   template <typename SearchKeyIter, typename OutputPairIter>
   static void invoke(cudf::detail::lists_column_device_view const& lists,
-                     SearchKeyIter const& keys_iter,
-                     OutputPairIter const& out_iter,
+                     SearchKeyIter const keys_iter,
+                     OutputPairIter const out_iter,
                      duplicate_find_option find_option,
                      rmm::cuda_stream_view stream)
   {
