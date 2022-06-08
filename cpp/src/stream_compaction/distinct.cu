@@ -46,38 +46,10 @@ namespace detail {
 namespace {
 template <typename MapDeviceView, typename Hash, typename KeyEqual>
 struct reduce_fn_gen {
-  __device__ size_type& inserted_value(size_type const idx) const
-  {
-    // Here we don't check `iter` validity for performance reason, assuming that it is always
-    // be valid because all input `idx` values have been inserted in to the map before.
-    auto const iter = d_map.find(idx, d_hash, d_eqcomp);
-
-    // Only one index value of the duplicate rows could be inserted into the map.
-    // As such, looking up for all indices of duplicate rows will return the same `inserted_idx`
-    // value, which is the index of that only inserted row.
-    auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
-
-    return d_output[inserted_idx];
-  }
-
-  template <duplicate_keep_option keep>
-  struct reduce_index_fn {
-    __device__ void operator()(size_type const idx) const
-    {
-      if constexpr (keep == duplicate_keep_option::KEEP_FIRST) {
-        // Store the smallest index of all keys that are equal.
-        atomicMin(&parent.inserted_value(idx), idx);
-      } else if constexpr (keep == duplicate_keep_option::KEEP_LAST) {
-        // Store the greatest index of all keys that are equal.
-        atomicMax(&parent.inserted_value(idx), idx);
-      } else {
-        // Count the number of duplicates for key.
-        atomicAdd(&parent.inserted_value(idx), size_type{1});
-      }
-    }
-
-    reduce_fn_gen const parent;
-  };
+  size_type* const d_output;
+  MapDeviceView const d_map;
+  Hash const d_hash;
+  KeyEqual const d_eqcomp;
 
   template <duplicate_keep_option keep>
   auto reduce_fn() const
@@ -85,16 +57,43 @@ struct reduce_fn_gen {
     return reduce_index_fn<keep>{*this};
   }
 
-  size_type* const d_output;
-  MapDeviceView const d_map;
-  Hash const d_hash;
-  KeyEqual const d_eqcomp;
+  template <duplicate_keep_option keep>
+  struct reduce_index_fn {
+    reduce_fn_gen const parent;
+
+    __device__ void operator()(size_type const idx) const
+    {
+      if constexpr (keep == duplicate_keep_option::KEEP_FIRST) {
+        // Store the smallest index of all rows that are equal.
+        atomicMin(&parent.get_output(idx), idx);
+      } else if constexpr (keep == duplicate_keep_option::KEEP_LAST) {
+        // Store the greatest index of all rows that are equal.
+        atomicMax(&parent.get_output(idx), idx);
+      } else {
+        // Count the number of rows that are equal to the row having index inserted.
+        atomicAdd(&parent.get_output(idx), size_type{1});
+      }
+    }
+  };
+
+ private:
+  __device__ size_type& get_output(size_type const idx) const
+  {
+    // Here we don't check `iter` validity for performance reason, assuming that it is always
+    // valid because all input `idx` values have been fed into `map.insert()` before.
+    auto const iter = d_map.find(idx, d_hash, d_eqcomp);
+
+    // Only one index value of the duplicate rows could be inserted into the map.
+    // As such, looking up for all indices of duplicate rows always returns the same value.
+    auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
+
+    // All duplicate rows will have concurrent access to the same output slot.
+    return d_output[inserted_idx];
+  }
 };
 
 }  // namespace
 
-// todo: add doxygen and detail interface
-// this will be userful for many follow up pr
 rmm::device_uvector<size_type> distinct_map(table_view const& input,
                                             std::vector<size_type> const& keys,
                                             duplicate_keep_option keep,
