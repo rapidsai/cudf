@@ -21,6 +21,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -128,11 +129,18 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
   key_map.insert(kv_iter, kv_iter + keys_size, hash_key, key_equal, stream.value());
 
   auto distinct_map = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
-  // If we don't care about order, just gather all rows having distinct keys taken from key_map.
+  // If we don't care about order, just gather indices of distinct keys taken from key_map.
   if (keep == duplicate_keep_option::KEEP_ANY) {
     key_map.retrieve_all(distinct_map.begin(), thrust::make_discard_iterator(), stream.value());
     return distinct_map;
   }
+
+  // A reduction will be performed on indices of rows compared equal and the results are store into
+  // this array. The reduction is:
+  // - If KEEP_FIRST: min.
+  // - If KEEP_LAST: max.
+  // - If KEEP_NONE: count number of appearances.
+  auto reduced_indices = rmm::device_uvector<size_type>(keys_tview.num_rows(), stream);
 
   auto const init_value = [keep] {
     if (keep == duplicate_keep_option::KEEP_FIRST) {
@@ -142,8 +150,6 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
     }
     return size_type{0};  // keep == KEEP_NONE
   }();
-
-  auto reduced_indices = rmm::device_uvector<size_type>(keys_tview.num_rows(), stream);
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), reduced_indices.begin(), reduced_indices.end(), init_value);
 
@@ -167,10 +173,10 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
     case duplicate_keep_option::KEEP_NONE:
       do_reduce(fn_gen.reduce_fn<duplicate_keep_option::KEEP_NONE>());
       break;
-    default:;  // KEEP_ANY has already been handled
+    default:;  // KEEP_ANY has already been handled above
   }
 
-  // Filter out the indices of the duplicate keys except one (so to keep one).
+  // Filter out indices of the undesired duplicate keys.
   auto const map_end =
     keep == duplicate_keep_option::KEEP_NONE
       ? thrust::copy_if(rmm::exec_policy(stream),
@@ -178,6 +184,7 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
                         thrust::make_counting_iterator(keys_size),
                         distinct_map.begin(),
                         [reduced_indices = reduced_indices.begin()] __device__(auto const idx) {
+                          // Only output index of the rows that appeared once during reduction.
                           return reduced_indices[idx] == size_type{1};
                         })
       : thrust::copy_if(rmm::exec_policy(stream),
@@ -201,8 +208,7 @@ std::unique_ptr<table> distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto const gather_map =
-    distinct_map(input, keys, keep, nulls_equal, stream, rmm::mr::get_current_device_resource());
+  auto const gather_map = distinct_map(input, keys, keep, nulls_equal, stream);
   return detail::gather(
     input, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
