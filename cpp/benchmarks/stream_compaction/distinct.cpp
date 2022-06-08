@@ -19,7 +19,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/lists/list_view.cuh>
+#include <cudf/lists/list_view.hpp>
 #include <cudf/types.hpp>
 
 #include <nvbench/nvbench.cuh>

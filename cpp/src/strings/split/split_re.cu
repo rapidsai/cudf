@@ -184,7 +184,7 @@ struct tokens_transform_fn {
 };
 
 std::unique_ptr<table> split_re(strings_column_view const& input,
-                                std::string const& pattern,
+                                std::string_view pattern,
                                 split_direction direction,
                                 size_type maxsplit,
                                 rmm::cuda_stream_view stream,
@@ -252,7 +252,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
-                                        std::string const& pattern,
+                                        std::string_view pattern,
                                         split_direction direction,
                                         size_type maxsplit,
                                         rmm::cuda_stream_view stream,
@@ -289,7 +289,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
 }  // namespace
 
 std::unique_ptr<table> split_re(strings_column_view const& input,
-                                std::string const& pattern,
+                                std::string_view pattern,
                                 size_type maxsplit,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
@@ -298,7 +298,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
-                                        std::string const& pattern,
+                                        std::string_view pattern,
                                         size_type maxsplit,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
@@ -307,7 +307,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
 }
 
 std::unique_ptr<table> rsplit_re(strings_column_view const& input,
-                                 std::string const& pattern,
+                                 std::string_view pattern,
                                  size_type maxsplit,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
@@ -316,7 +316,7 @@ std::unique_ptr<table> rsplit_re(strings_column_view const& input,
 }
 
 std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
-                                         std::string const& pattern,
+                                         std::string_view pattern,
                                          size_type maxsplit,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
@@ -329,7 +329,7 @@ std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
 // external APIs
 
 std::unique_ptr<table> split_re(strings_column_view const& input,
-                                std::string const& pattern,
+                                std::string_view pattern,
                                 size_type maxsplit,
                                 rmm::mr::device_memory_resource* mr)
 {
@@ -338,7 +338,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
-                                        std::string const& pattern,
+                                        std::string_view pattern,
                                         size_type maxsplit,
                                         rmm::mr::device_memory_resource* mr)
 {
@@ -347,7 +347,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
 }
 
 std::unique_ptr<table> rsplit_re(strings_column_view const& input,
-                                 std::string const& pattern,
+                                 std::string_view pattern,
                                  size_type maxsplit,
                                  rmm::mr::device_memory_resource* mr)
 {
@@ -356,7 +356,7 @@ std::unique_ptr<table> rsplit_re(strings_column_view const& input,
 }
 
 std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
-                                         std::string const& pattern,
+                                         std::string_view pattern,
                                          size_type maxsplit,
                                          rmm::mr::device_memory_resource* mr)
 {

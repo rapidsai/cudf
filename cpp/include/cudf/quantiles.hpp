@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,8 @@ namespace cudf {
  * Computes the specified quantiles by interpolating values between which they
  * lie, using the interpolation strategy specified in `interp`.
  *
- * @param[in] input           Column from which to compute quantile values.
- * @param[in] q               Specified quantiles in range [0, 1].
+ * @param[in] input           Column from which to compute quantile values
+ * @param[in] q               Specified quantiles in range [0, 1]
  * @param[in] interp          Strategy used to select between values adjacent to
  *                            a specified quantile.
  * @param[in] ordered_indices Column containing the sorted order of `input`.
@@ -48,7 +48,7 @@ namespace cudf {
  *                            If false, returns same type as input.
  * @param[in] mr              Device memory resource used to allocate the returned column's device
  memory
- * @returns Column of specified quantiles, with nulls for indeterminable values.
+ * @returns Column of specified quantiles, with nulls for indeterminable values
  */
 
 std::unique_ptr<column> quantile(
@@ -76,16 +76,16 @@ std::unique_ptr<column> quantile(
  * quantiles `<= 0` correspond to row `0`. (first)
  * quantiles `>= 1` correspond to row `input.size() - 1`. (last)
  *
- * @param input           Table used to compute quantile rows.
- * @param q               Desired quantiles in range [0, 1].
+ * @param input           Table used to compute quantile rows
+ * @param q               Desired quantiles in range [0, 1]
  * @param interp          Strategy used to select between the two rows on either
                           side of the desired quantile.
- * @param is_input_sorted Indicates if the input has been pre-sorted.
- * @param column_order    The desired sort order for each column.
- * @param null_precedence The desired order of null compared to other elements.
+ * @param is_input_sorted Indicates if the input has been pre-sorted
+ * @param column_order    The desired sort order for each column
+ * @param null_precedence The desired order of null compared to other elements
  * @param mr              Device memory resource used to allocate the returned table's device memory
  *
- * @returns Table of specified quantiles, with nulls for indeterminable values.
+ * @returns Table of specified quantiles, with nulls for indeterminable values
  * @throws cudf::logic_error if `interp` is an arithmetic interpolation strategy
  * @throws cudf::logic_error if `input` is empty
  */
@@ -110,15 +110,15 @@ std::unique_ptr<table> quantiles(
  * corresponding tdigest from `input` row `i`. The length of each output list
  * is the number of percentages specified in `percentages`.
  *
- * @param input           tdigest input data. One tdigest per row.
- * @param percentiles     Desired percentiles in range [0, 1].
+ * @param input           tdigest input data. One tdigest per row
+ * @param percentiles     Desired percentiles in range [0, 1]
  * @param mr              Device memory resource used to allocate the returned column's device
  * memory
  *
  * @throws cudf::logic_error if `input` is not a valid tdigest column.
  * @throws cudf::logic_error if `percentiles` is not a FLOAT64 column.
  *
- * @returns LIST Column containing requested percentile values as FLOAT64.
+ * @returns LIST Column containing requested percentile values as FLOAT64
  */
 std::unique_ptr<column> percentile_approx(
   tdigest::tdigest_column_view const& input,
