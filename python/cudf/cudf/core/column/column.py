@@ -423,15 +423,19 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
             # This assertion prevents mypy errors below.
             assert self.base_data is not None
-            new_buf_ptr = (
-                self.base_data.ptr + self.offset * self.dtype.itemsize
-            )
-            new_buf_size = self.size * self.dtype.itemsize
-            view_buf = Buffer(
-                data=new_buf_ptr,
-                size=new_buf_size,
-                owner=self.base_data._owner,
-            )
+
+            # If the view spans all of `base_data`, we return `base_data`.
+            if (
+                self.offset == 0
+                and self.base_data.size == self.size * self.dtype.itemsize
+            ):
+                view_buf = self.base_data
+            else:
+                view_buf = Buffer.from_buffer(
+                    buffer=self.base_data,
+                    size=self.size * self.dtype.itemsize,
+                    offset=self.offset * self.dtype.itemsize,
+                )
             return build_column(view_buf, dtype=dtype)
 
     def element_indexing(self, index: int):
