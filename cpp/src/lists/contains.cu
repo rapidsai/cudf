@@ -85,7 +85,9 @@ auto __device__ element_index_pair_iter(size_type const size)
 
 template <typename Type, typename SearchKeyIter>
 struct search_lists_fn {
-  template <bool find_first>
+  cudf::detail::lists_column_device_view const lists;
+  SearchKeyIter const keys_iter;
+  duplicate_find_option const find_option;
 
   __device__ thrust::pair<size_type, bool> operator()(size_type const idx) const
   {
@@ -104,6 +106,8 @@ struct search_lists_fn {
             true};
   }
 
+ private:
+  template <bool find_first>
   __device__ size_type search_list(list_device_view const& list, Type const& search_key) const
   {
     auto const [begin, end] = element_index_pair_iter<find_first>(list.size());
@@ -115,10 +119,6 @@ struct search_lists_fn {
     // If the key is found, return its found position in the list from `found_iter`.
     return found_iter == end ? NOT_FOUND_SENTINEL : *found_iter;
   }
-
-  cudf::detail::lists_column_device_view const lists;
-  SearchKeyIter const keys_iter;
-  duplicate_find_option const find_option;
 };
 
 /**
