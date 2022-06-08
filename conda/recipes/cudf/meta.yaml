@@ -22,6 +22,8 @@ build:
   # libcudf's run_exports pinning is looser than we would like
   ignore_run_exports:
     - libcudf
+  ignore_run_exports_from:
+    - {{ compiler('cuda') }}
 
 requirements:
   build:

@@ -37,7 +37,7 @@ bool contains_nested_element(column_view const& haystack,
 
   auto const comparator =
     cudf::experimental::row::equality::two_table_comparator(haystack_tv, needle_tv, stream);
-  auto const d_comp = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
+  auto const d_comp = comparator.equal_to(nullate::DYNAMIC{has_nulls});
 
   auto const begin = cudf::experimental::row::lhs_iterator(0);
   auto const end   = begin + haystack.size();

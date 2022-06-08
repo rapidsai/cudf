@@ -247,7 +247,7 @@ int96_timestamps : bool, default False
     timestamps will not be altered.
 row_group_size_bytes: integer or None, default None
     Maximum size of each stripe of the output.
-    If None, 13369344 (128MB) will be used.
+    If None, 134217728 (128MB) will be used.
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.

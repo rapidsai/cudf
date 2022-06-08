@@ -61,7 +61,6 @@ from cudf.core.reshape import (
     concat,
     get_dummies,
     melt,
-    merge_sorted,
     pivot,
     unstack,
 )
@@ -154,7 +153,6 @@ __all__ = [
     "isclose",
     "melt",
     "merge",
-    "merge_sorted",
     "pivot",
     "read_avro",
     "read_csv",
