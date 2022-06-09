@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,12 +39,14 @@ class table {
  public:
   table()        = default;
   ~table()       = default;
-  table(table&&) = default;
+  table(table&&) = default;  ///< Move constructor
   table& operator=(table const&) = delete;
   table& operator=(table&&) = delete;
 
   /**
    * @brief Construct a new table by copying the contents of another table.
+   *
+   * @param other The table to copy
    */
   table(table const& other);
 
@@ -70,17 +72,23 @@ class table {
 
   /**
    * @brief Returns the number of columns in the table
+   *
+   * @return The number of columns in the table
    */
   [[nodiscard]] size_type num_columns() const noexcept { return _columns.size(); }
 
   /**
    * @brief Returns the number of rows
+   *
+   * @return  The number of rows
    */
   [[nodiscard]] size_type num_rows() const noexcept { return _num_rows; }
 
   /**
    * @brief Returns an immutable, non-owning `table_view` of the contents of
    *this `table`.
+   *
+   * @return An immutable, non-owning `table_view` of the contents of this `table`
    */
   [[nodiscard]] table_view view() const;
 
@@ -93,6 +101,8 @@ class table {
   /**
    * @brief Returns a mutable, non-owning `mutable_table_view` of the contents
    * of this `table`.
+   *
+   * @return A mutable, non-owning `mutable_table_view` of the contents of this `table`
    */
   mutable_table_view mutable_view();
 
@@ -107,6 +117,8 @@ class table {
    * `unique_ptr`s to the constituent columns.
    *
    * After `release()`, `num_columns() == 0` and `num_rows() == 0`
+   *
+   * @returns A vector of `unique_ptr`s to the constituent columns
    */
   std::vector<std::unique_ptr<column>> release();
 
