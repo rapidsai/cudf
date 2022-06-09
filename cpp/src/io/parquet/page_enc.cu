@@ -1298,9 +1298,31 @@ class header_encoder {
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
+// byteswap 128 bit integer into char array in network byte order
+__device__ void swap128(__int128_t v, unsigned char * d)
+{
+  d[0] = (v >> 120) & 0xff;
+  d[1] = (v >> 112) & 0xff;
+  d[2] = (v >> 104) & 0xff;
+  d[3] = (v >> 96) & 0xff;
+  d[4] = (v >> 88) & 0xff;
+  d[5] = (v >> 80) & 0xff;
+  d[6] = (v >> 72) & 0xff;
+  d[7] = (v >> 64) & 0xff;
+  d[8] = (v >> 56) & 0xff;
+  d[9] = (v >> 48) & 0xff;
+  d[10] = (v >> 40) & 0xff;
+  d[11] = (v >> 32) & 0xff;
+  d[12] = (v >> 24) & 0xff;
+  d[13] = (v >> 16) & 0xff;
+  d[14] = (v >> 8) & 0xff;
+  d[15] = (v >> 0) & 0xff;
+}
+
 __device__ void get_min_max(const statistics_chunk* s,
                             uint8_t dtype,
                             float* fp_scratch,
+                            unsigned char * d128_scratch,
                             const void** vmin,
                             const void** vmax,
                             uint32_t* lmin,
@@ -1335,6 +1357,11 @@ __device__ void get_min_max(const statistics_chunk* s,
         fp_scratch[1] = s->max_value.fp_val;
         *vmin         = &fp_scratch[0];
         *vmax         = &fp_scratch[1];
+      } else if (dtype == dtype_decimal128) {
+        swap128(s->min_value.d128_val, &d128_scratch[0]);
+        swap128(s->max_value.d128_val, &d128_scratch[16]);
+        *vmin         = &d128_scratch[0];
+        *vmax         = &d128_scratch[16];
       } else {
         *vmin = &s->min_value;
         *vmax = &s->max_value;
@@ -1349,7 +1376,8 @@ __device__ void get_min_max(const statistics_chunk* s,
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
                                      const statistics_chunk* s,
                                      uint8_t dtype,
-                                     float* fp_scratch)
+                                     float* fp_scratch,
+                                     unsigned char * d128_scratch)
 {
   uint8_t* end;
   header_encoder encoder(start);
@@ -1358,7 +1386,7 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     const void *vmin, *vmax;
     uint32_t lmin, lmax;
 
-    get_min_max(s, dtype, fp_scratch, &vmin, &vmax, &lmin, &lmax);
+    get_min_max(s, dtype, fp_scratch, d128_scratch, &vmin, &vmax, &lmin, &lmax);
     encoder.field_binary(5, vmax, lmax);
     encoder.field_binary(6, vmin, lmin);
   }
@@ -1378,6 +1406,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
   __shared__ __align__(8) float fp_scratch[2];
+  __shared__ __align__(8) unsigned char d128_scratch[32];
 
   uint32_t t = threadIdx.x;
 
@@ -1392,7 +1421,7 @@ __global__ void __launch_bounds__(128)
     if (chunk_stats && &pages[blockIdx.x] == ck_g.pages) {  // Is this the first page in a chunk?
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
       hdr_end =
-        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, fp_scratch);
+        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, fp_scratch, d128_scratch);
       page_g.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
     }
     uncompressed_page_size = page_g.max_data_size;
@@ -1434,7 +1463,7 @@ __global__ void __launch_bounds__(128)
       if (not page_stats.empty()) {
         encoder.field_struct_begin(5);
         encoder.set_ptr(EncodeStatistics(
-          encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, fp_scratch));
+          encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, fp_scratch, d128_scratch));
         encoder.field_struct_end(5);
       }
       encoder.field_struct_end(5);
@@ -1487,26 +1516,8 @@ __device__ int32_t compareValues(int8_t ptype,
     // currently only used for decimal128, so length should always be 16
     // FIXME  this will break if comparing byte arrays of differing lengths
     case Type::FIXED_LEN_BYTE_ARRAY: {
-#if 0
-      string_view s1 = (string_view)v1.str_val;
-      string_view s2 = (string_view)v2.str_val;
-      printf("fixed %d %d\n", v1.str_val.length, v2.str_val.length);
-      for (int i=0; i < 16; i++) {
-        if (v1.str_val.ptr[i] != v2.str_val.ptr[i]) {
-          printf("%d %d %d\n", i, v1.str_val.ptr[i], v2.str_val.ptr[i]);
-          return v1.str_val.ptr[i] - v2.str_val.ptr[i];
-        }
-      }
-      return 0;
-#else
-      // FIXME: the stats buffer seems to have 64-bit int rather than
-      // 16-byte array!  I think this is a bug.
-      // look at typed_statistics_chunk union_member usage.  int128 is integral
-      // so just copies it to chunk as is, but ival is 64bit.  need to expand
-      // size of ival and uval in statistics_val to 128bit.  then need to encode
-      // decimal128 min/max vals as bigendian array of char's
-      return compare(v1.i_val, v2.i_val);
-#endif
+      // FIXME: pass dtype too.  only do this for decimal128
+      return compare(v1.d128_val, v2.d128_val);
     }
     case Type::BYTE_ARRAY: {
       string_view s1 = (string_view)v1.str_val;
@@ -1614,6 +1625,7 @@ __global__ void __launch_bounds__(1)
   uint32_t lmin, lmax;
   uint8_t* col_idx_end;
   float fp_scratch[2];
+  unsigned char d128_scratch[32];
 
   if (column_stats.empty()) return;
 
@@ -1635,7 +1647,7 @@ __global__ void __launch_bounds__(1)
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     get_min_max(
-      &column_stats[pageidx + page], col_g.stats_dtype, fp_scratch, &vmin, &vmax, &lmin, &lmax);
+      &column_stats[pageidx + page], col_g.stats_dtype, fp_scratch, d128_scratch, &vmin, &vmax, &lmin, &lmax);
     encoder.put_binary(vmin, lmin);
   }
   encoder.field_list_end(2);
@@ -1643,7 +1655,7 @@ __global__ void __launch_bounds__(1)
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     get_min_max(
-      &column_stats[pageidx + page], col_g.stats_dtype, fp_scratch, &vmin, &vmax, &lmin, &lmax);
+      &column_stats[pageidx + page], col_g.stats_dtype, fp_scratch, d128_scratch, &vmin, &vmax, &lmin, &lmax);
     encoder.put_binary(vmax, lmax);
   }
   encoder.field_list_end(3);

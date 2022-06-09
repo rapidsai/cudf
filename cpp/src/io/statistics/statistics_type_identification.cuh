@@ -123,13 +123,14 @@ class extrema_type {
 
   using non_arithmetic_extrema_type = typename std::conditional_t<
     cudf::is_fixed_point<T>() or cudf::is_duration<T>() or cudf::is_timestamp<T>(),
-    int64_t,
+    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
     typename std::conditional_t<std::is_same_v<T, string_view>, string_view, void>>;
 
   // unsigned int/bool -> uint64_t
   // signed int        -> int64_t
   // float/double      -> double
   // decimal32/64      -> int64_t
+  // decimal128        -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> string_view
   // timestamp_[T]     -> int64_t
@@ -175,7 +176,9 @@ class aggregation_type {
     typename std::conditional_t<std::is_signed_v<T>, int64_t, uint64_t>;
 
   using arithmetic_aggregation_type =
-    typename std::conditional_t<std::is_integral_v<T>, integral_aggregation_type, double>;
+    typename std::conditional_t<std::is_integral_v<T>,
+                                std::conditional_t<std::is_same_v<T, __int128_t>, __int128_t, integral_aggregation_type>,
+                                double>;
 
   using non_arithmetic_aggregation_type =
     typename std::conditional_t<cudf::is_fixed_point<T>() or cudf::is_duration<T>() or
@@ -208,6 +211,8 @@ class aggregation_type {
   {
     if constexpr (std::is_same_v<T, string_view>) {
       return val.size_bytes();
+    } else if constexpr (std::is_same_v<T, __int128_t>) {
+      return val;
     } else if constexpr (std::is_integral_v<T>) {
       return val;
     } else if constexpr (std::is_floating_point_v<T>) {
