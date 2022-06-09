@@ -900,34 +900,68 @@ TEST_F(Distinct, ListsOfEmptyStructs)
   // 11. [{}, {}]       ==
   // 12. [{}, {}]
 
-  using mask = std::vector<bool>;
+  auto const structs_null_it = nulls_at({0, 1, 2, 3, 4, 5, 6, 7});
+  auto const structs_nullmask_buf =
+    cudf::test::detail::make_null_mask(structs_null_it, structs_null_it + 14);
+  auto const structs =
+    cudf::column_view(cudf::data_type(cudf::type_id::STRUCT),
+                      14,
+                      nullptr,
+                      static_cast<cudf::bitmask_type const*>(structs_nullmask_buf.data()),
+                      cudf::UNKNOWN_NULL_COUNT,
+                      0,
+                      {});
 
-  auto struct_validity = mask{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
-  auto struct_validity_buffer =
-    cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
-  auto struct_col =
-    cudf::make_structs_column(14, {}, cudf::UNKNOWN_NULL_COUNT, std::move(struct_validity_buffer));
+  auto const offsets       = int32s_col{0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
+  auto const lists_null_it = nulls_at({2, 3});
+  auto const lists_nullmask_buf =
+    cudf::test::detail::make_null_mask(lists_null_it, lists_null_it + 13);
+  auto const keys =
+    cudf::column_view(cudf::data_type(cudf::type_id::LIST),
+                      13,
+                      nullptr,
+                      static_cast<cudf::bitmask_type const*>(lists_nullmask_buf.data()),
+                      cudf::UNKNOWN_NULL_COUNT,
+                      0,
+                      {offsets, structs});
 
-  auto offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>{
-    0, 0, 0, 0, 0, 2, 4, 6, 7, 8, 9, 10, 12, 14};
-  auto list_nullmask = mask{1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  auto list_validity_buffer =
-    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
-  auto list_column = cudf::make_lists_column(13,
-                                             offsets.release(),
-                                             std::move(struct_col),
-                                             cudf::UNKNOWN_NULL_COUNT,
-                                             std::move(list_validity_buffer));
-  auto idx =
-    cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6};
-  auto input = cudf::table_view{{idx, *list_column}};
+  auto const idx     = int32s_col{1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6};
+  auto const input   = cudf::table_view{{idx, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
 
-  auto expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2, 4, 7, 9, 11};
-  auto expect     = cudf::gather(input, expect_map);
+  {
+    auto const expect_map   = int32s_col{0, 2, 4, 7, 9, 11};
+    auto const expect_table = cudf::gather(input, expect_map);
 
-  auto result      = cudf::distinct(input, {1}, KEEP_ANY);
-  auto result_sort = cudf::sort_by_key(*result, result->select({0}));
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*expect, *result_sort);
+    {
+      auto const result      = cudf::distinct(input, key_idx);
+      auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+      CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result_sort);
+    }
+
+    {
+      auto const result      = cudf::distinct(input, key_idx, KEEP_ANY);
+      auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+      CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result_sort);
+    }
+  }
+
+  {
+    auto const expect_map   = int32s_col{0, 2, 3, 4, 5, 6, 7, 8, 9, 11};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    {
+      auto const result      = cudf::distinct(input, key_idx, null_equality::UNEQUAL);
+      auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+      CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result_sort);
+    }
+
+    {
+      auto const result      = cudf::distinct(input, key_idx, KEEP_ANY, null_equality::UNEQUAL);
+      auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+      CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result_sort);
+    }
+  }
 }
 
 TEST_F(Distinct, StructsOfStructs)
