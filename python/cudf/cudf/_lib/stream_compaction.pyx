@@ -9,12 +9,13 @@ from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.sorting cimport stable_sort_by_key as cpp_stable_sort_by_key
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
     distinct_count as cpp_distinct_count,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
-    distinct as cpp_distinct,
+    unique as cpp_unique,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -166,9 +167,21 @@ def drop_duplicates(list columns,
     cdef unique_ptr[table] c_result
 
     with nogil:
-        c_result = move(
-            cpp_distinct(
+        # cudf::unique keeps unique rows in each consecutive group of
+        # equivalent rows. To match the behavior of pandas.DataFrame.
+        # drop_duplicates, users need to stable sort the input first
+        # and then invoke cudf::unique.
+        sorted_source_table = move(
+            cpp_stable_sort_by_key(
                 source_table_view,
+                keys_view,
+                column_order,
+                null_precedence
+            )
+        )
+        c_result = move(
+            cpp_unique(
+                sorted_source_table.get().view(),
                 cpp_keys,
                 cpp_keep_option,
                 cpp_nulls_equal
