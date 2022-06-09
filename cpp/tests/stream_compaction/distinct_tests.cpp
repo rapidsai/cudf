@@ -45,7 +45,7 @@ using cudf::test::iterators::null_at;
 using cudf::test::iterators::nulls_at;
 
 template <typename Input, typename Keys>
-auto sorted_distinct(Input const& input, Keys const& keys, duplicate_keep_option keep)
+auto distinct_sort(Input const& input, Keys const& keys, duplicate_keep_option keep)
 {
   auto const result = cudf::distinct(input, keys, keep);
   return cudf::sort_by_key(*result, result->select(keys));
@@ -67,7 +67,7 @@ TEST_F(Distinct, StringKeyColumn_KEEP_ANY)
   auto const exp_keys_sort = strings_col{{"" /*NULL*/, "all", "new", "strings", "the"}, null_at(0)};
   auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
 
-  auto const result_sort = sorted_distinct(input, keys, duplicate_keep_option::KEEP_ANY);
+  auto const result_sort = distinct_sort(input, keys, duplicate_keep_option::KEEP_ANY);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
 }
 
@@ -86,7 +86,7 @@ TEST_F(Distinct, StringKeyColumn_KEEP_EXCEPT_ANY)
       strings_col{{"" /*NULL*/, "all", "new", "strings", "the"}, null_at(0)};
     auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
 
-    auto const result_sort = sorted_distinct(input, keys, duplicate_keep_option::KEEP_FIRST);
+    auto const result_sort = distinct_sort(input, keys, duplicate_keep_option::KEEP_FIRST);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
 
@@ -96,7 +96,7 @@ TEST_F(Distinct, StringKeyColumn_KEEP_EXCEPT_ANY)
       strings_col{{"" /*NULL*/, "all", "new", "strings", "the"}, null_at(0)};
     auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
 
-    auto const result_sort = sorted_distinct(input, keys, duplicate_keep_option::KEEP_LAST);
+    auto const result_sort = distinct_sort(input, keys, duplicate_keep_option::KEEP_LAST);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
 
@@ -105,7 +105,7 @@ TEST_F(Distinct, StringKeyColumn_KEEP_EXCEPT_ANY)
     auto const exp_keys_sort = strings_col{{"" /*NULL*/, "strings", "the"}, null_at(0)};
     auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
 
-    auto const result_sort = sorted_distinct(input, keys, duplicate_keep_option::KEEP_NONE);
+    auto const result_sort = distinct_sort(input, keys, duplicate_keep_option::KEEP_NONE);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
 }
