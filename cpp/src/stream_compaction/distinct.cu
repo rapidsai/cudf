@@ -103,7 +103,7 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   if (input.num_rows() == 0 or input.num_columns() == 0 or keys.empty()) {
-    return rmm::device_uvector<size_type>(0, stream);
+    return rmm::device_uvector<size_type>(0, stream, mr);
   }
 
   auto const keys_tview = input.select(keys);
@@ -128,11 +128,11 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
   key_map.insert(kv_iter, kv_iter + keys_size, hash_key, key_equal, stream.value());
 
-  auto distinct_map = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
+  auto output_map = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
   // If we don't care about order, just gather indices of distinct keys taken from key_map.
   if (keep == duplicate_keep_option::KEEP_ANY) {
-    key_map.retrieve_all(distinct_map.begin(), thrust::make_discard_iterator(), stream.value());
-    return distinct_map;
+    key_map.retrieve_all(output_map.begin(), thrust::make_discard_iterator(), stream.value());
+    return output_map;
   }
 
   // A reduction will be performed on indices of rows compared equal and the results are store into
@@ -182,7 +182,7 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
       ? thrust::copy_if(rmm::exec_policy(stream),
                         thrust::make_counting_iterator(0),
                         thrust::make_counting_iterator(keys_size),
-                        distinct_map.begin(),
+                        output_map.begin(),
                         [reduced_indices = reduced_indices.begin()] __device__(auto const idx) {
                           // Only output index of the rows that appeared once during reduction.
                           return reduced_indices[idx] == size_type{1};
@@ -190,11 +190,11 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
       : thrust::copy_if(rmm::exec_policy(stream),
                         reduced_indices.begin(),
                         reduced_indices.end(),
-                        distinct_map.begin(),
+                        output_map.begin(),
                         [init_value] __device__(auto const idx) { return idx != init_value; });
 
-  distinct_map.resize(thrust::distance(distinct_map.begin(), map_end), stream);
-  return distinct_map;
+  output_map.resize(thrust::distance(output_map.begin(), map_end), stream);
+  return output_map;
 }
 
 std::unique_ptr<table> distinct(table_view const& input,
