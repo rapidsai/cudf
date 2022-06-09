@@ -11,10 +11,10 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
+    distinct as cpp_distinct,
     distinct_count as cpp_distinct_count,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
-    distinct as cpp_distinct,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
