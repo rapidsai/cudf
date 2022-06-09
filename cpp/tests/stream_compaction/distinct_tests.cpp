@@ -964,6 +964,57 @@ TEST_F(Distinct, ListsOfEmptyStructs)
   }
 }
 
+TEST_F(Distinct, EmptyDeepList)
+{
+  // List<List<int>>, where all lists are empty:
+  //
+  // 0. []
+  // 1. []
+  // 2. Null
+  // 3. Null
+
+  auto const keys =
+    lists_col{{lists_col{}, lists_col{}, lists_col{}, lists_col{}}, nulls_at({2, 3})};
+
+  auto const idx     = int32s_col{1, 1, 2, 2};
+  auto const input   = cudf::table_view{{idx, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  {
+    auto const expect_map   = int32s_col{0, 2};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    {
+      auto const result      = cudf::distinct(input, key_idx);
+      auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+      CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result_sort);
+    }
+
+    {
+      auto const result      = cudf::distinct(input, key_idx, KEEP_ANY);
+      auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+      CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result_sort);
+    }
+  }
+
+  {
+    auto const expect_map   = int32s_col{0, 2, 3};
+    auto const expect_table = cudf::gather(input, expect_map);
+
+    {
+      auto const result      = cudf::distinct(input, key_idx, null_equality::UNEQUAL);
+      auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+      CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result_sort);
+    }
+
+    {
+      auto const result      = cudf::distinct(input, key_idx, KEEP_ANY, null_equality::UNEQUAL);
+      auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+      CUDF_TEST_EXPECT_TABLES_EQUAL(*expect_table, *result_sort);
+    }
+  }
+}
+
 TEST_F(Distinct, StructsOfStructs)
 {
   //  +-----------------+
@@ -1137,36 +1188,4 @@ TEST_F(Distinct, SlicedStructsOfLists)
     auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
-}
-
-TEST_F(Distinct, EmptyDeepList)
-{
-  // List<List<int>>, where all lists are empty
-  // []
-  // []
-  // Null
-  // Null
-
-  // Internal empty list
-  auto list1 = cudf::test::lists_column_wrapper<int>{};
-
-  auto offsets       = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 0, 0};
-  auto list_nullmask = std::vector<bool>{1, 1, 0, 0};
-  auto list_validity_buffer =
-    cudf::test::detail::make_null_mask(list_nullmask.begin(), list_nullmask.end());
-  auto list_column = cudf::make_lists_column(4,
-                                             offsets.release(),
-                                             list1.release(),
-                                             cudf::UNKNOWN_NULL_COUNT,
-                                             std::move(list_validity_buffer));
-
-  auto idx   = cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 2, 2};
-  auto input = cudf::table_view{{idx, *list_column}};
-
-  auto expect_map = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 2};
-  auto expect     = cudf::gather(input, expect_map);
-
-  auto result      = cudf::distinct(input, {1}, KEEP_ANY);
-  auto result_sort = cudf::sort_by_key(*result, result->select({0}));
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*expect, *result_sort);
 }
