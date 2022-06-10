@@ -21,8 +21,8 @@ function(find_and_configure_cucollections)
     cuco 0.0.1
     GLOBAL_TARGETS cuco::cuco
     BUILD_EXPORT_SET cudf-exports
-    CPM_ARGS GITHUB_REPOSITORY NVIDIA/cuCollections
-    GIT_TAG ebaba1ae378a5272116414b6d7ae5847e5cf5715
+    CPM_ARGS GITHUB_REPOSITORY ttnghia/cuCollections
+    GIT_TAG 331b24837ae515ac0ce92fac4a01053898b04b47
     EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS}
     OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
