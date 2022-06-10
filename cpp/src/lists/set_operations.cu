@@ -226,6 +226,8 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(lhs.size() == rhs.size(), "TBA");
+
   // - Insert lhs child elements into map.
   // - Check contains for rhs child element.
   // - Generate labels for rhs child elements.
@@ -235,18 +237,34 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
   // - output_offsets = reconstruct offsets from intersect_labels.
   // - return lists_column(output_child, output_offsets)
 
-  auto const lhs_child = lhs.get_sliced_child(stream);
-  auto const rhs_child = rhs.get_sliced_child(stream);
-  auto const map       = create_map(lhs_child, stream);
-  auto const contained = check_contains(map, lhs_child, rhs_child, stream);
-  auto const labels    = generate_labels(rhs_child, stream);
+  auto const lhs_child           = lhs.get_sliced_child(stream);
+  auto const rhs_child           = rhs.get_sliced_child(stream);
+  auto const lhs_child_has_nulls = has_nested_nulls(lhs_child);
+  auto const rhs_child_has_nulls = has_nested_nulls(rhs_child);
 
-  auto [out_child, intersect_labels] = extract_if(rhs_child, labels, contained, stream, mr);
-  auto out_offsets = reconstruct_offsets(intersect_labels, lhs.size(), stream, mr);
+  auto const map = create_map(lhs_child, nulls_equal, stream);
+  // todo handle nans
+  auto const contained = check_contains(
+    map, lhs_child, rhs_child, lhs_child_has_nulls, rhs_child_has_nulls, nulls_equal, stream);
+  auto const labels = generate_labels(rhs_child, stream);
+
+  auto const output_table = cudf::detail::copy_if(
+    table_view{{labels->view(), rhs_child}},
+    [contained = contained.begin()] __device__(auto const idx) { return contained[idx]; },
+    stream,
+    mr);
+
+  auto out_offsets =
+    reconstruct_offsets(output_table->get_column(0).view(), lhs.size(), stream, mr);
 
   // todo : fix null
-  return make_lists_column(
-    lhs.size(), std::move(out_offsets), std::move(out_child), 0, {}, stream, mr);
+  return make_lists_column(lhs.size(),
+                           std::move(out_offsets),
+                           std::move(output_table->release().back()),
+                           0,
+                           {},
+                           stream,
+                           mr);
 }
 
 std::unique_ptr<column> set_union(lists_column_view const& lhs,
@@ -256,6 +274,8 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(lhs.size() == rhs.size(), "TBA");
+
   // - concatenate_row(lhs, set_except(rhs, lhs))
   // - Alternative: concatenate_row(lhs, rhs) then `drop_list_duplicates`, however,
   //   `drop_list_duplicates` currently doesn't support nested types.
@@ -272,6 +292,8 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(lhs.size() == rhs.size(), "TBA");
+
   // - Insert rhs child elements.
   // - Check contains for lhs child element.
   // - Invert contains for lhs child element.
