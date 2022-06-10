@@ -140,10 +140,10 @@ cudf::size_type distinct_count(table_view const& input,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
- * @brief Generate a gather map of distinct rows for the input table.
+ * @brief Generate a gather map that refers to distinct rows of the input table.
  *
  * Given an input table, this function returns a gather map such that gathering the input table
- * using this gather map will produce an equivalent result (i.e., the same set of rows regarding of
+ * using this map will produce an equivalent result (i.e., the same set of rows regarding of
  * order) as the result of calling to `cudf::distinct`. As such, this function requires the same
  * parameters as `cudf::distinct`.
  *
@@ -155,7 +155,7 @@ cudf::size_type distinct_count(table_view const& input,
  * @param nulls_equal Flag to specify whether null key elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
- * @return A device_uvector containing the compact gather map
+ * @return A device_uvector containing the resulting compact gather map
  */
 rmm::device_uvector<size_type> distinct_map(
   table_view const& input,

@@ -208,10 +208,10 @@ std::unique_ptr<table> apply_boolean_mask(
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
  */
 enum class duplicate_keep_option {
-  KEEP_FIRST = 0,  ///< Keep first duplicate row and unique rows
-  KEEP_LAST,       ///< Keep last duplicate row and unique rows
-  KEEP_ANY,        ///< Keep one duplicate row at an unspecified position and unique rows
-  KEEP_NONE        ///< Keep only unique rows
+  KEEP_FIRST = 0,  ///< Keep first duplicate element and unique elements
+  KEEP_LAST,       ///< Keep last duplicate element and unique elements
+  KEEP_ANY,        ///< Keep one duplicate element at an unspecified position and unique elements
+  KEEP_NONE        ///< Keep only unique elements
 };
 
 /**
