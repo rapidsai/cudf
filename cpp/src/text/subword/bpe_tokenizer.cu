@@ -188,9 +188,15 @@ struct byte_pair_encoding_fn {
    */
   __device__ void operator()(cudf::size_type idx)
   {
-    if (d_strings.is_null(idx)) { return; }
+    if (d_strings.is_null(idx)) {
+      d_sizes[idx] = 0;
+      return;
+    }
     auto const d_str = get_first_token(d_strings.element<cudf::string_view>(idx));
-    if (d_str.empty()) { return; }
+    if (d_str.empty()) {
+      d_sizes[idx] = 0;
+      return;
+    }
 
     auto const offset = d_strings.child(cudf::strings_column_view::offsets_column_index)
                           .element<cudf::offset_type>(idx);
