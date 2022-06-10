@@ -105,6 +105,8 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
                stream.value(),
                detail::hash_table_allocator_type{default_allocator<char>{}, stream}};
 
+  // Insert all indices of the elements in the haystack column into the hash map.
+  // Here the row hash values are used as map keys and row indices are hash values.
   {
     auto const hasher   = cudf::experimental::row::hash::row_hasher(haystack_tv, stream);
     auto const d_hasher = detail::experimental::compaction_hash(
@@ -118,6 +120,7 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
     haystack_map.insert(haystack_it, haystack_it + haystack.size(), stream.value());
   }
 
+  // Check for existence of needles in haystack.
   {
     auto const hasher   = cudf::experimental::row::hash::row_hasher(needles_tv, stream);
     auto const d_hasher = detail::experimental::compaction_hash(
