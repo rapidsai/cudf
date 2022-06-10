@@ -22,7 +22,7 @@ function(find_and_configure_cucollections)
     GLOBAL_TARGETS cuco::cuco
     BUILD_EXPORT_SET cudf-exports
     CPM_ARGS GITHUB_REPOSITORY ttnghia/cuCollections
-    GIT_TAG faedd758516d1e3bfae9f0ba213511d9a8a86258
+    GIT_TAG 331b24837ae515ac0ce92fac4a01053898b04b47
     EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS}
     OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
