@@ -32,6 +32,7 @@ from cudf.api.types import (
     is_bool_dtype,
     is_float_dtype,
     is_integer_dtype,
+    is_integer,
     is_number,
 )
 from cudf.core.buffer import Buffer
@@ -220,6 +221,12 @@ class NumericalColumn(NumericalBaseColumn):
                 out_dtype = "bool"
 
         lhs, rhs = (other, self) if reflect else (self, other)
+
+        if op in {"__pow__"} and (
+            (is_integer(lhs) or is_integer_dtype(lhs.dtype)) and 
+            (is_integer(rhs) or is_integer_dtype(rhs.dtype)) ):
+            op = "__intpow__"
+
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:
