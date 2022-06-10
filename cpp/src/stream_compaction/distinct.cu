@@ -113,8 +113,8 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
   auto const keys_size = keys_tview.num_rows();
 
   auto key_map = hash_map_type{compute_hash_table_size(keys_size),
-                               COMPACTION_EMPTY_KEY_SENTINEL,
-                               COMPACTION_EMPTY_VALUE_SENTINEL,
+                               cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
+                               cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
                                detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                                stream.value()};
 
@@ -122,7 +122,7 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
   auto const hash_key = experimental::compaction_hash(row_hash.device_hasher(has_null));
 
   auto const row_comp  = cudf::experimental::row::equality::self_comparator(preprocessed_keys);
-  auto const key_equal = row_comp.device_comparator(has_null, nulls_equal);
+  auto const key_equal = row_comp.equal_to(has_null, nulls_equal);
 
   auto const kv_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
