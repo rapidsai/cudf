@@ -274,14 +274,12 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(lhs.size() == rhs.size(), "TBA");
-
   // - concatenate_row(lhs, set_except(rhs, lhs))
   // - Alternative: concatenate_row(lhs, rhs) then `drop_list_duplicates`, however,
   //   `drop_list_duplicates` currently doesn't support nested types.
   // todo: add stream in detail version
   // fix concatenate_rows params.
-  auto const diff = set_difference(rhs, lhs, nulls_equal, nans_equal, mr);
+  auto const diff = set_difference(rhs, lhs, nulls_equal, nans_equal, stream, mr);
   return lists::concatenate_rows(table_view{{lhs.parent(), diff->view()}});
 }
 
@@ -303,11 +301,15 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
   // - Pull lhs child elements from gather_map.
   // - Reconstruct output offsets from except_labels for lhs.
 
-  auto const lhs_child     = lhs.get_sliced_child(stream);
-  auto const rhs_child     = rhs.get_sliced_child(stream);
-  auto const map           = create_map(rhs_child, stream);
+  auto const lhs_child           = lhs.get_sliced_child(stream);
+  auto const rhs_child           = rhs.get_sliced_child(stream);
+  auto const lhs_child_has_nulls = has_nested_nulls(lhs_child);
+  auto const rhs_child_has_nulls = has_nested_nulls(rhs_child);
+
+  auto const map           = create_map(rhs_child, nulls_equal, stream);
   auto const inv_contained = [&] {
-    auto contained = check_contains(map, rhs_child, lhs_child, stream);
+    auto contained = check_contains(
+      map, rhs_child, lhs_child, rhs_child_has_nulls, lhs_child_has_nulls, nulls_equal, stream);
     thrust::transform(rmm::exec_policy(stream),
                       contained.begin(),
                       contained.end(),
@@ -318,12 +320,25 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
 
   auto const labels = generate_labels(lhs_child, stream);
 
-  auto [out_child, except_labels] = extract_if(lhs_child, labels, inv_contained, stream, mr);
-  auto out_offsets                = reconstruct_offsets(except_labels, lhs.size(), stream, mr);
+  auto const output_table = cudf::detail::copy_if(
+    table_view{{labels->view(), lhs_child}},
+    [inv_contained = inv_contained.begin()] __device__(auto const idx) {
+      return inv_contained[idx];
+    },
+    stream,
+    mr);
+
+  auto out_offsets =
+    reconstruct_offsets(output_table->get_column(0).view(), lhs.size(), stream, mr);
 
   // todo : fix null
-  return make_lists_column(
-    lhs.size(), std::move(out_offsets), std::move(out_child), 0, {}, stream, mr);
+  return make_lists_column(lhs.size(),
+                           std::move(out_offsets),
+                           std::move(output_table->release().back()),
+                           0,
+                           {},
+                           stream,
+                           mr);
 }
 
 }  // namespace detail
