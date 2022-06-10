@@ -45,12 +45,17 @@ namespace cudf {
 namespace detail {
 
 namespace {
-template <typename MapDeviceView, typename Hash, typename KeyEqual>
+/**
+ * @brief A functor to perform reduction on row indices.
+ *
+ * A reduction operator will be performed on each group of rows that are compared equal.
+ */
+template <typename MapDeviceView, typename KeyHasher, typename KeyComparator>
 struct reduce_fn_gen {
-  size_type* const d_output;
   MapDeviceView const d_map;
-  Hash const d_hash;
-  KeyEqual const d_eqcomp;
+  KeyHasher const d_hash;
+  KeyComparator const d_eqcomp;
+  size_type* const d_output;
 
   template <duplicate_keep_option keep>
   auto reduce_fn() const
@@ -58,6 +63,13 @@ struct reduce_fn_gen {
     return reduce_index_fn<keep>{*this};
   }
 
+  /**
+   * @brief The functor used on device for row index reduction.
+   *
+   * This inner functor has only one template argument. That reduces the amount of template
+   * parameters required upon constructing this functor, which happens multiple times. Other
+   * template arguments belong to its parent, which needs to be constructed just once.
+   */
   template <duplicate_keep_option keep>
   struct reduce_index_fn {
     reduce_fn_gen const parent;
@@ -118,29 +130,31 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
                                detail::hash_table_allocator_type{default_allocator<char>{}, stream},
                                stream.value()};
 
-  auto const row_hash = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
-  auto const hash_key = experimental::compaction_hash(row_hash.device_hasher(has_null));
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
+  auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_null));
 
   auto const row_comp  = cudf::experimental::row::equality::self_comparator(preprocessed_keys);
   auto const key_equal = row_comp.equal_to(has_null, nulls_equal);
 
   auto const kv_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
-  key_map.insert(kv_iter, kv_iter + keys_size, hash_key, key_equal, stream.value());
+  key_map.insert(kv_iter, kv_iter + keys_size, key_hasher, key_equal, stream.value());
 
+  // The output distinct map.
   auto output_map = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
+
   // If we don't care about order, just gather indices of distinct keys taken from key_map.
   if (keep == duplicate_keep_option::KEEP_ANY) {
     key_map.retrieve_all(output_map.begin(), thrust::make_discard_iterator(), stream.value());
     return output_map;
   }
 
-  // A reduction will be performed on indices of rows compared equal and the results are store into
-  // this array. The reduction is:
+  // Perform reduction on each group of rows compared equal and the results are store
+  // into this array. The reduction operator is:
   // - If KEEP_FIRST: min.
   // - If KEEP_LAST: max.
   // - If KEEP_NONE: count number of appearances.
-  auto reduced_indices = rmm::device_uvector<size_type>(keys_tview.num_rows(), stream);
+  auto reduction_results = rmm::device_uvector<size_type>(keys_tview.num_rows(), stream);
 
   auto const init_value = [keep] {
     if (keep == duplicate_keep_option::KEEP_FIRST) {
@@ -151,11 +165,11 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
     return size_type{0};  // keep == KEEP_NONE
   }();
   thrust::uninitialized_fill(
-    rmm::exec_policy(stream), reduced_indices.begin(), reduced_indices.end(), init_value);
+    rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init_value);
 
   auto const d_map  = key_map.get_device_view();
-  auto const fn_gen = reduce_fn_gen<decltype(d_map), decltype(hash_key), decltype(key_equal)>{
-    reduced_indices.begin(), d_map, hash_key, key_equal};
+  auto const fn_gen = reduce_fn_gen<decltype(d_map), decltype(key_hasher), decltype(key_equal)>{
+    d_map, key_hasher, key_equal, reduction_results.begin()};
 
   auto const do_reduce = [keys_size, stream](auto const& fn) {
     thrust::for_each(rmm::exec_policy(stream),
@@ -183,13 +197,13 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
                         thrust::make_counting_iterator(0),
                         thrust::make_counting_iterator(keys_size),
                         output_map.begin(),
-                        [reduced_indices = reduced_indices.begin()] __device__(auto const idx) {
+                        [reduction_results = reduction_results.begin()] __device__(auto const idx) {
                           // Only output index of the rows that appeared once during reduction.
-                          return reduced_indices[idx] == size_type{1};
+                          return reduction_results[idx] == size_type{1};
                         })
       : thrust::copy_if(rmm::exec_policy(stream),
-                        reduced_indices.begin(),
-                        reduced_indices.end(),
+                        reduction_results.begin(),
+                        reduction_results.end(),
                         output_map.begin(),
                         [init_value] __device__(auto const idx) { return idx != init_value; });
 
