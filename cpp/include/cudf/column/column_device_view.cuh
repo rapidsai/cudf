@@ -1232,6 +1232,7 @@ __device__ inline bitmask_type get_mask_offset_word(bitmask_type const* __restri
 
 /**
  * @brief value accessor of column without null bitmask
+ *
  * A unary functor returns scalar value at `id`.
  * `operator() (cudf::size_type id)` computes `element`
  * This functor is only allowed for non-nullable columns.
@@ -1249,6 +1250,7 @@ struct value_accessor {
 
   /**
    * @brief constructor
+   *
    * @param[in] _col column device view of cudf column
    */
   value_accessor(column_device_view const& _col) : col{_col}
@@ -1328,6 +1330,7 @@ struct optional_accessor {
 
 /**
  * @brief pair accessor of column with/without null bitmask
+ *
  * A unary functor returns pair with scalar value at `id` and boolean validity
  * `operator() (cudf::size_type id)` computes `element`  and
  * returns a `pair(element, validity)`
@@ -1350,6 +1353,7 @@ struct pair_accessor {
 
   /**
    * @brief constructor
+   *
    * @param[in] _col column device view of cudf column
    */
   pair_accessor(column_device_view const& _col) : col{_col}
@@ -1372,6 +1376,7 @@ struct pair_accessor {
 
 /**
  * @brief pair accessor of column with/without null bitmask
+ *
  * A unary functor returns pair with representative scalar value at `id` and boolean validity
  * `operator() (cudf::size_type id)` computes `element`  and
  * returns a `pair(element, validity)`
@@ -1396,6 +1401,7 @@ struct pair_rep_accessor {
 
   /**
    * @brief constructor
+   *
    * @param[in] _col column device view of cudf column
    */
   pair_rep_accessor(column_device_view const& _col) : col{_col}
@@ -1446,6 +1452,7 @@ struct mutable_value_accessor {
 
   /**
    * @brief Constructor
+   *
    * @param[in] _col mutable column device view of cudf column
    */
   mutable_value_accessor(mutable_column_device_view& _col) : col{_col}

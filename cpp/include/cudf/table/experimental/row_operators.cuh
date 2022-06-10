@@ -475,19 +475,36 @@ struct weak_ordering_comparator_impl {
  * @brief Wraps and interprets the result of device_row_comparator, true if the result is
  * weak_ordering::LESS meaning one row is lexicographically *less* than another row.
  *
- * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+ * @tparam Comparator generic comparator that returns a weak_ordering
  */
 template <typename Comparator>
 struct less_comparator : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS> {
+  /**
+   * @brief Constructs a less_comparator
+   *
+   * @param comparator The comparator to wrap
+   */
   less_comparator(Comparator const& comparator)
     : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS>{comparator}
   {
   }
 };
 
+/**
+ * @brief Wraps and interprets the result of device_row_comparator, true if the result is
+ * weak_ordering::LESS or weak_ordering::EQUIVALENT meaning one row is lexicographically *less* than
+ * or *equivalent* to another row.
+ *
+ * @tparam Comparator generic comparator that returns a weak_ordering
+ */
 template <typename Comparator>
 struct less_equivalent_comparator
   : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT> {
+  /**
+   * @brief Constructs a less_equivalent_comparator
+   *
+   * @param comparator The comparator to wrap
+   */
   less_equivalent_comparator(Comparator const& comparator)
     : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT>{
         comparator}
@@ -665,6 +682,7 @@ class self_comparator {
       nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence(), comparator}};
   }
 
+  /// @copydoc less()
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less_equivalent(Nullate nullate                      = {},
@@ -802,6 +820,7 @@ class two_table_comparator {
                                                             comparator}}};
   }
 
+  /// @copydoc less()
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less_equivalent(Nullate nullate                      = {},

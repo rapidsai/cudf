@@ -2820,161 +2820,89 @@ def test_set_index_multi(drop, nelem):
     )
 
 
-@pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_0(copy):
-    # TODO (ptaylor): pandas changes `int` dtype to `float64`
-    # when reindexing and filling new label indices with NaN
-    gdf = cudf.datasets.randomdata(
+@pytest.fixture()
+def reindex_data():
+    return cudf.datasets.randomdata(
         nrows=6,
         dtypes={
             "a": "category",
-            # 'b': int,
             "c": float,
             "d": str,
         },
     )
-    pdf = gdf.to_pandas()
-    # Validate reindex returns a copy unmodified
-    assert_eq(pdf.reindex(copy=True), gdf.reindex(copy=copy))
 
 
-@pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_1(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate labels are used as index when axis defaults to 0
-    assert_eq(pdf.reindex(index, copy=True), gdf.reindex(index, copy=copy))
-
-
-@pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_2(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate labels are used as index when axis=0
-    assert_eq(
-        pdf.reindex(index, axis=0, copy=True),
-        gdf.reindex(index, axis=0, copy=copy),
+@pytest.fixture()
+def reindex_data_numeric():
+    return cudf.datasets.randomdata(
+        nrows=6,
+        dtypes={"a": float, "b": float, "c": float},
     )
 
 
 @pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_3(copy):
-    columns = ["a", "b", "c", "d", "e"]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate labels are used as columns when axis=0
-    assert_eq(
-        pdf.reindex(columns, axis=1, copy=True),
-        gdf.reindex(columns, axis=1, copy=copy),
-    )
+@pytest.mark.parametrize(
+    "args,gd_kwargs",
+    [
+        ([], {}),
+        ([[-3, 0, 3, 0, -2, 1, 3, 4, 6]], {}),
+        ([[-3, 0, 3, 0, -2, 1, 3, 4, 6]], {}),
+        ([[-3, 0, 3, 0, -2, 1, 3, 4, 6]], {"axis": 0}),
+        ([["a", "b", "c", "d", "e"]], {"axis": 1}),
+        ([], {"labels": [-3, 0, 3, 0, -2, 1, 3, 4, 6], "axis": 0}),
+        ([], {"labels": ["a", "b", "c", "d", "e"], "axis": 1}),
+        ([], {"labels": [-3, 0, 3, 0, -2, 1, 3, 4, 6], "axis": "index"}),
+        ([], {"labels": ["a", "b", "c", "d", "e"], "axis": "columns"}),
+        ([], {"index": [-3, 0, 3, 0, -2, 1, 3, 4, 6]}),
+        ([], {"columns": ["a", "b", "c", "d", "e"]}),
+        (
+            [],
+            {
+                "index": [-3, 0, 3, 0, -2, 1, 3, 4, 6],
+                "columns": ["a", "b", "c", "d", "e"],
+            },
+        ),
+    ],
+)
+def test_dataframe_reindex(copy, reindex_data, args, gd_kwargs):
+    pdf, gdf = reindex_data.to_pandas(), reindex_data
+
+    gd_kwargs["copy"] = copy
+    pd_kwargs = gd_kwargs.copy()
+    pd_kwargs["copy"] = True
+    assert_eq(pdf.reindex(*args, **pd_kwargs), gdf.reindex(*args, **gd_kwargs))
 
 
-@pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_4(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate labels are used as index when axis=0
-    assert_eq(
-        pdf.reindex(labels=index, axis=0, copy=True),
-        gdf.reindex(labels=index, axis=0, copy=copy),
-    )
-
-
-@pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_5(copy):
-    columns = ["a", "b", "c", "d", "e"]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate labels are used as columns when axis=1
-    assert_eq(
-        pdf.reindex(labels=columns, axis=1, copy=True),
-        gdf.reindex(labels=columns, axis=1, copy=copy),
-    )
-
-
-@pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_6(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate labels are used as index when axis='index'
-    assert_eq(
-        pdf.reindex(labels=index, axis="index", copy=True),
-        gdf.reindex(labels=index, axis="index", copy=copy),
-    )
-
-
-@pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_7(copy):
-    columns = ["a", "b", "c", "d", "e"]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate labels are used as columns when axis='columns'
-    assert_eq(
-        pdf.reindex(labels=columns, axis="columns", copy=True),
-        gdf.reindex(labels=columns, axis="columns", copy=copy),
-    )
-
-
-@pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_8(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate reindexes labels when index=labels
-    assert_eq(
-        pdf.reindex(index=index, copy=True),
-        gdf.reindex(index=index, copy=copy),
-    )
-
-
-@pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_9(copy):
-    columns = ["a", "b", "c", "d", "e"]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate reindexes column names when columns=labels
-    assert_eq(
-        pdf.reindex(columns=columns, copy=True),
-        gdf.reindex(columns=columns, copy=copy),
-    )
-
-
-@pytest.mark.parametrize("copy", [True, False])
-def test_dataframe_reindex_10(copy):
-    index = [-3, 0, 3, 0, -2, 1, 3, 4, 6]
-    columns = ["a", "b", "c", "d", "e"]
-    gdf = cudf.datasets.randomdata(
-        nrows=6, dtypes={"a": "category", "c": float, "d": str}
-    )
-    pdf = gdf.to_pandas()
-    # Validate reindexes both labels and column names when
-    # index=index_labels and columns=column_labels
-    assert_eq(
-        pdf.reindex(index=index, columns=columns, copy=True),
-        gdf.reindex(index=index, columns=columns, copy=copy),
-    )
+@pytest.mark.parametrize("fill_value", [-1.0, 0.0, 1.5])
+@pytest.mark.parametrize(
+    "args,kwargs",
+    [
+        ([], {}),
+        ([[-3, 0, 3, 0, -2, 1, 3, 4, 6]], {}),
+        ([[-3, 0, 3, 0, -2, 1, 3, 4, 6]], {}),
+        ([[-3, 0, 3, 0, -2, 1, 3, 4, 6]], {"axis": 0}),
+        ([["a", "b", "c", "d", "e"]], {"axis": 1}),
+        ([], {"labels": [-3, 0, 3, 0, -2, 1, 3, 4, 6], "axis": 0}),
+        ([], {"labels": ["a", "b", "c", "d", "e"], "axis": 1}),
+        ([], {"labels": [-3, 0, 3, 0, -2, 1, 3, 4, 6], "axis": "index"}),
+        ([], {"labels": ["a", "b", "c", "d", "e"], "axis": "columns"}),
+        ([], {"index": [-3, 0, 3, 0, -2, 1, 3, 4, 6]}),
+        ([], {"columns": ["a", "b", "c", "d", "e"]}),
+        (
+            [],
+            {
+                "index": [-3, 0, 3, 0, -2, 1, 3, 4, 6],
+                "columns": ["a", "b", "c", "d", "e"],
+            },
+        ),
+    ],
+)
+def test_dataframe_reindex_fill_value(
+    reindex_data_numeric, args, kwargs, fill_value
+):
+    pdf, gdf = reindex_data_numeric.to_pandas(), reindex_data_numeric
+    kwargs["fill_value"] = fill_value
+    assert_eq(pdf.reindex(*args, **kwargs), gdf.reindex(*args, **kwargs))
 
 
 @pytest.mark.parametrize("copy", [True, False])
