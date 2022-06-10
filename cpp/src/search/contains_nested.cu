@@ -15,7 +15,6 @@
  */
 
 #include <stream_compaction/stream_compaction_common.cuh>
-#include <stream_compaction/stream_compaction_common.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>

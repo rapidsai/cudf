@@ -64,16 +64,6 @@ class compaction_hash {
     return (hash == COMPACTION_EMPTY_KEY_SENTINEL) ? (hash - 1) : hash;
   }
 
-  __device__ auto operator()(cudf::experimental::row::lhs_index_type row_index) const noexcept
-  {
-    return this->operator()(static_cast<size_type>(row_index));
-  }
-
-  __device__ auto operator()(cudf::experimental::row::rhs_index_type row_index) const noexcept
-  {
-    return this->operator()(static_cast<size_type>(row_index));
-  }
-
  private:
   RowHash _hash;
 };
