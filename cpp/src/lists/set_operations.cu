@@ -52,6 +52,10 @@ using hash_map = cuco::static_map<lhs_index_type,
                                   cuda::thread_scope_device,
                                   cudf::detail::hash_table_allocator_type>;
 
+using nan_equal_comparator =
+  cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
+
 /**
  * @brief Create a hash map with keys are indices of all elements in the input column.
  */
@@ -87,10 +91,6 @@ std::unique_ptr<hash_map> create_map(column_view const& input,
     map->insert(kv_it, kv_it + input.size(), d_hasher, d_eqcomp, stream.value());
   };
 
-  using nan_equal_comparator =
-    cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-  using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
-
   if (nans_equal == nan_equality::ALL_EQUAL) {
     do_insert(nan_equal_comparator{});
   } else {
@@ -112,6 +112,7 @@ rmm::device_uvector<bool> check_contains(std::unique_ptr<hash_map> const& map,
                                          bool const lhs_has_nulls,
                                          bool const rhs_has_nulls,
                                          null_equality nulls_equal,
+                                         nan_equality nans_equal,
                                          rmm::cuda_stream_view stream)
 {
   auto contained = rmm::device_uvector<bool>(rhs.size(), stream);
@@ -119,18 +120,29 @@ rmm::device_uvector<bool> check_contains(std::unique_ptr<hash_map> const& map,
   auto const lhs_tv = table_view{{lhs}};
   auto const rhs_tv = table_view{{rhs}};
 
+  auto const rhs_it = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, [] __device__(size_type const i) { return rhs_index_type{i}; });
+
   auto const hasher   = cudf::experimental::row::hash::row_hasher(rhs_tv, stream);
   auto const d_hasher = cudf::detail::experimental::compaction_hash(
     hasher.device_hasher(nullate::DYNAMIC{rhs_has_nulls}));
 
   auto const comparator =
     cudf::experimental::row::equality::two_table_comparator(lhs_tv, rhs_tv, stream);
-  auto const d_eqcomp =
-    comparator.equal_to(nullate::DYNAMIC{lhs_has_nulls || rhs_has_nulls}, nulls_equal);
 
-  auto const rhs_it = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(size_type const i) { return rhs_index_type{i}; });
-  map->contains(rhs_it, rhs_it + rhs.size(), contained.begin(), d_hasher, d_eqcomp, stream.value());
+  auto const do_check = [&](auto const& value_comp) {
+    auto const d_eqcomp = comparator.equal_to(
+      nullate::DYNAMIC{lhs_has_nulls || rhs_has_nulls}, nulls_equal, value_comp);
+    map->contains(
+      rhs_it, rhs_it + rhs.size(), contained.begin(), d_hasher, d_eqcomp, stream.value());
+  };
+
+  if (nans_equal == nan_equality::ALL_EQUAL) {
+    do_check(nan_equal_comparator{});
+  } else {
+    do_check(nan_unequal_comparator{});
+  }
+
   return contained;
 }
 
@@ -193,8 +205,14 @@ std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
 
   auto const map = create_map(lhs_child, nulls_equal, nans_equal, stream);
   // todo handle nans
-  auto const contained = check_contains(
-    map, lhs_child, rhs_child, lhs_child_has_nulls, rhs_child_has_nulls, nulls_equal, stream);
+  auto const contained    = check_contains(map,
+                                        lhs_child,
+                                        rhs_child,
+                                        lhs_child_has_nulls,
+                                        rhs_child_has_nulls,
+                                        nulls_equal,
+                                        nans_equal,
+                                        stream);
   auto const labels       = generate_labels(rhs_child, stream);
   auto const labels_begin = labels->view().template begin<size_type>();
 
@@ -258,9 +276,15 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
 
   auto const map = create_map(lhs_child, nulls_equal, nans_equal, stream);
   // todo handle nans
-  auto const contained = check_contains(
-    map, lhs_child, rhs_child, lhs_child_has_nulls, rhs_child_has_nulls, nulls_equal, stream);
-  auto const labels = generate_labels(rhs_child, stream);
+  auto const contained = check_contains(map,
+                                        lhs_child,
+                                        rhs_child,
+                                        lhs_child_has_nulls,
+                                        rhs_child_has_nulls,
+                                        nulls_equal,
+                                        nans_equal,
+                                        stream);
+  auto const labels    = generate_labels(rhs_child, stream);
 
   auto const output_table = cudf::detail::copy_if(
     table_view{{labels->view(), rhs_child}},
@@ -326,8 +350,14 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
 
   auto const map           = create_map(rhs_child, nulls_equal, nans_equal, stream);
   auto const inv_contained = [&] {
-    auto contained = check_contains(
-      map, rhs_child, lhs_child, rhs_child_has_nulls, lhs_child_has_nulls, nulls_equal, stream);
+    auto contained = check_contains(map,
+                                    rhs_child,
+                                    lhs_child,
+                                    rhs_child_has_nulls,
+                                    lhs_child_has_nulls,
+                                    nulls_equal,
+                                    nans_equal,
+                                    stream);
     thrust::transform(rmm::exec_policy(stream),
                       contained.begin(),
                       contained.end(),
