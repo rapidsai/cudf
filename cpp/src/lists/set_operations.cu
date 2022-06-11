@@ -57,6 +57,7 @@ using hash_map = cuco::static_map<lhs_index_type,
  */
 std::unique_ptr<hash_map> create_map(column_view const& input,
                                      null_equality nulls_equal,
+                                     nan_equality nans_equal,
                                      rmm::cuda_stream_view stream)
 {
   auto map = std::make_unique<hash_map>(
@@ -66,6 +67,11 @@ std::unique_ptr<hash_map> create_map(column_view const& input,
     cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 
+  auto const kv_it =
+    cudf::detail::make_counting_transform_iterator(size_type{0}, [] __device__(size_type const i) {
+      return cuco::make_pair(lhs_index_type{i}, lhs_index_type{i});
+    });
+
   auto const has_nulls = has_nested_nulls(table_view{{input}});
   auto const input_tv  = table_view{{input}};
   auto const preprocessed_input =
@@ -74,16 +80,23 @@ std::unique_ptr<hash_map> create_map(column_view const& input,
   auto const hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const d_hasher =
     cudf::detail::experimental::compaction_hash(hasher.device_hasher(nullate::DYNAMIC{has_nulls}));
-
   auto const comparator = cudf::experimental::row::equality::self_comparator(preprocessed_input);
-  // todo handle nans
-  auto const d_eqcomp = comparator.equal_to(nullate::DYNAMIC{has_nulls}, nulls_equal);
 
-  auto const kv_it =
-    cudf::detail::make_counting_transform_iterator(size_type{0}, [] __device__(size_type const i) {
-      return cuco::make_pair(lhs_index_type{i}, lhs_index_type{i});
-    });
-  map->insert(kv_it, kv_it + input.size(), d_hasher, d_eqcomp, stream.value());
+  auto const do_insert = [&](auto const& value_comp) {
+    auto const d_eqcomp = comparator.equal_to(nullate::DYNAMIC{has_nulls}, nulls_equal, value_comp);
+    map->insert(kv_it, kv_it + input.size(), d_hasher, d_eqcomp, stream.value());
+  };
+
+  using nan_equal_comparator =
+    cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+  using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
+
+  if (nans_equal == nan_equality::ALL_EQUAL) {
+    do_insert(nan_equal_comparator{});
+  } else {
+    do_insert(nan_unequal_comparator{});
+  }
+
   return map;
 }
 
@@ -178,7 +191,7 @@ std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
   auto const lhs_child_has_nulls = has_nested_nulls(table_view{{lhs_child}});
   auto const rhs_child_has_nulls = has_nested_nulls(table_view{{rhs_child}});
 
-  auto const map = create_map(lhs_child, nulls_equal, stream);
+  auto const map = create_map(lhs_child, nulls_equal, nans_equal, stream);
   // todo handle nans
   auto const contained = check_contains(
     map, lhs_child, rhs_child, lhs_child_has_nulls, rhs_child_has_nulls, nulls_equal, stream);
@@ -243,7 +256,7 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
   auto const lhs_child_has_nulls = has_nested_nulls(table_view{{lhs_child}});
   auto const rhs_child_has_nulls = has_nested_nulls(table_view{{rhs_child}});
 
-  auto const map = create_map(lhs_child, nulls_equal, stream);
+  auto const map = create_map(lhs_child, nulls_equal, nans_equal, stream);
   // todo handle nans
   auto const contained = check_contains(
     map, lhs_child, rhs_child, lhs_child_has_nulls, rhs_child_has_nulls, nulls_equal, stream);
@@ -311,7 +324,7 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
   auto const lhs_child_has_nulls = has_nested_nulls(table_view{{lhs_child}});
   auto const rhs_child_has_nulls = has_nested_nulls(table_view{{rhs_child}});
 
-  auto const map           = create_map(rhs_child, nulls_equal, stream);
+  auto const map           = create_map(rhs_child, nulls_equal, nans_equal, stream);
   auto const inv_contained = [&] {
     auto contained = check_contains(
       map, rhs_child, lhs_child, rhs_child_has_nulls, lhs_child_has_nulls, nulls_equal, stream);
