@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/set_operations.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 
 #include <thrust/copy.h>
@@ -286,11 +287,15 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                         stream);
   auto const labels    = generate_labels(rhs_child, stream);
 
-  auto const output_table = cudf::detail::copy_if(
+  auto const intersect_table = cudf::detail::copy_if(
     table_view{{labels->view(), rhs_child}},
     [contained = contained.begin()] __device__(auto const idx) { return contained[idx]; },
-    stream,
-    mr);
+    stream);
+
+  // todo: support nans equal
+  // todo use detail stream api
+  auto const output_table =
+    distinct(intersect_table->view(), {0, 1}, nulls_equal, /*nans_equal*/ /*stream*/ mr);
 
   auto out_offsets =
     reconstruct_offsets(output_table->get_column(0).view(), lhs.size(), stream, mr);
@@ -318,7 +323,10 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
   // todo: add stream in detail version
   // fix concatenate_rows params.
   auto const lhs_distinct = cudf::distinct(table_view{{lhs.parent()}}, {0}, nulls_equal);
-  auto const diff         = set_difference(rhs, lhs, nulls_equal, nans_equal, mr);
+
+  // The result table from set_different already contains distinct rows.
+  auto const diff = set_difference(rhs, lhs, nulls_equal, nans_equal, mr);
+
   return lists::concatenate_rows(table_view{{lhs_distinct->get_column(0).view(), diff->view()}},
                                  concatenate_null_policy::IGNORE,
                                  //    stream, //todo: add detail interface
@@ -368,13 +376,17 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
 
   auto const labels = generate_labels(lhs_child, stream);
 
-  auto const output_table = cudf::detail::copy_if(
+  auto const difference_table = cudf::detail::copy_if(
     table_view{{labels->view(), lhs_child}},
     [inv_contained = inv_contained.begin()] __device__(auto const idx) {
       return inv_contained[idx];
     },
-    stream,
-    mr);
+    stream);
+
+  // todo: support nans equal
+  // todo use detail stream api
+  auto const output_table =
+    distinct(difference_table->view(), {0, 1}, nulls_equal, /*nans_equal*/ /*stream*/ mr);
 
   auto out_offsets =
     reconstruct_offsets(output_table->get_column(0).view(), lhs.size(), stream, mr);
