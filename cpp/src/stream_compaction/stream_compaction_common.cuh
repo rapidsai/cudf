@@ -18,6 +18,7 @@
 #include "stream_compaction_common.hpp"
 
 #include <cudf/stream_compaction.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -28,6 +29,9 @@
 
 namespace cudf {
 namespace detail {
+
+using cudf::experimental::row::lhs_index_type;
+using cudf::experimental::row::rhs_index_type;
 
 /**
  * @brief Device callable to hash a given row.
@@ -57,9 +61,12 @@ class compaction_hash {
  public:
   compaction_hash(RowHash row_hasher) : _hash{row_hasher} {}
 
-  __device__ inline auto operator()(size_type i) const noexcept
+  template <typename T,
+            CUDF_ENABLE_IF(std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type> ||
+                           std::is_same_v<T, size_type>)>
+  __device__ inline auto operator()(T i) const noexcept
   {
-    auto hash = _hash(i);
+    auto hash = _hash(static_cast<size_type>(i));
     return (hash == COMPACTION_EMPTY_KEY_SENTINEL) ? (hash - 1) : hash;
   }
 

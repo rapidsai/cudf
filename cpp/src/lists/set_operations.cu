@@ -46,6 +46,7 @@ namespace {
 
 using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
+
 using hash_map = cuco::static_map<lhs_index_type,
                                   lhs_index_type,
                                   cuda::thread_scope_device,
@@ -60,12 +61,12 @@ std::unique_ptr<hash_map> create_map(column_view const& input,
 {
   auto map = std::make_unique<hash_map>(
     compute_hash_table_size(input.size()),
-    cuco::sentinel::empty_key{cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL},
-    cuco::sentinel::empty_value{cudf::detail::COMPACTION_EMPTY_VALUE_SENTINEL},
+    cuco::sentinel::empty_key{lhs_index_type{cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL}},
+    cuco::sentinel::empty_value{lhs_index_type{cudf::detail::COMPACTION_EMPTY_VALUE_SENTINEL}},
     cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 
-  auto const has_nulls = has_nested_nulls(input);
+  auto const has_nulls = has_nested_nulls(table_view{{input}});
   auto const input_tv  = table_view{{input}};
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input_tv, stream);
@@ -92,13 +93,13 @@ std::unique_ptr<hash_map> create_map(column_view const& input,
  */
 // todo: keys must be table with the first col is labels
 // todo handle nans
-auto check_contains(std::unique_ptr<hash_map> const& map,
-                    column_view const& lhs,
-                    column_view const& rhs,
-                    bool const lhs_has_nulls,
-                    bool const rhs_has_nulls,
-                    null_equality nulls_equal,
-                    rmm::cuda_stream_view stream)
+rmm::device_uvector<bool> check_contains(std::unique_ptr<hash_map> const& map,
+                                         column_view const& lhs,
+                                         column_view const& rhs,
+                                         bool const lhs_has_nulls,
+                                         bool const rhs_has_nulls,
+                                         null_equality nulls_equal,
+                                         rmm::cuda_stream_view stream)
 {
   auto contained = rmm::device_uvector<bool>(rhs.size(), stream);
 
@@ -174,8 +175,8 @@ std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
 
   auto const lhs_child           = lhs.get_sliced_child(stream);
   auto const rhs_child           = rhs.get_sliced_child(stream);
-  auto const lhs_child_has_nulls = has_nested_nulls(lhs_child);
-  auto const rhs_child_has_nulls = has_nested_nulls(rhs_child);
+  auto const lhs_child_has_nulls = has_nested_nulls(table_view{{lhs_child}});
+  auto const rhs_child_has_nulls = has_nested_nulls(table_view{{rhs_child}});
 
   auto const map = create_map(lhs_child, nulls_equal, stream);
   // todo handle nans
@@ -191,8 +192,8 @@ std::unique_ptr<column> set_overlap(lists_column_view const& lhs,
   auto overlap_result = rmm::device_uvector<bool>(lhs.size(), stream);
 
   auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream),
-                                         labels_begin,                  // keys
-                                         labels_begin + labels.size(),  // keys
+                                         labels_begin,                   // keys
+                                         labels_begin + labels->size(),  // keys
                                          contained.begin(),  // values to reduce
                                          list_indices.begin(),    // out keys
                                          overlap_result.begin(),  // out values
@@ -239,8 +240,8 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
 
   auto const lhs_child           = lhs.get_sliced_child(stream);
   auto const rhs_child           = rhs.get_sliced_child(stream);
-  auto const lhs_child_has_nulls = has_nested_nulls(lhs_child);
-  auto const rhs_child_has_nulls = has_nested_nulls(rhs_child);
+  auto const lhs_child_has_nulls = has_nested_nulls(table_view{{lhs_child}});
+  auto const rhs_child_has_nulls = has_nested_nulls(table_view{{rhs_child}});
 
   auto const map = create_map(lhs_child, nulls_equal, stream);
   // todo handle nans
@@ -279,8 +280,12 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
   //   `drop_list_duplicates` currently doesn't support nested types.
   // todo: add stream in detail version
   // fix concatenate_rows params.
-  auto const diff = set_difference(rhs, lhs, nulls_equal, nans_equal, stream, mr);
-  return lists::concatenate_rows(table_view{{lhs.parent(), diff->view()}});
+  auto const lhs_distinct = cudf::distinct(table_view{{lhs.parent()}}, {0}, nulls_equal);
+  auto const diff         = set_difference(rhs, lhs, nulls_equal, nans_equal, mr);
+  return lists::concatenate_rows(table_view{{lhs_distinct->get_column(0).view(), diff->view()}},
+                                 concatenate_null_policy::IGNORE,
+                                 //    stream, //todo: add detail interface
+                                 mr);
 }
 
 std::unique_ptr<column> set_difference(lists_column_view const& lhs,
@@ -303,8 +308,8 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
 
   auto const lhs_child           = lhs.get_sliced_child(stream);
   auto const rhs_child           = rhs.get_sliced_child(stream);
-  auto const lhs_child_has_nulls = has_nested_nulls(lhs_child);
-  auto const rhs_child_has_nulls = has_nested_nulls(rhs_child);
+  auto const lhs_child_has_nulls = has_nested_nulls(table_view{{lhs_child}});
+  auto const rhs_child_has_nulls = has_nested_nulls(table_view{{rhs_child}});
 
   auto const map           = create_map(rhs_child, nulls_equal, stream);
   auto const inv_contained = [&] {
