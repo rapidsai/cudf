@@ -21,6 +21,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/set_operations.hpp>
@@ -298,12 +299,11 @@ std::unique_ptr<column> list_distinct(
   auto out_offsets =
     reconstruct_offsets(distinct_table->get_column(0).view(), input.size(), stream, mr);
 
-  // todo : fix null
   return make_lists_column(input.size(),
                            std::move(out_offsets),
                            std::move(distinct_table->release().back()),
-                           0,
-                           {},
+                           input.null_count(),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }
@@ -508,12 +508,11 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
   auto out_offsets =
     reconstruct_offsets(output_table->get_column(0).view(), lhs.size(), stream, mr);
 
-  // todo : fix null
   return make_lists_column(lhs.size(),
                            std::move(out_offsets),
                            std::move(output_table->release().back()),
-                           0,
-                           {},
+                           lhs.null_count(),
+                           cudf::detail::copy_bitmask(lhs.parent(), stream, mr),
                            stream,
                            mr);
 }
