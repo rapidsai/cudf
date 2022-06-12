@@ -41,6 +41,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuco/static_map.cuh>
 #include <cuco/static_multimap.cuh>
 
 namespace cudf::lists {
@@ -51,10 +52,14 @@ namespace {
 using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
 
-using hash_map = cuco::static_map<lhs_index_type,
-                                  lhs_index_type,
-                                  cuda::thread_scope_device,
-                                  cudf::detail::hash_table_allocator_type>;
+// using hash_map      = cuco::static_map<lhs_index_type,
+//                                  lhs_index_type,
+//                                  cuda::thread_scope_device,
+//                                  cudf::detail::hash_table_allocator_type>;
+using hash_multimap = cuco::static_multimap<hash_value_type,
+                                            lhs_index_type,
+                                            cuda::thread_scope_device,
+                                            cudf::detail::hash_table_allocator_type>;
 
 using nan_equal_comparator =
   cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
@@ -63,51 +68,50 @@ using nan_unequal_comparator = cudf::experimental::row::equality::physical_equal
 /**
  * @brief Create a hash map with keys are indices of all elements in the input column.
  */
-std::unique_ptr<hash_map> create_map(table_view const& input,
-                                     bool const has_nulls,
-                                     null_equality nulls_equal,
-                                     nan_equality nans_equal,
-                                     rmm::cuda_stream_view stream)
+std::unique_ptr<hash_multimap> create_map(table_view const& input,
+                                          bool const has_nulls,
+                                          rmm::cuda_stream_view stream)
 {
-  auto map = std::make_unique<hash_map>(
+  auto map = std::make_unique<hash_multimap>(
     compute_hash_table_size(input.num_rows()),
-    cuco::sentinel::empty_key{lhs_index_type{cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL}},
+    cuco::sentinel::empty_key{hash_value_type{cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL}},
     cuco::sentinel::empty_value{lhs_index_type{cudf::detail::COMPACTION_EMPTY_VALUE_SENTINEL}},
-    cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-    stream.value());
+    stream.value(),
+    cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream});
 
-  auto const kv_it =
-    cudf::detail::make_counting_transform_iterator(size_type{0}, [] __device__(size_type const i) {
-      return cuco::make_pair(lhs_index_type{i}, lhs_index_type{i});
-    });
-
-  auto const preprocessed_input =
-    cudf::experimental::row::hash::preprocessed_table::create(input, stream);
-
-  auto const hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
+  auto const hasher = cudf::experimental::row::hash::row_hasher(input, stream);
   auto const d_hasher =
     cudf::detail::experimental::compaction_hash(hasher.device_hasher(nullate::DYNAMIC{has_nulls}));
-  auto const comparator = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
-  auto const do_insert = [&](auto const& value_comp) {
-    auto const d_eqcomp = comparator.equal_to(nullate::DYNAMIC{has_nulls}, nulls_equal, value_comp);
-    map->insert(kv_it, kv_it + input.num_rows(), d_hasher, d_eqcomp, stream.value());
-  };
-
-  if (nans_equal == nan_equality::ALL_EQUAL) {
-    do_insert(nan_equal_comparator{});
-  } else {
-    do_insert(nan_unequal_comparator{});
-  }
+  auto const kv_it = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, [d_hasher] __device__(size_type const i) {
+      return cuco::make_pair(d_hasher(i), lhs_index_type{i});
+    });
+  map->insert(kv_it, kv_it + input.num_rows(), stream.value());
 
   return map;
 }
+
+template <typename Comparator>
+struct pair_comparator_fn {
+  Comparator const d_eqcomp;
+  using LHSPair = cuco::pair<hash_value_type, lhs_index_type>;
+  using RHSPair = cuco::pair<hash_value_type, rhs_index_type>;
+
+  __device__ bool operator()(LHSPair const& lhs_hash_and_index,
+                             RHSPair const& rhs_hash_and_index) const noexcept
+  {
+    auto const& [lhs_hash, lhs_index] = lhs_hash_and_index;
+    auto const& [rhs_hash, rhs_index] = rhs_hash_and_index;
+    return lhs_hash == rhs_hash ? d_eqcomp(lhs_index, rhs_index) : false;
+  }
+};
 
 /**
  * @brief Check the existence of rows in the rhs column in the hash map, which was created by rows
  *        of the lhs column.
  */
-rmm::device_uvector<bool> check_contains(std::unique_ptr<hash_map> const& map,
+rmm::device_uvector<bool> check_contains(std::unique_ptr<hash_multimap> const& map,
                                          table_view const& lhs,
                                          table_view const& rhs,
                                          bool const lhs_has_nulls,
@@ -118,20 +122,25 @@ rmm::device_uvector<bool> check_contains(std::unique_ptr<hash_map> const& map,
 {
   auto contained = rmm::device_uvector<bool>(rhs.num_rows(), stream);
 
-  auto const rhs_it = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(size_type const i) { return rhs_index_type{i}; });
-
   auto const hasher   = cudf::experimental::row::hash::row_hasher(rhs, stream);
   auto const d_hasher = cudf::detail::experimental::compaction_hash(
     hasher.device_hasher(nullate::DYNAMIC{rhs_has_nulls}));
+
+  auto const rhs_it = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, [d_hasher] __device__(size_type const i) {
+      return cuco::make_pair(d_hasher(i), rhs_index_type{i});
+    });
 
   auto const comparator = cudf::experimental::row::equality::two_table_comparator(lhs, rhs, stream);
 
   auto const do_check = [&](auto const& value_comp) {
     auto const d_eqcomp = comparator.equal_to(
       nullate::DYNAMIC{lhs_has_nulls || rhs_has_nulls}, nulls_equal, value_comp);
-    map->contains(
-      rhs_it, rhs_it + rhs.num_rows(), contained.begin(), d_hasher, d_eqcomp, stream.value());
+    map->pair_contains(rhs_it,
+                       rhs_it + rhs.num_rows(),
+                       contained.begin(),
+                       pair_comparator_fn<decltype(d_eqcomp)>{d_eqcomp},
+                       stream.value());
   };
 
   if (nans_equal == nan_equality::ALL_EQUAL) {
@@ -235,91 +244,6 @@ rmm::device_uvector<size_type> distinct_map(
   return output_map;
 }
 
-std::unique_ptr<column> contains_elements(
-  column_view const& haystack,
-  column_view const& needles,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  auto result = make_numeric_column(data_type{type_to_id<bool>()},
-                                    needles.size(),
-                                    copy_bitmask(needles),
-                                    needles.null_count(),
-                                    stream,
-                                    mr);
-  if (needles.is_empty()) { return result; }
-
-  auto const out_begin = result->mutable_view().template begin<bool>();
-  if (haystack.is_empty()) {
-    thrust::uninitialized_fill(
-      rmm::exec_policy(stream), out_begin, out_begin + needles.size(), false);
-    return result;
-  }
-
-  auto const haystack_tv        = table_view{{haystack}};
-  auto const needles_tv         = table_view{{needles}};
-  auto const haystack_has_nulls = has_nested_nulls(haystack_tv);
-  auto const needles_has_nulls  = has_nested_nulls(needles_tv);
-
-  using cudf::experimental::row::lhs_index_type;
-  using cudf::experimental::row::rhs_index_type;
-  using static_map  = cuco::static_multimap<hash_value_type,
-                                           lhs_index_type,
-                                           cuda::thread_scope_device,
-                                           cudf::detail::hash_table_allocator_type>;
-  auto haystack_map = static_map{
-    compute_hash_table_size(haystack.size()),
-    cuco::sentinel::empty_key{hash_value_type{cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL}},
-    cuco::sentinel::empty_value{lhs_index_type{cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL}},
-    stream.value(),
-    cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream}};
-
-  // Insert all indices of the elements in the haystack column into the hash map.
-  // Here the row hash values are used as map keys and row indices are hash values.
-  {
-    auto const hasher   = cudf::experimental::row::hash::row_hasher(haystack_tv, stream);
-    auto const d_hasher = cudf::detail::experimental::compaction_hash(
-      hasher.device_hasher(nullate::DYNAMIC{haystack_has_nulls}));
-
-    auto const haystack_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, [d_hasher] __device__(size_type const i) {
-        return cuco::make_pair(d_hasher(i), lhs_index_type{i});
-      });
-
-    haystack_map.insert(haystack_it, haystack_it + haystack.size(), stream.value());
-  }
-
-  // Check for existence of needles in haystack.
-  {
-    auto const hasher   = cudf::experimental::row::hash::row_hasher(needles_tv, stream);
-    auto const d_hasher = cudf::detail::experimental::compaction_hash(
-      hasher.device_hasher(nullate::DYNAMIC{needles_has_nulls}));
-
-    auto const needles_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0}, [d_hasher] __device__(size_type const i) {
-        return cuco::make_pair(d_hasher(i), rhs_index_type{i});
-      });
-
-    auto const comparator =
-      cudf::experimental::row::equality::two_table_comparator(haystack_tv, needles_tv, stream);
-    auto const d_eqcomp =
-      comparator.equal_to(nullate::DYNAMIC{haystack_has_nulls || needles_has_nulls});
-
-    haystack_map.pair_contains(
-      needles_it,
-      needles_it + needles.size(),
-      out_begin,
-      [d_eqcomp] __device__(auto const& lhs_hash_and_index, auto const& rhs_hash_and_index) {
-        auto const& [lhs_hash, lhs_index] = lhs_hash_and_index;
-        auto const& [rhs_hash, rhs_index] = rhs_hash_and_index;
-        return lhs_hash == rhs_hash ? d_eqcomp(lhs_index, rhs_index) : false;
-      },
-      stream.value());
-  }
-
-  return result;
-}
-
 std::unique_ptr<column> list_distinct(
   lists_column_view const& input,
   null_equality nulls_equal,
@@ -390,7 +314,7 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
   auto const lhs_has_nulls = has_nested_nulls(lhs_table);
   auto const rhs_has_nulls = has_nested_nulls(rhs_table);
 
-  auto const map = create_map(lhs_table, lhs_has_nulls, nulls_equal, nans_equal, stream);
+  auto const map = create_map(lhs_table, lhs_has_nulls, stream);
   // todo handle nans
   auto const contained = check_contains(
     map, lhs_table, rhs_table, lhs_has_nulls, rhs_has_nulls, nulls_equal, nans_equal, stream);
@@ -458,7 +382,7 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
   auto const lhs_has_nulls = has_nested_nulls(lhs_table);
   auto const rhs_has_nulls = has_nested_nulls(rhs_table);
 
-  auto const map = create_map(lhs_table, lhs_has_nulls, nulls_equal, nans_equal, stream);
+  auto const map = create_map(lhs_table, lhs_has_nulls, stream);
   // todo handle nans
   auto const contained = check_contains(
     map, lhs_table, rhs_table, lhs_has_nulls, rhs_has_nulls, nulls_equal, nans_equal, stream);
@@ -534,7 +458,7 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
   auto const lhs_has_nulls = has_nested_nulls(lhs_table);
   auto const rhs_has_nulls = has_nested_nulls(rhs_table);
 
-  auto const map = create_map(rhs_table, rhs_has_nulls, nulls_equal, nans_equal, stream);
+  auto const map = create_map(rhs_table, rhs_has_nulls, stream);
 
   auto const inv_contained = [&] {
     auto contained = check_contains(
