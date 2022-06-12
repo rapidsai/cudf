@@ -534,7 +534,9 @@ struct preprocessed_table {
     : _t(std::move(table)),
       _column_order(std::move(column_order)),
       _null_precedence(std::move(null_precedence)),
-      _depths(std::move(depths)){};
+      _depths(std::move(depths))
+  {
+  }
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -590,6 +592,55 @@ struct preprocessed_table {
   rmm::device_uvector<size_type> const _depths;
 };
 
+// @cond
+template <typename Comparator>
+struct strong_index_self_comparator_adapter {
+  strong_index_self_comparator_adapter(Comparator const& comparator) : comparator{comparator} {}
+
+  template <typename T,
+            CUDF_ENABLE_IF(std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type> ||
+                           std::is_integral_v<T>)>
+  __device__ constexpr weak_ordering operator()(T const lhs_index, T const rhs_index) const noexcept
+  {
+    return comparator(static_cast<cudf::size_type>(lhs_index),
+                      static_cast<cudf::size_type>(rhs_index));
+  }
+
+  Comparator const comparator;
+};
+
+template <typename Comparator>
+struct strong_index_two_table_comparator_adapter {
+  strong_index_two_table_comparator_adapter(Comparator const& comparator) : comparator{comparator}
+  {
+  }
+
+  __device__ constexpr weak_ordering operator()(lhs_index_type const lhs_index,
+                                                rhs_index_type const rhs_index) const noexcept
+  {
+    return comparator(static_cast<cudf::size_type>(lhs_index),
+                      static_cast<cudf::size_type>(rhs_index));
+  }
+
+  __device__ constexpr weak_ordering operator()(rhs_index_type const rhs_index,
+                                                lhs_index_type const lhs_index) const noexcept
+  {
+    auto const left_right_ordering =
+      comparator(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
+
+    // Invert less/greater values to reflect right to left ordering
+    if (left_right_ordering == weak_ordering::LESS) {
+      return weak_ordering::GREATER;
+    } else if (left_right_ordering == weak_ordering::GREATER) {
+      return weak_ordering::LESS;
+    }
+    return weak_ordering::EQUIVALENT;
+  }
+
+  Comparator const comparator;
+};
+// @endcond
+
 /**
  * @brief An owning object that can be used to lexicographically compare two rows of the same table
  *
@@ -641,7 +692,8 @@ class self_comparator {
   /**
    * @brief Return the binary operator for comparing rows in the table.
    *
-   * Returns a binary callable, `F`, with signature `bool F(size_type, size_type)`.
+   * Returns a binary callable, `F`, with signature `bool F(T, T)` where `T` is either `size_type`,
+   * `lhs_index_type` or `rhs_index_type`.
    *
    * `F(i,j)` returns true if and only if row `i` compares lexicographically less than row `j`.
    *
@@ -657,8 +709,14 @@ class self_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_comparator{device_row_comparator{
-      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence(), comparator}};
+    return less_comparator{
+      strong_index_self_comparator_adapter{device_row_comparator{nullate,
+                                                                 *d_t,
+                                                                 *d_t,
+                                                                 d_t->depths(),
+                                                                 d_t->column_order(),
+                                                                 d_t->null_precedence(),
+                                                                 comparator}}};
   }
 
   /// @copydoc less()
@@ -667,44 +725,19 @@ class self_comparator {
   auto less_equivalent(Nullate nullate                      = {},
                        PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_equivalent_comparator{device_row_comparator{
-      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence(), comparator}};
+    return less_equivalent_comparator{
+      strong_index_self_comparator_adapter{device_row_comparator{nullate,
+                                                                 *d_t,
+                                                                 *d_t,
+                                                                 d_t->depths(),
+                                                                 d_t->column_order(),
+                                                                 d_t->null_precedence(),
+                                                                 comparator}}};
   }
 
  private:
   std::shared_ptr<preprocessed_table> d_t;
 };
-
-// @cond
-template <typename Comparator>
-struct strong_index_comparator_adapter {
-  strong_index_comparator_adapter(Comparator const& comparator) : comparator{comparator} {}
-
-  __device__ constexpr weak_ordering operator()(lhs_index_type const lhs_index,
-                                                rhs_index_type const rhs_index) const noexcept
-  {
-    return comparator(static_cast<cudf::size_type>(lhs_index),
-                      static_cast<cudf::size_type>(rhs_index));
-  }
-
-  __device__ constexpr weak_ordering operator()(rhs_index_type const rhs_index,
-                                                lhs_index_type const lhs_index) const noexcept
-  {
-    auto const left_right_ordering =
-      comparator(static_cast<cudf::size_type>(lhs_index), static_cast<cudf::size_type>(rhs_index));
-
-    // Invert less/greater values to reflect right to left ordering
-    if (left_right_ordering == weak_ordering::LESS) {
-      return weak_ordering::GREATER;
-    } else if (left_right_ordering == weak_ordering::GREATER) {
-      return weak_ordering::LESS;
-    }
-    return weak_ordering::EQUIVALENT;
-  }
-
-  Comparator const comparator;
-};
-// @endcond
 
 /**
  * @brief An owning object that can be used to lexicographically compare rows of two different
@@ -789,14 +822,14 @@ class two_table_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_comparator{
-      strong_index_comparator_adapter{device_row_comparator{nullate,
-                                                            *d_left_table,
-                                                            *d_right_table,
-                                                            d_left_table->depths(),
-                                                            d_left_table->column_order(),
-                                                            d_left_table->null_precedence(),
-                                                            comparator}}};
+    return less_comparator{strong_index_two_table_comparator_adapter{
+      device_row_comparator{nullate,
+                            *d_left_table,
+                            *d_right_table,
+                            d_left_table->depths(),
+                            d_left_table->column_order(),
+                            d_left_table->null_precedence(),
+                            comparator}}};
   }
 
   /// @copydoc less()
@@ -805,14 +838,14 @@ class two_table_comparator {
   auto less_equivalent(Nullate nullate                      = {},
                        PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_equivalent_comparator{
-      strong_index_comparator_adapter{device_row_comparator{nullate,
-                                                            *d_left_table,
-                                                            *d_right_table,
-                                                            d_left_table->depths(),
-                                                            d_left_table->column_order(),
-                                                            d_left_table->null_precedence(),
-                                                            comparator}}};
+    return less_equivalent_comparator{strong_index_two_table_comparator_adapter{
+      device_row_comparator{nullate,
+                            *d_left_table,
+                            *d_right_table,
+                            d_left_table->depths(),
+                            d_left_table->column_order(),
+                            d_left_table->null_precedence(),
+                            comparator}}};
   }
 
  private:
@@ -1156,6 +1189,46 @@ struct preprocessed_table {
   std::vector<rmm::device_buffer> _null_buffers;
 };
 
+// @cond
+template <typename Comparator>
+struct strong_index_self_comparator_adapter {
+  strong_index_self_comparator_adapter(Comparator const& comparator) : comparator{comparator} {}
+
+  template <typename T,
+            CUDF_ENABLE_IF(std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type> ||
+                           std::is_integral_v<T>)>
+  __device__ constexpr bool operator()(T const lhs_index, T const rhs_index) const noexcept
+  {
+    return comparator(static_cast<cudf::size_type>(lhs_index),
+                      static_cast<cudf::size_type>(rhs_index));
+  }
+
+  Comparator const comparator;
+};
+
+template <typename Comparator>
+struct strong_index_two_table_comparator_adapter {
+  strong_index_two_table_comparator_adapter(Comparator const& comparator) : comparator{comparator}
+  {
+  }
+
+  __device__ constexpr bool operator()(lhs_index_type const lhs_index,
+                                       rhs_index_type const rhs_index) const noexcept
+  {
+    return comparator(static_cast<cudf::size_type>(lhs_index),
+                      static_cast<cudf::size_type>(rhs_index));
+  }
+
+  __device__ constexpr bool operator()(rhs_index_type const rhs_index,
+                                       lhs_index_type const lhs_index) const noexcept
+  {
+    return this->operator()(lhs_index, rhs_index);
+  }
+
+  Comparator const comparator;
+};
+// @endcond
+
 /**
  * @brief Comparator for performing equality comparisons between two rows of the same table.
  *
@@ -1189,7 +1262,8 @@ class self_comparator {
   /**
    * @brief Get the comparison operator to use on the device
    *
-   * Returns a binary callable, `F`, with signature `bool F(size_type, size_type)`.
+   * Returns a binary callable, `F`, with signature `bool F(T, T)` where `T` is either `size_type`,
+   * `lhs_index_type` or `rhs_index_type`.
    *
    * `F(i,j)` returns true if and only if row `i` compares equal to row `j`.
    *
@@ -1207,34 +1281,13 @@ class self_comparator {
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
   {
-    return device_row_comparator{nullate, *d_t, *d_t, nulls_are_equal, comparator};
+    return strong_index_self_comparator_adapter{
+      device_row_comparator{nullate, *d_t, *d_t, nulls_are_equal, comparator}};
   }
 
  private:
   std::shared_ptr<preprocessed_table> d_t;
 };
-
-// @cond
-template <typename Comparator>
-struct strong_index_comparator_adapter {
-  strong_index_comparator_adapter(Comparator const& comparator) : comparator{comparator} {}
-
-  __device__ constexpr bool operator()(lhs_index_type const lhs_index,
-                                       rhs_index_type const rhs_index) const noexcept
-  {
-    return comparator(static_cast<cudf::size_type>(lhs_index),
-                      static_cast<cudf::size_type>(rhs_index));
-  }
-
-  __device__ constexpr bool operator()(rhs_index_type const rhs_index,
-                                       lhs_index_type const lhs_index) const noexcept
-  {
-    return this->operator()(lhs_index, rhs_index);
-  }
-
-  Comparator const comparator;
-};
-// @endcond
 
 /**
  * @brief An owning object that can be used to equality compare rows of two different tables.
@@ -1309,7 +1362,7 @@ class two_table_comparator {
                 null_equality nulls_are_equal         = null_equality::EQUAL,
                 PhysicalEqualityComparator comparator = {}) const noexcept
   {
-    return strong_index_comparator_adapter{
+    return strong_index_two_table_comparator_adapter{
       device_row_comparator(nullate, *d_left_table, *d_right_table, nulls_are_equal, comparator)};
   }
 
@@ -1492,6 +1545,23 @@ class device_row_hasher {
   uint32_t const _seed;
 };
 
+// @cond
+template <typename Hasher>
+struct strong_index_hasher_adapter {
+  strong_index_hasher_adapter(Hasher const& hasher) : hasher{hasher} {}
+
+  template <typename T,
+            CUDF_ENABLE_IF(std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type> ||
+                           std::is_integral_v<T>)>
+  __device__ auto operator()(T const row_index) const noexcept
+  {
+    return hasher(static_cast<cudf::size_type>(row_index));
+  }
+
+  Hasher const hasher;
+};
+// @endcond
+
 // Inject row::equality::preprocessed_table into the row::hash namespace
 // As a result, row::equality::preprocessed_table and row::hash::preprocessed table are the same
 // type and are interchangeable.
@@ -1539,10 +1609,10 @@ class row_hasher {
    * @return A hash operator to use on the device
    */
   template <template <typename> class hash_function = detail::default_hash, typename Nullate>
-  device_row_hasher<hash_function, Nullate> device_hasher(Nullate nullate = {},
-                                                          uint32_t seed   = DEFAULT_HASH_SEED) const
+  auto device_hasher(Nullate nullate = {}, uint32_t seed = DEFAULT_HASH_SEED) const
   {
-    return device_row_hasher<hash_function, Nullate>(nullate, *d_t, seed);
+    return strong_index_hasher_adapter{
+      device_row_hasher<hash_function, Nullate>(nullate, *d_t, seed)};
   }
 
  private:

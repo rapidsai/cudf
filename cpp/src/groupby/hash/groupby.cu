@@ -70,9 +70,11 @@ namespace {
 using map_type = concurrent_unordered_map<
   cudf::size_type,
   cudf::size_type,
-  cudf::experimental::row::hash::device_row_hasher<cudf::detail::default_hash,
-                                                   cudf::nullate::DYNAMIC>,
-  cudf::experimental::row::equality::device_row_comparator<cudf::nullate::DYNAMIC>>;
+  cudf::experimental::row::hash::strong_index_hasher_adapter<
+    cudf::experimental::row::hash::device_row_hasher<cudf::detail::default_hash,
+                                                     cudf::nullate::DYNAMIC>>,
+  cudf::experimental::row::equality::strong_index_self_comparator_adapter<
+    cudf::experimental::row::equality::device_row_comparator<cudf::nullate::DYNAMIC>>>;
 
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
