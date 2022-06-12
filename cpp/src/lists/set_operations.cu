@@ -124,6 +124,9 @@ struct pair_comparator_fn {
 /**
  * @brief Check the existence of rows in the rhs table in the hash map, which was created by rows
  *        of the lhs table.
+ *
+ *        Note: This need to be implemented in semi-anti-join
+ *        https://github.com/rapidsai/cudf/issues/11037
  */
 rmm::device_uvector<bool> check_contains(table_view const& lhs,
                                          table_view const& rhs,
@@ -190,6 +193,12 @@ rmm::device_uvector<bool> check_contains(table_view const& lhs,
   return contained;
 }
 
+/**
+ * @brief distinct_map
+ *
+ * This is the future work: https://github.com/rapidsai/cudf/pull/11052, and
+ * https://github.com/rapidsai/cudf/issues/11092
+ */
 rmm::device_uvector<size_type> distinct_map(
   table_view const& input,
   std::vector<size_type> const& keys,
