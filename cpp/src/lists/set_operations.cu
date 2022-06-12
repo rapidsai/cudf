@@ -126,7 +126,20 @@ rmm::device_uvector<bool> check_contains(table_view const& lhs,
       size_type{0}, [d_hasher] __device__(size_type const i) {
         return cuco::make_pair(d_hasher(i), lhs_index_type{i});
       });
-    map->insert(kv_it, kv_it + lhs.num_rows(), stream.value());
+
+    if ((nulls_equal == null_equality::EQUAL) || !lhs_has_nulls) {
+      map->insert(kv_it, kv_it + lhs.num_rows(), stream.value());
+    } else {
+      [[maybe_unused]] auto const [row_bitmask, tmp] = cudf::detail::bitmask_and(lhs, stream);
+
+      map->insert_if(
+        kv_it,
+        kv_it + lhs.num_rows(),
+        thrust::counting_iterator<size_type>(0),  // stencil
+        [row_bitmask = static_cast<bitmask_type const*>(row_bitmask.data())] __device__(
+          size_type const i) { return cudf::bit_is_set(row_bitmask, i); },
+        stream.value());
+    }
   }
 
   auto contained = rmm::device_uvector<bool>(rhs.num_rows(), stream);
