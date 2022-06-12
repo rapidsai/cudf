@@ -46,7 +46,6 @@
 
 namespace cudf::lists {
 namespace detail {
-
 namespace {
 
 using cudf::experimental::row::lhs_index_type;
@@ -65,42 +64,13 @@ using nan_equal_comparator =
   cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
 using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
 
-/**
- * @brief Generate labels for elements in the child column of the input lists column.
- * @param input
- */
-auto generate_labels(lists_column_view const& input, rmm::cuda_stream_view stream)
-{
-  auto labels = make_numeric_column(
-    data_type(type_to_id<size_type>()), input.size(), cudf::mask_state::UNALLOCATED, stream);
-  auto const labels_begin = labels->mutable_view().template begin<size_type>();
-  cudf::detail::label_segments(
-    input.offsets_begin(), input.offsets_end(), labels_begin, labels_begin + input.size(), stream);
-  return labels;
-}
+std::unique_ptr<column> generate_labels(lists_column_view const& input,
+                                        rmm::cuda_stream_view stream);
 
-/**
- * @brief Reconstruct an offsets column from the input labels array.
- */
-auto reconstruct_offsets(column_view const& labels,
-                         size_type n_rows,
-                         rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr)
-
-{
-  auto out_offsets = make_numeric_column(
-    data_type{type_to_id<offset_type>()}, n_rows + 1, mask_state::UNALLOCATED, stream, mr);
-
-  auto const labels_begin  = labels.template begin<size_type>();
-  auto const offsets_begin = out_offsets->mutable_view().template begin<size_type>();
-  cudf::detail::labels_to_offsets(labels_begin,
-                                  labels_begin + labels.size(),
-                                  offsets_begin,
-                                  offsets_begin + out_offsets->size(),
-                                  stream);
-  return out_offsets;
-}
-
+std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
+                                            size_type n_rows,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
 }  // namespace
 
 // This namespace contains code borrow from other WIP PRs, will be removed when they merged.
@@ -250,6 +220,49 @@ rmm::device_uvector<size_type> distinct_map(
   return output_map;
 }
 
+}  // namespace temporary
+
+namespace {
+
+/**
+ * @brief Generate labels for elements in the child column of the input lists column.
+ * @param input
+ */
+std::unique_ptr<column> generate_labels(lists_column_view const& input,
+                                        rmm::cuda_stream_view stream)
+{
+  auto labels = make_numeric_column(
+    data_type(type_to_id<size_type>()), input.size(), cudf::mask_state::UNALLOCATED, stream);
+  auto const labels_begin = labels->mutable_view().template begin<size_type>();
+  cudf::detail::label_segments(
+    input.offsets_begin(), input.offsets_end(), labels_begin, labels_begin + input.size(), stream);
+  return labels;
+}
+
+/**
+ * @brief Reconstruct an offsets column from the input labels array.
+ */
+std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
+                                            size_type n_rows,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
+
+{
+  auto out_offsets = make_numeric_column(
+    data_type{type_to_id<offset_type>()}, n_rows + 1, mask_state::UNALLOCATED, stream, mr);
+
+  auto const labels_begin  = labels.template begin<size_type>();
+  auto const offsets_begin = out_offsets->mutable_view().template begin<size_type>();
+  cudf::detail::labels_to_offsets(labels_begin,
+                                  labels_begin + labels.size(),
+                                  offsets_begin,
+                                  offsets_begin + out_offsets->size(),
+                                  stream);
+  return out_offsets;
+}
+
+}  // namespace
+
 std::unique_ptr<column> list_distinct(
   lists_column_view const& input,
   null_equality nulls_equal,
@@ -261,8 +274,8 @@ std::unique_ptr<column> list_distinct(
   auto const labels      = generate_labels(input, stream);
   auto const input_table = table_view{{labels->view(), child}};
 
-  auto const distinct_indices =
-    distinct_map(table_view{{labels->view(), child}}, {0, 1}, nulls_equal, nans_equal, stream);
+  auto const distinct_indices = temporary::distinct_map(
+    table_view{{labels->view(), child}}, {0, 1}, nulls_equal, nans_equal, stream);
 
   auto index_markers = rmm::device_uvector<bool>(child.size(), stream);
   thrust::uninitialized_fill(
@@ -294,8 +307,6 @@ std::unique_ptr<column> list_distinct(
                            stream,
                            mr);
 }
-
-}  // namespace temporary
 
 std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
                                      lists_column_view const& rhs,
@@ -420,7 +431,7 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
   // - concatenate_row(distinct(lhs), set_except(rhs, lhs))
   // todo: add stream in detail version
   // fix concatenate_rows params.
-  auto const lhs_distinct = temporary::list_distinct(lhs, nulls_equal, nans_equal, stream);
+  auto const lhs_distinct = list_distinct(lhs, nulls_equal, nans_equal, stream);
 
   // The result table from set_different already contains distinct rows.
   auto const diff = set_difference(rhs, lhs, nulls_equal, nans_equal, mr);
