@@ -41,6 +41,7 @@ fi
 gpuci_logger "Check environment variables"
 env
 
+cp -r /usr/local/src/conda/cudf-22.08.00a/nvcc_linux-64_activate.sh /opt/conda/envs/rapids/etc/conda/activate.d/nvcc_linux-64_activate.sh
 gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
