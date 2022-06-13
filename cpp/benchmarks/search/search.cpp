@@ -10,7 +10,7 @@
 
 static constexpr cudf::size_type num_struct_members = 8;
 static constexpr cudf::size_type max_int            = 100;
-static constexpr cudf::size_type max_str_length     = 5;
+static constexpr cudf::size_type max_str_length     = 2;
 
 static auto create_random_structs_column(cudf::size_type n_rows)
 {
