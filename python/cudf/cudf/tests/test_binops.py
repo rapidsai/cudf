@@ -594,7 +594,7 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     utils.assert_eq(cd_frame, pd_frame)
 
     pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
-    pdf2 = pd.DataFrame({"a": [2]}, index=["a"])
+    pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
     gdf1 = cudf.DataFrame.from_pandas(pdf1)
     gdf2 = cudf.DataFrame.from_pandas(pdf2)
     pd_frame = binop(pdf1, pdf2)
