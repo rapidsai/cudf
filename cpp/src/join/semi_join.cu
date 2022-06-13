@@ -25,6 +25,7 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -45,7 +46,7 @@ namespace {
 /**
  * @brief Device functor to create a pair of hash value and index for a given row.
  */
-struct make_pair_fn {
+struct make_pair_fn_tmp {
   __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
   {
     // The value is irrelevant since we only ever use the hash map to check for
@@ -54,7 +55,131 @@ struct make_pair_fn {
   }
 };
 
+template <typename T, typename Hasher>
+struct make_pair_fn {
+ public:
+  CUDF_HOST_DEVICE make_pair_fn(Hasher const& hasher, hash_value_type const empty_key_sentinel)
+    : hasher{hasher}, empty_key_sentinel{empty_key_sentinel}
+  {
+  }
+
+  __device__ __forceinline__ auto operator()(size_type const i) const noexcept
+  {
+    auto const hash_value = remap_sentinel_hash(hasher(i), empty_key_sentinel);
+    return cuco::make_pair(hash_value, T{i});
+  }
+
+  Hasher const hasher;
+  hash_value_type const empty_key_sentinel;
+};
+
+using cudf::experimental::row::lhs_index_type;
+using cudf::experimental::row::rhs_index_type;
+
+using nan_equal_comparator =
+  cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
+
+template <typename Comparator>
+struct pair_comparator_fn {
+  Comparator const d_eqcomp;
+
+  using LHSPair = cuco::pair<hash_value_type, lhs_index_type>;
+  using RHSPair = cuco::pair<hash_value_type, rhs_index_type>;
+
+  __device__ inline bool operator()(LHSPair const& lhs_hash_and_index,
+                                    RHSPair const& rhs_hash_and_index) const noexcept
+  {
+    auto const& [lhs_hash, lhs_index] = lhs_hash_and_index;
+    auto const& [rhs_hash, rhs_index] = rhs_hash_and_index;
+    return lhs_hash == rhs_hash ? d_eqcomp(lhs_index, rhs_index) : false;
+  }
+
+  __device__ inline bool operator()(RHSPair const& rhs_hash_and_index,
+                                    LHSPair const& lhs_hash_and_index) const noexcept
+  {
+    return this->operator()(lhs_hash_and_index, rhs_hash_and_index);
+  }
+};
+
 }  // namespace
+
+rmm::device_uvector<bool> semi_join_contains(table_view const& lhs,
+                                             table_view const& rhs,
+                                             null_equality nulls_equal,
+                                             nan_equality nans_equal,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  auto map =
+    cuco::static_multimap<hash_value_type,
+                          rhs_index_type,
+                          cuda::thread_scope_device,
+                          rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
+                          cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>(
+      compute_hash_table_size(rhs.num_rows()),
+      cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
+      cuco::sentinel::empty_value{rhs_index_type{cudf::detail::JoinNoneValue}},
+      stream.value(),
+      detail::hash_table_allocator_type{default_allocator<char>{}, stream});
+
+  auto const lhs_has_nulls = has_nested_nulls(lhs);
+  auto const rhs_has_nulls = has_nested_nulls(rhs);
+
+  // Create a hash map with keys are indices of elements in the rhs table.
+  {
+    auto const hasher   = cudf::experimental::row::hash::row_hasher(rhs, stream);
+    auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{rhs_has_nulls});
+
+    auto const kv_it = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      make_pair_fn<rhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
+
+    if ((nulls_equal == null_equality::EQUAL) || !rhs_has_nulls) {
+      map.insert(kv_it, kv_it + rhs.num_rows(), stream.value());
+    } else {
+      [[maybe_unused]] auto const [row_bitmask, tmp] = cudf::detail::bitmask_and(rhs, stream);
+
+      map.insert_if(kv_it,
+                    kv_it + lhs.num_rows(),
+                    thrust::counting_iterator<size_type>(0),  // stencil
+                    row_is_valid{static_cast<bitmask_type const*>(row_bitmask.data())},
+                    stream.value());
+    }
+  }
+
+  auto contained = rmm::device_uvector<bool>(lhs.num_rows(), stream);
+
+  {
+    auto const hasher   = cudf::experimental::row::hash::row_hasher(lhs, stream);
+    auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{lhs_has_nulls});
+
+    auto const kv_it = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      make_pair_fn<lhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
+
+    auto const comparator =
+      cudf::experimental::row::equality::two_table_comparator(lhs, rhs, stream);
+
+    auto const do_check = [&](auto const& value_comp) {
+      auto const d_eqcomp = comparator.equal_to(
+        nullate::DYNAMIC{lhs_has_nulls || rhs_has_nulls}, nulls_equal, value_comp);
+      map.pair_contains(kv_it,
+                        kv_it + lhs.num_rows(),
+                        contained.begin(),
+                        pair_comparator_fn<decltype(d_eqcomp)>{d_eqcomp},
+                        stream.value());
+    };
+
+    if (nans_equal == nan_equality::ALL_EQUAL) {
+      do_check(nan_equal_comparator{});
+    } else {
+      do_check(nan_unequal_comparator{});
+    }
+  }
+
+  return contained;
+}
 
 std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   join_kind const kind,
@@ -101,7 +226,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto const right_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(right_flattened_keys)};
   row_hash const hash_build{right_nulls, *right_rows_d};
   row_equality equality_build{right_nulls, *right_rows_d, *right_rows_d, compare_nulls};
-  make_pair_fn pair_func_build{};
+  make_pair_fn_tmp pair_func_build{};
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
 
