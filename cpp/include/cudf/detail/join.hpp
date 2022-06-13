@@ -123,6 +123,26 @@ struct hash_join {
             rmm::mr::device_memory_resource* mr) const;
 
   /**
+   * @brief Returns a vector of bools indicating whether there exist matching row(s) on the right
+   *        key table for each row on the left key table.
+   *
+   * @param left_keys The left table
+   * @param right_keys The right table
+   * @param nulls_equal Control whether null keys should be considered as matching or not
+   * @param nans_equal Control whether NaN keys in floating-point data should be considered as
+   *        matching or not
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned column's device memory
+   * @return A BOOL vector indicating if each row in `left_keys` has matching row(s) in `right_keys`
+   */
+  rmm::device_uvector<bool> semi_join_contains(cudf::table_view const& left_keys,
+                                               cudf::table_view const& right_keys,
+                                               null_equality nulls_equal,
+                                               nan_equality nans_equal,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr) const;
+
+  /**
    * @copydoc cudf::hash_join::inner_join_size
    */
   [[nodiscard]] std::size_t inner_join_size(cudf::table_view const& probe,
