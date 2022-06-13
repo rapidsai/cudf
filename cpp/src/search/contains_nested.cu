@@ -93,10 +93,12 @@ std::unique_ptr<column> multi_contains_nested_elements(column_view const& haysta
 
   using cudf::experimental::row::lhs_index_type;
   using cudf::experimental::row::rhs_index_type;
+  using hash_type  = cuco::detail::MurmurHash3_32<hash_value_type>;
   using static_map = cuco::static_multimap<hash_value_type,
                                            lhs_index_type,
                                            cuda::thread_scope_device,
-                                           hash_table_allocator_type>;
+                                           hash_table_allocator_type,
+                                           cuco::double_hashing<1, hash_type, hash_type>>;
   auto haystack_map =
     static_map{compute_hash_table_size(haystack.size()),
                cuco::sentinel::empty_key{hash_value_type{detail::COMPACTION_EMPTY_KEY_SENTINEL}},
