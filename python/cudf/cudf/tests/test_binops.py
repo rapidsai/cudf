@@ -2970,3 +2970,14 @@ def test_binops_dot(df, other):
     got = df @ other
 
     utils.assert_eq(expected, got)
+
+
+def test_binop_series_with_repeated_index():
+    # GH: #11094
+    psr1 = pd.Series([1, 1], index=["a", "a"])
+    psr2 = pd.Series([1, 1], index=["a", "a"])
+    gsr1 = cudf.from_pandas(psr1)
+    gsr2 = cudf.from_pandas(psr2)
+    expected = psr1 - psr2
+    got = gsr1 - gsr2
+    utils.assert_eq(expected, got)
