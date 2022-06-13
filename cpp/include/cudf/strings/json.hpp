@@ -105,6 +105,8 @@ class get_json_object_options {
    * Output = ["2", null]
    *
    * @endcode
+   *
+   * @return true if missing fields are interpreted as null.
    */
   [[nodiscard]] CUDF_HOST_DEVICE inline bool get_missing_fields_as_nulls() const
   {
