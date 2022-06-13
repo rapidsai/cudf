@@ -991,7 +991,7 @@ TEST_F(JsonPathTests, MissingFieldsAsNulls)
     cudf::test::strings_column_wrapper input{input_string};
     cudf::strings::get_json_object_options options;
 
-    // Test defualt behavior
+    // Test default behavior
     options.set_missing_fields_as_nulls(false);
     auto const default_result =
       cudf::strings::get_json_object(cudf::strings_column_view(input), {json_path_string}, options);
