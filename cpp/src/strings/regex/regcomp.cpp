@@ -25,6 +25,7 @@
 #include <numeric>
 #include <stack>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace cudf {
@@ -169,11 +170,11 @@ class regex_parser {
   char32_t const* _expr_ptr;
   bool _lex_done{false};
 
-  int32_t _id_ccls_w{-1};  // alphanumeric
-  int32_t _id_ccls_W{-1};  // not alphanumeric
-  int32_t _id_ccls_s{-1};  // space
-  int32_t _id_ccls_d{-1};  // digit
-  int32_t _id_ccls_D{-1};  // not digit
+  int32_t _id_cclass_w{-1};  // alphanumeric [a-zA-Z0-9_]
+  int32_t _id_cclass_W{-1};  // not alphanumeric plus '\n'
+  int32_t _id_cclass_s{-1};  // whitespace including '\t', '\n', '\r'
+  int32_t _id_cclass_d{-1};  // digits [0-9]
+  int32_t _id_cclass_D{-1};  // not digits
 
   char32_t _chr{};       // last lex'd char
   int32_t _cclass_id{};  // last lex'd class
@@ -183,22 +184,26 @@ class regex_parser {
   std::vector<Item> _items;
   bool _has_counted{false};
 
-  bool next_char(char32_t& c)  // return "quoted" == backslash-escape prefix
+  /**
+   * @brief Returns the next character in the expression
+   *
+   * Handles quoted (escaped) special characters and detecting the end of the expression.
+   *
+   * @return is-backslash-escape and character
+   */
+  std::pair<bool, char32_t> next_char()
   {
-    if (_lex_done) {
-      c = 0;
-      return true;
-    }
+    if (_lex_done) { return {true, 0}; }
 
-    c = *_expr_ptr++;
+    auto c = *_expr_ptr++;
     if (c == '\\') {
       c = *_expr_ptr++;
-      return true;
+      return {true, c};
     }
 
     if (c == 0) { _lex_done = true; }
 
-    return false;
+    return {false, c};
   }
 
   int32_t build_cclass()
@@ -207,12 +212,11 @@ class regex_parser {
     std::vector<char32_t> cls;
     int32_t builtins = 0;
 
-    char32_t chr = 0;
-    auto quoted  = next_char(chr);
+    auto [is_quoted, chr] = next_char();
     // check for negation
-    if (!quoted && chr == '^') {
-      type   = NCCLASS;
-      quoted = next_char(chr);
+    if (!is_quoted && chr == '^') {
+      type                     = NCCLASS;
+      std::tie(is_quoted, chr) = next_char();
       // negated classes also do not match '\n'
       cls.push_back('\n');
       cls.push_back('\n');
@@ -226,7 +230,7 @@ class regex_parser {
         // malformed '[]'
         return 0;
       }
-      if (quoted) {
+      if (is_quoted) {
         switch (chr) {
           case 'n': chr = '\n'; break;
           case 'r': chr = '\r'; break;
@@ -236,38 +240,38 @@ class regex_parser {
           case 'f': chr = 0x0C; break;
           case 'w':
             builtins |= ccls_w.builtins;
-            quoted = next_char(chr);
+            std::tie(is_quoted, chr) = next_char();
             continue;
           case 's':
             builtins |= ccls_s.builtins;
-            quoted = next_char(chr);
+            std::tie(is_quoted, chr) = next_char();
             continue;
           case 'd':
             builtins |= ccls_d.builtins;
-            quoted = next_char(chr);
+            std::tie(is_quoted, chr) = next_char();
             continue;
           case 'W':
             builtins |= ccls_W.builtins;
-            quoted = next_char(chr);
+            std::tie(is_quoted, chr) = next_char();
             continue;
           case 'S':
             builtins |= ccls_S.builtins;
-            quoted = next_char(chr);
+            std::tie(is_quoted, chr) = next_char();
             continue;
           case 'D':
             builtins |= ccls_D.builtins;
-            quoted = next_char(chr);
+            std::tie(is_quoted, chr) = next_char();
             continue;
         }
       }
-      if (!quoted && chr == ']' && count_char > 1) break;
-      if (!quoted && chr == '-') {
+      if (!is_quoted && chr == ']' && count_char > 1) break;
+      if (!is_quoted && chr == '-') {
         if (cls.empty()) {
           // malformed '[]': TODO assert or exception?
           return 0;
         }
-        quoted = next_char(chr);
-        if ((!quoted && chr == ']') || chr == 0) {
+        std::tie(is_quoted, chr) = next_char();
+        if ((!is_quoted && chr == ']') || chr == 0) {
           // malformed '[]': TODO assert or exception?
           return 0;
         }
@@ -276,7 +280,7 @@ class regex_parser {
         cls.push_back(chr);
         cls.push_back(chr);
       }
-      quoted = next_char(chr);
+      std::tie(is_quoted, chr) = next_char();
     }
 
     /* sort on span start */
@@ -316,10 +320,10 @@ class regex_parser {
 
   int32_t lex(int32_t dot_type)
   {
-    _chr         = 0;
-    char32_t chr = 0;
-    auto quoted  = next_char(chr);
-    if (quoted) {
+    _chr = 0;
+
+    auto [is_quoted, chr] = next_char();
+    if (is_quoted) {
       // treating all quoted numbers as Octal, since we are not supporting backreferences
       if (chr >= '0' && chr <= '7') {
         chr         = chr - '0';
@@ -359,43 +363,43 @@ class regex_parser {
             break;
           }
           case 'w': {
-            if (_id_ccls_w < 0) { _id_ccls_w = _prog.add_class(ccls_w); }
-            _cclass_id = _id_ccls_w;
+            if (_id_cclass_w < 0) { _id_cclass_w = _prog.add_class(ccls_w); }
+            _cclass_id = _id_cclass_w;
             return CCLASS;
           }
           case 'W': {
-            if (_id_ccls_W < 0) {
+            if (_id_cclass_W < 0) {
               reclass cls = ccls_w;
               cls.literals += '\n';
               cls.literals += '\n';
-              _id_ccls_W = _prog.add_class(cls);
+              _id_cclass_W = _prog.add_class(cls);
             }
-            _cclass_id = _id_ccls_W;
+            _cclass_id = _id_cclass_W;
             return NCCLASS;
           }
           case 's': {
-            if (_id_ccls_s < 0) { _id_ccls_s = _prog.add_class(ccls_s); }
-            _cclass_id = _id_ccls_s;
+            if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(ccls_s); }
+            _cclass_id = _id_cclass_s;
             return CCLASS;
           }
           case 'S': {
-            if (_id_ccls_s < 0) { _id_ccls_s = _prog.add_class(ccls_s); }
-            _cclass_id = _id_ccls_s;
+            if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(ccls_s); }
+            _cclass_id = _id_cclass_s;
             return NCCLASS;
           }
           case 'd': {
-            if (_id_ccls_d < 0) { _id_ccls_d = _prog.add_class(ccls_d); }
-            _cclass_id = _id_ccls_d;
+            if (_id_cclass_d < 0) { _id_cclass_d = _prog.add_class(ccls_d); }
+            _cclass_id = _id_cclass_d;
             return CCLASS;
           }
           case 'D': {
-            if (_id_ccls_D < 0) {
+            if (_id_cclass_D < 0) {
               reclass cls = ccls_d;
               cls.literals += '\n';
               cls.literals += '\n';
-              _id_ccls_D = _prog.add_class(cls);
+              _id_cclass_D = _prog.add_class(cls);
             }
-            _cclass_id = _id_ccls_D;
+            _cclass_id = _id_cclass_D;
             return NCCLASS;
           }
           case 'b': return BOW;
