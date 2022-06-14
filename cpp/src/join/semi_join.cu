@@ -277,13 +277,21 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     });
 
 #else
-  auto const flagged = semi_join_contains(left_keys,
-                                          right_keys,
-                                          compare_nulls,
-                                          nan_equality::UNEQUAL,
-                                          stream,
-                                          rmm::mr::get_current_device_resource());
-  auto flagged_d     = flagged.data();
+  auto flagged   = semi_join_contains(left_keys,
+                                    right_keys,
+                                    compare_nulls,
+                                    nan_equality::UNEQUAL,
+                                    stream,
+                                    rmm::mr::get_current_device_resource());
+  auto flagged_d = flagged.data();
+  if (kind == join_kind::LEFT_ANTI_JOIN) {
+    thrust::transform(rmm::exec_policy(stream),
+                      flagged.begin(),
+                      flagged.end(),
+                      flagged.begin(),
+                      thrust::logical_not{});
+  }
+
   auto counting_iter = thrust::counting_iterator<size_type>(0);
 #endif
 
