@@ -29,8 +29,8 @@ namespace fst {
  * @brief Uses a deterministic finite automaton to transduce a sequence of symbols from an input
  * iterator to a sequence of transduced output symbols.
  *
- * @tparam SymbolItT Random-access input iterator type to symbols fed into the FST
  * @tparam DfaT The DFA specification
+ * @tparam SymbolItT Random-access input iterator type to symbols fed into the FST
  * @tparam TransducedOutItT Random-access output iterator to which the transduced output will be
  * written
  * @tparam TransducedIndexOutItT Random-access output iterator type to which the indexes of the
