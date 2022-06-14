@@ -61,11 +61,6 @@ struct make_pair_fn {
   Hasher const hasher;
   hash_value_type const empty_key_sentinel;
 
-  make_pair_fn(Hasher const& hasher, hash_value_type const empty_key_sentinel)
-    : hasher{hasher}, empty_key_sentinel{empty_key_sentinel}
-  {
-  }
-
   __device__ __forceinline__ auto operator()(size_type const i) const noexcept
   {
     auto const hash_value = remap_sentinel_hash(hasher(i), empty_key_sentinel);
