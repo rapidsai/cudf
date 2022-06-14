@@ -54,7 +54,7 @@ pkg_check_modules(PKG_cuFile QUIET cuFile)
 set(cuFile_COMPILE_OPTIONS ${PKG_cuFile_CFLAGS_OTHER})
 set(cuFile_VERSION ${PKG_cuFile_VERSION})
 
-#Find the location of the CUDA Toolkit
+# Find the location of the CUDA Toolkit
 find_package(CUDAToolkit QUIET)
 find_path(
   cuFile_INCLUDE_DIR
