@@ -414,18 +414,18 @@ std::unique_ptr<cudf::table> left_semi_join(
  *
  * @param left_keys The left table
  * @param right_keys The right table
- * @param nulls_equal Control whether null keys should be considered as matching or not
- * @param nans_equal Control whether NaN keys in floating-point data should be considered as
+ * @param compare_nulls Control whether null keys should be considered as matching or not
+ * @param compare_nans Control whether NaN keys in floating-point data should be considered as
  *        matching or not
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A vector of bools indicating if each row in `left_keys` has matching row(s) in
  *         `right_keys`
  */
-rmm::device_uvector<bool> semi_join_contains(
+rmm::device_uvector<bool> left_semi_join_contains(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
-  null_equality nulls_equal,
-  nan_equality nans_equal,
+  null_equality compare_nulls,
+  nan_equality compare_nans,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

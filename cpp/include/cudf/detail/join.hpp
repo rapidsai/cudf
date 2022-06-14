@@ -184,18 +184,18 @@ struct hash_join {
 };
 
 /**
- * @copydoc cudf::semi_join_contains(cudf::table_view const&,
- *                                   cudf::table_view const&,
- *                                   null_equality,
- *                                   nan_equality,
- *                                   rmm::mr::device_memory_resource*)
+ * @copydoc cudf::left_semi_join_contains(cudf::table_view const&,
+ *                                        cudf::table_view const&,
+ *                                        null_equality,
+ *                                        nan_equality,
+ *                                        rmm::mr::device_memory_resource*)
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-rmm::device_uvector<bool> semi_join_contains(
+rmm::device_uvector<bool> left_semi_join_contains(
   cudf::table_view const& left_keys,
   cudf::table_view const& right_keys,
-  null_equality nulls_equal,
-  nan_equality nans_equal,
+  null_equality compare_nulls,
+  nan_equality compare_nans,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

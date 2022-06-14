@@ -94,12 +94,12 @@ struct pair_comparator_fn {
 
 }  // namespace
 
-rmm::device_uvector<bool> semi_join_contains(table_view const& lhs,
-                                             table_view const& rhs,
-                                             null_equality nulls_equal,
-                                             nan_equality nans_equal,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<bool> left_semi_join_contains(table_view const& left_keys,
+                                                  table_view const& right_keys,
+                                                  null_equality compare_nulls,
+                                                  nan_equality compare_nans,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr)
 {
   // Use a hash map with key type is row hash values and map value type is `rhs_index_type` to store
   // all indices of row in the rhs table.
@@ -110,45 +110,46 @@ rmm::device_uvector<bool> semi_join_contains(table_view const& lhs,
                           rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
                           cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
 
-  auto map = hash_map_type(compute_hash_table_size(rhs.num_rows()),
+  auto map = hash_map_type(compute_hash_table_size(right_keys.num_rows()),
                            cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
                            cuco::sentinel::empty_value{rhs_index_type{cudf::detail::JoinNoneValue}},
                            stream.value(),
                            detail::hash_table_allocator_type{default_allocator<char>{}, stream});
 
-  auto const lhs_has_nulls = has_nested_nulls(lhs);
-  auto const rhs_has_nulls = has_nested_nulls(rhs);
+  auto const lhs_has_nulls = has_nested_nulls(left_keys);
+  auto const rhs_has_nulls = has_nested_nulls(right_keys);
 
   // Insert all row hash values and indices of the rhs table.
   {
-    auto const hasher   = cudf::experimental::row::hash::row_hasher(rhs, stream);
+    auto const hasher   = cudf::experimental::row::hash::row_hasher(right_keys, stream);
     auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{rhs_has_nulls});
 
     auto const kv_it = cudf::detail::make_counting_transform_iterator(
       size_type{0},
       make_pair_fn<rhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
 
-    // If there are nulls but they are compared unequal, don't insert them.
+    // If right table has nulls but they are compared unequal, don't insert them.
     // Otherwise, it was known to cause performance issue:
     // - https://github.com/rapidsai/cudf/pull/6943
     // - https://github.com/rapidsai/cudf/pull/8277
-    if ((nulls_equal != null_equality::EQUAL) && rhs_has_nulls) {
-      [[maybe_unused]] auto const [row_bitmask, tmp] = cudf::detail::bitmask_and(rhs, stream);
+    if (nullable(right_keys) && compare_nulls == null_equality::UNEQUAL) {
+      [[maybe_unused]] auto const [row_bitmask, tmp] =
+        cudf::detail::bitmask_and(right_keys, stream);
       map.insert_if(kv_it,
-                    kv_it + lhs.num_rows(),
+                    kv_it + left_keys.num_rows(),
                     thrust::counting_iterator<size_type>(0),  // stencil
                     row_is_valid{static_cast<bitmask_type const*>(row_bitmask.data())},
                     stream.value());
     } else {
-      map.insert(kv_it, kv_it + rhs.num_rows(), stream.value());
+      map.insert(kv_it, kv_it + right_keys.num_rows(), stream.value());
     }
   }
 
-  auto contained = rmm::device_uvector<bool>(lhs.num_rows(), stream);
+  auto contained = rmm::device_uvector<bool>(left_keys.num_rows(), stream);
 
   // Check contains for each row of the lhs table in the rhs table.
   {
-    auto const hasher   = cudf::experimental::row::hash::row_hasher(lhs, stream);
+    auto const hasher   = cudf::experimental::row::hash::row_hasher(left_keys, stream);
     auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{lhs_has_nulls});
 
     auto const kv_it = cudf::detail::make_counting_transform_iterator(
@@ -156,19 +157,19 @@ rmm::device_uvector<bool> semi_join_contains(table_view const& lhs,
       make_pair_fn<lhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
 
     auto const comparator =
-      cudf::experimental::row::equality::two_table_comparator(lhs, rhs, stream);
+      cudf::experimental::row::equality::two_table_comparator(left_keys, right_keys, stream);
 
     auto const do_check = [&](auto const& value_comp) {
       auto const d_eqcomp = comparator.equal_to(
-        nullate::DYNAMIC{lhs_has_nulls || rhs_has_nulls}, nulls_equal, value_comp);
+        nullate::DYNAMIC{lhs_has_nulls || rhs_has_nulls}, compare_nulls, value_comp);
       map.pair_contains(kv_it,
-                        kv_it + lhs.num_rows(),
+                        kv_it + left_keys.num_rows(),
                         contained.begin(),
                         pair_comparator_fn<decltype(d_eqcomp)>{d_eqcomp},
                         stream.value());
     };
 
-    if (nans_equal == nan_equality::ALL_EQUAL) {
+    if (compare_nans == nan_equality::ALL_EQUAL) {
       do_check(nan_equal_comparator{});
     } else {
       do_check(nan_unequal_comparator{});
@@ -202,7 +203,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto const flagged = [&] {
     // Use `nan_equality::UNEQUAL` as the default value for comparing NaNs in semi- and anti- joins.
     auto contained =
-      semi_join_contains(left_keys, right_keys, compare_nulls, nan_equality::UNEQUAL, stream);
+      left_semi_join_contains(left_keys, right_keys, compare_nulls, nan_equality::UNEQUAL, stream);
     if (kind == join_kind::LEFT_ANTI_JOIN) {
       thrust::transform(rmm::exec_policy(stream),
                         contained.begin(),
