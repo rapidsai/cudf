@@ -92,6 +92,21 @@ struct pair_comparator_fn {
   }
 };
 
+/**
+ * @brief The functor to accumulate column_view of columns at all nested levels in a table.
+ *
+ * This is to avoid expensive materializing the bitmask into a real column when calling to
+ * `structs::detail::flatten_nested_columns`.
+ */
+void accumulate_nested_columns(table_view const& table, std::vector<column_view>& result)
+{
+  result.insert(result.end(), table.begin(), table.end());
+  for (auto const& col : table) {
+    accumulate_nested_columns(
+      table_view{std::vector<column_view>{col.child_begin(), col.child_end()}}, result);
+  }
+}
+
 }  // namespace
 
 rmm::device_uvector<bool> left_semi_join_contains(table_view const& left_keys,
@@ -132,9 +147,19 @@ rmm::device_uvector<bool> left_semi_join_contains(table_view const& left_keys,
     // Otherwise, it was known to cause performance issue:
     // - https://github.com/rapidsai/cudf/pull/6943
     // - https://github.com/rapidsai/cudf/pull/8277
-    if (nullable(right_keys) && compare_nulls == null_equality::UNEQUAL) {
+    if (rhs_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+      // Gather all columns at all levels from the right table.
+      // The columns without having nulls will not be considered in `bitmask_and`.
+      auto const right_columns_with_nulls = [&] {
+        auto result = std::vector<column_view>{};
+        accumulate_nested_columns(right_keys, result);
+        return result;
+      }();
+
       [[maybe_unused]] auto const [row_bitmask, tmp] =
-        cudf::detail::bitmask_and(right_keys, stream);
+        cudf::detail::bitmask_and(table_view{right_columns_with_nulls}, stream);
+
+      // Insert only rows that do not have any nulls at any level.
       map.insert_if(kv_it,
                     kv_it + right_keys.num_rows(),
                     thrust::counting_iterator<size_type>(0),  // stencil
