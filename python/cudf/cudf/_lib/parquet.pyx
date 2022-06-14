@@ -17,6 +17,7 @@ except ImportError:
     import json
 
 import numpy as np
+
 from cython.operator cimport dereference
 
 from cudf.api.types import (
@@ -38,6 +39,7 @@ from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
+from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -178,21 +180,51 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     index_col = None
     is_range_index = False
     cdef map[string, string] user_data = c_out_table.metadata.user_data
-    json_str = user_data[b'pandas'].decode('utf-8')
-    meta = None
-    if json_str != "":
-        meta = json.loads(json_str)
-        if 'index_columns' in meta and len(meta['index_columns']) > 0:
-            index_col = meta['index_columns']
-            if isinstance(index_col[0], dict) and \
-                    index_col[0]['kind'] == 'range':
+
+    cdef vector[unordered_map[string, string]] per_file_user_data = \
+        c_out_table.metadata.per_file_user_data
+
+    if len(per_file_user_data) > 1:
+        range_index = []
+        index_col_names = None
+        for single_file in per_file_user_data:
+            json_str = index_col[b'pandas'].decode('utf-8')
+            meta = None
+            if json_str != "":
+                meta = json.loads(json_str)
+                if 'index_columns' in meta and len(meta['index_columns']) > 0:
+                    index_col = meta['index_columns']
+
+                    if isinstance(index_col[0], dict) and \
+                            index_col[0]['kind'] == 'range':
+                        range_index.append(True)
+                    else:
+                        if index_col_names is None:
+                            index_col_names = OrderedDict()
+                            for idx_col in index_col:
+                                for c in meta['columns']:
+                                    if c['field_name'] == idx_col:
+                                        index_col_names[idx_col] = c['name']
+
+        if len(range_index) > 0:
+            if all(range_index):
                 is_range_index = True
-            else:
-                index_col_names = OrderedDict()
-                for idx_col in index_col:
-                    for c in meta['columns']:
-                        if c['field_name'] == idx_col:
-                            index_col_names[idx_col] = c['name']
+    else:
+        json_str = user_data[b'pandas'].decode('utf-8')
+        meta = None
+        if json_str != "":
+            meta = json.loads(json_str)
+            if 'index_columns' in meta and len(meta['index_columns']) > 0:
+                index_col = meta['index_columns']
+                if isinstance(index_col[0], dict) and \
+                        index_col[0]['kind'] == 'range':
+                    is_range_index = True
+                else:
+                    index_col_names = OrderedDict()
+                    for idx_col in index_col:
+                        for c in meta['columns']:
+                            if c['field_name'] == idx_col:
+                                index_col_names[idx_col] = c['name']
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
         move(c_out_table.tbl),
         column_names=column_names
@@ -218,7 +250,16 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # Set the index column
     if index_col is not None and len(index_col) > 0:
         if is_range_index:
-            range_index_meta = index_col[0]
+            if len(per_file_user_data) > 1:
+                range_index_meta = {
+                    "kind": "range",
+                    "name": None,
+                    "start": 0,
+                    "stop": len(df),
+                    "step": 1
+                }
+            else:
+                range_index_meta = index_col[0]
             if row_groups is not None:
                 per_file_metadata = [
                     pa.parquet.read_metadata(
