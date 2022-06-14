@@ -107,17 +107,18 @@ struct check_contains {
 };
 
 /**
- * @brief The functor to accumulate column_view of nullable columns at all nested levels in a table.
+ * @brief The functor to accumulate all nullable columns at all nested levels from a given column.
  *
  * This is to avoid expensive materializing the bitmask into a real column when calling to
  * `structs::detail::flatten_nested_columns`.
  */
-void accumulate_nullable_nested_columns(table_view const& table, std::vector<column_view>& result)
+void accumulate_nullable_nested_columns(column_view const& col, std::vector<column_view>& result)
 {
-  for (auto const& col : table) {
-    if (col.nullable()) { result.push_back(col); }
-    accumulate_nullable_nested_columns(
-      table_view{std::vector<column_view>{col.child_begin(), col.child_end()}}, result);
+  if (col.nullable()) { result.push_back(col); }
+
+  for (auto it = col.child_begin(); it != col.child_end(); ++it) {
+    auto const& child = *it;
+    if (child.size() == col.size()) { accumulate_nullable_nested_columns(child, result); }
   }
 }
 
@@ -165,7 +166,9 @@ rmm::device_uvector<bool> left_semi_join_contains(table_view const& left_keys,
       // Gather all nullable columns at all levels from the right table.
       auto const right_nullable_columns = [&] {
         auto result = std::vector<column_view>{};
-        accumulate_nullable_nested_columns(right_keys, result);
+        for (auto const& col : right_keys) {
+          accumulate_nullable_nested_columns(col, result);
+        }
         return result;
       }();
 
@@ -205,7 +208,9 @@ rmm::device_uvector<bool> left_semi_join_contains(table_view const& left_keys,
         // Gather all nullable columns at all levels from the left table.
         auto const left_nullable_columns = [&] {
           auto result = std::vector<column_view>{};
-          accumulate_nullable_nested_columns(left_keys, result);
+          for (auto const& col : left_keys) {
+            accumulate_nullable_nested_columns(col, result);
+          }
           return result;
         }();
 
