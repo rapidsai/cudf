@@ -396,6 +396,39 @@ std::unique_ptr<cudf::table> left_semi_join(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Returns a vector of bools indicating whether there exist matching row(s) on the right
+ *        table for each row on the left table.
+ *
+ * Given two tables, each row in the `left_keys` table is search for matching rows in the
+ * `right_keys` table. The search result (found or not) is written into the corresponding row of the
+ * output array.
+ *
+ * The resulting vector describe exactly which rows of the left table should be returned from the
+ * query `left_semi_join(left_keys, right_keys, compare_nulls, nan_equality::UNEQUAL)`.
+ *
+ * @code{.pseudo}
+ * left_keys: {{0, 1, 2}}
+ * right_keys: {{5, 4, 1, 2, 3}}
+ * output: {false, true, true}
+ * @endcode
+ *
+ * @param left_keys The left table
+ * @param right_keys The right table
+ * @param nulls_equal Control whether null keys should be considered as matching or not
+ * @param nans_equal Control whether NaN keys in floating-point data should be considered as
+ *        matching or not
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return A vector of bools indicating if each row in `left_keys` has matching row(s) in
+ *         `right_keys`
+ */
+rmm::device_uvector<bool> semi_join_contains(
+  cudf::table_view const& left_keys,
+  cudf::table_view const& right_keys,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Returns a vector of row indices corresponding to a left anti join
  * between the specified tables.
  *
