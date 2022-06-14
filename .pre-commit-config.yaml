@@ -103,7 +103,6 @@ repos:
                 language: python
               - id: doxygen-check
                 name: doxygen-check
-                stages: [commit]
                 entry: ./ci/checks/doxygen.sh
                 files: ^cpp/include/
                 types_or: [file]

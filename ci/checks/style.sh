@@ -54,20 +54,8 @@ HEADER_META=`ci/checks/headers_test.sh`
 HEADER_META_RETVAL=$?
 echo -e "$HEADER_META"
 
-# Run doxygen and check for missing documentation
-DOXYGEN=`ci/checks/doxygen.sh`
-DOXYGEN_RETVAL=$?
-
-if [ "$DOXYGEN_RETVAL" != "0" ] || [ ! -z "$DOXYGEN" ]; then
-  echo -e "\n\n>>>> FAILED: doxygen check; begin output\n\n"
-  echo -e "$DOXYGEN"
-  echo -e "\n\n>>>> FAILED: doxygen check; end output\n\n"
-else
-  echo -e "\n\n>>>> PASSED: doxygen check\n\n"
-fi
-
 RETVALS=(
-  $CR_RETVAL $PRE_COMMIT_RETVAL $CLANG_FORMAT_RETVAL $DOXYGEN_RETVAL
+  $CR_RETVAL $PRE_COMMIT_RETVAL $CLANG_FORMAT_RETVAL
 )
 IFS=$'\n'
 RETVAL=`echo "${RETVALS[*]}" | sort -nr | head -n1`
