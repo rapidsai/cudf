@@ -136,7 +136,7 @@ rmm::device_uvector<bool> left_semi_join_contains(table_view const& left_keys,
       [[maybe_unused]] auto const [row_bitmask, tmp] =
         cudf::detail::bitmask_and(right_keys, stream);
       map.insert_if(kv_it,
-                    kv_it + left_keys.num_rows(),
+                    kv_it + right_keys.num_rows(),
                     thrust::counting_iterator<size_type>(0),  // stencil
                     row_is_valid{static_cast<bitmask_type const*>(row_bitmask.data())},
                     stream.value());
