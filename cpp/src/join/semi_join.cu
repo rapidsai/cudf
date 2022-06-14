@@ -61,7 +61,7 @@ struct make_pair_fn {
   Hasher const hasher;
   hash_value_type const empty_key_sentinel;
 
-  __device__ __forceinline__ auto operator()(size_type const i) const noexcept
+  __device__ inline auto operator()(size_type const i) const noexcept
   {
     auto const hash_value = remap_sentinel_hash(hasher(i), empty_key_sentinel);
     return cuco::make_pair(hash_value, T{i});
@@ -88,16 +88,16 @@ struct pair_comparator_fn {
 };
 
 /**
- * @brief The functor to accumulate column_view of columns at all nested levels in a table.
+ * @brief The functor to accumulate column_view of nullable columns at all nested levels in a table.
  *
  * This is to avoid expensive materializing the bitmask into a real column when calling to
  * `structs::detail::flatten_nested_columns`.
  */
-void accumulate_nested_columns(table_view const& table, std::vector<column_view>& result)
+void accumulate_nullable_nested_columns(table_view const& table, std::vector<column_view>& result)
 {
-  result.insert(result.end(), table.begin(), table.end());
   for (auto const& col : table) {
-    accumulate_nested_columns(
+    if (col.nullable()) { result.push_back(col); }
+    accumulate_nullable_nested_columns(
       table_view{std::vector<column_view>{col.child_begin(), col.child_end()}}, result);
   }
 }
@@ -143,16 +143,15 @@ rmm::device_uvector<bool> left_semi_join_contains(table_view const& left_keys,
     // - https://github.com/rapidsai/cudf/pull/6943
     // - https://github.com/rapidsai/cudf/pull/8277
     if (rhs_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      // Gather all columns at all levels from the right table.
-      // The columns without having nulls will not be considered in `bitmask_and`.
-      auto const right_columns_with_nulls = [&] {
+      // Gather all nullable columns at all levels from the right table.
+      auto const right_nullable_columns = [&] {
         auto result = std::vector<column_view>{};
-        accumulate_nested_columns(right_keys, result);
+        accumulate_nullable_nested_columns(right_keys, result);
         return result;
       }();
 
       [[maybe_unused]] auto const [row_bitmask, tmp] =
-        cudf::detail::bitmask_and(table_view{right_columns_with_nulls}, stream);
+        cudf::detail::bitmask_and(table_view{right_nullable_columns}, stream);
 
       // Insert only rows that do not have any nulls at any level.
       map.insert_if(kv_it,
