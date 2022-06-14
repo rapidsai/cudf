@@ -1481,8 +1481,6 @@ __device__ int32_t compare(T& v1, T& v2)
     return 1;
 }
 
-// FIXME...need to make sure all data types are handled properly.  not sure how nested stats are
-// done
 __device__ int32_t compareValues(int8_t ptype,
                                  int8_t ctype,
                                  const statistics_val& v1,
@@ -1502,11 +1500,10 @@ __device__ int32_t compareValues(int8_t ptype,
       }
     case Type::FLOAT:
     case Type::DOUBLE: return compare(v1.fp_val, v2.fp_val);
-    // currently only used for decimal128, so length should always be 16
-    // FIXME  this will break if comparing byte arrays of differing lengths
     case Type::FIXED_LEN_BYTE_ARRAY: {
-      // FIXME: pass dtype too.  only do this for decimal128
-      return compare(v1.d128_val, v2.d128_val);
+      if (ctype == ConvertedType::DECIMAL) return compare(v1.d128_val, v2.d128_val);
+      // FIXME: this type should only be used for decimal, so need to throw here or something
+      return 1; // same as the punt below...need to fix this
     }
     case Type::BYTE_ARRAY: {
       string_view s1 = (string_view)v1.str_val;
