@@ -1657,7 +1657,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
           gpu::EncColumnChunk& ck = chunks[r][i];
           auto& column_chunk_meta = row_group.columns[i].meta_data;
 
-          // start transfer of column index
+          // start transfer of the column index
           std::vector<uint8_t> column_idx;
           column_idx.resize(ck.column_index_size);
           CUDF_CUDA_TRY(cudaMemcpyAsync(column_idx.data(),
@@ -1666,7 +1666,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
                                         cudaMemcpyDeviceToHost,
                                         stream.value()));
 
-          // do offsets while column index is transfering
+          // calculate offsets while the column index is transfering
           int64_t curr_pg_offset = column_chunk_meta.data_page_offset;
 
           OffsetIndex offset_idx;
@@ -1676,29 +1676,11 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
             // skip dict pages
             if (enc_page.page_type != PageType::DATA_PAGE) { continue; }
 
-            // offset_index info
-            // TODO: would it be better to create vectors on the encoded chunk
-            // struct for page sizes and start rows.  then just memcpy
-            // those and do exclusive_scan to calculate page offsets. doing it
-            // this way doesn't require changes to EncColumnChunk, but memcpys
-            // more data than necessary...but it's likely small enough that the
-            // cost of invoking the memcpy dominates rather than the amount of
-            // bytes transfered.
-
             int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
             offset_idx.page_locations.push_back(loc);
-
-            // printf("page %d size = %d at %ld next %ld\n",
-            //       curr_page_idx, this_page_size, curr_pg_offset, curr_pg_offset+this_page_size);
             curr_pg_offset += this_page_size;
-
-            // column_index info
-            // TODO: since this doesn't rely on knowledge of the file structure,
-            // probably best to create this on device, and return as thrift-encoded
-            // blob/size per chunk.  then this can be done in parallel per chunk,
-            // likely in gatherPages().
           }
 
           stream.synchronize();
