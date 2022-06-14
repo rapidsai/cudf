@@ -1520,6 +1520,24 @@ __global__ void __launch_bounds__(1024)
 }
 
 /**
+ * @brief Tests if statistics are comparable
+ */
+static __device__ bool isComparable(int8_t ptype, int8_t ctype)
+{
+  switch (ptype) {
+    case Type::BOOLEAN:
+    case Type::INT32:
+    case Type::INT64:
+    case Type::FLOAT:
+    case Type::DOUBLE:
+    case Type::BYTE_ARRAY: return true;
+    case Type::FIXED_LEN_BYTE_ARRAY:
+      if (ctype == ConvertedType::DECIMAL) return true;
+    default: return false;
+  }
+}
+
+/**
  * @brief Compares two values.
  * @return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
  */
@@ -1558,16 +1576,17 @@ static __device__ int32_t compareValues(int8_t ptype,
     case Type::FLOAT:
     case Type::DOUBLE: return compare(v1.fp_val, v2.fp_val);
     case Type::FIXED_LEN_BYTE_ARRAY: {
-      if (ctype == ConvertedType::DECIMAL) return compare(v1.d128_val, v2.d128_val);
-      // FIXME: this type should only be used for decimal, so need to throw here or something
-      return 1;  // same as the punt below...need to fix this
+      if (ctype == ConvertedType::DECIMAL)
+        return compare(v1.d128_val, v2.d128_val);
+      else
+        return 0;
     }
     case Type::BYTE_ARRAY: {
       string_view s1 = (string_view)v1.str_val;
       string_view s2 = (string_view)v2.str_val;
       return s1.compare(s2);
     }
-    default: return 1;  // FIXME: punt for now. need to just say unordered for these
+    default: return 0;
   }
 }
 
@@ -1611,6 +1630,7 @@ static __device__ int32_t calculateBoundaryOrder(const statistics_chunk* s,
                                                  int8_t ctype,
                                                  uint32_t num_pages)
 {
+  if (not isComparable(ptype, ctype)) return BoundaryOrder::UNORDERED;
   if (isAscending(s, ptype, ctype, num_pages))
     return BoundaryOrder::ASCENDING;
   else if (isDescending(s, ptype, ctype, num_pages))
