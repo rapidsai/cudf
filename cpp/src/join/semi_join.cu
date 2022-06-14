@@ -22,7 +22,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -37,28 +36,32 @@
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
+#include <thrust/transform.h>
 #include <thrust/tuple.h>
 
 namespace cudf {
 namespace detail {
 
 namespace {
+
+using cudf::experimental::row::lhs_index_type;
+using cudf::experimental::row::rhs_index_type;
+
+using nan_equal_comparator =
+  cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
+
 /**
  * @brief Device functor to create a pair of hash value and index for a given row.
+ * @tparam T Type of the index, must be `size_type` or a strong index type.
+ * @tparam Hasher The functor type to compute row hash.
  */
-struct make_pair_fn_tmp {
-  __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
-  {
-    // The value is irrelevant since we only ever use the hash map to check for
-    // membership of a particular row index.
-    return cuco::make_pair(static_cast<hash_value_type>(i), 0);
-  }
-};
-
 template <typename T, typename Hasher>
 struct make_pair_fn {
- public:
-  CUDF_HOST_DEVICE make_pair_fn(Hasher const& hasher, hash_value_type const empty_key_sentinel)
+  Hasher const hasher;
+  hash_value_type const empty_key_sentinel;
+
+  make_pair_fn(Hasher const& hasher, hash_value_type const empty_key_sentinel)
     : hasher{hasher}, empty_key_sentinel{empty_key_sentinel}
   {
   }
@@ -68,37 +71,24 @@ struct make_pair_fn {
     auto const hash_value = remap_sentinel_hash(hasher(i), empty_key_sentinel);
     return cuco::make_pair(hash_value, T{i});
   }
-
-  Hasher const hasher;
-  hash_value_type const empty_key_sentinel;
 };
 
-using cudf::experimental::row::lhs_index_type;
-using cudf::experimental::row::rhs_index_type;
-
-using nan_equal_comparator =
-  cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
-
+/**
+ * @brief The functor to compare two pairs of values with row equality comparison.
+ *
+ * @tparam Comparator The row comparator type to perform row equality comparison.
+ */
 template <typename Comparator>
 struct pair_comparator_fn {
   Comparator const d_eqcomp;
 
-  using LHSPair = cuco::pair<hash_value_type, lhs_index_type>;
-  using RHSPair = cuco::pair<hash_value_type, rhs_index_type>;
-
+  template <typename LHSPair, typename RHSPair>
   __device__ inline bool operator()(LHSPair const& lhs_hash_and_index,
                                     RHSPair const& rhs_hash_and_index) const noexcept
   {
     auto const& [lhs_hash, lhs_index] = lhs_hash_and_index;
     auto const& [rhs_hash, rhs_index] = rhs_hash_and_index;
     return lhs_hash == rhs_hash ? d_eqcomp(lhs_index, rhs_index) : false;
-  }
-
-  __device__ inline bool operator()(RHSPair const& rhs_hash_and_index,
-                                    LHSPair const& lhs_hash_and_index) const noexcept
-  {
-    return this->operator()(lhs_hash_and_index, rhs_hash_and_index);
   }
 };
 
@@ -111,22 +101,25 @@ rmm::device_uvector<bool> semi_join_contains(table_view const& lhs,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  auto map =
+  // Use a hash map with key type is row hash values and map value type is `rhs_index_type` to store
+  // all indices of row in the rhs table.
+  using hash_map_type =
     cuco::static_multimap<hash_value_type,
                           rhs_index_type,
                           cuda::thread_scope_device,
                           rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
-                          cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>(
-      compute_hash_table_size(rhs.num_rows()),
-      cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-      cuco::sentinel::empty_value{rhs_index_type{cudf::detail::JoinNoneValue}},
-      stream.value(),
-      detail::hash_table_allocator_type{default_allocator<char>{}, stream});
+                          cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
+
+  auto map = hash_map_type(compute_hash_table_size(rhs.num_rows()),
+                           cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
+                           cuco::sentinel::empty_value{rhs_index_type{cudf::detail::JoinNoneValue}},
+                           stream.value(),
+                           detail::hash_table_allocator_type{default_allocator<char>{}, stream});
 
   auto const lhs_has_nulls = has_nested_nulls(lhs);
   auto const rhs_has_nulls = has_nested_nulls(rhs);
 
-  // Create a hash map with keys are indices of elements in the rhs table.
+  // Insert all row hash values and indices of the rhs table.
   {
     auto const hasher   = cudf::experimental::row::hash::row_hasher(rhs, stream);
     auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{rhs_has_nulls});
@@ -135,21 +128,25 @@ rmm::device_uvector<bool> semi_join_contains(table_view const& lhs,
       size_type{0},
       make_pair_fn<rhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
 
-    if ((nulls_equal == null_equality::EQUAL) || !rhs_has_nulls) {
-      map.insert(kv_it, kv_it + rhs.num_rows(), stream.value());
-    } else {
+    // If there are nulls but they are compared unequal, don't insert them.
+    // Otherwise, it was known to cause performance issue:
+    // - https://github.com/rapidsai/cudf/pull/6943
+    // - https://github.com/rapidsai/cudf/pull/8277
+    if ((nulls_equal != null_equality::EQUAL) && rhs_has_nulls) {
       [[maybe_unused]] auto const [row_bitmask, tmp] = cudf::detail::bitmask_and(rhs, stream);
-
       map.insert_if(kv_it,
                     kv_it + lhs.num_rows(),
                     thrust::counting_iterator<size_type>(0),  // stencil
                     row_is_valid{static_cast<bitmask_type const*>(row_bitmask.data())},
                     stream.value());
+    } else {
+      map.insert(kv_it, kv_it + rhs.num_rows(), stream.value());
     }
   }
 
   auto contained = rmm::device_uvector<bool>(lhs.num_rows(), stream);
 
+  // Check contains for each row of the lhs table in the rhs table.
   {
     auto const hasher   = cudf::experimental::row::hash::row_hasher(lhs, stream);
     auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{lhs_has_nulls});
@@ -202,111 +199,33 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     return result;
   }
 
+  auto const flagged = [&] {
+    // Use `nan_equality::UNEQUAL` as the default value for comparing NaNs in semi- and anti- joins.
+    auto contained =
+      semi_join_contains(left_keys, right_keys, compare_nulls, nan_equality::UNEQUAL, stream);
+    if (kind == join_kind::LEFT_ANTI_JOIN) {
+      thrust::transform(rmm::exec_policy(stream),
+                        contained.begin(),
+                        contained.end(),
+                        contained.begin(),
+                        thrust::logical_not{});
+    }
+    return contained;
+  }();
+
   auto const left_num_rows = left_keys.num_rows();
-
-#if 0
-  auto const right_num_rows = right_keys.num_rows();
-
-  // flatten structs for the right and left and use that for the hash table
-  auto right_flattened_tables = structs::detail::flatten_nested_columns(
-    right_keys, {}, {}, structs::detail::column_nullability::FORCE);
-  auto left_flattened_tables = structs::detail::flatten_nested_columns(
-    left_keys, {}, {}, structs::detail::column_nullability::FORCE);
-
-  auto right_flattened_keys = right_flattened_tables.flattened_columns();
-  auto left_flattened_keys  = left_flattened_tables.flattened_columns();
-
-  // Create hash table.
-  semi_map_type hash_table{compute_hash_table_size(right_num_rows),
-                           cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
-                           cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
-                           hash_table_allocator_type{default_allocator<char>{}, stream},
-                           stream.value()};
-
-  // Create hash table containing all keys found in right table
-  auto right_rows_d      = table_device_view::create(right_flattened_keys, stream);
-  auto const right_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(right_flattened_keys)};
-  row_hash const hash_build{right_nulls, *right_rows_d};
-  row_equality equality_build{right_nulls, *right_rows_d, *right_rows_d, compare_nulls};
-  make_pair_fn_tmp pair_func_build{};
-
-  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
-
-  // skip rows that are null here.
-  if ((compare_nulls == null_equality::EQUAL) or (not nullable(right_keys))) {
-    hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
-  } else {
-    thrust::counting_iterator<size_type> stencil(0);
-    auto const [row_bitmask, _] = cudf::detail::bitmask_and(right_flattened_keys, stream);
-    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
-
-    // insert valid rows
-    hash_table.insert_if(
-      iter, iter + right_num_rows, stencil, pred, hash_build, equality_build, stream.value());
-  }
-
-  // Now we have a hash table, we need to iterate over the rows of the left table
-  // and check to see if they are contained in the hash table
-  auto left_rows_d      = table_device_view::create(left_flattened_keys, stream);
-  auto const left_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(left_flattened_keys)};
-  row_hash hash_probe{left_nulls, *left_rows_d};
-  // Note: This equality comparator violates symmetry of equality and is
-  // therefore relying on the implementation detail of the order in which its
-  // operator is invoked. If cuco makes no promises about the order of
-  // invocation this seems a bit unsafe.
-  row_equality equality_probe{left_nulls, *right_rows_d, *left_rows_d, compare_nulls};
-
-  // For semi join we want contains to be true, for anti join we want contains to be false
-  bool const join_type_boolean = (kind == join_kind::LEFT_SEMI_JOIN);
-
-  auto hash_table_view = hash_table.get_device_view();
-
-
-  rmm::device_uvector<bool> flagged(left_num_rows, stream, mr);
-  auto flagged_d = flagged.data();
-
-  auto counting_iter = thrust::counting_iterator<size_type>(0);
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    counting_iter,
-    counting_iter + left_num_rows,
-    [flagged_d, hash_table_view, join_type_boolean, hash_probe, equality_probe] __device__(
-      const size_type idx) {
-      flagged_d[idx] =
-        hash_table_view.contains(idx, hash_probe, equality_probe) == join_type_boolean;
-    });
-
-#else
-  auto flagged   = semi_join_contains(left_keys,
-                                    right_keys,
-                                    compare_nulls,
-                                    nan_equality::UNEQUAL,
-                                    stream,
-                                    rmm::mr::get_current_device_resource());
-  auto flagged_d = flagged.data();
-  if (kind == join_kind::LEFT_ANTI_JOIN) {
-    thrust::transform(rmm::exec_policy(stream),
-                      flagged.begin(),
-                      flagged.end(),
-                      flagged.begin(),
-                      thrust::logical_not{});
-  }
-
-  auto counting_iter = thrust::counting_iterator<size_type>(0);
-#endif
-
-  // gather_map_end will be the end of valid data in gather_map
   auto gather_map =
     std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
-  auto gather_map_end =
-    thrust::copy_if(rmm::exec_policy(stream),
-                    counting_iter,
-                    counting_iter + left_num_rows,
-                    gather_map->begin(),
-                    [flagged_d] __device__(size_type const idx) { return flagged_d[idx]; });
 
-  auto join_size = thrust::distance(gather_map->begin(), gather_map_end);
-  gather_map->resize(join_size, stream);
+  // gather_map_end will be the end of valid data in gather_map
+  auto gather_map_end = thrust::copy_if(
+    rmm::exec_policy(stream),
+    thrust::counting_iterator<size_type>(0),
+    thrust::counting_iterator<size_type>(left_num_rows),
+    gather_map->begin(),
+    [d_flagged = flagged.begin()] __device__(size_type const idx) { return d_flagged[idx]; });
+
+  gather_map->resize(thrust::distance(gather_map->begin(), gather_map_end), stream);
   return gather_map;
 }
 
