@@ -575,7 +575,7 @@ class ParquetFieldStringList {
 /**
  * @brief Functor to read a binary from CompactProtocolReader
  *
- * @return True if field type mismatches or if size of string exceeds bounds
+ * @return True if field type mismatches or if size of binary exceeds bounds
  * of the CompactProtocolReader
  */
 class ParquetFieldBinary {
@@ -606,7 +606,7 @@ class ParquetFieldBinary {
  * @brief Functor to read a vector of binaries from CompactProtocolReader
  *
  * @return True if field types mismatch or if the process of reading a
- * string fails
+ * binary fails
  */
 class ParquetFieldBinaryList {
   int field_val;
