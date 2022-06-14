@@ -106,7 +106,8 @@ repos:
                 entry: ./ci/checks/doxygen.sh
                 files: ^cpp/include/
                 types_or: [file]
-                language: system
+                language: conda
+                additional_dependencies: ['-c', 'conda-forge', 'doxygen=1.8.20']
                 pass_filenames: false
 
 default_language_version:
