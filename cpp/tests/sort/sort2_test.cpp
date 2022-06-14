@@ -230,7 +230,7 @@ TEST_F(NewRowOpTest, List)
   };
 
   auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 6, 5, 3, 0, 1, 2, 4, 7};
-  auto result = cudf::detail::experimental::sorted_order2(cudf::table_view({col}));
+  auto result = cudf::sorted_order(cudf::table_view({col}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
 }
 

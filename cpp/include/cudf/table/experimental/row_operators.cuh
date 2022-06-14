@@ -480,8 +480,16 @@ class device_row_comparator {
       null_order const null_precedence =
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
-      auto element_comp = element_comparator{
-        _check_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth, _comparator};
+      auto element_comp = element_comparator{_check_nulls,
+                                             _lhs.column(i),
+                                             _rhs.column(i),
+                                             null_precedence,
+                                             depth,
+                                             _comparator,
+                                             (*_dremel_offsets)[i],
+                                             (*_rep_levels)[i],
+                                             (*_def_levels)[i],
+                                             (*_max_def_levels)[i]};
 
       weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
@@ -691,6 +699,7 @@ struct preprocessed_table {
     return _depths.size() ? std::optional<device_span<int const>>(_depths) : std::nullopt;
   }
 
+  // TODO: span of spans?
   [[nodiscard]] std::optional<device_span<size_type* const>> dremel_offsets() const
   {
     return _dremel_offsets.size() ? std::optional<device_span<size_type* const>>(_dremel_offsets)

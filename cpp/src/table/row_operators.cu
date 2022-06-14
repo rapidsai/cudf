@@ -677,10 +677,13 @@ using column_checker_fn_t = std::function<void(column_view const&)>;
  */
 void check_lex_compatibility(table_view const& input)
 {
-  // Basically check if there's any LIST hiding anywhere in the table
+  // Basically check if there's any LIST of STRUCT or STRUCT of LIST hiding anywhere in the table
   column_checker_fn_t check_column = [&](column_view const& c) {
-    CUDF_EXPECTS(c.type().id() != type_id::LIST,
-                 "Cannot lexicographic compare a table with a LIST column");
+    if (c.type().id() == type_id::LIST) {
+      CUDF_EXPECTS(c.child(lists_column_view::child_column_index).type().id() != type_id::STRUCT,
+                   "Cannot lexicographic compare a table with a LIST of STRUCT column");
+    }
+    // TODO: more copying of logic from row_operators2.cu
     if (not is_nested(c.type())) {
       CUDF_EXPECTS(is_relationally_comparable(c.type()),
                    "Cannot lexicographic compare a table with a column of type " +
