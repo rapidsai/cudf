@@ -64,8 +64,7 @@ class union_member {
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_same_v<T, __int128_t>, type<T, U>> get(
-    U& val)
+  __device__ static std::enable_if_t<std::is_same_v<T, __int128_t>, type<T, U>> get(U& val)
   {
     return val.d128_val;
   }

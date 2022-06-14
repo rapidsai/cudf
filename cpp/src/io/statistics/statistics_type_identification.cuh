@@ -175,10 +175,10 @@ class aggregation_type {
   using integral_aggregation_type =
     typename std::conditional_t<std::is_signed_v<T>, int64_t, uint64_t>;
 
-  using arithmetic_aggregation_type =
-    typename std::conditional_t<std::is_integral_v<T>,
-                                std::conditional_t<std::is_same_v<T, __int128_t>, __int128_t, integral_aggregation_type>,
-                                double>;
+  using arithmetic_aggregation_type = typename std::conditional_t<
+    std::is_integral_v<T>,
+    std::conditional_t<std::is_same_v<T, __int128_t>, __int128_t, integral_aggregation_type>,
+    double>;
 
   using non_arithmetic_aggregation_type =
     typename std::conditional_t<cudf::is_fixed_point<T>() or cudf::is_duration<T>() or

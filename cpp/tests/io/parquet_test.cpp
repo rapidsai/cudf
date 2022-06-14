@@ -264,7 +264,8 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 // Declare typed test cases
 using SupportedTypes = cudf::test::NumericTypes;
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
-using ComparableAndFixedTypes = cudf::test::Concat<cudf::test::ComparableTypes, cudf::test::FixedPointTypes>;
+using ComparableAndFixedTypes =
+  cudf::test::Concat<cudf::test::ComparableTypes, cudf::test::FixedPointTypes>;
 TYPED_TEST_SUITE(ParquetWriterComparableTypeTest, ComparableAndFixedTypes);
 TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, cudf::test::ChronoTypes);
 using SupportedTimestampTypes =
@@ -3492,26 +3493,23 @@ std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper
 // ----- fixed point types
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>>
-ascending()
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
 {
-  auto elements =
-    cudf::detail::make_counting_transform_iterator(-10000, [](auto i) { return T(i, numeric::scale_type{0}); });
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    -10000, [](auto i) { return T(i, numeric::scale_type{0}); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>>
-descending()
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
 {
-  auto elements =
-    cudf::detail::make_counting_transform_iterator(-10000, [](auto i) { return T(-i, numeric::scale_type{0}); });
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    -10000, [](auto i) { return T(-i, numeric::scale_type{0}); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>>
-unordered()
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
     -10000, [](auto i) { return T(i % 2 ? i : -i, numeric::scale_type{0}); });
@@ -3689,13 +3687,14 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
     const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
     cudf_io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
 #if 0
-    printf("%d %d\n", fmd.schema[i+1].type, fmd.schema[i+1].converted_type);
+    printf("%d %d\n", fmd.schema[i + 1].type, fmd.schema[i + 1].converted_type);
     printHex(ci_buf->data(), ci_buf->size());
+    // if (std::is_same_v<T, numeric::decimal128>) ((int*)0)[12] = 10; // segfault
 #endif
     EXPECT_TRUE(cp.read(&ci));
 
     EXPECT_EQ(ci.boundary_order, expected_orders[i]);
-    //if (ci.boundary_order != expected_orders[i]) ((char*)0)[20]=0xff;
+    // if (ci.boundary_order != expected_orders[i]) ((char*)0)[20]=0xff;
   }
 }
 

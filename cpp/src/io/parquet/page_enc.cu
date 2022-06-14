@@ -1299,19 +1299,19 @@ class header_encoder {
 };
 
 // byteswap 128 bit integer into char array in network byte order
-__device__ void swap128(__int128_t v, unsigned char * d)
+__device__ void swap128(__int128_t v, unsigned char* d)
 {
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
   thrust::copy(thrust::seq,
-                thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
-                thrust::make_reverse_iterator(v_char_ptr),
-                d);
+               thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
+               thrust::make_reverse_iterator(v_char_ptr),
+               d);
 }
 
 __device__ void get_min_max(const statistics_chunk* s,
                             uint8_t dtype,
                             float* fp_scratch,
-                            unsigned char * d128_scratch,
+                            unsigned char* d128_scratch,
                             const void** vmin,
                             const void** vmax,
                             uint32_t* lmin,
@@ -1349,8 +1349,8 @@ __device__ void get_min_max(const statistics_chunk* s,
       } else if (dtype == dtype_decimal128) {
         swap128(s->min_value.d128_val, &d128_scratch[0]);
         swap128(s->max_value.d128_val, &d128_scratch[16]);
-        *vmin         = &d128_scratch[0];
-        *vmax         = &d128_scratch[16];
+        *vmin = &d128_scratch[0];
+        *vmax = &d128_scratch[16];
       } else {
         *vmin = &s->min_value;
         *vmax = &s->max_value;
@@ -1366,7 +1366,7 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
                                      const statistics_chunk* s,
                                      uint8_t dtype,
                                      float* fp_scratch,
-                                     unsigned char * d128_scratch)
+                                     unsigned char* d128_scratch)
 {
   uint8_t* end;
   header_encoder encoder(start);
@@ -1409,8 +1409,8 @@ __global__ void __launch_bounds__(128)
 
     if (chunk_stats && &pages[blockIdx.x] == ck_g.pages) {  // Is this the first page in a chunk?
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
-      hdr_end =
-        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, fp_scratch, d128_scratch);
+      hdr_end   = EncodeStatistics(
+        hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, fp_scratch, d128_scratch);
       page_g.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
     }
     uncompressed_page_size = page_g.max_data_size;
@@ -1635,16 +1635,28 @@ __global__ void __launch_bounds__(1)
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_min_max(
-      &column_stats[pageidx + page], col_g.stats_dtype, fp_scratch, d128_scratch, &vmin, &vmax, &lmin, &lmax);
+    get_min_max(&column_stats[pageidx + page],
+                col_g.stats_dtype,
+                fp_scratch,
+                d128_scratch,
+                &vmin,
+                &vmax,
+                &lmin,
+                &lmax);
     encoder.put_binary(vmin, lmin);
   }
   encoder.field_list_end(2);
   // max_values
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_min_max(
-      &column_stats[pageidx + page], col_g.stats_dtype, fp_scratch, d128_scratch, &vmin, &vmax, &lmin, &lmax);
+    get_min_max(&column_stats[pageidx + page],
+                col_g.stats_dtype,
+                fp_scratch,
+                d128_scratch,
+                &vmin,
+                &vmax,
+                &lmin,
+                &lmax);
     encoder.put_binary(vmax, lmax);
   }
   encoder.field_list_end(3);
