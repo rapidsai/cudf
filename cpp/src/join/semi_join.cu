@@ -202,7 +202,9 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     return result;
   }
 
-  auto const left_num_rows  = left_keys.num_rows();
+  auto const left_num_rows = left_keys.num_rows();
+
+#if 0
   auto const right_num_rows = right_keys.num_rows();
 
   // flatten structs for the right and left and use that for the hash table
@@ -259,8 +261,6 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
 
   auto hash_table_view = hash_table.get_device_view();
 
-  auto gather_map =
-    std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
 
   rmm::device_uvector<bool> flagged(left_num_rows, stream, mr);
   auto flagged_d = flagged.data();
@@ -276,7 +276,20 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
         hash_table_view.contains(idx, hash_probe, equality_probe) == join_type_boolean;
     });
 
+#else
+  auto const flagged = semi_join_contains(left_keys,
+                                          right_keys,
+                                          compare_nulls,
+                                          nan_equality::UNEQUAL,
+                                          stream,
+                                          rmm::mr::get_current_device_resource());
+  auto flagged_d     = flagged.data();
+  auto counting_iter = thrust::counting_iterator<size_type>(0);
+#endif
+
   // gather_map_end will be the end of valid data in gather_map
+  auto gather_map =
+    std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
   auto gather_map_end =
     thrust::copy_if(rmm::exec_policy(stream),
                     counting_iter,
