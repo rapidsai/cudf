@@ -182,6 +182,7 @@ struct hash_join {
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr) const;
 };
+
 /**
  * @copydoc cudf::semi_join_contains(cudf::table_view const&,
  *                                   cudf::table_view const&,
