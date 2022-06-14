@@ -3251,13 +3251,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Given a column of type List<Struct<X, Y>> and a key of type X, return a column of type Y,
+   * Given a column of type List<Struct<X, Y>> and a key column of type X, return a column of type Y,
    * where each row in the output column is the Y value corresponding to the X key.
    * If the key is not found, the corresponding output value is null.
    * @param keys the column view with keys to lookup in the column
    * @return a column of values or nulls based on the lookup result
    */
-  public final ColumnVector getMapValueForKeys(ColumnView keys) {
+  public final ColumnVector getMapValue(ColumnView keys) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     assert keys != null : "Lookup key may not be null";
     return new ColumnVector(mapLookupForKeys(getNativeView(), keys.getNativeView()));

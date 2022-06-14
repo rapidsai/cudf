@@ -5856,9 +5856,9 @@ public class ColumnVectorTest extends CudfTestBase {
     HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.INT32),
         new HostColumnVector.BasicType(true, DType.INT32)));
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
-         ColumnVector lookupKey = ColumnVector.fromInts(1, 2, 5);
-         ColumnVector res = cv.getMapValueForKeys(lookupKey);
-         ColumnVector expected = ColumnVector.fromBoxedInts(2, 3, 4)) {
+         ColumnVector lookupKey = ColumnVector.fromInts(1, 6, 5);
+         ColumnVector res = cv.getMapValue(lookupKey);
+         ColumnVector expected = ColumnVector.fromBoxedInts(2, null, 4)) {
       assertColumnsAreEqual(expected, res);
     }
   }
