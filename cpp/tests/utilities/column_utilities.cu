@@ -1038,13 +1038,40 @@ struct column_view_printer {
     if (col.is_empty()) return;
     auto h_data = cudf::test::to_host<std::string>(col);
 
+    // explicitly replace '\r' and '\n' characters with "\r" and "\n" strings respectively.
+    auto cleaned = [&](std::string const& in) {
+      auto is_newline = [](char c) { return c == '\r' || c == '\n'; };
+
+      auto esc_iter = cudf::detail::make_counting_transform_iterator(
+        0, [&](size_t i) -> size_t { return is_newline(in[i]) ? 2 : 1; });
+
+      auto const cleaned_size = std::reduce(esc_iter, esc_iter + in.size(), size_t{0});
+      auto replace_newlines   = [&]() {
+        std::string out;
+        out.resize(cleaned_size);
+        size_t out_pos = 0;
+        auto iter      = thrust::make_counting_iterator(0);
+        std::for_each(iter, iter + in.size(), [&](size_t i) {
+          char const c = in[i];
+          if (is_newline(c)) {
+            out[out_pos++] = '\\';
+            out[out_pos++] = c == '\r' ? 'r' : 'n';
+          } else {
+            out[out_pos++] = c;
+          }
+        });
+        return out;
+      };
+      return cleaned_size == in.size() ? in : replace_newlines();
+    };
+
     out.resize(col.size());
     std::transform(thrust::make_counting_iterator(size_type{0}),
                    thrust::make_counting_iterator(col.size()),
                    out.begin(),
-                   [&h_data](auto idx) {
+                   [&](auto idx) {
                      return h_data.second.empty() || bit_is_set(h_data.second.data(), idx)
-                              ? h_data.first[idx]
+                              ? cleaned(h_data.first[idx])
                               : std::string("NULL");
                    });
   }
