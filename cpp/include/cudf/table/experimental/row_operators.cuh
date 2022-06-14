@@ -71,6 +71,21 @@ struct dispatch_void_if_nested {
   using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
 };
 
+inline size_type __device__ row_to_value_idx(size_type idx, column_device_view col)
+{
+  while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+    if (col.type().id() == type_id::STRUCT) {
+      idx += col.offset();
+      col = col.child(0);
+    } else {
+      auto offset_col = col.child(lists_column_view::offsets_column_index);
+      idx             = offset_col.element<size_type>(idx + col.offset());
+      col             = col.child(lists_column_view::child_column_index);
+    }
+  }
+  return idx;
+}
+
 namespace row {
 
 enum class lhs_index_type : size_type {};
@@ -246,19 +261,28 @@ class device_row_comparator {
    * `null_order::BEFORE` for all columns.
    * @param comparator Physical element relational comparison functor.
    */
-  device_row_comparator(Nullate check_nulls,
-                        table_device_view lhs,
-                        table_device_view rhs,
-                        std::optional<device_span<int const>> depth                  = std::nullopt,
-                        std::optional<device_span<order const>> column_order         = std::nullopt,
-                        std::optional<device_span<null_order const>> null_precedence = std::nullopt,
-                        PhysicalElementComparator comparator                         = {}) noexcept
+  device_row_comparator(
+    Nullate check_nulls,
+    table_device_view lhs,
+    table_device_view rhs,
+    std::optional<device_span<int const>> depth                  = std::nullopt,
+    std::optional<device_span<order const>> column_order         = std::nullopt,
+    std::optional<device_span<null_order const>> null_precedence = std::nullopt,
+    PhysicalElementComparator comparator                         = {},
+    std::optional<device_span<size_type* const>> dremel_offsets  = std::nullopt,
+    std::optional<device_span<uint8_t* const>> rep_levels        = std::nullopt,
+    std::optional<device_span<uint8_t* const>> def_levels        = std::nullopt,
+    std::optional<device_span<uint8_t const>> max_def_levels     = std::nullopt) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _check_nulls{check_nulls},
       _depth{depth},
       _column_order{column_order},
       _null_precedence{null_precedence},
+      _dremel_offsets{dremel_offsets},
+      _rep_levels{rep_levels},
+      _def_levels{def_levels},
+      _max_def_levels{max_def_levels},
       _comparator{comparator}
   {
   }
@@ -287,12 +311,20 @@ class device_row_comparator {
                                   column_device_view rhs,
                                   null_order null_precedence           = null_order::BEFORE,
                                   int depth                            = 0,
-                                  PhysicalElementComparator comparator = {})
+                                  PhysicalElementComparator comparator = {},
+                                  size_type* dremel_offsets            = nullptr,
+                                  uint8_t* rep_level                   = nullptr,
+                                  uint8_t* def_level                   = nullptr,
+                                  uint8_t max_def_level                = 0)
       : _lhs{lhs},
         _rhs{rhs},
         _check_nulls{check_nulls},
         _null_precedence{null_precedence},
         _depth{depth},
+        dremel_offsets{dremel_offsets},
+        rep_level{rep_level},
+        def_level{def_level},
+        max_def_level{max_def_level},
         _comparator{comparator}
     {
     }
@@ -366,12 +398,61 @@ class device_row_comparator {
         rhs_element_index);
     }
 
+    template <typename Element,
+              CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
+                             std::is_same_v<Element, cudf::list_view>)>
+    __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
+                                                              size_type rhs_element_index)
+    {
+      auto l_start            = dremel_offsets[lhs_element_index];
+      auto l_end              = dremel_offsets[lhs_element_index + 1];
+      auto r_start            = dremel_offsets[rhs_element_index];
+      auto r_end              = dremel_offsets[rhs_element_index + 1];
+      auto lc_start           = row_to_value_idx(lhs_element_index, _lhs);
+      auto rc_start           = row_to_value_idx(rhs_element_index, _rhs);
+      column_device_view lcol = _lhs;
+      column_device_view rcol = _rhs;
+      while (lcol.type().id() == type_id::LIST) {
+        lcol = lcol.child(lists_column_view::child_column_index);
+        rcol = rcol.child(lists_column_view::child_column_index);
+      }
+      weak_ordering state{weak_ordering::EQUIVALENT};
+      for (int i = l_start, j = r_start, m = lc_start, n = rc_start; i < l_end and j < r_end;
+           ++i, ++j) {
+        if (def_level[i] != def_level[j]) {
+          state = (def_level[i] < def_level[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
+          return cuda::std::pair(state, _depth);
+        }
+        if (rep_level[i] != rep_level[j]) {
+          state = (rep_level[i] < rep_level[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
+          return cuda::std::pair(state, _depth);
+        }
+        if (def_level[i] == max_def_level) {
+          auto comparator     = element_comparator{_check_nulls, lcol, rcol, _null_precedence};
+          int last_null_depth = _depth;
+          cuda::std::tie(state, last_null_depth) =
+            cudf::type_dispatcher<dispatch_void_if_nested>(lcol.type(), comparator, m, n);
+          if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
+          ++m;
+          ++n;
+        }
+      }
+      state = (l_end - l_start < r_end - r_start)   ? weak_ordering::LESS
+              : (l_end - l_start > r_end - r_start) ? weak_ordering::GREATER
+                                                    : weak_ordering::EQUIVALENT;
+      return cuda::std::pair(state, _depth);
+    }
+
    private:
     column_device_view const _lhs;
     column_device_view const _rhs;
     Nullate const _check_nulls;
     null_order const _null_precedence;
     int const _depth;
+    size_type* dremel_offsets;
+    uint8_t* rep_level;
+    uint8_t* def_level;
+    uint8_t max_def_level{0};
     PhysicalElementComparator const _comparator;
   };
 
@@ -399,13 +480,12 @@ class device_row_comparator {
       null_order const null_precedence =
         _null_precedence.has_value() ? (*_null_precedence)[i] : null_order::BEFORE;
 
+      auto element_comp = element_comparator{
+        _check_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth, _comparator};
+
       weak_ordering state;
-      cuda::std::tie(state, last_null_depth) = cudf::type_dispatcher(
-        _lhs.column(i).type(),
-        element_comparator{
-          _check_nulls, _lhs.column(i), _rhs.column(i), null_precedence, depth, _comparator},
-        lhs_index,
-        rhs_index);
+      cuda::std::tie(state, last_null_depth) =
+        cudf::type_dispatcher(_lhs.column(i).type(), element_comp, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 
@@ -424,6 +504,12 @@ class device_row_comparator {
   std::optional<device_span<order const>> const _column_order;
   std::optional<device_span<null_order const>> const _null_precedence;
   PhysicalElementComparator const _comparator;
+
+  // List related members
+  std::optional<device_span<size_type* const>> _dremel_offsets;
+  std::optional<device_span<uint8_t* const>> _rep_levels;
+  std::optional<device_span<uint8_t* const>> _def_levels;
+  std::optional<device_span<uint8_t const>> _max_def_levels;
 };  // class device_row_comparator
 
 /**
@@ -494,6 +580,19 @@ struct less_equivalent_comparator
 };
 
 /**
+ * @brief Dremel data that describes one nested type column
+ *
+ * @see get_dremel_data()
+ */
+struct dremel_data {
+  rmm::device_uvector<size_type> dremel_offsets;
+  rmm::device_uvector<uint8_t> rep_level;
+  rmm::device_uvector<uint8_t> def_level;
+
+  size_type leaf_data_size;
+};
+
+/**
  * @brief Preprocessed table for use with lexicographical comparison
  *
  */
@@ -530,11 +629,20 @@ struct preprocessed_table {
   preprocessed_table(table_device_view_owner&& table,
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
-                     rmm::device_uvector<size_type>&& depths)
+                     rmm::device_uvector<size_type>&& depths,
+                     std::vector<dremel_data>&& dremel_data,
+                     rmm::device_uvector<size_type*>&& dremel_offsets,
+                     rmm::device_uvector<uint8_t*>&& rep_levels,
+                     rmm::device_uvector<uint8_t*>&& def_levels,
+                     rmm::device_uvector<uint8_t>&& max_def_levels)
     : _t(std::move(table)),
       _column_order(std::move(column_order)),
       _null_precedence(std::move(null_precedence)),
-      _depths(std::move(depths)){};
+      _depths(std::move(depths)),
+      _dremel_offsets(std::move(dremel_offsets)),
+      _rep_levels(std::move(rep_levels)),
+      _def_levels(std::move(def_levels)),
+      _max_def_levels(std::move(max_def_levels)){};
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -583,11 +691,42 @@ struct preprocessed_table {
     return _depths.size() ? std::optional<device_span<int const>>(_depths) : std::nullopt;
   }
 
+  [[nodiscard]] std::optional<device_span<size_type* const>> dremel_offsets() const
+  {
+    return _dremel_offsets.size() ? std::optional<device_span<size_type* const>>(_dremel_offsets)
+                                  : std::nullopt;
+  }
+
+  [[nodiscard]] std::optional<device_span<uint8_t* const>> rep_levels() const
+  {
+    return _rep_levels.size() ? std::optional<device_span<uint8_t* const>>(_rep_levels)
+                              : std::nullopt;
+  }
+
+  [[nodiscard]] std::optional<device_span<uint8_t* const>> def_levels() const
+  {
+    return _def_levels.size() ? std::optional<device_span<uint8_t* const>>(_def_levels)
+                              : std::nullopt;
+  }
+
+  [[nodiscard]] std::optional<device_span<uint8_t const>> max_def_levels() const
+  {
+    return _max_def_levels.size() ? std::optional<device_span<uint8_t const>>(_max_def_levels)
+                                  : std::nullopt;
+  }
+
  private:
   table_device_view_owner const _t;
   rmm::device_uvector<order> const _column_order;
   rmm::device_uvector<null_order> const _null_precedence;
   rmm::device_uvector<size_type> const _depths;
+
+  // List related pre-computation
+  std::vector<dremel_data> _dremel_data;
+  rmm::device_uvector<size_type*> _dremel_offsets;
+  rmm::device_uvector<uint8_t*> _rep_levels;
+  rmm::device_uvector<uint8_t*> _def_levels;
+  rmm::device_uvector<uint8_t> _max_def_levels;
 };
 
 /**
@@ -657,8 +796,17 @@ class self_comparator {
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less(Nullate nullate = {}, PhysicalElementComparator comparator = {}) const noexcept
   {
-    return less_comparator{device_row_comparator{
-      nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence(), comparator}};
+    return less_comparator{device_row_comparator{nullate,
+                                                 *d_t,
+                                                 *d_t,
+                                                 d_t->depths(),
+                                                 d_t->column_order(),
+                                                 d_t->null_precedence(),
+                                                 comparator,
+                                                 d_t->dremel_offsets(),
+                                                 d_t->rep_levels(),
+                                                 d_t->def_levels(),
+                                                 d_t->max_def_levels()}};
   }
 
   /// @copydoc less()
