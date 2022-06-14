@@ -1301,22 +1301,11 @@ class header_encoder {
 // byteswap 128 bit integer into char array in network byte order
 __device__ void swap128(__int128_t v, unsigned char * d)
 {
-  d[0] = (v >> 120) & 0xff;
-  d[1] = (v >> 112) & 0xff;
-  d[2] = (v >> 104) & 0xff;
-  d[3] = (v >> 96) & 0xff;
-  d[4] = (v >> 88) & 0xff;
-  d[5] = (v >> 80) & 0xff;
-  d[6] = (v >> 72) & 0xff;
-  d[7] = (v >> 64) & 0xff;
-  d[8] = (v >> 56) & 0xff;
-  d[9] = (v >> 48) & 0xff;
-  d[10] = (v >> 40) & 0xff;
-  d[11] = (v >> 32) & 0xff;
-  d[12] = (v >> 24) & 0xff;
-  d[13] = (v >> 16) & 0xff;
-  d[14] = (v >> 8) & 0xff;
-  d[15] = (v >> 0) & 0xff;
+  auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
+  thrust::copy(thrust::seq,
+                thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
+                thrust::make_reverse_iterator(v_char_ptr),
+                d);
 }
 
 __device__ void get_min_max(const statistics_chunk* s,
