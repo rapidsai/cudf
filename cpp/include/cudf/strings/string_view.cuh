@@ -335,26 +335,21 @@ __device__ inline size_type string_view::find(const char* str,
                                               size_type pos,
                                               size_type count) const
 {
-  const char* sptr = data();
-  if (!str || !bytes) return -1;
-  size_type nchars = length();
+  if (!str || pos < 0) return -1;
+  auto const nchars = length();
   if (count < 0) count = nchars;
-  size_type end = pos + count;
-  if (end < 0 || end > nchars) end = nchars;
-  size_type spos = byte_offset(pos);
-  size_type epos = byte_offset(end);
+  auto const spos = byte_offset(pos);
+  auto const epos = byte_offset(std::min(pos + count, nchars));
 
-  size_type len2 = bytes;
-  size_type len1 = (epos - spos) - len2 + 1;
+  auto const find_length = (epos - spos) - bytes + 1;
 
-  const char* ptr1 = sptr + spos;
-  const char* ptr2 = str;
-  for (size_type idx = 0; idx < len1; ++idx) {
+  auto ptr = data() + spos;
+  for (size_type idx = 0; idx < find_length; ++idx) {
     bool match = true;
-    for (size_type jdx = 0; match && (jdx < len2); ++jdx)
-      match = (ptr1[jdx] == ptr2[jdx]);
+    for (size_type jdx = 0; match && (jdx < bytes); ++jdx)
+      match = (ptr[jdx] == str[jdx]);
     if (match) return character_offset(idx + spos);
-    ptr1++;
+    ptr++;
   }
   return -1;
 }
@@ -378,25 +373,21 @@ __device__ inline size_type string_view::rfind(const char* str,
                                                size_type pos,
                                                size_type count) const
 {
-  const char* sptr = data();
-  if (!str || !bytes) return -1;
-  size_type nchars = length();
-  size_type end    = pos + count;
-  if (end < 0 || end > nchars) end = nchars;
-  size_type spos = byte_offset(pos);
-  size_type epos = byte_offset(end);
+  if (!str || pos < 0) return -1;
+  auto const nchars = length();
+  if (count < 0) count = nchars;
+  auto const spos = byte_offset(pos);
+  auto const epos = byte_offset(std::min(pos + count, nchars));
 
-  size_type len2 = bytes;
-  size_type len1 = (epos - spos) - len2 + 1;
+  auto const find_length = (epos - spos) - bytes + 1;
 
-  const char* ptr1 = sptr + epos - len2;
-  const char* ptr2 = str;
-  for (int idx = 0; idx < len1; ++idx) {
+  auto ptr = data() + epos - bytes;
+  for (size_type idx = 0; idx < find_length; ++idx) {
     bool match = true;
-    for (size_type jdx = 0; match && (jdx < len2); ++jdx)
-      match = (ptr1[jdx] == ptr2[jdx]);
-    if (match) return character_offset(epos - len2 - idx);
-    ptr1--;  // go backwards
+    for (size_type jdx = 0; match && (jdx < bytes); ++jdx)
+      match = (ptr[jdx] == str[jdx]);
+    if (match) return character_offset(epos - bytes - idx);
+    ptr--;  // go backwards
   }
   return -1;
 }
