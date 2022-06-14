@@ -1299,13 +1299,13 @@ class header_encoder {
 };
 
 // byteswap 128 bit integer into char array in network byte order
-__device__ void swap128(__int128_t v, unsigned char* d)
+static __device__ void swap128(__int128_t v, unsigned char* dst)
 {
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
   thrust::copy(thrust::seq,
                thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
                thrust::make_reverse_iterator(v_char_ptr),
-               d);
+               dst);
 }
 
 __device__ void get_min_max(const statistics_chunk* s,
@@ -1470,89 +1470,6 @@ __global__ void __launch_bounds__(128)
   if (t == 0) pages[blockIdx.x] = page_g;
 }
 
-template <typename T>
-__device__ int32_t compare(T& v1, T& v2)
-{
-  if (v1 < v2)
-    return -1;
-  else if (v1 == v2)
-    return 0;
-  else
-    return 1;
-}
-
-__device__ int32_t compareValues(int8_t ptype,
-                                 int8_t ctype,
-                                 const statistics_val& v1,
-                                 const statistics_val& v2)
-{
-  switch (ptype) {
-    case Type::BOOLEAN: return compare(v1.u_val, v2.u_val);
-    case Type::INT32:
-    case Type::INT64:
-      switch (ctype) {
-        case ConvertedType::UINT_8:
-        case ConvertedType::UINT_16:
-        case ConvertedType::UINT_32:
-        case ConvertedType::UINT_64: return compare(v1.u_val, v2.u_val);
-        default:  // assume everything else is signed
-          return compare(v1.i_val, v2.i_val);
-      }
-    case Type::FLOAT:
-    case Type::DOUBLE: return compare(v1.fp_val, v2.fp_val);
-    case Type::FIXED_LEN_BYTE_ARRAY: {
-      if (ctype == ConvertedType::DECIMAL) return compare(v1.d128_val, v2.d128_val);
-      // FIXME: this type should only be used for decimal, so need to throw here or something
-      return 1; // same as the punt below...need to fix this
-    }
-    case Type::BYTE_ARRAY: {
-      string_view s1 = (string_view)v1.str_val;
-      string_view s2 = (string_view)v2.str_val;
-      return s1.compare(s2);
-    }
-    default: return 1;  // FIXME: punt for now. need to just say unordered for these
-  }
-}
-
-__device__ bool isAscending(const statistics_chunk* s,
-                            int8_t ptype,
-                            int8_t ctype,
-                            uint32_t num_pages)
-{
-  for (uint32_t i = 1; i < num_pages; i++) {
-    if (compareValues(ptype, ctype, s[i - 1].min_value, s[i].min_value) > 0 ||
-        compareValues(ptype, ctype, s[i - 1].max_value, s[i].max_value) > 0)
-      return false;
-  }
-  return true;
-}
-
-__device__ bool isDescending(const statistics_chunk* s,
-                             int8_t ptype,
-                             int8_t ctype,
-                             uint32_t num_pages)
-{
-  for (uint32_t i = 1; i < num_pages; i++) {
-    if (compareValues(ptype, ctype, s[i - 1].min_value, s[i].min_value) < 0 ||
-        compareValues(ptype, ctype, s[i - 1].max_value, s[i].max_value) < 0)
-      return false;
-  }
-  return true;
-}
-
-__device__ int32_t calculateBoundaryOrder(const statistics_chunk* s,
-                                          int8_t ptype,
-                                          int8_t ctype,
-                                          uint32_t num_pages)
-{
-  if (isAscending(s, ptype, ctype, num_pages))
-    return BoundaryOrder::ASCENDING;
-  else if (isDescending(s, ptype, ctype, num_pages))
-    return BoundaryOrder::DESCENDING;
-  else
-    return BoundaryOrder::UNORDERED;
-}
-
 // blockDim(1024, 1, 1)
 __global__ void __launch_bounds__(1024)
   gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<gpu::EncPage const> pages)
@@ -1600,6 +1517,106 @@ __global__ void __launch_bounds__(1024)
     chunks[blockIdx.x].compressed_size = (dst - dst_base);
     if (ck_g.use_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
   }
+}
+
+/**
+ * @brief Compares two values.
+ * @return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+ */
+template <typename T>
+__device__ int32_t compare(T& v1, T& v2)
+{
+  if (v1 < v2)
+    return -1;
+  else if (v1 == v2)
+    return 0;
+  else
+    return 1;
+}
+
+/**
+ * @brief Compares two statistics_val structs.
+ * @return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+ */
+static __device__ int32_t compareValues(int8_t ptype,
+                                        int8_t ctype,
+                                        const statistics_val& v1,
+                                        const statistics_val& v2)
+{
+  switch (ptype) {
+    case Type::BOOLEAN: return compare(v1.u_val, v2.u_val);
+    case Type::INT32:
+    case Type::INT64:
+      switch (ctype) {
+        case ConvertedType::UINT_8:
+        case ConvertedType::UINT_16:
+        case ConvertedType::UINT_32:
+        case ConvertedType::UINT_64: return compare(v1.u_val, v2.u_val);
+        default:  // assume everything else is signed
+          return compare(v1.i_val, v2.i_val);
+      }
+    case Type::FLOAT:
+    case Type::DOUBLE: return compare(v1.fp_val, v2.fp_val);
+    case Type::FIXED_LEN_BYTE_ARRAY: {
+      if (ctype == ConvertedType::DECIMAL) return compare(v1.d128_val, v2.d128_val);
+      // FIXME: this type should only be used for decimal, so need to throw here or something
+      return 1;  // same as the punt below...need to fix this
+    }
+    case Type::BYTE_ARRAY: {
+      string_view s1 = (string_view)v1.str_val;
+      string_view s2 = (string_view)v2.str_val;
+      return s1.compare(s2);
+    }
+    default: return 1;  // FIXME: punt for now. need to just say unordered for these
+  }
+}
+
+/**
+ * @brief Determine if a set of statstistics are in ascending order.
+ */
+static __device__ bool isAscending(const statistics_chunk* s,
+                                   int8_t ptype,
+                                   int8_t ctype,
+                                   uint32_t num_pages)
+{
+  for (uint32_t i = 1; i < num_pages; i++) {
+    if (compareValues(ptype, ctype, s[i - 1].min_value, s[i].min_value) > 0 ||
+        compareValues(ptype, ctype, s[i - 1].max_value, s[i].max_value) > 0)
+      return false;
+  }
+  return true;
+}
+
+/**
+ * @brief Determine if a set of statstistics are in descending order.
+ */
+static __device__ bool isDescending(const statistics_chunk* s,
+                                    int8_t ptype,
+                                    int8_t ctype,
+                                    uint32_t num_pages)
+{
+  for (uint32_t i = 1; i < num_pages; i++) {
+    if (compareValues(ptype, ctype, s[i - 1].min_value, s[i].min_value) < 0 ||
+        compareValues(ptype, ctype, s[i - 1].max_value, s[i].max_value) < 0)
+      return false;
+  }
+  return true;
+}
+
+/**
+ * @brief Determine the ordering of a set of statistics.
+ */
+static __device__ int32_t calculateBoundaryOrder(const statistics_chunk* s,
+                                                 int8_t ptype,
+                                                 int8_t ctype,
+                                                 uint32_t num_pages)
+{
+  if (isAscending(s, ptype, ctype, num_pages))
+    return BoundaryOrder::ASCENDING;
+  else if (isDescending(s, ptype, ctype, num_pages))
+    return BoundaryOrder::DESCENDING;
+  else
+    return BoundaryOrder::UNORDERED;
 }
 
 // blockDim(1, 1, 1)
