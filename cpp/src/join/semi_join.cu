@@ -39,6 +39,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cooperative_groups.h>
+
 namespace cudf {
 namespace detail {
 
@@ -84,6 +86,23 @@ struct pair_comparator_fn {
     auto const& [lhs_hash, lhs_index] = lhs_hash_and_index;
     auto const& [rhs_hash, rhs_index] = rhs_hash_and_index;
     return lhs_hash == rhs_hash ? d_eqcomp(lhs_index, rhs_index) : false;
+  }
+};
+
+template <typename MapView, typename KV, typename Comparator>
+struct check_contains {
+  MapView d_map;
+  KV const kv_pair;
+  bitmask_type const* bitmask;
+  Comparator const dcomp;
+
+  __device__ bool operator()(size_type i)
+  {
+    if (!cudf::bit_is_set(bitmask, i)) { return false; }
+
+    auto const tile = cooperative_groups::tiled_partition<DEFAULT_JOIN_CG_SIZE>(
+      cooperative_groups::this_thread_block());
+    return d_map.pair_contains(tile, kv_pair[i], dcomp);
   }
 };
 
@@ -181,11 +200,35 @@ rmm::device_uvector<bool> left_semi_join_contains(table_view const& left_keys,
     auto const do_check = [&](auto const& value_comp) {
       auto const d_eqcomp = comparator.equal_to(
         nullate::DYNAMIC{lhs_has_nulls || rhs_has_nulls}, compare_nulls, value_comp);
-      map.pair_contains(kv_it,
-                        kv_it + left_keys.num_rows(),
-                        contained.begin(),
-                        pair_comparator_fn<decltype(d_eqcomp)>{d_eqcomp},
-                        stream.value());
+
+      if (lhs_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+        // Gather all nullable columns at all levels from the left table.
+        auto const left_nullable_columns = [&] {
+          auto result = std::vector<column_view>{};
+          accumulate_nullable_nested_columns(left_keys, result);
+          return result;
+        }();
+
+        [[maybe_unused]] auto const [row_bitmask, tmp] =
+          cudf::detail::bitmask_and(table_view{left_nullable_columns}, stream);
+
+        auto d_map           = map.get_device_view();
+        auto const pair_comp = pair_comparator_fn<decltype(d_eqcomp)>{d_eqcomp};
+
+        thrust::transform(
+          rmm::exec_policy(stream),
+          thrust::make_counting_iterator(0),
+          thrust::make_counting_iterator(left_keys.num_rows()),
+          contained.begin(),
+          check_contains<decltype(d_map), decltype(kv_it), decltype(pair_comp)>{
+            d_map, kv_it, static_cast<bitmask_type const*>(row_bitmask.data()), pair_comp});
+      } else {
+        map.pair_contains(kv_it,
+                          kv_it + left_keys.num_rows(),
+                          contained.begin(),
+                          pair_comparator_fn<decltype(d_eqcomp)>{d_eqcomp},
+                          stream.value());
+      }
     };
 
     if (compare_nans == nan_equality::ALL_EQUAL) {
