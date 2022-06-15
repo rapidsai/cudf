@@ -162,6 +162,7 @@ auto batched_compress_temp_size(compression_type compression,
 #else
       CUDF_FAIL("Unsupported compression type");
 #endif
+    case compression_type::ZSTD: [[fallthrough]];
     default: CUDF_FAIL("Unsupported compression type");
   }
 
@@ -240,7 +241,7 @@ static void batched_compress_async(compression_type compression,
 #else
       CUDF_FAIL("Unsupported compression type");
 #endif
-    case compression_type::ZSTD:
+    case compression_type::ZSTD: [[fallthrough]];
     default: CUDF_FAIL("Unsupported compression type");
   }
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in compression");
