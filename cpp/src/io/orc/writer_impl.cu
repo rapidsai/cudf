@@ -98,7 +98,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
  *
  * The nvCOMP ZLIB compression is limited to blocks up to 64KiB.
  */
-size_t compression_block_size(orc::CompressionKind compression)
+constexpr size_t compression_block_size(orc::CompressionKind compression)
 {
   switch (compression) {
     case orc::CompressionKind::NONE: return 0;

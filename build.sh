@@ -249,7 +249,7 @@ if hasArg clean; then
     done
 
     # Cleaning up python artifacts
-    find ${REPODIR}/python/ | grep -E "(__pycache__|\.pyc|\.pyo|\.so$)"  | xargs rm -rf
+    find ${REPODIR}/python/ | grep -E "(__pycache__|\.pyc|\.pyo|\.so|\_skbuild$)"  | xargs rm -rf
 
 fi
 
