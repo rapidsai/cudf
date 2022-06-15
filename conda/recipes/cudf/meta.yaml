@@ -67,7 +67,9 @@ requirements:
 test:                                   # [linux64]
   requires:                             # [linux64]
     - cudatoolkit {{ cuda_version }}.*  # [linux64]
-    - {{ compiler('cuda') }} {{ cuda_version }}
+#    - {{ compiler('c') }}
+#    - {{ compiler('cxx') }}
+#    - {{ compiler('cuda') }} {{ cuda_version }}
   imports:                              # [linux64]
     - cudf                              # [linux64]
 
