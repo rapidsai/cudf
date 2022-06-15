@@ -46,6 +46,7 @@ Mark Adler    madler@alumni.caltech.edu
 #include "gpuinflate.hpp"
 #include "io_uncomp.hpp"
 
+#include <cudf/utilities/error.hpp>
 #include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -1224,40 +1225,44 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
   }
 }
 
+struct status_failed_op {
+  bool __device__ __forceinline__ operator()(decompress_status const& stat)
+  {
+    return stat.status != 0;
+  }
+};
+
 void decompress_check(device_span<decompress_status> stats,
                       bool* d_any_block_failure,
                       rmm::cuda_stream_view stream)
 {
   if (stats.empty()) { return; }  // Early exit for empty stats
 
-  auto block_failures = rmm::device_uvector<bool>(stats.size(), stream);
-  thrust::transform(rmm::exec_policy(stream),
-                    stats.begin(),
-                    stats.end(),
-                    block_failures.begin(),
-                    [] __device__(auto const& stat) { return stat.status != 0; });
+  auto status_failed_it = thrust::make_transform_iterator(stats.data(), status_failed_op{});
 
   // Allocate temporary storage
   size_t storage_bytes = 0;
-  cub::DeviceReduce::Reduce(nullptr,
-                            storage_bytes,
-                            block_failures.data(),
-                            d_any_block_failure,
-                            block_failures.size(),
-                            thrust::logical_or{},
-                            false,
-                            stream.value());
+  auto status          = cub::DeviceReduce::Reduce(nullptr,
+                                          storage_bytes,
+                                          status_failed_it,
+                                          d_any_block_failure,
+                                          stats.size(),
+                                          thrust::logical_or{},
+                                          false,
+                                          stream.value());
+  CUDF_EXPECTS(status == cudaSuccess, "Failed to check compression status");
   auto temp_storage = rmm::device_buffer{storage_bytes, stream};
 
   // Run reduction
-  cub::DeviceReduce::Reduce(temp_storage.data(),
-                            storage_bytes,
-                            block_failures.data(),
-                            d_any_block_failure,
-                            block_failures.size(),
-                            thrust::logical_or{},
-                            false,
-                            stream.value());
+  status = cub::DeviceReduce::Reduce(temp_storage.data(),
+                                     storage_bytes,
+                                     status_failed_it,
+                                     d_any_block_failure,
+                                     stats.size(),
+                                     thrust::logical_or{},
+                                     false,
+                                     stream.value());
+  CUDF_EXPECTS(status == cudaSuccess, "Failed to check compression status");
 }
 
 }  // namespace io

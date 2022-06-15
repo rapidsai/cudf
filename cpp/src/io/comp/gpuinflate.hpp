@@ -127,7 +127,7 @@ void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
               rmm::cuda_stream_view stream);
 
 /**
- * @brief Checks the vector of decompression status and stores the result in a device scalar.
+ * @brief Checks the vector of decompression status and stores the result in device memory.
  *
  * @param[in] stats input vector of statuses
  * @param[out] d_any_block_failure pointer to device memory where the output status is stored
