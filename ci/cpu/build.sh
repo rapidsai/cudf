@@ -3,7 +3,7 @@
 ##############################################
 # cuDF CPU conda build script for CI         #
 ##############################################
-set -ex
+set -e
 
 # Set path and build parallel level
 # FIXME: PATH variable shouldn't be necessary.
