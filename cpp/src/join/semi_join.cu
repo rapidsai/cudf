@@ -98,12 +98,33 @@ struct check_contains {
 
   __device__ bool operator()(size_type i)
   {
-    if (!cudf::bit_is_set(bitmask, i)) { return false; }
+    auto idx = i / DEFAULT_JOIN_CG_SIZE;
+    if (!cudf::bit_is_set(bitmask, idx)) { return false; }
 
     auto const tile = cooperative_groups::tiled_partition<DEFAULT_JOIN_CG_SIZE>(
       cooperative_groups::this_thread_block());
-    return d_map.pair_contains(tile, kv_pair[i], dcomp);
+    return d_map.pair_contains(tile, *(kv_pair + idx), dcomp);
   }
+};
+
+// template <typename MapView, typename KV, typename Comparator>
+// struct check_contains {
+//  MapView d_map;
+//  KV const kv_pair;
+//  Comparator const dcomp;
+
+//  __device__ bool operator()(size_type i)
+//  {
+//    auto idx        = i / DEFAULT_JOIN_CG_SIZE;
+//    auto const tile = cooperative_groups::tiled_partition<DEFAULT_JOIN_CG_SIZE>(
+//      cooperative_groups::this_thread_block());
+//    return d_map.pair_contains(tile, *(kv_pair + idx), dcomp);
+//  }
+//};
+
+struct copy_no_duplicate {
+  bool const* const contained_tmp;
+  __device__ bool operator()(size_type idx) const { return contained_tmp[idx * 2]; }
 };
 
 /**
@@ -220,13 +241,21 @@ rmm::device_uvector<bool> left_semi_join_contains(table_view const& left_keys,
         auto d_map           = map.get_device_view();
         auto const pair_comp = pair_comparator_fn<decltype(d_eqcomp)>{d_eqcomp};
 
+        auto contained_tmp =
+          rmm::device_uvector<bool>(left_keys.num_rows() * DEFAULT_JOIN_CG_SIZE, stream);
         thrust::transform(
           rmm::exec_policy(stream),
           thrust::make_counting_iterator(0),
-          thrust::make_counting_iterator(left_keys.num_rows()),
-          contained.begin(),
+          thrust::make_counting_iterator(left_keys.num_rows() * DEFAULT_JOIN_CG_SIZE),
+          contained_tmp.begin(),
           check_contains<decltype(d_map), decltype(kv_it), decltype(pair_comp)>{
             d_map, kv_it, static_cast<bitmask_type const*>(row_bitmask.data()), pair_comp});
+
+        thrust::transform(rmm::exec_policy(stream),
+                          thrust::make_counting_iterator(0),
+                          thrust::make_counting_iterator(left_keys.num_rows()),
+                          contained.begin(),
+                          copy_no_duplicate{contained_tmp.begin()});
       } else {
         map.pair_contains(kv_it,
                           kv_it + left_keys.num_rows(),
