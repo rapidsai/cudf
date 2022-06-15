@@ -279,6 +279,10 @@ TEST_F(StringsContainsTests, HexTest)
       0, [ch](auto idx) { return ch == static_cast<char>(idx); });
     cudf::test::fixed_width_column_wrapper<bool> expected(true_dat, true_dat + count);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+    // also test hex character appearing in character class brackets
+    pattern = "[" + pattern + "]";
+    results = cudf::strings::contains_re(strings_view, pattern);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
 
@@ -303,6 +307,14 @@ TEST_F(StringsContainsTests, EmbeddedNullCharacter)
 
   results  = cudf::strings::contains_re(strings_view, "J\\0B");
   expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 0, 0, 0, 0, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  results  = cudf::strings::contains_re(strings_view, "[G-J][\\0]B");
+  expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 0, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  results  = cudf::strings::contains_re(strings_view, "[A-D][\\x00]B");
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 0, 0, 0, 0, 0, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 

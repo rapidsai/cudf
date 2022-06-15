@@ -160,6 +160,39 @@ class regex_parser {
   int16_t yy_min_count{};
   int16_t yy_max_count{};
 
+  /**
+   * @brief Parses octal characters from current expression position
+   * to return the represented character
+   *
+   * @param in_chr The first character of the octal pattern
+   * @return The resulting character
+   */
+  char32_t handle_octal(char32_t in_chr)
+  {
+    auto out_chr = in_chr - '0';
+    auto c       = *exprp;
+    auto digits  = 1;
+    while (c >= '0' && c <= '7' && digits < 3) {
+      out_chr = (out_chr << 3) | (c - '0');
+      c       = *(++exprp);
+      ++digits;
+    }
+    return out_chr;
+  }
+
+  /**
+   * @brief Parses hex characters from current expression position
+   * to return the represented character
+   *
+   * @return The resulting character
+   */
+  char32_t handle_hex()
+  {
+    std::string hex(1, static_cast<char>(*exprp++));
+    hex.append(1, static_cast<char>(*exprp++));
+    return static_cast<char32_t>(std::stol(hex, nullptr, 16));  // 16 = hex
+  }
+
   bool nextc(char32_t& c)  // return "quoted" == backslash-escape prefix
   {
     if (lexdone) {
@@ -208,6 +241,14 @@ class regex_parser {
           case 'a': c = 0x07; break;
           case 'b': c = 0x08; break;
           case 'f': c = 0x0C; break;
+          case '0' ... '7': {
+            c = handle_octal(c);
+            break;
+          }
+          case 'x': {
+            c = handle_hex();
+            break;
+          }
           case 'w':
             builtins |= ccls_w.builtins;
             quoted = nextc(c);
@@ -292,114 +333,90 @@ class regex_parser {
   {
     int quoted = nextc(yy);
     if (quoted) {
-      // treating all quoted numbers as Octal, since we are not supporting backreferences
-      if (yy >= '0' && yy <= '7') {
-        yy          = yy - '0';
-        auto c      = *exprp;
-        auto digits = 1;
-        while (c >= '0' && c <= '7' && digits < 3) {
-          yy = (yy << 3) | (c - '0');
-          c  = *(++exprp);
-          ++digits;
+      switch (yy) {
+        case 't': yy = '\t'; break;
+        case 'n': yy = '\n'; break;
+        case 'r': yy = '\r'; break;
+        case 'a': yy = 0x07; break;
+        case 'f': yy = 0x0C; break;
+        case '0' ... '7': {
+          yy = handle_octal(yy);
+          break;
         }
-        return CHAR;
-      } else {
-        switch (yy) {
-          case 't': yy = '\t'; break;
-          case 'n': yy = '\n'; break;
-          case 'r': yy = '\r'; break;
-          case 'a': yy = 0x07; break;
-          case 'f': yy = 0x0C; break;
-          case '0': yy = 0; break;
-          case 'x': {
-            char32_t a = *exprp++;
-            char32_t b = *exprp++;
-            yy         = 0;
-            if (a >= '0' && a <= '9')
-              yy += (a - '0') << 4;
-            else if (a >= 'a' && a <= 'f')
-              yy += (a - 'a' + 10) << 4;
-            else if (a >= 'A' && a <= 'F')
-              yy += (a - 'A' + 10) << 4;
-            if (b >= '0' && b <= '9')
-              yy += b - '0';
-            else if (b >= 'a' && b <= 'f')
-              yy += b - 'a' + 10;
-            else if (b >= 'A' && b <= 'F')
-              yy += b - 'A' + 10;
+        case 'x': {
+          yy = handle_hex();
+          break;
+        }
+        case 'w': {
+          if (id_ccls_w < 0) {
+            yyclass_id = m_prog.add_class(ccls_w);
+            id_ccls_w  = yyclass_id;
+          } else
+            yyclass_id = id_ccls_w;
+          return CCLASS;
+        }
+        case 'W': {
+          if (id_ccls_W < 0) {
+            reclass cls = ccls_w;
+            cls.literals += '\n';
+            cls.literals += '\n';
+            yyclass_id = m_prog.add_class(cls);
+            id_ccls_W  = yyclass_id;
+          } else
+            yyclass_id = id_ccls_W;
+          return NCCLASS;
+        }
+        case 's': {
+          if (id_ccls_s < 0) {
+            yyclass_id = m_prog.add_class(ccls_s);
+            id_ccls_s  = yyclass_id;
+          } else
+            yyclass_id = id_ccls_s;
+          return CCLASS;
+        }
+        case 'S': {
+          if (id_ccls_s < 0) {
+            yyclass_id = m_prog.add_class(ccls_s);
+            id_ccls_s  = yyclass_id;
+          } else
+            yyclass_id = id_ccls_s;
+          return NCCLASS;
+        }
+        case 'd': {
+          if (id_ccls_d < 0) {
+            yyclass_id = m_prog.add_class(ccls_d);
+            id_ccls_d  = yyclass_id;
+          } else
+            yyclass_id = id_ccls_d;
+          return CCLASS;
+        }
+        case 'D': {
+          if (id_ccls_D < 0) {
+            reclass cls = ccls_d;
+            cls.literals += '\n';
+            cls.literals += '\n';
+            yyclass_id = m_prog.add_class(cls);
+            id_ccls_D  = yyclass_id;
+          } else
+            yyclass_id = id_ccls_D;
+          return NCCLASS;
+        }
+        case 'b': return BOW;
+        case 'B': return NBOW;
+        case 'A': return BOL;
+        case 'Z': return EOL;
+        default: {
+          // let valid escapable chars fall through as literal CHAR
+          if (yy &&
+              (std::find(escapable_chars.begin(), escapable_chars.end(), static_cast<char>(yy)) !=
+               escapable_chars.end()))
             break;
-          }
-          case 'w': {
-            if (id_ccls_w < 0) {
-              yyclass_id = m_prog.add_class(ccls_w);
-              id_ccls_w  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_w;
-            return CCLASS;
-          }
-          case 'W': {
-            if (id_ccls_W < 0) {
-              reclass cls = ccls_w;
-              cls.literals += '\n';
-              cls.literals += '\n';
-              yyclass_id = m_prog.add_class(cls);
-              id_ccls_W  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_W;
-            return NCCLASS;
-          }
-          case 's': {
-            if (id_ccls_s < 0) {
-              yyclass_id = m_prog.add_class(ccls_s);
-              id_ccls_s  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_s;
-            return CCLASS;
-          }
-          case 'S': {
-            if (id_ccls_s < 0) {
-              yyclass_id = m_prog.add_class(ccls_s);
-              id_ccls_s  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_s;
-            return NCCLASS;
-          }
-          case 'd': {
-            if (id_ccls_d < 0) {
-              yyclass_id = m_prog.add_class(ccls_d);
-              id_ccls_d  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_d;
-            return CCLASS;
-          }
-          case 'D': {
-            if (id_ccls_D < 0) {
-              reclass cls = ccls_d;
-              cls.literals += '\n';
-              cls.literals += '\n';
-              yyclass_id = m_prog.add_class(cls);
-              id_ccls_D  = yyclass_id;
-            } else
-              yyclass_id = id_ccls_D;
-            return NCCLASS;
-          }
-          case 'b': return BOW;
-          case 'B': return NBOW;
-          case 'A': return BOL;
-          case 'Z': return EOL;
-          default: {
-            // let valid escapable chars fall through as literal CHAR
-            if (yy &&
-                (std::find(escapable_chars.begin(), escapable_chars.end(), static_cast<char>(yy)) !=
-                 escapable_chars.end()))
-              break;
-            // anything else is a bad escape so throw an error
-            CUDF_FAIL("invalid regex pattern: bad escape character at position " +
-                      std::to_string(exprp - pattern - 1));
-          }
-        }  // end-switch
-        return CHAR;
-      }
+          // anything else is a bad escape so throw an error
+          CUDF_FAIL("invalid regex pattern: bad escape character at position " +
+                    std::to_string(exprp - pattern - 1));
+        }
+      }  // end-switch
+      return CHAR;
     }
 
     // handle regex characters
