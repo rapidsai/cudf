@@ -120,26 +120,6 @@ struct search_lists_fn {
 };
 
 /**
- * @brief Create a device pointer to the search key(s).
- *
- * The returned pointer will be used to construct a validity iterator or an optional iterator for
- * the keys, which also have the same interface for both `scalar` and `column_device_view`.
- *
- * @return Depending on the type of the input key(s), a `scalar` pointer or a `column_device_view`
- *         pointer will be returned.
- */
-template <typename SearchKeyType>
-auto get_search_keys_device_view_ptr(SearchKeyType const& search_keys,
-                                     [[maybe_unused]] rmm::cuda_stream_view stream)
-{
-  if constexpr (std::is_same_v<SearchKeyType, cudf::scalar>) {
-    return &search_keys;
-  } else {
-    return column_device_view::create(search_keys, stream);
-  }
-}
-
-/**
  * @brief Dispatch functor to search for key element(s) in the corresponding rows of a lists column.
  */
 struct dispatch_index_of {
@@ -185,7 +165,6 @@ struct dispatch_index_of {
 
     auto const lists_cdv_ptr = column_device_view::create(lists.parent(), stream);
     auto const lists_cdv     = cudf::detail::lists_column_device_view{*lists_cdv_ptr};
-    auto const keys_dv_ptr   = get_search_keys_device_view_ptr(search_keys, stream);
 
     auto out_positions = make_numeric_column(
       data_type{type_to_id<size_type>()}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
@@ -193,13 +172,24 @@ struct dispatch_index_of {
     auto const out_iter = thrust::make_zip_iterator(
       out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
-    auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
-      *keys_dv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
+    auto const do_search = [&](auto const keys_iter) {
+      thrust::tabulate(
+        rmm::exec_policy(stream),
+        out_iter,
+        out_iter + lists.size(),
+        search_lists_fn<Type, decltype(keys_iter)>{lists_cdv, keys_iter, find_option});
+    };
 
-    thrust::tabulate(rmm::exec_policy(stream),
-                     out_iter,
-                     out_iter + lists.size(),
-                     search_lists_fn<Type, decltype(keys_iter)>{lists_cdv, keys_iter, find_option});
+    if constexpr (search_key_is_scalar) {
+      auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
+        search_keys, nullate::DYNAMIC{search_keys_have_nulls});
+      do_search(keys_iter);
+    } else {
+      auto const keys_cdv_ptr = column_device_view::create(search_keys, stream);
+      auto const keys_iter    = cudf::detail::make_optional_iterator<Type>(
+        *keys_cdv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
+      do_search(keys_iter);
+    }
 
     if (search_keys_have_nulls || lists.has_nulls()) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
