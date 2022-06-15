@@ -46,7 +46,6 @@ Mark Adler    madler@alumni.caltech.edu
 #include "gpuinflate.hpp"
 #include "io_uncomp.hpp"
 
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -1226,7 +1225,7 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
 }
 
 void decompress_check(device_span<decompress_status> stats,
-                      bool* any_block_failure,
+                      bool* d_any_block_failure,
                       rmm::cuda_stream_view stream)
 {
   if (stats.empty()) { return; }  // Early exit for empty stats
@@ -1243,7 +1242,7 @@ void decompress_check(device_span<decompress_status> stats,
   cub::DeviceReduce::Reduce(nullptr,
                             storage_bytes,
                             block_failures.data(),
-                            any_block_failure,
+                            d_any_block_failure,
                             block_failures.size(),
                             thrust::logical_or{},
                             false,
@@ -1254,7 +1253,7 @@ void decompress_check(device_span<decompress_status> stats,
   cub::DeviceReduce::Reduce(temp_storage.data(),
                             storage_bytes,
                             block_failures.data(),
-                            any_block_failure,
+                            d_any_block_failure,
                             block_failures.size(),
                             thrust::logical_or{},
                             false,
