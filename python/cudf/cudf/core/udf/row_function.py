@@ -24,7 +24,7 @@ from cudf.core.udf.utils import (
     _supported_dtypes_from_frame,
 )
 
-from cudf.core.udf.typing import stringview_model, dstring_model
+from strings_udf._typing import stringview_model, dstring_model
 
 
 def _get_frame_row_type(dtype):

@@ -37,7 +37,7 @@ SUPPORTED_NUMBA_TYPES = (
 
 import operator
 
-from strings_udf._typing import DString, StringView, dstring, string_view, dstring_model, stringview_model, str_view_arg_handler
+from strings_udf._typing import StringView, string_view
 
 
 
@@ -55,8 +55,6 @@ class MaskedType(types.Type):
         # TODO - replace object with stringview immediately
         if isinstance(value, (types.PyObject, StringView)):
             self.value_type = string_view
-        elif isinstance(value, DString):
-            self.value_type = dstring
         elif isinstance(value, SUPPORTED_NUMBA_TYPES):
             self.value_type = value
         else:
@@ -157,7 +155,7 @@ class MaskedConstructor(ConcreteTemplate):
             | datetime_cases
             | timedelta_cases
             | {types.boolean}
-            | {types.pyobject, string_view, dstring}
+            | {types.pyobject, string_view}
         )
     ]
 

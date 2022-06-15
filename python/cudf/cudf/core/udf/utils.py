@@ -11,7 +11,7 @@ from numba.types import Poison, Tuple, boolean, int64, void, CPointer
 
 import cupy as cp
 from cudf.core.dtypes import CategoricalDtype
-from cudf.core.udf.typing import MaskedType, dstring_model, string_view, str_view_arg_handler, dstring
+from cudf.core.udf.typing import MaskedType
 from cudf.core.column.column import as_column
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
@@ -22,7 +22,8 @@ from cudf.utils.dtypes import (
     STRING_TYPES,
 )
 from cudf.api.types import is_string_dtype
-from strings_udf._lib.cudf_jit_udf import to_string_view_array, from_dstring_array
+from strings_udf._lib.cudf_jit_udf import to_string_view_array
+from strings_udf._typing import str_view_arg_handler, string_view
 from strings_udf import ptxpath
 
 from cudf.utils.utils import _cudf_nvtx_annotate
@@ -220,7 +221,9 @@ def _compile_or_get(frame, func, args, kernel_getter=None):
 
     kernel, scalar_return_type = kernel_getter(frame, func, args)
 
-    np_return_type = scalar_return_type if scalar_return_type is dstring else numpy_support.as_dtype(scalar_return_type)
+    #np_return_type = scalar_return_type if scalar_return_type is dstring else numpy_support.as_dtype(scalar_return_type)
+    np_return_type = numpy_support.as_dtype(scalar_return_type)
+
     precompiled[cache_key] = (kernel, np_return_type)
 
     return kernel, np_return_type
@@ -245,16 +248,18 @@ def _launch_arg_from_col(col):
         return data, mask
 
 def _return_col_from_dtype(dt, size):
-    if dt is dstring:
-        #
-        return rmm.DeviceBuffer(
-            size=int(size * dstring_model.size_bytes)
-        )
-    else:
-        return cp.empty(size, dtype=dt)
+    #if dt is dstring:
+    #    #
+    #    return rmm.DeviceBuffer(
+    #        size=int(size * dstring_model.size_bytes)
+    #    )
+    #else:
+    #    return cp.empty(size, dtype=dt)
+    return cp.empty(size, dtype=dt)
 
 def _post_process_output_col(col, retty):
-    if retty == dstring:
-        return from_dstring_array(col)
-    else:
-        return as_column(col)
+    #if retty == dstring:
+    #    return from_dstring_array(col)
+    #else:
+    #    return as_column(col)
+    return as_column(col)
