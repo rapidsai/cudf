@@ -81,11 +81,18 @@ auto __device__ element_index_pair_iter(size_type const size)
   }
 }
 
-template <typename Element, typename SearchKeyIter>
+template <typename SearchKeyIter>
 struct search_lists_fn {
   cudf::detail::lists_column_device_view const lists;
   SearchKeyIter const keys_iter;
   duplicate_find_option const find_option;
+
+  search_lists_fn(cudf::detail::lists_column_device_view const lists,
+                  SearchKeyIter const keys_iter,
+                  duplicate_find_option const find_option)
+    : lists{lists}, keys_iter{keys_iter}, find_option{find_option}
+  {
+  }
 
   __device__ thrust::pair<size_type, bool> operator()(size_type const idx) const
   {
@@ -99,13 +106,16 @@ struct search_lists_fn {
     if (!key_opt) { return {NOT_FOUND_SENTINEL, false}; }
 
     auto const& key = key_opt.value();
-    return {find_option == duplicate_find_option::FIND_FIRST ? search_list<true>(list, key)
-                                                             : search_list<false>(list, key),
+
+    using Element = typename thrust::iterator_traits<SearchKeyIter>::value_type::value_type;
+    return {find_option == duplicate_find_option::FIND_FIRST
+              ? search_list<Element, true>(list, key)
+              : search_list<Element, false>(list, key),
             true};
   }
 
  private:
-  template <bool find_first>
+  template <typename Element, bool find_first>
   static __device__ size_type search_list(list_device_view const& list, Element const& search_key)
   {
     auto const [begin, end] = element_index_pair_iter<find_first>(list.size());
@@ -167,11 +177,10 @@ struct dispatch_index_of {
       out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
 
     auto const do_search = [&](auto const keys_iter) {
-      thrust::tabulate(
-        rmm::exec_policy(stream),
-        out_iter,
-        out_iter + lists.size(),
-        search_lists_fn<Element, decltype(keys_iter)>{lists_cdv, keys_iter, find_option});
+      thrust::tabulate(rmm::exec_policy(stream),
+                       out_iter,
+                       out_iter + lists.size(),
+                       search_lists_fn{lists_cdv, keys_iter, find_option});
     };
 
     if constexpr (search_key_is_scalar) {
