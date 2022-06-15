@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <stream_compaction/stream_compaction_common.cuh>
+#include "stream_compaction_common.cuh"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
@@ -107,12 +107,12 @@ struct reduce_fn_gen {
 
 }  // namespace
 
-rmm::device_uvector<size_type> distinct_map(table_view const& input,
-                                            std::vector<size_type> const& keys,
-                                            duplicate_keep_option keep,
-                                            null_equality nulls_equal,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
+                                                    std::vector<size_type> const& keys,
+                                                    duplicate_keep_option keep,
+                                                    null_equality nulls_equal,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   if (input.num_rows() == 0 or input.num_columns() == 0 or keys.empty()) {
     return rmm::device_uvector<size_type>(0, stream, mr);
@@ -213,15 +213,6 @@ rmm::device_uvector<size_type> distinct_map(table_view const& input,
 
 std::unique_ptr<table> distinct(table_view const& input,
                                 std::vector<size_type> const& keys,
-                                null_equality nulls_equal,
-                                rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
-{
-  return distinct(input, keys, duplicate_keep_option::KEEP_ANY, nulls_equal, stream, mr);
-}
-
-std::unique_ptr<table> distinct(table_view const& input,
-                                std::vector<size_type> const& keys,
                                 duplicate_keep_option keep,
                                 null_equality nulls_equal,
                                 rmm::cuda_stream_view stream,
@@ -231,21 +222,12 @@ std::unique_ptr<table> distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto const gather_map = distinct_map(input, keys, keep, nulls_equal, stream);
+  auto const gather_map = get_distinct_indices(input, keys, keep, nulls_equal, stream);
   return detail::gather(
     input, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 }  // namespace detail
-
-std::unique_ptr<table> distinct(table_view const& input,
-                                std::vector<size_type> const& keys,
-                                null_equality nulls_equal,
-                                rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::distinct(input, keys, nulls_equal, rmm::cuda_stream_default, mr);
-}
 
 std::unique_ptr<table> distinct(table_view const& input,
                                 std::vector<size_type> const& keys,
