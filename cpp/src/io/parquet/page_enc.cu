@@ -1570,19 +1570,12 @@ static __device__ int32_t compareValues(int8_t ptype,
       }
     case Type::FLOAT:
     case Type::DOUBLE: return compare(v1.fp_val, v2.fp_val);
-    case Type::FIXED_LEN_BYTE_ARRAY: {
-      if (ctype == ConvertedType::DECIMAL)
-        return compare(v1.d128_val, v2.d128_val);
-      else
-        return 0;
-    }
-    case Type::BYTE_ARRAY: {
-      string_view s1 = (string_view)v1.str_val;
-      string_view s2 = (string_view)v2.str_val;
-      return s1.compare(s2);
-    }
-    default: return 0;
+    case Type::BYTE_ARRAY: return static_cast<string_view>(v1.str_val).compare(v2.str_val);
+    case Type::FIXED_LEN_BYTE_ARRAY:
+      if (ctype == ConvertedType::DECIMAL) return compare(v1.d128_val, v2.d128_val);
+      // fall through
   }
+  return 0;
 }
 
 /**
