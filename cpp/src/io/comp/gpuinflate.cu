@@ -52,8 +52,8 @@ Mark Adler    madler@alumni.caltech.edu
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/transform.h>
 #include <cub/cub.cuh>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace io {
