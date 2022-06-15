@@ -416,15 +416,36 @@ class device_row_comparator {
         lcol = lcol.child(lists_column_view::child_column_index);
         rcol = rcol.child(lists_column_view::child_column_index);
       }
+      printf("max_def_level: %d\n", max_def_level);
+
+      printf("t: %d, lhs_element_index: %d, rhs_element_index: %d\n",
+             threadIdx.x,
+             lhs_element_index,
+             rhs_element_index);
+      printf("t: %d, l_start: %d, l_end: %d, r_start: %d, r_end: %d\n",
+             threadIdx.x,
+             l_start,
+             l_end,
+             r_start,
+             r_end);
       weak_ordering state{weak_ordering::EQUIVALENT};
       for (int i = l_start, j = r_start, m = lc_start, n = rc_start; i < l_end and j < r_end;
            ++i, ++j) {
+        printf("t: %d, i: %d, j: %d, m: %d, n: %d\n", threadIdx.x, i, j, m, n);
+        printf("t: %d, def_l: %d, def_r: %d, rep_l: %d, rep_r: %d\n",
+               threadIdx.x,
+               def_level[i],
+               def_level[j],
+               rep_level[i],
+               rep_level[j]);
         if (def_level[i] != def_level[j]) {
           state = (def_level[i] < def_level[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
+          printf("t: %d, def, state: %d\n", threadIdx.x, state);
           return cuda::std::pair(state, _depth);
         }
         if (rep_level[i] != rep_level[j]) {
           state = (rep_level[i] < rep_level[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
+          printf("t: %d, rep, state: %d\n", threadIdx.x, state);
           return cuda::std::pair(state, _depth);
         }
         if (def_level[i] == max_def_level) {
@@ -432,7 +453,13 @@ class device_row_comparator {
           int last_null_depth = _depth;
           cuda::std::tie(state, last_null_depth) =
             cudf::type_dispatcher<dispatch_void_if_nested>(lcol.type(), comparator, m, n);
-          if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
+          if (state != weak_ordering::EQUIVALENT) {
+            printf("t: %d, leaf, state: %d\n", threadIdx.x, state);
+            return cuda::std::pair(state, _depth);
+          }
+          ++m;
+          ++n;
+        } else if (lcol.nullable() and def_level[i] == max_def_level - 1) {
           ++m;
           ++n;
         }
