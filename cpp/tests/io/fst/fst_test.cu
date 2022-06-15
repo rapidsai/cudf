@@ -20,14 +20,15 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/cuda_stream.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
-
-#include "cub/cub.cuh"
 
 #include <cstdlib>
 #include <vector>
@@ -212,8 +213,13 @@ TEST_F(FstTest, GroundTruth)
                       R"(}  {} [] [ ])";
 
   // Repeat input sample 1024x
-  for (std::size_t i = 0; i < 10; i++)
-    input += input;
+  size_t string_size                 = 1 << 10;
+  auto d_input_scalar                = cudf::make_string_scalar(input);
+  auto& d_string_scalar              = static_cast<cudf::string_scalar&>(*d_input_scalar);
+  const cudf::size_type repeat_times = string_size / input.size();
+  auto d_input_string                = cudf::strings::repeat_string(d_string_scalar, repeat_times);
+  auto& d_input = static_cast<cudf::scalar_type_t<std::string>&>(*d_input_string);
+  input         = d_input.to_string(stream);
 
 
 
@@ -260,7 +266,7 @@ TEST_F(FstTest, GroundTruth)
                std::back_inserter(out_index_cpu));
 
   // Make sure results have been copied back to host
-  cudaStreamSynchronize(stream.value());
+  stream.synchronize();
 
   // Verify results
   ASSERT_EQ(output_gpu_size[0], output_cpu.size());
