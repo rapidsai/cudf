@@ -1039,9 +1039,9 @@ struct column_view_printer {
     auto h_data = cudf::test::to_host<std::string>(col);
 
     // explicitly replace '\r' and '\n' characters with "\r" and "\n" strings respectively.
-    auto cleaned = [](std::string const& in) {
-      std::string out   = in;
-      auto replace_char = [](std::string& out, char c, std::string const& repl) {
+    auto cleaned = [](std::string_view in) {
+      std::string out(in);
+      auto replace_char = [](std::string& out, char c, std::string_view repl) {
         for (std::string::size_type pos{}; out.npos != (pos = out.find(c, pos)); pos++) {
           out.replace(pos, 1, repl);
         }
