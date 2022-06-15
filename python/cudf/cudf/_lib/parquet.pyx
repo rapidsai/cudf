@@ -221,6 +221,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # Set the index column
     if index_col is not None and len(index_col) > 0:
         if is_range_index:
+            if not allow_range_index:
+                return df
             range_index_meta = index_col[0]
             if row_groups is not None:
                 per_file_metadata = [
