@@ -128,7 +128,6 @@ struct dispatch_index_of {
             CUDF_ENABLE_IF(is_supported_non_nested_type<Element>())>
   std::unique_ptr<column> operator()(lists_column_view const& lists,
                                      SearchKeyType const& search_keys,
-                                     bool search_keys_have_nulls,
                                      duplicate_find_option find_option,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -140,6 +139,14 @@ struct dispatch_index_of {
     CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
+    auto const search_keys_have_nulls   = [&] {
+      if constexpr (search_key_is_scalar) {
+        return !search_keys.is_valid(stream);
+      } else {
+        return search_keys.has_nulls();
+      }
+    }();
+
     if (search_key_is_scalar && search_keys_have_nulls) {
       // If the scalar key is invalid/null, the entire output column will be all nulls.
       return make_numeric_column(data_type{cudf::type_to_id<size_type>()},
@@ -191,7 +198,6 @@ struct dispatch_index_of {
             CUDF_ENABLE_IF(!is_supported_non_nested_type<Element>())>
   std::unique_ptr<column> operator()(lists_column_view const&,
                                      SearchKeyType const&,
-                                     bool,
                                      duplicate_find_option,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
@@ -237,14 +243,8 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return cudf::type_dispatcher(search_key.type(),
-                               dispatch_index_of{},
-                               lists,
-                               search_key,
-                               !search_key.is_valid(stream),
-                               find_option,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    search_key.type(), dispatch_index_of{}, lists, search_key, find_option, stream, mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
@@ -255,14 +255,8 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
 {
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
-  return cudf::type_dispatcher(search_keys.type(),
-                               dispatch_index_of{},
-                               lists,
-                               search_keys,
-                               search_keys.has_nulls(),
-                               find_option,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    search_keys.type(), dispatch_index_of{}, lists, search_keys, find_option, stream, mr);
 }
 
 std::unique_ptr<column> contains(lists_column_view const& lists,
