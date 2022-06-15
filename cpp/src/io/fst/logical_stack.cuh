@@ -43,7 +43,7 @@ namespace fst {
 /**
  * @brief Describes the kind of stack operation.
  */
-enum class stack_op_type : int32_t {
+enum class stack_op_type : int8_t {
   READ = 0,  ///< Operation reading what is currently on top of the stack
   PUSH = 1,  ///< Operation pushing a new item on top of the stack
   POP  = 2   ///< Operation popping the item currently on top of the stack
