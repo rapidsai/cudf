@@ -4,6 +4,17 @@
 # cuDF doxygen warnings check #
 ###############################
 
+# Utility to return version as number for comparison
+function version { echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
+
+# doxygen supported version 1.8.20 to 1.9.1
+DOXYGEN_VERSION=`doxygen --version`
+if [ $(version "$DOXYGEN_VERSION") -lt $(version "1.8.20") ] ||  [ $(version $DOXYGEN_VERSION) -gt $(version "1.9.1") ]; then
+  echo -e "Unsupported doxygen version $DOXYGEN_VERSION"
+  echo -e "Expecting doxygen version from 1.8.20 to 1.9.1"
+  exit 1
+fi
+
 # Run doxygen, ignore missing tag files error
 TAG_ERROR1="error: Tag file '.*.tag' does not exist or is not a file. Skipping it..."
 TAG_ERROR2="error: cannot open tag file .*.tag for writing"
