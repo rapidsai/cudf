@@ -621,6 +621,8 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
 
   // read each column across the tile
   // each warp takes a column with each thread of a warp taking a row
+  // this is done with cooperative groups where each column is chosen
+  // by the tiled partition and each thread in that partition works on a row
   for (int relative_col = warp.meta_group_rank(); relative_col < num_tile_cols;
        relative_col += warp.meta_group_size()) {
     for (int relative_row = warp.thread_rank(); relative_row < num_tile_rows;
@@ -1541,7 +1543,7 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
   // should occur every 2 rows, but if a lower bound is run at 2 gigs, 4 gigs, 6 gigs.
   // the batches will be 2 rows, 2 rows, 3 rows, which will be invalid. The previous
   // batch size must be taken into account when building a new batch. One way is to
-  // pull the batch size back to the PC and add it to MAX_BATCH_SIZE for the lower
+  // pull the batch size back to the host and add it to MAX_BATCH_SIZE for the lower
   // bound search. The other method involves keeping everything on device, but subtracting
   // the previous batch from cumulative_row_sizes based on index. This involves no
   // synchronization between GPU and CPU, but involves more work on the GPU. These further
@@ -1557,7 +1559,7 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
     auto search_end = offset_row_sizes + num_rows;
 
     // find the next MAX_BATCH_SIZE boundary
-    auto lb =
+    auto const lb =
         thrust::lower_bound(rmm::exec_policy(stream), search_start, search_end, MAX_BATCH_SIZE);
     size_type const batch_size = lb - search_start;
 
