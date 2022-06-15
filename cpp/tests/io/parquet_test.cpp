@@ -3530,7 +3530,7 @@ template <typename T>
 std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return T(typename T::duration(20000-i)); });
+    0, [](auto i) { return T(typename T::duration(20000 - i)); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
@@ -3538,7 +3538,7 @@ template <typename T>
 std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return T(typename T::duration(i % 2 ? i : 20000-i)); });
+    0, [](auto i) { return T(typename T::duration(i % 2 ? i : 20000 - i)); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
@@ -3547,16 +3547,15 @@ std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper
 template <typename T>
 std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [&](auto i) { return T(i); });
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return T(i); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
 {
-  auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [&](auto i) { return T(20000-i); });
+  auto elements =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return T(20000 - i); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
@@ -3564,7 +3563,7 @@ template <typename T>
 std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [&](auto i) { return T(i % 2 ? i : 20000-i); });
+    0, [&](auto i) { return T(i % 2 ? i : 20000 - i); });
   return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
 }
 
