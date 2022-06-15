@@ -198,9 +198,9 @@ def test_cuda_array_interface_pytorch():
 
     assert_eq(got, cudf.Series(index))
 
-    index = cudf.core.index.GenericIndex([1, 2, 8, 6])
+    index = cudf.Index([1, 2, 8, 6])
     tensor = torch.tensor(index)
-    got = cudf.core.index.GenericIndex(tensor)
+    got = cudf.Index(tensor)
 
     assert_eq(got, index)
 
