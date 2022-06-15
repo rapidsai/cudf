@@ -160,8 +160,11 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         .build()
     )
     cdef vector[string] cpp_columns
+    allow_range_index = True
     if columns is not None:
         cpp_columns.reserve(len(columns))
+        if len(cpp_columns) == 0:
+            allow_range_index = False
         for col in columns or []:
             cpp_columns.push_back(str(col).encode())
         args.set_columns(cpp_columns)
