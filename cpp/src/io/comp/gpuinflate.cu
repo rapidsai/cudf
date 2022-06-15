@@ -50,6 +50,10 @@ Mark Adler    madler@alumni.caltech.edu
 #include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/transform.h>
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace io {
@@ -1221,26 +1225,40 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
   }
 }
 
-__global__ void decompress_check_kernel(device_span<decompress_status const> stats,
-                                        bool* any_block_failure)
-{
-  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid < stats.size()) {
-    if (stats[tid].status != 0) {
-      *any_block_failure = true;  // Doesn't need to be atomic
-    }
-  }
-}
-
 void decompress_check(device_span<decompress_status> stats,
                       bool* any_block_failure,
                       rmm::cuda_stream_view stream)
 {
-  if (stats.empty()) { return; }  // early exit for empty stats
+  if (stats.empty()) { return; }  // Early exit for empty stats
 
-  dim3 block(128);
-  dim3 grid(cudf::util::div_rounding_up_safe(stats.size(), static_cast<size_t>(block.x)));
-  decompress_check_kernel<<<grid, block, 0, stream.value()>>>(stats, any_block_failure);
+  auto block_failures = rmm::device_uvector<bool>(stats.size(), stream);
+  thrust::transform(rmm::exec_policy(stream),
+                    stats.begin(),
+                    stats.end(),
+                    block_failures.begin(),
+                    [] __device__(auto const& stat) { return stat.status != 0; });
+
+  // Allocate temporary storage
+  size_t storage_bytes = 0;
+  cub::DeviceReduce::Reduce(nullptr,
+                            storage_bytes,
+                            block_failures.data(),
+                            any_block_failure,
+                            block_failures.size(),
+                            thrust::logical_or{},
+                            false,
+                            stream.value());
+  auto temp_storage = rmm::device_buffer{storage_bytes, stream};
+
+  // Run reduction
+  cub::DeviceReduce::Reduce(temp_storage.data(),
+                            storage_bytes,
+                            block_failures.data(),
+                            any_block_failure,
+                            block_failures.size(),
+                            thrust::logical_or{},
+                            false,
+                            stream.value());
 }
 
 }  // namespace io
