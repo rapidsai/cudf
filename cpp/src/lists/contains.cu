@@ -50,10 +50,10 @@ namespace {
  */
 auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
 
-template <typename Type>
+template <typename Element>
 auto constexpr is_supported_non_nested_type()
 {
-  return cudf::is_fixed_width<Type>() || std::is_same_v<Type, cudf::string_view>;
+  return cudf::is_fixed_width<Element>() || std::is_same_v<Element, cudf::string_view>;
 }
 
 /**
@@ -81,7 +81,7 @@ auto __device__ element_index_pair_iter(size_type const size)
   }
 }
 
-template <typename Type, typename SearchKeyIter>
+template <typename Element, typename SearchKeyIter>
 struct search_lists_fn {
   cudf::detail::lists_column_device_view const lists;
   SearchKeyIter const keys_iter;
@@ -106,13 +106,13 @@ struct search_lists_fn {
 
  private:
   template <bool find_first>
-  static __device__ size_type search_list(list_device_view const& list, Type const& search_key)
+  static __device__ size_type search_list(list_device_view const& list, Element const& search_key)
   {
     auto const [begin, end] = element_index_pair_iter<find_first>(list.size());
     auto const found_iter =
       thrust::find_if(thrust::seq, begin, end, [&] __device__(auto const idx) {
         return !list.is_null(idx) &&
-               cudf::equality_compare(list.template element<Type>(idx), search_key);
+               cudf::equality_compare(list.template element<Element>(idx), search_key);
       });
     // If the key is found, return its found position in the list from `found_iter`.
     return found_iter == end ? NOT_FOUND_SENTINEL : *found_iter;
@@ -123,22 +123,9 @@ struct search_lists_fn {
  * @brief Dispatch functor to search for key element(s) in the corresponding rows of a lists column.
  */
 struct dispatch_index_of {
-  template <typename Type,
+  template <typename Element,
             typename SearchKeyType,
-            CUDF_ENABLE_IF(!is_supported_non_nested_type<Type>())>
-  std::unique_ptr<column> operator()(lists_column_view const&,
-                                     SearchKeyType const&,
-                                     bool,
-                                     duplicate_find_option,
-                                     rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*) const
-  {
-    CUDF_FAIL("Unsupported type in `dispatch_index_of` functor.");
-  }
-
-  template <typename Type,
-            typename SearchKeyType,
-            CUDF_ENABLE_IF(is_supported_non_nested_type<Type>())>
+            CUDF_ENABLE_IF(is_supported_non_nested_type<Element>())>
   std::unique_ptr<column> operator()(lists_column_view const& lists,
                                      SearchKeyType const& search_keys,
                                      bool search_keys_have_nulls,
@@ -177,16 +164,16 @@ struct dispatch_index_of {
         rmm::exec_policy(stream),
         out_iter,
         out_iter + lists.size(),
-        search_lists_fn<Type, decltype(keys_iter)>{lists_cdv, keys_iter, find_option});
+        search_lists_fn<Element, decltype(keys_iter)>{lists_cdv, keys_iter, find_option});
     };
 
     if constexpr (search_key_is_scalar) {
-      auto const keys_iter = cudf::detail::make_optional_iterator<Type>(
+      auto const keys_iter = cudf::detail::make_optional_iterator<Element>(
         search_keys, nullate::DYNAMIC{search_keys_have_nulls});
       do_search(keys_iter);
     } else {
       auto const keys_cdv_ptr = column_device_view::create(search_keys, stream);
-      auto const keys_iter    = cudf::detail::make_optional_iterator<Type>(
+      auto const keys_iter    = cudf::detail::make_optional_iterator<Element>(
         *keys_cdv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
       do_search(keys_iter);
     }
@@ -198,6 +185,19 @@ struct dispatch_index_of {
     }
     return out_positions;
   }
+
+  template <typename Element,
+            typename SearchKeyType,
+            CUDF_ENABLE_IF(!is_supported_non_nested_type<Element>())>
+  std::unique_ptr<column> operator()(lists_column_view const&,
+                                     SearchKeyType const&,
+                                     bool,
+                                     duplicate_find_option,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
+  {
+    CUDF_FAIL("Unsupported type in `dispatch_index_of` functor.");
+  }
 };
 
 /**
@@ -208,8 +208,8 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(key_positions->type().id() == type_id::INT32,
-               "Expected input column of type INT32.");
+  CUDF_EXPECTS(key_positions->type().id() == type_to_id<size_type>(),
+               "Expected input column of type cudf::size_type.");
   auto const positions_begin = key_positions->view().template begin<size_type>();
   auto result                = make_numeric_column(
     data_type{type_id::BOOL8}, key_positions->size(), mask_state::UNALLOCATED, stream, mr);
