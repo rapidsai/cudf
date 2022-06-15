@@ -1544,12 +1544,7 @@ static __device__ bool isComparable(int8_t ptype, int8_t ctype)
 template <typename T>
 __device__ int32_t compare(T& v1, T& v2)
 {
-  if (v1 < v2)
-    return -1;
-  else if (v1 == v2)
-    return 0;
-  else
-    return 1;
+  return (v1 > v2) - (v1 < v2);
 }
 
 /**
