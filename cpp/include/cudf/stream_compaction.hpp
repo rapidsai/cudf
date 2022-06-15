@@ -274,7 +274,7 @@ std::unique_ptr<table> unique(
 std::unique_ptr<table> distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
-  duplicate_keep_option keep,
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal           = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
