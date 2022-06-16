@@ -92,40 +92,43 @@ auto __device__ element_index_pair_iter(size_type const size)
   }
 }
 
-template <typename SearchKeyIter>
-struct search_lists_fn {
+/**
+ * @brief The functor to create a `list_device_view` for a lists column at a given index.
+ */
+struct create_list_dview {
   cudf::detail::lists_column_device_view const lists;
-  SearchKeyIter const keys_iter;
+
+  __device__ list_device_view operator()(size_type const idx) const
+  {
+    return list_device_view{lists, idx};
+  }
+};
+
+/**
+ * @brief Functor to perform searching for index of a key element in a given list.
+ */
+struct search_list_fn {
   duplicate_find_option const find_option;
 
-  search_lists_fn(cudf::detail::lists_column_device_view const lists,
-                  SearchKeyIter const keys_iter,
-                  duplicate_find_option const find_option)
-    : lists{lists}, keys_iter{keys_iter}, find_option{find_option}
+  template <typename Element>
+  __device__ size_type operator()(list_device_view list, thrust::optional<Element> key_opt) const
   {
-  }
-
-  __device__ size_type operator()(size_type const idx) const
-  {
-    auto const list = list_device_view{lists, idx};
     // A null list never contains any key, even null key.
     // In addition, a null list will result in a null output row.
     if (list.is_null()) { return NULL_SENTINEL; }
 
-    auto const key_opt = keys_iter[idx];
     // A null key will also result in a null output row.
     if (!key_opt) { return NULL_SENTINEL; }
 
     auto const& key = key_opt.value();
 
-    using Element = typename thrust::iterator_traits<SearchKeyIter>::value_type::value_type;
     return find_option == duplicate_find_option::FIND_FIRST
-             ? search_list<Element, true>(list, key)
-             : search_list<Element, false>(list, key);
+             ? search_list<true, Element>(list, key)
+             : search_list<false, Element>(list, key);
   }
 
  private:
-  template <typename Element, bool find_first>
+  template <bool find_first, typename Element>
   static __device__ size_type search_list(list_device_view const& list, Element const& search_key)
   {
     auto const [begin, end] = element_index_pair_iter<find_first>(list.size());
@@ -178,17 +181,20 @@ struct dispatch_index_of {
     }
 
     auto const lists_cdv_ptr = column_device_view::create(lists.parent(), stream);
-    auto const lists_cdv     = cudf::detail::lists_column_device_view{*lists_cdv_ptr};
+    auto const input_it      = cudf::detail::make_counting_transform_iterator(
+      0, create_list_dview{cudf::detail::lists_column_device_view{*lists_cdv_ptr}});
 
     auto out_positions = make_numeric_column(
       data_type{type_to_id<size_type>()}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
     auto const out_begin = out_positions->mutable_view().template begin<size_type>();
 
     auto const do_search = [&](auto const keys_iter) {
-      thrust::tabulate(rmm::exec_policy(stream),
-                       out_begin,
-                       out_begin + lists.size(),
-                       search_lists_fn{lists_cdv, keys_iter, find_option});
+      thrust::transform(rmm::exec_policy(stream),
+                        input_it,
+                        input_it + lists.size(),
+                        keys_iter,
+                        out_begin,
+                        search_list_fn{find_option});
     };
 
     if constexpr (search_key_is_scalar) {
