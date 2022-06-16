@@ -127,7 +127,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   auto const kv_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
 
-  auto const do_insert = [&](auto const value_comp) {
+  auto const insert_keys = [&](auto const value_comp) {
     auto const key_equal = row_comp.equal_to(has_null, nulls_equal, value_comp);
     map.insert(kv_iter, kv_iter + input.num_rows(), key_hasher, key_equal, stream.value());
   };
@@ -137,9 +137,9 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
 
   if (nans_equal == nan_equality::ALL_EQUAL) {
-    do_insert(nan_equal_comparator{});
+    insert_keys(nan_equal_comparator{});
   } else {
-    do_insert(nan_unequal_comparator{});
+    insert_keys(nan_unequal_comparator{});
   }
 
   // The output distinct indices.
@@ -169,11 +169,21 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init_value);
 
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(input.num_rows()),
-    reduce_index_fn{map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
+  auto const reduce_by_index = [&](auto const value_comp) {
+    auto const key_equal = row_comp.equal_to(has_null, nulls_equal, value_comp);
+    thrust::for_each(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(input.num_rows()),
+      reduce_index_fn{
+        map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
+  };
+
+  if (nans_equal == nan_equality::ALL_EQUAL) {
+    reduce_by_index(nan_equal_comparator{});
+  } else {
+    reduce_by_index(nan_unequal_comparator{});
+  }
 
   // Filter out indices of the undesired duplicate keys.
   auto const map_end =
