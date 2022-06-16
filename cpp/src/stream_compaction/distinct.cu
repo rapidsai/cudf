@@ -18,7 +18,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
@@ -196,8 +196,12 @@ std::unique_ptr<table> distinct(table_view const& input,
   }
 
   auto const gather_map = get_distinct_indices(input.select(keys), keep, nulls_equal, stream);
-  return detail::gather(
-    input, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
+  return detail::gather(input,
+                        gather_map,
+                        out_of_bounds_policy::DONT_CHECK,
+                        negative_index_policy::NOT_ALLOWED,
+                        stream,
+                        mr);
 }
 
 }  // namespace detail
