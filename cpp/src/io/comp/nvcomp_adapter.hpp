@@ -34,6 +34,7 @@ enum class compression_type { SNAPPY, ZSTD, DEFLATE };
  * @param[out] outputs List of output buffers
  * @param[out] statuses List of output status structures
  * @param[in] max_uncomp_chunk_size maximum size of uncompressed chunk
+ * @param[in] max_total_uncomp_size maximum total size of uncompressed data
  * @param[in] stream CUDA stream to use
  */
 void batched_decompress(compression_type compression,
@@ -41,6 +42,7 @@ void batched_decompress(compression_type compression,
                         device_span<device_span<uint8_t> const> outputs,
                         device_span<decompress_status> statuses,
                         size_t max_uncomp_chunk_size,
+                        size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream);
 
 /**
