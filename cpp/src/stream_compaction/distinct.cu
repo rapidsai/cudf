@@ -119,7 +119,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
                                                     std::vector<size_type> const& keys,
                                                     duplicate_keep_option keep,
                                                     null_equality nulls_equal,
-                                                    nan_equality,
+                                                    nan_equality nans_equal,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
@@ -142,14 +142,27 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
   auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_null));
 
-  auto const row_comp  = cudf::experimental::row::equality::self_comparator(preprocessed_keys);
-  auto const key_equal = row_comp.equal_to(has_null, nulls_equal);
+  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_keys);
 
   auto const kv_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
-  key_map.insert(kv_iter, kv_iter + keys_size, key_hasher, key_equal, stream.value());
 
-  // The output distinct map.
+  auto const do_insert = [&](auto const value_comp) {
+    auto const key_equal = row_comp.equal_to(has_null, nulls_equal, value_comp);
+    key_map.insert(kv_iter, kv_iter + keys_size, key_hasher, key_equal, stream.value());
+  };
+
+  using nan_equal_comparator =
+    cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+  using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
+
+  if (nans_equal == nan_equality::ALL_EQUAL) {
+    do_insert(nan_equal_comparator{});
+  } else {
+    do_insert(nan_unequal_comparator{});
+  }
+
+  // The output distinct indicies.
   auto output_indices = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
 
   // If we don't care about order, just gather indices of distinct keys taken from key_map.
@@ -176,8 +189,8 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init_value);
 
-  auto const d_map  = key_map.get_device_view();
-  auto const fn_gen = reduce_op_gen{d_map, key_hasher, key_equal, reduction_results.begin()};
+  auto const fn_gen =
+    reduce_op_gen{key_map.get_device_view(), key_hasher, key_equal, reduction_results.begin()};
 
   auto const do_reduce = [keys_size, stream](auto const& fn) {
     thrust::for_each(rmm::exec_policy(stream),
