@@ -590,7 +590,7 @@ class aggregate_reader_metadata {
   /**
    * @brief Filters and reduces down to a selection of columns
    *
-   * @param use_names List of paths of column names to select; nullptr if user did not select
+   * @param use_names List of paths of column names to select; `nullopt` if user did not select
    * columns to read
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter

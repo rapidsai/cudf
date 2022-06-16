@@ -160,7 +160,7 @@ class parquet_reader_options {
    *
    * @param col_names Vector of column names
    */
-  void set_columns(std::vector<std::string> col_names) { _columns = {std::move(col_names)}; }
+  void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
 
   /**
    * @brief Sets vector of individual row groups to read.
