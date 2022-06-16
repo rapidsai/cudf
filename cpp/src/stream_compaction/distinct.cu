@@ -149,12 +149,12 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   key_map.insert(kv_iter, kv_iter + keys_size, key_hasher, key_equal, stream.value());
 
   // The output distinct map.
-  auto output_map = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
+  auto output_indices = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
 
   // If we don't care about order, just gather indices of distinct keys taken from key_map.
   if (keep == duplicate_keep_option::KEEP_ANY) {
-    key_map.retrieve_all(output_map.begin(), thrust::make_discard_iterator(), stream.value());
-    return output_map;
+    key_map.retrieve_all(output_indices.begin(), thrust::make_discard_iterator(), stream.value());
+    return output_indices;
   }
 
   // Perform reduction on each group of rows compared equal and the results are store
@@ -203,7 +203,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
       ? thrust::copy_if(rmm::exec_policy(stream),
                         thrust::make_counting_iterator(0),
                         thrust::make_counting_iterator(keys_size),
-                        output_map.begin(),
+                        output_indices.begin(),
                         [reduction_results = reduction_results.begin()] __device__(auto const idx) {
                           // Only output index of the rows that appeared once during reduction.
                           // Indices of duplicate rows will be either >1 or `0`.
@@ -212,11 +212,11 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
       : thrust::copy_if(rmm::exec_policy(stream),
                         reduction_results.begin(),
                         reduction_results.end(),
-                        output_map.begin(),
+                        output_indices.begin(),
                         [init_value] __device__(auto const idx) { return idx != init_value; });
 
-  output_map.resize(thrust::distance(output_map.begin(), map_end), stream);
-  return output_map;
+  output_indices.resize(thrust::distance(output_indices.begin(), map_end), stream);
+  return output_indices;
 }
 
 std::unique_ptr<table> distinct(table_view const& input,
