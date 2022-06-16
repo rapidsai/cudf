@@ -148,7 +148,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
   key_map.insert(kv_iter, kv_iter + keys_size, key_hasher, key_equal, stream.value());
 
-  // The output distinct map.
+  // The output distinct indices.
   auto output_indices = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
 
   // If we don't care about order, just gather indices of distinct keys taken from key_map.
@@ -175,8 +175,8 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init_value);
 
-  auto const d_map  = key_map.get_device_view();
-  auto const fn_gen = reduce_op_gen{d_map, key_hasher, key_equal, reduction_results.begin()};
+  auto const fn_gen =
+    reduce_op_gen{key_map.get_device_view(), key_hasher, key_equal, reduction_results.begin()};
 
   auto const do_reduce = [keys_size, stream](auto const& fn) {
     thrust::for_each(rmm::exec_policy(stream),
