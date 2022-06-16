@@ -32,7 +32,7 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 unset GIT_DESCRIBE_TAG
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
-export INSTALL_DASK_MAIN=0
+export INSTALL_DASK_MAIN=1
 
 # ucx-py version
 export UCX_PY_VERSION='0.27.*'
@@ -82,8 +82,6 @@ conda list --show-channel-urls
 
 gpuci_logger "Check compiler versions"
 python --version
-$CC --version
-$CXX --version
 
 function install_dask {
     # Install the conda-forge or nightly version of dask and distributed
@@ -94,8 +92,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask==2022.05.2 conda-forge::distributed==2022.05.2 conda-forge::dask-core==2022.05.2 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask==2022.05.2 conda-forge::distributed==2022.05.2 conda-forge::dask-core==2022.05.2 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
@@ -127,7 +125,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     ################################################################################
 
     gpuci_logger "Build from source"
-    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds --cmake-args=\"-DFIND_CUDF_CPP=ON\"
+    "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
 
     ################################################################################
     # TEST - Run GoogleTest
