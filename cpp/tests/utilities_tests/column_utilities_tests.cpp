@@ -364,6 +364,19 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
   }
 }
 
+TEST_F(ColumnUtilitiesListsTest, DifferingRowCounts)
+{
+  cudf::test::fixed_width_column_wrapper<int> a{1, 1, 1, 1};
+  cudf::test::fixed_width_column_wrapper<int> b{1, 1, 1, 1, 1};
+
+  EXPECT_FALSE(cudf::test::expect_columns_equal(a, b, cudf::test::debug_output_level::QUIET));
+  EXPECT_FALSE(
+    cudf::test::expect_column_properties_equal(a, b, cudf::test::debug_output_level::QUIET));
+  EXPECT_FALSE(cudf::test::expect_columns_equivalent(a, b, cudf::test::debug_output_level::QUIET));
+  EXPECT_FALSE(
+    cudf::test::expect_column_properties_equivalent(a, b, cudf::test::debug_output_level::QUIET));
+}
+
 TEST_F(ColumnUtilitiesListsTest, UnsanitaryLists)
 {
   // unsanitary
