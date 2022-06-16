@@ -217,9 +217,8 @@ enum class duplicate_keep_option {
 /**
  * @brief Create a new table with consecutive duplicate rows removed.
  *
- * Given an `input` table_view, its rows are copied to the output table such that the output `keys`
- * columns have only unique rows. If `keys` columns in the input table has duplicate rows, depending
- * on the value of `keep`:
+ * Given an `input` table_view, each row is copied to the output table if the corresponding row of
+ * `keys` columns is unique, where the definition of unique depends on the value of @p keep:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_ANY: an unspecified row in a sequence of duplicate rows is copied

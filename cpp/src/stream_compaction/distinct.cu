@@ -76,7 +76,7 @@ struct reduce_index_fn {
       // Store the greatest index of all rows that are equal.
       atomicMax(&get_output(idx), idx);
     } else {
-      // Count the number of rows that are equal to the row having index inserted.
+      // Count the number of rows that are equal to the row having its index inserted.
       atomicAdd(&get_output(idx), size_type{1});
     }
   }
