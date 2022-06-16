@@ -789,6 +789,34 @@ TYPED_TEST(Sort, WithNullableListColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
 }
 
+TYPED_TEST(Sort, WithSlicedListColumn)
+{
+  using T = TypeParam;
+  if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
+
+  using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
+  lcw col{
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},                                          //
+    {{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, cudf::test::iterators::nulls_at({3})},  // 0
+    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},                                              // 1
+    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},                                                // 2
+    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, cudf::test::iterators::nulls_at({0})}},        // 3
+    {{7, 8}, {}},                                                                    // 4
+    lcw{lcw{}, lcw{}, lcw{}},                                                        // 5
+    lcw{lcw{}},                                                                      // 6
+    {lcw{10}},                                                                       // 7
+    lcw{},                                                                           // 8
+    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, cudf::test::iterators::nulls_at({0, 2})}},     // 9
+    {{1, 2}, {3}, {4, 5}, {{0, 7}, cudf::test::iterators::nulls_at({0})}},           //
+  };
+
+  auto sliced_col = cudf::slice(col, {1, 10});
+
+  auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{8, 6, 5, 3, 2, 0, 1, 4, 7};
+  auto result = cudf::sorted_order(cudf::table_view({sliced_col}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
+}
+
 TYPED_TEST(Sort, WithEmptyListColumn)
 {
   using T = TypeParam;
