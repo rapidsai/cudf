@@ -162,7 +162,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     do_insert(nan_unequal_comparator{});
   }
 
-  // The output distinct indicies.
+  // The output distinct indices.
   auto output_indices = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
 
   // If we don't care about order, just gather indices of distinct keys taken from key_map.
