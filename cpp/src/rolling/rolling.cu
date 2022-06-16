@@ -44,6 +44,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                "Defaults column must be either empty or have as many rows as the input column.");
 
   if (agg.kind == aggregation::CUDA || agg.kind == aggregation::PTX) {
+    // TODO: In future, might need to clamp preceding/following to column boundaries.
     return cudf::detail::rolling_window_udf(input,
                                             preceding_window,
                                             "cudf::size_type",
@@ -54,8 +55,16 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                             stream,
                                             mr);
   } else {
-    auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
-    auto following_window_begin = thrust::make_constant_iterator(following_window);
+    // Clamp preceding/following to column boundaries.
+    // E.g. If preceding_window == 2, then for a column of 5 elements, preceding_window will be:
+    //      [1, 2, 2, 2, 1]
+    auto const preceding_window_begin = cudf::detail::make_counting_transform_iterator(
+      0,
+      [preceding_window] __device__(size_type i) { return thrust::min(i + 1, preceding_window); });
+    auto const following_window_begin = cudf::detail::make_counting_transform_iterator(
+      0, [col_size = input.size(), following_window] __device__(size_type i) {
+        return thrust::min(col_size - i - 1, following_window);
+      });
 
     return cudf::detail::rolling_window(input,
                                         default_outputs,
@@ -91,6 +100,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                "preceding_window/following_window size must match input size");
 
   if (agg.kind == aggregation::CUDA || agg.kind == aggregation::PTX) {
+    // TODO: In future, might need to clamp preceding/following to column boundaries.
     return cudf::detail::rolling_window_udf(input,
                                             preceding_window.begin<size_type>(),
                                             "cudf::size_type*",
@@ -103,10 +113,21 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   } else {
     auto defaults_col =
       cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
+    // Clamp preceding/following to column boundaries.
+    // E.g. If preceding_window == [2, 2, 2, 2, 2] for a column of 5 elements, the new
+    // preceding_window will be: [1, 2, 2, 2, 1]
+    auto const preceding_window_begin = cudf::detail::make_counting_transform_iterator(
+      0, [preceding = preceding_window.begin<size_type>()] __device__(size_type i) {
+        return thrust::min(i + 1, preceding[i]);
+      });
+    auto const following_window_begin = cudf::detail::make_counting_transform_iterator(
+      0,
+      [col_size = input.size(), following = following_window.begin<size_type>()] __device__(
+        size_type i) { return thrust::min(col_size - i - 1, following[i]); });
     return cudf::detail::rolling_window(input,
                                         empty_like(defaults_col)->view(),
-                                        preceding_window.begin<size_type>(),
-                                        following_window.begin<size_type>(),
+                                        preceding_window_begin,
+                                        following_window_begin,
                                         min_periods,
                                         agg,
                                         stream,
