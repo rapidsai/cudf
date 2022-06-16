@@ -672,11 +672,9 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
   auto const tile_output_buffer = output_data[tile.batch_number];
   auto const row_batch_start = tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
-  tile_barrier.arrive_and_wait();
-#else
+  // no async copies above waiting on the barrier, so we sync the group here to ensure
+  // all copies to shared memory are completed before copying data out
   group.sync();
-#endif // ASYNC_MEMCPY_SUPPORTED
 
   // each warp takes a row
   for (int copy_row = warp.meta_group_rank(); copy_row < tile.num_rows();
@@ -795,6 +793,8 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
   auto const row_batch_start = tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
   // make sure entire tile has finished copy
+  // Note that this was copied from above just under the for loop due to nsight complaints about
+  // divergent threads
   group.sync();
 
   for (int relative_row = warp.meta_group_rank(); relative_row < num_tile_rows;
@@ -844,8 +844,8 @@ __global__ void copy_strings_to_rows(size_type const num_rows, size_type const n
   // Each warp will copy a row at a time. The base thread will first go through column data and
   // fill out offset/length information for the column. Then all threads of the warp will
   // participate in the memcpy of the string data.
-  auto my_block = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(my_block);
+  auto const my_block = cooperative_groups::this_thread_block();
+  auto const warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(my_block);
 #ifdef ASYNC_MEMCPY_SUPPORTED
   cuda::barrier<cuda::thread_scope_block> block_barrier;
 #endif
