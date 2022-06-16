@@ -162,7 +162,7 @@ struct dispatch_index_of {
     CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
-    auto const search_keys_have_nulls   = [&] {
+    auto const search_keys_have_nulls   = [&search_keys, stream] {
       if constexpr (search_key_is_scalar) {
         return !search_keys.is_valid(stream);
       } else {
