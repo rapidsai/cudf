@@ -175,55 +175,36 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     column_names = [x.decode() for x in c_out_table.metadata.column_names]
 
-    # Access the Parquet user_data json to find the index
+    # Access the Parquet per_file_user_data to find the index
     index_col = None
     is_range_index = False
-    cdef map[string, string] user_data = c_out_table.metadata.user_data
-
     cdef vector[unordered_map[string, string]] per_file_user_data = \
         c_out_table.metadata.per_file_user_data
 
-    if len(per_file_user_data) > 1:
-        range_index = []
-        index_col_names = None
-        for single_file in per_file_user_data:
-            json_str = single_file[b'pandas'].decode('utf-8')
-            meta = None
-            if json_str != "":
-                meta = json.loads(json_str)
-                if 'index_columns' in meta and len(meta['index_columns']) > 0:
-                    index_col = meta['index_columns']
-
-                    if isinstance(index_col[0], dict) and \
-                            index_col[0]['kind'] == 'range':
-                        range_index.append(True)
-                    else:
-                        if index_col_names is None:
-                            index_col_names = {}
-                            for idx_col in index_col:
-                                for c in meta['columns']:
-                                    if c['field_name'] == idx_col:
-                                        index_col_names[idx_col] = c['name']
-
-        if len(range_index) > 0:
-            if all(range_index):
-                is_range_index = True
-    else:
-        json_str = user_data[b'pandas'].decode('utf-8')
+    range_index = []
+    index_col_names = None
+    for single_file in per_file_user_data:
+        json_str = single_file[b'pandas'].decode('utf-8')
         meta = None
         if json_str != "":
             meta = json.loads(json_str)
             if 'index_columns' in meta and len(meta['index_columns']) > 0:
                 index_col = meta['index_columns']
+
                 if isinstance(index_col[0], dict) and \
                         index_col[0]['kind'] == 'range':
-                    is_range_index = True
+                    range_index.append(True)
                 else:
-                    index_col_names = {}
-                    for idx_col in index_col:
-                        for c in meta['columns']:
-                            if c['field_name'] == idx_col:
-                                index_col_names[idx_col] = c['name']
+                    if index_col_names is None:
+                        index_col_names = {}
+                        for idx_col in index_col:
+                            for c in meta['columns']:
+                                if c['field_name'] == idx_col:
+                                    index_col_names[idx_col] = c['name']
+
+    if len(range_index) > 0 and all(range_index):
+        is_range_index = True
+
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
         move(c_out_table.tbl),
         column_names=column_names
