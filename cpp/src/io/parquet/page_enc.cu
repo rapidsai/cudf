@@ -1637,13 +1637,12 @@ __global__ void __launch_bounds__(1)
 
   if (column_stats.empty()) return;
 
-  EncColumnChunk ck_g = chunks[blockIdx.x];
-  uint32_t num_pages  = ck_g.num_pages;
-
+  EncColumnChunk ck_g              = chunks[blockIdx.x];
+  uint32_t num_pages               = ck_g.num_pages;
   parquet_column_device_view col_g = *ck_g.col_desc;
+  size_t first_data_page           = ck_g.use_dictionary ? 1 : 0;
+  uint32_t pageidx                 = ck_g.first_page;
 
-  size_t first_data_page = ck_g.use_dictionary ? 1 : 0;
-  uint32_t pageidx       = ck_g.first_page;
   header_encoder encoder(ck_g.column_index_blob);
 
   // null_pages
