@@ -91,23 +91,19 @@ std::unique_ptr<table> distinct(
 /**
  * @brief Get the row indices that denote all distinct rows in `input`.
  *
- * Given an `input` table_view, each row index is copied to the output array in an
- * unspecified order if the corresponding row of `keys` columns is distinct (no other
- * equivalent row exists in the table).
+ * Given an `input` table_view, index of each row is added to the output array in an
+ * unspecified order such that the rows correspond to all output indices are distinct (i.e., no
+ * other equivalent row among the output indices).
  *
- * Note that the returning gather map is compact: all the indices are valid.
- *
- * @param input The input table_view to generate gather map for distinct rows
- * @param keys Vector of indices representing key columns from `input`
- * @param keep Keep the first, last, any, or no rows of the found duplicates
- * @param nulls_equal Flag to specify whether null key elements should be considered as equal
+ * @param input The input table_view to find indices of distinct rows
+ * @param keep Get index of the first, last, any, or no distinct row among the duplicates
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned table's device memory
- * @return A device_uvector containing the resulting compact gather map
+ * @param mr Device memory resource used to allocate the returned vector
+ * @return A device_uvector containing the indices of distinct rows
  */
 rmm::device_uvector<size_type> get_distinct_indices(
   table_view const& input,
-  std::vector<size_type> const& keys,
   duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::UNEQUAL,

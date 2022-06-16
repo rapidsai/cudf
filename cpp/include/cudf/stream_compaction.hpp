@@ -208,18 +208,17 @@ std::unique_ptr<table> apply_boolean_mask(
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
  */
 enum class duplicate_keep_option {
-  KEEP_FIRST = 0,  ///< Keep first duplicate element and unique elements
-  KEEP_LAST,       ///< Keep last duplicate element and unique elements
-  KEEP_ANY,        ///< Keep one duplicate element at an unspecified position and unique elements
+  KEEP_FIRST = 0,  ///< Keep first occurrence of an element
+  KEEP_LAST,       ///< Keep last occurrence of an element
+  KEEP_ANY,        ///< Keep unspecified occurrence of an element
   KEEP_NONE        ///< Keep only unique elements
 };
 
 /**
  * @brief Create a new table with consecutive duplicate rows removed.
  *
- * Given an `input` table_view, its rows are copied to the output table such that the output `keys`
- * columns have only unique rows. If `keys` columns in the input table has duplicate rows, depending
- * on the value of `keep`:
+ * Given an `input` table_view, each row is copied to the output table if the corresponding row of
+ * `keys` columns is unique, where the definition of unique depends on the value of @p keep:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_ANY: an unspecified row in a sequence of duplicate rows is copied

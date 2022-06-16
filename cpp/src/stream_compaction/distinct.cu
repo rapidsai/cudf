@@ -18,7 +18,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
@@ -48,61 +48,45 @@ namespace {
 /**
  * @brief A functor to perform reduction on row indices.
  *
- * A reduction operator will be performed on each group of rows that are compared equal.
+ * A reduction operation will be performed on each group of rows that are compared equal.
  */
 template <typename MapDeviceView, typename KeyHasher, typename KeyComparator>
-struct reduce_op_gen {
+struct reduce_index_fn {
   MapDeviceView const d_map;
-  KeyHasher const d_hash;
+  KeyHasher const d_hasher;
   KeyComparator const d_eqcomp;
+  duplicate_keep_option const keep;
   size_type* const d_output;
 
-  reduce_op_gen(MapDeviceView const& d_map,
-                KeyHasher const& d_hash,
-                KeyComparator const& d_eqcomp,
-                size_type* const d_output)
-    : d_map{d_map}, d_hash{d_hash}, d_eqcomp{d_eqcomp}, d_output{d_output}
+  reduce_index_fn(MapDeviceView const& d_map,
+                  KeyHasher const& d_hasher,
+                  KeyComparator const& d_eqcomp,
+                  duplicate_keep_option const keep,
+                  size_type* const d_output)
+    : d_map{d_map}, d_hasher{d_hasher}, d_eqcomp{d_eqcomp}, keep{keep}, d_output{d_output}
   {
   }
 
-  template <duplicate_keep_option keep>
-  auto reduce_op() const
+  __device__ void operator()(size_type const idx) const
   {
-    return reduce_index_fn<keep>{*this};
-  }
-
-  /**
-   * @brief The functor used on device for row index reduction.
-   *
-   * This inner functor has only one template argument. That reduces the amount of template
-   * parameters required upon constructing this functor, which happens multiple times. Other
-   * template arguments belong to its parent, which needs to be constructed just once.
-   */
-  template <duplicate_keep_option keep>
-  struct reduce_index_fn {
-    reduce_op_gen const parent;
-
-    __device__ void operator()(size_type const idx) const
-    {
-      if constexpr (keep == duplicate_keep_option::KEEP_FIRST) {
-        // Store the smallest index of all rows that are equal.
-        atomicMin(&parent.get_output(idx), idx);
-      } else if constexpr (keep == duplicate_keep_option::KEEP_LAST) {
-        // Store the greatest index of all rows that are equal.
-        atomicMax(&parent.get_output(idx), idx);
-      } else {
-        // Count the number of rows that are equal to the row having index inserted.
-        atomicAdd(&parent.get_output(idx), size_type{1});
-      }
+    if (keep == duplicate_keep_option::KEEP_FIRST) {
+      // Store the smallest index of all rows that are equal.
+      atomicMin(&get_output(idx), idx);
+    } else if (keep == duplicate_keep_option::KEEP_LAST) {
+      // Store the greatest index of all rows that are equal.
+      atomicMax(&get_output(idx), idx);
+    } else {
+      // Count the number of rows that are equal to the row having its index inserted.
+      atomicAdd(&get_output(idx), size_type{1});
     }
-  };
+  }
 
  private:
   __device__ size_type& get_output(size_type const idx) const
   {
     // Here we don't check `iter` validity for performance reason, assuming that it is always
     // valid because all input `idx` values have been fed into `map.insert()` before.
-    auto const iter = d_map.find(idx, d_hash, d_eqcomp);
+    auto const iter = d_map.find(idx, d_hasher, d_eqcomp);
 
     // Only one index value of the duplicate rows could be inserted into the map.
     // As such, looking up for all indices of duplicate rows always returns the same value.
@@ -116,40 +100,36 @@ struct reduce_op_gen {
 }  // namespace
 
 rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
-                                                    std::vector<size_type> const& keys,
                                                     duplicate_keep_option keep,
                                                     null_equality nulls_equal,
                                                     nan_equality nans_equal,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
-  if (input.num_rows() == 0 or input.num_columns() == 0 or keys.empty()) {
+  if (input.num_rows() == 0 or input.num_columns() == 0) {
     return rmm::device_uvector<size_type>(0, stream, mr);
   }
 
-  auto const keys_tview = input.select(keys);
-  auto const preprocessed_keys =
-    cudf::experimental::row::hash::preprocessed_table::create(keys_tview, stream);
-  auto const has_null  = nullate::DYNAMIC{cudf::has_nested_nulls(keys_tview)};
-  auto const keys_size = keys_tview.num_rows();
+  auto const preprocessed_input =
+    cudf::experimental::row::hash::preprocessed_table::create(input, stream);
+  auto const has_null = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
 
-  auto key_map = hash_map_type{compute_hash_table_size(keys_size),
-                               cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
-                               cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
-                               detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-                               stream.value()};
+  auto map = hash_map_type{compute_hash_table_size(input.num_rows()),
+                           cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
+                           cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
+                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                           stream.value()};
 
-  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_null));
-
-  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_keys);
+  auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const kv_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
 
   auto const do_insert = [&](auto const value_comp) {
     auto const key_equal = row_comp.equal_to(has_null, nulls_equal, value_comp);
-    key_map.insert(kv_iter, kv_iter + keys_size, key_hasher, key_equal, stream.value());
+    map.insert(kv_iter, kv_iter + input.num_rows(), key_hasher, key_equal, stream.value());
   };
 
   using nan_equal_comparator =
@@ -163,11 +143,11 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   }
 
   // The output distinct indices.
-  auto output_indices = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
+  auto output_indices = rmm::device_uvector<size_type>(map.get_size(), stream, mr);
 
-  // If we don't care about order, just gather indices of distinct keys taken from key_map.
+  // If we don't care about order, just gather indices of distinct keys taken from map.
   if (keep == duplicate_keep_option::KEEP_ANY) {
-    key_map.retrieve_all(output_indices.begin(), thrust::make_discard_iterator(), stream.value());
+    map.retrieve_all(output_indices.begin(), thrust::make_discard_iterator(), stream.value());
     return output_indices;
   }
 
@@ -176,7 +156,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   // - If KEEP_FIRST: min.
   // - If KEEP_LAST: max.
   // - If KEEP_NONE: count number of appearances.
-  auto reduction_results = rmm::device_uvector<size_type>(keys_tview.num_rows(), stream);
+  auto reduction_results = rmm::device_uvector<size_type>(input.num_rows(), stream);
 
   auto const init_value = [keep] {
     if (keep == duplicate_keep_option::KEEP_FIRST) {
@@ -189,34 +169,18 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init_value);
 
-  auto const fn_gen =
-    reduce_op_gen{key_map.get_device_view(), key_hasher, key_equal, reduction_results.begin()};
-
-  auto const do_reduce = [keys_size, stream](auto const& fn) {
-    thrust::for_each(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator(0),
-                     thrust::make_counting_iterator(keys_size),
-                     fn);
-  };
-  switch (keep) {
-    case duplicate_keep_option::KEEP_FIRST:
-      do_reduce(fn_gen.reduce_op<duplicate_keep_option::KEEP_FIRST>());
-      break;
-    case duplicate_keep_option::KEEP_LAST:
-      do_reduce(fn_gen.reduce_op<duplicate_keep_option::KEEP_LAST>());
-      break;
-    case duplicate_keep_option::KEEP_NONE:
-      do_reduce(fn_gen.reduce_op<duplicate_keep_option::KEEP_NONE>());
-      break;
-    default:;  // KEEP_ANY has already been handled above
-  }
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(input.num_rows()),
+    reduce_index_fn{map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
 
   // Filter out indices of the undesired duplicate keys.
   auto const map_end =
     keep == duplicate_keep_option::KEEP_NONE
       ? thrust::copy_if(rmm::exec_policy(stream),
                         thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(keys_size),
+                        thrust::make_counting_iterator(input.num_rows()),
                         output_indices.begin(),
                         [reduction_results = reduction_results.begin()] __device__(auto const idx) {
                           // Only output index of the rows that appeared once during reduction.
@@ -245,9 +209,14 @@ std::unique_ptr<table> distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto const gather_map = get_distinct_indices(input, keys, keep, nulls_equal, nans_equal, stream);
-  return detail::gather(
-    input, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
+  auto const gather_map =
+    get_distinct_indices(input.select(keys), keep, nulls_equal, nans_equal, stream);
+  return detail::gather(input,
+                        gather_map,
+                        out_of_bounds_policy::DONT_CHECK,
+                        negative_index_policy::NOT_ALLOWED,
+                        stream,
+                        mr);
 }
 
 }  // namespace detail
