@@ -54,12 +54,6 @@ auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
  */
 auto constexpr __device__ NULL_SENTINEL = std::numeric_limits<size_type>::min();
 
-template <typename Element>
-auto constexpr is_supported_non_nested_type()
-{
-  return cudf::is_fixed_width<Element>() || std::is_same_v<Element, cudf::string_view>;
-}
-
 /**
  * @brief Return a pair of index iterators {begin, end} to loop through elements within a list.
  *
@@ -127,6 +121,12 @@ struct search_list_fn {
  * @brief Dispatch functor to search for key element(s) in the corresponding rows of a lists column.
  */
 struct dispatch_index_of {
+  template <typename Element>
+  static auto constexpr is_supported_non_nested_type()
+  {
+    return cudf::is_fixed_width<Element>() || std::is_same_v<Element, cudf::string_view>;
+  }
+
   template <typename Element, typename SearchKeyType>
   std::enable_if_t<is_supported_non_nested_type<Element>(), std::unique_ptr<column>> operator()(
     lists_column_view const& lists,
