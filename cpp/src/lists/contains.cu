@@ -54,13 +54,6 @@ auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
  */
 auto constexpr __device__ NULL_SENTINEL = std::numeric_limits<size_type>::min();
 
-/**
- * @brief The functor to identify if an output row is valid using the result search indices.
- */
-struct is_valid_fn {
-  __device__ bool operator()(size_type const idx) const noexcept { return idx != NULL_SENTINEL; }
-};
-
 template <typename Element>
 auto constexpr is_supported_non_nested_type()
 {
@@ -91,18 +84,6 @@ auto __device__ element_index_pair_iter(size_type const size)
                         thrust::make_reverse_iterator(thrust::make_counting_iterator(0)));
   }
 }
-
-/**
- * @brief The functor to create a `list_device_view` for a lists column at a given index.
- */
-struct create_list_dview {
-  cudf::detail::lists_column_device_view const lists;
-
-  __device__ list_device_view operator()(size_type const idx) const
-  {
-    return list_device_view{lists, idx};
-  }
-};
 
 /**
  * @brief Functor to perform searching for index of a key element in a given list.
@@ -146,14 +127,13 @@ struct search_list_fn {
  * @brief Dispatch functor to search for key element(s) in the corresponding rows of a lists column.
  */
 struct dispatch_index_of {
-  template <typename Element,
-            typename SearchKeyType,
-            CUDF_ENABLE_IF(is_supported_non_nested_type<Element>())>
-  std::unique_ptr<column> operator()(lists_column_view const& lists,
-                                     SearchKeyType const& search_keys,
-                                     duplicate_find_option find_option,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+  template <typename Element, typename SearchKeyType>
+  std::enable_if_t<is_supported_non_nested_type<Element>(), std::unique_ptr<column>> operator()(
+    lists_column_view const& lists,
+    SearchKeyType const& search_keys,
+    duplicate_find_option find_option,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
   {
     CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
                  "Nested types not supported in list search operations.");
@@ -182,7 +162,10 @@ struct dispatch_index_of {
 
     auto const lists_cdv_ptr = column_device_view::create(lists.parent(), stream);
     auto const input_it      = cudf::detail::make_counting_transform_iterator(
-      0, create_list_dview{cudf::detail::lists_column_device_view{*lists_cdv_ptr}});
+      size_type{0},
+      [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(auto const idx) {
+        return list_device_view{lists, idx};
+      });
 
     auto out_positions = make_numeric_column(
       data_type{type_to_id<size_type>()}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
@@ -209,21 +192,24 @@ struct dispatch_index_of {
     }
 
     if (search_keys_have_nulls || lists.has_nulls()) {
-      auto [null_mask, null_count] =
-        cudf::detail::valid_if(out_begin, out_begin + lists.size(), is_valid_fn{}, stream, mr);
+      auto [null_mask, null_count] = cudf::detail::valid_if(
+        out_begin,
+        out_begin + lists.size(),
+        [] __device__(auto const idx) { return idx != NULL_SENTINEL; },
+        stream,
+        mr);
       out_positions->set_null_mask(std::move(null_mask), null_count);
     }
     return out_positions;
   }
 
-  template <typename Element,
-            typename SearchKeyType,
-            CUDF_ENABLE_IF(!is_supported_non_nested_type<Element>())>
-  std::unique_ptr<column> operator()(lists_column_view const&,
-                                     SearchKeyType const&,
-                                     duplicate_find_option,
-                                     rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*) const
+  template <typename Element, typename SearchKeyType>
+  std::enable_if_t<!is_supported_non_nested_type<Element>(), std::unique_ptr<column>> operator()(
+    lists_column_view const&,
+    SearchKeyType const&,
+    duplicate_find_option,
+    rmm::cuda_stream_view,
+    rmm::mr::device_memory_resource*) const
   {
     CUDF_FAIL("Unsupported type in `dispatch_index_of` functor.");
   }
