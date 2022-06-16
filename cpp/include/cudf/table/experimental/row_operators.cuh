@@ -73,21 +73,6 @@ struct dispatch_void_if_nested {
   using type = std::conditional_t<cudf::is_nested(data_type(t)), void, id_to_type<t>>;
 };
 
-inline size_type __device__ row_to_value_idx(size_type idx, column_device_view col)
-{
-  while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-    if (col.type().id() == type_id::STRUCT) {
-      idx += col.offset();
-      col = col.child(0);
-    } else {
-      detail::lists_column_device_view lcol(col);
-      idx = lcol.offset_at(idx);
-      col = lcol.child();
-    }
-  }
-  return idx;
-}
-
 namespace row {
 
 enum class lhs_index_type : size_type {};
@@ -410,13 +395,11 @@ class device_row_comparator {
       auto l_end              = dremel_offsets[lhs_element_index + 1];
       auto r_start            = dremel_offsets[rhs_element_index];
       auto r_end              = dremel_offsets[rhs_element_index + 1];
-      auto lc_start           = row_to_value_idx(lhs_element_index, _lhs);
-      auto rc_start           = row_to_value_idx(rhs_element_index, _rhs);
-      column_device_view lcol = _lhs;
-      column_device_view rcol = _rhs;
+      column_device_view lcol = _lhs.slice(lhs_element_index, 1);
+      column_device_view rcol = _rhs.slice(rhs_element_index, 1);
       while (lcol.type().id() == type_id::LIST) {
-        lcol = lcol.child(lists_column_view::child_column_index);
-        rcol = rcol.child(lists_column_view::child_column_index);
+        lcol = detail::lists_column_device_view(lcol).get_sliced_child();
+        rcol = detail::lists_column_device_view(rcol).get_sliced_child();
       }
       printf("max_def_level: %d\n", max_def_level);
 
@@ -431,9 +414,8 @@ class device_row_comparator {
              r_start,
              r_end);
       weak_ordering state{weak_ordering::EQUIVALENT};
-      for (int i = l_start, j = r_start, m = lc_start, n = rc_start; i < l_end and j < r_end;
-           ++i, ++j) {
-        printf("t: %d, i: %d, j: %d, m: %d, n: %d\n", threadIdx.x, i, j, m, n);
+      for (int i = l_start, j = r_start, k = 0; i < l_end and j < r_end; ++i, ++j) {
+        printf("t: %d, i: %d, j: %d, k: %d\n", threadIdx.x, i, j, k);
         printf("t: %d, def_l: %d, def_r: %d, rep_l: %d, rep_r: %d\n",
                threadIdx.x,
                def_level[i],
@@ -454,16 +436,14 @@ class device_row_comparator {
           auto comparator     = element_comparator{_check_nulls, lcol, rcol, _null_precedence};
           int last_null_depth = _depth;
           cuda::std::tie(state, last_null_depth) =
-            cudf::type_dispatcher<dispatch_void_if_nested>(lcol.type(), comparator, m, n);
+            cudf::type_dispatcher<dispatch_void_if_nested>(lcol.type(), comparator, k, k);
           if (state != weak_ordering::EQUIVALENT) {
             printf("t: %d, leaf, state: %d\n", threadIdx.x, state);
             return cuda::std::pair(state, _depth);
           }
-          ++m;
-          ++n;
+          ++k;
         } else if (lcol.nullable() and def_level[i] == max_def_level - 1) {
-          ++m;
-          ++n;
+          ++k;
         }
       }
       state = (l_end - l_start < r_end - r_start)   ? weak_ordering::LESS
