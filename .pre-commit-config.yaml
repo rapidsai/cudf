@@ -108,6 +108,7 @@ repos:
                 types_or: [file]
                 language: system
                 pass_filenames: false
+                verbose: true
 
 default_language_version:
       python: python3
