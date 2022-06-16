@@ -324,17 +324,22 @@ void check_lex_compatibility(table_view const& input)
   // Basically check if there's any LIST of STRUCT or STRUCT of LIST hiding anywhere in the table
   column_checker_fn_t check_column = [&](column_view const& c) {
     if (c.type().id() == type_id::LIST) {
-      CUDF_EXPECTS(c.child(lists_column_view::child_column_index).type().id() != type_id::STRUCT,
+      auto const& list_col = lists_column_view(c);
+      CUDF_EXPECTS(list_col.child().type().id() != type_id::STRUCT,
                    "Cannot lexicographic compare a table with a LIST of STRUCT column");
+      check_column(list_col.child());
+    } else if (c.type().id() == type_id::STRUCT) {
+      for (auto child = c.child_begin(); child < c.child_end(); ++child) {
+        CUDF_EXPECTS(child->type().id() != type_id::LIST,
+                     "Cannot lexicographic compare a table with a STRUCT of LIST column");
+        check_column(*child);
+      }
     }
     // TODO: more copying of logic from row_operators2.cu
     if (not is_nested(c.type())) {
       CUDF_EXPECTS(is_relationally_comparable(c.type()),
                    "Cannot lexicographic compare a table with a column of type " +
                      jit::get_type_name(c.type()));
-    }
-    for (auto child = c.child_begin(); child < c.child_end(); ++child) {
-      check_column(*child);
     }
   };
   for (column_view const& c : input) {

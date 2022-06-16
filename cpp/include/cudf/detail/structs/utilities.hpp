@@ -150,13 +150,6 @@ flattened_table flatten_nested_columns(
   std::vector<null_order> const& null_precedence,
   column_nullability nullability = column_nullability::MATCH_INCOMING);
 
-namespace experimental {
-std::tuple<flattened_table, std::vector<int>> verticalize_nested_columns(
-  table_view input,
-  std::vector<order> const& column_order,
-  std::vector<null_order> const& null_precedence);
-}
-
 /**
  * @brief Unflatten columns flattened as by `flatten_nested_columns()`,
  *        based on the provided `blueprint`.
