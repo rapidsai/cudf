@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "io/parquet/parquet_gpu.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -78,9 +80,9 @@ inline size_type __device__ row_to_value_idx(size_type idx, column_device_view c
       idx += col.offset();
       col = col.child(0);
     } else {
-      auto offset_col = col.child(lists_column_view::offsets_column_index);
-      idx             = offset_col.element<size_type>(idx + col.offset());
-      col             = col.child(lists_column_view::child_column_index);
+      detail::lists_column_device_view lcol(col);
+      idx = lcol.offset_at(idx);
+      col = lcol.child();
     }
   }
   return idx;
@@ -615,19 +617,6 @@ struct less_equivalent_comparator
 };
 
 /**
- * @brief Dremel data that describes one nested type column
- *
- * @see get_dremel_data()
- */
-struct dremel_data {
-  rmm::device_uvector<size_type> dremel_offsets;
-  rmm::device_uvector<uint8_t> rep_level;
-  rmm::device_uvector<uint8_t> def_level;
-
-  size_type leaf_data_size;
-};
-
-/**
  * @brief Preprocessed table for use with lexicographical comparison
  *
  */
@@ -665,7 +654,7 @@ struct preprocessed_table {
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
                      rmm::device_uvector<size_type>&& depths,
-                     std::vector<dremel_data>&& dremel_data,
+                     std::vector<io::parquet::gpu::dremel_data>&& dremel_data,
                      rmm::device_uvector<size_type*>&& dremel_offsets,
                      rmm::device_uvector<uint8_t*>&& rep_levels,
                      rmm::device_uvector<uint8_t*>&& def_levels,
@@ -758,7 +747,7 @@ struct preprocessed_table {
   rmm::device_uvector<size_type> const _depths;
 
   // List related pre-computation
-  std::vector<dremel_data> _dremel_data;
+  std::vector<io::parquet::gpu::dremel_data> _dremel_data;
   rmm::device_uvector<size_type*> _dremel_offsets;
   rmm::device_uvector<uint8_t*> _rep_levels;
   rmm::device_uvector<uint8_t*> _def_levels;

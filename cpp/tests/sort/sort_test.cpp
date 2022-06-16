@@ -789,6 +789,25 @@ TYPED_TEST(Sort, WithNullableListColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
 }
 
+TYPED_TEST(Sort, WithEmptyListColumn)
+{
+  using T = TypeParam;
+  if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
+
+  auto L1 = cudf::make_lists_column(0,
+                                    cudf::make_empty_column(cudf::data_type(cudf::type_id::INT32)),
+                                    cudf::make_empty_column(cudf::data_type{cudf::type_id::INT64}),
+                                    0,
+                                    {});
+  auto L0 = cudf::make_lists_column(
+    3, cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0}.release(), std::move(L1), 0, {});
+
+  auto expect = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 1, 2};
+  auto result = cudf::sorted_order(cudf::table_view({*L0}));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
+}
+// TODO: Sliced list test
+
 struct SortByKey : public BaseFixture {
 };
 
