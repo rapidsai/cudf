@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,15 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/functional.h>
+#include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/reduce.h>
 #include <thrust/scan.h>
+#include <thrust/sequence.h>
+#include <thrust/sort.h>
+#include <thrust/transform.h>
 #include <thrust/tuple.h>
 
 constexpr int block_size           = 128;
@@ -102,7 +108,7 @@ struct page_state_s {
  */
 __device__ uint32_t device_str2hash32(const char* key, size_t len, uint32_t seed = 33)
 {
-  const uint8_t* p  = reinterpret_cast<const uint8_t*>(key);
+  const auto* p     = reinterpret_cast<const uint8_t*>(key);
   uint32_t h1       = seed, k1;
   const uint32_t c1 = 0xcc9e2d51;
   const uint32_t c2 = 0x1b873593;
@@ -513,7 +519,7 @@ __device__ void gpuInitStringDescriptors(volatile page_state_s* s, int target_po
  */
 inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, void* dstv)
 {
-  const char* ptr = NULL;
+  const char* ptr = nullptr;
   size_t len      = 0;
 
   if (s->dict_base) {
@@ -522,10 +528,9 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
                                                sizeof(string_index_pair)
                                            : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
-      const string_index_pair* src =
-        reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
-      ptr = src->first;
-      len = src->second;
+      const auto* src = reinterpret_cast<const string_index_pair*>(s->dict_base + dict_pos);
+      ptr             = src->first;
+      len             = src->second;
     }
   } else {
     // Plain encoding
@@ -540,9 +545,9 @@ inline __device__ void gpuOutputString(volatile page_state_s* s, int src_pos, vo
     *static_cast<uint32_t*>(dstv) = device_str2hash32(ptr, len);
   } else {
     // Output string descriptor
-    string_index_pair* dst = static_cast<string_index_pair*>(dstv);
-    dst->first             = ptr;
-    dst->second            = len;
+    auto* dst   = static_cast<string_index_pair*>(dstv);
+    dst->first  = ptr;
+    dst->second = len;
   }
 }
 
@@ -925,17 +930,18 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case INT64:
           if (s->col.ts_clock_rate) {
             int32_t units = 0;
-            if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS) {
-              units = cudf::timestamp_us::period::den;
-            }
-
-            else if (s->col.converted_type == TIME_MILLIS ||
-                     s->col.converted_type == TIMESTAMP_MILLIS) {
+            if (s->col.converted_type == TIME_MILLIS or s->col.converted_type == TIMESTAMP_MILLIS) {
               units = cudf::timestamp_ms::period::den;
+            } else if (s->col.converted_type == TIME_MICROS or
+                       s->col.converted_type == TIMESTAMP_MICROS) {
+              units = cudf::timestamp_us::period::den;
+            } else if (s->col.logical_type.TIMESTAMP.unit.isset.NANOS) {
+              units = cudf::timestamp_ns::period::den;
             }
-            if (units && units != s->col.ts_clock_rate)
+            if (units and units != s->col.ts_clock_rate) {
               s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate)
                                                            : (s->col.ts_clock_rate / units);
+            }
           }
           // Fall through to DOUBLE
         case DOUBLE: s->dtype_len = 8; break;
@@ -1016,7 +1022,7 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       cur += InitLevelSection(s, cur, end, level_type::DEFINITION);
 
       s->dict_bits = 0;
-      s->dict_base = 0;
+      s->dict_base = nullptr;
       s->dict_size = 0;
       switch (s->page.encoding) {
         case Encoding::PLAIN_DICTIONARY:
@@ -1133,7 +1139,7 @@ static __device__ void store_validity(PageNestingInfo* pni,
   int bit_offset  = pni->valid_map_offset % 32;
   // if we fit entirely in the output word
   if (bit_offset + value_count <= 32) {
-    uint32_t relevant_mask = static_cast<uint32_t>((static_cast<uint64_t>(1) << value_count) - 1);
+    auto relevant_mask = static_cast<uint32_t>((static_cast<uint64_t>(1) << value_count) - 1);
 
     if (relevant_mask == ~0) {
       pni->valid_map[word_offset] = valid_mask;
@@ -1515,13 +1521,12 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
  * to determine what subset of rows in this page we should be reading.
  */
 // blockDim {block_size,1,1}
-extern "C" __global__ void __launch_bounds__(block_size)
-  gpuComputePageSizes(PageInfo* pages,
-                      ColumnChunkDesc const* chunks,
-                      size_t min_row,
-                      size_t num_rows,
-                      int32_t num_chunks,
-                      bool trim_pass)
+__global__ void __launch_bounds__(block_size) gpuComputePageSizes(PageInfo* pages,
+                                                                  ColumnChunkDesc const* chunks,
+                                                                  size_t min_row,
+                                                                  size_t num_rows,
+                                                                  int32_t num_chunks,
+                                                                  bool trim_pass)
 {
   __shared__ __align__(16) page_state_s state_g;
 
@@ -1607,12 +1612,11 @@ extern "C" __global__ void __launch_bounds__(block_size)
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {block_size,1,1}
-extern "C" __global__ void __launch_bounds__(block_size)
-  gpuDecodePageData(PageInfo* pages,
-                    ColumnChunkDesc const* chunks,
-                    size_t min_row,
-                    size_t num_rows,
-                    int32_t num_chunks)
+__global__ void __launch_bounds__(block_size) gpuDecodePageData(PageInfo* pages,
+                                                                ColumnChunkDesc const* chunks,
+                                                                size_t min_row,
+                                                                size_t num_rows,
+                                                                int32_t num_chunks)
 {
   __shared__ __align__(16) page_state_s state_g;
 

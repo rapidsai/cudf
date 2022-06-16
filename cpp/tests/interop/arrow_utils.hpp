@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,3 +176,27 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(
 
 std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(
   cudf::size_type length = 10000);
+
+template <typename T>
+[[nodiscard]] auto make_decimal128_arrow_array(std::vector<T> const& data,
+                                               std::optional<std::vector<int>> const& validity,
+                                               int32_t scale) -> std::shared_ptr<arrow::Array>
+{
+  auto constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(T);
+
+  std::shared_ptr<arrow::Array> arr;
+  arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -scale),
+                                           arrow::default_memory_pool());
+
+  for (T i = 0; i < static_cast<T>(data.size() / BIT_WIDTH_RATIO); ++i) {
+    if (validity.has_value() and not validity.value()[i]) {
+      decimal_builder.AppendNull();
+    } else {
+      decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + BIT_WIDTH_RATIO * i));
+    }
+  }
+
+  CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+  return arr;
+}

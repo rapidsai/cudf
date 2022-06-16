@@ -1,12 +1,12 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.api import types as ptypes
+from pandas.api import types as pd_types
 
 import cudf
-from cudf.api import types as types
+from cudf.api import types
 
 
 @pytest.mark.parametrize(
@@ -17,9 +17,7 @@ from cudf.api import types as types
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -84,13 +82,17 @@ from cudf.api import types as types
         (cudf.CategoricalDtype, True),
         (cudf.ListDtype, False),
         (cudf.StructDtype, False),
+        (cudf.Decimal128Dtype, False),
         (cudf.Decimal64Dtype, False),
+        (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
         (cudf.CategoricalDtype("a"), True),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
+        (cudf.Decimal128Dtype(5, 2), False),
         (cudf.Decimal64Dtype(5, 2), False),
+        (cudf.Decimal32Dtype(5, 2), False),
         (cudf.IntervalDtype(int), False),
         # cuDF objects
         (cudf.Series(dtype="bool"), False),
@@ -100,7 +102,9 @@ from cudf.api import types as types
         (cudf.Series(dtype="datetime64[s]"), False),
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), True),
+        (cudf.Series(dtype=cudf.Decimal128Dtype(5, 2)), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
+        (cudf.Series(dtype=cudf.Decimal32Dtype(5, 2)), False),
         # TODO: Currently creating an empty Series of list type ignores the
         # provided type and instead makes a float64 Series.
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
@@ -122,9 +126,7 @@ def test_is_categorical_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, True),
@@ -189,13 +191,17 @@ def test_is_categorical_dtype(obj, expect):
         (cudf.CategoricalDtype, False),
         (cudf.ListDtype, False),
         (cudf.StructDtype, False),
+        (cudf.Decimal128Dtype, True),
         (cudf.Decimal64Dtype, True),
+        (cudf.Decimal32Dtype, True),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
         (cudf.CategoricalDtype("a"), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
+        (cudf.Decimal128Dtype(5, 2), True),
         (cudf.Decimal64Dtype(5, 2), True),
+        (cudf.Decimal32Dtype(5, 2), True),
         (cudf.IntervalDtype(int), False),
         # cuDF objects
         (cudf.Series(dtype="bool"), True),
@@ -205,7 +211,9 @@ def test_is_categorical_dtype(obj, expect):
         (cudf.Series(dtype="datetime64[s]"), False),
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
+        (cudf.Series(dtype=cudf.Decimal128Dtype(5, 2)), True),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), True),
+        (cudf.Series(dtype=cudf.Decimal32Dtype(5, 2)), True),
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
@@ -223,9 +231,7 @@ def test_is_numeric_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -290,13 +296,17 @@ def test_is_numeric_dtype(obj, expect):
         (cudf.CategoricalDtype, False),
         (cudf.ListDtype, False),
         (cudf.StructDtype, False),
+        (cudf.Decimal128Dtype, False),
         (cudf.Decimal64Dtype, False),
+        (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
         (cudf.CategoricalDtype("a"), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
+        (cudf.Decimal128Dtype(5, 2), False),
         (cudf.Decimal64Dtype(5, 2), False),
+        (cudf.Decimal32Dtype(5, 2), False),
         (cudf.IntervalDtype(int), False),
         # cuDF objects
         (cudf.Series(dtype="bool"), False),
@@ -306,7 +316,9 @@ def test_is_numeric_dtype(obj, expect):
         (cudf.Series(dtype="datetime64[s]"), False),
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
+        (cudf.Series(dtype=cudf.Decimal128Dtype(5, 2)), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
+        (cudf.Series(dtype=cudf.Decimal32Dtype(5, 2)), False),
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
@@ -324,9 +336,7 @@ def test_is_integer_dtype(obj, expect):
         (int(), True),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -391,13 +401,17 @@ def test_is_integer_dtype(obj, expect):
         (cudf.CategoricalDtype, False),
         (cudf.ListDtype, False),
         (cudf.StructDtype, False),
+        (cudf.Decimal128Dtype, False),
         (cudf.Decimal64Dtype, False),
+        (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
         (cudf.CategoricalDtype("a"), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
+        (cudf.Decimal128Dtype(5, 2), False),
         (cudf.Decimal64Dtype(5, 2), False),
+        (cudf.Decimal32Dtype(5, 2), False),
         (cudf.IntervalDtype(int), False),
         # cuDF objects
         (cudf.Series(dtype="bool"), False),
@@ -407,7 +421,9 @@ def test_is_integer_dtype(obj, expect):
         (cudf.Series(dtype="datetime64[s]"), False),
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
+        (cudf.Series(dtype=cudf.Decimal128Dtype(5, 2)), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
+        (cudf.Series(dtype=cudf.Decimal32Dtype(5, 2)), False),
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
@@ -426,9 +442,7 @@ def test_is_integer(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -493,13 +507,17 @@ def test_is_integer(obj, expect):
         (cudf.CategoricalDtype, False),
         (cudf.ListDtype, False),
         (cudf.StructDtype, False),
+        (cudf.Decimal128Dtype, False),
         (cudf.Decimal64Dtype, False),
+        (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
         (cudf.CategoricalDtype("a"), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
+        (cudf.Decimal128Dtype(5, 2), False),
         (cudf.Decimal64Dtype(5, 2), False),
+        (cudf.Decimal32Dtype(5, 2), False),
         (cudf.IntervalDtype(int), False),
         # cuDF objects
         (cudf.Series(dtype="bool"), False),
@@ -509,7 +527,9 @@ def test_is_integer(obj, expect):
         (cudf.Series(dtype="datetime64[s]"), False),
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
+        (cudf.Series(dtype=cudf.Decimal128Dtype(5, 2)), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
+        (cudf.Series(dtype=cudf.Decimal32Dtype(5, 2)), False),
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
@@ -527,9 +547,7 @@ def test_is_string_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -594,13 +612,17 @@ def test_is_string_dtype(obj, expect):
         (cudf.CategoricalDtype, False),
         (cudf.ListDtype, False),
         (cudf.StructDtype, False),
+        (cudf.Decimal128Dtype, False),
         (cudf.Decimal64Dtype, False),
+        (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
         (cudf.CategoricalDtype("a"), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
+        (cudf.Decimal128Dtype(5, 2), False),
         (cudf.Decimal64Dtype(5, 2), False),
+        (cudf.Decimal32Dtype(5, 2), False),
         (cudf.IntervalDtype(int), False),
         # cuDF objects
         (cudf.Series(dtype="bool"), False),
@@ -610,7 +632,9 @@ def test_is_string_dtype(obj, expect):
         (cudf.Series(dtype="datetime64[s]"), True),
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
+        (cudf.Series(dtype=cudf.Decimal128Dtype(5, 2)), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
+        (cudf.Series(dtype=cudf.Decimal32Dtype(5, 2)), False),
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
@@ -628,9 +652,7 @@ def test_is_datetime_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -695,13 +717,17 @@ def test_is_datetime_dtype(obj, expect):
         (cudf.CategoricalDtype, False),
         (cudf.ListDtype, True),
         (cudf.StructDtype, False),
+        (cudf.Decimal128Dtype, False),
         (cudf.Decimal64Dtype, False),
+        (cudf.Decimal32Dtype, False),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
         (cudf.CategoricalDtype("a"), False),
         (cudf.ListDtype(int), True),
         (cudf.StructDtype({"a": int}), False),
+        (cudf.Decimal128Dtype(5, 2), False),
         (cudf.Decimal64Dtype(5, 2), False),
+        (cudf.Decimal32Dtype(5, 2), False),
         (cudf.IntervalDtype(int), False),
         # cuDF objects
         (cudf.Series(dtype="bool"), False),
@@ -711,7 +737,9 @@ def test_is_datetime_dtype(obj, expect):
         (cudf.Series(dtype="datetime64[s]"), False),
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
+        (cudf.Series(dtype=cudf.Decimal128Dtype(5, 2)), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
+        (cudf.Series(dtype=cudf.Decimal32Dtype(5, 2)), False),
         (cudf.Series([[1, 2], [3, 4, 5]]), True),
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
@@ -729,9 +757,7 @@ def test_is_list_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -796,13 +822,17 @@ def test_is_list_dtype(obj, expect):
         (cudf.CategoricalDtype, False),
         (cudf.ListDtype, False),
         (cudf.StructDtype, True),
+        (cudf.Decimal128Dtype, False),
         (cudf.Decimal64Dtype, False),
+        (cudf.Decimal32Dtype, False),
         # (cudf.IntervalDtype, False),
         # cuDF dtype instances.
         (cudf.CategoricalDtype("a"), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), True),
+        (cudf.Decimal128Dtype(5, 2), False),
         (cudf.Decimal64Dtype(5, 2), False),
+        (cudf.Decimal32Dtype(5, 2), False),
         # (cudf.IntervalDtype(int), False),
         # cuDF objects
         (cudf.Series(dtype="bool"), False),
@@ -812,7 +842,9 @@ def test_is_list_dtype(obj, expect):
         (cudf.Series(dtype="datetime64[s]"), False),
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
+        (cudf.Series(dtype=cudf.Decimal128Dtype(5, 2)), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
+        (cudf.Series(dtype=cudf.Decimal32Dtype(5, 2)), False),
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), True),
         # (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
@@ -833,9 +865,7 @@ def test_is_struct_dtype(obj, expect):
         (int(), False),
         (float(), False),
         (complex(), False),
-        (str(), False),
         ("", False),
-        (r"", False),
         (object(), False),
         # Base Python types.
         (bool, False),
@@ -900,13 +930,17 @@ def test_is_struct_dtype(obj, expect):
         (cudf.CategoricalDtype, False),
         (cudf.ListDtype, False),
         (cudf.StructDtype, False),
+        (cudf.Decimal128Dtype, True),
         (cudf.Decimal64Dtype, True),
+        (cudf.Decimal32Dtype, True),
         (cudf.IntervalDtype, False),
         # cuDF dtype instances.
         (cudf.CategoricalDtype("a"), False),
         (cudf.ListDtype(int), False),
         (cudf.StructDtype({"a": int}), False),
+        (cudf.Decimal128Dtype(5, 2), True),
         (cudf.Decimal64Dtype(5, 2), True),
+        (cudf.Decimal32Dtype(5, 2), True),
         (cudf.IntervalDtype(int), False),
         # cuDF objects
         (cudf.Series(dtype="bool"), False),
@@ -916,7 +950,9 @@ def test_is_struct_dtype(obj, expect):
         (cudf.Series(dtype="datetime64[s]"), False),
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
+        (cudf.Series(dtype=cudf.Decimal128Dtype(5, 2)), True),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), True),
+        (cudf.Series(dtype=cudf.Decimal32Dtype(5, 2)), True),
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
@@ -934,9 +970,7 @@ def test_is_decimal_dtype(obj, expect):
         int(),
         float(),
         complex(),
-        str(),
         "",
-        r"",
         object(),
         # Base Python types.
         bool,
@@ -1001,11 +1035,13 @@ def test_is_decimal_dtype(obj, expect):
     ),
 )
 def test_pandas_agreement(obj):
-    assert types.is_categorical_dtype(obj) == ptypes.is_categorical_dtype(obj)
-    assert types.is_numeric_dtype(obj) == ptypes.is_numeric_dtype(obj)
-    assert types.is_integer_dtype(obj) == ptypes.is_integer_dtype(obj)
-    assert types.is_integer(obj) == ptypes.is_integer(obj)
-    assert types.is_string_dtype(obj) == ptypes.is_string_dtype(obj)
+    assert types.is_categorical_dtype(obj) == pd_types.is_categorical_dtype(
+        obj
+    )
+    assert types.is_numeric_dtype(obj) == pd_types.is_numeric_dtype(obj)
+    assert types.is_integer_dtype(obj) == pd_types.is_integer_dtype(obj)
+    assert types.is_integer(obj) == pd_types.is_integer(obj)
+    assert types.is_string_dtype(obj) == pd_types.is_string_dtype(obj)
 
 
 @pytest.mark.parametrize(
@@ -1016,9 +1052,7 @@ def test_pandas_agreement(obj):
         int(),
         float(),
         complex(),
-        str(),
         "",
-        r"",
         object(),
         # Base Python types.
         bool,
@@ -1083,7 +1117,7 @@ def test_pandas_agreement(obj):
     ),
 )
 def test_pandas_agreement_scalar(obj):
-    assert types.is_scalar(obj) == ptypes.is_scalar(obj)
+    assert types.is_scalar(obj) == pd_types.is_scalar(obj)
 
 
 # TODO: Add test of interval.

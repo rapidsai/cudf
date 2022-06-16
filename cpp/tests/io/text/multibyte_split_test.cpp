@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/concatenate.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -141,3 +143,30 @@ TEST_F(MultibyteSplitTest, HandpickedInput)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *out, debug_output_level::ALL_ERRORS);
 }
+
+TEST_F(MultibyteSplitTest, LargeInputMultipleRange)
+{
+  auto host_input    = std::string();
+  auto host_expected = std::vector<std::string>();
+
+  for (auto i = 0; i < 1000; i++) {
+    host_input += "...:|";
+  }
+
+  auto delimiter = std::string("...:|");
+  auto source    = cudf::io::text::make_source(host_input);
+
+  auto byte_ranges = cudf::io::text::create_byte_range_infos_consecutive(host_input.size(), 3);
+  auto out0        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[0]);
+  auto out1        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[1]);
+  auto out2        = cudf::io::text::multibyte_split(*source, delimiter, byte_ranges[2]);
+
+  auto out_views = std::vector<cudf::column_view>({out0->view(), out1->view(), out2->view()});
+  auto out       = cudf::concatenate(out_views);
+
+  auto expected = cudf::io::text::multibyte_split(*source, delimiter);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), *out, debug_output_level::ALL_ERRORS);
+}
+
+CUDF_TEST_PROGRAM_MAIN()

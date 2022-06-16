@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,13 +40,14 @@ namespace io {
 namespace detail {
 
 enum class io_file_format { ORC, PARQUET };
+enum class is_int96_timestamp { YES, NO };
 
-template <io_file_format IO>
+template <io_file_format IO, is_int96_timestamp INT96>
 struct conversion_map;
 
 // Every timestamp or duration type is converted to milliseconds in ORC statistics
-template <>
-struct conversion_map<io_file_format::ORC> {
+template <is_int96_timestamp INT96>
+struct conversion_map<io_file_format::ORC, INT96> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
                            std::pair<cudf::timestamp_us, cudf::timestamp_ms>,
                            std::pair<cudf::timestamp_ns, cudf::timestamp_ms>,
@@ -59,9 +60,16 @@ struct conversion_map<io_file_format::ORC> {
 // milliseconds. Timestamps and durations with nanosecond resolution are
 // converted to microseconds.
 template <>
-struct conversion_map<io_file_format::PARQUET> {
+struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::YES> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
                            std::pair<cudf::timestamp_ns, cudf::timestamp_us>,
+                           std::pair<cudf::duration_s, cudf::duration_ms>,
+                           std::pair<cudf::duration_ns, cudf::duration_us>>;
+};
+// int64 nanosecond timestamp won't be converted
+template <>
+struct conversion_map<io_file_format::PARQUET, is_int96_timestamp::NO> {
+  using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
                            std::pair<cudf::duration_s, cudf::duration_ms>,
                            std::pair<cudf::duration_ns, cudf::duration_us>>;
 };

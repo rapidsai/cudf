@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -32,6 +32,10 @@ cdef extern from "cudf/io/types.hpp" \
         BROTLI "cudf::io::compression_type::BROTLI"
         ZIP "cudf::io::compression_type::ZIP"
         XZ "cudf::io::compression_type::XZ"
+        ZLIB "cudf::io::compression_type::ZLIB"
+        LZ4 "cudf::io::compression_type::LZ4"
+        LZO "cudf::io::compression_type::LZO"
+        ZSTD "cudf::io::compression_type::ZSTD"
 
     ctypedef enum io_type:
         FILEPATH "cudf::io::io_type::FILEPATH"
@@ -73,6 +77,13 @@ cdef extern from "cudf/io/types.hpp" \
 
         vector[column_in_metadata] column_metadata
 
+    cdef cppclass partition_info:
+        size_type start_row
+        size_type num_rows
+
+        partition_info()
+        partition_info(size_type start_row, size_type num_rows) except +
+
     cdef cppclass host_buffer:
         const char* data
         size_t size
@@ -99,8 +110,10 @@ cdef extern from "cudf/io/types.hpp" \
 
         sink_info() except +
         sink_info(string file_path) except +
+        sink_info(vector[string] file_path) except +
         sink_info(vector[char] * buffer) except +
         sink_info(data_sink * user_sink) except +
+        sink_info(vector[data_sink *] user_sink) except +
 
 
 cdef extern from "cudf/io/data_sink.hpp" \

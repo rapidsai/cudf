@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ public:
     check_for_eof(sizeof(T));
     // use memcpy since data may be misaligned
     T result;
-    memcpy(&result, data_ptr, sizeof(T));
+    memcpy(reinterpret_cast<jbyte *>(&result), data_ptr, sizeof(T));
     data_ptr += sizeof(T);
     return result;
   }

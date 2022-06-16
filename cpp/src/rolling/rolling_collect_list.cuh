@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/extrema.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -204,9 +207,7 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
                                             stream,
                                             mr);
 
-  rmm::device_buffer null_mask;
-  size_type null_count;
-  std::tie(null_mask, null_count) = valid_if(
+  auto [null_mask, null_count] = valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(input.size()),
     [preceding_begin, following_begin, min_periods] __device__(auto i) {

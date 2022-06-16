@@ -54,7 +54,7 @@ Indexing, iteration
    DataFrame.iloc
    DataFrame.insert
    DataFrame.__iter__
-   DataFrame.iteritems
+   DataFrame.items
    DataFrame.keys
    DataFrame.iterrows
    DataFrame.itertuples
@@ -64,9 +64,6 @@ Indexing, iteration
    DataFrame.where
    DataFrame.mask
    DataFrame.query
-
-For more information on ``.at``, ``.iat``, ``.loc``, and
-``.iloc``,  see the :ref:`indexing documentation <indexing>`.
 
 Binary operator functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -84,6 +81,7 @@ Binary operator functions
    DataFrame.floordiv
    DataFrame.mod
    DataFrame.pow
+   DataFrame.dot
    DataFrame.radd
    DataFrame.rsub
    DataFrame.rmul
@@ -107,6 +105,7 @@ Function application, GroupBy & window
    :toctree: api/
 
    DataFrame.apply
+   DataFrame.applymap
    DataFrame.apply_chunks
    DataFrame.apply_rows
    DataFrame.pipe
@@ -121,6 +120,7 @@ Computations / descriptive stats
 .. autosummary::
    :toctree: api/
 
+   DataFrame.abs
    DataFrame.all
    DataFrame.any
    DataFrame.clip
@@ -132,12 +132,15 @@ Computations / descriptive stats
    DataFrame.cumprod
    DataFrame.cumsum
    DataFrame.describe
+   DataFrame.diff
    DataFrame.kurt
    DataFrame.kurtosis
    DataFrame.max
    DataFrame.mean
+   DataFrame.median
    DataFrame.min
    DataFrame.mode
+   DataFrame.pct_change
    DataFrame.prod
    DataFrame.product
    DataFrame.quantile
@@ -146,8 +149,11 @@ Computations / descriptive stats
    DataFrame.round
    DataFrame.skew
    DataFrame.sum
+   DataFrame.sum_of_squares
    DataFrame.std
    DataFrame.var
+   DataFrame.nunique
+   DataFrame.value_counts
 
 Reindexing / selection / label manipulation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -159,7 +165,9 @@ Reindexing / selection / label manipulation
    DataFrame.drop
    DataFrame.drop_duplicates
    DataFrame.equals
+   DataFrame.first
    DataFrame.head
+   DataFrame.last
    DataFrame.reindex
    DataFrame.rename
    DataFrame.reset_index
@@ -180,6 +188,7 @@ Missing data handling
 
    DataFrame.dropna
    DataFrame.fillna
+   DataFrame.interpolate
    DataFrame.isna
    DataFrame.isnull
    DataFrame.nans_to_nulls
@@ -209,8 +218,8 @@ Reshaping, sorting, transposing
    DataFrame.T
    DataFrame.transpose
 
-Combining / comparing / joining / merging / encoding
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Combining / comparing / joining / merging
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. autosummary::
    :toctree: api/
 
@@ -219,23 +228,6 @@ Combining / comparing / joining / merging / encoding
    DataFrame.join
    DataFrame.merge
    DataFrame.update
-   DataFrame.label_encoding
-   DataFrame.one_hot_encoding
-
-Numerical operations
-~~~~~~~~~~~~~~~~~~~~
-.. autosummary::
-   :toctree: api/
-
-   DataFrame.acos
-   DataFrame.asin
-   DataFrame.atan
-   DataFrame.cos
-   DataFrame.exp
-   DataFrame.log
-   DataFrame.sin
-   DataFrame.sqrt
-   DataFrame.tan
 
 Time Series-related
 ~~~~~~~~~~~~~~~~~~~
@@ -243,26 +235,26 @@ Time Series-related
    :toctree: api/
 
    DataFrame.shift
+   DataFrame.resample
 
 Serialization / IO / conversion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. autosummary::
    :toctree: api/
 
-   DataFrame.as_gpu_matrix
-   DataFrame.as_matrix
    DataFrame.from_arrow
    DataFrame.from_pandas
    DataFrame.from_records
-   DataFrame.hash_columns
    DataFrame.hash_values
    DataFrame.to_arrow
    DataFrame.to_dlpack
    DataFrame.to_parquet
    DataFrame.to_csv
+   DataFrame.to_cupy
    DataFrame.to_hdf
    DataFrame.to_dict
    DataFrame.to_json
+   DataFrame.to_numpy
    DataFrame.to_pandas
    DataFrame.to_feather
    DataFrame.to_records

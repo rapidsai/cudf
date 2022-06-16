@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include "operation.cuh"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -43,9 +44,9 @@ constexpr bool is_bool_result()
 template <typename CastType>
 struct type_casted_accessor {
   template <typename Element>
-  CUDA_DEVICE_CALLABLE CastType operator()(cudf::size_type i,
-                                           column_device_view const& col,
-                                           bool is_scalar) const
+  __device__ inline CastType operator()(cudf::size_type i,
+                                        column_device_view const& col,
+                                        bool is_scalar) const
   {
     if constexpr (column_device_view::has_element_accessor<Element>() and
                   std::is_convertible_v<Element, CastType>)
@@ -61,9 +62,9 @@ struct type_casted_accessor {
 template <typename FromType>
 struct typed_casted_writer {
   template <typename Element>
-  CUDA_DEVICE_CALLABLE void operator()(cudf::size_type i,
-                                       mutable_column_device_view const& col,
-                                       FromType val) const
+  __device__ inline void operator()(cudf::size_type i,
+                                    mutable_column_device_view const& col,
+                                    FromType val) const
   {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
                   std::is_constructible_v<Element, FromType>) {
@@ -103,6 +104,8 @@ struct ops_wrapper {
         type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs, is_rhs_scalar);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or
                       std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
@@ -150,6 +153,8 @@ struct ops2_wrapper {
       TypeRhs y   = rhs.element<TypeRhs>(is_rhs_scalar ? 0 : i);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalAnd> or
+                      std::is_same_v<BinaryOperator, ops::NullLogicalOr> or
                       std::is_same_v<BinaryOperator, ops::NullMax> or
                       std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
@@ -261,36 +266,42 @@ void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
 {
   int block_size;
   int min_grid_size;
-  CUDA_TRY(
+  CUDF_CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, for_each_kernel<decltype(f)>));
   // 2 elements per thread.
   const int grid_size = util::div_rounding_up_safe(size, 2 * block_size);
   for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
 }
-
+namespace detail {
+template <class T, class... Ts>
+inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value;
+}
 template <class BinaryOperator>
-void apply_binary_op(mutable_column_device_view& outd,
-                     column_device_view const& lhsd,
-                     column_device_view const& rhsd,
+void apply_binary_op(mutable_column_view& out,
+                     column_view const& lhs,
+                     column_view const& rhs,
                      bool is_lhs_scalar,
                      bool is_rhs_scalar,
                      rmm::cuda_stream_view stream)
 {
-  auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
+  auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
 
+  auto lhsd = column_device_view::create(lhs, stream);
+  auto rhsd = column_device_view::create(rhs, stream);
+  auto outd = mutable_column_device_view::create(out, stream);
   // Create binop functor instance
   if (common_dtype) {
     // Execute it on every element
     for_each(stream,
-             outd.size(),
+             out.size(),
              binary_op_device_dispatcher<BinaryOperator>{
-               *common_dtype, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+               *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   } else {
     // Execute it on every element
     for_each(stream,
-             outd.size(),
+             out.size(),
              binary_op_double_device_dispatcher<BinaryOperator>{
-               outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+               *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   }
 }
 

@@ -1,8 +1,9 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import operator
+import itertools
 import re
-from collections.abc import Mapping, Sequence
+import warnings
+from collections import abc
 from contextlib import contextmanager
 from decimal import Decimal
 
@@ -14,7 +15,7 @@ from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
-from cudf.core.column.datetime import _numpy_to_pandas_conversion
+from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
@@ -41,6 +42,17 @@ OTHER_TYPES = sorted(list(dtypeutils.OTHER_TYPES))
 ALL_TYPES = sorted(list(dtypeutils.ALL_TYPES))
 
 
+def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
+    """Randomly nullify elements in series with the provided probability."""
+    probs = [null_probability, 1 - null_probability]
+    rng = np.random.default_rng(seed=seed)
+    mask = rng.choice([False, True], size=len(series), p=probs)
+    series.iloc[mask] = None
+
+
+# TODO: This function should be removed. Anywhere that it is being used should
+# instead be generating a random boolean array (bytemask) and use the public
+# APIs to set those elements to None.
 def random_bitmask(size):
     """
     Parameters
@@ -96,12 +108,25 @@ def assert_eq(left, right, **kwargs):
     if isinstance(right, cupy.ndarray):
         right = cupy.asnumpy(right)
 
-    if isinstance(left, pd.DataFrame):
-        tm.assert_frame_equal(left, right, **kwargs)
-    elif isinstance(left, pd.Series):
-        tm.assert_series_equal(left, right, **kwargs)
-    elif isinstance(left, pd.Index):
-        tm.assert_index_equal(left, right, **kwargs)
+    if isinstance(left, (pd.DataFrame, pd.Series, pd.Index)):
+        # TODO: A warning is emitted from the function
+        # pandas.testing.assert_[series, frame, index]_equal for some inputs:
+        # "DeprecationWarning: elementwise comparison failed; this will raise
+        # an error in the future."
+        # or "FutureWarning: elementwise ..."
+        # This warning comes from a call from pandas to numpy. It is ignored
+        # here because it cannot be fixed within cudf.
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "ignore", (DeprecationWarning, FutureWarning)
+            )
+            if isinstance(left, pd.DataFrame):
+                tm.assert_frame_equal(left, right, **kwargs)
+            elif isinstance(left, pd.Series):
+                tm.assert_series_equal(left, right, **kwargs)
+            else:
+                tm.assert_index_equal(left, right, **kwargs)
+
     elif isinstance(left, np.ndarray) and isinstance(right, np.ndarray):
         if np.issubdtype(left.dtype, np.floating) and np.issubdtype(
             right.dtype, np.floating
@@ -113,7 +138,7 @@ def assert_eq(left, right, **kwargs):
         # Use the overloaded __eq__ of the operands
         if left == right:
             return True
-        elif any([np.issubdtype(type(x), np.floating) for x in (left, right)]):
+        elif any(np.issubdtype(type(x), np.floating) for x in (left, right)):
             np.testing.assert_almost_equal(left, right)
         else:
             np.testing.assert_equal(left, right)
@@ -218,9 +243,9 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
     else:
         if len(func_args_and_kwargs) == 1:
             func_args, func_kwargs = [], {}
-            if isinstance(func_args_and_kwargs[0], Sequence):
+            if isinstance(func_args_and_kwargs[0], abc.Sequence):
                 func_args = func_args_and_kwargs[0]
-            elif isinstance(func_args_and_kwargs[0], Mapping):
+            elif isinstance(func_args_and_kwargs[0], abc.Mapping):
                 func_kwargs = func_args_and_kwargs[0]
             else:
                 raise ValueError(
@@ -228,12 +253,12 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
                     "either a Sequence or a Mapping"
                 )
         elif len(func_args_and_kwargs) == 2:
-            if not isinstance(func_args_and_kwargs[0], Sequence):
+            if not isinstance(func_args_and_kwargs[0], abc.Sequence):
                 raise ValueError(
                     "Positional argument at 1st position of "
                     "func_args_and_kwargs should be a sequence."
                 )
-            if not isinstance(func_args_and_kwargs[1], Mapping):
+            if not isinstance(func_args_and_kwargs[1], abc.Mapping):
                 raise ValueError(
                     "Key-word argument at 2nd position of "
                     "func_args_and_kwargs should be a dictionary mapping."
@@ -280,13 +305,17 @@ def gen_rand(dtype, size, **kwargs):
         time_unit, _ = np.datetime_data(dtype)
         high = kwargs.get(
             "high",
-            1000000000000000000 / _numpy_to_pandas_conversion[time_unit],
+            int(1e18) / _unit_to_nanoseconds_conversion[time_unit],
         )
         return pd.to_datetime(
             np.random.randint(low=low, high=high, size=size), unit=time_unit
         )
     elif dtype.kind in ("O", "U"):
-        return pd.util.testing.rands_array(10, size)
+        low = kwargs.get("low", 10)
+        high = kwargs.get("high", 11)
+        return pd._testing.rands_array(
+            np.random.randint(low=low, high=high, size=1)[0], size
+        )
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 
@@ -300,7 +329,8 @@ def gen_rand_series(dtype, size, **kwargs):
 
 def _decimal_series(input, dtype):
     return cudf.Series(
-        [x if x is None else Decimal(x) for x in input], dtype=dtype,
+        [x if x is None else Decimal(x) for x in input],
+        dtype=dtype,
     )
 
 
@@ -316,8 +346,18 @@ def xfail_param(param, **kwargs):
 def assert_column_memory_eq(
     lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
 ):
+    """Assert the memory location and size of `lhs` and `rhs` are equivalent.
+
+    Both data pointer and mask pointer are checked. Also recursively check for
+    children to the same constraints. Also fails check if the number of
+    children mismatches at any level.
+    """
     assert lhs.base_data_ptr == rhs.base_data_ptr
     assert lhs.base_mask_ptr == rhs.base_mask_ptr
+    assert lhs.base_size == rhs.base_size
+    assert lhs.offset == rhs.offset
+    assert lhs.size == rhs.size
+    assert len(lhs.base_children) == len(rhs.base_children)
     for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
         assert_column_memory_eq(lhs_child, rhs_child)
 
@@ -330,3 +370,16 @@ def assert_column_memory_ne(
     except AssertionError:
         return
     raise AssertionError("lhs and rhs holds the same memory.")
+
+
+def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
+    # Wrapper around pd.Series using a float64 default dtype for empty data.
+    if dtype is None and (data is None or len(data) == 0):
+        dtype = "float64"
+    return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
+
+
+parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(
+    "left_dtype,right_dtype",
+    list(itertools.combinations_with_replacement(NUMERIC_TYPES, 2)),
+)

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import string
 from itertools import product
@@ -105,7 +105,7 @@ def test_series_argsort(nelem, dtype, asc):
 )
 def test_series_sort_index(nelem, asc):
     np.random.seed(0)
-    sr = Series((100 * np.random.random(nelem)))
+    sr = Series(100 * np.random.random(nelem))
     psr = sr.to_pandas()
 
     expected = psr.sort_index(ascending=asc)

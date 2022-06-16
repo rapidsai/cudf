@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/filling.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -32,6 +33,9 @@
 #include <vector>
 
 #include <tests/copying/slice_tests.cuh>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 std::vector<cudf::size_type> splits_to_indices(std::vector<cudf::size_type> splits,
                                                cudf::size_type size)
@@ -1315,6 +1319,32 @@ TEST_F(ContiguousSplitUntypedTest, ProgressiveSizes)
   }
 }
 
+TEST_F(ContiguousSplitUntypedTest, ValidityRepartition)
+{
+  // it is tricky to actually get the internal repartitioning/load-balancing code to add new splits
+  // inside a validity buffer.  Under almost all situations, the fraction of bytes that validity
+  // represents is so small compared to the bytes for all other data, that those buffers end up not
+  // getting subdivided. this test forces it happen by using a small, single column of int8's, which
+  // keeps the overall fraction that validity takes up large enough to cause a repartition.
+  srand(0);
+  auto rvalids                   = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    return static_cast<float>(rand()) / static_cast<float>(RAND_MAX) < 0.5f ? 0 : 1;
+  });
+  cudf::size_type const num_rows = 2000000;
+  auto col                       = cudf::sequence(num_rows, cudf::numeric_scalar<int8_t>{0});
+  col->set_null_mask(cudf::test::detail::make_null_mask(rvalids, rvalids + num_rows));
+
+  cudf::table_view t({*col});
+  auto result   = cudf::contiguous_split(t, {num_rows / 2});
+  auto expected = cudf::split(t, {num_rows / 2});
+  CUDF_EXPECTS(result.size() == expected.size(),
+               "Mismatch in split results in ValidityRepartition test");
+
+  for (size_t idx = 0; idx < result.size(); idx++) {
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result[idx].table, expected[idx]);
+  }
+}
+
 TEST_F(ContiguousSplitUntypedTest, ValidityEdgeCase)
 {
   // tests an edge case where the splits cause the final validity data to be copied
@@ -1328,6 +1358,15 @@ TEST_F(ContiguousSplitUntypedTest, ValidityEdgeCase)
   for (unsigned long index = 0; index < result.size(); index++) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index].column(0), result[index].table.column(0));
   }
+}
+
+TEST_F(ContiguousSplitUntypedTest, CalculationOverflow)
+{
+  // tests an edge case where buf.elements * buf.element_size overflows an INT32.
+  auto col = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT64}, 400 * 1024 * 1024, cudf::mask_state::UNALLOCATED);
+  auto result = cudf::contiguous_split(cudf::table_view{{*col}}, {});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, result[0].table.column(0));
 }
 
 // contiguous split with strings

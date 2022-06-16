@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
 from cudf.utils.gpu_utils import validate_setup
 
 validate_setup()
@@ -16,10 +17,8 @@ from cudf.api.extensions import (
     register_index_accessor,
     register_series_accessor,
 )
-from cudf.core.scalar import (
-    NA,
-    Scalar,
-)
+from cudf.core.scalar import Scalar
+
 from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
@@ -44,6 +43,7 @@ from cudf.core.index import (
 )
 from cudf.core.dataframe import DataFrame, from_pandas, merge, from_dataframe
 from cudf.core.series import Series
+from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.cut import cut
 from cudf.core.algorithms import factorize
@@ -51,36 +51,16 @@ from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal64Dtype,
     Decimal32Dtype,
+    Decimal128Dtype,
     IntervalDtype,
     ListDtype,
     StructDtype,
 )
 from cudf.core.groupby import Grouper
-from cudf.core.ops import (
-    add,
-    arccos,
-    arcsin,
-    arctan,
-    cos,
-    exp,
-    floor_divide,
-    log,
-    logical_and,
-    logical_not,
-    logical_or,
-    multiply,
-    remainder,
-    sin,
-    sqrt,
-    subtract,
-    tan,
-    true_divide,
-)
 from cudf.core.reshape import (
     concat,
     get_dummies,
     melt,
-    merge_sorted,
     pivot,
     unstack,
 )
@@ -126,3 +106,65 @@ del numba_config
 
 __version__ = get_versions()["version"]
 del get_versions
+
+__all__ = [
+    "BaseIndex",
+    "CategoricalDtype",
+    "CategoricalIndex",
+    "DataFrame",
+    "DateOffset",
+    "DatetimeIndex",
+    "Decimal32Dtype",
+    "Decimal64Dtype",
+    "Float32Index",
+    "Float64Index",
+    "GenericIndex",
+    "Grouper",
+    "Index",
+    "Int16Index",
+    "Int32Index",
+    "Int64Index",
+    "Int8Index",
+    "IntervalDtype",
+    "IntervalIndex",
+    "ListDtype",
+    "MultiIndex",
+    "NA",
+    "RangeIndex",
+    "Scalar",
+    "Series",
+    "StringIndex",
+    "StructDtype",
+    "TimedeltaIndex",
+    "UInt16Index",
+    "UInt32Index",
+    "UInt64Index",
+    "UInt8Index",
+    "api",
+    "concat",
+    "cut",
+    "date_range",
+    "factorize",
+    "from_dataframe",
+    "from_dlpack",
+    "from_pandas",
+    "get_dummies",
+    "interval_range",
+    "isclose",
+    "melt",
+    "merge",
+    "pivot",
+    "read_avro",
+    "read_csv",
+    "read_feather",
+    "read_hdf",
+    "read_json",
+    "read_orc",
+    "read_parquet",
+    "read_text",
+    "set_allocator",
+    "testing",
+    "to_datetime",
+    "to_numeric",
+    "unstack",
+]

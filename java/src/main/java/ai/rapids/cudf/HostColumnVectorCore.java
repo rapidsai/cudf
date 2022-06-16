@@ -448,11 +448,8 @@ public class HostColumnVectorCore implements AutoCloseable {
    * @return true if null else false
    */
   public boolean isNull(long rowIndex) {
-    assert (rowIndex >= 0 && rowIndex < rows) : "index is out of range 0 <= " + rowIndex + " < " + rows;
-    if (hasValidityVector()) {
-      return BitVectorHelper.isNull(offHeap.valid, rowIndex);
-    }
-    return false;
+    return rowIndex < 0 || rowIndex >= rows // unknown, hence NULL
+           || hasValidityVector() && BitVectorHelper.isNull(offHeap.valid, rowIndex);
   }
 
   /**
@@ -594,9 +591,15 @@ public class HostColumnVectorCore implements AutoCloseable {
       boolean neededCleanup = false;
       if (data != null || valid != null || offsets != null) {
         try {
-          ColumnVector.closeBuffers(data);
-          ColumnVector.closeBuffers(offsets);
-          ColumnVector.closeBuffers(valid);
+          if (data != null) {
+            data.close();
+          }
+          if (offsets != null) {
+            offsets.close();
+          }
+          if (valid != null) {
+            valid.close();
+          }
         } finally {
           // Always mark the resource as freed even if an exception is thrown.
           // We cannot know how far it progressed before the exception, and

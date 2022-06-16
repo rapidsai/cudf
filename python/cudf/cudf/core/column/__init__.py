@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 """
 isort: skip_file
 """
@@ -31,5 +32,7 @@ from cudf.core.column.interval import IntervalColumn  # noqa: F401
 from cudf.core.column.decimal import (  # noqa: F401
     Decimal32Column,
     Decimal64Column,
+    Decimal128Column,
+    DecimalBaseColumn,
 )
 from cudf.core.column.interval import IntervalColumn  # noqa: F401

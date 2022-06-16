@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import warnings
 from typing import Any, Optional, Tuple, Union, cast
@@ -12,6 +12,7 @@ from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
 from cudf.core.frame import Frame
 from cudf.core.index import Index
+from cudf.core.missing import NA
 from cudf.core.series import Series
 from cudf.core.single_column_frame import SingleColumnFrame
 
@@ -28,9 +29,7 @@ def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
             f"{type(other).__name__} to {col.dtype.name}"
         )
 
-    return cudf.Scalar(
-        other, dtype=col.dtype if other in {None, cudf.NA} else None
-    )
+    return cudf.Scalar(other, dtype=col.dtype if other in {None, NA} else None)
 
 
 def _check_and_cast_columns_with_other(
@@ -93,10 +92,10 @@ def _check_and_cast_columns_with_other(
 
 
 def _normalize_columns_and_scalars_type(
-    frame: Frame, other: Any, inplace: bool = False,
-) -> Tuple[
-    Union[Frame, ColumnLike], Any,
-]:
+    frame: Frame,
+    other: Any,
+    inplace: bool = False,
+) -> Tuple[Union[Frame, ColumnLike], Any]:
     """
     Try to normalize the other's dtypes as per frame.
 
@@ -176,7 +175,10 @@ def _normalize_columns_and_scalars_type(
 
 
 def where(
-    frame: Frame, cond: Any, other: Any = None, inplace: bool = False,
+    frame: Frame,
+    cond: Any,
+    other: Any = None,
+    inplace: bool = False,
 ) -> Optional[Union[Frame]]:
     """
     Replace values where the condition is False.
@@ -264,11 +266,12 @@ def where(
                 )
             # Setting `frame` column names to `cond`
             # as `cond` has no column names.
-            cond.columns = frame.columns
+            cond._set_column_names_like(frame)
 
-        (source_df, others,) = _normalize_columns_and_scalars_type(
-            frame, other
-        )
+        (
+            source_df,
+            others,
+        ) = _normalize_columns_and_scalars_type(frame, other)
         if isinstance(others, Frame):
             others = others._data.columns
 
@@ -340,9 +343,10 @@ def where(
                 """Array conditional must be same shape as self"""
             )
 
-        (input_col, other,) = _normalize_columns_and_scalars_type(
-            frame, other, inplace
-        )
+        (
+            input_col,
+            other,
+        ) = _normalize_columns_and_scalars_type(frame, other, inplace)
 
         if isinstance(input_col, cudf.core.column.CategoricalColumn):
             if cudf.api.types.is_scalar(other):

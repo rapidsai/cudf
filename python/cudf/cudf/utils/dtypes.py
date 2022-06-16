@@ -1,6 +1,6 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-import datetime as dt
+import datetime
 from collections import namedtuple
 from decimal import Decimal
 
@@ -12,6 +12,7 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
+from cudf.core.missing import NA
 
 _NA_REP = "<NA>"
 
@@ -160,12 +161,24 @@ def numeric_normalize_types(*args):
 def _find_common_type_decimal(dtypes):
     # Find the largest scale and the largest difference between
     # precision and scale of the columns to be concatenated
-    s = max([dtype.scale for dtype in dtypes])
-    lhs = max([dtype.precision - dtype.scale for dtype in dtypes])
+    s = max(dtype.scale for dtype in dtypes)
+    lhs = max(dtype.precision - dtype.scale for dtype in dtypes)
     # Combine to get the necessary precision and clip at the maximum
     # precision
-    p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
-    return cudf.Decimal64Dtype(p, s)
+    p = s + lhs
+
+    if p > cudf.Decimal64Dtype.MAX_PRECISION:
+        return cudf.Decimal128Dtype(
+            min(cudf.Decimal128Dtype.MAX_PRECISION, p), s
+        )
+    elif p > cudf.Decimal32Dtype.MAX_PRECISION:
+        return cudf.Decimal64Dtype(
+            min(cudf.Decimal64Dtype.MAX_PRECISION, p), s
+        )
+    else:
+        return cudf.Decimal32Dtype(
+            min(cudf.Decimal32Dtype.MAX_PRECISION, p), s
+        )
 
 
 def cudf_dtype_from_pydata_dtype(dtype):
@@ -179,6 +192,8 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return cudf.core.dtypes.Decimal32Dtype
     elif cudf.api.types.is_decimal64_dtype(dtype):
         return cudf.core.dtypes.Decimal64Dtype
+    elif cudf.api.types.is_decimal128_dtype(dtype):
+        return cudf.core.dtypes.Decimal128Dtype
     elif dtype in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
         return dtype.type
 
@@ -218,7 +233,7 @@ def cudf_dtype_from_pa_type(typ):
     elif pa.types.is_struct(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
-        return cudf.core.dtypes.Decimal64Dtype.from_arrow(typ)
+        return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     elif pa.types.is_dictionary(typ):
         return cudf.core.dtypes.CategoricalDtype.from_arrow(typ)
     else:
@@ -257,10 +272,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     if isinstance(val, pa.DictionaryScalar):
         val = val.value.as_py()
-
-    if isinstance(val, dt.datetime):
+    elif isinstance(val, datetime.datetime):
         val = np.datetime64(val)
-    elif isinstance(val, dt.timedelta):
+    elif isinstance(val, datetime.timedelta):
         val = np.timedelta64(val)
     elif isinstance(val, pd.Timestamp):
         val = val.to_datetime64()
@@ -526,7 +540,7 @@ def find_common_type(dtypes):
             )
             for dtype in dtypes
         ):
-            if len(set(dtype._categories.dtype for dtype in dtypes)) == 1:
+            if len({dtype._categories.dtype for dtype in dtypes}) == 1:
                 return cudf.CategoricalDtype(
                     cudf.core.column.concat_columns(
                         [dtype._categories for dtype in dtypes]
@@ -592,7 +606,7 @@ def _can_cast(from_dtype, to_dtype):
     `np.can_cast` but with some special handling around
     cudf specific dtypes.
     """
-    if from_dtype in {None, cudf.NA}:
+    if from_dtype in {None, NA}:
         return True
     if isinstance(from_dtype, type):
         from_dtype = cudf.dtype(from_dtype)
@@ -601,8 +615,9 @@ def _can_cast(from_dtype, to_dtype):
 
     # TODO : Add precision & scale checking for
     # decimal types in future
-    if isinstance(from_dtype, cudf.core.dtypes.Decimal64Dtype):
-        if isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+
+    if isinstance(from_dtype, cudf.core.dtypes.DecimalDtype):
+        if isinstance(to_dtype, cudf.core.dtypes.DecimalDtype):
             return True
         elif isinstance(to_dtype, np.dtype):
             if to_dtype.kind in {"i", "f", "u", "U", "O"}:
@@ -612,7 +627,7 @@ def _can_cast(from_dtype, to_dtype):
     elif isinstance(from_dtype, np.dtype):
         if isinstance(to_dtype, np.dtype):
             return np.can_cast(from_dtype, to_dtype)
-        elif isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+        elif isinstance(to_dtype, cudf.core.dtypes.DecimalDtype):
             if from_dtype.kind in {"i", "f", "u", "U", "O"}:
                 return True
             else:

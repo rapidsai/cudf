@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,9 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <type_traits>
 #include <vector>
@@ -150,7 +153,7 @@ inline cudf::column make_exp_chrono_column(cudf::type_id type_id)
         rmm::device_buffer{test_durations_ns.data(),
                            test_durations_ns.size() * sizeof(test_durations_ns.front()),
                            rmm::cuda_stream_default});
-    default: CUDF_FAIL("");
+    default: CUDF_FAIL("Unsupported type_id");
   }
 };
 
@@ -171,9 +174,7 @@ void validate_cast_result(cudf::column_view expected, cudf::column_view actual)
 {
   using namespace cudf::test;
   // round-trip through the host because sizeof(T) may not equal sizeof(R)
-  thrust::host_vector<T> h_data;
-  std::vector<cudf::bitmask_type> null_mask;
-  std::tie(h_data, null_mask) = to_host<T>(expected);
+  auto [h_data, null_mask] = to_host<T>(expected);
   if (null_mask.empty()) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(make_column<R, T>(h_data), actual);
   } else {
@@ -1000,6 +1001,22 @@ TYPED_TEST(FixedPointTests, Decimal128ToDecimalXXWithLargerScaleAndNullMask)
   auto const input    = fp_wrapperFrom{vec.cbegin(), vec.cend(), {1, 1, 1, 0}, scale_type{-3}};
   auto const expected = fp_wrapperTo{{1, 17, 172, 1729000}, {1, 1, 1, 0}, scale_type{0}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(0));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTests, DecimalRescaleOverflowAndNullMask)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const vec      = std::vector{1729, 17290, 172900, 1729000};
+  auto const scale    = cuda::std::numeric_limits<RepType>::digits10 + 1;
+  auto const input    = fp_wrapper{vec.cbegin(), vec.cend(), {1, 0, 0, 1}, scale_type{0}};
+  auto const expected = fp_wrapper{{0, 0, 0, 0}, {1, 0, 0, 1}, scale_type{scale}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(scale));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }

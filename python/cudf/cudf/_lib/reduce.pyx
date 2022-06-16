@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import cudf
 from cudf.api.types import is_decimal_dtype
@@ -16,7 +16,12 @@ from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
 
-from cudf._lib.aggregation cimport Aggregation, make_aggregation
+from cudf._lib.aggregation cimport (
+    ReduceAggregation,
+    ScanAggregation,
+    make_reduce_aggregation,
+    make_scan_aggregation,
+)
 from cudf._lib.types cimport (
     dtype_to_data_type,
     is_decimal_type_id,
@@ -43,17 +48,15 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         to the same type as the input column
     """
 
-    col_dtype = incol.dtype
-    if (
-        reduction_op in ['sum', 'sum_of_squares', 'product']
-        and not is_decimal_dtype(col_dtype)
-    ):
-        col_dtype = np.find_common_type([col_dtype], [np.uint64])
-    col_dtype = col_dtype if dtype is None else dtype
+    col_dtype = (
+        dtype if dtype is not None
+        else incol._reduction_result_dtype(reduction_op)
+    )
 
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[scalar] c_result
-    cdef Aggregation cython_agg = make_aggregation(reduction_op, kwargs)
+    cdef ReduceAggregation cython_agg = make_reduce_aggregation(
+        reduction_op, kwargs)
 
     cdef data_type c_out_dtype = dtype_to_data_type(col_dtype)
 
@@ -101,7 +104,7 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     """
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[column] c_result
-    cdef Aggregation cython_agg = make_aggregation(scan_op, kwargs)
+    cdef ScanAggregation cython_agg = make_scan_aggregation(scan_op, kwargs)
 
     cdef scan_type c_inclusive = \
         scan_type.INCLUSIVE if inclusive else scan_type.EXCLUSIVE

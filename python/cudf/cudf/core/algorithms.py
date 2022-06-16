@@ -1,12 +1,12 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-from warnings import warn
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+import warnings
 
 import cupy as cp
 import numpy as np
 
 from cudf.core.column import as_column
-from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex
+from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.series import Series
 
 
@@ -21,7 +21,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
         Value to indicate missing category.
 
     Returns
-    --------
+    -------
     (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
         - *labels* contains the encoded values
         - *cats* contains the categories in order that the N-th
@@ -50,7 +50,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
         raise NotImplementedError("na_sentinel can not be None.")
 
     if size_hint:
-        warn("size_hint is not applicable for cudf.factorize")
+        warnings.warn("size_hint is not applicable for cudf.factorize")
 
     return_cupy_array = isinstance(values, cp.ndarray)
 
@@ -92,7 +92,7 @@ def _index_or_values_interpolation(column, index=None):
     if num_nan == 0 or num_nan == len(column):
         return column
 
-    to_interp = Frame(data={None: column}, index=index)
+    to_interp = IndexedFrame(data={None: column}, index=index)
     known_x_and_y = to_interp._apply_boolean_mask(as_column(~mask))
 
     known_x = known_x_and_y._index._column.values

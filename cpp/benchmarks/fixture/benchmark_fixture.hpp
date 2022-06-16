@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,12 @@ namespace {
 // memory resource factory helpers
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 
-inline auto make_pool()
+inline auto make_pool_instance()
 {
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+  static rmm::mr::cuda_memory_resource cuda_mr;
+  static auto pool_mr =
+    std::make_shared<rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>>(&cuda_mr);
+  return pool_mr;
 }
 }  // namespace
 
@@ -68,13 +71,19 @@ inline auto make_pool()
  */
 class benchmark : public ::benchmark::Fixture {
  public:
-  virtual void SetUp(const ::benchmark::State& state)
+  benchmark() : ::benchmark::Fixture()
   {
-    mr = make_pool();
+    const char* env_iterations = std::getenv("CUDF_BENCHMARK_ITERATIONS");
+    if (env_iterations != nullptr) { this->Iterations(std::max(0L, atol(env_iterations))); }
+  }
+
+  void SetUp(const ::benchmark::State& state) override
+  {
+    mr = make_pool_instance();
     rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
   }
 
-  virtual void TearDown(const ::benchmark::State& state)
+  void TearDown(const ::benchmark::State& state) override
   {
     // reset default resource to the initial resource
     rmm::mr::set_current_device_resource(nullptr);
@@ -82,8 +91,8 @@ class benchmark : public ::benchmark::Fixture {
   }
 
   // eliminate partial override warnings (see benchmark/benchmark.h)
-  virtual void SetUp(::benchmark::State& st) { SetUp(const_cast<const ::benchmark::State&>(st)); }
-  virtual void TearDown(::benchmark::State& st)
+  void SetUp(::benchmark::State& st) override { SetUp(const_cast<const ::benchmark::State&>(st)); }
+  void TearDown(::benchmark::State& st) override
   {
     TearDown(const_cast<const ::benchmark::State&>(st));
   }
@@ -102,7 +111,10 @@ class memory_stats_logger {
 
   ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
 
-  size_t peak_memory_usage() const noexcept { return statistics_mr.get_bytes_counter().peak; }
+  [[nodiscard]] size_t peak_memory_usage() const noexcept
+  {
+    return statistics_mr.get_bytes_counter().peak;
+  }
 
  private:
   rmm::mr::device_memory_resource* existing_mr;

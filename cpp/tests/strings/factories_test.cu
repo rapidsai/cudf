@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/execution_policy.h>
+#include <thrust/host_vector.h>
+#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 #include <cstring>
@@ -68,7 +70,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
       strings[idx] = thrust::pair<const char*, cudf::size_type>{nullptr, 0};
       nulls++;
     } else {
-      cudf::size_type length = (cudf::size_type)strlen(str);
+      auto length = (cudf::size_type)strlen(str);
       memcpy(h_buffer.data() + offset, str, length);
       strings[idx] = thrust::pair<const char*, cudf::size_type>{d_buffer.data() + offset, length};
       offset += length;
@@ -76,7 +78,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     h_offsets[idx + 1] = offset;
   }
   auto d_strings = cudf::detail::make_device_uvector_sync(strings);
-  CUDA_TRY(cudaMemcpy(d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
+  CUDF_CUDA_TRY(cudaMemcpy(d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
   auto column = cudf::make_strings_column(d_strings);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), nulls);
@@ -130,7 +132,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
     h_null_mask     = (h_null_mask << 1);
     const char* str = h_test_strings[idx];
     if (str) {
-      cudf::size_type length = (cudf::size_type)strlen(str);
+      auto length = (cudf::size_type)strlen(str);
       memcpy(h_buffer.data() + offset, str, length);
       offset += length;
       h_null_mask |= 1;

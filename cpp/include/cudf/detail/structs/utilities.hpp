@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,17 +106,17 @@ class flattened_table {
   /**
    * @brief Getter for the flattened columns, as a `table_view`.
    */
-  table_view flattened_columns() const { return _flattened_columns; }
+  [[nodiscard]] table_view flattened_columns() const { return _flattened_columns; }
 
   /**
    * @brief Getter for the cudf::order of the table_view's columns.
    */
-  std::vector<order> orders() const { return _orders; }
+  [[nodiscard]] std::vector<order> orders() const { return _orders; }
 
   /**
    * @brief Getter for the cudf::null_order of the table_view's columns.
    */
-  std::vector<null_order> null_orders() const { return _null_orders; }
+  [[nodiscard]] std::vector<null_order> null_orders() const { return _null_orders; }
 
   /**
    * @brief Conversion to `table_view`, to fetch flattened columns.
@@ -245,6 +245,20 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
   table_view const& table,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Checks if a column or any of its children is a struct column with structs that are null.
+ *
+ * This function searches for structs that are null -- differentiating between structs that are null
+ * and structs containing null values. Null structs add a column to the result of the flatten column
+ * utility and necessitates column_nullability::FORCE when flattening the column for comparison
+ * operations.
+ *
+ * @param col Column to check for null structs
+ * @return A boolean indicating if the column is or contains a struct column that contains a null
+ * struct.
+ */
+bool contains_null_structs(column_view const& col);
 }  // namespace detail
 }  // namespace structs
 }  // namespace cudf

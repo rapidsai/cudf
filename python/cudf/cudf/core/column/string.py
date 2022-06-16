@@ -1,15 +1,13 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-import builtins
-import pickle
 import re
 import warnings
+from functools import cached_property
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
     Optional,
     Sequence,
     Tuple,
@@ -36,8 +34,7 @@ from cudf.api.types import (
 )
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethods, ParentType
-from cudf.utils import utils
+from cudf.core.column.methods import ColumnMethods
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import can_convert_to_column
 
@@ -50,7 +47,13 @@ def str_to_boolean(column: StringColumn):
 
 
 if TYPE_CHECKING:
-    from cudf._typing import ColumnLike, Dtype, ScalarLike, SeriesOrIndex
+    from cudf._typing import (
+        ColumnBinaryOperand,
+        ColumnLike,
+        Dtype,
+        ScalarLike,
+        SeriesOrIndex,
+    )
 
 
 _str_to_numeric_typecast_functions = {
@@ -132,7 +135,7 @@ class StringMethods(ColumnMethods):
     def htoi(self) -> SeriesOrIndex:
         """
         Returns integer value represented by each hex string.
-        String is interpretted to have hex (base-16) characters.
+        String is interpreted to have hex (base-16) characters.
 
         Returns
         -------
@@ -156,7 +159,7 @@ class StringMethods(ColumnMethods):
 
     hex_to_int = htoi
 
-    def ip2int(self) -> ParentType:
+    def ip2int(self) -> SeriesOrIndex:
         """
         This converts ip strings to integers
 
@@ -196,7 +199,7 @@ class StringMethods(ColumnMethods):
             return self.get(key)
 
     def len(self) -> SeriesOrIndex:
-        """
+        r"""
         Computes the length of each element in the Series/Index.
 
         Returns
@@ -208,7 +211,7 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(["dog", "", "\\n", None])
+        >>> s = cudf.Series(["dog", "", "\n", None])
         >>> s.str.len()
         0       3
         1       0
@@ -248,7 +251,9 @@ class StringMethods(ColumnMethods):
         2    11
         dtype: int32
         """
-        return self._return_or_inplace(libstrings.count_bytes(self._column),)
+        return self._return_or_inplace(
+            libstrings.count_bytes(self._column),
+        )
 
     @overload
     def cat(self, sep: str = None, na_rep: str = None) -> str:
@@ -349,15 +354,15 @@ class StringMethods(ColumnMethods):
 
         if others is None:
             data = libstrings.join(
-                self._column, cudf.Scalar(sep), cudf.Scalar(na_rep, "str"),
+                self._column,
+                cudf.Scalar(sep),
+                cudf.Scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
             all_cols = [self._column] + other_cols
             data = libstrings.concatenate(
-                cudf.DataFrame(
-                    {index: value for index, value in enumerate(all_cols)}
-                ),
+                all_cols,
                 cudf.Scalar(sep),
                 cudf.Scalar(na_rep, "str"),
             )
@@ -574,6 +579,8 @@ class StringMethods(ColumnMethods):
         ----------
         pat : str
             Regular expression pattern with capturing groups.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
         expand : bool, default True
             If True, return DataFrame with one column per capture group.
             If False, return a Series/Index if there is one capture group or
@@ -588,8 +595,8 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        The `flags` parameter is not yet supported and will raise a
-        NotImplementedError if anything other than the default value is passed.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
 
         Examples
         --------
@@ -618,10 +625,12 @@ class StringMethods(ColumnMethods):
         2    <NA>
         dtype: object
         """  # noqa W605
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
+        if not _is_supported_regex_flags(flags):
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
-        data, index = libstrings.extract(self._column, pat)
+        data, index = libstrings.extract(self._column, pat, flags)
         if len(data) == 1 and expand is False:
             data = next(iter(data.values()))
         else:
@@ -752,7 +761,9 @@ class StringMethods(ColumnMethods):
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         if pat is None:
             result_col = column.column_empty(
@@ -771,7 +782,10 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(result_col)
 
-    def repeat(self, repeats: Union[int, Sequence],) -> SeriesOrIndex:
+    def repeat(
+        self,
+        repeats: Union[int, Sequence],
+    ) -> SeriesOrIndex:
         """
         Duplicate each string in the Series or Index.
         Equivalent to `str.repeat()
@@ -816,7 +830,8 @@ class StringMethods(ColumnMethods):
         if can_convert_to_column(repeats):
             return self._return_or_inplace(
                 libstrings.repeat_sequence(
-                    self._column, column.as_column(repeats, dtype="int"),
+                    self._column,
+                    column.as_column(repeats, dtype="int"),
                 ),
             )
 
@@ -909,7 +924,9 @@ class StringMethods(ColumnMethods):
 
             return self._return_or_inplace(
                 libstrings.replace_multi_re(
-                    self._column, pat, column.as_column(repl, dtype="str"),
+                    self._column,
+                    pat,
+                    column.as_column(repl, dtype="str"),
                 )
                 if regex
                 else libstrings.replace_multi(
@@ -941,7 +958,7 @@ class StringMethods(ColumnMethods):
         )
 
     def replace_with_backrefs(self, pat: str, repl: str) -> SeriesOrIndex:
-        """
+        r"""
         Use the ``repl`` back-ref template to create a new string
         with the extracted elements found using the ``pat`` expression.
 
@@ -961,7 +978,7 @@ class StringMethods(ColumnMethods):
         --------
         >>> import cudf
         >>> s = cudf.Series(["A543","Z756"])
-        >>> s.str.replace_with_backrefs('(\\\\d)(\\\\d)', 'V\\\\2\\\\1')
+        >>> s.str.replace_with_backrefs('(\\d)(\\d)', 'V\\2\\1')
         0    AV453
         1    ZV576
         dtype: object
@@ -1176,7 +1193,7 @@ class StringMethods(ColumnMethods):
         )
 
     def isfloat(self) -> SeriesOrIndex:
-        """
+        r"""
         Check whether all characters in each string form floating value.
 
         If a string has zero characters, False is returned for
@@ -1230,7 +1247,7 @@ class StringMethods(ColumnMethods):
         4     True
         5    False
         dtype: bool
-        >>> s = cudf.Series(["this is plain text", "\\t\\n", "9.9", "9.9.9"])
+        >>> s = cudf.Series(["this is plain text", "\t\n", "9.9", "9.9.9"])
         >>> s.str.isfloat()
         0    False
         1    False
@@ -1984,7 +2001,9 @@ class StringMethods(ColumnMethods):
             repl = ""
 
         return self._return_or_inplace(
-            libstrings.filter_alphanum(self._column, cudf.Scalar(repl), keep),
+            libstrings.filter_alphanum(
+                self._column, cudf.Scalar(repl, "str"), keep
+            ),
         )
 
     def slice_from(
@@ -2119,7 +2138,7 @@ class StringMethods(ColumnMethods):
 
         return self._return_or_inplace(
             libstrings.slice_replace(
-                self._column, start, stop, cudf.Scalar(repl)
+                self._column, start, stop, cudf.Scalar(repl, "str")
             ),
         )
 
@@ -2170,7 +2189,7 @@ class StringMethods(ColumnMethods):
             repl = ""
 
         return self._return_or_inplace(
-            libstrings.insert(self._column, start, cudf.Scalar(repl)),
+            libstrings.insert(self._column, start, cudf.Scalar(repl, "str")),
         )
 
     def get(self, i: int = 0) -> SeriesOrIndex:
@@ -2218,7 +2237,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(libstrings.get(self._column, i))
 
     def get_json_object(self, json_path):
-        """
+        r"""
         Applies a JSONPath string to an input strings column
         where each row in the column is a valid json string
 
@@ -2237,7 +2256,7 @@ class StringMethods(ColumnMethods):
         >>> import cudf
         >>> s = cudf.Series(
             [
-                \\"\\"\\"
+                \"\"\"
                 {
                     "store":{
                         "book":[
@@ -2256,13 +2275,13 @@ class StringMethods(ColumnMethods):
                         ]
                     }
                 }
-                \\"\\"\\"
+                \"\"\"
             ])
         >>> s
-            0    {"store": {\\n        "book": [\\n        { "cat...
+            0    {"store": {\n        "book": [\n        { "cat...
             dtype: object
         >>> s.str.get_json_object("$.store.book")
-            0    [\\n        { "category": "reference",\\n       ...
+            0    [\n        { "category": "reference",\n       ...
             dtype: object
         """
 
@@ -2284,19 +2303,24 @@ class StringMethods(ColumnMethods):
             return res
 
     def split(
-        self, pat: str = None, n: int = -1, expand: bool = None
+        self,
+        pat: str = None,
+        n: int = -1,
+        expand: bool = False,
+        regex: bool = None,
     ) -> SeriesOrIndex:
         """
         Split strings around given separator/delimiter.
 
         Splits the string in the Series/Index from the beginning, at the
-        specified delimiter string. Equivalent to `str.split()
+        specified delimiter string. Similar to `str.split()
         <https://docs.python.org/3/library/stdtypes.html#str.split>`_.
 
         Parameters
         ----------
-        pat : str, default ' ' (space)
-            String to split on, does not yet support regular expressions.
+        pat : str, default None
+            String or regular expression to split on. If not specified, split
+            on whitespace.
         n : int, default -1 (all)
             Limit number of splits in output. `None`, 0, and -1 will all be
             interpreted as "all splits".
@@ -2307,6 +2331,13 @@ class StringMethods(ColumnMethods):
               dimensionality.
             * If ``False``, return Series/Index, containing lists
               of strings.
+        regex : bool, default None
+            Determines if the passed-in pattern is a regular expression:
+
+            * If ``True``, assumes the passed-in pattern is a regular
+              expression
+            * If ``False``, treats the pattern as a literal string.
+            * If pat length is 1, treats pat as a literal string.
 
         Returns
         -------
@@ -2396,9 +2427,6 @@ class StringMethods(ColumnMethods):
         2                                <NA>  <NA>  <NA>     <NA>      <NA>
         """
 
-        if expand is None:
-            expand = False
-
         if expand not in (True, False):
             raise ValueError(
                 f"expand parameter accepts only : [True, False], "
@@ -2406,38 +2434,54 @@ class StringMethods(ColumnMethods):
             )
 
         # Pandas treats 0 as all
-        if n == 0:
+        if n is None or n == 0:
             n = -1
 
         if pat is None:
             pat = ""
 
+        if regex and isinstance(pat, re.Pattern):
+            pat = pat.pattern
+
+        if len(str(pat)) <= 1:
+            regex = False
+
         if expand:
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                data, index = libstrings.split(
-                    self._column, cudf.Scalar(pat, "str"), n
-                )
+                if regex is True:
+                    data, index = libstrings.split_re(self._column, pat, n)
+                else:
+                    data, index = libstrings.split(
+                        self._column, cudf.Scalar(pat, "str"), n
+                    )
                 if len(data) == 1 and data[0].null_count == len(self._column):
                     result_table = cudf.core.frame.Frame({})
                 else:
                     result_table = cudf.core.frame.Frame(data, index)
         else:
-            result_table = libstrings.split_record(
-                self._column, cudf.Scalar(pat, "str"), n
-            )
+            if regex is True:
+                result_table = libstrings.split_record_re(self._column, pat, n)
+            else:
+                result_table = libstrings.split_record(
+                    self._column, cudf.Scalar(pat, "str"), n
+                )
 
         return self._return_or_inplace(result_table, expand=expand)
 
     def rsplit(
-        self, pat: str = None, n: int = -1, expand: bool = None
+        self,
+        pat: str = None,
+        n: int = -1,
+        expand: bool = False,
+        regex: bool = None,
     ) -> SeriesOrIndex:
         """
         Split strings around given separator/delimiter.
 
         Splits the string in the Series/Index from the end, at the
-        specified delimiter string. Equivalent to `str.rsplit()
+        specified delimiter string. Similar to `str.rsplit()
         <https://docs.python.org/3/library/stdtypes.html#str.rsplit>`_.
 
         Parameters
@@ -2454,6 +2498,13 @@ class StringMethods(ColumnMethods):
               dimensionality.
             * If ``False``, return Series/Index, containing lists
               of strings.
+        regex : bool, default None
+            Determines if the passed-in pattern is a regular expression:
+
+            * If ``True``, assumes the passed-in pattern is a regular
+              expression
+            * If ``False``, treats the pattern as a literal string.
+            * If pat length is 1, treats pat as a literal string.
 
         Returns
         -------
@@ -2552,9 +2603,6 @@ class StringMethods(ColumnMethods):
         2                                <NA>        <NA>
         """
 
-        if expand is None:
-            expand = False
-
         if expand not in (True, False):
             raise ValueError(
                 f"expand parameter accepts only : [True, False], "
@@ -2568,21 +2616,32 @@ class StringMethods(ColumnMethods):
         if pat is None:
             pat = ""
 
+        if regex and isinstance(pat, re.Pattern):
+            pat = pat.pattern
+
         if expand:
             if self._column.null_count == len(self._column):
                 result_table = cudf.core.frame.Frame({0: self._column.copy()})
             else:
-                data, index = libstrings.rsplit(
-                    self._column, cudf.Scalar(pat, "str"), n
-                )
+                if regex is True:
+                    data, index = libstrings.rsplit_re(self._column, pat, n)
+                else:
+                    data, index = libstrings.rsplit(
+                        self._column, cudf.Scalar(pat, "str"), n
+                    )
                 if len(data) == 1 and data[0].null_count == len(self._column):
                     result_table = cudf.core.frame.Frame({})
                 else:
                     result_table = cudf.core.frame.Frame(data, index)
         else:
-            result_table = libstrings.rsplit_record(
-                self._column, cudf.Scalar(pat), n
-            )
+            if regex is True:
+                result_table = libstrings.rsplit_record_re(
+                    self._column, pat, n
+                )
+            else:
+                result_table = libstrings.rsplit_record(
+                    self._column, cudf.Scalar(pat, "str"), n
+                )
 
         return self._return_or_inplace(result_table, expand=expand)
 
@@ -2664,7 +2723,7 @@ class StringMethods(ColumnMethods):
 
         return self._return_or_inplace(
             cudf.core.frame.Frame(
-                *libstrings.partition(self._column, cudf.Scalar(sep))
+                *libstrings.partition(self._column, cudf.Scalar(sep, "str"))
             ),
             expand=expand,
         )
@@ -2731,7 +2790,7 @@ class StringMethods(ColumnMethods):
 
         return self._return_or_inplace(
             cudf.core.frame.Frame(
-                *libstrings.rpartition(self._column, cudf.Scalar(sep))
+                *libstrings.rpartition(self._column, cudf.Scalar(sep, "str"))
             ),
             expand=expand,
         )
@@ -3077,7 +3136,7 @@ class StringMethods(ColumnMethods):
         )
 
     def strip(self, to_strip: str = None) -> SeriesOrIndex:
-        """
+        r"""
         Remove leading and trailing characters.
 
         Strip whitespaces (including newlines) or a set of
@@ -3108,11 +3167,11 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\\n', '3. Cat?\\t', None])
+        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\n', '3. Cat?\t', None])
         >>> s
         0    1. Ant.
-        1    2. Bee!\\n
-        2    3. Cat?\\t
+        1    2. Bee!\n
+        2    3. Cat?\t
         3         <NA>
         dtype: object
         >>> s.str.strip()
@@ -3121,7 +3180,7 @@ class StringMethods(ColumnMethods):
         2    3. Cat?
         3       <NA>
         dtype: object
-        >>> s.str.strip('123.!? \\n\\t')
+        >>> s.str.strip('123.!? \n\t')
         0     Ant
         1     Bee
         2     Cat
@@ -3132,11 +3191,11 @@ class StringMethods(ColumnMethods):
             to_strip = ""
 
         return self._return_or_inplace(
-            libstrings.strip(self._column, cudf.Scalar(to_strip))
+            libstrings.strip(self._column, cudf.Scalar(to_strip, "str"))
         )
 
     def lstrip(self, to_strip: str = None) -> SeriesOrIndex:
-        """
+        r"""
         Remove leading and trailing characters.
 
         Strip whitespaces (including newlines)
@@ -3167,11 +3226,11 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\\n', '3. Cat?\\t', None])
+        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\n', '3. Cat?\t', None])
         >>> s.str.lstrip('123.')
         0     Ant.
-        1     Bee!\\n
-        2     Cat?\\t
+        1     Bee!\n
+        2     Cat?\t
         3       <NA>
         dtype: object
         """
@@ -3179,11 +3238,11 @@ class StringMethods(ColumnMethods):
             to_strip = ""
 
         return self._return_or_inplace(
-            libstrings.lstrip(self._column, cudf.Scalar(to_strip))
+            libstrings.lstrip(self._column, cudf.Scalar(to_strip, "str"))
         )
 
     def rstrip(self, to_strip: str = None) -> SeriesOrIndex:
-        """
+        r"""
         Remove leading and trailing characters.
 
         Strip whitespaces (including newlines)
@@ -3216,14 +3275,14 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\\n', '3. Cat?\\t', None])
+        >>> s = cudf.Series(['1. Ant.  ', '2. Bee!\n', '3. Cat?\t', None])
         >>> s
         0    1. Ant.
-        1    2. Bee!\\n
-        2    3. Cat?\\t
+        1    2. Bee!\n
+        2    3. Cat?\t
         3         <NA>
         dtype: object
-        >>> s.str.rstrip('.!? \\n\\t')
+        >>> s.str.rstrip('.!? \n\t')
         0    1. Ant
         1    2. Bee
         2    3. Cat
@@ -3234,11 +3293,11 @@ class StringMethods(ColumnMethods):
             to_strip = ""
 
         return self._return_or_inplace(
-            libstrings.rstrip(self._column, cudf.Scalar(to_strip))
+            libstrings.rstrip(self._column, cudf.Scalar(to_strip, "str"))
         )
 
     def wrap(self, width: int, **kwargs) -> SeriesOrIndex:
-        """
+        r"""
         Wrap long strings in the Series/Index to be formatted in
         paragraphs with length less than a given width.
 
@@ -3279,8 +3338,8 @@ class StringMethods(ColumnMethods):
         >>> data = ['line to be wrapped', 'another line to be wrapped']
         >>> s = cudf.Series(data)
         >>> s.str.wrap(12)
-        0             line to be\\nwrapped
-        1    another line\\nto be\\nwrapped
+        0             line to be\nwrapped
+        1    another line\nto be\nwrapped
         dtype: object
         """
         if not is_integer(width):
@@ -3393,7 +3452,9 @@ class StringMethods(ColumnMethods):
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         return self._return_or_inplace(
             libstrings.count_re(self._column, pat, flags)
@@ -3410,6 +3471,8 @@ class StringMethods(ColumnMethods):
         ----------
         pat : str
             Pattern or regular expression.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
 
         Returns
         -------
@@ -3419,7 +3482,8 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        `flags` parameter is currently not supported.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
 
         Examples
         --------
@@ -3462,13 +3526,27 @@ class StringMethods(ColumnMethods):
         1  <NA>  <NA>
         2     b     b
         """
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
+        if isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
+        if not _is_supported_regex_flags(flags):
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
-        data, index = libstrings.findall(self._column, pat)
-        return self._return_or_inplace(
-            cudf.core.frame.Frame(data, index), expand=expand
-        )
+        if expand:
+            warnings.warn(
+                "The expand parameter is deprecated and will be removed in a "
+                "future version. Set expand=False to match future behavior.",
+                FutureWarning,
+            )
+            data, index = libstrings.findall(self._column, pat, flags)
+            return self._return_or_inplace(
+                cudf.core.frame.Frame(data, index), expand=expand
+            )
+        else:
+            data = libstrings.findall_record(self._column, pat, flags)
+            return self._return_or_inplace(data, expand=expand)
 
     def isempty(self) -> SeriesOrIndex:
         """
@@ -3495,7 +3573,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace((self._column == "").fillna(False))
 
     def isspace(self) -> SeriesOrIndex:
-        """
+        r"""
         Check whether all characters in each string are whitespace.
 
         This is equivalent to running the Python string method
@@ -3543,7 +3621,7 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> s = cudf.Series([' ', '\\t\\r\\n ', ''])
+        >>> s = cudf.Series([' ', '\t\r\n ', ''])
         >>> s.str.isspace()
         0     True
         1     True
@@ -3961,7 +4039,9 @@ class StringMethods(ColumnMethods):
             flags = pat.flags & ~re.U
             pat = pat.pattern
         if not _is_supported_regex_flags(flags):
-            raise ValueError("invalid `flags` parameter value")
+            raise NotImplementedError(
+                "unsupported value for `flags` parameter"
+            )
 
         return self._return_or_inplace(
             libstrings.match_re(self._column, pat, flags)
@@ -4162,7 +4242,7 @@ class StringMethods(ColumnMethods):
         table = str.maketrans(table)
         return self._return_or_inplace(
             libstrings.filter_characters(
-                self._column, table, keep, cudf.Scalar(repl)
+                self._column, table, keep, cudf.Scalar(repl, "str")
             ),
         )
 
@@ -4189,7 +4269,7 @@ class StringMethods(ColumnMethods):
         )
 
     def normalize_characters(self, do_lower: bool = True) -> SeriesOrIndex:
-        """
+        r"""
         Normalizes strings characters for tokenizing.
 
         This uses the normalizer that is built into the
@@ -4198,7 +4278,7 @@ class StringMethods(ColumnMethods):
             - adding padding around punctuation (unicode category starts with
               "P") as well as certain ASCII symbols like "^" and "$"
             - adding padding around the CJK Unicode block characters
-            - changing whitespace (e.g. ``\\t``, ``\\n``, ``\\r``) to space
+            - changing whitespace (e.g. ``\t``, ``\n``, ``\r``) to space
             - removing control characters (unicode categories "Cc" and "Cf")
 
         If `do_lower_case = true`, lower-casing also removes the accents.
@@ -4221,7 +4301,7 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> ser = cudf.Series(["héllo, \\tworld","ĂĆCĖÑTED","$99"])
+        >>> ser = cudf.Series(["héllo, \tworld","ĂĆCĖÑTED","$99"])
         >>> ser.str.normalize_characters()
         0    hello ,  world
         1          accented
@@ -4438,7 +4518,6 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> str_series.str.ngrams(2, "_")
         0    this is my_favorite book
@@ -4711,119 +4790,6 @@ class StringMethods(ColumnMethods):
             ),
         )
 
-    def subword_tokenize(
-        self,
-        hash_file: str,
-        max_length: int = 64,
-        stride: int = 48,
-        do_lower: bool = True,
-        do_truncate: bool = False,
-        max_rows_tensor: int = 500,
-    ) -> Tuple[cupy.ndarray, cupy.ndarray, cupy.ndarray]:
-        """
-        Run CUDA BERT subword tokenizer on cuDF strings column.
-        Encodes words to token ids using vocabulary from a pretrained
-        tokenizer.
-
-        This function requires about 21x the number of character bytes
-        in the input strings column as working memory.
-
-        ``Series.str.subword_tokenize`` is deprecated and will be removed.
-        Use ``cudf.core.subword_tokenizer.SubwordTokenizer`` instead.
-
-        Parameters
-        ----------
-        hash_file : str
-            Path to hash file containing vocabulary of words with token-ids.
-            This can be created from the raw vocabulary
-            using the ``cudf.utils.hash_vocab_utils.hash_vocab`` function
-        max_length : int, Default is 64
-            Limits the length of the sequence returned.
-            If tokenized string is shorter than max_length,
-            output will be padded with 0s.
-            If the tokenized string is longer than max_length and
-            do_truncate == False, there will be multiple returned
-            sequences containing the overflowing token-ids.
-        stride : int, Default is 48
-            If do_truncate == False and the tokenized string is larger
-            than max_length, the sequences containing the overflowing
-            token-ids can contain duplicated token-ids from the main
-            sequence. If max_length is equal to stride there are no
-            duplicated-id tokens. If stride is 80% of max_length,
-            20% of the first sequence will be repeated on the second
-            sequence and so on until the entire sentence is encoded.
-        do_lower : bool, Default is True
-            If set to true, original text will be lowercased before encoding.
-        do_truncate : bool, Default is False
-            If set to true, strings will be truncated and padded to
-            max_length. Each input string will result in exactly one output
-            sequence. If set to false, there may be multiple output
-            sequences when the max_length is smaller than generated tokens.
-        max_rows_tensor : int, Default is 500
-            Maximum number of rows for the output token-ids expected
-            to be generated by the tokenizer.
-            Used for allocating temporary working memory on the GPU device.
-            If the output generates a larger number of rows, behavior
-            is undefined.
-            This will vary based on stride, truncation, and max_length.
-            For example, for non-overlapping sequences output rows
-            will be the same as input rows.
-
-        Returns
-        -------
-        token-ids : cupy.ndarray
-            The token-ids for each string padded with 0s to max_length.
-        attention-mask : cupy.ndarray
-            The mask for token-ids result where corresponding positions
-            identify valid token-id values.
-        metadata : cupy.ndarray
-            Each row contains the index id of the original string and the
-            first and last index of the token-ids that are non-padded and
-            non-overlapping.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> from cudf.utils.hash_vocab_utils import hash_vocab
-        >>> hash_vocab('bert-base-uncased-vocab.txt', 'voc_hash.txt')
-        >>> ser = cudf.Series(['this is the', 'best book'])
-        >>> stride, max_length = 8, 8
-        >>> max_rows_tensor = len(ser)
-        >>> tokens, masks, metadata = ser.str.subword_tokenize('voc_hash.txt',
-        ... max_length=max_length, stride=stride,
-        ... max_rows_tensor=max_rows_tensor)
-        >>> tokens.reshape(-1, max_length)
-        array([[2023, 2003, 1996,    0,    0,    0,    0,    0],
-               [2190, 2338,    0,    0,    0,    0,    0,    0]], dtype=uint32)
-        >>> masks.reshape(-1, max_length)
-        array([[1, 1, 1, 0, 0, 0, 0, 0],
-               [1, 1, 0, 0, 0, 0, 0, 0]], dtype=uint32)
-        >>> metadata.reshape(-1, 3)
-        array([[0, 0, 2],
-               [1, 0, 1]], dtype=uint32)
-        """
-        warnings.warn(
-            "`Series.str.subword_tokenize` is deprecated and will be removed "
-            "in future versions of cudf. Use "
-            "`cudf.core.subword_tokenizer.SubwordTokenizer` instead.",
-            FutureWarning,
-        )
-
-        tokens, masks, metadata = libstrings.subword_tokenize_vocab_file(
-            self._column,
-            hash_file,
-            max_length,
-            stride,
-            do_lower,
-            do_truncate,
-            max_rows_tensor,
-        )
-        return (
-            cupy.asarray(tokens),
-            cupy.asarray(masks),
-            cupy.asarray(metadata),
-        )
-
     def porter_stemmer_measure(self) -> SeriesOrIndex:
         """
         Compute the Porter Stemmer measure for each string.
@@ -4984,7 +4950,7 @@ class StringMethods(ColumnMethods):
             libstrings.edit_distance(self._column, targets_column)
         )
 
-    def edit_distance_matrix(self) -> ParentType:
+    def edit_distance_matrix(self) -> SeriesOrIndex:
         """Computes the edit distance between strings in the series.
 
         The series to compute the matrix should have more than 2 strings and
@@ -5073,7 +5039,26 @@ class StringColumn(column.ColumnBase):
 
     _start_offset: Optional[int]
     _end_offset: Optional[int]
-    _cached_sizeof: Optional[int]
+
+    _VALID_BINARY_OPERATIONS = {
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+        "__add__",
+        "__radd__",
+        # These operators aren't actually supported, they only exist to allow
+        # empty column binops with scalars of arbitrary other dtypes. See
+        # the _binaryop method for more information.
+        "__sub__",
+        "__mul__",
+        "__mod__",
+        "__pow__",
+        "__truediv__",
+        "__floordiv__",
+    }
 
     def __init__(
         self,
@@ -5151,6 +5136,7 @@ class StringColumn(column.ColumnBase):
 
         return self._end_offset
 
+    @cached_property
     def memory_usage(self) -> int:
         n = 0
         if len(self.base_children) == 2:
@@ -5196,13 +5182,16 @@ class StringColumn(column.ColumnBase):
         """
         if self.null_count == len(self):
             return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b""))]
+                pa.null(), len(self), [pa.py_buffer(b"")]
             )
         else:
             return super().to_arrow()
 
     def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+        self,
+        skipna: bool = None,
+        dtype: Dtype = None,
+        min_count: int = 0,
     ):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
@@ -5212,7 +5201,7 @@ class StringColumn(column.ColumnBase):
                 result_col,
                 sep=cudf.Scalar(""),
                 na_rep=cudf.Scalar(None, "str"),
-            )[0]
+            ).element_indexing(0)
         else:
             return result_col
 
@@ -5309,7 +5298,7 @@ class StringColumn(column.ColumnBase):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.Decimal64Column":
+    ) -> "cudf.core.column.DecimalBaseColumn":
         return libstrings.to_decimal(self, dtype)
 
     def as_string_column(
@@ -5331,26 +5320,6 @@ class StringColumn(column.ColumnBase):
         """
         raise TypeError("String Arrays is not yet implemented in cudf")
 
-    # TODO: This method is deprecated and should be removed when the associated
-    # Frame methods are removed.
-    def to_array(self, fillna: bool = None) -> np.ndarray:
-        """Get a dense numpy array for the data.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-
-        Raises
-        ------
-        ``NotImplementedError`` if there are nulls
-        """
-        if fillna is not None:
-            warnings.warn("fillna parameter not supported for string arrays")
-
-        return self.to_arrow().to_pandas().values
-
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
@@ -5363,56 +5332,6 @@ class StringColumn(column.ColumnBase):
         if index is not None:
             pd_series.index = index
         return pd_series
-
-    def serialize(self) -> Tuple[dict, list]:
-        header: Dict[Any, Any] = {"null_count": self.null_count}
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["size"] = self.size
-
-        frames = []
-        sub_headers = []
-
-        for item in self.children:
-            sheader, sframes = item.serialize()
-            sub_headers.append(sheader)
-            frames.extend(sframes)
-
-        if self.null_count > 0:
-            frames.append(self.mask)
-
-        header["subheaders"] = sub_headers
-        header["frame_count"] = len(frames)
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header: dict, frames: list) -> StringColumn:
-        size = header["size"]
-        if not isinstance(size, int):
-            size = pickle.loads(size)
-
-        # Deserialize the mask, value, and offset frames
-        buffers = [Buffer(each_frame) for each_frame in frames]
-
-        nbuf = None
-        if header["null_count"] > 0:
-            nbuf = buffers[2]
-
-        children = []
-        for h, b in zip(header["subheaders"], buffers[:2]):
-            column_type = pickle.loads(h["type-serialized"])
-            children.append(column_type.deserialize(h, [b]))
-
-        col = cast(
-            StringColumn,
-            column.build_column(
-                data=None,
-                dtype="str",
-                mask=nbuf,
-                children=tuple(children),
-                size=size,
-            ),
-        )
-        return col
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = cudf.dtype(to_dtype)
@@ -5454,10 +5373,16 @@ class StringColumn(column.ColumnBase):
             and replacement_col.dtype != self.dtype
         ):
             return self.copy()
-        df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
+        df = cudf.DataFrame._from_data(
+            {"old": to_replace_col, "new": replacement_col}
+        )
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            res = self.fillna(df._data["new"][df._data["old"].isnull()][0])
+            res = self.fillna(
+                df._data["new"]
+                .apply_boolean_mask(df._data["old"].isnull())
+                .element_indexing(0)
+            )
             df = df.dropna(subset=["old"])
         else:
             res = self
@@ -5466,7 +5391,7 @@ class StringColumn(column.ColumnBase):
     def fillna(
         self,
         fill_value: Any = None,
-        method: builtins.str = None,
+        method: str = None,
         dtype: Dtype = None,
     ) -> StringColumn:
         if fill_value is not None:
@@ -5481,7 +5406,7 @@ class StringColumn(column.ColumnBase):
 
     def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
         found_indices = libcudf.search.contains(
-            self, column.as_column([value], dtype=self.dtype)
+            column.as_column([value], dtype=self.dtype), self
         )
         found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(np.int32(1))
@@ -5496,52 +5421,85 @@ class StringColumn(column.ColumnBase):
     def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
         return self._find_first_and_last(value)[1]
 
-    def normalize_binop_value(self, other) -> "column.ColumnBase":
-        # fastpath: gpu scalar
-        if isinstance(other, cudf.Scalar) and other.dtype == "object":
-            return column.as_column(other, length=len(self))
-        if isinstance(other, column.ColumnBase):
-            return other.astype(self.dtype)
-        elif isinstance(other, str) or other is None:
-            col = utils.scalar_broadcast_to(
-                other, size=len(self), dtype="object"
-            )
-            return col
-        elif isinstance(other, np.ndarray) and other.ndim == 0:
-            col = utils.scalar_broadcast_to(
-                other.item(), size=len(self), dtype="object"
-            )
-            return col
-        else:
-            raise TypeError(f"cannot broadcast {type(other)}")
+    def normalize_binop_value(
+        self, other
+    ) -> Union[column.ColumnBase, cudf.Scalar]:
+        if (
+            isinstance(other, (column.ColumnBase, cudf.Scalar))
+            and other.dtype == "object"
+        ):
+            return other
+        if isinstance(other, str):
+            return cudf.Scalar(other)
+        return NotImplemented
 
-    def _default_na_value(self) -> ScalarLike:
-        return None
-
-    def binary_operator(
-        self, op: builtins.str, rhs, reflect: bool = False
+    def _binaryop(
+        self, other: ColumnBinaryOperand, op: str
     ) -> "column.ColumnBase":
-        lhs = self
-        if reflect:
-            lhs, rhs = rhs, lhs
-        if isinstance(rhs, (StringColumn, str, cudf.Scalar)):
-            if op == "add":
+        reflect, op = self._check_reflected_op(op)
+        # Due to https://github.com/pandas-dev/pandas/issues/46332 we need to
+        # support binary operations between empty or all null string columns
+        # and columns of other dtypes, even if those operations would otherwise
+        # be invalid. For example, you cannot divide strings, but pandas allows
+        # division between an empty string column and a (nonempty) integer
+        # column. Ideally we would disable these operators entirely, but until
+        # the above issue is resolved we cannot avoid this problem.
+        if self.null_count == len(self):
+            if op in {
+                "__add__",
+                "__sub__",
+                "__mul__",
+                "__mod__",
+                "__pow__",
+                "__truediv__",
+                "__floordiv__",
+            }:
+                return self
+            elif op in {"__eq__", "__lt__", "__le__", "__gt__", "__ge__"}:
+                return self.notnull()
+            elif op == "__ne__":
+                return self.isnull()
+
+        other = self._wrap_binop_normalization(other)
+        if other is NotImplemented:
+            return NotImplemented
+
+        if isinstance(other, (StringColumn, str, cudf.Scalar)):
+            if op == "__add__":
+                if isinstance(other, cudf.Scalar):
+                    other = cast(
+                        StringColumn,
+                        column.full(len(self), other, dtype="object"),
+                    )
+
+                # Explicit types are necessary because mypy infers ColumnBase
+                # rather than StringColumn and sometimes forgets Scalar.
+                lhs: Union[cudf.Scalar, StringColumn]
+                rhs: Union[cudf.Scalar, StringColumn]
+                lhs, rhs = (other, self) if reflect else (self, other)
+
                 return cast(
                     "column.ColumnBase",
                     libstrings.concatenate(
-                        cudf.DataFrame({0: lhs, 1: rhs}),
+                        [lhs, rhs],
                         sep=cudf.Scalar(""),
                         na_rep=cudf.Scalar(None, "str"),
                     ),
                 )
-            elif op in ("eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"):
+            elif op in {
+                "__eq__",
+                "__ne__",
+                "__gt__",
+                "__lt__",
+                "__ge__",
+                "__le__",
+                "NULL_EQUALS",
+            }:
+                lhs, rhs = (other, self) if reflect else (self, other)
                 return libcudf.binaryop.binaryop(
                     lhs=lhs, rhs=rhs, op=op, dtype="bool"
                 )
-
-        raise TypeError(
-            f"{op} operator not supported between {type(self)} and {type(rhs)}"
-        )
+        return NotImplemented
 
     @copy_docstring(column.ColumnBase.view)
     def view(self, dtype) -> "cudf.core.column.ColumnBase":

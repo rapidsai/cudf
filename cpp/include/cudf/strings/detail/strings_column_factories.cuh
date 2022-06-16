@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -26,12 +27,25 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/distance.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
+
+/**
+ * @brief Basic type expected for iterators passed to `make_strings_column` that represent string
+ * data in device memory.
+ */
+using string_index_pair = thrust::pair<const char*, size_type>;
 
 /**
  * @brief Average string byte-length threshold for deciding character-level
@@ -63,8 +77,6 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
   CUDF_FUNC_RANGE();
   size_type strings_count = thrust::distance(begin, end);
   if (strings_count == 0) return make_empty_column(type_id::STRING);
-
-  using string_index_pair = thrust::pair<const char*, size_type>;
 
   // check total size is not too large for cudf column
   auto size_checker = [] __device__(string_index_pair const& item) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <cstdint>
+
 namespace cudf {
 namespace ast {
 
@@ -36,16 +38,37 @@ class expression_parser;
  * Expressions inheriting from this class can accept parsers as visitors.
  */
 struct expression {
+  /**
+   * @brief Accepts a visitor class.
+   *
+   * @param visitor The `expression_parser` parsing this expression tree
+   * @return Index of device data reference for this instance
+   */
   virtual cudf::size_type accept(detail::expression_parser& visitor) const = 0;
 
-  bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
+  /**
+   * @brief Returns true if the expression may evaluate to null.
+   *
+   * @param left The left operand of the expression (The same is used as right operand)
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return `true` if the expression may evaluate to null, otherwise false
+   */
+  [[nodiscard]] bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
   {
     return may_evaluate_null(left, left, stream);
   }
 
-  virtual bool may_evaluate_null(table_view const& left,
-                                 table_view const& right,
-                                 rmm::cuda_stream_view stream) const = 0;
+  /**
+   * @brief Returns true if the expression may evaluate to null.
+   *
+   * @param left The left operand of the expression
+   * @param right The right operand of the expression
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return `true` if the expression may evaluate to null, otherwise false
+   */
+  [[nodiscard]] virtual bool may_evaluate_null(table_view const& left,
+                                               table_view const& right,
+                                               rmm::cuda_stream_view stream) const = 0;
 
   virtual ~expression() {}
 };
@@ -53,7 +76,7 @@ struct expression {
 /**
  * @brief Enum of supported operators.
  */
-enum class ast_operator {
+enum class ast_operator : int32_t {
   // Binary operators
   ADD,         ///< operator +
   SUB,         ///< operator -
@@ -135,8 +158,8 @@ class literal : public expression {
   /**
    * @brief Construct a new literal object.
    *
-   * @tparam T Numeric scalar template type.
-   * @param value A numeric scalar value.
+   * @tparam T Numeric scalar template type
+   * @param value A numeric scalar value
    */
   template <typename T>
   literal(cudf::numeric_scalar<T>& value)
@@ -147,8 +170,8 @@ class literal : public expression {
   /**
    * @brief Construct a new literal object.
    *
-   * @tparam T Timestamp scalar template type.
-   * @param value A timestamp scalar value.
+   * @tparam T Timestamp scalar template type
+   * @param value A timestamp scalar value
    */
   template <typename T>
   literal(cudf::timestamp_scalar<T>& value)
@@ -159,8 +182,8 @@ class literal : public expression {
   /**
    * @brief Construct a new literal object.
    *
-   * @tparam T Duration scalar template type.
-   * @param value A duration scalar value.
+   * @tparam T Duration scalar template type
+   * @param value A duration scalar value
    */
   template <typename T>
   literal(cudf::duration_scalar<T>& value)
@@ -171,28 +194,31 @@ class literal : public expression {
   /**
    * @brief Get the data type.
    *
-   * @return cudf::data_type
+   * @return The data type of the literal
    */
-  cudf::data_type get_data_type() const { return get_value().type(); }
+  [[nodiscard]] cudf::data_type get_data_type() const { return get_value().type(); }
 
   /**
    * @brief Get the value object.
    *
-   * @return cudf::detail::fixed_width_scalar_device_view_base
+   * @return The device scalar object
    */
-  cudf::detail::fixed_width_scalar_device_view_base get_value() const { return value; }
+  [[nodiscard]] cudf::detail::fixed_width_scalar_device_view_base get_value() const
+  {
+    return value;
+  }
 
   /**
    * @brief Accepts a visitor class.
    *
-   * @param visitor Visitor.
-   * @return cudf::size_type Index of device data reference for this instance.
+   * @param visitor The `expression_parser` parsing this expression tree
+   * @return Index of device data reference for this instance
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
-  bool may_evaluate_null(table_view const& left,
-                         table_view const& right,
-                         rmm::cuda_stream_view stream) const override
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
   {
     return !is_valid(stream);
   }
@@ -200,9 +226,13 @@ class literal : public expression {
   /**
    * @brief Check if the underlying scalar is valid.
    *
-   * @return bool
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return true if the underlying scalar is valid
    */
-  bool is_valid(rmm::cuda_stream_view stream) const { return scalar.is_valid(stream); }
+  [[nodiscard]] bool is_valid(rmm::cuda_stream_view stream) const
+  {
+    return scalar.is_valid(stream);
+  }
 
  private:
   cudf::scalar const& scalar;
@@ -219,7 +249,7 @@ class column_reference : public expression {
    *
    * @param column_index Index of this column in the table (provided when the expression is
    * evaluated).
-   * @param table_source Which table to use in cases with two tables (e.g. joins).
+   * @param table_source Which table to use in cases with two tables (e.g. joins)
    */
   column_reference(cudf::size_type column_index,
                    table_reference table_source = table_reference::LEFT)
@@ -230,24 +260,24 @@ class column_reference : public expression {
   /**
    * @brief Get the column index.
    *
-   * @return cudf::size_type
+   * @return The column index of the column reference
    */
-  cudf::size_type get_column_index() const { return column_index; }
+  [[nodiscard]] cudf::size_type get_column_index() const { return column_index; }
 
   /**
    * @brief Get the table source.
    *
-   * @return table_reference
+   * @return table_reference The reference to the table containing this column
    */
-  table_reference get_table_source() const { return table_source; }
+  [[nodiscard]] table_reference get_table_source() const { return table_source; }
 
   /**
    * @brief Get the data type.
    *
-   * @param table Table used to determine types.
-   * @return cudf::data_type
+   * @param table Table used to determine types
+   * @return The data type of the column
    */
-  cudf::data_type get_data_type(table_view const& table) const
+  [[nodiscard]] cudf::data_type get_data_type(table_view const& table) const
   {
     return table.column(get_column_index()).type();
   }
@@ -255,11 +285,12 @@ class column_reference : public expression {
   /**
    * @brief Get the data type.
    *
-   * @param left_table Left table used to determine types.
-   * @param right_table Right table used to determine types.
-   * @return cudf::data_type
+   * @param left_table Left table used to determine types
+   * @param right_table Right table used to determine types
+   * @return The data type of the column
    */
-  cudf::data_type get_data_type(table_view const& left_table, table_view const& right_table) const
+  [[nodiscard]] cudf::data_type get_data_type(table_view const& left_table,
+                                              table_view const& right_table) const
   {
     auto const table = [&] {
       if (get_table_source() == table_reference::LEFT) {
@@ -276,14 +307,14 @@ class column_reference : public expression {
   /**
    * @brief Accepts a visitor class.
    *
-   * @param visitor Visitor.
-   * @return cudf::size_type Index of device data reference for this instance.
+   * @param visitor The `expression_parser` parsing this expression tree
+   * @return Index of device data reference for this instance
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
-  bool may_evaluate_null(table_view const& left,
-                         table_view const& right,
-                         rmm::cuda_stream_view stream) const override
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
   {
     return (table_source == table_reference::LEFT ? left : right).column(column_index).has_nulls();
   }
@@ -325,28 +356,28 @@ class operation : public expression {
   /**
    * @brief Get the operator.
    *
-   * @return ast_operator
+   * @return The operator
    */
-  ast_operator get_operator() const { return op; }
+  [[nodiscard]] ast_operator get_operator() const { return op; }
 
   /**
    * @brief Get the operands.
    *
-   * @return std::vector<std::reference_wrapper<const expression>>
+   * @return Vector of operands
    */
   std::vector<std::reference_wrapper<expression const>> get_operands() const { return operands; }
 
   /**
    * @brief Accepts a visitor class.
    *
-   * @param visitor Visitor.
-   * @return cudf::size_type Index of device data reference for this instance.
+   * @param visitor The `expression_parser` parsing this expression tree
+   * @return Index of device data reference for this instance
    */
   cudf::size_type accept(detail::expression_parser& visitor) const override;
 
-  bool may_evaluate_null(table_view const& left,
-                         table_view const& right,
-                         rmm::cuda_stream_view stream) const override
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
   {
     return std::any_of(operands.cbegin(),
                        operands.cend(),

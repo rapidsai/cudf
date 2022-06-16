@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -29,6 +31,7 @@
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <iterator>
 
@@ -55,81 +58,15 @@ const __constant__ uint32_t md5_hash_constants[64] = {
   0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
 };
 
-template <int capacity, typename hash_step_callable>
-struct hash_circular_buffer {
-  uint8_t storage[capacity];
-  uint8_t* cur;
-  int available_space{capacity};
-  hash_step_callable hash_step;
-
-  CUDA_DEVICE_CALLABLE hash_circular_buffer(hash_step_callable hash_step)
-    : cur{storage}, hash_step{hash_step}
-  {
-  }
-
-  CUDA_DEVICE_CALLABLE void put(uint8_t const* in, int size)
-  {
-    int copy_start = 0;
-    while (size >= available_space) {
-      // The buffer will be filled by this chunk of data. Copy a chunk of the
-      // data to fill the buffer and trigger a hash step.
-      memcpy(cur, in + copy_start, available_space);
-      hash_step(storage);
-      size -= available_space;
-      copy_start += available_space;
-      cur             = storage;
-      available_space = capacity;
-    }
-    // The buffer will not be filled by the remaining data. That is, `size >= 0
-    // && size < capacity`. We copy the remaining data into the buffer but do
-    // not trigger a hash step.
-    memcpy(cur, in + copy_start, size);
-    cur += size;
-    available_space -= size;
-  }
-
-  CUDA_DEVICE_CALLABLE void pad(int const space_to_leave)
-  {
-    if (space_to_leave > available_space) {
-      memset(cur, 0x00, available_space);
-      hash_step(storage);
-      cur             = storage;
-      available_space = capacity;
-    }
-    memset(cur, 0x00, available_space - space_to_leave);
-    cur += available_space - space_to_leave;
-    available_space = space_to_leave;
-  }
-
-  CUDA_DEVICE_CALLABLE const uint8_t& operator[](int idx) const { return storage[idx]; }
-};
-
-// Get a uint8_t pointer to a column element and its size as a pair.
-template <typename Element>
-auto CUDA_DEVICE_CALLABLE get_element_pointer_and_size(Element const& element)
-{
-  if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
-    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
-  } else {
-    cudf_assert(false && "Unsupported type.");
-  }
-}
-
-template <>
-auto CUDA_DEVICE_CALLABLE get_element_pointer_and_size(string_view const& element)
-{
-  return thrust::make_pair(reinterpret_cast<uint8_t const*>(element.data()), element.size_bytes());
-}
-
 struct MD5Hasher {
   static constexpr int message_chunk_size = 64;
 
-  CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location)
+  __device__ inline MD5Hasher(char* result_location)
     : result_location(result_location), buffer(md5_hash_step{hash_values})
   {
   }
 
-  CUDA_DEVICE_CALLABLE ~MD5Hasher()
+  __device__ inline ~MD5Hasher()
   {
     // On destruction, finalize the message buffer and write out the current
     // hexadecimal hash value to the result location.
@@ -154,7 +91,7 @@ struct MD5Hasher {
   MD5Hasher& operator=(MD5Hasher&&) = delete;
 
   template <typename Element>
-  void CUDA_DEVICE_CALLABLE process(Element const& element)
+  void __device__ inline process(Element const& element)
   {
     auto const normalized_element  = normalize_nans_and_zeros(element);
     auto const [element_ptr, size] = get_element_pointer_and_size(normalized_element);
@@ -169,7 +106,7 @@ struct MD5Hasher {
   struct md5_hash_step {
     uint32_t (&hash_values)[4];
 
-    void CUDA_DEVICE_CALLABLE operator()(const uint8_t (&buffer)[message_chunk_size])
+    void __device__ inline operator()(const uint8_t (&buffer)[message_chunk_size])
     {
       uint32_t A = hash_values[0];
       uint32_t B = hash_values[1];
@@ -205,7 +142,7 @@ struct MD5Hasher {
         A = D;
         D = C;
         C = B;
-        B = B + __funnelshift_l(F, F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
+        B = B + rotate_bits_left(F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
       }
 
       hash_values[0] += A;
@@ -226,20 +163,20 @@ struct HasherDispatcher {
   Hasher* hasher;
   column_device_view const& input_col;
 
-  CUDA_DEVICE_CALLABLE HasherDispatcher(Hasher* hasher, column_device_view const& input_col)
+  __device__ inline HasherDispatcher(Hasher* hasher, column_device_view const& input_col)
     : hasher{hasher}, input_col{input_col}
   {
   }
 
   template <typename Element>
-  void CUDA_DEVICE_CALLABLE operator()(size_type const row_index) const
+  void __device__ inline operator()(size_type const row_index) const
   {
     if constexpr ((is_fixed_width<Element>() && !is_chrono<Element>()) ||
                   std::is_same_v<Element, string_view>) {
       hasher->process(input_col.element<Element>(row_index));
     } else {
       (void)row_index;
-      cudf_assert(false && "Unsupported type for hash function.");
+      CUDF_UNREACHABLE("Unsupported type for hash function.");
     }
   }
 };
@@ -249,14 +186,13 @@ struct ListHasherDispatcher {
   Hasher* hasher;
   column_device_view const& input_col;
 
-  CUDA_DEVICE_CALLABLE ListHasherDispatcher(Hasher* hasher, column_device_view const& input_col)
+  __device__ inline ListHasherDispatcher(Hasher* hasher, column_device_view const& input_col)
     : hasher{hasher}, input_col{input_col}
   {
   }
 
   template <typename Element>
-  void CUDA_DEVICE_CALLABLE operator()(size_type const offset_begin,
-                                       size_type const offset_end) const
+  void __device__ inline operator()(size_type const offset_begin, size_type const offset_end) const
   {
     if constexpr ((is_fixed_width<Element>() && !is_chrono<Element>()) ||
                   std::is_same_v<Element, string_view>) {
@@ -266,7 +202,7 @@ struct ListHasherDispatcher {
     } else {
       (void)offset_begin;
       (void)offset_end;
-      cudf_assert(false && "Unsupported type for hash function.");
+      CUDF_UNREACHABLE("Unsupported type for hash function.");
     }
   }
 };
@@ -312,8 +248,6 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 
-  rmm::device_buffer null_mask{0, stream, mr};
-
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
@@ -329,7 +263,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
             auto const data_col = col.child(lists_column_view::child_column_index);
             auto const offsets  = col.child(lists_column_view::offsets_column_index);
             if (data_col.type().id() == type_id::LIST) {
-              cudf_assert(false && "Nested list unsupported");
+              CUDF_UNREACHABLE("Nested list unsupported");
             }
             auto const offset_begin = offsets.element<size_type>(row_index);
             auto const offset_end   = offsets.element<size_type>(row_index + 1);
@@ -342,6 +276,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
         }
       }
     });
+
+  rmm::device_buffer null_mask{0, stream, mr};
 
   return make_strings_column(
     input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));

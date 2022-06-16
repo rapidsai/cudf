@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 """
 Test related to MultiIndex
@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_130, PANDAS_LT_140
+from cudf.core._compat import PANDAS_GE_130
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import assert_eq, assert_exceptions_equal, assert_neq
@@ -688,7 +688,7 @@ def test_multiindex_copy_sem(data, levels, codes, names):
     # Test same behavior when used on DataFrame
     gdf.index = gmi_copy
     pdf.index = pmi_copy
-    assert gdf.__repr__() == pdf.__repr__()
+    assert repr(gdf) == repr(pdf)
 
 
 @pytest.mark.parametrize(
@@ -762,7 +762,7 @@ def test_multiindex_copy_deep(data, deep):
         lptrs = [child.base_data.ptr for child in lchildren]
         rptrs = [child.base_data.ptr for child in rchildren]
 
-        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
     elif isinstance(data, cudf.MultiIndex):
         mi1 = data
@@ -772,19 +772,19 @@ def test_multiindex_copy_deep(data, deep):
         lptrs = [lv._data._data[None].base_data.ptr for lv in mi1._levels]
         rptrs = [lv._data._data[None].base_data.ptr for lv in mi2._levels]
 
-        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._codes identity
         lptrs = [c.base_data.ptr for _, c in mi1._codes._data.items()]
         rptrs = [c.base_data.ptr for _, c in mi2._codes._data.items()]
 
-        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
         # Assert ._data identity
         lptrs = [d.base_data.ptr for _, d in mi1._data.items()]
         rptrs = [d.base_data.ptr for _, d in mi2._data.items()]
 
-        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+        assert all((x == y) == same_ref for x, y in zip(lptrs, rptrs))
 
 
 @pytest.mark.parametrize(
@@ -1031,7 +1031,7 @@ def test_multicolumn_loc(pdf, pdfIndex):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    condition=PANDAS_GE_130,
     reason="https://github.com/pandas-dev/pandas/issues/43351",
 )
 def test_multicolumn_set_item(pdf, pdfIndex):
@@ -1131,7 +1131,7 @@ def test_multiindex_values_host():
         ),
     ],
 )
-def test_multiIndex_fillna(gdi, fill_value, expected):
+def test_multiindex_fillna(gdi, fill_value, expected):
     assert_eq(expected, gdi.fillna(fill_value))
 
 
@@ -1173,7 +1173,7 @@ def test_multiIndex_fillna(gdi, fill_value, expected):
         ),
     ],
 )
-def test_multiIndex_empty(pdi):
+def test_multiindex_empty(pdi):
     gdi = cudf.from_pandas(pdi)
 
     assert_eq(pdi.empty, gdi.empty)
@@ -1217,7 +1217,7 @@ def test_multiIndex_empty(pdi):
         ),
     ],
 )
-def test_multiIndex_size(pdi):
+def test_multiindex_size(pdi):
     gdi = cudf.from_pandas(pdi)
 
     assert_eq(pdi.size, gdi.size)
@@ -1375,7 +1375,7 @@ def test_multiindex_sort_values(pmidx, ascending, return_indexer):
     ],
 )
 @pytest.mark.parametrize("ascending", [True, False])
-def test_multiIndex_argsort(pdi, ascending):
+def test_multiindex_argsort(pdi, ascending):
     gdi = cudf.from_pandas(pdi)
 
     if not ascending:
@@ -1562,7 +1562,7 @@ def test_multiindex_indexing(key):
     assert_eq(gi[key], pi[key], exact=False)
 
 
-def test_multiIndex_duplicate_names():
+def test_multiindex_duplicate_names():
     gi = cudf.MultiIndex(
         levels=[["a", "b"], ["b", "a"]],
         codes=[[0, 0], [0, 1]],
@@ -1699,7 +1699,7 @@ def test_intersection_mulitIndex(idx1, idx2, sort):
         None,
     ],
 )
-def test_pickle_roundtrip_multiIndex(names):
+def test_pickle_roundtrip_multiindex(names):
     df = cudf.DataFrame(
         {
             "one": [1, 2, 3],
@@ -1745,7 +1745,7 @@ def test_pickle_roundtrip_multiIndex(names):
         "is_interval",
     ],
 )
-def test_multiIndex_type_methods(pidx, func):
+def test_multiindex_type_methods(pidx, func):
     gidx = cudf.from_pandas(pidx)
 
     expected = getattr(pidx, func)()

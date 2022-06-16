@@ -79,25 +79,52 @@ cdef source_info make_source_info(list src) except*:
     return source_info(c_host_buffers)
 
 # Converts the Python sink input to libcudf++ IO sink_info.
-cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
-    if isinstance(src, io.StringIO):
-        sink.reset(new iobase_data_sink(src))
-        return sink_info(sink.get())
-    elif isinstance(src, io.TextIOBase):
-        # Files opened in text mode expect writes to be str rather than bytes,
-        # which requires conversion from utf-8. If the underlying buffer is
-        # utf-8, we can bypass this conversion by writing directly to it.
-        if codecs.lookup(src.encoding).name not in {"utf-8", "ascii"}:
-            raise NotImplementedError(f"Unsupported encoding {src.encoding}")
-        sink.reset(new iobase_data_sink(src.buffer))
-        return sink_info(sink.get())
-    elif isinstance(src, io.IOBase):
-        sink.reset(new iobase_data_sink(src))
-        return sink_info(sink.get())
-    elif isinstance(src, (basestring, os.PathLike)):
-        return sink_info(<string> os.path.expanduser(src).encode())
+cdef sink_info make_sinks_info(
+    list src, vector[unique_ptr[data_sink]] & sink
+) except*:
+    cdef vector[data_sink *] data_sinks
+    cdef vector[string] paths
+    if isinstance(src[0], io.StringIO):
+        data_sinks.reserve(len(src))
+        for s in src:
+            sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
+            data_sinks.push_back(sink.back().get())
+        return sink_info(data_sinks)
+    elif isinstance(src[0], io.TextIOBase):
+        data_sinks.reserve(len(src))
+        for s in src:
+            # Files opened in text mode expect writes to be str rather than
+            # bytes, which requires conversion from utf-8. If the underlying
+            # buffer is utf-8, we can bypass this conversion by writing
+            # directly to it.
+            if codecs.lookup(s.encoding).name not in {"utf-8", "ascii"}:
+                raise NotImplementedError(f"Unsupported encoding {s.encoding}")
+            sink.push_back(
+                unique_ptr[data_sink](new iobase_data_sink(s.buffer))
+            )
+            data_sinks.push_back(sink.back().get())
+        return sink_info(data_sinks)
+    elif isinstance(src[0], io.IOBase):
+        data_sinks.reserve(len(src))
+        for s in src:
+            sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
+            data_sinks.push_back(sink.back().get())
+        return sink_info(data_sinks)
+    elif isinstance(src[0], (basestring, os.PathLike)):
+        paths.reserve(len(src))
+        for s in src:
+            paths.push_back(<string> os.path.expanduser(s).encode())
+        return sink_info(move(paths))
     else:
         raise TypeError("Unrecognized input type: {}".format(type(src)))
+
+
+cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
+    cdef vector[unique_ptr[data_sink]] datasinks
+    cdef sink_info info = make_sinks_info([src], datasinks)
+    if not datasinks.empty():
+        sink.swap(datasinks[0])
+    return info
 
 
 # Adapts a python io.IOBase object as a libcudf++ IO data_sink. This lets you

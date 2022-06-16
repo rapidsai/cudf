@@ -46,7 +46,7 @@ using namespace cudf::io::parquet;
 using namespace cudf::io;
 
 // Forward declarations
-class aggregate_metadata;
+class aggregate_reader_metadata;
 
 /**
  * @brief Implementation for Parquet reader
@@ -199,7 +199,7 @@ class reader::impl {
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
   std::vector<std::unique_ptr<datasource>> _sources;
-  std::unique_ptr<aggregate_metadata> _metadata;
+  std::unique_ptr<aggregate_reader_metadata> _metadata;
 
   // input columns to be processed
   std::vector<input_column_info> _input_columns;

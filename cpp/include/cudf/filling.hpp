@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,7 +140,7 @@ std::unique_ptr<table> repeat(
  *
  * @param input_table Input table
  * @param count Number of repetitions
- * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
@@ -169,7 +169,7 @@ std::unique_ptr<table> repeat(
  * @param init First value in the sequence
  * @param step Increment value
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> The result table containing the sequence
+ * @return The result column containing the generated sequence
  */
 std::unique_ptr<column> sequence(
   size_type size,
@@ -195,7 +195,7 @@ std::unique_ptr<column> sequence(
  * @param size Size of the output column
  * @param init First value in the sequence
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return std::unique_ptr<column> The result table containing the sequence
+ * @return The result column containing the generated sequence
  */
 std::unique_ptr<column> sequence(
   size_type size,
@@ -223,7 +223,7 @@ std::unique_ptr<column> sequence(
  * @param months Months to increment
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @returns Timestamps column with sequences of months.
+ * @return Timestamps column with sequences of months
  */
 std::unique_ptr<cudf::column> calendrical_month_sequence(
   size_type size,

@@ -28,6 +28,7 @@ Attributes
    Series.nullmask
    Series.null_count
    Series.size
+   Series.T
    Series.memory_usage
    Series.has_nulls
    Series.empty
@@ -44,7 +45,6 @@ Conversion
    Series.copy
    Series.to_list
    Series.__array__
-   Series.as_mask
    Series.scale
 
 
@@ -59,9 +59,6 @@ Indexing, iteration
    Series.items
    Series.iteritems
    Series.keys
-
-For more information on ``.at``, ``.iat``, ``.loc``, and
-``.iloc``,  see the :ref:`indexing documentation <indexing>`.
 
 Binary operator functions
 -------------------------
@@ -95,6 +92,7 @@ Binary operator functions
    Series.ne
    Series.eq
    Series.product
+   Series.dot
 
 Function application, GroupBy & window
 --------------------------------------
@@ -119,7 +117,7 @@ Computations / descriptive stats
    Series.all
    Series.any
    Series.autocorr
-   Series.ceil
+   Series.between
    Series.clip
    Series.corr
    Series.count
@@ -132,7 +130,6 @@ Computations / descriptive stats
    Series.diff
    Series.digitize
    Series.factorize
-   Series.floor
    Series.kurt
    Series.max
    Series.mean
@@ -141,6 +138,7 @@ Computations / descriptive stats
    Series.mode
    Series.nlargest
    Series.nsmallest
+   Series.pct_change
    Series.prod
    Series.quantile
    Series.rank
@@ -167,15 +165,14 @@ Reindexing / selection / label manipulation
    Series.drop
    Series.drop_duplicates
    Series.equals
+   Series.first
    Series.head
    Series.isin
+   Series.last
    Series.reindex
    Series.rename
    Series.reset_index
-   Series.reverse
    Series.sample
-   Series.set_index
-   Series.set_mask
    Series.take
    Series.tail
    Series.tile
@@ -211,30 +208,13 @@ Reshaping, sorting
    Series.repeat
    Series.transpose
 
-Combining / comparing / joining / merging / encoding
-----------------------------------------------------
+Combining / comparing / joining / merging
+-----------------------------------------
 .. autosummary::
    :toctree: api/
 
    Series.append
    Series.update
-   Series.label_encoding
-   Series.one_hot_encoding
-
-Numerical operations
-~~~~~~~~~~~~~~~~~~~~
-.. autosummary::
-   :toctree: api/
-
-   Series.acos
-   Series.asin
-   Series.atan
-   Series.cos
-   Series.exp
-   Series.log
-   Series.sin
-   Series.sqrt
-   Series.tan
 
 Time Series-related
 -------------------
@@ -242,6 +222,7 @@ Time Series-related
    :toctree: api/
 
    Series.shift
+   Series.resample
 
 Accessors
 ---------
@@ -409,19 +390,17 @@ Serialization / IO / conversion
 .. autosummary::
    :toctree: api/
 
-   Series.to_array
    Series.to_arrow
+   Series.to_cupy
    Series.to_dlpack
    Series.to_frame
-   Series.to_gpu_array
    Series.to_hdf
    Series.to_json
+   Series.to_numpy
    Series.to_pandas
    Series.to_string
    Series.from_arrow
    Series.from_categorical
    Series.from_masked_array
    Series.from_pandas
-   Series.hash_encode
    Series.hash_values
-   

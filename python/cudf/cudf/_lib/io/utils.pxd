@@ -13,6 +13,8 @@ from cudf._lib.cpp.io.types cimport (
 
 
 cdef source_info make_source_info(list src) except*
+cdef sink_info make_sinks_info(
+    list src, vector[unique_ptr[data_sink]] & data) except*
 cdef sink_info make_sink_info(src, unique_ptr[data_sink] & data) except*
 cdef update_struct_field_names(
     table,

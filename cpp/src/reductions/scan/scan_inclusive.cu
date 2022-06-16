@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/find.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 
 #include <type_traits>
@@ -88,8 +91,7 @@ struct min_max_scan_operator {
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
-  CUDA_DEVICE_CALLABLE
-  size_type operator()(size_type lhs, size_type rhs) const
+  __device__ inline size_type operator()(size_type lhs, size_type rhs) const
   {
     // thrust::inclusive_scan may pass us garbage values so we need to protect ourselves;
     // in these cases the return value does not matter since the result is not used
@@ -118,7 +120,7 @@ struct scan_functor {
     thrust::inclusive_scan(
       rmm::exec_policy(stream), begin, begin + input_view.size(), result.data<T>(), Op{});
 
-    CHECK_CUDA(stream.value());
+    CUDF_CHECK_CUDA(stream.value());
     return output_column;
   }
 };
@@ -157,7 +159,7 @@ struct scan_functor<Op, cudf::struct_view> {
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
-    // Create a gather map contaning indices of the prefix min/max elements.
+    // Create a gather map containing indices of the prefix min/max elements.
     auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
     auto const binop_generator =
       cudf::reduction::detail::comparison_binop_generator::create<Op>(input, stream);
@@ -226,7 +228,7 @@ struct scan_dispatcher {
    *
    * @tparam T type of input column
    */
-  template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      null_policy,
                                      rmm::cuda_stream_view stream,
@@ -246,7 +248,7 @@ struct scan_dispatcher {
 
 std::unique_ptr<column> scan_inclusive(
   column_view const& input,
-  std::unique_ptr<aggregation> const& agg,
+  std::unique_ptr<scan_aggregation> const& agg,
   null_policy null_handling,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())

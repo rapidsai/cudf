@@ -1,14 +1,15 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
-import collections
 import warnings
+from collections import abc
 from typing import TYPE_CHECKING, Any, Tuple, cast
 
 import numpy as np
 
 import cudf
-from cudf.api.types import is_dtype_equal
+from cudf.api.types import is_decimal_dtype, is_dtype_equal
 from cudf.core.column import CategoricalColumn
 from cudf.core.dtypes import CategoricalDtype
 
@@ -85,9 +86,7 @@ def _match_join_keys(
     if is_dtype_equal(ltype, rtype):
         return lcol, rcol
 
-    if isinstance(ltype, cudf.Decimal64Dtype) or isinstance(
-        rtype, cudf.Decimal64Dtype
-    ):
+    if is_decimal_dtype(ltype) or is_decimal_dtype(rtype):
         raise TypeError(
             "Decimal columns can only be merged with decimal columns "
             "of the same precision and scale"
@@ -167,7 +166,7 @@ def _match_categorical_dtypes_both(
 
 
 def _coerce_to_tuple(obj):
-    if isinstance(obj, collections.abc.Iterable) and not isinstance(obj, str):
+    if isinstance(obj, abc.Iterable) and not isinstance(obj, str):
         return tuple(obj)
     else:
         return (obj,)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace {
@@ -257,7 +261,7 @@ __global__ void copy_block_partitions(InputIter input_iter,
     reinterpret_cast<size_type*>(block_output + OPTIMIZED_BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD);
   auto partition_offset_global = partition_offset_shared + num_partitions + 1;
 
-  typedef cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE> BlockScan;
+  using BlockScan = cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE>;
   __shared__ typename BlockScan::TempStorage temp_storage;
 
   // use ELEMENTS_PER_THREAD=2 to support upto 1024 partitions
@@ -591,8 +595,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     }
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
-    return std::make_pair(std::make_unique<table>(std::move(output_cols)),
-                          std::move(partition_offsets));
+    return std::pair(std::make_unique<table>(std::move(output_cols)), std::move(partition_offsets));
   } else {
     // Compute a scatter map from input to output such that the output rows are
     // sorted by partition number
@@ -609,7 +612,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
       input, row_partition_numbers.begin(), row_partition_numbers.end(), input, false, stream, mr);
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
-    return std::make_pair(std::move(output), std::move(partition_offsets));
+    return std::pair(std::move(output), std::move(partition_offsets));
   }
 }
 
@@ -696,7 +699,7 @@ struct dispatch_map_type {
     auto scattered =
       cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, false, stream, mr);
 
-    return std::make_pair(std::move(scattered), std::move(partition_offsets));
+    return std::pair(std::move(scattered), std::move(partition_offsets));
   }
 
   template <typename MapType, typename... Args>
@@ -724,7 +727,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   // Return empty result if there are no partitions or nothing to hash
   if (num_partitions <= 0 || input.num_rows() == 0 || table_to_hash.num_columns() == 0) {
-    return std::make_pair(empty_like(input), std::vector<size_type>{});
+    return std::pair(empty_like(input), std::vector<size_type>{});
   }
 
   if (has_nulls(table_to_hash)) {
@@ -749,7 +752,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   CUDF_EXPECTS(not partition_map.has_nulls(), "Unexpected null values in partition_map.");
 
   if (num_partitions == 0 or t.num_rows() == 0) {
-    return std::make_pair(empty_like(t), std::vector<size_type>{});
+    return std::pair(empty_like(t), std::vector<size_type>{});
   }
 
   return cudf::type_dispatcher(
@@ -775,10 +778,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
         if (!is_numeric(input.column(column_id).type()))
           CUDF_FAIL("IdentityHash does not support this data type");
       }
-      return detail::local::hash_partition<IdentityHash>(
+      return detail::local::hash_partition<detail::IdentityHash>(
         input, columns_to_hash, num_partitions, seed, stream, mr);
     case (hash_id::HASH_MURMUR3):
-      return detail::local::hash_partition<MurmurHash3_32>(
+      return detail::local::hash_partition<detail::MurmurHash3_32>(
         input, columns_to_hash, num_partitions, seed, stream, mr);
     default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }

@@ -1,7 +1,6 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import datetime
-import datetime as dt
 import operator
 import re
 
@@ -14,6 +13,7 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
+from cudf.core._compat import PANDAS_LT_140
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -219,8 +219,8 @@ def test_sort_datetime():
 
 def test_issue_165():
     df_pandas = pd.DataFrame()
-    start_date = dt.datetime.strptime("2000-10-21", "%Y-%m-%d")
-    data = [(start_date + dt.timedelta(days=x)) for x in range(6)]
+    start_date = datetime.datetime.strptime("2000-10-21", "%Y-%m-%d")
+    data = [(start_date + datetime.timedelta(days=x)) for x in range(6)]
     df_pandas["dates"] = data
     df_pandas["num"] = [1, 2, 3, 4, 5, 6]
     df_cudf = DataFrame.from_pandas(df_pandas)
@@ -580,7 +580,11 @@ def test_datetime_dataframe():
             dtype="datetime64[ns]",
             freq=None,
         ),
-        pd.DatetimeIndex([], dtype="datetime64[ns]", freq=None,),
+        pd.DatetimeIndex(
+            [],
+            dtype="datetime64[ns]",
+            freq=None,
+        ),
         pd.Series([1, 2, 3]).astype("datetime64[ns]"),
         pd.Series([1, 2, 3]).astype("datetime64[us]"),
         pd.Series([1, 2, 3]).astype("datetime64[ms]"),
@@ -681,7 +685,11 @@ def test_to_datetime_not_implemented():
         pd.Series([0, 1, -1]),
         pd.Series([0, 1, -1, 100, 200, 47637]),
         [10, 12, 1200, 15003],
-        pd.DatetimeIndex([], dtype="datetime64[ns]", freq=None,),
+        pd.DatetimeIndex(
+            [],
+            dtype="datetime64[ns]",
+            freq=None,
+        ),
         pd.Index([1, 2, 3, 4]),
     ],
 )
@@ -941,7 +949,8 @@ def test_datetime_subtract(data, other, data_dtype, other_dtype):
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 @pytest.mark.parametrize(
-    "op", ["add", "sub"],
+    "op",
+    ["add", "sub"],
 )
 def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
     gsr = cudf.Series(data=data, dtype=dtype)
@@ -1455,7 +1464,7 @@ date_range_test_freq = [
     pytest.param(
         {"hours": 10, "days": 57, "nanoseconds": 3},
         marks=pytest.mark.xfail(
-            True,
+            condition=PANDAS_LT_140,
             reason="Pandas ignoring nanoseconds component. "
             "https://github.com/pandas-dev/pandas/issues/44393",
         ),
@@ -1542,6 +1551,8 @@ def test_date_range_end_freq_periods(end, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
+        if "nanoseconds" in freq:
+            pytest.xfail("https://github.com/pandas-dev/pandas/issues/46877")
         _gfreq = cudf.DateOffset(**freq)
         _pfreq = pd.DateOffset(**freq)
 
@@ -1891,4 +1902,108 @@ def test_round(data, time_type, resolution):
 
     expect = ps.dt.round(resolution)
     got = gs.dt.round(resolution)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.DatetimeIndex([]),
+        pd.DatetimeIndex(["2010-05-31"]),
+        pd.date_range("2000-01-01", "2000-12-31", periods=21),
+    ],
+)
+@pytest.mark.parametrize(
+    "offset",
+    [
+        "10Y",
+        "6M",
+        "M",
+        "31D",
+        "0H",
+        "44640T",
+        "44640min",
+        "2678000S",
+        "2678000000L",
+        "2678000000ms",
+        "2678000000000U",
+        "2678000000000us",
+        "2678000000000000N",
+        "2678000000000000ns",
+    ],
+)
+def test_first(idx, offset):
+    p = pd.Series(range(len(idx)), index=idx)
+    g = cudf.from_pandas(p)
+
+    expect = p.first(offset=offset)
+    got = g.first(offset=offset)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    # This test case tests correctness when start is end of month
+    "idx, offset",
+    [
+        (
+            pd.DatetimeIndex(
+                [
+                    "2020-01-31",
+                    "2020-02-15",
+                    "2020-02-29",
+                    "2020-03-15",
+                    "2020-03-31",
+                    "2020-04-15",
+                    "2020-04-30",
+                ]
+            ),
+            "3M",
+        )
+    ],
+)
+def test_first_start_at_end_of_month(idx, offset):
+    p = pd.Series(range(len(idx)), index=idx)
+    g = cudf.from_pandas(p)
+
+    expect = p.first(offset=offset)
+    got = g.first(offset=offset)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.DatetimeIndex([]),
+        pd.DatetimeIndex(["2010-05-31"]),
+        pd.date_range("2000-01-01", "2000-12-31", periods=21),
+    ],
+)
+@pytest.mark.parametrize(
+    "offset",
+    [
+        "10Y",
+        "6M",
+        "M",
+        "31D",
+        "0H",
+        "44640T",
+        "44640min",
+        "2678000S",
+        "2678000000L",
+        "2678000000ms",
+        "2678000000000U",
+        "2678000000000us",
+        "2678000000000000N",
+        "2678000000000000ns",
+    ],
+)
+def test_last(idx, offset):
+    p = pd.Series(range(len(idx)), index=idx)
+    g = cudf.from_pandas(p)
+
+    expect = p.last(offset=offset)
+    got = g.last(offset=offset)
+
     assert_eq(expect, got)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ template <typename T, typename Enable = void>
 struct uniform_distribution_impl {
 };
 template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<std::is_integral<T>::value>> {
+struct uniform_distribution_impl<T, std::enable_if_t<std::is_integral_v<T>>> {
   using type = std::uniform_int_distribution<T>;
 };
 
@@ -69,7 +69,7 @@ struct uniform_distribution_impl<bool> {
 };
 
 template <typename T>
-struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point<T>::value>> {
+struct uniform_distribution_impl<T, std::enable_if_t<std::is_floating_point_v<T>>> {
   using type = std::uniform_real_distribution<T>;
 };
 
@@ -123,7 +123,7 @@ uint64_t random_generator_incrementing_seed();
 template <typename T = cudf::size_type, typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
  public:
-  using uniform_distribution = uniform_distribution_t<T>;
+  using uniform_distribution = uniform_distribution_t<T>;  ///< The uniform distribution type for T.
 
   UniformRandomGenerator() : rng{std::mt19937_64{detail::random_generator_incrementing_seed()}()} {}
 
@@ -144,6 +144,13 @@ class UniformRandomGenerator {
   {
   }
 
+  /**
+   * @brief Construct a new Uniform Random Generator to generate uniformly random booleans
+   *
+   * @param lower ignored
+   * @param upper ignored
+   * @param seed  seed to initialize generator with
+   */
   template <typename TL = T, std::enable_if_t<cudf::is_boolean<TL>()>* = nullptr>
   UniformRandomGenerator(T lower,
                          T upper,
@@ -171,6 +178,7 @@ class UniformRandomGenerator {
 
   /**
    * @brief Returns the next random number.
+   *
    * @return generated random number
    */
   template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()>* = nullptr>
@@ -179,6 +187,10 @@ class UniformRandomGenerator {
     return T{dist(rng)};
   }
 
+  /**
+   * @brief Returns the next random number.
+   * @return generated random number
+   */
   template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()>* = nullptr>
   T generate()
   {

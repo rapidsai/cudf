@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,12 +40,23 @@ struct store_result_functor {
                        sort::sort_groupby_helper& helper,
                        cudf::detail::result_cache& cache,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr)
-    : helper(helper), cache(cache), values(values), stream(stream), mr(mr)
+                       rmm::mr::device_memory_resource* mr,
+                       sorted keys_are_sorted = sorted::NO)
+    : helper(helper),
+      cache(cache),
+      values(values),
+      stream(stream),
+      mr(mr),
+      keys_are_sorted(keys_are_sorted)
   {
   }
 
  protected:
+  /**
+   * @brief Check if the groupby keys are presorted
+   */
+  [[nodiscard]] bool is_presorted() const { return keys_are_sorted == sorted::YES; }
+
   /**
    * @brief Get the grouped values
    *
@@ -54,6 +65,8 @@ struct store_result_functor {
    */
   column_view get_grouped_values()
   {
+    if (is_presorted()) { return values; }
+
     // TODO (dm): After implementing single pass multi-agg, explore making a
     //            cache of all grouped value columns rather than one at a time
     if (grouped_values)
@@ -86,6 +99,7 @@ struct store_result_functor {
   rmm::cuda_stream_view stream;         ///< CUDA stream on which to execute kernels
   rmm::mr::device_memory_resource* mr;  ///< Memory resource to allocate space for results
 
+  sorted keys_are_sorted;                  ///< Whether the keys are sorted
   std::unique_ptr<column> sorted_values;   ///< Memoised grouped and sorted values
   std::unique_ptr<column> grouped_values;  ///< Memoised grouped values
 };

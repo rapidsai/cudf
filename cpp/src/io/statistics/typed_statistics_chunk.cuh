@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <math_constants.h>
+
+#include <thrust/extrema.h>
 
 namespace cudf {
 namespace io {
@@ -92,24 +94,20 @@ struct typed_statistics_chunk<T, true> {
   using E = typename detail::extrema_type<T>::type;
   using A = typename detail::aggregation_type<T>::type;
 
-  uint32_t non_nulls;   //!< number of non-null values in chunk
-  uint32_t null_count;  //!< number of null values in chunk
+  uint32_t non_nulls{0};   //!< number of non-null values in chunk
+  uint32_t null_count{0};  //!< number of null values in chunk
 
   E minimum_value;
   E maximum_value;
   A aggregate;
 
-  uint8_t has_minmax;  //!< Nonzero if min_value and max_values are valid
-  uint8_t has_sum;     //!< Nonzero if sum is valid
+  uint8_t has_minmax{false};  //!< Nonzero if min_value and max_values are valid
+  uint8_t has_sum{false};     //!< Nonzero if sum is valid
 
   __device__ typed_statistics_chunk()
-    : non_nulls(0),
-      null_count(0),
-      minimum_value(detail::minimum_identity<E>()),
+    : minimum_value(detail::minimum_identity<E>()),
       maximum_value(detail::maximum_identity<E>()),
-      aggregate(0),
-      has_minmax(false),
-      has_sum(false)  // Set to true when storing
+      aggregate(0)
   {
   }
 
@@ -140,22 +138,17 @@ template <typename T>
 struct typed_statistics_chunk<T, false> {
   using E = typename detail::extrema_type<T>::type;
 
-  uint32_t non_nulls;   //!< number of non-null values in chunk
-  uint32_t null_count;  //!< number of null values in chunk
+  uint32_t non_nulls{0};   //!< number of non-null values in chunk
+  uint32_t null_count{0};  //!< number of null values in chunk
 
   E minimum_value;
   E maximum_value;
 
-  uint8_t has_minmax;  //!< Nonzero if min_value and max_values are valid
-  uint8_t has_sum;     //!< Nonzero if sum is valid
+  uint8_t has_minmax{false};  //!< Nonzero if min_value and max_values are valid
+  uint8_t has_sum{false};     //!< Nonzero if sum is valid
 
   __device__ typed_statistics_chunk()
-    : non_nulls(0),
-      null_count(0),
-      minimum_value(detail::minimum_identity<E>()),
-      maximum_value(detail::maximum_identity<E>()),
-      has_minmax(false),
-      has_sum(false)  // Set to true when storing
+    : minimum_value(detail::minimum_identity<E>()), maximum_value(detail::maximum_identity<E>())
   {
   }
 
@@ -238,7 +231,7 @@ get_untyped_chunk(const typed_statistics_chunk<T, include_aggregate>& chunk)
   stat.has_minmax = chunk.has_minmax;
   stat.has_sum    = [&]() {
     if (!chunk.has_minmax) return false;
-    // invalidate the sum if overlow or underflow is possible
+    // invalidate the sum if overflow or underflow is possible
     if constexpr (std::is_floating_point_v<E> or std::is_integral_v<E>) {
       return std::numeric_limits<E>::max() / chunk.non_nulls >=
                static_cast<E>(chunk.maximum_value) and

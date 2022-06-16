@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,8 +27,13 @@ namespace cudf {
 namespace detail {
 // TODO: Use chrono::utc_clock when available in libcu++?
 template <class Duration>
-using time_point = cuda::std::chrono::sys_time<Duration>;
+using time_point = cuda::std::chrono::sys_time<Duration>;  ///< Time point type
 
+/**
+ * @brief A wrapper around a column of time_point in varying resolutions
+ *
+ * @tparam Duration The underlying duration type
+ */
 template <class Duration>
 using timestamp = time_point<Duration>;
 }  // namespace detail
@@ -78,32 +83,3 @@ static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep), "");
 
 /** @} */  // end of group
 }  // namespace cudf
-
-namespace std {
-/**
- * @brief Specialization of std::numeric_limits for cudf::detail::timestamp
- *
- * Pass through to return the limits of the underlying numeric representation.
- */
-#define TIMESTAMP_LIMITS(TypeName)                                                                \
-  template <>                                                                                     \
-  struct numeric_limits<TypeName> {                                                               \
-    static constexpr TypeName max() noexcept { return TypeName::max(); }                          \
-    static constexpr TypeName lowest() noexcept                                                   \
-    {                                                                                             \
-      return TypeName{TypeName::duration{std::numeric_limits<typename TypeName::rep>::lowest()}}; \
-    }                                                                                             \
-    static constexpr TypeName min() noexcept { return TypeName::min(); }                          \
-  }
-
-TIMESTAMP_LIMITS(cudf::timestamp_D);
-TIMESTAMP_LIMITS(cudf::timestamp_h);
-TIMESTAMP_LIMITS(cudf::timestamp_m);
-TIMESTAMP_LIMITS(cudf::timestamp_s);
-TIMESTAMP_LIMITS(cudf::timestamp_ms);
-TIMESTAMP_LIMITS(cudf::timestamp_us);
-TIMESTAMP_LIMITS(cudf::timestamp_ns);
-
-#undef TIMESTAMP_LIMITS
-
-}  // namespace std

@@ -67,8 +67,8 @@ __global__ void compute_conditional_join_output_size(
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
   std::size_t thread_counter{0};
-  cudf::size_type const start_idx      = threadIdx.x + blockIdx.x * blockDim.x;
-  cudf::size_type const stride         = blockDim.x * gridDim.x;
+  cudf::size_type const start_idx      = threadIdx.x + blockIdx.x * block_size;
+  cudf::size_type const stride         = block_size * gridDim.x;
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
@@ -169,7 +169,7 @@ __global__ void conditional_join(table_device_view left_table,
 
   __syncwarp();
 
-  cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
 
   unsigned int const activemask = __ballot_sync(0xffffffff, outer_row_index < outer_num_rows);
 

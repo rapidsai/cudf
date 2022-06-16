@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -11,7 +11,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_133
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -28,6 +28,7 @@ from cudf.testing._utils import (
     SIGNED_INTEGER_TYPES,
     SIGNED_TYPES,
     UNSIGNED_TYPES,
+    _create_pandas_series,
     assert_column_memory_eq,
     assert_column_memory_ne,
     assert_eq,
@@ -464,7 +465,8 @@ def test_range_index_from_range(data):
 
 
 @pytest.mark.parametrize(
-    "n", [-10, -5, -2, 0, 1, 0, 2, 5, 10],
+    "n",
+    [-10, -5, -2, 0, 1, 0, 2, 5, 10],
 )
 def test_empty_df_head_tail_index(n):
     df = cudf.DataFrame()
@@ -502,7 +504,8 @@ def test_empty_df_head_tail_index(n):
             10,
             None,
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/43240"
+                condition=not PANDAS_GE_133,
+                reason="https://github.com/pandas-dev/pandas/issues/43240",
             ),
         ),
         (
@@ -511,11 +514,36 @@ def test_empty_df_head_tail_index(n):
             -pd.Index(np.arange(10)),
             None,
         ),
-        (pd.Index([1, 2, np.nan]), pd.Index([1, 2, np.nan]) == 4, None, None,),
-        (pd.Index([1, 2, np.nan]), pd.Index([1, 2, np.nan]) != 4, None, None,),
-        (pd.Index([-2, 3, -4, -79]), [True, True, True], None, ValueError,),
-        (pd.Index([-2, 3, -4, -79]), [True, True, True, False], None, None,),
-        (pd.Index([-2, 3, -4, -79]), [True, True, True, False], 17, None,),
+        (
+            pd.Index([1, 2, np.nan]),
+            pd.Index([1, 2, np.nan]) == 4,
+            None,
+            None,
+        ),
+        (
+            pd.Index([1, 2, np.nan]),
+            pd.Index([1, 2, np.nan]) != 4,
+            None,
+            None,
+        ),
+        (
+            pd.Index([-2, 3, -4, -79]),
+            [True, True, True],
+            None,
+            ValueError,
+        ),
+        (
+            pd.Index([-2, 3, -4, -79]),
+            [True, True, True, False],
+            None,
+            None,
+        ),
+        (
+            pd.Index([-2, 3, -4, -79]),
+            [True, True, True, False],
+            17,
+            None,
+        ),
         (pd.Index(list("abcdgh")), pd.Index(list("abcdgh")) != "g", "3", None),
         (
             pd.Index(list("abcdgh")),
@@ -678,6 +706,7 @@ def test_index_argsort(data):
         pd.Index([102, 1001, 1002, 0.0, 23], dtype="datetime64[ns]"),
         pd.Index([13240.2, 1001, 100.2, 0.0, 23], dtype="datetime64[ns]"),
         pd.RangeIndex(0, 10, 1),
+        pd.RangeIndex(0, -100, -2),
         pd.Index([-10.2, 100.1, -100.2, 0.0, 23], dtype="timedelta64[ns]"),
     ],
 )
@@ -947,9 +976,7 @@ def test_index_equal_misc(data, other):
     actual = gd_data.equals(np.array(gd_other))
     assert_eq(expected, actual)
 
-    expected = pd_data.equals(
-        cudf.utils.utils._create_pandas_series(data=pd_other)
-    )
+    expected = pd_data.equals(_create_pandas_series(pd_other))
     actual = gd_data.equals(cudf.Series(gd_other))
     assert_eq(expected, actual)
 
@@ -1566,111 +1593,6 @@ def test_interval_index_from_breaks(closed):
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.parametrize("n", [0, 2, 5, 10, None])
-@pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
-@pytest.mark.parametrize("replace", [True, False])
-def test_index_sample_basic(n, frac, replace):
-    psr = pd.Series([1, 2, 3, 4, 5])
-    gindex = cudf.Index(psr)
-    random_state = 0
-
-    try:
-        pout = psr.sample(
-            n=n, frac=frac, replace=replace, random_state=random_state
-        )
-    except BaseException:
-        assert_exceptions_equal(
-            lfunc=psr.sample,
-            rfunc=gindex.sample,
-            lfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                },
-            ),
-            rfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                },
-            ),
-        )
-    else:
-        gout = gindex.sample(
-            n=n, frac=frac, replace=replace, random_state=random_state
-        )
-
-        assert pout.shape == gout.shape
-
-
-@pytest.mark.parametrize("n", [2, 5, 10, None])
-@pytest.mark.parametrize("frac", [0.5, 1, 2, None])
-@pytest.mark.parametrize("replace", [True, False])
-@pytest.mark.parametrize("axis", [0, 1])
-def test_multiindex_sample_basic(n, frac, replace, axis):
-    # as we currently don't support column with same name
-    if axis == 1 and replace:
-        return
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 3, 4, 5],
-            "float": [0.05, 0.2, 0.3, 0.2, 0.25],
-            "int": [1, 3, 5, 4, 2],
-        },
-    )
-    mul_index = cudf.Index(cudf.from_pandas(pdf))
-    random_state = 0
-
-    try:
-        pout = pdf.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            random_state=random_state,
-            axis=axis,
-        )
-    except BaseException:
-        assert_exceptions_equal(
-            lfunc=pdf.sample,
-            rfunc=mul_index.sample,
-            lfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                    "axis": axis,
-                },
-            ),
-            rfunc_args_and_kwargs=(
-                [],
-                {
-                    "n": n,
-                    "frac": frac,
-                    "replace": replace,
-                    "random_state": random_state,
-                    "axis": axis,
-                },
-            ),
-        )
-    else:
-        gout = mul_index.sample(
-            n=n,
-            frac=frac,
-            replace=replace,
-            random_state=random_state,
-            axis=axis,
-        )
-        assert pout.shape == gout.shape
-
-
 @pytest.mark.parametrize(
     "data",
     [
@@ -1923,7 +1845,8 @@ def test_index_rangeindex_search_range():
 
 
 @pytest.mark.parametrize(
-    "rge", [(1, 10, 1), (1, 10, 3), (10, -17, -1), (10, -17, -3)],
+    "rge",
+    [(1, 10, 1), (1, 10, 3), (10, -17, -1), (10, -17, -3)],
 )
 def test_index_rangeindex_get_item_basic(rge):
     pridx = pd.RangeIndex(*rge)
@@ -1934,7 +1857,8 @@ def test_index_rangeindex_get_item_basic(rge):
 
 
 @pytest.mark.parametrize(
-    "rge", [(1, 10, 3), (10, 1, -3)],
+    "rge",
+    [(1, 10, 3), (10, 1, -3)],
 )
 def test_index_rangeindex_get_item_out_of_bounds(rge):
     gridx = cudf.RangeIndex(*rge)
@@ -1943,7 +1867,8 @@ def test_index_rangeindex_get_item_out_of_bounds(rge):
 
 
 @pytest.mark.parametrize(
-    "rge", [(10, 1, 1), (-17, 10, -3)],
+    "rge",
+    [(10, 1, 1), (-17, 10, -3)],
 )
 def test_index_rangeindex_get_item_null_range(rge):
     gridx = cudf.RangeIndex(*rge)
@@ -2050,7 +1975,8 @@ def test_get_loc_single_unique_numeric(idx, key, method):
 
 
 @pytest.mark.parametrize(
-    "idx", [pd.RangeIndex(3, 100, 4)],
+    "idx",
+    [pd.RangeIndex(3, 100, 4)],
 )
 @pytest.mark.parametrize("key", list(range(1, 110, 3)))
 @pytest.mark.parametrize("method", [None, "ffill"])
@@ -2480,3 +2406,115 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
 
     if NA_idx is not None:
         assert idx[NA_idx] is cudf.NA
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(
+            ["this", "is", None, "a", "test"], index=["a", "b", "c", "d", "e"]
+        ),
+        pd.Series([0, 15, 10], index=[0, None, 9]),
+        pd.Series(
+            range(25),
+            index=pd.date_range(
+                start="2019-01-01", end="2019-01-02", freq="H"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ["this", "is"],
+        [0, 19, 13],
+        ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02"],
+    ],
+)
+def test_isin_index(data, values):
+    psr = _create_pandas_series(data)
+    gsr = cudf.Series.from_pandas(psr)
+
+    got = gsr.index.isin(values)
+    expected = psr.index.isin(values)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3], ["red", "blue", "green"]], names=("number", "color")
+        ),
+        pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 10, 100], ["red", "blue", "green", "pink", "white"]],
+            names=("number", "color"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values,level,err",
+    [
+        (["red", "orange", "yellow"], "color", None),
+        (["red", "white", "yellow"], "color", None),
+        ([0, 1, 2, 10, 11, 15], "number", None),
+        ([0, 1, 2, 10, 11, 15], None, TypeError),
+        (pd.Series([0, 1, 2, 10, 11, 15]), None, TypeError),
+        (pd.Index([0, 1, 2, 10, 11, 15]), None, TypeError),
+        (pd.Index([0, 1, 2, 8, 11, 15]), "number", None),
+        (pd.Index(["red", "white", "yellow"]), "color", None),
+        ([(1, "red"), (3, "red")], None, None),
+        (((1, "red"), (3, "red")), None, None),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3], ["red", "blue", "green"]],
+                names=("number", "color"),
+            ),
+            None,
+            None,
+        ),
+        (
+            pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
+            None,
+            None,
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [
+                    [1, 2, 3, 10, 100],
+                    ["red", "blue", "green", "pink", "white"],
+                ],
+                names=("number", "color"),
+            ),
+            None,
+            None,
+        ),
+    ],
+)
+def test_isin_multiindex(data, values, level, err):
+    pmdx = data
+    gmdx = cudf.from_pandas(data)
+
+    if err is None:
+        expected = pmdx.isin(values, level=level)
+        if isinstance(values, pd.MultiIndex):
+            values = cudf.from_pandas(values)
+        got = gmdx.isin(values, level=level)
+
+        assert_eq(got, expected)
+    else:
+        assert_exceptions_equal(
+            lfunc=pmdx.isin,
+            rfunc=gmdx.isin,
+            lfunc_args_and_kwargs=([values], {"level": level}),
+            rfunc_args_and_kwargs=([values], {"level": level}),
+            check_exception_type=False,
+            expected_error_message=re.escape(
+                "values need to be a Multi-Index or set/list-like tuple "
+                "squences  when `level=None`."
+            ),
+        )

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import datetime
 import json
@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 
 
-class Fuzzer(object):
+class Fuzzer:
     def __init__(
         self,
         target,
@@ -57,13 +57,15 @@ class Fuzzer(object):
         logging.info(f"Run-Time elapsed (hh:mm:ss.ms) {total_time_taken}")
 
     def write_crash(self, error):
-        error_file_name = datetime.datetime.now().__str__()
+        error_file_name = str(datetime.datetime.now())
         if self._crash_dir:
             crash_path = os.path.join(
-                self._crash_dir, error_file_name + "_crash.json",
+                self._crash_dir,
+                error_file_name + "_crash.json",
             )
             crash_log_path = os.path.join(
-                self._crash_dir, error_file_name + "_crash.log",
+                self._crash_dir,
+                error_file_name + "_crash.log",
             )
         else:
             crash_path = error_file_name + "_crash.json"

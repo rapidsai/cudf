@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 #include <vector>
 
@@ -123,7 +126,7 @@ TEST_F(TableViewTest, SelectOutOfBounds)
   fixed_width_column_wrapper<int64_t> col4{{4, 5, 6, 7}};
   cudf::table_view t{{col1, col2}};
 
-  EXPECT_THROW(t.select({2, 3, 4}), std::out_of_range);
+  EXPECT_THROW((void)t.select({2, 3, 4}), std::out_of_range);
 }
 
 TEST_F(TableViewTest, SelectNoColumns)

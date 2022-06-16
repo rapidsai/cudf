@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,13 +121,17 @@ class column {
 
   /**
    * @brief Returns the column's logical element type
+   *
+   * @return The column's logical element type
    */
-  data_type type() const noexcept { return _type; }
+  [[nodiscard]] data_type type() const noexcept { return _type; }
 
   /**
    * @brief Returns the number of elements
+   *
+   * @return The number of elements
    */
-  size_type size() const noexcept { return _size; }
+  [[nodiscard]] size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns the count of null elements.
@@ -136,8 +140,10 @@ class column {
    * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
+   *
+   * @return The number of null elements
    */
-  size_type null_count() const;
+  [[nodiscard]] size_type null_count() const;
 
   /**
    * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
@@ -199,7 +205,7 @@ class column {
    * @return true The column can hold null values
    * @return false The column cannot hold null values
    */
-  bool nullable() const noexcept { return (_null_mask.size() > 0); }
+  [[nodiscard]] bool nullable() const noexcept { return (_null_mask.size() > 0); }
 
   /**
    * @brief Indicates whether the column contains null elements.
@@ -207,12 +213,14 @@ class column {
    * @return true One or more elements are null
    * @return false Zero elements are null
    */
-  bool has_nulls() const noexcept { return (null_count() > 0); }
+  [[nodiscard]] bool has_nulls() const noexcept { return (null_count() > 0); }
 
   /**
    * @brief Returns the number of child columns
+   *
+   * @return The number of child columns
    */
-  size_type num_children() const noexcept { return _children.size(); }
+  [[nodiscard]] size_type num_children() const noexcept { return _children.size(); }
 
   /**
    * @brief Returns a reference to the specified child
@@ -228,7 +236,10 @@ class column {
    * @param child_index Index of the desired child
    * @return column const& Const reference to the desired child
    */
-  column const& child(size_type child_index) const noexcept { return *_children[child_index]; };
+  [[nodiscard]] column const& child(size_type child_index) const noexcept
+  {
+    return *_children[child_index];
+  };
 
   /**
    * @brief Wrapper for the contents of a column.
@@ -236,9 +247,9 @@ class column {
    * Returned by `column::release()`.
    */
   struct contents {
-    std::unique_ptr<rmm::device_buffer> data;
-    std::unique_ptr<rmm::device_buffer> null_mask;
-    std::vector<std::unique_ptr<column>> children;
+    std::unique_ptr<rmm::device_buffer> data;       ///< data device memory buffer
+    std::unique_ptr<rmm::device_buffer> null_mask;  ///< null mask device memory buffer
+    std::vector<std::unique_ptr<column>> children;  ///< child columns
   };
 
   /**
@@ -264,7 +275,7 @@ class column {
    *
    * @return column_view The immutable, non-owning view
    */
-  column_view view() const;
+  [[nodiscard]] column_view view() const;
 
   /**
    * @brief Implicit conversion operator to a `column_view`.

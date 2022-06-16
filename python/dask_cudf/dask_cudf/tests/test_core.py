@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import random
 
@@ -284,7 +284,7 @@ def test_assign():
     got = dgf.assign(z=newcol)
 
     dd.assert_eq(got.loc[:, ["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"].compute().to_array(), pdcol)
+    np.testing.assert_array_equal(got["z"].compute().values_host, pdcol)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])
@@ -720,7 +720,9 @@ def test_series_describe():
     pdsr = dd.from_pandas(psr, npartitions=4)
 
     dd.assert_eq(
-        dsr.describe(), pdsr.describe(), check_less_precise=3,
+        dsr.describe(),
+        pdsr.describe(),
+        check_less_precise=3,
     )
 
 

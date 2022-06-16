@@ -1,8 +1,8 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import logging
 import random
-from collections import abc as abc
+from collections import abc
 
 import numpy as np
 
@@ -65,7 +65,7 @@ class JSONReader(IOFuzz):
                 seed,
             ) = self.get_next_regression_params()
         else:
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             random.seed(seed)
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
@@ -140,7 +140,7 @@ class JSONWriter(IOFuzz):
                 seed,
             ) = self.get_next_regression_params()
         else:
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             random.seed(seed)
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES

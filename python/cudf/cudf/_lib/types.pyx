@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from enum import IntEnum
 
@@ -70,6 +70,7 @@ class TypeId(IntEnum):
     )
     DECIMAL32 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL32
     DECIMAL64 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL64
+    DECIMAL128 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL128
 
 
 SUPPORTED_NUMPY_TO_LIBCUDF_TYPES = {
@@ -96,6 +97,10 @@ SUPPORTED_NUMPY_TO_LIBCUDF_TYPES = {
 }
 
 LIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
+    # There's no equivalent to EMPTY in cudf.  We translate EMPTY
+    # columns from libcudf to ``int8`` columns of all nulls in Python.
+    # ``int8`` is chosen because it uses the least amount of memory.
+    TypeId.EMPTY: np.dtype("int8"),
     TypeId.INT8: np.dtype("int8"),
     TypeId.INT16: np.dtype("int16"),
     TypeId.INT32: np.dtype("int32"),
@@ -226,6 +231,11 @@ cdef dtype_from_column_view(column_view cv):
             precision=cudf.Decimal32Dtype.MAX_PRECISION,
             scale=-cv.type().scale()
         )
+    elif tid == libcudf_types.type_id.DECIMAL128:
+        return cudf.Decimal128Dtype(
+            precision=cudf.Decimal128Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
     elif tid == libcudf_types.type_id.DICTIONARY32:
         return dtype_from_dictionary_column_view(cv)
     else:
@@ -238,6 +248,8 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
         tid = libcudf_types.type_id.LIST
     elif cudf.api.types.is_struct_dtype(dtype):
         tid = libcudf_types.type_id.STRUCT
+    elif cudf.api.types.is_decimal128_dtype(dtype):
+        tid = libcudf_types.type_id.DECIMAL128
     elif cudf.api.types.is_decimal64_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL64
     elif cudf.api.types.is_decimal32_dtype(dtype):
@@ -256,6 +268,7 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
 
 cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
     return tid in (
+        libcudf_types.type_id.DECIMAL128,
         libcudf_types.type_id.DECIMAL64,
-        libcudf_types.type_id.DECIMAL32
+        libcudf_types.type_id.DECIMAL32,
     )

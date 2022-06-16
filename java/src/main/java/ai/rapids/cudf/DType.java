@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -174,6 +174,37 @@ public final class DType {
   };
 
   /**
+   * Returns max precision for Decimal Type.
+   * @return max precision this Decimal Type can hold
+   */
+  public int getDecimalMaxPrecision() {
+    if (!isDecimalType()) {
+      throw new IllegalArgumentException("not a decimal type: " + this);
+    }
+    if (typeId == DTypeEnum.DECIMAL32) return DECIMAL32_MAX_PRECISION;
+    if (typeId == DTypeEnum.DECIMAL64) return DECIMAL64_MAX_PRECISION;
+    return DType.DECIMAL128_MAX_PRECISION;
+  }
+
+  /**
+   * Get the number of decimal places needed to hold the Integral Type.
+   * NOTE: this method is NOT for Decimal Type but for Integral Type.
+   * @return the minimum decimal precision (places) for Integral Type
+   */
+  public int getPrecisionForInt() {
+    // -128 to 127
+    if (typeId == DTypeEnum.INT8) return 3;
+    // -32768 to 32767
+    if (typeId == DTypeEnum.INT16) return 5;
+    // -2147483648 to 2147483647
+    if (typeId == DTypeEnum.INT32) return 10;
+    // -9223372036854775808 to 9223372036854775807
+    if (typeId == DTypeEnum.INT64) return 19;
+
+    throw new IllegalArgumentException("not an integral type: " + this);
+  }
+
+  /**
    * This only works for fixed width types. Variable width types like strings the value is
    * undefined and should be ignored.
    *
@@ -307,7 +338,7 @@ public final class DType {
       return new DType(DTypeEnum.DECIMAL128, -dec.scale());
     }
     throw new IllegalArgumentException("Precision " + dec.precision() +
-        " exceeds max precision cuDF can support " + DECIMAL64_MAX_PRECISION);
+        " exceeds max precision cuDF can support " + DECIMAL128_MAX_PRECISION);
   }
 
   /**

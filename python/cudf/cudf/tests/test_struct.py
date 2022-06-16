@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -205,6 +205,14 @@ def test_dataframe_to_struct():
     df["a"][0] = 5
     assert_eq(got, expect)
 
+    # check that a non-string (but convertible to string) named column can be
+    # converted to struct
+    df = cudf.DataFrame([[1, 2], [3, 4]], columns=[(1, "b"), 0])
+    expect = cudf.Series([{"(1, 'b')": 1, "0": 2}, {"(1, 'b')": 3, "0": 4}])
+    with pytest.warns(UserWarning, match="will be casted"):
+        got = df.to_struct()
+    assert_eq(got, expect)
+
 
 @pytest.mark.parametrize(
     "series, slce",
@@ -314,3 +322,13 @@ def test_struct_int_values():
     assert isinstance(actual_series[0]["b"], int)
     assert isinstance(actual_series[1]["b"], type(None))
     assert isinstance(actual_series[2]["b"], int)
+
+
+def test_nested_struct_from_pandas_empty():
+    # tests constructing nested structs columns that would result in
+    # libcudf EMPTY type child columns inheriting their parent's null
+    # mask. See GH PR: #10761
+    pdf = pd.Series([[{"c": {"x": None}}], [{"c": None}]])
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf, gdf)

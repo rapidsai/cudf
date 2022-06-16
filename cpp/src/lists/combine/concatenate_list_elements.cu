@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
+#include <thrust/scan.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
@@ -76,7 +81,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 
   auto [null_mask, null_count] = [&] {
     if (!build_null_mask)
-      return std::make_pair(cudf::detail::copy_bitmask(input, stream, mr), input.null_count());
+      return std::pair(cudf::detail::copy_bitmask(input, stream, mr), input.null_count());
 
     // The output row will be null only if all lists on the input row are null.
     auto const lists_dv_ptr = column_device_view::create(lists_column_view(input).child(), stream);
