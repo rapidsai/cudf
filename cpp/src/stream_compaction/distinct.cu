@@ -206,6 +206,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
                         output_map.begin(),
                         [reduction_results = reduction_results.begin()] __device__(auto const idx) {
                           // Only output index of the rows that appeared once during reduction.
+                          // Indices of duplicate rows will be either >1 or `0`.
                           return reduction_results[idx] == size_type{1};
                         })
       : thrust::copy_if(rmm::exec_policy(stream),
