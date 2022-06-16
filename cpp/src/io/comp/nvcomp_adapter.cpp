@@ -54,13 +54,17 @@ auto batched_decompress_get_temp_size_ex(compression_type compression, Args&&...
   switch (compression) {
     case compression_type::SNAPPY:
       return nvcompBatchedSnappyDecompressGetTempSizeEx(std::forward<Args>(args)...);
-#if NVCOMP_HAS_ZSTD
     case compression_type::ZSTD:
+#if NVCOMP_HAS_ZSTD
       return nvcompBatchedZstdDecompressGetTempSizeEx(std::forward<Args>(args)...);
+#else
+      CUDF_FAIL("Unsupported compression type");
 #endif
-#if NVCOMP_HAS_DEFLATE
     case compression_type::DEFLATE:
+#if NVCOMP_HAS_DEFLATE
       return nvcompBatchedDeflateDecompressGetTempSizeEx(std::forward<Args>(args)...);
+#else
+      CUDF_FAIL("Unsupported compression type");
 #endif
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -120,10 +124,10 @@ size_t batched_decompress_temp_size(compression_type compression,
 {
   size_t temp_size = 0;
 #if NVCOMP_HAS_TEMPSIZE_EX
-  nvcompStatus_t nvcomp_status = batched_decompress_get_temp_size_ex(
+  auto const nvcomp_status = batched_decompress_get_temp_size_ex(
     compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
 #else
-  nvcompStatus_t nvcomp_status =
+  auto const nvcomp_status =
     batched_decompress_get_temp_size(compression, num_chunks, max_uncomp_chunk_size, &temp_size);
 #endif
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
@@ -158,10 +162,9 @@ void batched_decompress(compression_type compression,
   rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_chunks, stream);
   rmm::device_uvector<nvcompStatus_t> nvcomp_statuses(num_chunks, stream);
   // Temporary space required for decompression
-  rmm::device_buffer scratch(
-    batched_decompress_temp_size(
-      compression, num_chunks, max_uncomp_chunk_size, max_total_uncomp_size),
-    stream);
+  auto const temp_size = batched_decompress_temp_size(
+    compression, num_chunks, max_uncomp_chunk_size, max_total_uncomp_size);
+  rmm::device_buffer scratch(temp_size, stream);
   auto const nvcomp_status = batched_decompress_async(compression,
                                                       nvcomp_args.input_data_ptrs.data(),
                                                       nvcomp_args.input_data_sizes.data(),

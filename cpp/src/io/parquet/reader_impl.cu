@@ -1101,10 +1101,10 @@ rmm::device_buffer reader::impl::decompress_page_data(
   size_t total_decomp_size = 0;
 
   struct codec_stats {
-    parquet::Compression compression_type;
-    size_t num_pages              = 0;
-    int32_t max_decompressed_size = 0;
-    size_t total_decomp_size      = 0;
+    parquet::Compression compression_type = UNCOMPRESSED;
+    size_t num_pages                      = 0;
+    int32_t max_decompressed_size         = 0;
+    size_t total_decomp_size              = 0;
   };
 
   std::array codecs{codec_stats{parquet::GZIP},
