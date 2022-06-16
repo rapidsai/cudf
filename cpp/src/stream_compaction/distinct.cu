@@ -51,14 +51,22 @@ namespace {
  * A reduction operator will be performed on each group of rows that are compared equal.
  */
 template <typename MapDeviceView, typename KeyHasher, typename KeyComparator>
-struct reduce_fn_gen {
+struct reduce_op_gen {
   MapDeviceView const d_map;
   KeyHasher const d_hash;
   KeyComparator const d_eqcomp;
   size_type* const d_output;
 
+  reduce_op_gen(MapDeviceView const& d_map,
+                KeyHasher const& d_hash,
+                KeyComparator const& d_eqcomp,
+                size_type* const d_output)
+    : d_map{d_map}, d_hash{d_hash}, d_eqcomp{d_eqcomp}, d_output{d_output}
+  {
+  }
+
   template <duplicate_keep_option keep>
-  auto reduce_fn() const
+  auto reduce_op() const
   {
     return reduce_index_fn<keep>{*this};
   }
@@ -72,7 +80,7 @@ struct reduce_fn_gen {
    */
   template <duplicate_keep_option keep>
   struct reduce_index_fn {
-    reduce_fn_gen const parent;
+    reduce_op_gen const parent;
 
     __device__ void operator()(size_type const idx) const
     {
@@ -168,8 +176,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init_value);
 
   auto const d_map  = key_map.get_device_view();
-  auto const fn_gen = reduce_fn_gen<decltype(d_map), decltype(key_hasher), decltype(key_equal)>{
-    d_map, key_hasher, key_equal, reduction_results.begin()};
+  auto const fn_gen = reduce_op_gen{d_map, key_hasher, key_equal, reduction_results.begin()};
 
   auto const do_reduce = [keys_size, stream](auto const& fn) {
     thrust::for_each(rmm::exec_policy(stream),
@@ -179,13 +186,13 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   };
   switch (keep) {
     case duplicate_keep_option::KEEP_FIRST:
-      do_reduce(fn_gen.reduce_fn<duplicate_keep_option::KEEP_FIRST>());
+      do_reduce(fn_gen.reduce_op<duplicate_keep_option::KEEP_FIRST>());
       break;
     case duplicate_keep_option::KEEP_LAST:
-      do_reduce(fn_gen.reduce_fn<duplicate_keep_option::KEEP_LAST>());
+      do_reduce(fn_gen.reduce_op<duplicate_keep_option::KEEP_LAST>());
       break;
     case duplicate_keep_option::KEEP_NONE:
-      do_reduce(fn_gen.reduce_fn<duplicate_keep_option::KEEP_NONE>());
+      do_reduce(fn_gen.reduce_op<duplicate_keep_option::KEEP_NONE>());
       break;
     default:;  // KEEP_ANY has already been handled above
   }
