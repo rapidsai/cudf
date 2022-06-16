@@ -48,22 +48,22 @@ namespace {
 /**
  * @brief A functor to perform reduction on row indices.
  *
- * A reduction operator will be performed on each group of rows that are compared equal.
+ * A reduction operation will be performed on each group of rows that are compared equal.
  */
 template <typename MapDeviceView, typename KeyHasher, typename KeyComparator>
 struct reduce_index_fn {
   MapDeviceView const d_map;
-  KeyHasher const d_hash;
+  KeyHasher const d_hasher;
   KeyComparator const d_eqcomp;
   duplicate_keep_option const keep;
   size_type* const d_output;
 
   reduce_index_fn(MapDeviceView const& d_map,
-                  KeyHasher const& d_hash,
+                  KeyHasher const& d_hasher,
                   KeyComparator const& d_eqcomp,
                   duplicate_keep_option const keep,
                   size_type* const d_output)
-    : d_map{d_map}, d_hash{d_hash}, d_eqcomp{d_eqcomp}, keep{keep}, d_output{d_output}
+    : d_map{d_map}, d_hasher{d_hasher}, d_eqcomp{d_eqcomp}, keep{keep}, d_output{d_output}
   {
   }
 
@@ -86,7 +86,7 @@ struct reduce_index_fn {
   {
     // Here we don't check `iter` validity for performance reason, assuming that it is always
     // valid because all input `idx` values have been fed into `map.insert()` before.
-    auto const iter = d_map.find(idx, d_hash, d_eqcomp);
+    auto const iter = d_map.find(idx, d_hasher, d_eqcomp);
 
     // Only one index value of the duplicate rows could be inserted into the map.
     // As such, looking up for all indices of duplicate rows always returns the same value.
