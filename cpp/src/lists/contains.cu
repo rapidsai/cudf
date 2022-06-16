@@ -88,6 +88,12 @@ struct search_list_fn {
              : search_list<false, Element>(list, key);
   }
 
+  template <typename Element, CUDF_ENABLE_IF(cudf::is_nested<Element>())>
+  __device__ size_type operator()(list_device_view, thrust::optional<Element>) const
+  {
+    cudf_assert(false && "Nested types are not yet supported");
+  }
+
  private:
   template <bool forward, typename Element, CUDF_ENABLE_IF(is_supported_non_nested_type<Element>())>
   static __device__ size_type search_list(list_device_view const& list, Element const& search_key)
