@@ -91,7 +91,8 @@ std::unique_ptr<table> distinct(
  * @brief Get the row indices that denote all distinct rows in `input`.
  *
  * Given an `input` table_view, index of each row is added to the output array in an
- * unspecified order if the row is distinct (i.e., no other equivalent row exists in the table).
+ * unspecified order such that the rows correspond to all output indices are distinct (i.e., no
+ * other equivalent row among the output indices).
  *
  * @param input The input table_view to find indices of distinct rows
  * @param keep Get index of the first, last, any, or no distinct row among the duplicates
