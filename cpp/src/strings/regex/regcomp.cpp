@@ -278,32 +278,31 @@ class regex_parser {
       std::tie(is_quoted, chr) = next_char();
     }
 
-    // transform pairs of literals to spans
-    std::vector<reclass_range> spans(literals.size() / 2);
+    // transform pairs of literals to ranges
+    std::vector<reclass_range> ranges(literals.size() / 2);
     auto const counter = thrust::make_counting_iterator(0);
-    std::transform(counter, counter + spans.size(), spans.begin(), [&literals](auto idx) {
+    std::transform(counter, counter + ranges.size(), ranges.begin(), [&literals](auto idx) {
       return reclass_range{literals[idx * 2], literals[idx * 2 + 1]};
     });
-    // sort the spans to help with detecting overlapping entries
-    std::sort(spans.begin(), spans.end(), [](auto l, auto r) {
+    // sort the ranges to help with detecting overlapping entries
+    std::sort(ranges.begin(), ranges.end(), [](auto l, auto r) {
       return l.first == r.first ? l.last < r.last : l.first < r.first;
     });
     // combine overlapping entries: [a-f][c-g] => [a-g]
-    for (auto itr = spans.begin() + static_cast<int>(!spans.empty()); itr < spans.end(); ++itr) {
+    for (auto itr = ranges.begin() + static_cast<int>(!ranges.empty()); itr < ranges.end(); ++itr) {
       auto const prev = *(itr - 1);
-      auto const curr = *itr;
-      if (curr.first <= prev.last + 1) {
-        // if these 2 spans intersect, expand the current one
-        *itr = reclass_range{prev.first, std::max(prev.last, curr.last)};
+      if (itr->first <= prev.last + 1) {
+        // if these 2 ranges intersect, expand the current one
+        *itr = reclass_range{prev.first, std::max(prev.last, itr->last)};
       }
     }
     // remove any duplicates
-    std::reverse(spans.begin(), spans.end());  // moves larger overlaps forward
+    std::reverse(ranges.begin(), ranges.end());  // moves larger overlaps forward
     auto const end =  // std::unique specifies keeping the first entry in a repeated sequence
-      std::unique(spans.begin(), spans.end(), [](auto l, auto r) { return l.first == r.first; });
-    spans.erase(end, spans.end());  // clear the remainder
+      std::unique(ranges.begin(), ranges.end(), [](auto l, auto r) { return l.first == r.first; });
+    ranges.erase(end, ranges.end());  // clear the remaining items
 
-    _cclass_id = _prog.add_class(reclass{builtins, std::move(spans)});
+    _cclass_id = _prog.add_class(reclass{builtins, std::move(ranges)});
     return type;
   }
 
