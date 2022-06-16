@@ -183,9 +183,6 @@ class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
 
-  // ORC compresses streams into independent chunks
-  static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 256 * 1024;
-
  public:
   /**
    * @brief Constructor with writer options.
@@ -431,8 +428,8 @@ class writer::impl {
 
   stripe_size_limits max_stripe_size;
   size_type row_index_stride;
-  size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
-  CompressionKind compression_kind_ = CompressionKind::NONE;
+  CompressionKind compression_kind_;
+  size_t compression_blocksize_;
 
   bool enable_dictionary_     = true;
   statistics_freq stats_freq_ = ORC_STATISTICS_ROW_GROUP;
