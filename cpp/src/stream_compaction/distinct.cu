@@ -109,15 +109,22 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     return rmm::device_uvector<size_type>(0, stream, mr);
   }
 
+  // TODO: In case keep != KEEP_ANY, we need to switch to use static_reduction_map when it is ready
+  // (https://github.com/NVIDIA/cuCollections/pull/98)
+  using static_map = cuco::static_map<size_type,
+                                      size_type,
+                                      cuda::thread_scope_device,
+                                      cudf::detail::hash_table_allocator_type>;
+
+  auto map = static_map{compute_hash_table_size(input.num_rows()),
+                        cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
+                        cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
+                        detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                        stream.value()};
+
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);
   auto const has_null = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
-
-  auto map = hash_map_type{compute_hash_table_size(input.num_rows()),
-                           cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
-                           cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
-                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-                           stream.value()};
 
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_null));
