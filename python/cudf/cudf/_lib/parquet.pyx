@@ -5,7 +5,6 @@
 import errno
 import io
 import os
-from collections import OrderedDict
 
 import pyarrow as pa
 
@@ -188,7 +187,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         range_index = []
         index_col_names = None
         for single_file in per_file_user_data:
-            json_str = index_col[b'pandas'].decode('utf-8')
+            json_str = single_file[b'pandas'].decode('utf-8')
             meta = None
             if json_str != "":
                 meta = json.loads(json_str)
@@ -200,7 +199,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                         range_index.append(True)
                     else:
                         if index_col_names is None:
-                            index_col_names = OrderedDict()
+                            index_col_names = {}
                             for idx_col in index_col:
                                 for c in meta['columns']:
                                     if c['field_name'] == idx_col:
@@ -220,7 +219,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                         index_col[0]['kind'] == 'range':
                     is_range_index = True
                 else:
-                    index_col_names = OrderedDict()
+                    index_col_names = {}
                     for idx_col in index_col:
                         for c in meta['columns']:
                             if c['field_name'] == idx_col:
