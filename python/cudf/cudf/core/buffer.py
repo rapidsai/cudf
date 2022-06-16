@@ -5,7 +5,7 @@ import functools
 import operator
 import time
 from threading import RLock
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -36,6 +36,31 @@ def get_base_buffer(obj: Any) -> Optional[Buffer]:
     if hasattr(obj, "base_data"):
         return get_base_buffer(obj.base_data)
     return None
+
+
+class DelayedPointerTuple(Sequence):
+    """
+    A delayed version of the "data" field in __cuda_array_interface__.
+
+    The idea is to delay the access to `Buffer.ptr` until the user
+    actually accesses the data pointer.
+
+    For instance, in many cases __cuda_array_interface__ is accessed
+    only to determine whether an object is a CUDA object or not.
+    """
+
+    def __init__(self, buffer: Buffer) -> None:
+        self._buf = buffer
+
+    def __len__(self):
+        return 2
+
+    def __getitem__(self, i):
+        if i == 0:
+            return self._buf.ptr
+        elif i == 1:
+            return False
+        raise IndexError("tuple index out of range")
 
 
 class Buffer(Serializable):
@@ -249,7 +274,7 @@ class Buffer(Serializable):
     @property
     def __cuda_array_interface__(self) -> dict:
         return {
-            "data": (self.ptr, False),
+            "data": DelayedPointerTuple(self),
             "shape": (self.size,),
             "strides": None,
             "typestr": "|u1",
