@@ -51,51 +51,35 @@ namespace {
  * A reduction operator will be performed on each group of rows that are compared equal.
  */
 template <typename MapDeviceView, typename KeyHasher, typename KeyComparator>
-struct reduce_op_gen {
+struct reduce_index_fn {
   MapDeviceView const d_map;
   KeyHasher const d_hash;
   KeyComparator const d_eqcomp;
+  duplicate_keep_option const keep;
   size_type* const d_output;
 
-  reduce_op_gen(MapDeviceView const& d_map,
+  reduce_index_fn(MapDeviceView const& d_map,
                 KeyHasher const& d_hash,
                 KeyComparator const& d_eqcomp,
+                duplicate_keep_option const keep,
                 size_type* const d_output)
-    : d_map{d_map}, d_hash{d_hash}, d_eqcomp{d_eqcomp}, d_output{d_output}
+    : d_map{d_map}, d_hash{d_hash}, d_eqcomp{d_eqcomp}, keep{keep}, d_output{d_output}
   {
   }
 
-  template <duplicate_keep_option keep>
-  auto reduce_op() const
+  __device__ void operator()(size_type const idx) const
   {
-    return reduce_index_fn<keep>{*this};
-  }
-
-  /**
-   * @brief The functor used on device for row index reduction.
-   *
-   * This inner functor has only one template argument. That reduces the amount of template
-   * parameters required upon constructing this functor, which happens multiple times. Other
-   * template arguments belong to its parent, which needs to be constructed just once.
-   */
-  template <duplicate_keep_option keep>
-  struct reduce_index_fn {
-    reduce_op_gen const parent;
-
-    __device__ void operator()(size_type const idx) const
-    {
-      if constexpr (keep == duplicate_keep_option::KEEP_FIRST) {
-        // Store the smallest index of all rows that are equal.
-        atomicMin(&parent.get_output(idx), idx);
-      } else if constexpr (keep == duplicate_keep_option::KEEP_LAST) {
-        // Store the greatest index of all rows that are equal.
-        atomicMax(&parent.get_output(idx), idx);
-      } else {
-        // Count the number of rows that are equal to the row having index inserted.
-        atomicAdd(&parent.get_output(idx), size_type{1});
-      }
+    if (keep == duplicate_keep_option::KEEP_FIRST) {
+      // Store the smallest index of all rows that are equal.
+      atomicMin(&get_output(idx), idx);
+    } else if (keep == duplicate_keep_option::KEEP_LAST) {
+      // Store the greatest index of all rows that are equal.
+      atomicMax(&get_output(idx), idx);
+    } else {
+      // Count the number of rows that are equal to the row having index inserted.
+      atomicAdd(&get_output(idx), size_type{1});
     }
-  };
+  }
 
  private:
   __device__ size_type& get_output(size_type const idx) const
@@ -175,27 +159,12 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init_value);
 
-  auto const fn_gen =
-    reduce_op_gen{key_map.get_device_view(), key_hasher, key_equal, reduction_results.begin()};
-
-  auto const do_reduce = [keys_size, stream](auto const& fn) {
-    thrust::for_each(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator(0),
-                     thrust::make_counting_iterator(keys_size),
-                     fn);
-  };
-  switch (keep) {
-    case duplicate_keep_option::KEEP_FIRST:
-      do_reduce(fn_gen.reduce_op<duplicate_keep_option::KEEP_FIRST>());
-      break;
-    case duplicate_keep_option::KEEP_LAST:
-      do_reduce(fn_gen.reduce_op<duplicate_keep_option::KEEP_LAST>());
-      break;
-    case duplicate_keep_option::KEEP_NONE:
-      do_reduce(fn_gen.reduce_op<duplicate_keep_option::KEEP_NONE>());
-      break;
-    default:;  // KEEP_ANY has already been handled above
-  }
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(keys_size),
+    reduce_index_fn{
+      key_map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
 
   // Filter out indices of the undesired duplicate keys.
   auto const map_end =
