@@ -289,18 +289,19 @@ class regex_parser {
       return l.first == r.first ? l.last < r.last : l.first < r.first;
     });
     // combine overlapping entries: [a-f][c-g] => [a-g]
-    for (auto itr = ranges.begin() + static_cast<int>(!ranges.empty()); itr < ranges.end(); ++itr) {
-      auto const prev = *(itr - 1);
-      if (itr->first <= prev.last + 1) {
-        // if these 2 ranges intersect, expand the current one
-        *itr = reclass_range{prev.first, std::max(prev.last, itr->last)};
+    if (ranges.size() > 1) {
+      for (auto itr = ranges.begin() + 1; itr < ranges.end(); ++itr) {
+        auto const prev = *(itr - 1);
+        if (itr->first <= prev.last + 1) {
+          // if these 2 ranges intersect, expand the current one
+          *itr = reclass_range{prev.first, std::max(prev.last, itr->last)};
+        }
       }
     }
     // remove any duplicates
-    std::reverse(ranges.begin(), ranges.end());  // moves larger overlaps forward
-    auto const end =  // std::unique specifies keeping the first entry in a repeated sequence
-      std::unique(ranges.begin(), ranges.end(), [](auto l, auto r) { return l.first == r.first; });
-    ranges.erase(end, ranges.end());  // clear the remaining items
+    auto const end = std::unique(
+      ranges.rbegin(), ranges.rend(), [](auto l, auto r) { return l.first == r.first; });
+    ranges.erase(ranges.begin(), ranges.begin() + std::distance(end, ranges.rend()));
 
     _cclass_id = _prog.add_class(reclass{builtins, std::move(ranges)});
     return type;
