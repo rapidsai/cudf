@@ -534,9 +534,7 @@ struct preprocessed_table {
     : _t(std::move(table)),
       _column_order(std::move(column_order)),
       _null_precedence(std::move(null_precedence)),
-      _depths(std::move(depths))
-  {
-  }
+      _depths(std::move(depths)){};
 
   /**
    * @brief Implicit conversion operator to a `table_device_view` of the preprocessed table.
@@ -912,17 +910,15 @@ class device_row_comparator {
    * @param rhs_index The index of the row in the `rhs` table to examine
    * @return `true` if row from the `lhs` table is equal to the row in the `rhs` table
    */
-  template <typename T,
-            CUDF_ENABLE_IF(std::is_same_v<T, lhs_index_type> || std::is_same_v<T, rhs_index_type> ||
-                           std::is_same_v<T, size_type>)>
-  __device__ constexpr bool operator()(T const lhs_index, T const rhs_index) const noexcept
+  __device__ constexpr bool operator()(size_type const lhs_index,
+                                       size_type const rhs_index) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(
         l.type(),
         element_comparator{check_nulls, l, r, nulls_are_equal, comparator},
-        static_cast<size_type>(lhs_index),
-        static_cast<size_type>(rhs_index));
+        lhs_index,
+        rhs_index);
     };
 
     return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
