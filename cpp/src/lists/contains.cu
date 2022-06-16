@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf_test/column_utilities.hpp>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -57,14 +55,10 @@ auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
 auto constexpr __device__ NULL_SENTINEL = std::numeric_limits<size_type>::min();
 
 /**
- * @brief The functor to identify if an output row is valid.
+ * @brief The functor to identify if an output row is valid using the result search indices.
  */
 struct is_valid_fn {
-  __device__ bool operator()(size_type const idx) const noexcept
-  {
-    printf("%d\n", idx);
-    return idx != NULL_SENTINEL;
-  }
+  __device__ bool operator()(size_type const idx) const noexcept { return idx != NULL_SENTINEL; }
 };
 
 template <typename Element>
@@ -207,8 +201,6 @@ struct dispatch_index_of {
         *keys_cdv_ptr, nullate::DYNAMIC{search_keys_have_nulls});
       do_search(keys_iter);
     }
-
-    cudf::test::print(out_positions->view());
 
     if (search_keys_have_nulls || lists.has_nulls()) {
       auto [null_mask, null_count] =
