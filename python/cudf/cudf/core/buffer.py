@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import functools
 import operator
-import pickle
 import time
 from threading import RLock
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 import numpy as np
 
@@ -285,30 +284,15 @@ class Buffer(Serializable):
             )
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {}  # type: Dict[Any, Any]
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["constructor-kwargs"] = {}
-        header["desc"] = self.__cuda_array_interface__.copy()
-        header["desc"]["strides"] = (1,)
-        header["frame_count"] = 1
-        frames = [self]
-        return header, frames
+        return {}, [self]
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> Buffer:
-        assert (
-            header["frame_count"] == 1
-        ), "Only expecting to deserialize Buffer with a single frame."
-        buf = cls(frames[0], **header["constructor-kwargs"])
-
-        if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
+        if frames != 1:
             raise ValueError(
-                f"Received a `Buffer` with the wrong size."
-                f" Expected {header['desc']['shape']}, "
-                f"but got {buf.__cuda_array_interface__['shape']}"
+                "Only expecting to deserialize Buffer with a single frame."
             )
-
-        return buf
+        return cls.from_buffer(frames[0])
 
     @classmethod
     def empty(cls, size: int) -> Buffer:
