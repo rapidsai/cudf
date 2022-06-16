@@ -264,8 +264,8 @@ std::unique_ptr<table> unique(
  * @param[in] input           input table_view to copy only distinct rows
  * @param[in] keys            vector of indices representing key columns from `input`
  * @param[in] keep            keep the first, last, any, or no rows of the found duplicates
- * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
- *                            equal if null_equality::UNEQUAL
+ * @param[in] nulls_equal     flag to control if nulls are compared equal or not
+ * @param[in] nans_equal      flag to control if floating-point NaN values are compared equal or not
  * @param[in] mr              Device memory resource used to allocate the returned table's device
  *                            memory
  *
@@ -276,6 +276,7 @@ std::unique_ptr<table> distinct(
   std::vector<size_type> const& keys,
   duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::UNEQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
