@@ -53,12 +53,12 @@ enum OperatorType {
 };
 #define ITEM_MASK 0300
 
-static reclass ccls_w(CCLASS_W);   // \w
-static reclass ccls_s(CCLASS_S);   // \s
-static reclass ccls_d(CCLASS_D);   // \d
-static reclass ccls_W(NCCLASS_W);  // \W
-static reclass ccls_S(NCCLASS_S);  // \S
-static reclass ccls_D(NCCLASS_D);  // \D
+static reclass cclass_w(CCLASS_W);   // \w
+static reclass cclass_s(CCLASS_S);   // \s
+static reclass cclass_d(CCLASS_D);   // \d
+static reclass cclass_W(NCCLASS_W);  // \W
+static reclass cclass_S(NCCLASS_S);  // \S
+static reclass cclass_D(NCCLASS_D);  // \D
 
 // Tables for analyzing quantifiers
 const std::array<int, 6> valid_preceding_inst_types{{CHAR, CCLASS, NCCLASS, ANY, ANYNL, RBRA}};
@@ -241,32 +241,32 @@ class regex_parser {
           case 'b': chr = 0x08; break;
           case 'f': chr = 0x0C; break;
           case 'w':
-            builtins |= ccls_w.builtins;
+            builtins |= cclass_w.builtins;
             std::tie(is_quoted, chr) = next_char();
             continue;
           case 's':
-            builtins |= ccls_s.builtins;
+            builtins |= cclass_s.builtins;
             std::tie(is_quoted, chr) = next_char();
             continue;
           case 'd':
-            builtins |= ccls_d.builtins;
+            builtins |= cclass_d.builtins;
             std::tie(is_quoted, chr) = next_char();
             continue;
           case 'W':
-            builtins |= ccls_W.builtins;
+            builtins |= cclass_W.builtins;
             std::tie(is_quoted, chr) = next_char();
             continue;
           case 'S':
-            builtins |= ccls_S.builtins;
+            builtins |= cclass_S.builtins;
             std::tie(is_quoted, chr) = next_char();
             continue;
           case 'D':
-            builtins |= ccls_D.builtins;
+            builtins |= cclass_D.builtins;
             std::tie(is_quoted, chr) = next_char();
             continue;
         }
       }
-      if (!is_quoted && chr == ']' && count_char > 1) break;
+      if (!is_quoted && chr == ']' && count_char > 1) { break; }  // done
       if (!is_quoted && chr == '-') {
         if (literals.empty()) { return 0; }  // malformed '[]'
         std::tie(is_quoted, chr) = next_char();
@@ -280,18 +280,16 @@ class regex_parser {
     }
 
     // transform pairs of literals to spans
-    std::vector<reclass_range> spans;
-    auto const evens = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                       [](auto i) { return i * 2; });
-    std::transform(
-      evens, evens + (literals.size() / 2), std::back_inserter(spans), [&literals](auto idx) {
-        return reclass_range{literals[idx], literals[idx + 1]};
-      });
+    std::vector<reclass_range> spans(literals.size() / 2);
+    auto const counter = thrust::make_counting_iterator(0);
+    std::transform(counter, counter + spans.size(), spans.begin(), [&literals](auto idx) {
+      return reclass_range{literals[idx * 2], literals[idx * 2 + 1]};
+    });
     // sort the spans to help with detecting overlapping entries
     std::sort(spans.begin(), spans.end(), [](auto l, auto r) {
       return l.first == r.first ? l.last < r.last : l.first < r.first;
     });
-    // combine overlapping entries
+    // combine overlapping entries: [a-f][c-g] => [a-g]
     for (auto itr = spans.begin() + static_cast<int>(!spans.empty()); itr < spans.end(); ++itr) {
       auto const prev = *(itr - 1);
       auto const curr = *itr;
@@ -300,11 +298,11 @@ class regex_parser {
         *itr = reclass_range{prev.first, std::max(prev.last, curr.last)};
       }
     }
-    // remove duplicates
+    // remove any duplicates
     std::reverse(spans.begin(), spans.end());  // moves larger overlaps forward
-    auto const end =  // this relies on std::unique keeping the first entry in a repeated sequence
+    auto const end =  // std::unique specifies keeping the first entry in a repeated sequence
       std::unique(spans.begin(), spans.end(), [](auto l, auto r) { return l.first == r.first; });
-    spans.erase(end, spans.end());
+    spans.erase(end, spans.end());  // clear the remainder
 
     _cclass_id = _prog.add_class(reclass{builtins, std::move(spans)});
     return type;
@@ -355,13 +353,13 @@ class regex_parser {
             break;
           }
           case 'w': {
-            if (_id_cclass_w < 0) { _id_cclass_w = _prog.add_class(ccls_w); }
+            if (_id_cclass_w < 0) { _id_cclass_w = _prog.add_class(cclass_w); }
             _cclass_id = _id_cclass_w;
             return CCLASS;
           }
           case 'W': {
             if (_id_cclass_W < 0) {
-              reclass cls = ccls_w;
+              reclass cls = cclass_w;
               cls.literals.push_back({'\n', '\n'});
               _id_cclass_W = _prog.add_class(cls);
             }
@@ -369,23 +367,23 @@ class regex_parser {
             return NCCLASS;
           }
           case 's': {
-            if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(ccls_s); }
+            if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(cclass_s); }
             _cclass_id = _id_cclass_s;
             return CCLASS;
           }
           case 'S': {
-            if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(ccls_s); }
+            if (_id_cclass_s < 0) { _id_cclass_s = _prog.add_class(cclass_s); }
             _cclass_id = _id_cclass_s;
             return NCCLASS;
           }
           case 'd': {
-            if (_id_cclass_d < 0) { _id_cclass_d = _prog.add_class(ccls_d); }
+            if (_id_cclass_d < 0) { _id_cclass_d = _prog.add_class(cclass_d); }
             _cclass_id = _id_cclass_d;
             return CCLASS;
           }
           case 'D': {
             if (_id_cclass_D < 0) {
-              reclass cls = ccls_d;
+              reclass cls = cclass_d;
               cls.literals.push_back({'\n', '\n'});
               _id_cclass_D = _prog.add_class(cls);
             }
