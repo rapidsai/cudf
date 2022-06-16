@@ -3609,6 +3609,7 @@ unordered()
 }  // anonymous namespace
 
 // for debugging tests
+// TODO remove when done with testing
 void printHex(const uint8_t* v, size_t len)
 {
   for (size_t j = 0; j < len; j += 16) {
@@ -3618,8 +3619,6 @@ void printHex(const uint8_t* v, size_t len)
   }
 }
 
-// TODO create three columns in acending, descending, and random order
-// write out, then read column indexes and make sure boundary order is correct
 TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 {
   using T = TypeParam;
@@ -3648,7 +3647,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   EXPECT_GT(fmd.row_groups.size(), 0);
   EXPECT_EQ(fmd.row_groups[0].columns.size(), 3);
 
-  // now chunk that the boundary order for chunk 1 is ascending,
+  // now check that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
   cudf_io::parquet::BoundaryOrder expected_orders[] = {cudf_io::parquet::BoundaryOrder::ASCENDING,
                                                        cudf_io::parquet::BoundaryOrder::DESCENDING,
@@ -3663,6 +3662,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
     const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
     cudf_io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
 #if 0
+    // TODO remove when done testing
     printf("%d %d\n", fmd.schema[i + 1].type, fmd.schema[i + 1].converted_type);
     printHex(ci_buf->data(), ci_buf->size());
     // if (std::is_same_v<T, numeric::decimal128>) ((int*)0)[12] = 10; // segfault
@@ -3670,11 +3670,9 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
     EXPECT_TRUE(cp.read(&ci));
 
     EXPECT_EQ(ci.boundary_order, expected_orders[i]);
-    // if (ci.boundary_order != expected_orders[i]) ((char*)0)[20]=0xff;
   }
 }
 
-// TODO use ctype to check for unsigned ints
 template <typename T>
 int32_t compare(T& v1, T& v2)
 {
