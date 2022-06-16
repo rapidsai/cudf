@@ -16,11 +16,13 @@
 
 #include "binary_ops.hpp"
 #include "operation.cuh"
+#include "struct_binary_ops.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -91,23 +93,6 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
                            0,
                            {offsets_column->view(), chars_column_v});
   return std::pair{col_v, std::move(offsets_column)};
-}
-
-/**
- * @brief Converts scalar to column_view with single element.
- *
- * @param scal    scalar to convert
- * @param stream  CUDA stream used for device memory operations and kernel launches.
- * @param mr      Device memory resource used to allocate the returned column's device memory
- * @return        pair with column_view and column containing any auxiliary data to create
- * column_view from scalar
- */
-auto scalar_to_column_view(
-  scalar const& scal,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
 }
 
 // This functor does the actual comparison between string column value and a scalar string
@@ -249,6 +234,21 @@ struct null_considering_binop {
 
 }  // namespace
 
+/**
+ * @brief Converts scalar to column_view with single element.
+ *
+ * @param scal    scalar to convert
+ * @param stream  CUDA stream used for device memory operations and kernel launches.
+ * @param mr      Device memory resource used to allocate the returned column's device memory
+ * @return        pair with column_view and column containing any auxiliary data to create
+ * column_view from scalar
+ */
+std::pair<column_view, std::unique_ptr<column>> scalar_to_column_view(
+  scalar const& scal, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+{
+  return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
+}
+
 std::unique_ptr<column> string_null_min_max(scalar const& lhs,
                                             column_view const& rhs,
                                             binary_operator op,
@@ -384,6 +384,29 @@ void binary_operation(mutable_column_view& out,
 {
   auto [rhsv, aux] = scalar_to_column_view(rhs, stream);
   operator_dispatcher(out, lhs, rhsv, false, true, op, stream);
+}
+
+void apply_sorting_struct_binary_op(mutable_column_view& out,
+                                    column_view const& lhs,
+                                    column_view const& rhs,
+                                    bool is_lhs_scalar,
+                                    bool is_rhs_scalar,
+                                    binary_operator op,
+                                    rmm::cuda_stream_view stream)
+
+// clang-format off
+{switch (op) {
+case binary_operator::EQUAL:
+case binary_operator::NOT_EQUAL:
+  apply_struct_equality_op(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, op, stream, cudf::experimental::row::equality::nan_equal_physical_equality_comparator{}); break;
+
+case binary_operator::LESS:                 apply_struct_binary_op<ops::Less>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream, cudf::experimental::row::lexicographic::sorting_physical_element_comparator{}); break;
+case binary_operator::GREATER:              apply_struct_binary_op<ops::Greater>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream, cudf::experimental::row::lexicographic::sorting_physical_element_comparator{}); break;
+case binary_operator::LESS_EQUAL:           apply_struct_binary_op<ops::LessEqual>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream, cudf::experimental::row::lexicographic::sorting_physical_element_comparator{}); break;
+case binary_operator::GREATER_EQUAL:        apply_struct_binary_op<ops::GreaterEqual>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream, cudf::experimental::row::lexicographic::sorting_physical_element_comparator{}); break;
+default:;
+}
+  // clang-format on
 }
 }  // namespace compiled
 }  // namespace binops

@@ -24,6 +24,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/lists/contains.hpp>
@@ -1288,9 +1289,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
     cudf::jni::auto_set_device(env);
     auto lhs = reinterpret_cast<cudf::column_view *>(lhs_view);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
-
     cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
+
+    if (lhs->type().id() == cudf::type_id::STRUCT) {
+      auto [new_mask, null_count] =
+          cudf::detail::bitmask_and(cudf::table_view({*lhs, *rhs}), rmm::cuda_stream_default);
+      auto out = make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask), null_count,
+                                         rmm::cuda_stream_default);
+      auto out_view = out->mutable_view();
+      cudf::binops::compiled::apply_sorting_struct_binary_op(out_view, *lhs, *rhs, false, false, op,
+                                                             rmm::cuda_stream_default);
+      // cudf::jni::test_func(out_view, *lhs, *rhs, false, false, op, rmm::cuda_stream_default);
+      return release_as_jlong(out);
+    }
+
     return release_as_jlong(cudf::binary_operation(*lhs, *rhs, op, n_data_type));
   }
   CATCH_STD(env, 0);
@@ -1319,8 +1332,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
     auto lhs = reinterpret_cast<cudf::column_view *>(lhs_view);
     cudf::scalar *rhs = reinterpret_cast<cudf::scalar *>(rhs_ptr);
     cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
-
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
+
+    if (lhs->type().id() == cudf::type_id::STRUCT) {
+      auto new_mask = cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs, rmm::cuda_stream_default);
+      auto out = make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask),
+                                         cudf::UNKNOWN_NULL_COUNT, rmm::cuda_stream_default);
+      auto [rhsv, aux] =
+          cudf::binops::compiled::scalar_to_column_view(*rhs, rmm::cuda_stream_default);
+      auto out_view = out->mutable_view();
+      // cudf::jni::test_func(out_view, *lhs, rhsv, false, true, op, rmm::cuda_stream_default);
+      cudf::binops::compiled::apply_sorting_struct_binary_op(out_view, *lhs, rhsv, false, false, op,
+                                                             rmm::cuda_stream_default);
+      return release_as_jlong(out);
+    }
+
     return release_as_jlong(cudf::binary_operation(*lhs, *rhs, op, n_data_type));
   }
   CATCH_STD(env, 0);

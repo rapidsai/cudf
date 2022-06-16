@@ -237,6 +237,7 @@ void dispatch_equality_op(mutable_column_view& out,
                           bool is_rhs_scalar,
                           binary_operator op,
                           rmm::cuda_stream_view stream);
+
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf

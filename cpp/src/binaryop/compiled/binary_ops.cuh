@@ -278,61 +278,6 @@ void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
   const int grid_size = util::div_rounding_up_safe(size, 2 * block_size);
   for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
 }
-namespace detail {
-template <class T, class... Ts>
-inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value;
-}
-
-template <class BinaryOperator>
-void apply_struct_binary_op(mutable_column_view& out,
-                            column_view const& lhs,
-                            column_view const& rhs,
-                            bool is_lhs_scalar,
-                            bool is_rhs_scalar,
-                            rmm::cuda_stream_view stream)
-{
-  auto compare_orders = std::vector<order>(
-    lhs.size(),
-    detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual> ? order::DESCENDING
-                                                                      : order::ASCENDING);
-  auto tlhs = table_view{{lhs}};
-  auto trhs = table_view{{rhs}};
-  auto table_comparator = cudf::experimental::row::lexicographic::two_table_comparator{
-    tlhs, trhs, compare_orders, {}, stream};
-  auto outd = column_device_view::create(out, stream);
-  auto optional_iter =
-    cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
-
-  if (detail::is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>) {
-    auto device_comparator = table_comparator.less_equivalent(
-      nullate::DYNAMIC{nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)}},
-      cudf::experimental::row::lexicographic::physical_element_comparator{});
-    thrust::tabulate(
-      rmm::exec_policy(stream),
-      out.begin<bool>(),
-      out.end<bool>(),
-      [optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator] __device__(size_type i) {
-        return optional_iter[i].has_value() &&
-               device_comparator(cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i},
-                                 cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i});
-      });
-
-  } else {
-    auto device_comparator = table_comparator.less(
-      nullate::DYNAMIC{nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)}},
-      cudf::experimental::row::lexicographic::physical_element_comparator{});
-    thrust::tabulate(
-      rmm::exec_policy(stream),
-      out.begin<bool>(),
-      out.end<bool>(),
-      [optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator] __device__(size_type i) {
-        return optional_iter[i].has_value() &&
-               device_comparator(cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i},
-                                 cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i});
-      });
-  }
-  return;
-}
 
 template <class BinaryOperator>
 void apply_binary_op(mutable_column_view& out,
@@ -342,29 +287,24 @@ void apply_binary_op(mutable_column_view& out,
                      bool is_rhs_scalar,
                      rmm::cuda_stream_view stream)
 {
-  if (is_struct(lhs.type()) && is_struct(rhs.type())) {
-    apply_struct_binary_op<BinaryOperator>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream);
-    return;
-  } else {
-    auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
+  auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
 
-    auto lhsd = column_device_view::create(lhs, stream);
-    auto rhsd = column_device_view::create(rhs, stream);
-    auto outd = mutable_column_device_view::create(out, stream);
-    // Create binop functor instance
-    if (common_dtype) {
-      // Execute it on every element
-      for_each(stream,
-               out.size(),
-               binary_op_device_dispatcher<BinaryOperator>{
-                 *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
-    } else {
-      // Execute it on every element
-      for_each(stream,
-               out.size(),
-               binary_op_double_device_dispatcher<BinaryOperator>{
-                 *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
-    }
+  auto lhsd = column_device_view::create(lhs, stream);
+  auto rhsd = column_device_view::create(rhs, stream);
+  auto outd = mutable_column_device_view::create(out, stream);
+  // Create binop functor instance
+  if (common_dtype) {
+    // Execute it on every element
+    for_each(stream,
+             out.size(),
+             binary_op_device_dispatcher<BinaryOperator>{
+               *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+  } else {
+    // Execute it on every element
+    for_each(stream,
+             out.size(),
+             binary_op_double_device_dispatcher<BinaryOperator>{
+               *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
   }
 }
 }  // namespace compiled

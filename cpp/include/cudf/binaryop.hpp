@@ -214,5 +214,43 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
                                                          cudf::data_type const& lhs,
                                                          cudf::data_type const& rhs);
 
+namespace binops {
+
+/**
+ * @brief Computes output valid mask for op between a column and a scalar
+ */
+rmm::device_buffer scalar_col_valid_mask_and(
+  column_view const& col,
+  scalar const& s,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+namespace compiled {
+
+/**
+ * @brief Converts scalar to column_view with single element.
+ *
+ * @param scal    scalar to convert
+ * @param stream  CUDA stream used for device memory operations and kernel launches.
+ * @param mr      Device memory resource used to allocate the returned column's device memory
+ * @return        pair with column_view and column containing any auxiliary data to create
+ * column_view from scalar
+ */
+std::pair<column_view, std::unique_ptr<column>> scalar_to_column_view(
+  scalar const& scal,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+// template <class BinaryOperator, typename PhysicalElementComparator>
+void apply_sorting_struct_binary_op(mutable_column_view& out,
+                                    column_view const& lhs,
+                                    column_view const& rhs,
+                                    bool is_lhs_scalar,
+                                    bool is_rhs_scalar,
+                                    binary_operator op,
+                                    rmm::cuda_stream_view stream);
+}  // namespace compiled
+}  // namespace binops
+
 /** @} */  // end of group
 }  // namespace cudf
