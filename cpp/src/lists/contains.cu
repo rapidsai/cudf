@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf_test/column_utilities.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -32,12 +34,9 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/pair.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <type_traits>
 
@@ -47,8 +46,26 @@ namespace {
 
 /**
  * @brief A sentinel value used for marking that a given key has not been found in the search list.
+ *
+ * The value should be `-1` as indicated in the public API documentation.
  */
 auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
+
+/**
+ * @brief A sentinel value used for marking that a given output row should be null.
+ */
+auto constexpr __device__ NULL_SENTINEL = std::numeric_limits<size_type>::min();
+
+/**
+ * @brief The functor to identify if an output row is valid.
+ */
+struct is_valid_fn {
+  __device__ bool operator()(size_type const idx) const noexcept
+  {
+    printf("%d\n", idx);
+    return idx != NULL_SENTINEL;
+  }
+};
 
 template <typename Element>
 auto constexpr is_supported_non_nested_type()
@@ -94,24 +111,23 @@ struct search_lists_fn {
   {
   }
 
-  __device__ thrust::pair<size_type, bool> operator()(size_type const idx) const
+  __device__ size_type operator()(size_type const idx) const
   {
     auto const list = list_device_view{lists, idx};
     // A null list never contains any key, even null key.
     // In addition, a null list will result in a null output row.
-    if (list.is_null()) { return {NOT_FOUND_SENTINEL, false}; }
+    if (list.is_null()) { return NULL_SENTINEL; }
 
     auto const key_opt = keys_iter[idx];
     // A null key will also result in a null output row.
-    if (!key_opt) { return {NOT_FOUND_SENTINEL, false}; }
+    if (!key_opt) { return NULL_SENTINEL; }
 
     auto const& key = key_opt.value();
 
     using Element = typename thrust::iterator_traits<SearchKeyIter>::value_type::value_type;
-    return {find_option == duplicate_find_option::FIND_FIRST
-              ? search_list<Element, true>(list, key)
-              : search_list<Element, false>(list, key),
-            true};
+    return find_option == duplicate_find_option::FIND_FIRST
+             ? search_list<Element, true>(list, key)
+             : search_list<Element, false>(list, key);
   }
 
  private:
@@ -172,14 +188,12 @@ struct dispatch_index_of {
 
     auto out_positions = make_numeric_column(
       data_type{type_to_id<size_type>()}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-    auto out_validity   = rmm::device_uvector<bool>(lists.size(), stream);
-    auto const out_iter = thrust::make_zip_iterator(
-      out_positions->mutable_view().template begin<size_type>(), out_validity.begin());
+    auto const out_begin = out_positions->mutable_view().template begin<size_type>();
 
     auto const do_search = [&](auto const keys_iter) {
       thrust::tabulate(rmm::exec_policy(stream),
-                       out_iter,
-                       out_iter + lists.size(),
+                       out_begin,
+                       out_begin + lists.size(),
                        search_lists_fn{lists_cdv, keys_iter, find_option});
     };
 
@@ -194,9 +208,11 @@ struct dispatch_index_of {
       do_search(keys_iter);
     }
 
+    cudf::test::print(out_positions->view());
+
     if (search_keys_have_nulls || lists.has_nulls()) {
-      auto [null_mask, null_count] = cudf::detail::valid_if(
-        out_validity.begin(), out_validity.end(), thrust::identity{}, stream, mr);
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(out_begin, out_begin + lists.size(), is_valid_fn{}, stream, mr);
       out_positions->set_null_mask(std::move(null_mask), null_count);
     }
     return out_positions;
