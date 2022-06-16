@@ -522,8 +522,13 @@ size_t decompress_zstd(host_span<uint8_t const> src,
 
   auto hd_stats                   = hostdevice_vector<decompress_status>(1, stream);
   auto const max_uncomp_page_size = dst.size();
-  nvcomp::batched_decompress(
-    nvcomp::compression_type::ZSTD, hd_srcs, hd_dsts, hd_stats, max_uncomp_page_size, stream);
+  nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
+                             hd_srcs,
+                             hd_dsts,
+                             hd_stats,
+                             max_uncomp_page_size,
+                             max_uncomp_page_size,
+                             stream);
 
   hd_stats.device_to_host(stream, true);
   CUDF_EXPECTS(hd_stats[0].status == 0, "ZSTD decompression failed");
