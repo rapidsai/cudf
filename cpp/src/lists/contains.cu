@@ -55,28 +55,14 @@ auto constexpr __device__ NOT_FOUND_SENTINEL = size_type{-1};
 auto constexpr __device__ NULL_SENTINEL = std::numeric_limits<size_type>::min();
 
 /**
- * @brief Return a pair of index iterators {begin, end} to loop through elements within a list.
+ * @brief Indicate the current supported types in `cudf::lists::contains`.
  *
- * Depending on the value of `find_first`, a pair of forward or reverse iterators will be returned,
- * allowing to loop through elements in the list in first-to-last or last-to-first order.
- *
- * Note that the element indices always restart to `0` at the first position in each list.
- *
- * @tparam find_first A boolean value indicating whether we want to find the first or last
- *         appearance of a given key in the list.
- * @param size The number of elements in the list.
- * @return A pair of {begin, end} iterators to iterate through the range `[0, size)` by forward or
- *         reverse order.
+ * TODO: Add supported nested types.
  */
-template <bool find_first>
-auto __device__ element_index_pair_iter(size_type const size)
+template <typename Element>
+static auto constexpr is_supported_non_nested_type()
 {
-  if constexpr (find_first) {
-    return thrust::pair(thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
-  } else {
-    return thrust::pair(thrust::make_reverse_iterator(thrust::make_counting_iterator(size)),
-                        thrust::make_reverse_iterator(thrust::make_counting_iterator(0)));
-  }
+  return cudf::is_fixed_width<Element>() || std::is_same_v<Element, cudf::string_view>;
 }
 
 /**
@@ -85,7 +71,7 @@ auto __device__ element_index_pair_iter(size_type const size)
 struct search_list_fn {
   duplicate_find_option const find_option;
 
-  template <typename Element>
+  template <typename Element, CUDF_ENABLE_IF(is_supported_non_nested_type<Element>())>
   __device__ size_type operator()(list_device_view list, thrust::optional<Element> key_opt) const
   {
     // A null list never contains any key, even null key.
@@ -103,10 +89,10 @@ struct search_list_fn {
   }
 
  private:
-  template <bool find_first, typename Element>
+  template <bool forward, typename Element, CUDF_ENABLE_IF(is_supported_non_nested_type<Element>())>
   static __device__ size_type search_list(list_device_view const& list, Element const& search_key)
   {
-    auto const [begin, end] = element_index_pair_iter<find_first>(list.size());
+    auto const [begin, end] = element_index_pair_iter<forward>(list.size());
     auto const found_iter =
       thrust::find_if(thrust::seq, begin, end, [&] __device__(auto const idx) {
         return !list.is_null(idx) &&
@@ -115,18 +101,37 @@ struct search_list_fn {
     // If the key is found, return its found position in the list from `found_iter`.
     return found_iter == end ? NOT_FOUND_SENTINEL : *found_iter;
   }
+
+  /**
+   * @brief Return a pair of index iterators {begin, end} to loop through elements within a list.
+   *
+   * Depending on the value of `forward`, a pair of forward or reverse iterators will be
+   * returned, allowing to loop through elements in the list in first-to-last or last-to-first
+   * order.
+   *
+   * Note that the element indices always restart to `0` at the first position in each list.
+   *
+   * @tparam forward A boolean value indicating whether we want to iterate elements in the list by
+   *         forward or reverse order.
+   * @param size The number of elements in the list.
+   * @return A pair of {begin, end} iterators to iterate through the range `[0, size)`.
+   */
+  template <bool forward>
+  static __device__ auto element_index_pair_iter(size_type const size)
+  {
+    if constexpr (forward) {
+      return thrust::pair(thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
+    } else {
+      return thrust::pair(thrust::make_reverse_iterator(thrust::make_counting_iterator(size)),
+                          thrust::make_reverse_iterator(thrust::make_counting_iterator(0)));
+    }
+  }
 };
 
 /**
  * @brief Dispatch functor to search for key element(s) in the corresponding rows of a lists column.
  */
 struct dispatch_index_of {
-  template <typename Element>
-  static auto constexpr is_supported_non_nested_type()
-  {
-    return cudf::is_fixed_width<Element>() || std::is_same_v<Element, cudf::string_view>;
-  }
-
   template <typename Element, typename SearchKeyType>
   std::enable_if_t<is_supported_non_nested_type<Element>(), std::unique_ptr<column>> operator()(
     lists_column_view const& lists,
