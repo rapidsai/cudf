@@ -94,8 +94,8 @@ std::unique_ptr<table> distinct(
  * unspecified order if the row is distinct (i.e., no other equivalent row exists in the table).
  *
  * @param input The input table_view to find indices of distinct rows
- * @param keep Keep the first, last, any, or no rows of the found duplicates
- * @param nulls_equal Flag to specify whether null key elements should be considered as equal
+ * @param keep Get index of the first, last, any, or no distinct row among the duplicates
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return A device_uvector containing the indices of distinct rows
