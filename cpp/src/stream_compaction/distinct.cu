@@ -119,6 +119,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
                                                     std::vector<size_type> const& keys,
                                                     duplicate_keep_option keep,
                                                     null_equality nulls_equal,
+                                                    nan_equality,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
@@ -223,7 +224,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 std::vector<size_type> const& keys,
                                 duplicate_keep_option keep,
                                 null_equality nulls_equal,
-                                nan_equality,
+                                nan_equality nans_equal,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
@@ -231,7 +232,7 @@ std::unique_ptr<table> distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto const gather_map = get_distinct_indices(input, keys, keep, nulls_equal, stream);
+  auto const gather_map = get_distinct_indices(input, keys, keep, nulls_equal, nans_equal, stream);
   return detail::gather(
     input, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }

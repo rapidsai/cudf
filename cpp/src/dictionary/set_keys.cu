@@ -131,6 +131,7 @@ std::unique_ptr<column> set_keys(
                                               std::vector<size_type>{0},
                                               duplicate_keep_option::KEEP_ANY,
                                               null_equality::EQUAL,
+                                              nan_equality::UNEQUAL,
                                               stream,
                                               mr);
   auto sorted_keys   = cudf::detail::sort(distinct_keys->view(),
