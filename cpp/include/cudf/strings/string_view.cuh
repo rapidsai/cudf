@@ -330,10 +330,11 @@ __device__ inline size_type string_view::find(const string_view& str,
   return find(str.data(), str.size_bytes(), pos, count);
 }
 
-__device__ inline size_type string_view::find(const char* str,
-                                              size_type bytes,
-                                              size_type pos,
-                                              size_type count) const
+template <bool reverse>
+__device__ inline size_type string_view::find_impl(const char* str,
+                                                   size_type bytes,
+                                                   size_type pos,
+                                                   size_type count) const
 {
   if (!str || pos < 0) return -1;
   auto const nchars = length();
@@ -343,15 +344,24 @@ __device__ inline size_type string_view::find(const char* str,
 
   auto const find_length = (epos - spos) - bytes + 1;
 
-  auto ptr = data() + spos;
+  auto ptr = data() + (reverse ? (epos - bytes) : spos);
   for (size_type idx = 0; idx < find_length; ++idx) {
     bool match = true;
-    for (size_type jdx = 0; match && (jdx < bytes); ++jdx)
+    for (size_type jdx = 0; match && (jdx < bytes); ++jdx) {
       match = (ptr[jdx] == str[jdx]);
-    if (match) return character_offset(idx + spos);
-    ptr++;
+    }
+    if (match) { return character_offset(reverse ? (epos - bytes - idx) : (idx + spos)); }
+    reverse ? --ptr : ++ptr;
   }
   return -1;
+}
+
+__device__ inline size_type string_view::find(const char* str,
+                                              size_type bytes,
+                                              size_type pos,
+                                              size_type count) const
+{
+  return find_impl<false>(str, bytes, pos, count);
 }
 
 __device__ inline size_type string_view::find(char_utf8 chr, size_type pos, size_type count) const
@@ -373,23 +383,7 @@ __device__ inline size_type string_view::rfind(const char* str,
                                                size_type pos,
                                                size_type count) const
 {
-  if (!str || pos < 0) return -1;
-  auto const nchars = length();
-  if (count < 0) count = nchars;
-  auto const spos = byte_offset(pos);
-  auto const epos = byte_offset(std::min(pos + count, nchars));
-
-  auto const find_length = (epos - spos) - bytes + 1;
-
-  auto ptr = data() + epos - bytes;
-  for (size_type idx = 0; idx < find_length; ++idx) {
-    bool match = true;
-    for (size_type jdx = 0; match && (jdx < bytes); ++jdx)
-      match = (ptr[jdx] == str[jdx]);
-    if (match) return character_offset(epos - bytes - idx);
-    ptr--;  // go backwards
-  }
-  return -1;
+  return find_impl<true>(str, bytes, pos, count);
 }
 
 __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, size_type count) const
