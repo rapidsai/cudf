@@ -5,6 +5,7 @@ from __future__ import annotations
 import pickle
 import warnings
 from functools import cached_property
+from itertools import chain
 from types import SimpleNamespace
 from typing import (
     Any,
@@ -67,6 +68,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
+from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand, Reducible
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
@@ -421,15 +423,19 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
             # This assertion prevents mypy errors below.
             assert self.base_data is not None
-            new_buf_ptr = (
-                self.base_data.ptr + self.offset * self.dtype.itemsize
-            )
-            new_buf_size = self.size * self.dtype.itemsize
-            view_buf = Buffer(
-                data=new_buf_ptr,
-                size=new_buf_size,
-                owner=self.base_data._owner,
-            )
+
+            # If the view spans all of `base_data`, we return `base_data`.
+            if (
+                self.offset == 0
+                and self.base_data.size == self.size * self.dtype.itemsize
+            ):
+                view_buf = self.base_data
+            else:
+                view_buf = Buffer.from_buffer(
+                    buffer=self.base_data,
+                    size=self.size * self.dtype.itemsize,
+                    offset=self.offset * self.dtype.itemsize,
+                )
             return build_column(view_buf, dtype=dtype)
 
     def element_indexing(self, index: int):
@@ -498,7 +504,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             self._mimic_inplace(out, inplace=True)
 
     def _wrap_binop_normalization(self, other):
-        if other is cudf.NA or other is None:
+        if other is NA or other is None:
             return cudf.Scalar(other, dtype=self.dtype)
         if isinstance(other, np.ndarray) and other.ndim == 0:
             other = other.item()
@@ -1037,10 +1043,29 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
+        # data model:
+
+        # Serialization produces a nested metadata "header" and a flattened
+        # list of memoryviews/buffers that reference data (frames).  Each
+        # header advertises a frame_count slot which indicates how many
+        # frames deserialization will consume. The class used to construct
+        # an object is named under the key "type-serialized" to match with
+        # Dask's serialization protocol (see
+        # distributed.protocol.serialize). Since column dtypes may either be
+        # cudf native or foreign some special-casing is required here for
+        # serialization.
+
         header: Dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
-        header["dtype"] = self.dtype.str
+        try:
+            dtype, dtype_frames = self.dtype.serialize()
+            header["dtype"] = dtype
+            frames.extend(dtype_frames)
+            header["dtype-is-cudf-serialized"] = True
+        except AttributeError:
+            header["dtype"] = pickle.dumps(self.dtype)
+            header["dtype-is-cudf-serialized"] = False
 
         if self.data is not None:
             data_header, data_frames = self.data.serialize()
@@ -1051,19 +1076,52 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             mask_header, mask_frames = self.mask.serialize()
             header["mask"] = mask_header
             frames.extend(mask_frames)
-
+        if self.children:
+            child_headers, child_frames = zip(
+                *(c.serialize() for c in self.children)
+            )
+            header["subheaders"] = list(child_headers)
+            frames.extend(chain(*child_frames))
+        header["size"] = self.size
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
-        dtype = header["dtype"]
-        data = Buffer.deserialize(header["data"], [frames[0]])
-        mask = None
+        def unpack(header, frames) -> Tuple[Any, list]:
+            count = header["frame_count"]
+            klass = pickle.loads(header["type-serialized"])
+            obj = klass.deserialize(header, frames[:count])
+            return obj, frames[count:]
+
+        assert header["frame_count"] == len(frames), (
+            f"Deserialization expected {header['frame_count']} frames, "
+            f"but received {len(frames)}"
+        )
+        if header["dtype-is-cudf-serialized"]:
+            dtype, frames = unpack(header["dtype"], frames)
+        else:
+            dtype = pickle.loads(header["dtype"])
+        if "data" in header:
+            data, frames = unpack(header["data"], frames)
+        else:
+            data = None
         if "mask" in header:
-            mask = Buffer.deserialize(header["mask"], [frames[1]])
+            mask, frames = unpack(header["mask"], frames)
+        else:
+            mask = None
+        children = []
+        if "subheaders" in header:
+            for h in header["subheaders"]:
+                child, frames = unpack(h, frames)
+                children.append(child)
+        assert len(frames) == 0, "Deserialization did not consume all frames"
         return build_column(
-            data=data, dtype=dtype, mask=mask, size=header.get("size", None)
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=header.get("size", None),
+            children=tuple(children),
         )
 
     def unary_operator(self, unaryop: str):

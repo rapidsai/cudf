@@ -58,7 +58,7 @@ namespace cudf {
  * @note if @p input.num_rows() is zero, or @p keys is empty or has no nulls,
  * there is no error, and an empty `table` is returned
  *
- * @param[in] input The input `table_view` to filter.
+ * @param[in] input The input `table_view` to filter
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] keep_threshold The minimum number of non-null fields in a row
  *                           required to keep the row.
@@ -92,7 +92,7 @@ std::unique_ptr<table> drop_nulls(
  * Same as drop_nulls but defaults keep_threshold to the number of columns in
  * @p keys.
  *
- * @param[in] input The input `table_view` to filter.
+ * @param[in] input The input `table_view` to filter
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing all rows of the `input` without nulls in the columns
@@ -132,7 +132,7 @@ std::unique_ptr<table> drop_nulls(
  *
  * @throws cudf::logic_error if The `keys` columns are not floating-point type.
  *
- * @param[in] input The input `table_view` to filter.
+ * @param[in] input The input `table_view` to filter
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] keep_threshold The minimum number of non-NAN elements in a row
  *                           required to keep the row.
@@ -167,7 +167,7 @@ std::unique_ptr<table> drop_nans(
  * Same as drop_nans but defaults keep_threshold to the number of columns in
  * @p keys.
  *
- * @param[in] input The input `table_view` to filter.
+ * @param[in] input The input `table_view` to filter
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return Table containing all rows of the `input` without NANs in the columns
@@ -242,7 +242,7 @@ enum class duplicate_keep_option {
  * @param[in] mr              Device memory resource used to allocate the returned table's device
  *                            memory
  *
- * @return Table with unique rows from each sequence of equivalent rows as specified by `keep`.
+ * @return Table with unique rows from each sequence of equivalent rows as specified by `keep`
  */
 std::unique_ptr<table> unique(
   table_view const& input,
@@ -273,7 +273,7 @@ std::unique_ptr<table> unique(
  * @param[in] mr              Device memory resource used to allocate the returned table's device
  *                            memory
  *
- * @return Table with distinct rows in an unspecified order.
+ * @return Table with distinct rows in an unspecified order
  */
 std::unique_ptr<table> distinct(
   table_view const& input,
@@ -304,7 +304,7 @@ cudf::size_type unique_count(column_view const& input,
  * @brief Count the number of consecutive groups of equivalent rows in a table.
  *
  * @param[in] input Table whose consecutive groups of equivalent rows will be counted
- * @param[in] nulls_equal flag to denote if null elements should be considered equal.
+ * @param[in] nulls_equal flag to denote if null elements should be considered equal
  *            nulls are not equal if null_equality::UNEQUAL.
  *
  * @return number of consecutive groups of equivalent rows in the column

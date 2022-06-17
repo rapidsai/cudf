@@ -62,10 +62,50 @@ namespace test {
 
 namespace {
 
-// expand all non-null rows in a list column into a column of child row indices.
-std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
-                                                   column_view const& row_indices)
+std::unique_ptr<column> generate_all_row_indices(size_type num_rows)
 {
+  auto indices =
+    cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED);
+  thrust::sequence(rmm::exec_policy(),
+                   indices->mutable_view().begin<size_type>(),
+                   indices->mutable_view().end<size_type>(),
+                   0);
+  return indices;
+}
+
+// generate the rows indices that should be checked for the child column of a list column.
+//
+// - if we are just checking for equivalence, we can skip any rows that are nulls. this allows
+//   things like non-empty rows that have been nullified after creation.  they may actually contain
+//   values, but since the row is null they don't matter for equivalency.
+//
+// - if we are checking for exact equality, we need to check all rows.
+//
+//   This allows us to differentiate between:
+//
+//  List<int32_t>:
+//    Length : 1
+//    Offsets : 0, 4
+//    Null count: 1
+//    0
+//       0, 1, 2, 3
+//
+//  List<int32_t>:
+//    Length : 1
+//    Offsets : 0, 0
+//    Null count: 1
+//    0
+//
+std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
+                                                   column_view const& row_indices,
+                                                   bool check_exact_equality)
+{
+  // if we are checking for exact equality, we should be checking for "unsanitized" data that may
+  // be hiding underneath nulls. so check all rows instead of just non-null rows
+  if (check_exact_equality) {
+    return generate_all_row_indices(c.get_sliced_child(rmm::cuda_stream_default).size());
+  }
+
   // Example input
   // List<int32_t>:
   // Length : 7
@@ -232,7 +272,6 @@ struct column_property_comparator {
       PROP_EXPECT_EQ(types_equivalent(lhs.type(), rhs.type()), true);
     }
 
-    // DISCUSSION: does this make sense, semantically?
     auto const lhs_size = check_exact_equality ? lhs.size() : lhs_row_indices.size();
     auto const rhs_size = check_exact_equality ? rhs.size() : rhs_row_indices.size();
     PROP_EXPECT_EQ(lhs_size, rhs_size);
@@ -280,13 +319,16 @@ struct column_property_comparator {
     cudf::lists_column_view rhs_l(rhs);
 
     // recurse
-    auto lhs_child = lhs_l.get_sliced_child(rmm::cuda_stream_default);
-    // note: if a column is all nulls or otherwise empty, no indices are generated and no recursion
-    // happens
-    auto lhs_child_indices = generate_child_row_indices(lhs_l, lhs_row_indices);
+
+    // note: if a column is all nulls (and we are checking for exact equality) or otherwise empty,
+    // no indices are generated and no recursion happens
+    auto lhs_child_indices =
+      generate_child_row_indices(lhs_l, lhs_row_indices, check_exact_equality);
     if (lhs_child_indices->size() > 0) {
-      auto rhs_child         = rhs_l.get_sliced_child(rmm::cuda_stream_default);
-      auto rhs_child_indices = generate_child_row_indices(rhs_l, rhs_row_indices);
+      auto lhs_child = lhs_l.get_sliced_child(rmm::cuda_stream_default);
+      auto rhs_child = rhs_l.get_sliced_child(rmm::cuda_stream_default);
+      auto rhs_child_indices =
+        generate_child_row_indices(rhs_l, rhs_row_indices, check_exact_equality);
       return cudf::type_dispatcher(lhs_child.type(),
                                    column_property_comparator<check_exact_equality>{},
                                    lhs_child,
@@ -647,14 +689,16 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       return false;
     }
 
-    // recurse.
-    auto lhs_child = lhs_l.get_sliced_child(rmm::cuda_stream_default);
-    // note: if a column is all nulls or otherwise empty, no indices are generated and no recursion
-    // happens
-    auto lhs_child_indices = generate_child_row_indices(lhs_l, lhs_row_indices);
+    // recurse
+    // note: if a column is all nulls (and we are only checking for equivalence) or otherwise empty,
+    // no indices are generated and no recursion happens
+    auto lhs_child_indices =
+      generate_child_row_indices(lhs_l, lhs_row_indices, check_exact_equality);
     if (lhs_child_indices->size() > 0) {
-      auto rhs_child         = rhs_l.get_sliced_child(rmm::cuda_stream_default);
-      auto rhs_child_indices = generate_child_row_indices(rhs_l, rhs_row_indices);
+      auto lhs_child = lhs_l.get_sliced_child(rmm::cuda_stream_default);
+      auto rhs_child = rhs_l.get_sliced_child(rmm::cuda_stream_default);
+      auto rhs_child_indices =
+        generate_child_row_indices(rhs_l, rhs_row_indices, check_exact_equality);
       return cudf::type_dispatcher(lhs_child.type(),
                                    column_comparator<check_exact_equality>{},
                                    lhs_child,
@@ -713,9 +757,6 @@ struct column_comparator {
                   size_type fp_ulps,
                   int depth = 0)
   {
-    CUDF_EXPECTS(lhs_row_indices.size() == rhs_row_indices.size(),
-                 "Mismatch in row counts to compare");
-
     // compare properties
     if (!cudf::type_dispatcher(lhs.type(),
                                column_property_comparator<check_exact_equality>{},
@@ -733,17 +774,6 @@ struct column_comparator {
   }
 };
 
-std::unique_ptr<column> generate_all_row_indices(size_type num_rows)
-{
-  auto indices =
-    cudf::make_fixed_width_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED);
-  thrust::sequence(rmm::exec_policy(),
-                   indices->mutable_view().begin<size_type>(),
-                   indices->mutable_view().end<size_type>(),
-                   0);
-  return indices;
-}
-
 }  // namespace
 
 /**
@@ -753,9 +783,15 @@ bool expect_column_properties_equal(column_view const& lhs,
                                     column_view const& rhs,
                                     debug_output_level verbosity)
 {
-  auto indices = generate_all_row_indices(lhs.size());
-  return cudf::type_dispatcher(
-    lhs.type(), column_property_comparator<true>{}, lhs, rhs, *indices, *indices, verbosity);
+  auto lhs_indices = generate_all_row_indices(lhs.size());
+  auto rhs_indices = generate_all_row_indices(rhs.size());
+  return cudf::type_dispatcher(lhs.type(),
+                               column_property_comparator<true>{},
+                               lhs,
+                               rhs,
+                               *lhs_indices,
+                               *rhs_indices,
+                               verbosity);
 }
 
 /**
@@ -765,9 +801,15 @@ bool expect_column_properties_equivalent(column_view const& lhs,
                                          column_view const& rhs,
                                          debug_output_level verbosity)
 {
-  auto indices = generate_all_row_indices(lhs.size());
-  return cudf::type_dispatcher(
-    lhs.type(), column_property_comparator<false>{}, lhs, rhs, *indices, *indices, verbosity);
+  auto lhs_indices = generate_all_row_indices(lhs.size());
+  auto rhs_indices = generate_all_row_indices(rhs.size());
+  return cudf::type_dispatcher(lhs.type(),
+                               column_property_comparator<false>{},
+                               lhs,
+                               rhs,
+                               *lhs_indices,
+                               *rhs_indices,
+                               verbosity);
 }
 
 /**
@@ -777,13 +819,14 @@ bool expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
                           debug_output_level verbosity)
 {
-  auto indices = generate_all_row_indices(lhs.size());
+  auto lhs_indices = generate_all_row_indices(lhs.size());
+  auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
                                column_comparator<true>{},
                                lhs,
                                rhs,
-                               *indices,
-                               *indices,
+                               *lhs_indices,
+                               *rhs_indices,
                                verbosity,
                                cudf::test::default_ulp);
 }
@@ -796,9 +839,16 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
                                debug_output_level verbosity,
                                size_type fp_ulps)
 {
-  auto indices = generate_all_row_indices(lhs.size());
-  return cudf::type_dispatcher(
-    lhs.type(), column_comparator<false>{}, lhs, rhs, *indices, *indices, verbosity, fp_ulps);
+  auto lhs_indices = generate_all_row_indices(lhs.size());
+  auto rhs_indices = generate_all_row_indices(rhs.size());
+  return cudf::type_dispatcher(lhs.type(),
+                               column_comparator<false>{},
+                               lhs,
+                               rhs,
+                               *lhs_indices,
+                               *rhs_indices,
+                               verbosity,
+                               fp_ulps);
 }
 
 /**

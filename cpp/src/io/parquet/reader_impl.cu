@@ -23,7 +23,7 @@
 
 #include "compact_protocol_reader.hpp"
 
-#include <io/comp/gpuinflate.h>
+#include <io/comp/gpuinflate.hpp>
 #include <io/comp/nvcomp_adapter.hpp>
 #include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
@@ -317,10 +317,10 @@ struct metadata : public FileMetaData {
 };
 
 class aggregate_reader_metadata {
-  std::vector<metadata> const per_file_metadata;
-  std::map<std::string, std::string> const agg_keyval_map;
-  size_type const num_rows;
-  size_type const num_row_groups;
+  std::vector<metadata> per_file_metadata;
+  std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
+  size_type num_rows;
+  size_type num_row_groups;
   /**
    * @brief Create a metadata object from each element in the source vector
    */
@@ -335,18 +335,26 @@ class aggregate_reader_metadata {
   }
 
   /**
-   * @brief Merge the keyvalue maps from each per-file metadata object into a single map.
+   * @brief Collect the keyvalue maps from each per-file metadata object into a vector of maps.
    */
-  auto merge_keyval_metadata()
+  [[nodiscard]] auto collect_keyval_metadata()
   {
-    std::map<std::string, std::string> merged;
-    // merge key/value maps TODO: warn/throw if there are mismatches?
-    for (auto const& pfm : per_file_metadata) {
-      for (auto const& kv : pfm.key_value_metadata) {
-        merged[kv.key] = kv.value;
-      }
-    }
-    return merged;
+    std::vector<std::unordered_map<std::string, std::string>> kv_maps;
+    std::transform(per_file_metadata.cbegin(),
+                   per_file_metadata.cend(),
+                   std::back_inserter(kv_maps),
+                   [](auto const& pfm) {
+                     std::unordered_map<std::string, std::string> kv_map;
+                     std::transform(pfm.key_value_metadata.cbegin(),
+                                    pfm.key_value_metadata.cend(),
+                                    std::inserter(kv_map, kv_map.end()),
+                                    [](auto const& kv) {
+                                      return std::pair{kv.key, kv.value};
+                                    });
+                     return kv_map;
+                   });
+
+    return kv_maps;
   }
 
   /**
@@ -374,7 +382,7 @@ class aggregate_reader_metadata {
  public:
   aggregate_reader_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
     : per_file_metadata(metadatas_from_sources(sources)),
-      agg_keyval_map(merge_keyval_metadata()),
+      keyval_maps(collect_keyval_metadata()),
       num_rows(calc_num_rows()),
       num_row_groups(calc_num_row_groups())
   {
@@ -425,7 +433,7 @@ class aggregate_reader_metadata {
     return per_file_metadata[0].schema[schema_idx];
   }
 
-  [[nodiscard]] auto const& get_key_value_metadata() const { return agg_keyval_map; }
+  [[nodiscard]] auto const& get_key_value_metadata() const { return keyval_maps; }
 
   /**
    * @brief Gets the concrete nesting depth of output cudf columns
@@ -461,8 +469,10 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::string get_pandas_index() const
   {
-    auto it = agg_keyval_map.find("pandas");
-    if (it != agg_keyval_map.end()) {
+    // Assumes that all input files have the same metadata
+    // TODO: verify this assumption
+    auto it = keyval_maps[0].find("pandas");
+    if (it != keyval_maps[0].end()) {
       // Captures a list of quoted strings found inside square brackets after `"index_columns":`
       // Inside quotes supports newlines, brackets, escaped quotes, etc.
       // One-liner regex:
@@ -1091,14 +1101,16 @@ rmm::device_buffer reader::impl::decompress_page_data(
   size_t total_decomp_size = 0;
 
   struct codec_stats {
-    parquet::Compression compression_type;
-    size_t num_pages;
-    int32_t max_decompressed_size;
+    parquet::Compression compression_type = UNCOMPRESSED;
+    size_t num_pages                      = 0;
+    int32_t max_decompressed_size         = 0;
+    size_t total_decomp_size              = 0;
   };
 
-  std::array codecs{codec_stats{parquet::GZIP, 0, 0},
-                    codec_stats{parquet::SNAPPY, 0, 0},
-                    codec_stats{parquet::BROTLI, 0, 0}};
+  std::array codecs{codec_stats{parquet::GZIP},
+                    codec_stats{parquet::SNAPPY},
+                    codec_stats{parquet::BROTLI},
+                    codec_stats{parquet::ZSTD}};
 
   auto is_codec_supported = [&codecs](int8_t codec) {
     if (codec == parquet::UNCOMPRESSED) return true;
@@ -1117,6 +1129,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
     for_each_codec_page(codec.compression_type, [&](size_t page) {
       auto page_uncomp_size = pages[page].uncompressed_page_size;
       total_decomp_size += page_uncomp_size;
+      codec.total_decomp_size += page_uncomp_size;
       codec.max_decompressed_size = std::max(codec.max_decompressed_size, page_uncomp_size);
       codec.num_pages++;
       num_comp_pages++;
@@ -1176,10 +1189,20 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                      d_comp_out,
                                      d_comp_stats_view,
                                      codec.max_decompressed_size,
+                                     codec.total_decomp_size,
                                      stream);
         } else {
           gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, stream);
         }
+        break;
+      case parquet::ZSTD:
+        nvcomp::batched_decompress(nvcomp::compression_type::ZSTD,
+                                   d_comp_in,
+                                   d_comp_out,
+                                   d_comp_stats_view,
+                                   codec.max_decompressed_size,
+                                   codec.total_decomp_size,
+                                   stream);
         break;
       case parquet::BROTLI:
         gpu_debrotli(d_comp_in,
@@ -1759,7 +1782,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   }
 
   // Return user metadata
-  out_metadata.user_data = _metadata->get_key_value_metadata();
+  out_metadata.per_file_user_data = _metadata->get_key_value_metadata();
+  out_metadata.user_data          = {out_metadata.per_file_user_data[0].begin(),
+                            out_metadata.per_file_user_data[0].end()};
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }

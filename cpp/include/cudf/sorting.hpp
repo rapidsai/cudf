@@ -39,7 +39,7 @@ namespace cudf {
  * equal to `input.num_columns()` or empty. If empty, all columns will be sorted
  * in ascending order.
  * @param null_precedence The desired order of null compared to other elements
- * for each column.  Size must be equal to `input.num_columns()` or empty.
+ * for each column. Size must be equal to `input.num_columns()` or empty.
  * If empty, all columns will be sorted in `null_order::BEFORE`.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A non-nullable column of `size_type` elements containing the permuted row indices of
@@ -79,7 +79,7 @@ std::unique_ptr<column> stable_sorted_order(
  *                              `input.num_columns()` or empty. If empty,
  *                              `null_order::BEFORE` is assumed for all columns.
  *
- * @returns bool                true if sorted as expected, false if not.
+ * @returns bool                true if sorted as expected, false if not
  */
 bool is_sorted(cudf::table_view const& table,
                std::vector<order> const& column_order,
@@ -180,7 +180,7 @@ std::unique_ptr<table> stable_sort_by_key(
  * @endcode
  *
  * @param input The column to rank
- * @param method The ranking method used for tie breaking (same values).
+ * @param method The ranking method used for tie breaking (same values)
  * @param column_order The desired sort order for ranking
  * @param null_handling  flag to include nulls during ranking. If nulls are not
  * included, corresponding rank will be null.
@@ -219,7 +219,7 @@ std::unique_ptr<column> rank(
  * `keys.num_columns()` or empty. If empty, all columns will be sorted with
  * `null_order::BEFORE`.
  * @param mr Device memory resource to allocate any returned objects
- * @return sorted order of the segment sorted table .
+ * @return sorted order of the segment sorted table
  *
  */
 std::unique_ptr<column> segmented_sorted_order(
@@ -260,7 +260,7 @@ std::unique_ptr<column> stable_segmented_sorted_order(
  * `keys.num_columns()` or empty. If empty, all columns will be sorted with
  * `null_order::BEFORE`.
  * @param mr Device memory resource to allocate any returned objects
- * @return table with elements in each segment sorted.
+ * @return table with elements in each segment sorted
  *
  */
 std::unique_ptr<table> segmented_sort_by_key(

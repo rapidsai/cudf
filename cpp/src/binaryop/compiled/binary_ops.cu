@@ -39,7 +39,7 @@ namespace {
 /**
  * @brief Converts scalar to column_view with single element.
  *
- * @return pair with column_view and column containing any auxilary data to create column_view from
+ * @return pair with column_view and column containing any auxiliary data to create column_view from
  * scalar
  */
 struct scalar_as_column_view {
@@ -91,7 +91,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
  * @param scal    scalar to convert
  * @param stream  CUDA stream used for device memory operations and kernel launches.
  * @param mr      Device memory resource used to allocate the returned column's device memory
- * @return        pair with column_view and column containing any auxilary data to create
+ * @return        pair with column_view and column containing any auxiliary data to create
  * column_view from scalar
  */
 auto scalar_to_column_view(

@@ -50,7 +50,7 @@ namespace strings {
  */
 std::unique_ptr<column> replace_re(
   strings_column_view const& strings,
-  std::string const& pattern,
+  std::string_view pattern,
   string_scalar const& replacement           = string_scalar(""),
   std::optional<size_type> max_replace_count = std::nullopt,
   regex_flags const flags                    = regex_flags::DEFAULT,
@@ -98,8 +98,8 @@ std::unique_ptr<column> replace_re(
  */
 std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& strings,
-  std::string const& pattern,
-  std::string const& replacement,
+  std::string_view pattern,
+  std::string_view replacement,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

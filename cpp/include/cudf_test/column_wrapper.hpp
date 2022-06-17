@@ -81,6 +81,7 @@ class column_wrapper {
 
   /**
    * @brief Releases internal unique_ptr to wrapped column
+   *
    * @return unique_ptr to wrapped column
    */
   std::unique_ptr<cudf::column> release() { return std::move(wrapped); }
@@ -94,7 +95,14 @@ class column_wrapper {
  */
 template <typename From, typename To>
 struct fixed_width_type_converter {
-  // Are the types same - simply copy elements from [begin, end) to out
+  /**
+   * @brief No conversion necessary: Same type, simply copy element to output.
+   *
+   * @tparam FromT Source type
+   * @tparam ToT Target type
+   * @param element Source value
+   * @return The converted target value, same as source value
+   */
   template <typename FromT                                      = From,
             typename ToT                                        = To,
             std::enable_if_t<std::is_same_v<FromT, ToT>, void>* = nullptr>
@@ -103,7 +111,14 @@ struct fixed_width_type_converter {
     return element;
   }
 
-  // Are the types convertible or can target be constructed from source?
+  /**
+   * @brief Convert types if possible, otherwise construct target from source.
+   *
+   * @tparam FromT Source type
+   * @tparam ToT Target type
+   * @param element Source value
+   * @return The converted target value
+   */
   template <
     typename FromT          = From,
     typename ToT            = To,
@@ -115,7 +130,14 @@ struct fixed_width_type_converter {
     return static_cast<ToT>(element);
   }
 
-  // Convert integral values to timestamps
+  /**
+   * @brief Convert integral values to timestamps
+   *
+   * @tparam FromT Source type
+   * @tparam ToT Target type
+   * @param element Source value
+   * @return The converted target `timestamp` value
+   */
   template <
     typename FromT                                                                  = From,
     typename ToT                                                                    = To,
@@ -484,6 +506,11 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   }
 };
 
+/**
+ * @brief A wrapper for a column of fixed-width elements.
+ *
+ * @tparam Rep The type of the column
+ */
 template <typename Rep>
 class fixed_point_column_wrapper : public detail::column_wrapper {
  public:
@@ -1033,17 +1060,20 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
  public:
   /**
    * @brief Cast to dictionary_column_view
+   *
    */
   operator dictionary_column_view() const { return cudf::dictionary_column_view{wrapped->view()}; }
 
   /**
    * @brief Access keys column view
+   *
    * @return column_view to keys column
    */
   column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
 
   /**
    * @brief Access indices column view
+   *
    * @return column_view to indices column
    */
   column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
@@ -1441,7 +1471,45 @@ class lists_column_wrapper : public detail::column_wrapper {
     build_from_nested(elements, validity);
   }
 
+  /**
+   * @brief Construct a list column containing a single empty, optionally null row.
+   *
+   * @param valid Whether or not the empty row is also null
+   * @return A list column containing a single empty row
+   */
+  static lists_column_wrapper<T> make_one_empty_row_column(bool valid = true)
+  {
+    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets{0, 0};
+    cudf::test::fixed_width_column_wrapper<int> values{};
+    return lists_column_wrapper<T>(
+      1,
+      offsets.release(),
+      values.release(),
+      valid ? 0 : 1,
+      valid ? rmm::device_buffer{} : cudf::create_null_mask(1, cudf::mask_state::ALL_NULL));
+  }
+
  private:
+  /**
+   * @brief Construct a list column from constituent parts.
+   *
+   * @param num_rows The number of lists the column represents
+   * @param offsets The column of offset values for this column
+   * @param values The column of values bounded by the offsets
+   * @param null_count The number of null list entries
+   * @param null_mask The bits specifying the null lists in device memory
+   */
+  lists_column_wrapper(size_type num_rows,
+                       std::unique_ptr<cudf::column>&& offsets,
+                       std::unique_ptr<cudf::column>&& values,
+                       size_type null_count,
+                       rmm::device_buffer&& null_mask)
+  {
+    // construct the list column
+    wrapped = make_lists_column(
+      num_rows, std::move(offsets), std::move(values), null_count, std::move(null_mask));
+  }
+
   /**
    * @brief Initialize as a nested list column composed of other list columns.
    *
