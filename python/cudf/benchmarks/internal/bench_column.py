@@ -1,5 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+"""Benchmarks of Column methods."""
+
 import pytest
 import pytest_cases
 from utils import (

@@ -1,5 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+"""Test cases for benchmarks in bench_functions.py."""
+
 import pytest_cases
 from config import NUM_ROWS, cudf, cupy
 

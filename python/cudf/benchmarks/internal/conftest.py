@@ -1,5 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+"""Defines pytest fixtures for internal benchmarks."""
+
 from config import NUM_ROWS, cudf  # noqa: E402
 from utils import (
     OrderedSet,

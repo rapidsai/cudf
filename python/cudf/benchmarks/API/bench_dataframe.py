@@ -1,5 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+"""Benchmarks of DataFrame methods."""
+
 import string
 
 import numpy

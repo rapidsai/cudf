@@ -1,6 +1,6 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
-"""Standard location for shared fixtures and code across tests.
+"""Defines pytest fixtures for all benchmarks.
 
 Most fixtures defined in this file represent one of the primary classes in the
 cuDF ecosystem such as DataFrame, Series, or Index. These fixtures may in turn
@@ -43,7 +43,6 @@ specialized fixtures:
       it with index_dtype_int64 (a true Int64Index), and it cannot hold nulls.
       As a result, it is provided as a separate fixture.
 """
-
 
 import os
 import string
