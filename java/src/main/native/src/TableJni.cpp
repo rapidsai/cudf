@@ -1497,9 +1497,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv *env, 
                                                       static_cast<std::size_t>(buffer_length)) :
                                 cudf::io::source_info(filename.get());
 
-    cudf::io::parquet_reader_options opts =
-        cudf::io::parquet_reader_options::builder(source)
-            .columns(n_filter_col_names.as_cpp_vector())
+    auto builder = cudf::io::parquet_reader_options::builder(source);
+    if (n_filter_col_names.size() > 0) {
+        builder = builder.columns(n_filter_col_names.as_cpp_vector());
+    }
+
+    cudf::io::parquet_reader_options opts = builder
             .convert_strings_to_categories(false)
             .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
             .build();

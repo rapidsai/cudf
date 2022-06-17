@@ -588,35 +588,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testReadParquetFull() {
-    ParquetOptions opts = ParquetOptions.builder()
-            .includeColumn("loan_id")
-            .includeColumn("orig_channel")
-            .includeColumn("orig_interest_rate")
-            .includeColumn("orig_upb")
-            .includeColumn("orig_loan_term")
-            .includeColumn("orig_date")
-            .includeColumn("first_pay_date")
-            .includeColumn("orig_ltv")
-            .includeColumn("orig_cltv")
-            .includeColumn("num_borrowers")
-            .includeColumn("dti")
-            .includeColumn("borrower_credit_score")
-            .includeColumn("first_home_buyer")
-            .includeColumn("loan_purpose")
-            .includeColumn("property_type")
-            .includeColumn("num_units")
-            .includeColumn("occupancy_status")
-            .includeColumn("property_state")
-            .includeColumn("zip")
-            .includeColumn("mortgage_insurance_percent")
-            .includeColumn("product_type")
-            .includeColumn("coborrow_credit_score")
-            .includeColumn("mortgage_insurance_type")
-            .includeColumn("relocation_mortgage_indicator")
-            .includeColumn("quarter")
-            .includeColumn("seller_id")
-            .build();
-    try (Table table = Table.readParquet(opts, TEST_PARQUET_FILE)) {
+    try (Table table = Table.readParquet(TEST_PARQUET_FILE)) {
       long rows = table.getRowCount();
       assertEquals(1000, rows);
 
@@ -655,17 +627,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testReadParquetContainsDecimalData() {
-    ParquetOptions opts = ParquetOptions.builder()
-            .includeColumn("c_0")
-            .includeColumn("c_1")
-            .includeColumn("c_2")
-            .includeColumn("c_3")
-            .includeColumn("c_4")
-            .includeColumn("c_5")
-            .includeColumn("c_6")
-            .includeColumn("c_7")
-            .build();
-    try (Table table = Table.readParquet(opts, TEST_DECIMAL_PARQUET_FILE)) {
+    try (Table table = Table.readParquet(TEST_DECIMAL_PARQUET_FILE)) {
       long rows = table.getRowCount();
       assertEquals(100, rows);
       DType[] expectedTypes = new DType[]{
@@ -7788,8 +7750,7 @@ public class TableTest extends CudfTestBase {
         writer.write(table0);
         writer.write(table0);
       }
-      ParquetOptions opts = ParquetOptions.builder().includeColumn(options.getFlatColumnNames()).build();
-      try (Table table1 = Table.readParquet(opts, consumer.buffer, 0, consumer.offset);
+      try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
       }
@@ -7824,8 +7785,7 @@ public class TableTest extends CudfTestBase {
       MessageType schema = reader.getFooter().getFileMetaData().getSchema();
       assertEquals(OriginalType.MAP, schema.getType("my_map").getOriginalType());
     }
-    ParquetOptions opts = ParquetOptions.builder().includeColumn(options.getFlatColumnNames()).build();
-    try (ColumnVector cv = Table.readParquet(opts, f).getColumn(0);
+    try (ColumnVector cv = Table.readParquet(f).getColumn(0);
          ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
          ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
       assertColumnsAreEqual(expected, res);
@@ -7844,8 +7804,7 @@ public class TableTest extends CudfTestBase {
         writer.write(table0);
         writer.write(table0);
       }
-      ParquetOptions opts = ParquetOptions.builder().includeColumn(options.getFlatColumnNames()).build();
-      try (Table table1 = Table.readParquet(opts, consumer.buffer, 0,
+      try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0,
           consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
@@ -7867,8 +7826,7 @@ public class TableTest extends CudfTestBase {
         writer.write(table0);
         writer.write(table0);
       }
-      ParquetOptions opts = ParquetOptions.builder().includeColumn(columns).build();
-      try (Table table1 = Table.readParquet(opts, consumer.buffer, 0, consumer.offset);
+      try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
       }
@@ -7889,8 +7847,7 @@ public class TableTest extends CudfTestBase {
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
       }
-      ParquetOptions opts = ParquetOptions.builder().includeColumn(options.getFlatColumnNames()).build();
-      try (Table table2 = Table.readParquet(opts, tempFile.getAbsoluteFile())) {
+      try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
     } finally {
@@ -7913,8 +7870,7 @@ public class TableTest extends CudfTestBase {
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
       }
-      ParquetOptions opts = ParquetOptions.builder().includeColumn(options.getFlatColumnNames()).build();
-      try (Table table2 = Table.readParquet(opts, tempFile.getAbsoluteFile())) {
+      try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
     } finally {
@@ -7936,8 +7892,7 @@ public class TableTest extends CudfTestBase {
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
       }
-      ParquetOptions opts = ParquetOptions.builder().includeColumn(options.getFlatColumnNames()).build();
-      try (Table table2 = Table.readParquet(opts, tempFile.getAbsoluteFile())) {
+      try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
     } finally {

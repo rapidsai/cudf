@@ -957,17 +957,32 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Read a Parquet file using the default ParquetOptions.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readParquet(File path) {
+    return readParquet(ParquetOptions.DEFAULT, path);
+  }
+
+  /**
    * Read a Parquet file.
    * @param opts various parquet parsing options.
    * @param path the local file to read.
    * @return the file parsed as a table on the GPU.
    */
   public static Table readParquet(ParquetOptions opts, File path) {
-    if (opts.getIncludeColumnNames().length == 0) {
-      throw new IllegalArgumentException("Column names must be provided");
-    }
     return new Table(readParquet(opts.getIncludeColumnNames(),
         path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
+  }
+
+  /**
+   * Read parquet formatted data.
+   * @param buffer raw parquet formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readParquet(byte[] buffer) {
+    return readParquet(ParquetOptions.DEFAULT, buffer, 0, buffer.length);
   }
 
   /**
@@ -977,9 +992,6 @@ public final class Table implements AutoCloseable {
    * @return the data parsed as a table on the GPU.
    */
   public static Table readParquet(ParquetOptions opts, byte[] buffer) {
-    if (opts.getIncludeColumnNames().length == 0) {
-      throw new IllegalArgumentException("Column names must be provided");
-    }
     return readParquet(opts, buffer, 0, buffer.length);
   }
 
@@ -992,9 +1004,6 @@ public final class Table implements AutoCloseable {
    * @return the data parsed as a table on the GPU.
    */
   public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
-    if (opts.getIncludeColumnNames().length == 0) {
-      throw new IllegalArgumentException("Column names must be provided");
-    }
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -1017,9 +1026,6 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, HostMemoryBuffer buffer,
                                   long offset, long len) {
-    if (opts.getIncludeColumnNames().length == 0) {
-      throw new IllegalArgumentException("Column names must be provided");
-    }
     if (len <= 0) {
       len = buffer.length - offset;
     }

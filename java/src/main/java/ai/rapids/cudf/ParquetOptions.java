@@ -23,7 +23,11 @@ package ai.rapids.cudf;
  */
 public class ParquetOptions extends ColumnFilterOptions {
 
+  public static ParquetOptions DEFAULT = new ParquetOptions(new Builder());
+
   private final DType unit;
+
+
 
   private ParquetOptions(Builder builder) {
     super(builder);
