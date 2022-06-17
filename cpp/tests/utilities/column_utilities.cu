@@ -272,7 +272,6 @@ struct column_property_comparator {
       PROP_EXPECT_EQ(types_equivalent(lhs.type(), rhs.type()), true);
     }
 
-    // DISCUSSION: does this make sense, semantically?
     auto const lhs_size = check_exact_equality ? lhs.size() : lhs_row_indices.size();
     auto const rhs_size = check_exact_equality ? rhs.size() : rhs_row_indices.size();
     PROP_EXPECT_EQ(lhs_size, rhs_size);
@@ -758,9 +757,6 @@ struct column_comparator {
                   size_type fp_ulps,
                   int depth = 0)
   {
-    CUDF_EXPECTS(lhs_row_indices.size() == rhs_row_indices.size(),
-                 "Mismatch in row counts to compare");
-
     // compare properties
     if (!cudf::type_dispatcher(lhs.type(),
                                column_property_comparator<check_exact_equality>{},
@@ -787,9 +783,15 @@ bool expect_column_properties_equal(column_view const& lhs,
                                     column_view const& rhs,
                                     debug_output_level verbosity)
 {
-  auto indices = generate_all_row_indices(lhs.size());
-  return cudf::type_dispatcher(
-    lhs.type(), column_property_comparator<true>{}, lhs, rhs, *indices, *indices, verbosity);
+  auto lhs_indices = generate_all_row_indices(lhs.size());
+  auto rhs_indices = generate_all_row_indices(rhs.size());
+  return cudf::type_dispatcher(lhs.type(),
+                               column_property_comparator<true>{},
+                               lhs,
+                               rhs,
+                               *lhs_indices,
+                               *rhs_indices,
+                               verbosity);
 }
 
 /**
@@ -799,9 +801,15 @@ bool expect_column_properties_equivalent(column_view const& lhs,
                                          column_view const& rhs,
                                          debug_output_level verbosity)
 {
-  auto indices = generate_all_row_indices(lhs.size());
-  return cudf::type_dispatcher(
-    lhs.type(), column_property_comparator<false>{}, lhs, rhs, *indices, *indices, verbosity);
+  auto lhs_indices = generate_all_row_indices(lhs.size());
+  auto rhs_indices = generate_all_row_indices(rhs.size());
+  return cudf::type_dispatcher(lhs.type(),
+                               column_property_comparator<false>{},
+                               lhs,
+                               rhs,
+                               *lhs_indices,
+                               *rhs_indices,
+                               verbosity);
 }
 
 /**
@@ -811,13 +819,14 @@ bool expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
                           debug_output_level verbosity)
 {
-  auto indices = generate_all_row_indices(lhs.size());
+  auto lhs_indices = generate_all_row_indices(lhs.size());
+  auto rhs_indices = generate_all_row_indices(rhs.size());
   return cudf::type_dispatcher(lhs.type(),
                                column_comparator<true>{},
                                lhs,
                                rhs,
-                               *indices,
-                               *indices,
+                               *lhs_indices,
+                               *rhs_indices,
                                verbosity,
                                cudf::test::default_ulp);
 }
@@ -830,9 +839,16 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
                                debug_output_level verbosity,
                                size_type fp_ulps)
 {
-  auto indices = generate_all_row_indices(lhs.size());
-  return cudf::type_dispatcher(
-    lhs.type(), column_comparator<false>{}, lhs, rhs, *indices, *indices, verbosity, fp_ulps);
+  auto lhs_indices = generate_all_row_indices(lhs.size());
+  auto rhs_indices = generate_all_row_indices(rhs.size());
+  return cudf::type_dispatcher(lhs.type(),
+                               column_comparator<false>{},
+                               lhs,
+                               rhs,
+                               *lhs_indices,
+                               *rhs_indices,
+                               verbosity,
+                               fp_ulps);
 }
 
 /**
