@@ -114,17 +114,20 @@ def accepts_cudf_fixture(
         "indexedframe",
         "frame_or_index",
     )
-    assert (
-        cls in supported_classes
-    ), f"cls {cls} is invalid, choose from {', '.join(c for c in supported_classes)}"
+    assert cls in supported_classes, (
+        f"cls {cls} is invalid, choose from "
+        f"{', '.join(c for c in supported_classes)}"
+    )
 
     name = name or cls
 
     if not isinstance(dtype, list):
         dtype = [dtype]
-    assert all(
-        dt in column_generators for dt in dtype
-    ), f"The only supported dtypes are {', '.join(dt for dt in column_generators)}"
+    assert all(dt in column_generators for dt in dtype), (
+        f"The only supported dtypes are "
+        f"{', '.join(dt for dt in column_generators)}"
+    )
+
     dtype_str = "_dtype_" + "_or_".join(dtype)
 
     null_str = ""
