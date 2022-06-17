@@ -57,13 +57,7 @@ from cudf.api.types import (
 from cudf.core import column, df_protocol, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
-    CategoricalColumn,
-    ColumnBase,
-    as_column,
-    build_categorical_column,
-    build_column,
-    column_empty,
-    concat_columns,
+    CategoricalColumn, ColumnBase, as_column, column_empty
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -88,7 +82,6 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_column_like,
-    min_scalar_type,
     numeric_normalize_types,
 )
 from cudf.utils.utils import (
@@ -1622,11 +1615,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Infer common dtypes between numeric columns
         # and combine CategoricalColumn categories
-        categories = _find_common_dtypes_and_categories(non_null_cols, dtypes)
+        _find_common_dtypes_and_categories(non_null_cols, dtypes)
 
         # Cast all columns to a common dtype, assign combined categories,
         # and back-fill missing columns with all-null columns
-        _cast_cols_to_common_dtypes(indices, columns, dtypes, categories)
+        _cast_cols_to_common_dtypes(indices, columns, dtypes)
 
         # Construct input tables with the index and data columns in the same
         # order. This strips the given index/column names and replaces the
@@ -1674,26 +1667,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 [o._index for o in objs]
             )
 
-        # Reassign the categories for any categorical table cols
-        _reassign_categories(
-            categories, out._data, indices[first_data_column_position:]
-        )
-
-        # Reassign the categories for any categorical index cols
-        if not isinstance(out._index, cudf.RangeIndex):
-            _reassign_categories(
-                categories,
-                out._index._data,
-                indices[:first_data_column_position],
-            )
-            if not isinstance(out._index, MultiIndex) and is_categorical_dtype(
-                out._index._values.dtype
-            ):
-                out = out.set_index(
-                    cudf.core.index.as_index(out.index._values)
-                )
-
-        # Reassign precision for decimal cols & type schema for struct cols
+        # Reassign precision for any decimal cols
         for name, col in out._data.items():
             if isinstance(
                 col,
@@ -6955,36 +6929,33 @@ def _get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
 
 
 def _find_common_dtypes_and_categories(non_null_columns, dtypes):
-    # A mapping of {idx: categories}, where `categories` is a
-    # column of all the unique categorical values from each
-    # categorical column across all input frames
-    categories = dict()
     for idx, cols in non_null_columns.items():
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
-        # If all the non-null dtypes are int/float, find a common dtype
-        if all(is_numeric_dtype(col.dtype) for col in cols):
-            dtypes[idx] = find_common_type([col.dtype for col in cols])
-        # If all categorical dtypes, combine the categories
+        # For categorical types, if all columns to concat have the
+        # same categorical dtype (with exactly the same categories), take this
+        # shortcut to avoid casting.
+        if all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
+            continue
+        # If all the non-null dtypes are int/float, find a common dtype. For
+        # categorical columns, check dtype of categories.
         elif all(
-            isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
+            is_numeric_dtype(_value_dtype_of_column(col)) for col in cols
         ):
-            # Combine and de-dupe the categories
-            categories[idx] = (
-                cudf.Series(concat_columns([col.categories for col in cols]))
-                .drop_duplicates(ignore_index=True)
-                ._column
+            dtypes[idx] = find_common_type(
+                [_value_dtype_of_column(col) for col in cols]
             )
-            # Set the column dtype to the codes' dtype. The categories
-            # will be re-assigned at the end
-            dtypes[idx] = min_scalar_type(len(categories[idx]))
-        # Otherwise raise an error if columns have different dtypes
-        elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
+        # raise an error if columns have different dtypes
+        elif not all(
+            is_dtype_equal(
+                _value_dtype_of_column(c), _value_dtype_of_dtype(dtypes[idx])
+            )
+            for c in cols
+        ):
             raise ValueError("All columns must be the same type")
-    return categories
 
 
-def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
+def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes):
     # Cast all columns to a common dtype, assign combined categories,
     # and back-fill missing columns with all-null columns
     for idx in col_idxs:
@@ -6994,31 +6965,19 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
             if idx >= len(cols) or cols[idx] is None:
                 n = len(next(x for x in cols if x is not None))
                 cols[idx] = column_empty(row_count=n, dtype=dtype, masked=True)
-            else:
-                # If column is categorical, rebase the codes with the
-                # combined categories, and cast the new codes to the
-                # min-scalar-sized dtype
-                if idx in categories:
-                    cols[idx] = (
-                        cols[idx]
-                        ._set_categories(
-                            categories[idx],
-                            is_unique=True,
-                        )
-                        .codes
-                    )
+            elif not is_categorical_dtype(dtype):
+                # When result type is categorical, the only case for this is
+                # when all columns have the same categorical dtype. Avoid
+                # casting in this case.
                 cols[idx] = cols[idx].astype(dtype)
 
 
-def _reassign_categories(categories, cols, col_idxs):
-    for name, idx in zip(cols, col_idxs):
-        if idx in categories:
-            cols[name] = build_categorical_column(
-                categories=categories[idx],
-                codes=build_column(
-                    cols[name].base_data, dtype=cols[name].dtype
-                ),
-                mask=cols[name].base_mask,
-                offset=cols[name].offset,
-                size=cols[name].size,
-            )
+# TODO: better naming..
+def _value_dtype_of_column(col):
+    return (
+        col.dtype._categories.dtype if is_categorical_dtype(col) else col.dtype
+    )
+
+
+def _value_dtype_of_dtype(dtype):
+    return dtype._categories.dtype if is_categorical_dtype(dtype) else dtype

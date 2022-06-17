@@ -152,6 +152,12 @@ class CategoricalDtype(_BaseDtype):
         return "|O08"
 
     @classmethod
+    def from_arrow(cls, typ: pa.DictionaryType) -> "CategoricalDtype":
+        # pyarrow `DictionaryType` has no category information, return a
+        # placeholder here, where real categories are updated later
+        return CategoricalDtype(categories=None, ordered=typ.ordered)
+
+    @classmethod
     def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
@@ -250,6 +256,8 @@ class ListDtype(_BaseDtype):
             return ListDtype.from_arrow(self._typ.value_type)
         elif isinstance(self._typ.value_type, pa.StructType):
             return StructDtype.from_arrow(self._typ.value_type)
+        elif isinstance(self._typ.value_type, pa.DictionaryType):
+            return CategoricalDtype.from_arrow(self._typ.value_type)
         else:
             return cudf.dtype(self._typ.value_type.to_pandas_dtype()).name
 

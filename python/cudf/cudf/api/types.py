@@ -7,11 +7,12 @@ from __future__ import annotations
 from collections import abc
 from functools import wraps
 from inspect import isclass
-from typing import List, Union
+from typing import List, Union, cast
 
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api import types as pd_types
 
 import cudf
@@ -129,6 +130,7 @@ def is_scalar(val):
         val,
         (
             cudf.Scalar,
+            pa.Scalar,
             cudf._lib.scalar.DeviceScalar,
             cudf.core.tools.datetimes.DateOffset,
         ),
@@ -216,8 +218,9 @@ def _union_categoricals(
     if ignore_order:
         raise TypeError("ignore_order is not yet implemented")
 
-    result_col = cudf.core.column.CategoricalColumn._concat(
-        [obj._column for obj in to_union]
+    result_col = cast(
+        cudf.core.column.CategoricalColumn,
+        cudf.core.column.concat_columns([obj._column for obj in to_union]),
     )
     if sort_categories:
         sorted_categories = result_col.categories.sort_by_values(

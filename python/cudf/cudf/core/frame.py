@@ -17,7 +17,6 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
-    cast,
 )
 
 import cupy
@@ -38,7 +37,7 @@ from cudf.api.types import (
 from cudf.core.column import (
     ColumnBase,
     as_column,
-    build_categorical_column,
+    column_empty,
     deserialize_columns,
     full,
     serialize_columns,
@@ -1365,61 +1364,11 @@ class Frame(BinaryOperand, Scannable):
                 if "field_name" in col
             }
 
-        # Currently we don't have support for
-        # pyarrow.DictionaryArray -> cudf Categorical column,
-        # so handling indices and dictionary as two different columns.
-        # This needs be removed once we have hooked libcudf dictionary32
-        # with categorical.
-        dict_indices = {}
-        dict_dictionaries = {}
-        dict_ordered = {}
-        for field in data.schema:
-            if isinstance(field.type, pa.DictionaryType):
-                dict_ordered[field.name] = field.type.ordered
-                dict_indices[field.name] = pa.chunked_array(
-                    [chunk.indices for chunk in data[field.name].chunks],
-                    type=field.type.index_type,
-                )
-                dict_dictionaries[field.name] = pa.chunked_array(
-                    [chunk.dictionary for chunk in data[field.name].chunks],
-                    type=field.type.value_type,
-                )
-
-        # Handle dict arrays
-        cudf_category_frame = {}
-        if len(dict_indices):
-
-            dict_indices_table = pa.table(dict_indices)
-            data = data.drop(dict_indices_table.column_names)
-            indices_columns = libcudf.interop.from_arrow(dict_indices_table)
-            # as dictionary size can vary, it can't be a single table
-            cudf_dictionaries_columns = {
-                name: ColumnBase.from_arrow(dict_dictionaries[name])
-                for name in dict_dictionaries.keys()
-            }
-
-            cudf_category_frame = {
-                name: build_categorical_column(
-                    cudf_dictionaries_columns[name],
-                    codes,
-                    mask=codes.base_mask,
-                    size=codes.size,
-                    ordered=dict_ordered[name],
-                )
-                for name, codes in zip(
-                    dict_indices_table.column_names, indices_columns
-                )
-            }
-
-        # Handle non-dict arrays
-        cudf_non_category_frame = {
-            name: col
-            for name, col in zip(
-                data.column_names, libcudf.interop.from_arrow(data)
-            )
-        }
-
-        result = {**cudf_non_category_frame, **cudf_category_frame}
+        result = (
+            {}
+            if data.num_columns == 0
+            else libcudf.interop.from_arrow(data, data.column_names)[0]
+        )
 
         # There are some special cases that need to be handled
         # based on metadata.
@@ -1772,28 +1721,6 @@ class Frame(BinaryOperand, Scannable):
         if include_index:
             if self._index is not None and other._index is not None:
                 self._index._copy_type_metadata(other._index)  # type: ignore
-                # When other._index is a CategoricalIndex, the current index
-                # will be a NumericalIndex with an underlying CategoricalColumn
-                # (the above _copy_type_metadata call will have converted the
-                # column). Calling cudf.Index on that column generates the
-                # appropriate index.
-                if isinstance(
-                    other._index, cudf.core.index.CategoricalIndex
-                ) and not isinstance(
-                    self._index, cudf.core.index.CategoricalIndex
-                ):
-                    self._index = cudf.Index(
-                        cast(
-                            cudf.core.index.NumericIndex, self._index
-                        )._column,
-                        name=self._index.name,
-                    )
-                elif isinstance(
-                    other._index, cudf.MultiIndex
-                ) and not isinstance(self._index, cudf.MultiIndex):
-                    self._index = cudf.MultiIndex._from_data(
-                        self._index._data, name=self._index.name
-                    )
         return self
 
     @_cudf_nvtx_annotate

@@ -7,7 +7,7 @@ import pyarrow as pa
 
 import cudf
 from cudf.api.types import is_scalar
-from cudf.core.dtypes import ListDtype, StructDtype
+from cudf.core.dtypes import ListDtype, StructDtype, CategoricalDtype
 from cudf.core.missing import NA
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
@@ -147,10 +147,17 @@ class Scalar(BinaryOperand):
             else:
                 return NA, dtype
 
+        if isinstance(dtype, CategoricalDtype):
+            if value not in dtype.categories:
+                return NA, dtype.categories.dtype
+            else:
+                return value, dtype.categories.dtype
+
         if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             value = pa.scalar(
                 value, type=pa.decimal128(dtype.precision, dtype.scale)
             ).as_py()
+
         if isinstance(value, decimal.Decimal) and dtype is None:
             dtype = cudf.Decimal128Dtype._from_decimal(value)
 

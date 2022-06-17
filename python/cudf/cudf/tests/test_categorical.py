@@ -91,8 +91,7 @@ def test_categorical_integer():
     assert sr.null_count == 2
 
     np.testing.assert_array_equal(
-        pdsr.cat.codes.values,
-        sr.cat.codes.astype(pdsr.cat.codes.dtype).fillna(-1).to_numpy(),
+        pdsr.cat.codes.values, sr.cat.codes.to_array()
     )
 
     expect_str = dedent(
@@ -190,11 +189,17 @@ def test_categorical_element_indexing():
     Element indexing to a cat column must give the underlying object
     not the numerical index.
     """
-    cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
+    cat = pd.Categorical(["a", "a", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = cudf.Series(cat)
     assert_eq(pdsr, sr)
     assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
+
+    for i in range(len(sr)):
+        if pdsr.iloc[i] is not np.nan:
+            assert pdsr.iloc[i] == sr.iloc[i]
+        else:
+            assert pdsr.iloc[i] is np.nan and sr.iloc[i] is cudf.NA
 
 
 def test_categorical_masking():
@@ -356,6 +361,11 @@ def test_categorical_set_categories():
     got = sr.cat.set_categories(["a", "b"])
     assert_eq(expect, got)
 
+    # set different category
+    expect = psr.cat.set_categories(["a", "b", "d"])
+    got = sr.cat.set_categories(["a", "b", "d"])
+    assert_eq(expect, got)
+
 
 def test_categorical_set_categories_preserves_order():
     series = pd.Series([1, 0, 0, 0, 2]).astype("category")
@@ -443,9 +453,12 @@ def test_categorical_reorder_categories(
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
 
-    assert_eq(pd_sr_1, cd_sr_1)
+    # Skip checking the order of category if the result is unordered
+    # categorical
+    assert_eq(pd_sr_1, cd_sr_1, check_category_order=to_ordered)
 
-    assert str(cd_sr_1) == str(pd_sr_1)
+    if to_ordered:
+        assert str(cd_sr_1) == str(pd_sr_1)
 
 
 @pytest.mark.parametrize(
@@ -686,34 +699,29 @@ def test_categorical_dtype(categories, ordered):
 
 
 @pytest.mark.parametrize(
-    ("data", "expected"),
+    "ps",
     [
-        (cudf.Series([1]), np.uint8),
-        (cudf.Series([1, None]), np.uint8),
-        (cudf.Series(np.arange(np.iinfo(np.int8).max)), np.uint8),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.int8).max), [None])),
-            np.uint8,
-        ),
-        (cudf.Series(np.arange(np.iinfo(np.int16).max)), np.uint16),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.int16).max), [None])),
-            np.uint16,
-        ),
-        (cudf.Series(np.arange(np.iinfo(np.uint8).max)), np.uint8),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.uint8).max), [None])),
-            np.uint8,
-        ),
-        (cudf.Series(np.arange(np.iinfo(np.uint16).max)), np.uint16),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.uint16).max), [None])),
-            np.uint16,
-        ),
+        pd.Series([1]),
+        pd.Series([1, None]),
+        pd.Series(np.arange(np.iinfo(np.int8).max)),
+        pd.Series(np.append(np.arange(np.iinfo(np.int8).max), [None])),
+        pd.Series(np.arange(np.iinfo(np.int16).max)),
+        pd.Series(np.append(np.arange(np.iinfo(np.int16).max), [None])),
+        pd.Series(np.arange(np.iinfo(np.uint8).max)),
+        pd.Series(np.append(np.arange(np.iinfo(np.uint8).max), [None])),
+        pd.Series(np.arange(np.iinfo(np.uint16).max)),
+        pd.Series(np.append(np.arange(np.iinfo(np.uint16).max), [None])),
     ],
 )
-def test_astype_dtype(data, expected):
-    got = data.astype("category").cat.codes.dtype
+def test_astype_dtype(ps):
+    # This tests the dtype returned by categorical methods matches with pandas
+    # respectively. Note that cudf stores the codes at uint32 unconditionally,
+    # the type match here happens as a post-processing to the internal codes.
+    ps = ps.astype("category")
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.cat.codes.dtype
+    got = gs.cat.codes.dtype
     np.testing.assert_equal(got, expected)
 
 
@@ -737,19 +745,7 @@ def test_add_categories(data, add):
     expected = pds.cat.add_categories(add)
     with _hide_cudf_safe_casting_warning():
         actual = gds.cat.add_categories(add)
-
-    assert_eq(
-        expected.cat.codes, actual.cat.codes.astype(expected.cat.codes.dtype)
-    )
-
-    # Need to type-cast pandas object to str due to mixed-type
-    # support in "object"
-    assert_eq(
-        expected.cat.categories.astype("str")
-        if (expected.cat.categories.dtype == "object")
-        else expected.cat.categories,
-        actual.cat.categories,
-    )
+    assert_eq(expected, actual, check_category_order=False)
 
 
 @pytest.mark.parametrize(
@@ -908,3 +904,12 @@ def test_categorical_string_index_contains(data, value):
     pidx = idx.to_pandas()
 
     assert_eq(value in idx, value in pidx)
+
+def test_categorical_ordered_dtype_sort():
+    ps = pd.Series(pd.Categorical([1, None, 2], categories=[2, 1], ordered=True))
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.sort_values()
+    got = gs.sort_values()
+
+    assert_eq(expected, got)

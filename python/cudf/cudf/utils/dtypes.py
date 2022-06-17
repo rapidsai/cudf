@@ -205,7 +205,15 @@ def cudf_dtype_to_pa_type(dtype):
     Python dtype.
     """
     if cudf.api.types.is_categorical_dtype(dtype):
-        raise NotImplementedError()
+        cat_dtype = dtype.categories.dtype
+        cat_typ = (
+            pa.string()
+            if cudf.api.types.is_string_dtype(cat_dtype)
+            else pa.from_numpy_dtype(cat_dtype)
+        )
+        return pa.dictionary(
+            index_type="int32", value_type=cat_typ, ordered=dtype.ordered
+        )
     elif (
         cudf.api.types.is_list_dtype(dtype)
         or cudf.api.types.is_struct_dtype(dtype)
@@ -226,6 +234,8 @@ def cudf_dtype_from_pa_type(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
+    elif pa.types.is_dictionary(typ):
+        return cudf.core.dtypes.CategoricalDtype.from_arrow(typ)
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
@@ -260,7 +270,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
     ) or cudf.api.types.is_string_dtype(dtype):
         dtype = "str"
 
-    if isinstance(val, datetime.datetime):
+    if isinstance(val, pa.DictionaryScalar):
+        val = val.value.as_py()
+    elif isinstance(val, datetime.datetime):
         val = np.datetime64(val)
     elif isinstance(val, datetime.timedelta):
         val = np.timedelta64(val)
@@ -275,7 +287,9 @@ def to_cudf_compatible_scalar(val, dtype=None):
         if isinstance(val, str) and np.dtype(dtype).kind == "M":
             # pd.Timestamp can handle str, but not np.str_
             val = pd.Timestamp(str(val)).to_datetime64().astype(dtype)
-        else:
+        elif not isinstance(
+            dtype, cudf.CategoricalDtype
+        ):  # TODO: what to do with categoricaldtype??
             val = val.astype(dtype)
 
     if val.dtype.type is np.datetime64:

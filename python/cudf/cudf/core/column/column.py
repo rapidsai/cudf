@@ -257,46 +257,28 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
 
-        data = pa.table([array], [None])
-
-        if isinstance(array.type, pa.DictionaryType):
-            indices_table = pa.table(
-                {
-                    "None": pa.chunked_array(
-                        [chunk.indices for chunk in data["None"].chunks],
-                        type=array.type.index_type,
-                    )
-                }
-            )
-            dictionaries_table = pa.table(
-                {
-                    "None": pa.chunked_array(
-                        [chunk.dictionary for chunk in data["None"].chunks],
-                        type=array.type.value_type,
-                    )
-                }
-            )
-
-            codes = libcudf.interop.from_arrow(indices_table)[0]
-            categories = libcudf.interop.from_arrow(dictionaries_table)[0]
-
-            return build_categorical_column(
-                categories=categories,
-                codes=codes,
-                mask=codes.base_mask,
-                size=codes.size,
-                ordered=array.type.ordered,
-            )
-        elif isinstance(array.type, pa.StructType):
+        if isinstance(array.type, pa.StructType):
             return cudf.core.column.StructColumn.from_arrow(array)
         elif isinstance(
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
+        elif isinstance(array.type, pa.Decimal128Type):
+            return cudf.core.column.Decimal128Column.from_arrow(array)
+        elif isinstance(array, pa.DictionaryArray) and isinstance(
+            array.dictionary, pa.NullArray
+        ):
+            array = pa.DictionaryArray.from_arrays(
+                array.indices, pa.array([], type=pa.string())
+            )
 
+        data = pa.table([array], [None])
         result = libcudf.interop.from_arrow(data)[0]
 
-        return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
+        dtype = cudf_dtype_from_pa_type(array.type)
+        if isinstance(dtype, CategoricalDtype):
+            dtype._categories = as_column(array.dictionary)
+        return result._with_type_metadata(dtype)
 
     def _get_mask_as_column(self) -> ColumnBase:
         return libcudf.transform.mask_to_bools(
@@ -904,17 +886,36 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
         # Re-label self w.r.t. the provided categories
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
-            labels = sr._label_encoding(cats=dtype.categories)
+            NA_SENTINEL = -1
+            labels = sr.label_encoding(
+                cats=dtype.categories, na_sentinel=NA_SENTINEL
+            )
             if "ordered" in kwargs:
                 warnings.warn(
                     "Ignoring the `ordered` parameter passed in `**kwargs`, "
                     "will be using `ordered` parameter of CategoricalDtype"
                 )
 
+            missing_categorical_mask = libcudf.unary.unary_operation(
+                (labels._column == np.int32(NA_SENTINEL)),
+                libcudf.unary.UnaryOp.NOT,
+            )
+            if self.mask:
+                mask_col = libcudf.transform.mask_to_bools(
+                    self.mask, 0, self.size
+                )
+                mask = (
+                    mask_col & missing_categorical_mask
+                    if self.mask is not None
+                    else missing_categorical_mask
+                )
+            else:
+                mask = missing_categorical_mask
+            bitmask = libcudf.transform.bools_to_mask(mask)
             return build_categorical_column(
-                categories=dtype.categories,
+                categories=as_column(dtype.categories),
                 codes=labels._column,
-                mask=self.mask,
+                mask=bitmask,
                 ordered=dtype.ordered,
             )
 
@@ -933,7 +934,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 labels = labels.astype(min_type)
 
         return build_categorical_column(
-            categories=cats,
+            categories=as_column(cats),
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
@@ -1215,21 +1216,6 @@ def column_empty_like(
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
 
-    if (
-        hasattr(column, "dtype")
-        and is_categorical_dtype(column.dtype)
-        and dtype == column.dtype
-    ):
-        column = cast("cudf.core.column.CategoricalColumn", column)
-        codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
-        return build_column(
-            data=None,
-            dtype=dtype,
-            mask=codes.base_mask,
-            children=(as_column(codes.base_data, dtype=codes.dtype),),
-            size=codes.size,
-        )
-
     return column_empty(row_count, dtype, masked)
 
 
@@ -1270,12 +1256,9 @@ def column_empty(
         )
     elif is_categorical_dtype(dtype):
         data = None
-        children = (
-            build_column(
-                data=Buffer.empty(row_count * cudf.dtype("int32").itemsize),
-                dtype="int32",
-            ),
-        )
+        indices = column_empty(row_count, dtype="uint32", masked=False)
+        keys = dtype.categories._values.copy()
+        children = (indices, keys)
     elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
         data = None
         children = (
@@ -1337,12 +1320,6 @@ def build_column(
             null_count=null_count,
         )
     if is_categorical_dtype(dtype):
-        if not len(children) == 1:
-            raise ValueError(
-                "Must specify exactly one child column for CategoricalColumn"
-            )
-        if not isinstance(children[0], ColumnBase):
-            raise TypeError("children must be a tuple of Columns")
         return cudf.core.column.CategoricalColumn(
             dtype=dtype,
             mask=mask,
@@ -1468,10 +1445,10 @@ def build_categorical_column(
     offset: int = 0,
     null_count: int = None,
     ordered: bool = None,
+    dtype: CategoricalDtype = None,
 ) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
-
     Parameters
     ----------
     categories : Column
@@ -1485,13 +1462,41 @@ def build_categorical_column(
     offset : int, optional
     ordered : bool
         Indicates whether the categories are ordered
-    """
-    codes_dtype = min_unsigned_type(len(categories))
-    codes = as_column(codes)
-    if codes.dtype != codes_dtype:
-        codes = codes.astype(codes_dtype)
+    dtype : CategoricalDtype
+        If None, the dtype of the columns is constructed from `categories` and
+        `ordered`. Otherwise, use this argument.
+    
+    Notes
+    -----
+    In cudf, categories are always stored as sorted. However this function
+    does not assume `categories` argument to be sorted, user can pass in
+    `categories` in any order, but should make sure `codes` matches.
 
-    dtype = CategoricalDtype(categories=categories, ordered=ordered)
+    In theory, `codes` should not be nullable, nulls in the columns are to
+    be specified by `mask`. It remains a TODO to enforce that throughout the
+    code base.
+    """
+
+    if codes.nullable:
+        # Assumes the nulls are specified in ``mask``
+        codes = codes.fillna(0)
+    if categories.nullable:
+        raise ValueError("Cannot contain nulls in categories.")
+
+    category_order = categories.argsort()
+    category_sorted = categories.take(category_order)
+
+    # Note that `nullify==True`, by default pandas codes places -1 for null
+    # locations. Gathering these places will result in nulls.
+    codes = (
+        category_order
+        .take(codes, nullify=True)
+        .astype("uint32")
+        .fillna(0)
+    )
+
+    if not dtype:
+        dtype = CategoricalDtype(categories=categories, ordered=ordered)
 
     result = build_column(
         data=None,
@@ -1500,7 +1505,7 @@ def build_categorical_column(
         size=size,
         offset=offset,
         null_count=null_count,
-        children=(codes,),
+        children=(codes, category_sorted),
     )
     return cast("cudf.core.column.CategoricalColumn", result)
 
@@ -2362,20 +2367,6 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
                 )
             else:
                 raise ValueError("All columns must be the same type")
-
-    # TODO: This logic should be generalized to a dispatch to
-    # ColumnBase._concat so that all subclasses can override necessary
-    # behavior. However, at the moment it's not clear what that API should look
-    # like, so CategoricalColumn simply implements a minimal working API.
-    if all(is_categorical_dtype(o.dtype) for o in objs):
-        return cudf.core.column.categorical.CategoricalColumn._concat(
-            cast(
-                MutableSequence[
-                    cudf.core.column.categorical.CategoricalColumn
-                ],
-                objs,
-            )
-        )
 
     newsize = sum(map(len, objs))
     if newsize > libcudf.MAX_COLUMN_SIZE:
