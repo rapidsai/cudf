@@ -3671,11 +3671,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 template <typename T>
 int32_t compare(T& v1, T& v2)
 {
-  if (v1 < v2)
-    return -1;
-  else if (v1 > v2)
-    return 1;
-  return 0;
+  return (v1 > v2) - (v1 < v2);
 }
 
 int32_t compare_binary(std::vector<uint8_t>& v1,
@@ -3716,7 +3712,7 @@ int32_t compare_binary(std::vector<uint8_t>& v1,
       int32_t v1sz = v1.size();
       int32_t v2sz = v2.size();
       int32_t ret  = memcmp(v1.data(), v2.data(), std::min(v1sz, v2sz));
-      if (v1sz == v2sz)
+      if (ret != 0 or v1sz == v2sz)
         return ret;
       else
         return v1sz - v2sz;
