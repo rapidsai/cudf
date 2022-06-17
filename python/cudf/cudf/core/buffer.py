@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import functools
 import operator
+import pickle
 import time
 from threading import RLock
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
@@ -309,11 +310,15 @@ class Buffer(Serializable):
             )
 
     def serialize(self) -> Tuple[dict, list]:
-        return {}, [self]
+        header = {
+            "type-serialized": pickle.dumps(type(self)),
+            "frame_count": 1,
+        }
+        return header, [self]
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> Buffer:
-        if frames != 1:
+        if len(frames) != 1:
             raise ValueError(
                 "Only expecting to deserialize Buffer with a single frame."
             )
