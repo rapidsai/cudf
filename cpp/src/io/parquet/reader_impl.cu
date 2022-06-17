@@ -1101,15 +1101,16 @@ rmm::device_buffer reader::impl::decompress_page_data(
   size_t total_decomp_size = 0;
 
   struct codec_stats {
-    parquet::Compression compression_type;
-    size_t num_pages;
-    int32_t max_decompressed_size;
+    parquet::Compression compression_type = UNCOMPRESSED;
+    size_t num_pages                      = 0;
+    int32_t max_decompressed_size         = 0;
+    size_t total_decomp_size              = 0;
   };
 
-  std::array codecs{codec_stats{parquet::GZIP, 0, 0},
-                    codec_stats{parquet::SNAPPY, 0, 0},
-                    codec_stats{parquet::BROTLI, 0, 0},
-                    codec_stats{parquet::ZSTD, 0, 0}};
+  std::array codecs{codec_stats{parquet::GZIP},
+                    codec_stats{parquet::SNAPPY},
+                    codec_stats{parquet::BROTLI},
+                    codec_stats{parquet::ZSTD}};
 
   auto is_codec_supported = [&codecs](int8_t codec) {
     if (codec == parquet::UNCOMPRESSED) return true;
@@ -1128,6 +1129,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
     for_each_codec_page(codec.compression_type, [&](size_t page) {
       auto page_uncomp_size = pages[page].uncompressed_page_size;
       total_decomp_size += page_uncomp_size;
+      codec.total_decomp_size += page_uncomp_size;
       codec.max_decompressed_size = std::max(codec.max_decompressed_size, page_uncomp_size);
       codec.num_pages++;
       num_comp_pages++;
@@ -1187,6 +1189,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                      d_comp_out,
                                      d_comp_stats_view,
                                      codec.max_decompressed_size,
+                                     codec.total_decomp_size,
                                      stream);
         } else {
           gpu_unsnap(d_comp_in, d_comp_out, d_comp_stats_view, stream);
@@ -1198,6 +1201,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                    d_comp_out,
                                    d_comp_stats_view,
                                    codec.max_decompressed_size,
+                                   codec.total_decomp_size,
                                    stream);
         break;
       case parquet::BROTLI:
