@@ -834,7 +834,6 @@ TYPED_TEST(Sort, WithEmptyListColumn)
   auto result = cudf::sorted_order(cudf::table_view({*L0}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, *result);
 }
-// TODO: Sliced list test
 
 struct SortByKey : public BaseFixture {
 };

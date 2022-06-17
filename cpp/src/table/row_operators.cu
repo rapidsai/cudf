@@ -285,20 +285,20 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
     }
   }
 
-  std::vector<size_type*> dremel_offsets;
-  std::vector<uint8_t*> rep_levels;
-  std::vector<uint8_t*> def_levels;
+  std::vector<device_span<size_type>> dremel_offsets;
+  std::vector<device_span<uint8_t>> rep_levels;
+  std::vector<device_span<uint8_t>> def_levels;
   size_type c = 0;
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
-      dremel_offsets.push_back(dremel_data[c].dremel_offsets.data());
-      rep_levels.push_back(dremel_data[c].rep_level.data());
-      def_levels.push_back(dremel_data[c].def_level.data());
+      dremel_offsets.emplace_back(dremel_data[c].dremel_offsets);
+      rep_levels.emplace_back(dremel_data[c].rep_level);
+      def_levels.emplace_back(dremel_data[c].def_level);
       ++c;
     } else {
-      dremel_offsets.push_back(nullptr);
-      rep_levels.push_back(nullptr);
-      def_levels.push_back(nullptr);
+      dremel_offsets.emplace_back();
+      rep_levels.emplace_back();
+      def_levels.emplace_back();
     }
   }
   auto d_dremel_offsets = detail::make_device_uvector_async(dremel_offsets, stream);
@@ -335,7 +335,6 @@ void check_lex_compatibility(table_view const& input)
         check_column(*child);
       }
     }
-    // TODO: more copying of logic from row_operators2.cu
     if (not is_nested(c.type())) {
       CUDF_EXPECTS(is_relationally_comparable(c.type()),
                    "Cannot lexicographic compare a table with a column of type " +

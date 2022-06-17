@@ -252,14 +252,14 @@ class device_row_comparator {
     Nullate check_nulls,
     table_device_view lhs,
     table_device_view rhs,
-    std::optional<device_span<int const>> depth                  = std::nullopt,
-    std::optional<device_span<order const>> column_order         = std::nullopt,
-    std::optional<device_span<null_order const>> null_precedence = std::nullopt,
-    PhysicalElementComparator comparator                         = {},
-    std::optional<device_span<size_type* const>> dremel_offsets  = std::nullopt,
-    std::optional<device_span<uint8_t* const>> rep_levels        = std::nullopt,
-    std::optional<device_span<uint8_t* const>> def_levels        = std::nullopt,
-    std::optional<device_span<uint8_t const>> max_def_levels     = std::nullopt) noexcept
+    std::optional<device_span<int const>> depth                             = std::nullopt,
+    std::optional<device_span<order const>> column_order                    = std::nullopt,
+    std::optional<device_span<null_order const>> null_precedence            = std::nullopt,
+    PhysicalElementComparator comparator                                    = {},
+    std::optional<device_span<device_span<size_type> const>> dremel_offsets = std::nullopt,
+    std::optional<device_span<device_span<uint8_t> const>> rep_levels       = std::nullopt,
+    std::optional<device_span<device_span<uint8_t> const>> def_levels       = std::nullopt,
+    std::optional<device_span<uint8_t const>> max_def_levels                = std::nullopt) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _check_nulls{check_nulls},
@@ -296,22 +296,22 @@ class device_row_comparator {
     __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
-                                  null_order null_precedence           = null_order::BEFORE,
-                                  int depth                            = 0,
-                                  PhysicalElementComparator comparator = {},
-                                  size_type* dremel_offsets            = nullptr,
-                                  uint8_t* rep_level                   = nullptr,
-                                  uint8_t* def_level                   = nullptr,
-                                  uint8_t max_def_level                = 0)
+                                  null_order null_precedence            = null_order::BEFORE,
+                                  int depth                             = 0,
+                                  PhysicalElementComparator comparator  = {},
+                                  device_span<size_type> dremel_offsets = {},
+                                  device_span<uint8_t> rep_level        = {},
+                                  device_span<uint8_t> def_level        = {},
+                                  uint8_t max_def_level                 = 0)
       : _lhs{lhs},
         _rhs{rhs},
         _check_nulls{check_nulls},
         _null_precedence{null_precedence},
         _depth{depth},
-        dremel_offsets{dremel_offsets},
-        rep_level{rep_level},
-        def_level{def_level},
-        max_def_level{max_def_level},
+        _dremel_offsets{dremel_offsets},
+        _rep_level{rep_level},
+        _def_level{def_level},
+        _max_def_level{max_def_level},
         _comparator{comparator}
     {
     }
@@ -391,17 +391,17 @@ class device_row_comparator {
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
                                                               size_type rhs_element_index)
     {
-      auto l_start            = dremel_offsets[lhs_element_index];
-      auto l_end              = dremel_offsets[lhs_element_index + 1];
-      auto r_start            = dremel_offsets[rhs_element_index];
-      auto r_end              = dremel_offsets[rhs_element_index + 1];
+      auto l_start            = _dremel_offsets[lhs_element_index];
+      auto l_end              = _dremel_offsets[lhs_element_index + 1];
+      auto r_start            = _dremel_offsets[rhs_element_index];
+      auto r_end              = _dremel_offsets[rhs_element_index + 1];
       column_device_view lcol = _lhs.slice(lhs_element_index, 1);
       column_device_view rcol = _rhs.slice(rhs_element_index, 1);
       while (lcol.type().id() == type_id::LIST) {
         lcol = detail::lists_column_device_view(lcol).get_sliced_child();
         rcol = detail::lists_column_device_view(rcol).get_sliced_child();
       }
-      printf("max_def_level: %d\n", max_def_level);
+      printf("max_def_level: %d\n", _max_def_level);
 
       printf("t: %d, lhs_element_index: %d, rhs_element_index: %d\n",
              threadIdx.x,
@@ -418,21 +418,21 @@ class device_row_comparator {
         printf("t: %d, i: %d, j: %d, k: %d\n", threadIdx.x, i, j, k);
         printf("t: %d, def_l: %d, def_r: %d, rep_l: %d, rep_r: %d\n",
                threadIdx.x,
-               def_level[i],
-               def_level[j],
-               rep_level[i],
-               rep_level[j]);
-        if (def_level[i] != def_level[j]) {
-          state = (def_level[i] < def_level[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
+               _def_level[i],
+               _def_level[j],
+               _rep_level[i],
+               _rep_level[j]);
+        if (_def_level[i] != _def_level[j]) {
+          state = (_def_level[i] < _def_level[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
           printf("t: %d, def, state: %d\n", threadIdx.x, state);
           return cuda::std::pair(state, _depth);
         }
-        if (rep_level[i] != rep_level[j]) {
-          state = (rep_level[i] < rep_level[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
+        if (_rep_level[i] != _rep_level[j]) {
+          state = (_rep_level[i] < _rep_level[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
           printf("t: %d, rep, state: %d\n", threadIdx.x, state);
           return cuda::std::pair(state, _depth);
         }
-        if (def_level[i] == max_def_level) {
+        if (_def_level[i] == _max_def_level) {
           auto comparator     = element_comparator{_check_nulls, lcol, rcol, _null_precedence};
           int last_null_depth = _depth;
           cuda::std::tie(state, last_null_depth) =
@@ -442,7 +442,7 @@ class device_row_comparator {
             return cuda::std::pair(state, _depth);
           }
           ++k;
-        } else if (lcol.nullable() and def_level[i] == max_def_level - 1) {
+        } else if (lcol.nullable() and _def_level[i] == _max_def_level - 1) {
           ++k;
         }
       }
@@ -458,10 +458,10 @@ class device_row_comparator {
     Nullate const _check_nulls;
     null_order const _null_precedence;
     int const _depth;
-    size_type* dremel_offsets;
-    uint8_t* rep_level;
-    uint8_t* def_level;
-    uint8_t max_def_level{0};
+    device_span<size_type> _dremel_offsets;
+    device_span<uint8_t> _rep_level;
+    device_span<uint8_t> _def_level;
+    uint8_t _max_def_level{0};
     PhysicalElementComparator const _comparator;
   };
 
@@ -523,9 +523,9 @@ class device_row_comparator {
   PhysicalElementComparator const _comparator;
 
   // List related members
-  std::optional<device_span<size_type* const>> _dremel_offsets;
-  std::optional<device_span<uint8_t* const>> _rep_levels;
-  std::optional<device_span<uint8_t* const>> _def_levels;
+  std::optional<device_span<device_span<size_type> const>> _dremel_offsets;
+  std::optional<device_span<device_span<uint8_t> const>> _rep_levels;
+  std::optional<device_span<device_span<uint8_t> const>> _def_levels;
   std::optional<device_span<uint8_t const>> _max_def_levels;
 };  // class device_row_comparator
 
@@ -635,9 +635,9 @@ struct preprocessed_table {
                      rmm::device_uvector<null_order>&& null_precedence,
                      rmm::device_uvector<size_type>&& depths,
                      std::vector<io::parquet::gpu::dremel_data>&& dremel_data,
-                     rmm::device_uvector<size_type*>&& dremel_offsets,
-                     rmm::device_uvector<uint8_t*>&& rep_levels,
-                     rmm::device_uvector<uint8_t*>&& def_levels,
+                     rmm::device_uvector<device_span<size_type>>&& dremel_offsets,
+                     rmm::device_uvector<device_span<uint8_t>>&& rep_levels,
+                     rmm::device_uvector<device_span<uint8_t>>&& def_levels,
                      rmm::device_uvector<uint8_t>&& max_def_levels)
     : _t(std::move(table)),
       _column_order(std::move(column_order)),
@@ -696,21 +696,22 @@ struct preprocessed_table {
   }
 
   // TODO: span of spans?
-  [[nodiscard]] std::optional<device_span<size_type* const>> dremel_offsets() const
+  [[nodiscard]] std::optional<device_span<device_span<size_type> const>> dremel_offsets() const
   {
-    return _dremel_offsets.size() ? std::optional<device_span<size_type* const>>(_dremel_offsets)
-                                  : std::nullopt;
+    return _dremel_offsets.size()
+             ? std::optional<device_span<device_span<size_type> const>>(_dremel_offsets)
+             : std::nullopt;
   }
 
-  [[nodiscard]] std::optional<device_span<uint8_t* const>> rep_levels() const
+  [[nodiscard]] std::optional<device_span<device_span<uint8_t> const>> rep_levels() const
   {
-    return _rep_levels.size() ? std::optional<device_span<uint8_t* const>>(_rep_levels)
+    return _rep_levels.size() ? std::optional<device_span<device_span<uint8_t> const>>(_rep_levels)
                               : std::nullopt;
   }
 
-  [[nodiscard]] std::optional<device_span<uint8_t* const>> def_levels() const
+  [[nodiscard]] std::optional<device_span<device_span<uint8_t> const>> def_levels() const
   {
-    return _def_levels.size() ? std::optional<device_span<uint8_t* const>>(_def_levels)
+    return _def_levels.size() ? std::optional<device_span<device_span<uint8_t> const>>(_def_levels)
                               : std::nullopt;
   }
 
@@ -728,9 +729,9 @@ struct preprocessed_table {
 
   // List related pre-computation
   std::vector<io::parquet::gpu::dremel_data> _dremel_data;
-  rmm::device_uvector<size_type*> _dremel_offsets;
-  rmm::device_uvector<uint8_t*> _rep_levels;
-  rmm::device_uvector<uint8_t*> _def_levels;
+  rmm::device_uvector<device_span<size_type>> _dremel_offsets;
+  rmm::device_uvector<device_span<uint8_t>> _rep_levels;
+  rmm::device_uvector<device_span<uint8_t>> _def_levels;
   rmm::device_uvector<uint8_t> _max_def_levels;
 };
 
