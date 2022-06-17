@@ -133,7 +133,6 @@ TEST_F(JsonTest, TokenStream)
   ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
     d_input.data(), input.data(), input.size() * sizeof(SymbolT), cudaMemcpyHostToDevice, stream));
 
-
   hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream};
   hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream};
   hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream};
@@ -182,7 +181,7 @@ TEST_F(JsonTest, TokenStream)
 
   // Verify the number of tokens matches
   ASSERT_EQ(golden_token_stream.size(), num_tokens_out[0]);
-  
+
   for (std::size_t i = 0; i < num_tokens_out[0]; i++) {
     // Ensure the index the tokens are pointing to do match
     ASSERT_EQ(golden_token_stream[i].first, token_indices_gpu[i]);
