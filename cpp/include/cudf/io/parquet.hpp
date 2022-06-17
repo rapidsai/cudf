@@ -51,7 +51,7 @@ class parquet_reader_options {
   source_info _source;
 
   // Path in schema of column to read; empty is all
-  std::vector<std::string> _columns;
+  std::optional<std::vector<std::string>> _columns;
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
@@ -132,11 +132,14 @@ class parquet_reader_options {
   [[nodiscard]] size_type get_num_rows() const { return _num_rows; }
 
   /**
-   * @brief Returns names of column to be read.
+   * @brief Returns names of column to be read, if set.
    *
-   * @return Names of column to be read
+   * @return Names of column to be read; `nullopt` if the option is not set
    */
-  [[nodiscard]] std::vector<std::string> const& get_columns() const { return _columns; }
+  [[nodiscard]] std::optional<std::vector<std::string>> const& get_columns() const
+  {
+    return _columns;
+  }
 
   /**
    * @brief Returns list of individual row groups to be read.

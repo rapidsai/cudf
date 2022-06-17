@@ -135,7 +135,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
-    cdef vector[string] cpp_columns
     cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
     cdef size_type cpp_skiprows = skiprows if skiprows is not None else 0
@@ -145,10 +144,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         cudf_types.type_id.EMPTY
     )
 
-    if columns is not None:
-        cpp_columns.reserve(len(columns))
-        for col in columns or []:
-            cpp_columns.push_back(str(col).encode())
     if row_groups is not None:
         cpp_row_groups = row_groups
 
@@ -156,7 +151,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # Setup parquet reader arguments
     args = move(
         parquet_reader_options.builder(source)
-        .columns(cpp_columns)
         .row_groups(cpp_row_groups)
         .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
@@ -165,6 +159,15 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         .timestamp_type(cpp_timestamp_type)
         .build()
     )
+    cdef vector[string] cpp_columns
+    allow_range_index = True
+    if columns is not None:
+        cpp_columns.reserve(len(columns))
+        if len(cpp_columns) == 0:
+            allow_range_index = False
+        for col in columns or []:
+            cpp_columns.push_back(str(col).encode())
+        args.set_columns(cpp_columns)
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_out_table
@@ -218,6 +221,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # Set the index column
     if index_col is not None and len(index_col) > 0:
         if is_range_index:
+            if not allow_range_index:
+                return df
             range_index_meta = index_col[0]
             if row_groups is not None:
                 per_file_metadata = [

@@ -2550,3 +2550,16 @@ def test_parquet_reader_zstd_compression(datadir):
         assert_eq(df, pdf)
     except RuntimeError:
         pytest.mark.xfail(reason="zstd support is not enabled")
+
+
+@pytest.mark.parametrize("index", [True, False, None])
+@pytest.mark.parametrize("columns", [None, [], ["b", "a"]])
+def test_parquet_columns_and_index_param(index, columns):
+    buffer = BytesIO()
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    df.to_parquet(buffer, index=index)
+
+    expected = pd.read_parquet(buffer, columns=columns)
+    got = cudf.read_parquet(buffer, columns=columns)
+
+    assert_eq(expected, got, check_index_type=True)
