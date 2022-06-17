@@ -24,8 +24,9 @@
 
 namespace cudf::io::json::experimental {
 
-template <typename str_spans_it_it>
+template <typename str_spans_it_it, typename col_size_it>
 std::vector<std::unique_ptr<column>> parse_data(str_spans_it_it cols_str_spans,
+                                                col_size_it cols_size,
                                                 host_span<data_type const> cols_type,
                                                 rmm::cuda_stream_view stream);
 

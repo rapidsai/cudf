@@ -18,21 +18,18 @@
 
 namespace cudf::io::json::experimental {
 
-template <typename str_spans_it_it>
+template <typename str_spans_it_it, typename col_size_it>
 std::vector<std::unique_ptr<column>> parse_data(str_spans_it_it cols_str_spans,
+                                                col_size_it cols_size,
                                                 host_span<data_type const> cols_type,
                                                 rmm::cuda_stream_view stream)
 {
-  std::cout << cols_type.size() << std::endl;
-  for (auto& type : cols_type) {
-    if (type.id() != type_id::STRING)
-      std::cout << "NOT" << std::endl;
-    else
-      std::cout << "STRING" << std::endl;
-  }
   return {};
 }
 
-template std::vector<std::unique_ptr<column>> parse_data<string_view**>(
-  string_view** cols_str_spans, host_span<data_type const> cols_type, rmm::cuda_stream_view stream);
+template std::vector<std::unique_ptr<column>> parse_data<string_view**, size_type*>(
+  string_view** cols_str_spans,
+  size_type* cols_size,
+  host_span<data_type const> cols_type,
+  rmm::cuda_stream_view stream);
 }  // namespace cudf::io::json::experimental
