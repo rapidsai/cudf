@@ -18,8 +18,6 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_view.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -217,26 +215,6 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
 
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
 {
-  return double_type_dispatcher(lhs, rhs, is_supported_operation_functor{}, out, op) ||
-         (is_struct(lhs) && is_struct(rhs) &&
-          (op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL ||
-           op == binary_operator::LESS || op == binary_operator::LESS_EQUAL ||
-           op == binary_operator::GREATER || op == binary_operator::GREATER_EQUAL));
-}
-
-bool is_supported_operation(data_type out,
-                            column_view const& lhs,
-                            column_view const& rhs,
-                            binary_operator op)
-{
-  return is_struct(lhs.type()) && is_struct(rhs.type())
-           ? (lhs.num_children() == rhs.num_children() || lhs.num_children() == 1 ||
-              rhs.num_children() == 1) &&
-               std::all_of(thrust::counting_iterator<size_type>(0),
-                           thrust::counting_iterator<size_type>(lhs.num_children()),
-                           [&](size_type i) {
-                             return is_supported_operation(out, lhs.child(i), rhs.child(i), op);
-                           })
-           : is_supported_operation(out, lhs.type(), rhs.type(), op);
+  return double_type_dispatcher(lhs, rhs, is_supported_operation_functor{}, out, op);
 }
 }  // namespace cudf::binops::compiled

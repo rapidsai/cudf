@@ -172,25 +172,6 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
  */
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
 
-/**
- * @brief Check if input binary operation is supported for the given input columns and output types.
- *
- * If the left and right columns are struct columns, recursively checks if the input columns have
- * the same number of children and the corresponding child columns are supported for the specified
- * operation and output type. If either input column is not a struct, returns the result of
- * is_supported_operation for the input column types.
- *
- * @param out output type of the binary operation
- * @param lhs left column of the binary operation
- * @param rhs right column of the binary operation
- * @param op binary operator enum
- * @return true if given binary operator supports given input columns and output types.
- */
-bool is_supported_operation(data_type out,
-                            column_view const& lhs,
-                            column_view const& rhs,
-                            binary_operator op);
-
 // Defined in individual .cu files.
 /**
  * @brief Deploys single type or double type dispatcher that runs binary operation on each element
@@ -237,7 +218,6 @@ void dispatch_equality_op(mutable_column_view& out,
                           bool is_rhs_scalar,
                           binary_operator op,
                           rmm::cuda_stream_view stream);
-
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf

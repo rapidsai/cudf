@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,34 +23,30 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-namespace cudf::binops::compiled {
-namespace detail {
+namespace cudf::binops::compiled::detail {
 template <class T, class... Ts>
 inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value;
-}
 
-template <class BinaryOperator, typename PhysicalElementComparator>
+template <class BinaryOperator,
+          typename PhysicalElementComparator =
+            cudf::experimental::row::lexicographic::sorting_physical_element_comparator>
 void apply_struct_binary_op(mutable_column_view& out,
                             column_view const& lhs,
                             column_view const& rhs,
                             bool is_lhs_scalar,
                             bool is_rhs_scalar,
-                            rmm::cuda_stream_view stream,
-                            PhysicalElementComparator c)
+                            PhysicalElementComparator c  = {},
+                            rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
-  auto compare_orders = std::vector<order>(
-    lhs.size(),
-    detail::is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual> ? order::DESCENDING
-                                                                      : order::ASCENDING);
+  auto compare_orders   = std::vector<order>(lhs.size(),
+                                           is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
+                                               ? order::DESCENDING
+                                               : order::ASCENDING);
   auto tlhs             = table_view{{lhs}};
   auto trhs             = table_view{{rhs}};
   auto table_comparator = cudf::experimental::row::lexicographic::two_table_comparator{
@@ -59,7 +55,7 @@ void apply_struct_binary_op(mutable_column_view& out,
   auto optional_iter =
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
 
-  if (detail::is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>) {
+  if (is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>) {
     auto device_comparator = table_comparator.less_equivalent(
       nullate::DYNAMIC{nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)}}, c);
     thrust::tabulate(
@@ -88,15 +84,16 @@ void apply_struct_binary_op(mutable_column_view& out,
   return;
 }
 
-template <typename PhysicalEqualityComparator>
+template <typename PhysicalEqualityComparator =
+            cudf::experimental::row::equality::physical_equality_comparator>
 void apply_struct_equality_op(mutable_column_view& out,
                               column_view const& lhs,
                               column_view const& rhs,
                               bool is_lhs_scalar,
                               bool is_rhs_scalar,
                               binary_operator op,
-                              rmm::cuda_stream_view stream,
-                              PhysicalEqualityComparator c)
+                              PhysicalEqualityComparator c = {},
+                              rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL,
                "Unsupported operator for these types");
@@ -128,4 +125,4 @@ void apply_struct_equality_op(mutable_column_view& out,
              (flip_output ? not device_comparator(lhs, rhs) : device_comparator(lhs, rhs));
     });
 }
-}  // namespace cudf::binops::compiled
+}  // namespace cudf::binops::compiled::detail

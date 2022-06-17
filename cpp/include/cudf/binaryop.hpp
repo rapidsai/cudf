@@ -213,7 +213,6 @@ int32_t binary_operation_fixed_point_scale(binary_operator op,
 cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
                                                          cudf::data_type const& lhs,
                                                          cudf::data_type const& rhs);
-
 namespace binops {
 
 /**
@@ -222,9 +221,8 @@ namespace binops {
 rmm::device_buffer scalar_col_valid_mask_and(
   column_view const& col,
   scalar const& s,
-  rmm::cuda_stream_view stream,
+  rmm::cuda_stream_view stream = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 namespace compiled {
 
 /**
@@ -238,17 +236,26 @@ namespace compiled {
  */
 std::pair<column_view, std::unique_ptr<column>> scalar_to_column_view(
   scalar const& scal,
-  rmm::cuda_stream_view stream,
+  rmm::cuda_stream_view stream = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-// template <class BinaryOperator, typename PhysicalElementComparator>
+/**
+ * @brief 
+ * 
+ * @param out 
+ * @param lhs 
+ * @param rhs 
+ * @param is_lhs_scalar 
+ * @param is_rhs_scalar 
+ * @param stream 
+ */
 void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     column_view const& lhs,
                                     column_view const& rhs,
                                     bool is_lhs_scalar,
                                     bool is_rhs_scalar,
                                     binary_operator op,
-                                    rmm::cuda_stream_view stream);
+                                    rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 }  // namespace compiled
 }  // namespace binops
 
