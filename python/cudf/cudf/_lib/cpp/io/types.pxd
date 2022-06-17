@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -32,6 +32,10 @@ cdef extern from "cudf/io/types.hpp" \
         BROTLI "cudf::io::compression_type::BROTLI"
         ZIP "cudf::io::compression_type::ZIP"
         XZ "cudf::io::compression_type::XZ"
+        ZLIB "cudf::io::compression_type::ZLIB"
+        LZ4 "cudf::io::compression_type::LZ4"
+        LZO "cudf::io::compression_type::LZO"
+        ZSTD "cudf::io::compression_type::ZSTD"
 
     ctypedef enum io_type:
         FILEPATH "cudf::io::io_type::FILEPATH"
