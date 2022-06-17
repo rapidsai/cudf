@@ -90,7 +90,10 @@ for dtype, column_generator in column_generators.items():
     def make_dataframe(nr, nc, column_generator=column_generator):
         assert nc <= len(string.ascii_lowercase)
         return cudf.DataFrame(
-            {f"{string.ascii_lowercase[i]}": column_generator(nr) for i in range(nc)}
+            {
+                f"{string.ascii_lowercase[i]}": column_generator(nr)
+                for i in range(nc)
+            }
         )
 
     for nr in NUM_ROWS:
@@ -102,7 +105,9 @@ for dtype, column_generator in column_generators.items():
         # https://github.com/smarie/python-pytest-cases/issues/278
         # Once that is fixed we could remove all the extraneous `request`
         # fixtures in these fixtures.
-        def series_nulls_false(request, nr=nr, column_generator=column_generator):
+        def series_nulls_false(
+            request, nr=nr, column_generator=column_generator
+        ):
             return cudf.Series(column_generator(nr))
 
         make_fixture(
@@ -112,7 +117,9 @@ for dtype, column_generator in column_generators.items():
             fixtures,
         )
 
-        def series_nulls_true(request, nr=nr, column_generator=column_generator):
+        def series_nulls_true(
+            request, nr=nr, column_generator=column_generator
+        ):
             s = cudf.Series(column_generator(nr))
             s.iloc[::2] = None
             return s
@@ -125,7 +132,9 @@ for dtype, column_generator in column_generators.items():
         )
 
         # For now, not bothering to include a nullable index fixture.
-        def index_nulls_false(request, nr=nr, column_generator=column_generator):
+        def index_nulls_false(
+            request, nr=nr, column_generator=column_generator
+        ):
             return cudf.Index(column_generator(nr))
 
         make_fixture(
@@ -208,7 +217,10 @@ for dtype, column_generator in column_generators.items():
     # that may or may not be nullable as well as Index objects.
     pytest_cases.fixture_union(
         name=f"frame_or_index_dtype_{dtype}",
-        fixtures=(f"indexedframe_dtype_{dtype}", f"index_dtype_{dtype}_nulls_false"),
+        fixtures=(
+            f"indexedframe_dtype_{dtype}",
+            f"index_dtype_{dtype}_nulls_false",
+        ),
         ids=["", f"index_dtype_{dtype}_nulls_false"],
     )
 

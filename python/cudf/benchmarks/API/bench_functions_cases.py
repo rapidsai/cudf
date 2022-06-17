@@ -24,7 +24,9 @@ def concat_case_contiguous_indexes(nr):
 @pytest_cases.parametrize("nr", NUM_ROWS)
 def concat_case_contiguous_indexes_different_cols(nr):
     return [
-        cudf.DataFrame({"a": cupy.tile([1, 2, 3], nr), "b": cupy.tile([4, 5, 7], nr)}),
+        cudf.DataFrame(
+            {"a": cupy.tile([1, 2, 3], nr), "b": cupy.tile([4, 5, 7], nr)}
+        ),
         cudf.DataFrame(
             {"c": cupy.tile([4, 5, 7], nr)},
             index=cudf.RangeIndex(start=nr * 3, stop=nr * 2 * 3),
@@ -111,22 +113,30 @@ def concat_case_unique_columns(nr):
 @pytest_cases.parametrize("nr", NUM_ROWS)
 def concat_case_unique_columns_with_different_range_index(nr):
     return [
-        cudf.DataFrame({"a": cupy.tile([1, 2, 3], nr), "b": cupy.tile([4, 5, 7], nr)}),
+        cudf.DataFrame(
+            {"a": cupy.tile([1, 2, 3], nr), "b": cupy.tile([4, 5, 7], nr)}
+        ),
         cudf.DataFrame(
             {"c": cupy.tile([4, 5, 7], nr)},
             index=cudf.RangeIndex(start=nr * 3, stop=nr * 2 * 3),
         ),
-        cudf.DataFrame({"d": cupy.tile([1, 2, 3], nr), "e": cupy.tile([4, 5, 7], nr)}),
+        cudf.DataFrame(
+            {"d": cupy.tile([1, 2, 3], nr), "e": cupy.tile([4, 5, 7], nr)}
+        ),
         cudf.DataFrame(
             {"f": cupy.tile([4, 5, 7], nr)},
             index=cudf.RangeIndex(start=nr * 3, stop=nr * 2 * 3),
         ),
-        cudf.DataFrame({"g": cupy.tile([1, 2, 3], nr), "h": cupy.tile([4, 5, 7], nr)}),
+        cudf.DataFrame(
+            {"g": cupy.tile([1, 2, 3], nr), "h": cupy.tile([4, 5, 7], nr)}
+        ),
         cudf.DataFrame(
             {"i": cupy.tile([4, 5, 7], nr)},
             index=cudf.RangeIndex(start=nr * 3, stop=nr * 2 * 3),
         ),
-        cudf.DataFrame({"j": cupy.tile([1, 2, 3], nr), "k": cupy.tile([4, 5, 7], nr)}),
+        cudf.DataFrame(
+            {"j": cupy.tile([1, 2, 3], nr), "k": cupy.tile([4, 5, 7], nr)}
+        ),
         cudf.DataFrame(
             {"l": cupy.tile([4, 5, 7], nr)},
             index=cudf.RangeIndex(start=nr * 3, stop=nr * 2 * 3),

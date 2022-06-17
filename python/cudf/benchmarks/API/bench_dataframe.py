@@ -19,7 +19,9 @@ def bench_eval_func(benchmark, expr, dataframe):
     benchmark(dataframe.eval, expr)
 
 
-@accepts_cudf_fixture(cls="dataframe", dtype="int", nulls=False, cols=6, name="df")
+@accepts_cudf_fixture(
+    cls="dataframe", dtype="int", nulls=False, cols=6, name="df"
+)
 @pytest.mark.parametrize(
     "nkey_cols",
     [2, 3, 4],
@@ -58,7 +60,9 @@ def random_state(request):
 def bench_sample(benchmark, dataframe, axis, frac, random_state):
     if axis == 1 and isinstance(random_state, cupy.random.RandomState):
         pytest.skip("Unsupported params.")
-    benchmark(dataframe.sample, frac=frac, axis=axis, random_state=random_state)
+    benchmark(
+        dataframe.sample, frac=frac, axis=axis, random_state=random_state
+    )
 
 
 @accepts_cudf_fixture(cls="dataframe", dtype="int", nulls=False, cols=6)
@@ -76,7 +80,10 @@ def bench_groupby(benchmark, dataframe, nkey_cols):
     [
         "sum",
         ["sum", "mean"],
-        {f"{string.ascii_lowercase[i]}": ["sum", "mean", "count"] for i in range(6)},
+        {
+            f"{string.ascii_lowercase[i]}": ["sum", "mean", "count"]
+            for i in range(6)
+        },
     ],
 )
 @pytest.mark.parametrize(

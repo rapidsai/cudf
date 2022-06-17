@@ -27,7 +27,9 @@ def bench_from_pandas(benchmark, pidx):
 
 
 def bench_constructor(benchmark, midx):
-    benchmark(cudf.MultiIndex, codes=midx.codes, levels=midx.levels, names=midx.names)
+    benchmark(
+        cudf.MultiIndex, codes=midx.codes, levels=midx.levels, names=midx.names
+    )
 
 
 def bench_from_frame(benchmark, midx):
