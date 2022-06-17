@@ -1499,11 +1499,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(JNIEnv *env, 
 
     auto builder = cudf::io::parquet_reader_options::builder(source);
     if (n_filter_col_names.size() > 0) {
-        builder = builder.columns(n_filter_col_names.as_cpp_vector());
+      builder = builder.columns(n_filter_col_names.as_cpp_vector());
     }
 
-    cudf::io::parquet_reader_options opts = builder
-            .convert_strings_to_categories(false)
+    cudf::io::parquet_reader_options opts =
+        builder.convert_strings_to_categories(false)
             .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
             .build();
     return convert_table_for_return(env, cudf::io::read_parquet(opts).tbl);
