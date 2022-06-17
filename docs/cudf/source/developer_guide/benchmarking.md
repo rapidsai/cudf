@@ -5,14 +5,14 @@ Benchmarks in cuDF are written using the
 [`pytest-benchmark`](https://pytest-benchmark.readthedocs.io/en/latest/index.html) plugin to the
 [`pytest`](https://docs.pytest.org/en/latest/) Python testing framework.
 Using `pytest-benchmark` provides a seamless experience for developers familiar with `pytest`.
-We include benchmarks of both public APIs and internal functions
+We include benchmarks of both public APIs and internal functions.
 The former give us a macro view of our performance, especially vis a vis pandas.
 The latter help us quantify and minimize the overhead of our Python bindings.
 
 ```{note}
-Minimizing memory footprint can be just as important as minimizing run time.
-Our benchmarks do not currently account for memory usage at all.
-However, we may reconsider this in the future.
+Our current benchmarks focus entirely on measuring run time.
+However, minimizing memory footprint can be just as important for some cases.
+In the future, we may update our benchmarks to also include memory usage measurements.
 ```
 
 ## Benchmark organization
@@ -27,40 +27,31 @@ Functions in cuDF generally fall into two groups:
 1. Methods of classes like `DataFrame` or `Series`.
 2. Free functions operating on the above classes like `cudf.merge`.
 
-The former should be organized into files based on the class.
-API benchmark files should be named `bench_$class.py`.
+The former should be organized into files named `bench_class.py`.
 For example, benchmarks of `DataFrame.eval` belong in `API/bench_dataframe.py`.
-For benchmarks of internal classes (or benchmarks of internal methods of public classes),
-the class files should be suffixed with `_internal` to avoid naming conflicts.
-Even if they are in separate directories, identically named files can cause issues for `pytest`.
-Benchmarks of `DataFrame._apply_boolean_mask`, for instance, belong in `internal/bench_dataframe_internal.py`.
-
-To ensure that benchmarks cover the widest range of classes possible,
-benchmarks should be organized into files corresponding to the highest class in the hierarchy that they support.
+Benchmarks should be written at the highest level of generality possible with respect to the class hierarchy.
 For instance, all classes support the `take` method, so those benchmarks belong in `API/bench_frame_or_index.py`.
-Some APIs exist for both Index and IndexedFrame classes, but with slightly different APIs.
-In such cases, benchmarks should be written using to a minimal common API,
+If a method has a slightly different API for different classes, benchmarks should use a minimal common API,
 _unless_ developers expect certain arguments to trigger code paths with very different performance characteristics.
+
+```{note}
+`pytest` does not support having two benchmark files with the same name, even if they are in separate directories.
+Therefore, benchmarks of internal methods of _public_ classes go in files suffixed with `_internal`.
+Benchmarks of `DataFrame._apply_boolean_mask`, for instance, belong in `internal/bench_dataframe_internal.py`.
+```
 
 Free functions have more flexibility.
 Broadly speaking, they should be grouped into benchmark files containing similar functionality.
-We may evolve a more concrete set of guidelines on exactly what that should look like over time,
-but for now those groupings are left to the discretion of developers.
+For example, I/O benchmarks can all live in `bench_io.py`.
+For now those groupings are left to the discretion of developers.
 
+## Standard fixtures
 
-## Standard object fixtures
-
-Benchmarks of methods are typically straightforward to write.
-Using `pytest-benchmark`'s benchmark fixture, they are typically as simple as `benchmark(obj.method)`.
-One of the most common difficulties, however, is deciding exactly what `obj` should look like.
-Developers often want to benchmark objects of different sizes, or multiple classes.
-Conversely, we would like to avoid proliferating nearly identical functions for object creation.
-
-`pytest` is designed to address this problem using fixtures.
-For our purposes, however, we also need to be able to run some benchmarks for _multiple_ fixtures.
+The most difficult part of writing a benchmark is often deciding what class of objects that benchmark should run for.
+Developers often need to run the same benchmarks with _multiple_ `pytest` fixtures rather than just one.
 For instance, benchmarks in `API/bench_indexedframe.py` must be run for both `DataFrame` and `Series`.
 To address this requirement, we make use of [`pytest_cases`](https://smarie.github.io/python-pytest-cases/).
-Specifically we use `pytest_cases.fixture_union` to create fixtures from other fixtures.
+Specifically we use `pytest_cases.fixture_union` to create fixture unions.
 Tests parametrized by fixture unions are run once for each member of the union.
 
 This feature is critical to the design of our benchmarks.
@@ -73,12 +64,23 @@ In particular, our standard fixtures cover the following:
 - Dtype: Objects of a specific dtype.
 - Size: Objects with a certain number of rows or columns.
 
-Each benchmark should use the appropriate fixture to span the desired subset of this parameter space.
-Where absolutely necessary, developers may define custom fixtures for a subset of benchmarks.
-However, new benchmarks should be added with care.
-The default benchmark fixtures are carefully designed to automatically support most case.
-They will also work for the special cases like comparing to pandas or running tests, as described below.
-Most importantly, they ensure reasonable benchmark coverage without ballooning the parameter space unnecessarily.
+Fixture names identify these parameters unambiguously like so:
+`{classname}_dtype_{dtype}[_nulls_{true|false}][[_cols_{num_cols}]_rows_{num_rows}]`.
+If a fixture name does not contain a particular component, it represents a union of all values of that component.
+For example, a benchmark
+```
+def bench_foo(benchmark, dataframe_dtype_int_rows_100):
+    benchmark(df.foo)
+```
+will run for both nullable and non-nullable 100 row integer `DataFrame`s of with different numbers of columns.
+
+These fixtures should support most use cases.
+Developers may define custom fixtures if necessary, but this should be done with care.
+The default fixtures provide reasonable benchmark coverage without excessive resource usage.
+More bespoke fixtures, if necessary, should be constructed with the same constraints in mind.
+Furthermore, the default fixtures are designed to work when
+[comparing to pandas](pandascompare) or [running tests](testing).
+New fixtures must also account for these use cases.
 
 ### The `accepts_cudf_fixture` decorator
 
@@ -99,9 +101,7 @@ def bench_foo(benchmark, df):
     benchmark(df.foo)
 ```
 
-In general, the type of objects being benchmarked should match the name of the benchmark file.
-In the above example, for instance, we are benchmarking DataFrame objects in `bench_dataframe.py`.
-We do so by specifying `cls="dataframe"`, but remap that to the name `"df"` for convenience.
+This code benchmarks `DataFrame` objects (`cls="dataframe"`) but remaps them to the name `"df"` for convenience.
 
 
 ## Parametrization vs fixtures
@@ -152,6 +152,8 @@ From a conceptual standpoint, fixtures are homogeneous and generic while cases a
 Fixtures should be created sparingly and used broadly.
 Cases can be precisely tailored for a single test.
 
+(pandascompare)=
+
 ## Comparing to pandas
 
 An important aspect of benchmarking cuDF is comparing it to pandas.
@@ -161,18 +163,27 @@ When this variable is detected, all benchmarks will automatically be run using p
 Therefore, comparisons can easily be generated by simply running the benchmarks twice,
 once with the variable set and once without.
 
-## Continuous integration
+```{warning}
+`CUDF_BENCHMARKS_USE_PANDAS` relies on benchmarks importing `cudf` and `cupy` from `common/config.py`.
+That allows configuration of these modules based on the environment variable.
+When developers add these imports to a file, they must import from `config.py` rather than importing directly.
+```
+
+(testing)=
+
+## Testing
 
 Benchmarks need to be kept up to date with API changes in cuDF.
-However, we cannot simply benchmarks in CI.
-Doing so would consume too many resources, _and_ it would significantly slow down the development cycle
+However, we cannot simply run benchmarks in CI.
+Doing so would consume too many resources, and it would significantly slow down the development cycle
 
 To balance these issues, our benchmarks also support running in "testing" mode.
 To do so, developers can set the `CUDF_BENCHMARKS_TEST_ONLY` environment variable.
 When benchmarks are run with this variable, all data sizes are set to a minimum and the number of sizes are reduced.
+Our CI testing takes advantage of this to ensure that benchmarks remain valid code.
 
 ```{warning}
-The `CUDF_BENCHMARKS_TEST_ONLY` fixture relies on the configuration values defined in `common/config.py`.
+`CUDF_BENCHMARKS_TEST_ONLY` relies on the configuration values defined in `common/config.py`.
 All the standard fixtures automatically respect the `NUM_ROWS` and `NUM_COLS` variables defined there.
 If developers define custom fixtures or cases, they are responsible for importing and using those variables.
 ```
