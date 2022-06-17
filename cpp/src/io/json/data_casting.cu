@@ -24,6 +24,8 @@ std::vector<std::unique_ptr<column>> parse_data(str_spans_it_it cols_str_spans,
                                                 host_span<data_type const> cols_type,
                                                 rmm::cuda_stream_view stream)
 {
+  // first version: make_strings_column from the string spans
+  // full version: use existing code (`ConvertFunctor`) to convert values
   return {};
 }
 
