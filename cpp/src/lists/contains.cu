@@ -74,29 +74,24 @@ struct search_list_fn {
   template <typename Element, CUDF_ENABLE_IF(is_supported_non_nested_type<Element>())>
   __device__ size_type operator()(list_device_view list, thrust::optional<Element> key_opt) const
   {
-    // A null list never contains any key, even null key.
-    // In addition, a null list will result in a null output row.
-    if (list.is_null()) { return NULL_SENTINEL; }
-
-    // A null key will also result in a null output row.
-    if (!key_opt) { return NULL_SENTINEL; }
-
-    auto const& key = key_opt.value();
+    // A null list or null key will result in a null output row.
+    if (list.is_null() || !key_opt) { return NULL_SENTINEL; }
 
     return find_option == duplicate_find_option::FIND_FIRST
-             ? search_list<true, Element>(list, key)
-             : search_list<false, Element>(list, key);
+             ? search_list<true, Element>(list, *key_opt)
+             : search_list<false, Element>(list, *key_opt);
   }
 
   template <typename Element, CUDF_ENABLE_IF(cudf::is_nested<Element>())>
   __device__ size_type operator()(list_device_view, thrust::optional<Element>) const
   {
-    cudf_assert(false && "Nested types are not yet supported");
+    CUDF_UNREACHABLE("Nested types are not yet supported");
   }
 
  private:
   template <bool forward, typename Element, CUDF_ENABLE_IF(is_supported_non_nested_type<Element>())>
-  static __device__ size_type search_list(list_device_view const& list, Element const& search_key)
+  static __device__ inline size_type search_list(list_device_view const list,
+                                                 Element const search_key)
   {
     auto const [begin, end] = element_index_pair_iter<forward>(list.size());
     auto const found_iter =
