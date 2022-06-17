@@ -111,6 +111,19 @@ cdef class BufferArrayFromVector:
         pass
 
 
+def _parse_metadata(meta):
+    file_is_range_index = False
+    file_index_cols = None
+
+    if 'index_columns' in meta and len(meta['index_columns']) > 0:
+        file_index_cols = meta['index_columns']
+
+        if isinstance(file_index_cols[0], dict) and \
+                file_index_cols[0]['kind'] == 'range':
+            file_is_range_index = True
+    return file_is_range_index, file_index_cols
+
+
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    skiprows=None, num_rows=None, strings_to_categorical=False,
                    use_pandas_metadata=True):
@@ -177,33 +190,26 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     # Access the Parquet per_file_user_data to find the index
     index_col = None
-    is_range_index = False
     cdef vector[unordered_map[string, string]] per_file_user_data = \
         c_out_table.metadata.per_file_user_data
 
-    range_index = []
     index_col_names = None
+    is_range_index = True
     for single_file in per_file_user_data:
         json_str = single_file[b'pandas'].decode('utf-8')
         meta = None
         if json_str != "":
             meta = json.loads(json_str)
-            if 'index_columns' in meta and len(meta['index_columns']) > 0:
-                index_col = meta['index_columns']
+            file_is_range_index, index_col = _parse_metadata(meta)
+            is_range_index &= file_is_range_index
 
-                if isinstance(index_col[0], dict) and \
-                        index_col[0]['kind'] == 'range':
-                    range_index.append(True)
-                else:
-                    if index_col_names is None:
-                        index_col_names = {}
-                        for idx_col in index_col:
-                            for c in meta['columns']:
-                                if c['field_name'] == idx_col:
-                                    index_col_names[idx_col] = c['name']
-
-    if len(range_index) > 0 and all(range_index):
-        is_range_index = True
+            if not file_is_range_index and index_col is not None \
+                    and index_col_names is None:
+                index_col_names = {}
+                for idx_col in index_col:
+                    for c in meta['columns']:
+                        if c['field_name'] == idx_col:
+                            index_col_names[idx_col] = c['name']
 
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
         move(c_out_table.tbl),
