@@ -547,6 +547,7 @@ cdef class Column:
         size = cv.size()
         offset = cv.offset()
         dtype = dtype_from_column_view(cv)
+        dtype_itemsize = dtype.itemsize if hasattr(dtype, "itemsize") else 1
 
         data_ptr = <uintptr_t>(cv.head[void]())
         data = None
@@ -554,13 +555,13 @@ cdef class Column:
         data_owner = owner
         if column_owner:
             data_owner = owner.base_data
-            base_nbytes = owner.base_size * dtype.itemsize
+            base_nbytes = owner.base_size * dtype_itemsize
         if data_ptr:
             if data_owner is None:
                 data = Buffer(
                     rmm.DeviceBuffer(
                         ptr=data_ptr,
-                        size=(size+offset) * dtype.itemsize
+                        size=(size+offset) * dtype_itemsize
                     ),
                     sole_owner=True
                 )
