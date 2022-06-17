@@ -1736,7 +1736,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    4
         dtype: int64
         >>> series.data
-        <cudf.core.buffer.Buffer size=32 spillable=True...>
+        <cudf.core.buffer.Buffer size=32.00B spillable=True...>
         >>> series.data.to_host_array()
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
