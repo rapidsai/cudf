@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 """Common utilities for fixture creation and benchmarking."""
 
 import inspect

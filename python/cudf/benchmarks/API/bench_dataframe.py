@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 import string
 
 import numpy

@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 """Benchmarks of methods that exist for both Frame and BaseIndex."""
 
 import operator

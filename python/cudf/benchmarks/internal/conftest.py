@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 from config import NUM_ROWS, cudf  # noqa: E402
 from utils import (
     OrderedSet,

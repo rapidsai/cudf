@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 import pytest_cases
 from config import NUM_ROWS, cudf, cupy
 

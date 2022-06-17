@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 """Module used for global configuration of benchmarks.
 
 This file contains global definitions that are important for configuring all

@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 """Standard location for shared fixtures and code across tests.
 
 Most fixtures defined in this file represent one of the primary classes in the

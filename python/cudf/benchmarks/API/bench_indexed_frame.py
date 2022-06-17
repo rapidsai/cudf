@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 """Benchmarks of IndexedFrame methods."""
 
 import pytest

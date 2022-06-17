@@ -1,3 +1,5 @@
+# Copyright (c) 2022, NVIDIA CORPORATION.
+
 """Benchmarks of Series methods."""
 
 import pytest
