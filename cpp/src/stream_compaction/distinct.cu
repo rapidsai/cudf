@@ -49,21 +49,24 @@ namespace {
  * @brief A functor to perform reduction on row indices.
  *
  * A reduction operation will be performed on each group of rows that are compared equal.
+ *
+ * TODO: We need to switch to use `static_reduction_map` when it is ready
+ * (https://github.com/NVIDIA/cuCollections/pull/98).
  */
-template <typename MapDeviceView, typename KeyHasher, typename KeyComparator>
+template <typename MapView, typename KeyHasher, typename KeyEqual>
 struct reduce_index_fn {
-  MapDeviceView const d_map;
+  MapView const d_map;
   KeyHasher const d_hasher;
-  KeyComparator const d_eqcomp;
+  KeyEqual const d_equal;
   duplicate_keep_option const keep;
   size_type* const d_output;
 
-  reduce_index_fn(MapDeviceView const& d_map,
+  reduce_index_fn(MapView const& d_map,
                   KeyHasher const& d_hasher,
-                  KeyComparator const& d_eqcomp,
+                  KeyEqual const& d_equal,
                   duplicate_keep_option const keep,
                   size_type* const d_output)
-    : d_map{d_map}, d_hasher{d_hasher}, d_eqcomp{d_eqcomp}, keep{keep}, d_output{d_output}
+    : d_map{d_map}, d_hasher{d_hasher}, d_equal{d_equal}, keep{keep}, d_output{d_output}
   {
   }
 
@@ -86,7 +89,7 @@ struct reduce_index_fn {
   {
     // Here we don't check `iter` validity for performance reason, assuming that it is always
     // valid because all input `idx` values have been fed into `map.insert()` before.
-    auto const iter = d_map.find(idx, d_hasher, d_eqcomp);
+    auto const iter = d_map.find(idx, d_hasher, d_equal);
 
     // Only one index value of the duplicate rows could be inserted into the map.
     // As such, looking up for all indices of duplicate rows always returns the same value.
@@ -110,26 +113,31 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     return rmm::device_uvector<size_type>(0, stream, mr);
   }
 
+  using static_map = cuco::static_map<size_type,
+                                      size_type,
+                                      cuda::thread_scope_device,
+                                      cudf::detail::hash_table_allocator_type>;
+
+  auto map = static_map{compute_hash_table_size(input.num_rows()),
+                        cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
+                        cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
+                        detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                        stream.value()};
+
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);
   auto const has_null = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
-
-  auto map = hash_map_type{compute_hash_table_size(input.num_rows()),
-                           cuco::sentinel::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
-                           cuco::sentinel::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
-                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-                           stream.value()};
 
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_null));
   auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
-  auto const kv_iter = cudf::detail::make_counting_transform_iterator(
+  auto const pair_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
 
   auto const insert_keys = [&](auto const value_comp) {
     auto const key_equal = row_comp.equal_to(has_null, nulls_equal, value_comp);
-    map.insert(kv_iter, kv_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
   };
 
   using nan_equal_comparator =
