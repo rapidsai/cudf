@@ -33,6 +33,12 @@
 struct JSONTypeCastTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(JSONTypeCastTest, Basic) { EXPECT_TRUE(1); }
+TEST_F(JSONTypeCastTest, Basic)
+{
+  std::vector<cudf::data_type> types{cudf::data_type{cudf::type_id::INT32}};
+  cudf::io::json::experimental::parse_data<cudf::string_view**>(
+    {}, types, rmm::cuda_stream_default);
+  EXPECT_TRUE(0);
+}
 
 CUDF_TEST_PROGRAM_MAIN()
