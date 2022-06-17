@@ -40,7 +40,13 @@ def test_spillable_buffer():
     assert buf.ptr_exposed
     assert not buf.spillable
     buf = Buffer(rmm.DeviceBuffer(size=10), sole_owner=True)
-    buf.__cuda_array_interface__  # Expose pointer
+    # Notice, accessing `__cuda_array_interface__` itself doesn't
+    # expose the pointer, only accessing the "data" field exposes
+    # the pointer.
+    iface = buf.__cuda_array_interface__
+    assert not buf.ptr_exposed
+    assert buf.spillable
+    iface["data"][0]  # Expose pointer
     assert buf.ptr_exposed
     assert not buf.spillable
 
