@@ -6,7 +6,7 @@ import operator
 import pickle
 import time
 from threading import RLock
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -310,19 +310,33 @@ class Buffer(Serializable):
             )
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {
-            "type-serialized": pickle.dumps(type(self)),
-            "frame_count": 1,
-        }
-        return header, [self]
+        header = {}  # type: Dict[Any, Any]
+        header["type-serialized"] = pickle.dumps(type(self))
+        header["desc"] = {"shape": (self.size,)}
+        header["desc"]["strides"] = (1,)
+        header["frame_count"] = 1
+        frames = [self]
+        return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> Buffer:
-        if len(frames) != 1:
+        assert (
+            header["frame_count"] == 1
+        ), "Only expecting to deserialize Buffer with a single frame."
+
+        if type(cls) is Buffer:
+            return Buffer.from_buffer(frames[0])
+
+        # Currently, downstream classes depend on this for deserialization.
+        # TODO: This should be removed when they don't depend on this anymore.
+        buf = cls(frames[0])
+        if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(
-                "Only expecting to deserialize Buffer with a single frame."
+                f"Received a `Buffer` with the wrong size."
+                f" Expected {header['desc']['shape']}, "
+                f"but got {buf.__cuda_array_interface__['shape']}"
             )
-        return cls.from_buffer(frames[0])
+        return buf
 
     @classmethod
     def empty(cls, size: int) -> Buffer:
