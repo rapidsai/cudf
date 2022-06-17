@@ -555,7 +555,8 @@ cdef class Column:
         data_owner = owner
         if column_owner:
             data_owner = owner.base_data
-            base_nbytes = owner.base_size * dtype_itemsize
+            base_size = owner.base_size
+        base_nbytes = base_size * dtype_itemsize
         if data_ptr:
             if data_owner is None:
                 data = Buffer(
