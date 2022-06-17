@@ -28,12 +28,14 @@
  * (RAII). In the following we show a minimal example of how to use this class.
 
     #include <benchmark/benchmark.h>
+    #include <cudf/utilities/default_stream.hpp>
 
     static void sample_cuda_benchmark(benchmark::State& state) {
 
       for (auto _ : state){
 
-        rmm::cuda_stream_view stream{}; // default stream, could be another stream
+        // default stream, could be another stream
+        rmm::cuda_stream_view stream{cudf::default_stream_value};
 
         // Create (Construct) an object of this class. You HAVE to pass in the
         // benchmark::State object you are using. It measures the time from its

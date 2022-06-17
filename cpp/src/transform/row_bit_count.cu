@@ -161,8 +161,6 @@ void flatten_hierarchy(ColIter begin,
  *
  */
 struct flatten_functor {
-  rmm::cuda_stream_view stream;
-
   // fixed width
   template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   void operator()(column_view const& col,
@@ -283,7 +281,7 @@ void flatten_hierarchy(ColIter begin,
 {
   std::for_each(begin, end, [&](column_view const& col) {
     cudf::type_dispatcher(col.type(),
-                          flatten_functor{stream},
+                          flatten_functor{},
                           col,
                           out,
                           info,

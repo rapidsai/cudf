@@ -174,12 +174,12 @@ class column {
    * @param new_null_count Optional, the count of null elements. If unknown, specify
    * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on the first invocation
    * of `null_count()`.
-   * @param stream The stream on which to perform the allocation and copy. Uses the default CUDA
+   * @param stream The stream on which to perform the allocation and copy. Uses the default CUDF
    * stream if none is specified.
    */
   void set_null_mask(rmm::device_buffer const& new_null_mask,
                      size_type new_null_count     = UNKNOWN_NULL_COUNT,
-                     rmm::cuda_stream_view stream = rmm::cuda_stream_view{});
+                     rmm::cuda_stream_view stream = cudf::default_stream_value);
 
   /**
    * @brief Updates the count of null elements.
