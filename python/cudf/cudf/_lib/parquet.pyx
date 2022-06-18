@@ -5,7 +5,6 @@
 import errno
 import io
 import os
-from collections import OrderedDict
 
 import pyarrow as pa
 
@@ -17,6 +16,7 @@ except ImportError:
     import json
 
 import numpy as np
+
 from cython.operator cimport dereference
 
 from cudf.api.types import (
@@ -38,6 +38,7 @@ from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
+from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -110,6 +111,19 @@ cdef class BufferArrayFromVector:
         pass
 
 
+def _parse_metadata(meta):
+    file_is_range_index = False
+    file_index_cols = None
+
+    if 'index_columns' in meta and len(meta['index_columns']) > 0:
+        file_index_cols = meta['index_columns']
+
+        if isinstance(file_index_cols[0], dict) and \
+                file_index_cols[0]['kind'] == 'range':
+            file_is_range_index = True
+    return file_is_range_index, file_index_cols
+
+
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    skiprows=None, num_rows=None, strings_to_categorical=False,
                    use_pandas_metadata=True):
@@ -177,25 +191,29 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     column_names = [x.decode() for x in c_out_table.metadata.column_names]
 
-    # Access the Parquet user_data json to find the index
+    # Access the Parquet per_file_user_data to find the index
     index_col = None
-    is_range_index = False
-    cdef map[string, string] user_data = c_out_table.metadata.user_data
-    json_str = user_data[b'pandas'].decode('utf-8')
-    meta = None
-    if json_str != "":
-        meta = json.loads(json_str)
-        if 'index_columns' in meta and len(meta['index_columns']) > 0:
-            index_col = meta['index_columns']
-            if isinstance(index_col[0], dict) and \
-                    index_col[0]['kind'] == 'range':
-                is_range_index = True
-            else:
-                index_col_names = OrderedDict()
+    cdef vector[unordered_map[string, string]] per_file_user_data = \
+        c_out_table.metadata.per_file_user_data
+
+    index_col_names = None
+    is_range_index = True
+    for single_file in per_file_user_data:
+        json_str = single_file[b'pandas'].decode('utf-8')
+        meta = None
+        if json_str != "":
+            meta = json.loads(json_str)
+            file_is_range_index, index_col = _parse_metadata(meta)
+            is_range_index &= file_is_range_index
+
+            if not file_is_range_index and index_col is not None \
+                    and index_col_names is None:
+                index_col_names = {}
                 for idx_col in index_col:
                     for c in meta['columns']:
                         if c['field_name'] == idx_col:
                             index_col_names[idx_col] = c['name']
+
     df = cudf.DataFrame._from_data(*data_from_unique_ptr(
         move(c_out_table.tbl),
         column_names=column_names
@@ -223,7 +241,18 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         if is_range_index:
             if not allow_range_index:
                 return df
-            range_index_meta = index_col[0]
+
+            if len(per_file_user_data) > 1:
+                range_index_meta = {
+                    "kind": "range",
+                    "name": None,
+                    "start": 0,
+                    "stop": len(df),
+                    "step": 1
+                }
+            else:
+                range_index_meta = index_col[0]
+
             if row_groups is not None:
                 per_file_metadata = [
                     pa.parquet.read_metadata(
