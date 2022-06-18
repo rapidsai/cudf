@@ -87,16 +87,24 @@ struct reduce_index_fn {
  private:
   __device__ size_type& get_output(size_type const idx) const
   {
-    // Here we don't check `iter` validity for performance reason, assuming that it is always
-    // valid because all input `idx` values have been fed into `map.insert()` before.
     auto const iter = d_map.find(idx, d_hasher, d_equal);
 
-    // Only one index value of the duplicate rows could be inserted into the map.
-    // As such, looking up for all indices of duplicate rows always returns the same value.
-    auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
+    if (iter != d_map.end()) {
+      // Only one index value of the duplicate rows could be inserted into the map.
+      // As such, looking up for all indices of duplicate rows always returns the same value.
+      auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
 
-    // All duplicate rows will have concurrent access to the same output slot.
-    return d_output[inserted_idx];
+      // All duplicate rows will have concurrent access to this same output slot.
+      return d_output[inserted_idx];
+    } else {
+      // All input `idx` values have been inserted into map before.
+      // Thus, searching for an `idx` key resulting in the `end()` iterator only happens if
+      // `d_equal(idx, idx) == false`.
+      // Such situations are due to comparing nulls or NaNs which are considered as always unequal.
+      // In those cases, rows containing nulls or NaNs are distinct, so just return their direct
+      // output slot.
+      return d_output[idx];
+    }
   }
 };
 
