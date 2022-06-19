@@ -208,10 +208,10 @@ std::unique_ptr<table> apply_boolean_mask(
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
  */
 enum class duplicate_keep_option {
-  KEEP_FIRST = 0,  ///< Keep first occurrence of an element
-  KEEP_LAST,       ///< Keep last occurrence of an element
-  KEEP_ANY,        ///< Keep unspecified occurrence of an element
-  KEEP_NONE        ///< Keep only unique elements
+  KEEP_ANY = 0,  ///< Keep an unspecified occurrence
+  KEEP_FIRST,    ///< Keep first occurrence
+  KEEP_LAST,     ///< Keep last occurrence
+  KEEP_NONE      ///< Keep no (remove all) occurrences of duplicates
 };
 
 /**
@@ -227,6 +227,9 @@ enum class duplicate_keep_option {
  * A row is distinct if there are no equivalent rows in the table. A row is unique if there is no
  * adjacent equivalent row. That is, keeping distinct rows removes all duplicates in the
  * table/column, while keeping unique rows only removes duplicates from consecutive groupings.
+ *
+ * Performance hint: if the input is pre-sorted, `cudf::unique` can produce an equivalent result
+ * (i.e., same set of output rows) but with less running time than `cudf::distinct`.
  *
  * @throws cudf::logic_error if the `keys` column indices are out of bounds in the `input` table.
  *
@@ -259,6 +262,9 @@ std::unique_ptr<table> unique(
  * - KEEP_NONE: no duplicate rows are copied
  *
  * The order of elements in the output table is not specified.
+ *
+ * Performance hint: if the input is pre-sorted, `cudf::unique` can produce an equivalent result
+ * (i.e., same set of output rows) but with less running time than `cudf::distinct`.
  *
  * @param[in] input           input table_view to copy only distinct rows
  * @param[in] keys            vector of indices representing key columns from `input`
