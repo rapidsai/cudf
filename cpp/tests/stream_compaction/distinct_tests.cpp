@@ -549,7 +549,7 @@ TEST_F(DistinctKeepAny, NullableLists)
   }
 }
 
-TEST_F(DistinctKeepFirstLastNone, NullableLists)
+TEST_F(DistinctKeepFirstLastNone, ListsWithNullsEqual)
 {
   // Column(s) used to test needs to have different rows for the same keys.
   // clang-format off
@@ -567,7 +567,7 @@ TEST_F(DistinctKeepFirstLastNone, NullableLists)
     auto const exp_keys_sort = lists_col{{{}, {1}, {2, 2}, {2}, {} /*NULL*/}, null_at(4)};
     auto const expected_sort = cudf::table_view{{exp_idx_sort, exp_keys_sort}};
 
-    auto const result      = cudf::distinct(input, key_idx, KEEP_FIRST);
+    auto const result      = cudf::distinct(input, key_idx, KEEP_FIRST, NULL_EQUAL);
     auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
@@ -578,7 +578,7 @@ TEST_F(DistinctKeepFirstLastNone, NullableLists)
     auto const exp_keys_sort = lists_col{{{}, {1}, {2}, {2, 2}, {} /*NULL*/}, null_at(4)};
     auto const expected_sort = cudf::table_view{{exp_idx_sort, exp_keys_sort}};
 
-    auto const result      = cudf::distinct(input, key_idx, KEEP_LAST);
+    auto const result      = cudf::distinct(input, key_idx, KEEP_LAST, NULL_EQUAL);
     auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
@@ -589,8 +589,57 @@ TEST_F(DistinctKeepFirstLastNone, NullableLists)
     auto const exp_keys = lists_col{};
     auto const expected = cudf::table_view{{exp_idx, exp_keys}};
 
-    auto const result = cudf::distinct(input, key_idx, KEEP_NONE);
+    auto const result = cudf::distinct(input, key_idx, KEEP_NONE, NULL_EQUAL);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *result);
+  }
+}
+
+TEST_F(DistinctKeepFirstLastNone, ListsWithNullsUnequal)
+{
+  // Column(s) used to test needs to have different rows for the same keys.
+  // clang-format off
+  auto const idx = int32s_col{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  auto const keys =
+    lists_col{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {} /*NULL*/, {2, 2}, {2, 2}, {} /*NULL*/},
+              nulls_at({7, 10})};
+  // clang-format on
+  auto const input   = cudf::table_view{{idx, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  // KEEP_FIRST
+  {
+    auto const exp_idx_sort = int32s_col{0, 2, 4, 5, 7, 10};
+    auto const exp_keys_sort =
+      lists_col{{{}, {1}, {2, 2}, {2}, {} /*NULL*/, {} /*NULL*/}, nulls_at({4, 5})};
+    auto const expected_sort = cudf::table_view{{exp_idx_sort, exp_keys_sort}};
+
+    auto const result      = cudf::distinct(input, key_idx, KEEP_FIRST, NULL_UNEQUAL);
+    auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+
+  // KEEP_LAST
+  {
+    auto const exp_idx_sort = int32s_col{1, 3, 6, 7, 9, 10};
+    auto const exp_keys_sort =
+      lists_col{{{}, {1}, {2}, {} /*NULL*/, {2, 2}, {} /*NULL*/}, nulls_at({3, 5})};
+    auto const expected_sort = cudf::table_view{{exp_idx_sort, exp_keys_sort}};
+
+    auto const result      = cudf::distinct(input, key_idx, KEEP_LAST, NULL_UNEQUAL);
+    auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+
+  // KEEP_NONE
+  {
+    auto const exp_idx_sort = int32s_col{7, 10};
+    auto const exp_keys_sort =
+      lists_col{{lists_col{} /*NULL*/, lists_col{} /*NULL*/}, nulls_at({0, 1})};
+    auto const expected_sort = cudf::table_view{{exp_idx_sort, exp_keys_sort}};
+
+    auto const result      = cudf::distinct(input, key_idx, KEEP_NONE, NULL_UNEQUAL);
+    auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
 }
 
