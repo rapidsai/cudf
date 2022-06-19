@@ -217,12 +217,11 @@ enum class duplicate_keep_option {
 /**
  * @brief Create a new table with consecutive duplicate rows removed.
  *
- * Given an `input` table_view, each row is copied to the output table if the corresponding row of
- * `keys` columns is unique, where the definition of unique depends on the value of @p keep:
- * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
- * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
- * - KEEP_ANY: an unspecified row in a sequence of duplicate rows is copied
- * - KEEP_NONE: no duplicate rows are copied
+ * Given an `input` table_view, each row is copied to the output table to create a set of distinct
+ * rows. If there are duplicate rows, which row to be copied depends on the specified value of
+ * the `keep` parameter.
+ *
+ * The order of rows in the output table remains the same as in the input.
  *
  * A row is distinct if there are no equivalent rows in the table. A row is unique if there is no
  * adjacent equivalent row. That is, keeping distinct rows removes all duplicates in the
@@ -253,15 +252,11 @@ std::unique_ptr<table> unique(
 /**
  * @brief Create a new table without duplicate rows.
  *
- * Given an `input` table_view, each row is copied to the output table if the corresponding
- * row of `keys` columns is distinct (no other equivalent row exists in the table). If duplicate
- * rows are present, depending on the value of `keep`:
- * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
- * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
- * - KEEP_ANY: an unspecified row in a sequence of duplicate rows is copied
- * - KEEP_NONE: no duplicate rows are copied
+ * Given an `input` table_view, each row is copied to the output table to create a set of distinct
+ * rows. If there are duplicate rows, which row to be copied depends on the specified value of
+ * the `keep` parameter.
  *
- * The order of elements in the output table is not specified.
+ * The order of rows in the output table is not specified.
  *
  * Performance hint: if the input is pre-sorted, `cudf::unique` can produce an equivalent result
  * (i.e., same set of output rows) but with less running time than `cudf::distinct`.
