@@ -60,7 +60,8 @@ struct DistinctKeepFirstLastNone : public cudf::test::BaseFixture {
 
 TEST_F(DistinctKeepAny, StringKeyColumn)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys.
+  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
+  // nondeterministic.
   auto const col = int32s_col{{5, null, null, 5, 5, 8, 1}, nulls_at({1, 2})};
   auto const keys =
     strings_col{{"all", "new", "new", "all", "" /*NULL*/, "the", "strings"}, null_at(4)};
@@ -153,7 +154,8 @@ TEST_F(DistinctKeepAny, EmptyKeys)
 
 TEST_F(DistinctKeepAny, NoNullsTable)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys.
+  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
+  // nondeterministic.
   auto const col1  = int32s_col{6, 6, 6, 3, 5, 8, 5};
   auto const col2  = floats_col{6, 6, 6, 3, 4, 9, 4};
   auto const keys1 = int32s_col{20, 20, 20, 20, 19, 21, 9};
@@ -232,7 +234,8 @@ TEST_F(DistinctKeepAny, SlicedNoNullsTable)
 {
   auto constexpr dont_care = int32_t{0};
 
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys.
+  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
+  // nondeterministic.
   auto const col1  = int32s_col{dont_care, dont_care, 6, 6, 6, 3, 5, 8, 5, dont_care};
   auto const col2  = floats_col{dont_care, dont_care, 6, 6, 6, 3, 4, 9, 4, dont_care};
   auto const keys1 = int32s_col{dont_care, dont_care, 20, 20, 20, 20, 19, 21, 9, dont_care};
@@ -318,7 +321,8 @@ TEST_F(DistinctKeepFirstLastNone, SlicedNoNullsTable)
 
 TEST_F(DistinctKeepAny, InputWithNulls)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys.
+  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
+  // nondeterministic.
   auto const col     = int32s_col{5, 4, 4, 1, 8, 1};
   auto const keys    = int32s_col{{20, null, null, 19, 21, 19}, nulls_at({1, 2})};
   auto const input   = cudf::table_view{{col, keys}};
@@ -433,7 +437,8 @@ TEST_F(DistinctKeepFirstLastNone, InputWithNullsUnequal)
 
 TEST_F(DistinctKeepAny, BasicLists)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys.
+  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
+  // nondeterministic.
   // clang-format off
   auto const idx = int32s_col{ 0,  0,   1,      2,   1,      3,      4,  5,   5,      6,      4,       4};
   auto const keys = lists_col{{}, {}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}};
@@ -498,7 +503,8 @@ TEST_F(DistinctKeepAny, SlicedBasicLists)
 {
   auto constexpr dont_care = int32_t{0};
 
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys.
+  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
+  // nondeterministic.
   auto const idx  = int32s_col{dont_care, dont_care, 1, 2, 1, 3, 4, 5, 5, 6, 4, 4, dont_care};
   auto const keys = lists_col{
     {0, 0}, {0, 0}, {1}, {1, 1}, {1}, {1, 2}, {2, 2}, {2}, {2}, {2, 1}, {2, 2}, {2, 2}, {5, 5}};
@@ -517,7 +523,8 @@ TEST_F(DistinctKeepAny, SlicedBasicLists)
 
 TEST_F(DistinctKeepAny, NullableLists)
 {
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys.
+  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
+  // nondeterministic.
   auto const idx = int32s_col{0, 0, 1, 1, 4, 5, 5, 6, 4, 4, 6};
   auto const keys =
     lists_col{{{}, {}, {1}, {1}, {2, 2}, {2}, {2}, {} /*NULL*/, {2, 2}, {2, 2}, {} /*NULL*/},
