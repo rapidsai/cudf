@@ -32,14 +32,14 @@ namespace {
  * (https://github.com/NVIDIA/cuCollections/pull/98).
  */
 template <typename MapView, typename KeyHasher, typename KeyEqual>
-struct reduce_by_key_fn {
+struct reduce_by_row_fn {
   MapView const d_map;
   KeyHasher const d_hasher;
   KeyEqual const d_equal;
   duplicate_keep_option const keep;
   size_type* const d_output;
 
-  reduce_by_key_fn(MapView const& d_map,
+  reduce_by_row_fn(MapView const& d_map,
                    KeyHasher const& d_hasher,
                    KeyEqual const& d_equal,
                    duplicate_keep_option const keep,
@@ -94,7 +94,7 @@ rmm::device_uvector<size_type> reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const& preprocessed_input,
   size_type input_size,
-  nullate::DYNAMIC has_nulls,
+  cudf::nullate::DYNAMIC has_nulls,
   duplicate_keep_option keep,
   null_equality nulls_equal,
   rmm::cuda_stream_view stream,
@@ -129,7 +129,7 @@ rmm::device_uvector<size_type> reduce_by_row(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(input_size),
-    reduce_by_key_fn{
+    reduce_by_row_fn{
       map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
 
   auto output_indices = rmm::device_uvector<size_type>(map.get_size(), stream, mr);
