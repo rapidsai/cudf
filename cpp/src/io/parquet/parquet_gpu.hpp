@@ -640,9 +640,9 @@ void GatherPages(device_span<EncColumnChunk> chunks,
  * @param[in] column_stats Page-level statistics to be encoded
  * @param[in] stream CUDA stream to use
  */
-void EncodeeColumnIndexes(device_span<EncColumnChunk> chunks,
-                          device_span<statistics_chunk const> column_stats,
-                          rmm::cuda_stream_view stream);
+void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
+                         device_span<statistics_chunk const> column_stats,
+                         rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace parquet
