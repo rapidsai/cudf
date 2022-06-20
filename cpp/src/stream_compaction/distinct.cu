@@ -46,57 +46,65 @@ namespace detail {
 
 namespace {
 /**
- * @brief A functor to perform reduction on row indices.
- *
- * A reduction operation will be performed on each group of rows that are compared equal.
+ * @brief A functor to perform reduce-by-key with keys are rows that compared equal.
  *
  * TODO: We need to switch to use `static_reduction_map` when it is ready
  * (https://github.com/NVIDIA/cuCollections/pull/98).
  */
 template <typename MapView, typename KeyHasher, typename KeyEqual>
-struct reduce_index_fn {
+struct reduce_by_key_fn {
   MapView const d_map;
   KeyHasher const d_hasher;
   KeyEqual const d_equal;
   duplicate_keep_option const keep;
   size_type* const d_output;
 
-  reduce_index_fn(MapView const& d_map,
-                  KeyHasher const& d_hasher,
-                  KeyEqual const& d_equal,
-                  duplicate_keep_option const keep,
-                  size_type* const d_output)
+  reduce_by_key_fn(MapView const& d_map,
+                   KeyHasher const& d_hasher,
+                   KeyEqual const& d_equal,
+                   duplicate_keep_option const keep,
+                   size_type* const d_output)
     : d_map{d_map}, d_hasher{d_hasher}, d_equal{d_equal}, keep{keep}, d_output{d_output}
   {
   }
 
   __device__ void operator()(size_type const idx) const
   {
+    auto const out_ptr = get_output_ptr(idx);
+
     if (keep == duplicate_keep_option::KEEP_FIRST) {
       // Store the smallest index of all rows that are equal.
-      atomicMin(&get_output(idx), idx);
+      atomicMin(out_ptr, idx);
     } else if (keep == duplicate_keep_option::KEEP_LAST) {
       // Store the greatest index of all rows that are equal.
-      atomicMax(&get_output(idx), idx);
+      atomicMax(out_ptr, idx);
     } else {
       // Count the number of rows that are equal to the row having its index inserted.
-      atomicAdd(&get_output(idx), size_type{1});
+      atomicAdd(out_ptr, size_type{1});
     }
   }
 
  private:
-  __device__ size_type& get_output(size_type const idx) const
+  __device__ size_type* get_output_ptr(size_type const idx) const
   {
-    // Here we don't check `iter` validity for performance reason, assuming that it is always
-    // valid because all input `idx` values have been fed into `map.insert()` before.
     auto const iter = d_map.find(idx, d_hasher, d_equal);
 
-    // Only one index value of the duplicate rows could be inserted into the map.
-    // As such, looking up for all indices of duplicate rows always returns the same value.
-    auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
+    if (iter != d_map.end()) {
+      // Only one index value of the duplicate rows could be inserted into the map.
+      // As such, looking up for all indices of duplicate rows always returns the same value.
+      auto const inserted_idx = iter->second.load(cuda::std::memory_order_relaxed);
 
-    // All duplicate rows will have concurrent access to the same output slot.
-    return d_output[inserted_idx];
+      // All duplicate rows will have concurrent access to this same output slot.
+      return &d_output[inserted_idx];
+    } else {
+      // All input `idx` values have been inserted into map before.
+      // Thus, searching for an `idx` key resulting in the `end()` iterator only happens if
+      // `d_equal(idx, idx) == false`.
+      // Such situations are due to comparing nulls or NaNs which are considered as always unequal.
+      // In those cases, rows containing nulls or NaNs are distinct, so just return their direct
+      // output slot.
+      return &d_output[idx];
+    }
   }
 };
 
@@ -159,11 +167,12 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     return output_indices;
   }
 
-  // Perform reduction on each group of rows compared equal and the results are store
-  // into this array. The reduction operator is:
-  // - If KEEP_FIRST: min.
-  // - If KEEP_LAST: max.
-  // - If KEEP_NONE: count number of appearances.
+  // Perform a reduction on each group of rows compared equal and the results are store
+  // into this array. This is essentially reduce-by-key with keys are rows compared equal.
+  // The reduction operation is:
+  // - If KEEP_FIRST: min of row index.
+  // - If KEEP_LAST: max of row index.
+  // - If KEEP_NONE: sum number of appearances.
   auto reduction_results = rmm::device_uvector<size_type>(input.num_rows(), stream);
 
   auto const init_value = [keep] {
@@ -177,39 +186,43 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init_value);
 
-  auto const reduce_by_index = [&](auto const value_comp) {
+  auto const reduce_by_key = [&](auto const value_comp) {
     auto const key_equal = row_comp.equal_to(has_null, nulls_equal, value_comp);
     thrust::for_each(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(input.num_rows()),
-      reduce_index_fn{
+      reduce_by_key_fn{
         map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
   };
 
   if (nans_equal == nan_equality::ALL_EQUAL) {
-    reduce_by_index(nan_equal_comparator{});
+    reduce_by_key(nan_equal_comparator{});
   } else {
-    reduce_by_index(nan_unequal_comparator{});
+    reduce_by_key(nan_unequal_comparator{});
   }
 
   // Filter out indices of the undesired duplicate keys.
-  auto const map_end =
-    keep == duplicate_keep_option::KEEP_NONE
-      ? thrust::copy_if(rmm::exec_policy(stream),
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(input.num_rows()),
-                        output_indices.begin(),
-                        [reduction_results = reduction_results.begin()] __device__(auto const idx) {
-                          // Only output index of the rows that appeared once during reduction.
-                          // Indices of duplicate rows will be either >1 or `0`.
-                          return reduction_results[idx] == size_type{1};
-                        })
-      : thrust::copy_if(rmm::exec_policy(stream),
-                        reduction_results.begin(),
-                        reduction_results.end(),
-                        output_indices.begin(),
-                        [init_value] __device__(auto const idx) { return idx != init_value; });
+  auto const map_end = [&] {
+    if (keep == duplicate_keep_option::KEEP_NONE) {
+      return thrust::copy_if(
+        rmm::exec_policy(stream),
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(input.num_rows()),
+        output_indices.begin(),
+        [reduction_results = reduction_results.begin()] __device__(auto const idx) {
+          // Only output index of the rows that appeared once during reduction.
+          // Indices of duplicate rows will be either >1 or `0`.
+          return reduction_results[idx] == size_type{1};
+        });
+    }
+
+    return thrust::copy_if(rmm::exec_policy(stream),
+                           reduction_results.begin(),
+                           reduction_results.end(),
+                           output_indices.begin(),
+                           [init_value] __device__(auto const idx) { return idx != init_value; });
+  }();
 
   output_indices.resize(thrust::distance(output_indices.begin(), map_end), stream);
   return output_indices;
