@@ -25,6 +25,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <thrust/copy.h>
+#include <thrust/distance.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
 #include <utility>

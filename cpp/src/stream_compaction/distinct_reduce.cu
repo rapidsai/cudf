@@ -16,8 +16,6 @@
 
 #include "distinct_reduce.cuh"
 
-#include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/uninitialized_fill.h>
