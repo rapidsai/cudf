@@ -100,12 +100,9 @@ rmm::device_uvector<size_type> reduce_by_row(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  // Perform a reduction on each group of rows compared equal and the results are store
-  // into this array. This is essentially reduce-by-key with keys are rows compared equal.
-  // The reduction operation is:
-  // - If KEEP_FIRST: min of row index.
-  // - If KEEP_LAST: max of row index.
-  // - If KEEP_NONE: sum number of appearances.
+  CUDF_EXPECTS(keep != duplicate_keep_option::KEEP_ANY,
+               "KEEP_ANY should not be handled by this function");
+
   auto reduction_results = rmm::device_uvector<size_type>(input_size, stream);
 
   auto const init_value = [keep] {

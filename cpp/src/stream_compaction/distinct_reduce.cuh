@@ -28,6 +28,21 @@
 
 namespace cudf::detail {
 
+/**
+ * @brief Perform a reduction on each group of rows compared equal.
+ *
+ * For a given map with keys are row indices and were already inserted, perform a reduction on each
+ * group of rows where each that are compared equal. This is essentially a reduce-by-key with keys
+ * are rows compared equal.
+ *
+ * Depending on the `keep` parameter, the reduction operation is:
+ * - If `keep == KEEP_FIRST`: min of row index.
+ * - If `keep == KEEP_LAST`: max of row index.
+ * - If `keep == KEEP_NONE`: sum number of row appearances.
+ *
+ * @return A device_uvector containing indices of distinct rows with desired behavior specified by
+ *         the `keep` option.
+ */
 rmm::device_uvector<size_type> reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const& preprocessed_input,

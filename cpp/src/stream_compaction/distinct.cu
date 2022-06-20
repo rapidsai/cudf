@@ -70,6 +70,8 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     return output_indices;
   }
 
+  // For other keep options, perform "reduce-by-row" on the rows compared equal to find the
+  // correct output indices.
   return reduce_by_row(
     map, preprocessed_input, input.num_rows(), has_nulls, keep, nulls_equal, stream, mr);
 }
