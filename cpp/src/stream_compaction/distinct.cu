@@ -63,17 +63,45 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
   map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
 
+  auto output_indices = rmm::device_uvector<size_type>(map.get_size(), stream, mr);
+
   // If we don't care about order, just gather indices of distinct keys taken from map.
   if (keep == duplicate_keep_option::KEEP_ANY) {
-    auto output_indices = rmm::device_uvector<size_type>(map.get_size(), stream, mr);
     map.retrieve_all(output_indices.begin(), thrust::make_discard_iterator(), stream.value());
     return output_indices;
   }
 
-  // For other keep options, perform "reduce-by-row" on the rows compared equal to find the
-  // correct output indices.
-  return reduce_by_row(
+  // For other keep options, perform a (sparse) reduce-by-row on the rows compared equal.
+  auto const reduction_results = spare_reduce_by_row(
     map, preprocessed_input, input.num_rows(), has_nulls, keep, nulls_equal, stream, mr);
+
+  // Extract the desired output indices from reduction results.
+  auto const map_end = [&] {
+    if (keep == duplicate_keep_option::KEEP_NONE) {
+      // Reduction results with `KEEP_NONE` are either group sizes of equal rows, or `0`.
+      // Thus, we only output index of the rows in the groups having group size of `1`.
+      return thrust::copy_if(rmm::exec_policy(stream),
+                             thrust::make_counting_iterator(0),
+                             thrust::make_counting_iterator(input.num_rows()),
+                             output_indices.begin(),
+                             [reduction_results = reduction_results.begin()] __device__(
+                               auto const idx) { return reduction_results[idx] == size_type{1}; });
+    }
+
+    // Reduction results with `KEEP_FIRST` and `KEEP_LAST` are row indices of the first/last row in
+    // each group of equal rows (which are the desired output indicies), or the value given by
+    // `reduction_init_value()`.
+    return thrust::copy_if(rmm::exec_policy(stream),
+                           reduction_results.begin(),
+                           reduction_results.end(),
+                           output_indices.begin(),
+                           [init_value = reduction_init_value(keep)] __device__(auto const idx) {
+                             return idx != init_value;
+                           });
+  }();
+
+  output_indices.resize(thrust::distance(output_indices.begin(), map_end), stream);
+  return output_indices;
 }
 
 std::unique_ptr<table> distinct(table_view const& input,

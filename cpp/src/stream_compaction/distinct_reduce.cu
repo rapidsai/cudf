@@ -90,10 +90,10 @@ struct reduce_by_row_fn {
 
 }  // namespace
 
-rmm::device_uvector<size_type> reduce_by_row(
+rmm::device_uvector<size_type> spare_reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const& preprocessed_input,
-  size_type input_size,
+  size_type num_rows,
   cudf::nullate::DYNAMIC has_nulls,
   duplicate_keep_option keep,
   null_equality nulls_equal,
@@ -101,20 +101,14 @@ rmm::device_uvector<size_type> reduce_by_row(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(keep != duplicate_keep_option::KEEP_ANY,
-               "KEEP_ANY should not be handled by this function");
+               "KEEP_ANY should not be called with this function");
 
-  auto reduction_results = rmm::device_uvector<size_type>(input_size, stream);
+  auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream);
 
-  auto const init_value = [keep] {
-    if (keep == duplicate_keep_option::KEEP_FIRST) {
-      return std::numeric_limits<size_type>::max();
-    } else if (keep == duplicate_keep_option::KEEP_LAST) {
-      return std::numeric_limits<size_type>::min();
-    }
-    return size_type{0};  // keep == KEEP_NONE
-  }();
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream), reduction_results.begin(), reduction_results.end(), init_value);
+  thrust::uninitialized_fill(rmm::exec_policy(stream),
+                             reduction_results.begin(),
+                             reduction_results.end(),
+                             reduction_init_value(keep));
 
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
@@ -125,36 +119,11 @@ rmm::device_uvector<size_type> reduce_by_row(
   thrust::for_each(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(input_size),
+    thrust::make_counting_iterator(num_rows),
     reduce_by_row_fn{
       map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
 
-  auto output_indices = rmm::device_uvector<size_type>(map.get_size(), stream, mr);
-
-  // Filter out indices of the undesired duplicate keys.
-  auto const map_end = [&] {
-    if (keep == duplicate_keep_option::KEEP_NONE) {
-      return thrust::copy_if(
-        rmm::exec_policy(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(input_size),
-        output_indices.begin(),
-        [reduction_results = reduction_results.begin()] __device__(auto const idx) {
-          // Only output index of the rows that appeared once during reduction.
-          // Indices of duplicate rows will be either >1 or `0`.
-          return reduction_results[idx] == size_type{1};
-        });
-    }
-
-    return thrust::copy_if(rmm::exec_policy(stream),
-                           reduction_results.begin(),
-                           reduction_results.end(),
-                           output_indices.begin(),
-                           [init_value] __device__(auto const idx) { return idx != init_value; });
-  }();
-
-  output_indices.resize(thrust::distance(output_indices.begin(), map_end), stream);
-  return output_indices;
+  return reduction_results;
 }
 
 }  // namespace cudf::detail
