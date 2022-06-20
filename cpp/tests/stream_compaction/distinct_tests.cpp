@@ -397,7 +397,8 @@ TEST_F(DistinctKeepAny, InputWithNullsAndNaNs)
 {
   auto constexpr null{0.0};  // shadow the global `null` variable of type int
 
-  // Column(s) used to test KEEP_ANY needs to have same rows for same keys.
+  // Column(s) used to test KEEP_ANY needs to have same rows for same keys because KEEP_ANY is
+  // nondeterministic.
   auto const col   = int32s_col{5, 4, 1, 1, 1, 4, 1, 8, 1};
   auto const keys  = floats_col{{20., null, NaN, NaN, NaN, null, 19., 21., 19.}, nulls_at({1, 5})};
   auto const input = cudf::table_view{{col, keys}};
@@ -528,6 +529,90 @@ TEST_F(DistinctKeepFirstLastNone, InputWithNullsUnequal)
     auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
 
     auto const result      = cudf::distinct(input, key_idx, KEEP_NONE, NULL_UNEQUAL);
+    auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+}
+
+TEST_F(DistinctKeepFirstLastNone, InputWithNaNsEqual)
+{
+  // Column(s) used to test needs to have different rows for the same keys.
+  auto const col     = int32s_col{0, 1, 2, 3, 4, 5, 6};
+  auto const keys    = floats_col{20., NaN, NaN, 19., 21., 19., 22.};
+  auto const input   = cudf::table_view{{col, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  // KEEP_FIRST
+  {
+    auto const exp_col_sort  = int32s_col{0, 1, 3, 4, 6};
+    auto const exp_keys_sort = floats_col{20., NaN, 19., 21., 22.};
+    auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
+
+    auto const result      = cudf::distinct(input, key_idx, KEEP_FIRST, NULL_EQUAL, NAN_EQUAL);
+    auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+
+  // KEEP_LAST
+  {
+    auto const exp_col_sort  = int32s_col{0, 2, 4, 5, 6};
+    auto const exp_keys_sort = floats_col{20., NaN, 21., 19., 22.};
+    auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
+
+    auto const result      = cudf::distinct(input, key_idx, KEEP_LAST, NULL_EQUAL, NAN_EQUAL);
+    auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+
+  // KEEP_NONE
+  {
+    auto const exp_col_sort  = int32s_col{0, 4, 6};
+    auto const exp_keys_sort = floats_col{20., 21., 22.};
+    auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
+
+    auto const result      = cudf::distinct(input, key_idx, KEEP_NONE, NULL_EQUAL, NAN_EQUAL);
+    auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+}
+
+TEST_F(DistinctKeepFirstLastNone, InputWithNaNsUnequal)
+{
+  // Column(s) used to test needs to have different rows for the same keys.
+  auto const col     = int32s_col{0, 1, 2, 3, 4, 5, 6, 7};
+  auto const keys    = floats_col{20., NaN, NaN, 19., 21., 19., 22., 20.};
+  auto const input   = cudf::table_view{{col, keys}};
+  auto const key_idx = std::vector<cudf::size_type>{1};
+
+  // KEEP_FIRST
+  {
+    auto const exp_col_sort  = int32s_col{0, 1, 2, 3, 4, 6};
+    auto const exp_keys_sort = floats_col{20., NaN, NaN, 19., 21., 22.};
+    auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
+
+    auto const result      = cudf::distinct(input, key_idx, KEEP_FIRST, NULL_UNEQUAL, NAN_UNEQUAL);
+    auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+
+  // KEEP_LAST
+  {
+    auto const exp_col_sort  = int32s_col{1, 2, 4, 5, 6, 7};
+    auto const exp_keys_sort = floats_col{NaN, NaN, 21., 19., 22., 20.};
+    auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
+
+    auto const result      = cudf::distinct(input, key_idx, KEEP_LAST, NULL_UNEQUAL, NAN_UNEQUAL);
+    auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
+  }
+
+  // KEEP_NONE
+  {
+    auto const exp_col_sort  = int32s_col{1, 2, 4, 6};
+    auto const exp_keys_sort = floats_col{NaN, NaN, 21., 22.};
+    auto const expected_sort = cudf::table_view{{exp_col_sort, exp_keys_sort}};
+
+    auto const result      = cudf::distinct(input, key_idx, KEEP_NONE, NULL_UNEQUAL, NAN_UNEQUAL);
     auto const result_sort = cudf::sort_by_key(*result, result->select({0}));
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort, *result_sort);
   }
