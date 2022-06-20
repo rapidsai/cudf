@@ -1627,8 +1627,8 @@ static __device__ int32_t calculateBoundaryOrder(const statistics_chunk* s,
 
 // blockDim(1, 1, 1)
 __global__ void __launch_bounds__(1)
-  gpuCalculateColumnIndexes(device_span<EncColumnChunk> chunks,
-                            device_span<statistics_chunk const> column_stats)
+  gpuEncodeColumnIndexes(device_span<EncColumnChunk> chunks,
+                         device_span<statistics_chunk const> column_stats)
 {
   const void *vmin, *vmax;
   uint32_t lmin, lmax;
@@ -2267,11 +2267,11 @@ void GatherPages(device_span<EncColumnChunk> chunks,
   gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
 }
 
-void CalculateColumnIndexes(device_span<EncColumnChunk> chunks,
-                            device_span<statistics_chunk const> column_stats,
-                            rmm::cuda_stream_view stream)
+void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
+                         device_span<statistics_chunk const> column_stats,
+                         rmm::cuda_stream_view stream)
 {
-  gpuCalculateColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(chunks, column_stats);
+  gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(chunks, column_stats);
 }
 
 }  // namespace gpu
