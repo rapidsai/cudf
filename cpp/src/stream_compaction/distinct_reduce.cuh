@@ -17,6 +17,7 @@
 #include "stream_compaction_common.cuh"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
 
