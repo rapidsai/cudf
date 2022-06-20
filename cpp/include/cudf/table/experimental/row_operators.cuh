@@ -643,6 +643,7 @@ struct preprocessed_table {
       _column_order(std::move(column_order)),
       _null_precedence(std::move(null_precedence)),
       _depths(std::move(depths)),
+      _dremel_data(std::move(dremel_data)),
       _dremel_offsets(std::move(dremel_offsets)),
       _rep_levels(std::move(rep_levels)),
       _def_levels(std::move(def_levels)),
