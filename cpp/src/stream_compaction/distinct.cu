@@ -15,29 +15,17 @@
  */
 
 #include "distinct_reduce.cuh"
-#include "stream_compaction_common.cuh"
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/copy.h>
-#include <thrust/distance.h>
-#include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/uninitialized_fill.h>
 
 #include <utility>
 #include <vector>

@@ -16,20 +16,15 @@
 
 #include "stream_compaction_common.cuh"
 
-#include <cudf/column/column_view.hpp>
-#include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/stream_compaction.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <memory>
 
 namespace cudf::detail {
 
@@ -37,7 +32,7 @@ rmm::device_uvector<size_type> reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const& preprocessed_input,
   size_type input_size,
-  nullate::DYNAMIC has_nulls,
+  cudf::nullate::DYNAMIC has_nulls,
   duplicate_keep_option keep,
   null_equality nulls_equal,
   rmm::cuda_stream_view stream,
