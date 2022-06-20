@@ -64,20 +64,31 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
 
+  // Cast initial value
+  std::optional<ResultType> initial_value;
+  if (init.has_value() && init.value()->is_valid()) {
+    using ScalarType = cudf::scalar_type_t<ElementType>;
+    auto input_value = static_cast<const ScalarType*>(init.value())->value(stream);
+    initial_value    = static_cast<ResultType>(input_value);
+  } else {
+    initial_value = std::nullopt;
+  }
+
   auto result = [&] {
     if (col.has_nulls()) {
       auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
       auto it = thrust::make_transform_iterator(dcol->pair_begin<ElementType, true>(), f);
-      return cudf::reduction::detail::reduce(it, col.size(), simple_op, init, stream, mr);
+      return cudf::reduction::detail::reduce(it, col.size(), simple_op, initial_value, stream, mr);
     } else {
       auto f  = simple_op.template get_element_transformer<ResultType>();
       auto it = thrust::make_transform_iterator(dcol->begin<ElementType>(), f);
-      return cudf::reduction::detail::reduce(it, col.size(), simple_op, init, stream, mr);
+      return cudf::reduction::detail::reduce(it, col.size(), simple_op, initial_value, stream, mr);
     }
   }();
 
   // set scalar is valid
-  result->set_valid_async(col.null_count() < col.size(), stream);
+  result->set_valid_async(
+    col.null_count() < col.size() && (!init.has_value() || init.value()->is_valid()), stream);
   return result;
 }
 
@@ -103,15 +114,24 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
 
+  // Cast initial value
+  std::optional<Type> initial_value;
+  if (init.has_value() && init.value()->is_valid()) {
+    using ScalarType = cudf::scalar_type_t<Type>;
+    initial_value    = static_cast<const ScalarType*>(init.value())->value(stream);
+  } else {
+    initial_value = std::nullopt;
+  }
+
   auto result = [&] {
     if (col.has_nulls()) {
       auto f  = simple_op.template get_null_replacing_element_transformer<Type>();
       auto it = thrust::make_transform_iterator(dcol->pair_begin<Type, true>(), f);
-      return cudf::reduction::detail::reduce(it, col.size(), simple_op, init, stream, mr);
+      return cudf::reduction::detail::reduce(it, col.size(), simple_op, initial_value, stream, mr);
     } else {
       auto f  = simple_op.template get_element_transformer<Type>();
       auto it = thrust::make_transform_iterator(dcol->begin<Type>(), f);
-      return cudf::reduction::detail::reduce(it, col.size(), simple_op, init, stream, mr);
+      return cudf::reduction::detail::reduce(it, col.size(), simple_op, initial_value, stream, mr);
     }
   }();
 
@@ -126,7 +146,11 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   }();
 
   auto const val = static_cast<cudf::scalar_type_t<Type>*>(result.get());
-  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale, stream, mr);
+  auto result_scalar =
+    cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale, stream, mr);
+  result_scalar->set_valid_async(
+    col.null_count() < col.size() && (!init.has_value() || init.value()->is_valid()), stream);
+  return result_scalar;
 }
 
 /**
@@ -150,16 +174,27 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
 
+  // Cast initial value
+  std::optional<ResultType> initial_value;
+  if (init.has_value() && init.value()->is_valid()) {
+    using ScalarType = cudf::scalar_type_t<ElementType>;
+    auto input_value = static_cast<const ScalarType*>(init.value())->value(stream);
+    initial_value    = static_cast<ResultType>(input_value);
+  } else {
+    initial_value = std::nullopt;
+  }
+
   auto result = [&] {
     auto f = simple_op.template get_null_replacing_element_transformer<ResultType>();
     auto p =
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls());
     auto it = thrust::make_transform_iterator(p, f);
-    return cudf::reduction::detail::reduce(it, col.size(), simple_op, init, stream, mr);
+    return cudf::reduction::detail::reduce(it, col.size(), simple_op, initial_value, stream, mr);
   }();
 
   // set scalar is valid
-  result->set_valid_async(col.null_count() < col.size(), stream);
+  result->set_valid_async(
+    col.null_count() < col.size() && (!init.has_value() || init.value()->is_valid()), stream);
   return result;
 }
 

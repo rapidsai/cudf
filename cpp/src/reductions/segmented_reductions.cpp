@@ -141,6 +141,8 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          scalar const& init,
                                          rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(segmented_values.type() == init.type(),
+               "column and initial value must be the same type");
   CUDF_FUNC_RANGE();
   return detail::segmented_reduce(segmented_values,
                                   offsets,

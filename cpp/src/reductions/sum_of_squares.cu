@@ -25,7 +25,6 @@ namespace reduction {
 
 std::unique_ptr<cudf::scalar> sum_of_squares(column_view const& col,
                                              cudf::data_type const output_dtype,
-                                             std::optional<const scalar*> init,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
@@ -34,7 +33,7 @@ std::unique_ptr<cudf::scalar> sum_of_squares(column_view const& col,
     simple::detail::element_type_dispatcher<cudf::reduction::op::sum_of_squares>{},
     col,
     output_dtype,
-    init,
+    std::nullopt,
     stream,
     mr);
 }

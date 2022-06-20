@@ -60,16 +60,16 @@ struct reduce_dispatch_functor {
       case aggregation::ANY: return reduction::any(col, output_dtype, init, stream, mr); break;
       case aggregation::ALL: return reduction::all(col, output_dtype, init, stream, mr); break;
       case aggregation::SUM_OF_SQUARES:
-        return reduction::sum_of_squares(col, output_dtype, init, stream, mr);
+        return reduction::sum_of_squares(col, output_dtype, stream, mr);
         break;
-      case aggregation::MEAN: return reduction::mean(col, output_dtype, init, stream, mr); break;
+      case aggregation::MEAN: return reduction::mean(col, output_dtype, stream, mr); break;
       case aggregation::VARIANCE: {
         auto var_agg = dynamic_cast<var_aggregation const*>(agg.get());
-        return reduction::variance(col, output_dtype, var_agg->_ddof, init, stream, mr);
+        return reduction::variance(col, output_dtype, var_agg->_ddof, stream, mr);
       } break;
       case aggregation::STD: {
         auto var_agg = dynamic_cast<std_aggregation const*>(agg.get());
-        return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, init, stream, mr);
+        return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, stream, mr);
       } break;
       case aggregation::MEDIAN: {
         auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
@@ -189,6 +189,14 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                scalar const& init,
                                rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(col.type() == init.type(), "column and initial value must be the same type");
+  if (!(agg->kind == aggregation::SUM || agg->kind == aggregation::PRODUCT ||
+        agg->kind == aggregation::MIN || agg->kind == aggregation::MAX ||
+        agg->kind == aggregation::ANY || agg->kind == aggregation::ALL)) {
+    CUDF_FAIL(
+      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
+  }
+
   CUDF_FUNC_RANGE();
   return detail::reduce(col, agg, output_dtype, &init, rmm::cuda_stream_default, mr);
 }

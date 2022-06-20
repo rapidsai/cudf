@@ -78,10 +78,16 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
   size_type num_segments = offsets.size() - 1;
 
   auto binary_op = simple_op.get_binary_op();
-  auto initial_value =
-    (init.has_value() && init.value()->is_valid())
-      ? static_cast<const cudf::scalar_type_t<ResultType>*>(init.value())->value()
-      : simple_op.template get_identity<ResultType>();
+
+  // Cast initial value
+  ResultType initial_value;
+  if (init.has_value() && init.value()->is_valid()) {
+    using ScalarType = cudf::scalar_type_t<InputType>;
+    auto input_value = static_cast<const ScalarType*>(init.value())->value(stream);
+    initial_value    = static_cast<ResultType>(input_value);
+  } else {
+    initial_value = simple_op.template get_identity<ResultType>();
+  }
 
   // TODO: Explore rewriting null_replacing_element_transformer/element_transformer with nullate
   auto result = [&] {
@@ -109,6 +115,8 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
                                                 first_bit_indices_end,
                                                 last_bit_indices_begin,
                                                 null_handling,
+                                                init.has_value(),
+                                                init.has_value() ? init.value()->is_valid() : false,
                                                 stream,
                                                 mr);
   result->set_null_mask(output_null_mask, output_null_count, stream);
@@ -157,10 +165,9 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
     cudf::detail::element_argminmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
   auto constexpr identity =
     is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
-  auto initial_value =
-    (init.has_value() && init.value()->is_valid())
-      ? static_cast<const cudf::scalar_type_t<string_view>*>(init.value())->value()
-      : identity;
+  auto initial_value = (init.has_value() && init.value()->is_valid())
+                         ? static_cast<const cudf::scalar_type_t<size_type>*>(init.value())->value()
+                         : identity;
 
   auto gather_map =
     cudf::reduction::detail::segmented_reduce(it,
@@ -183,6 +190,8 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                                                 offsets.end() - 1,
                                                 offsets.begin() + 1,
                                                 null_handling,
+                                                init.has_value(),
+                                                init.has_value() ? init.value()->is_valid() : false,
                                                 stream,
                                                 mr);
 

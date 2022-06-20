@@ -64,6 +64,20 @@ std::enable_if_t<cudf::is_timestamp_t<T>::value, std::vector<T>> convert_values(
 }
 
 template <typename T>
+std::enable_if_t<!cudf::is_timestamp_t<T>::value, T> convert_int(int value)
+{
+  if (std::is_unsigned_v<T>) value = std::abs(value);
+  return static_cast<T>(value);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_timestamp_t<T>::value, T> convert_int(int value)
+{
+  if (std::is_unsigned_v<T>) value = std::abs(value);
+  return T{typename T::duration(value)};
+}
+
+template <typename T>
 cudf::test::fixed_width_column_wrapper<T> construct_null_column(std::vector<T> const& values,
                                                                 std::vector<bool> const& bools)
 {
@@ -165,7 +179,7 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 0, 1});
   std::vector<bool> all_null({0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
   std::vector<T> v = convert_values<T>(int_values);
-  T init_value     = v.back();
+  T init_value     = convert_int<T>(321);
   auto init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
 
   // Min/Max succeeds for any gdf types including
@@ -316,20 +330,20 @@ TYPED_TEST(SumReductionTest, Sum)
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
   std::vector<T> v = convert_values<T>(int_values);
-  T init_value     = v.back();
+  T init_value     = convert_int<T>(321);
   auto init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
   T expected_value      = std::accumulate(v.begin(), v.end(), T{0});
-  T expected_init_value = std::accumulate(v.begin(), v.end(), init_value);
+  T expected_value_init = std::accumulate(v.begin(), v.end(), init_value);
   this->reduction_test(col,
                        expected_value,
                        this->ret_non_arithmetic,
                        cudf::make_sum_aggregation<reduce_aggregation>());
   this->reduction_test(col,
                        *init_scalar,
-                       expected_init_value,
+                       expected_value_init,
                        this->ret_non_arithmetic,
                        cudf::make_sum_aggregation<reduce_aggregation>());
 
@@ -347,7 +361,9 @@ TYPED_TEST(SumReductionTest, Sum)
                        *init_scalar,
                        expected_null_value,
                        this->ret_non_arithmetic,
-                       cudf::make_sum_aggregation<reduce_aggregation>());
+                       cudf::make_sum_aggregation<reduce_aggregation>(),
+                       cudf::data_type{},
+                       true);
 }
 
 TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
@@ -358,7 +374,7 @@ TYPED_TEST(ReductionTest, Product)
   std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1});
   std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
-  T init_value             = v.back();
+  T init_value             = convert_int<T>(4);
   auto init_scalar         = cudf::make_fixed_width_scalar<T>(init_value);
 
   auto calc_prod = [](std::vector<T>& v) {
@@ -376,7 +392,7 @@ TYPED_TEST(ReductionTest, Product)
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
   TypeParam expected_value      = calc_prod(v);
-  TypeParam expected_init_value = calc_prod_init(v, init_value);
+  TypeParam expected_value_init = calc_prod_init(v, init_value);
 
   this->reduction_test(col,
                        expected_value,
@@ -384,7 +400,7 @@ TYPED_TEST(ReductionTest, Product)
                        cudf::make_product_aggregation<reduce_aggregation>());
   this->reduction_test(col,
                        *init_scalar,
-                       expected_init_value,
+                       expected_value_init,
                        this->ret_non_arithmetic,
                        cudf::make_product_aggregation<reduce_aggregation>());
 
@@ -402,7 +418,9 @@ TYPED_TEST(ReductionTest, Product)
                        *init_scalar,
                        expected_null_value,
                        this->ret_non_arithmetic,
-                       cudf::make_product_aggregation<reduce_aggregation>());
+                       cudf::make_product_aggregation<reduce_aggregation>(),
+                       cudf::data_type{},
+                       true);
 }
 
 TYPED_TEST(ReductionTest, SumOfSquare)
@@ -411,30 +429,18 @@ TYPED_TEST(ReductionTest, SumOfSquare)
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
   std::vector<T> v = convert_values<T>(int_values);
-  T init_value     = v.back();
-  auto init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
 
   auto calc_reduction = [](std::vector<T>& v) {
     T value = std::accumulate(v.begin(), v.end(), T{0}, [](T acc, T i) { return acc + i * i; });
     return value;
   };
-  auto calc_reduction_init = [](std::vector<T>& v, T init) {
-    T value = std::accumulate(v.begin(), v.end(), init, [](T acc, T i) { return acc + i * i; });
-    return value;
-  };
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  T expected_value      = calc_reduction(v);
-  T expected_init_value = calc_reduction_init(v, init_value);
+  T expected_value = calc_reduction(v);
 
   this->reduction_test(col,
                        expected_value,
-                       this->ret_non_arithmetic,
-                       cudf::make_sum_of_squares_aggregation<reduce_aggregation>());
-  this->reduction_test(col,
-                       *init_scalar,
-                       expected_init_value,
                        this->ret_non_arithmetic,
                        cudf::make_sum_of_squares_aggregation<reduce_aggregation>());
 
@@ -442,14 +448,8 @@ TYPED_TEST(ReductionTest, SumOfSquare)
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   auto r                                              = replace_nulls(v, host_bools, T{0});
   T expected_null_value                               = calc_reduction(r);
-  init_scalar->set_valid_async(false);
 
   this->reduction_test(col_nulls,
-                       expected_null_value,
-                       this->ret_non_arithmetic,
-                       cudf::make_sum_of_squares_aggregation<reduce_aggregation>());
-  this->reduction_test(col_nulls,
-                       *init_scalar,
                        expected_null_value,
                        this->ret_non_arithmetic,
                        cudf::make_sum_of_squares_aggregation<reduce_aggregation>());
@@ -467,7 +467,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
   std::vector<int> int_values({true, true, true, true});
   std::vector<bool> host_bools({1, 1, 0, 1});
   std::vector<T> v = convert_values<T>(int_values);
-  auto init_scalar = cudf::make_fixed_width_scalar<T>(v.back());
+  auto init_scalar = cudf::make_fixed_width_scalar<T>(convert_int<T>(true));
 
   // Min/Max succeeds for any gdf types including
   // non-arithmetic types (date32, date64, timestamp, category)
@@ -514,13 +514,15 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
                        expected,
                        result_error,
                        cudf::make_any_aggregation<reduce_aggregation>(),
-                       output_dtype);
+                       output_dtype,
+                       true);
   this->reduction_test(col_nulls,
                        *init_scalar,
                        expected,
                        result_error,
                        cudf::make_all_aggregation<reduce_aggregation>(),
-                       output_dtype);
+                       output_dtype,
+                       true);
 }
 
 TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
@@ -529,7 +531,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
   std::vector<int> int_values({false, false, false, false});
   std::vector<bool> host_bools({1, 1, 0, 1});
   std::vector<T> v = convert_values<T>(int_values);
-  auto init_scalar = cudf::make_fixed_width_scalar<T>(v.back());
+  auto init_scalar = cudf::make_fixed_width_scalar<T>(convert_int<T>(false));
 
   // Min/Max succeeds for any gdf types including
   // non-arithmetic types (date32, date64, timestamp, category)
@@ -576,13 +578,15 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
                        expected,
                        result_error,
                        cudf::make_any_aggregation<reduce_aggregation>(),
-                       output_dtype);
+                       output_dtype,
+                       true);
   this->reduction_test(col_nulls,
                        *init_scalar,
                        expected,
                        result_error,
                        cudf::make_all_aggregation<reduce_aggregation>(),
-                       output_dtype);
+                       output_dtype,
+                       true);
 }
 
 // ----------------------------------------------------------------------------
@@ -915,8 +919,7 @@ TEST_F(ReductionDtypeTest, different_precision)
                                                    cudf::data_type(cudf::type_id::INT64));
 }
 
-struct ReductionErrorTest : public cudf::test::BaseFixture {
-};
+struct ReductionErrorTest : public cudf::test::BaseFixture {};
 
 // test case for empty input cases
 TEST_F(ReductionErrorTest, empty_column)
@@ -951,8 +954,7 @@ TEST_F(ReductionErrorTest, empty_column)
 // ----------------------------------------------------------------------------
 
 struct ReductionParamTest : public ReductionTest<double>,
-                            public ::testing::WithParamInterface<cudf::size_type> {
-};
+                            public ::testing::WithParamInterface<cudf::size_type> {};
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
 
@@ -1686,8 +1688,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
   }
 }
 
-struct Decimal128Only : public cudf::test::BaseFixture {
-};
+struct Decimal128Only : public cudf::test::BaseFixture {};
 
 TEST_F(Decimal128Only, Decimal128ProductReduction)
 {
@@ -1828,8 +1829,7 @@ TYPED_TEST(ReductionTest, NthElement)
   }
 }
 
-struct DictionaryStringReductionTest : public StringReductionTest {
-};
+struct DictionaryStringReductionTest : public StringReductionTest {};
 
 std::vector<std::string> data_list[] = {
   {"nine", "two", "five", "three", "five", "six", "two", "eight", "nine"},
