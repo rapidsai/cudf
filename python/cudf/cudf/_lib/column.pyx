@@ -80,6 +80,7 @@ cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners) except *:
     if buf is None:
         return NULL
 
+    # TODO: use `buf.restricted_ptr()`
     with buf._lock:
         buf_ptr_exposed = buf._ptr_exposed
         buf.move_inplace(target="gpu")  # Unspill

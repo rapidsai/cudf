@@ -236,6 +236,13 @@ class Buffer(Serializable):
 
     @property
     def ptr(self) -> int:
+        """Access the memory directly
+
+        Notice, this will mark the buffer as "exposed" and make
+        it unspillable permanently.
+
+        Consider using `.restricted_ptr` instead.
+        """
         if self._spill_manager is not None:
             self._spill_manager.spill_to_device_limit()
         with self._lock:
@@ -244,6 +251,11 @@ class Buffer(Serializable):
             self._last_accessed = time.monotonic()
             assert self._ptr is not None
             return self._ptr
+
+    @property
+    def restricted_ptr(self):
+        """Access the memory without exposing the buffer permanently"""
+        raise NotImplementedError("TODO: implement")
 
     @property
     def sole_owner(self) -> bool:
