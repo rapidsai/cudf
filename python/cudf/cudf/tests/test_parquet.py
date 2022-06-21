@@ -1619,6 +1619,39 @@ def test_parquet_writer_bytes_io(simple_gdf):
     assert_eq(cudf.read_parquet(output), cudf.concat([simple_gdf, simple_gdf]))
 
 
+@pytest.mark.parametrize(
+    "row_group_size_kwargs",
+    [
+        {"row_group_size_bytes": 4 * 1024},
+        {"row_group_size_rows": 5000},
+    ],
+)
+def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
+    # Check that row_group_size options are exposed in Python
+    # See https://github.com/rapidsai/cudf/issues/10978
+
+    size = 20000
+    gdf = cudf.DataFrame({"a": range(size), "b": [1] * size})
+
+    fname = tmpdir.join("gdf.parquet")
+    with ParquetWriter(fname, **row_group_size_kwargs) as writer:
+        writer.write_table(gdf)
+
+    # Simple check for multiple row-groups
+    nrows, nrow_groups, columns = cudf.io.parquet.read_parquet_metadata(fname)
+    assert nrows == size
+    assert nrow_groups > 1
+    assert columns == ["a", "b"]
+
+    # Know the specific row-group count for row_group_size_rows
+    if "row_group_size_rows" in row_group_size_kwargs:
+        assert (
+            nrow_groups == size // row_group_size_kwargs["row_group_size_rows"]
+        )
+
+    assert_eq(cudf.read_parquet(fname), gdf)
+
+
 @pytest.mark.parametrize("filename", ["myfile.parquet", None])
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
 def test_parquet_partitioned(tmpdir_factory, cols, filename):
@@ -2475,7 +2508,7 @@ def test_parquet_reader_one_level_list2(datadir):
 
 @pytest.mark.parametrize("size_bytes", [4_000_000, 1_000_000, 600_000])
 @pytest.mark.parametrize("size_rows", [1_000_000, 100_000, 10_000])
-def test_parquet_writer_row_group_size(
+def test_to_parquet_row_group_size(
     tmpdir, large_int64_gdf, size_bytes, size_rows
 ):
     fname = tmpdir.join("row_group_size.parquet")
@@ -2515,8 +2548,36 @@ def test_parquet_reader_zstd_compression(datadir):
         df = cudf.read_parquet(fname)
         pdf = pd.read_parquet(fname)
         assert_eq(df, pdf)
-    except RuntimeError as e:
-        if "Unsupported compression type" in str(e):
-            pytest.mark.xfail(reason="nvcomp build doesn't have zstd")
-        else:
-            raise e
+    except RuntimeError:
+        pytest.mark.xfail(reason="zstd support is not enabled")
+
+
+def test_read_parquet_multiple_files(datadir):
+    df_1_path = datadir / "df_1.parquet"
+    df_2_path = datadir / "df_2.parquet"
+    df_1 = cudf.DataFrame({"id": range(100), "a": [1] * 100})
+    df_1.to_parquet(df_1_path)
+
+    df_2 = cudf.DataFrame({"id": range(200, 2200), "a": [2] * 2000})
+    df_2.to_parquet(df_2_path)
+
+    expected = pd.read_parquet([df_1_path, df_2_path])
+    actual = cudf.read_parquet([df_1_path, df_2_path])
+    assert_eq(expected, actual)
+
+    expected = pd.read_parquet([df_2_path, df_1_path])
+    actual = cudf.read_parquet([df_2_path, df_1_path])
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("index", [True, False, None])
+@pytest.mark.parametrize("columns", [None, [], ["b", "a"]])
+def test_parquet_columns_and_index_param(index, columns):
+    buffer = BytesIO()
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    df.to_parquet(buffer, index=index)
+
+    expected = pd.read_parquet(buffer, columns=columns)
+    got = cudf.read_parquet(buffer, columns=columns)
+
+    assert_eq(expected, got, check_index_type=True)
