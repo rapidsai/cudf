@@ -20,14 +20,13 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <strings/utf8.cuh>
-#include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 

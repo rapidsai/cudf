@@ -16,9 +16,9 @@
 
 #include <strings/regex/regcomp.h>
 #include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
