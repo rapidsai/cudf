@@ -38,58 +38,62 @@ def bench_take(benchmark, column, gather_how, nullify):
     benchmark(column.take, gather_map, nullify=nullify)
 
 
-# TODO: Due to https://github.com/smarie/python-pytest-cases/issues/280 we
-# cannot use the accepts_cudf_fixture decorator for cases. If and when that is
-# resolved, we can change all of the cases below to use that instead of
-# hardcoding the fixture name.
-def setitem_case_stride_1_slice_scalar(column_dtype_int_nulls_false):
-    return column_dtype_int_nulls_false, slice(None, None, 1), 42
+@accepts_cudf_fixture(cls="column", dtype="int", nulls=False)
+def setitem_case_stride_1_slice_scalar(column):
+    return column, slice(None, None, 1), 42
 
 
-def setitem_case_stride_2_slice_scalar(column_dtype_int_nulls_false):
-    return column_dtype_int_nulls_false, slice(None, None, 2), 42
+@accepts_cudf_fixture(cls="column", dtype="int", nulls=False)
+def setitem_case_stride_2_slice_scalar(column):
+    return column, slice(None, None, 2), 42
 
 
-def setitem_case_boolean_column_scalar(column_dtype_int_nulls_false):
-    column = column_dtype_int_nulls_false
+@accepts_cudf_fixture(cls="column", dtype="int", nulls=False)
+def setitem_case_boolean_column_scalar(column):
+    column = column
     return column, [True, False] * (len(column) // 2), 42
 
 
-def setitem_case_int_column_scalar(column_dtype_int_nulls_false):
-    column = column_dtype_int_nulls_false
+@accepts_cudf_fixture(cls="column", dtype="int", nulls=False)
+def setitem_case_int_column_scalar(column):
+    column = column
     return column, list(range(len(column))), 42
 
 
+@accepts_cudf_fixture(cls="column", dtype="int", nulls=False)
 def setitem_case_stride_1_slice_align_to_key_size(
-    column_dtype_int_nulls_false,
+    column,
 ):
-    column = column_dtype_int_nulls_false
+    column = column
     key = slice(None, None, 1)
     start, stop, stride = key.indices(len(column))
     materialized_key_size = len(column.slice(start, stop, stride))
     return column, key, [42] * materialized_key_size
 
 
+@accepts_cudf_fixture(cls="column", dtype="int", nulls=False)
 def setitem_case_stride_2_slice_align_to_key_size(
-    column_dtype_int_nulls_false,
+    column,
 ):
-    column = column_dtype_int_nulls_false
+    column = column
     key = slice(None, None, 2)
     start, stop, stride = key.indices(len(column))
     materialized_key_size = len(column.slice(start, stop, stride))
     return column, key, [42] * materialized_key_size
 
 
+@accepts_cudf_fixture(cls="column", dtype="int", nulls=False)
 def setitem_case_boolean_column_align_to_col_size(
-    column_dtype_int_nulls_false,
+    column,
 ):
-    column = column_dtype_int_nulls_false
+    column = column
     size = len(column)
     return column, [True, False] * (size // 2), [42] * size
 
 
-def setitem_case_int_column_align_to_col_size(column_dtype_int_nulls_false):
-    column = column_dtype_int_nulls_false
+@accepts_cudf_fixture(cls="column", dtype="int", nulls=False)
+def setitem_case_int_column_align_to_col_size(column):
+    column = column
     size = len(column)
     return column, list(range(size)), [42] * size
 

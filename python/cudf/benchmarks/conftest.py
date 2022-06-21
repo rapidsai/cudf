@@ -54,7 +54,7 @@ import pytest_cases
 # sessionfinish hooks), we could just make the benchmarks a (sub)package to
 # enable relative imports. A minor change to consider when these are ported
 # into the main repo.
-sys.path.insert(0, os.path.join(os.getcwd(), "common"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
 from config import cudf  # noqa: W0611, E402, F401
 from utils import (  # noqa: E402
