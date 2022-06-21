@@ -10,7 +10,7 @@ features:
       cupy). This feature enables easy comparisons of benchmarks between cudf
       and pandas. All common modules (cudf, cupy) should be imported from here
       by benchmark modules to allow configuration if needed.
-    - Defining CUDF_BENCHMARKS_TEST_ONLY will set global configuration
+    - Defining CUDF_BENCHMARKS_DEBUG_ONLY will set global configuration
       variables to avoid running large benchmarks, instead using minimal values
       to simply ensure that benchmarks are functional.
 
@@ -61,7 +61,7 @@ def pytest_sessionfinish(session, exitstatus):
 
 
 # Constants used to define benchmarking standards.
-if "CUDF_BENCHMARKS_TEST_ONLY" in os.environ:
+if "CUDF_BENCHMARKS_DEBUG_ONLY" in os.environ:
     NUM_ROWS = [10, 20]
     NUM_COLS = [1, 6]
 else:

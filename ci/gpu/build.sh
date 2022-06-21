@@ -237,8 +237,8 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORK
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
 cd "$WORKSPACE/python/cudf"
-CUDF_BENCHMARKS_TEST_ONLY=ON pytest -n 8 benchmarks
-CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_TEST_ONLY=ON pytest -n 8 benchmarks
+CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 benchmarks
+CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 benchmarks
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"
