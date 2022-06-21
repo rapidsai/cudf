@@ -238,6 +238,13 @@ rmm::device_uvector<size_type> distinct_map(
 
 namespace {
 
+void check_compatibility(lists_column_view const& lhs, lists_column_view const& rhs)
+{
+  CUDF_EXPECTS(lhs.size() == rhs.size(), "The input lists column must have the same size.");
+  CUDF_EXPECTS(lhs.size() == rhs.size(),
+               "The input lists column must have children having the same data types");
+}
+
 /**
  * @brief Generate labels for elements in the child column of the input lists column.
  * @param input
@@ -328,7 +335,7 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(lhs.size() == rhs.size(), "TBA");
+  check_compatibility(lhs, rhs);
 
   // - Generate labels for lhs and rhs child elements.
   // - Insert {lhs_labels, lhs_child} table into map.
@@ -389,7 +396,7 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(lhs.size() == rhs.size(), "TBA");
+  check_compatibility(lhs, rhs);
 
   // - Generate labels for lhs and rhs child elements.
   // - Insert {lhs_labels, lhs_child} table into map.
@@ -441,6 +448,8 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
+  check_compatibility(lhs, rhs);
+
   // - concatenate_row(distinct(lhs), set_except(rhs, lhs))
   // todo: add stream in detail version
   // fix concatenate_rows params.
@@ -462,7 +471,7 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(lhs.size() == rhs.size(), "TBA");
+  check_compatibility(lhs, rhs);
 
   // - Generate labels for lhs and rhs child elements.
   // - Insert {rhs_labels, rhs_child} table into map.
