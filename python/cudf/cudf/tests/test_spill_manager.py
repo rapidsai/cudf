@@ -71,16 +71,6 @@ def test_spillable_df_groupby():
     assert df._data._data["x"].data.spillable
 
 
-def test_spillable_df_views():
-    df = gen_df()
-    assert gen_df.is_spillable(df)
-    df_view = df.loc[1:]
-    # TODO: support spillable views, for now we mark the view
-    #       and its base as unspillable
-    assert not gen_df.is_spillable(df_view)
-    assert not gen_df.is_spillable(df)
-
-
 def test_spilling_buffer():
     buf = Buffer(rmm.DeviceBuffer(size=10), ptr_exposed=False)
     buf.move_inplace(target="cpu")
@@ -201,11 +191,12 @@ def test_external_memory_never_spills(manager):
     assert not s._data[None].data.spillable
 
 
-def test_spilling_df_views():
+def test_spilling_df_views(manager):
     df = gen_df()
     assert gen_df.is_spillable(df)
     gen_df.buffer(df).move_inplace(target="cpu")
     assert gen_df.is_spilled(df)
     df_view = df.loc[1:]
-    assert not gen_df.is_spillable(df_view)
-    assert not gen_df.is_spillable(df)
+    assert gen_df.is_spillable(df_view)
+    assert gen_df.is_spillable(df)
+    del df.loc  # Delete the cached view
