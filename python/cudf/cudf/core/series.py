@@ -563,7 +563,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def axes(self):
         """
         Return a list representing the axes of the Series.
-            Series.axes returns a list containing the row index.
+
+        Series.axes returns a list containing the row index.
 
         Examples
         --------
