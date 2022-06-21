@@ -29,16 +29,6 @@ def format_bytes(nbytes: int) -> str:
     return f"{n:.2f} TiB"
 
 
-def get_base_buffer(obj: Any) -> Optional[Buffer]:
-    if isinstance(obj, Buffer):
-        if obj._sole_owner:
-            return obj
-        return get_base_buffer(obj._owner)
-    if hasattr(obj, "base_data"):
-        return get_base_buffer(obj.base_data)
-    return None
-
-
 class DelayedPointerTuple(Sequence):
     """
     A delayed version of the "data" field in __cuda_array_interface__.
@@ -149,13 +139,6 @@ class Buffer(Serializable):
                 raise TypeError("data must be Buffer, array-like or integer")
             self._init_from_array_like(np.asarray(data), owner)
 
-        if not self._sole_owner and self._owner is not None:
-            base_buffer = get_base_buffer(self._owner)
-            if base_buffer is not None:
-                with base_buffer._lock:
-                    assert not base_buffer.is_spilled
-                    base_buffer._ptr_exposed = True
-
         self._spill_manager = None
         if global_manager.enabled:
             self._spill_manager = global_manager.get()
@@ -195,7 +178,7 @@ class Buffer(Serializable):
         ret = cls()
         ret._ptr = buffer.ptr + offset
         ret._size = buffer.size if size is None else size
-        ret._owner = get_base_buffer(buffer)
+        ret._owner = buffer
         return ret
 
     def __len__(self) -> int:
