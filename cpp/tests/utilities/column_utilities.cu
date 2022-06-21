@@ -1054,13 +1054,26 @@ struct column_view_printer {
     if (col.is_empty()) return;
     auto h_data = cudf::test::to_host<std::string>(col);
 
+    // explicitly replace '\r' and '\n' characters with "\r" and "\n" strings respectively.
+    auto cleaned = [](std::string_view in) {
+      std::string out(in);
+      auto replace_char = [](std::string& out, char c, std::string_view repl) {
+        for (std::string::size_type pos{}; out.npos != (pos = out.find(c, pos)); pos++) {
+          out.replace(pos, 1, repl);
+        }
+      };
+      replace_char(out, '\r', "\\r");
+      replace_char(out, '\n', "\\n");
+      return out;
+    };
+
     out.resize(col.size());
     std::transform(thrust::make_counting_iterator(size_type{0}),
                    thrust::make_counting_iterator(col.size()),
                    out.begin(),
-                   [&h_data](auto idx) {
+                   [&](auto idx) {
                      return h_data.second.empty() || bit_is_set(h_data.second.data(), idx)
-                              ? h_data.first[idx]
+                              ? cleaned(h_data.first[idx])
                               : std::string("NULL");
                    });
   }
