@@ -178,6 +178,12 @@ def accepts_cudf_fixture(
 
         src = textwrap.dedent(
             f"""
+            import makefun
+            @makefun.wraps(
+                bm,
+                remove_args=("{name}",),
+                prepend_args=("{fixture_name}",)
+            )
             def wrapped_bm({params_str}):
                 return bm({arg_str})
             """
@@ -188,8 +194,6 @@ def accepts_cudf_fixture(
         # In case marks were applied to the original benchmark, copy them over.
         if marks := getattr(bm, "pytestmark", None):
             wrapped_bm.pytestmark = marks
-        wrapped_bm.__name__ = bm.__name__
-        wrapped_bm.__module__ = bm.__module__
         wrapped_bm.place_as = bm
         return wrapped_bm
 
