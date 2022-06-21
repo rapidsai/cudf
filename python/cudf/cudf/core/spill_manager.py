@@ -63,7 +63,7 @@ class SpillManager:
 
     def add(self, buffer: Buffer) -> None:
         with self._lock:
-            if buffer.sole_owner and buffer.size > 0:
+            if buffer.size > 0 and not buffer.ptr_exposed:
                 self._base_buffers[self._id_counter] = buffer
                 self._id_counter += 1
         self.spill_to_device_limit()

@@ -70,12 +70,9 @@ class Buffer(Serializable):
         Python object to which the lifetime of the memory
         allocation is tied. If provided, a reference to this
         object is kept in this Buffer.
-    sole_owner : bool, optional
-        Whether or not this buffer is the sole owner of the
-        underlying memory.
     ptr_exposed : bool, optional
         Whether or not a raw pointer (integer or C pointer) has
-        been exposed to the outside world . If this is the case,
+        been exposed to the outside world. If this is the case,
         the buffer cannot be spilled.
     """
 
@@ -85,7 +82,6 @@ class Buffer(Serializable):
     _ptr_exposed: bool  # Guarded by `_lock`
     _size: int  # read-only
     _owner: object  # read-only
-    _sole_owner: bool  # read-only
     _spill_manager: Optional[SpillManager]  # read-only
     _access_counter: AccessCounter
     _last_accessed: float
@@ -95,15 +91,13 @@ class Buffer(Serializable):
         data: Any = None,
         size: int = None,
         owner: object = None,
-        sole_owner: bool = False,
-        ptr_exposed: bool = False,
+        ptr_exposed: bool = True,
     ):
         from cudf._lib.column import AccessCounter
         from cudf.core.spill_manager import global_manager
 
         self._lock = RLock()
         self._access_counter = AccessCounter()
-        self._sole_owner = sole_owner
         self._ptr_exposed = ptr_exposed
         self._ptr_desc = {"type": "gpu"}
         self._last_accessed = time.monotonic()
@@ -146,18 +140,11 @@ class Buffer(Serializable):
                 base = self._spill_manager.lookup_address_range(
                     self._ptr, self._size
                 )
-                if self._sole_owner:
-                    if base is not None:
-                        raise RuntimeError(
-                            "Creating sole owning buffer of already "
-                            f"known memory {self} {base}"
-                        )
-                elif base:
-                    with base._lock:
-                        assert not base.is_spilled
-                        base._ptr_exposed = True
-
-                self._spill_manager.add(self)
+                if base is not None:
+                    base.ptr  # expose base buffer
+                elif not self._ptr_exposed:
+                    # `self` is a base buffer that hasn't been exposed
+                    self._spill_manager.add(self)
 
     @classmethod
     def from_buffer(cls, buffer: Buffer, size: int = None, offset: int = 0):
@@ -241,20 +228,12 @@ class Buffer(Serializable):
         raise NotImplementedError("TODO: implement")
 
     @property
-    def sole_owner(self) -> bool:
-        return self._sole_owner
-
-    @property
     def ptr_exposed(self) -> bool:
         return self._ptr_exposed
 
     @property
     def spillable(self) -> bool:
-        return (
-            self._sole_owner
-            and not self._ptr_exposed
-            and self._access_counter.use_count() == 1
-        )
+        return not self._ptr_exposed and self._access_counter.use_count() == 1
 
     @property
     def size(self) -> int:
@@ -356,8 +335,7 @@ class Buffer(Serializable):
             data_info = str(hex(self._ptr))
         return (
             f"<cudf.core.buffer.Buffer size={format_bytes(self._size)} "
-            f"spillable={self.spillable} sole_owner={self.sole_owner} "
-            f"ptr_exposed={self.ptr_exposed} "
+            f"spillable={self.spillable} ptr_exposed={self.ptr_exposed} "
             f"access_counter={self._access_counter.use_count()} "
             f"ptr={data_info} owner={repr(self._owner)}>"
         )

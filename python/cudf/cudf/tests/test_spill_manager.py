@@ -34,12 +34,12 @@ def manager(request):
 
 
 def test_spillable_buffer():
-    buf = Buffer(rmm.DeviceBuffer(size=10), sole_owner=True)
+    buf = Buffer(rmm.DeviceBuffer(size=10), ptr_exposed=False)
     assert buf.spillable
     buf.ptr  # Expose pointer
     assert buf.ptr_exposed
     assert not buf.spillable
-    buf = Buffer(rmm.DeviceBuffer(size=10), sole_owner=True)
+    buf = Buffer(rmm.DeviceBuffer(size=10), ptr_exposed=False)
     # Notice, accessing `__cuda_array_interface__` itself doesn't
     # expose the pointer, only accessing the "data" field exposes
     # the pointer.
@@ -82,7 +82,7 @@ def test_spillable_df_views():
 
 
 def test_spilling_buffer():
-    buf = Buffer(rmm.DeviceBuffer(size=10), sole_owner=True)
+    buf = Buffer(rmm.DeviceBuffer(size=10), ptr_exposed=False)
     buf.move_inplace(target="cpu")
     assert buf.is_spilled
     buf.ptr  # Expose pointer and trigger unspill
