@@ -186,6 +186,21 @@ def test_lookup_address_range(manager: SpillManager):
     assert manager.lookup_address_range(buf.ptr - buf.size, buf.size) is None
 
 
+def test_external_memory_never_spills(manager):
+    """
+    Test that external data, i.e., data not managed by RMM,
+    is never spilled
+    """
+
+    cp = pytest.importorskip("cupy")
+    cp.cuda.set_allocator()  # uses default allocator
+
+    a = cp.asarray([1, 2, 3])
+    s = cudf.Series(a)
+    assert len(manager.base_buffers()) == 0
+    assert not s._data[None].data.spillable
+
+
 def test_spilling_df_views():
     df = gen_df()
     assert gen_df.is_spillable(df)
