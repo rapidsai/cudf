@@ -205,7 +205,7 @@ outputs:
         - test -f $PREFIX/include/cudf/strings/case.hpp
         - test -f $PREFIX/include/cudf/strings/char_types/char_cases.hpp
         - test -f $PREFIX/include/cudf/strings/char_types/char_types.hpp
-        - test -f $PREFIX/include/cudf/strings/char_types/char_types_enum.hpp        
+        - test -f $PREFIX/include/cudf/strings/char_types/char_types_enum.hpp
         - test -f $PREFIX/include/cudf/strings/combine.hpp
         - test -f $PREFIX/include/cudf/strings/contains.hpp
         - test -f $PREFIX/include/cudf/strings/convert/convert_booleans.hpp
