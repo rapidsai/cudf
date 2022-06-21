@@ -89,15 +89,16 @@ class Buffer(Serializable):
         the buffer cannot be spilled.
     """
 
-    _ptr: Optional[int]
-    _ptr_desc: dict
-    _size: int
-    _owner: object
-    _sole_owner: bool
+    _lock: RLock
+    _ptr: Optional[int]  # Guarded by `_lock`
+    _ptr_desc: dict  # Guarded by `_lock`
+    _ptr_exposed: bool  # Guarded by `_lock`
+    _size: int  # read-only
+    _owner: object  # read-only
+    _sole_owner: bool  # read-only
+    _spill_manager: Optional[SpillManager]  # read-only
     _access_counter: AccessCounter
-    _ptr_exposed: bool
     _last_accessed: float
-    _spill_manager: Optional[SpillManager]
 
     def __init__(
         self,
