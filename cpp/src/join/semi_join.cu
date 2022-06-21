@@ -14,18 +14,14 @@
  * limitations under the License.
  */
 
-#include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -38,7 +34,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 namespace cudf {
 namespace detail {
