@@ -75,8 +75,14 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   }
 
   // For other keep options, perform a (sparse) reduce-by-row on the rows compared equal.
-  auto const reduction_results = spare_reduce_by_row(
-    map, preprocessed_input, input.num_rows(), has_nulls, keep, nulls_equal, stream, mr);
+  auto const reduction_results = spare_reduce_by_row(map,
+                                                     preprocessed_input,
+                                                     input.num_rows(),
+                                                     has_nulls,
+                                                     keep,
+                                                     nulls_equal,
+                                                     stream,
+                                                     rmm::mr::get_current_device_resource());
 
   // Extract the desired output indices from reduction results.
   auto const map_end = [&] {

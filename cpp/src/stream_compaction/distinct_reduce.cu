@@ -57,7 +57,7 @@ struct reduce_by_row_fn {
       // Store the greatest index of all rows that are equal.
       atomicMax(out_ptr, idx);
     } else {
-      // Count the number of rows that are equal to the row having its index inserted.
+      // Count the number of rows in each group of rows that are compared equal.
       atomicAdd(out_ptr, size_type{1});
     }
   }
@@ -75,11 +75,11 @@ struct reduce_by_row_fn {
       // All duplicate rows will have concurrent access to this same output slot.
       return &d_output[inserted_idx];
     } else {
-      // All input `idx` values have been inserted into map before.
+      // All input `idx` values have been inserted into the map before.
       // Thus, searching for an `idx` key resulting in the `end()` iterator only happens if
       // `d_equal(idx, idx) == false`.
       // Such situations are due to comparing nulls or NaNs which are considered as always unequal.
-      // In those cases, rows containing nulls or NaNs are distinct, so just return their direct
+      // In those cases, all rows containing nulls or NaNs are distinct. Just return their direct
       // output slot.
       return &d_output[idx];
     }
@@ -101,7 +101,7 @@ rmm::device_uvector<size_type> spare_reduce_by_row(
   CUDF_EXPECTS(keep != duplicate_keep_option::KEEP_ANY,
                "KEEP_ANY should not be called with this function");
 
-  auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream);
+  auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream, mr);
 
   thrust::uninitialized_fill(rmm::exec_policy(stream),
                              reduction_results.begin(),
