@@ -36,7 +36,8 @@
 template <typename T>
 class default_allocator;
 
-namespace cudf::detail {
+namespace cudf {
+namespace detail {
 
 constexpr int DEFAULT_JOIN_CG_SIZE = 2;
 
@@ -182,21 +183,5 @@ struct hash_join {
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr) const;
 };
-
-/**
- * @copydoc cudf::left_semi_join_contains(cudf::table_view const&,
- *                                        cudf::table_view const&,
- *                                        null_equality,
- *                                        nan_equality,
- *                                        rmm::mr::device_memory_resource*)
- * @param stream CUDA stream used for device memory operations and kernel launches
- */
-rmm::device_uvector<bool> left_semi_join_contains(
-  cudf::table_view const& left_keys,
-  cudf::table_view const& right_keys,
-  null_equality compare_nulls,
-  nan_equality compare_nans,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-}  // namespace cudf::detail
+}  // namespace detail
+}  // namespace cudf
