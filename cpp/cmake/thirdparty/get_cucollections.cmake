@@ -22,7 +22,7 @@ function(find_and_configure_cucollections)
     GLOBAL_TARGETS cuco::cuco
     BUILD_EXPORT_SET cudf-exports
     CPM_ARGS GITHUB_REPOSITORY PointKernel/cuCollections
-    GIT_TAG 32d0b17317827ba61de9870c10fea3e1acd4cc25
+    GIT_TAG 21b85075df0d3a96b5fcd8f80ee7656280aaa2eb
     EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS}
     OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
