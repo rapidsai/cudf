@@ -379,7 +379,7 @@ class string_view {
   /**
    * @brief Common internal implementation for string_view::find and string_view::rfind.
    *
-   * @tparam reverse True for rfind
+   * @tparam forward True for find and false for rfind
    *
    * @param str Target string to search with this string
    * @param bytes Number of bytes in str
@@ -387,7 +387,7 @@ class string_view {
    * @param count Number of characters from pos to include in the search
    * @return -1 if arg string is not found in this string
    */
-  template <bool reverse>
+  template <bool forward>
   __device__ inline size_type find_impl(const char* str,
                                         size_type bytes,
                                         size_type pos,

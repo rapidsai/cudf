@@ -330,7 +330,7 @@ __device__ inline size_type string_view::find(const string_view& str,
   return find(str.data(), str.size_bytes(), pos, count);
 }
 
-template <bool reverse>
+template <bool forward>
 __device__ inline size_type string_view::find_impl(const char* str,
                                                    size_type bytes,
                                                    size_type pos,
@@ -344,14 +344,14 @@ __device__ inline size_type string_view::find_impl(const char* str,
 
   auto const find_length = (epos - spos) - bytes + 1;
 
-  auto ptr = data() + (reverse ? (epos - bytes) : spos);
+  auto ptr = data() + (forward ? spos : (epos - bytes));
   for (size_type idx = 0; idx < find_length; ++idx) {
     bool match = true;
     for (size_type jdx = 0; match && (jdx < bytes); ++jdx) {
       match = (ptr[jdx] == str[jdx]);
     }
-    if (match) { return character_offset(reverse ? (epos - bytes - idx) : (idx + spos)); }
-    reverse ? --ptr : ++ptr;
+    if (match) { return character_offset(forward ? (idx + spos) : (epos - bytes - idx)); }
+    forward ? ++ptr : --ptr;
   }
   return -1;
 }
@@ -361,7 +361,7 @@ __device__ inline size_type string_view::find(const char* str,
                                               size_type pos,
                                               size_type count) const
 {
-  return find_impl<false>(str, bytes, pos, count);
+  return find_impl<true>(str, bytes, pos, count);
 }
 
 __device__ inline size_type string_view::find(char_utf8 chr, size_type pos, size_type count) const
@@ -383,7 +383,7 @@ __device__ inline size_type string_view::rfind(const char* str,
                                                size_type pos,
                                                size_type count) const
 {
-  return find_impl<true>(str, bytes, pos, count);
+  return find_impl<false>(str, bytes, pos, count);
 }
 
 __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, size_type count) const
