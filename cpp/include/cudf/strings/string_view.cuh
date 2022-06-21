@@ -330,33 +330,38 @@ __device__ inline size_type string_view::find(const string_view& str,
   return find(str.data(), str.size_bytes(), pos, count);
 }
 
+template <bool forward>
+__device__ inline size_type string_view::find_impl(const char* str,
+                                                   size_type bytes,
+                                                   size_type pos,
+                                                   size_type count) const
+{
+  if (!str || pos < 0) return -1;
+  auto const nchars = length();
+  if (count < 0) count = nchars;
+  auto const spos = byte_offset(pos);
+  auto const epos = byte_offset(std::min(pos + count, nchars));
+
+  auto const find_length = (epos - spos) - bytes + 1;
+
+  auto ptr = data() + (forward ? spos : (epos - bytes));
+  for (size_type idx = 0; idx < find_length; ++idx) {
+    bool match = true;
+    for (size_type jdx = 0; match && (jdx < bytes); ++jdx) {
+      match = (ptr[jdx] == str[jdx]);
+    }
+    if (match) { return character_offset(forward ? (idx + spos) : (epos - bytes - idx)); }
+    forward ? ++ptr : --ptr;
+  }
+  return -1;
+}
+
 __device__ inline size_type string_view::find(const char* str,
                                               size_type bytes,
                                               size_type pos,
                                               size_type count) const
 {
-  const char* sptr = data();
-  if (!str || !bytes) return -1;
-  size_type nchars = length();
-  if (count < 0) count = nchars;
-  size_type end = pos + count;
-  if (end < 0 || end > nchars) end = nchars;
-  size_type spos = byte_offset(pos);
-  size_type epos = byte_offset(end);
-
-  size_type len2 = bytes;
-  size_type len1 = (epos - spos) - len2 + 1;
-
-  const char* ptr1 = sptr + spos;
-  const char* ptr2 = str;
-  for (size_type idx = 0; idx < len1; ++idx) {
-    bool match = true;
-    for (size_type jdx = 0; match && (jdx < len2); ++jdx)
-      match = (ptr1[jdx] == ptr2[jdx]);
-    if (match) return character_offset(idx + spos);
-    ptr1++;
-  }
-  return -1;
+  return find_impl<true>(str, bytes, pos, count);
 }
 
 __device__ inline size_type string_view::find(char_utf8 chr, size_type pos, size_type count) const
@@ -378,27 +383,7 @@ __device__ inline size_type string_view::rfind(const char* str,
                                                size_type pos,
                                                size_type count) const
 {
-  const char* sptr = data();
-  if (!str || !bytes) return -1;
-  size_type nchars = length();
-  size_type end    = pos + count;
-  if (end < 0 || end > nchars) end = nchars;
-  size_type spos = byte_offset(pos);
-  size_type epos = byte_offset(end);
-
-  size_type len2 = bytes;
-  size_type len1 = (epos - spos) - len2 + 1;
-
-  const char* ptr1 = sptr + epos - len2;
-  const char* ptr2 = str;
-  for (int idx = 0; idx < len1; ++idx) {
-    bool match = true;
-    for (size_type jdx = 0; match && (jdx < len2); ++jdx)
-      match = (ptr1[jdx] == ptr2[jdx]);
-    if (match) return character_offset(epos - len2 - idx);
-    ptr1--;  // go backwards
-  }
-  return -1;
+  return find_impl<false>(str, bytes, pos, count);
 }
 
 __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, size_type count) const
