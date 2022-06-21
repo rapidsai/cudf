@@ -70,7 +70,7 @@ cdef class AccessCounter:
 
 ctypedef vector[shared_ptr[void]] OwnersVecT  # Type aliasing
 
-cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners):
+cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners) except *:
     """
     Retrieve the raw data pointer of `buf`. If adds an owner reference
     to `owners`.
@@ -87,7 +87,7 @@ cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners):
         buf._last_accessed = time.monotonic()
         ac = buf._access_counter
         deref(owners).push_back(static_pointer_cast[void, int](ac.counter))
-        # Now that we have a refence to `ac.counter`, we can recover
+        # Now that we have a reference to `ac.counter`, we can recover
         # the "expose" state of `buf`
         buf._ptr_exposed = buf_ptr_exposed
         return <void*><uintptr_t>buf._ptr
