@@ -2700,8 +2700,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def axes(self):
         """
         Return a list representing the axes of the DataFrame.
+
         DataFrame.axes returns a list of two elements:
-            element zero is the row index and element one is the columns.
+        element zero is the row index and element one is the columns.
 
         Examples
         --------
