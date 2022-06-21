@@ -82,6 +82,7 @@ class Buffer(Serializable):
     _ptr_exposed: bool  # Guarded by `_lock`
     _size: int  # read-only
     _owner: object  # read-only
+    _view_desc: Optional[dict]  # read-only
     _spill_manager: Optional[SpillManager]  # read-only
     _access_counter: AccessCounter
     _last_accessed: float
@@ -101,6 +102,9 @@ class Buffer(Serializable):
         self._ptr_exposed = ptr_exposed
         self._ptr_desc = {"type": "gpu"}
         self._last_accessed = time.monotonic()
+        self._view_desc = (
+            None  # TODO: make a view its own subclass `BufferView`
+        )
 
         if isinstance(data, Buffer):
             self._ptr = data.ptr
@@ -136,7 +140,7 @@ class Buffer(Serializable):
         self._spill_manager = None
         if global_manager.enabled:
             self._spill_manager = global_manager.get()
-            if self._ptr and self._size:
+            if self._ptr:
                 base = self._spill_manager.lookup_address_range(
                     self._ptr, self._size
                 )
@@ -163,9 +167,21 @@ class Buffer(Serializable):
         """
 
         ret = cls()
-        ret._ptr = buffer.ptr + offset
         ret._size = buffer.size if size is None else size
         ret._owner = buffer
+        if ret._spill_manager is None or buffer.ptr_exposed:
+            ret._ptr = buffer.ptr + offset
+            return ret
+
+        # Get base buffer
+        if buffer._view_desc is None:
+            base = buffer
+            base_offset = 0
+        else:
+            base = buffer._view_desc["base"]
+            base_offset = buffer._view_desc["offset"]
+
+        ret._view_desc = {"base": base, "offset": base_offset + offset}
         return ret
 
     def __len__(self) -> int:
@@ -173,9 +189,12 @@ class Buffer(Serializable):
 
     @property
     def is_spilled(self) -> bool:
+        if self._view_desc:
+            return self._view_desc["base"].is_spilled
         return self._ptr_desc["type"] != "gpu"
 
     def move_inplace(self, target: str = "cpu") -> None:
+        assert self._view_desc is None
         with self._lock:
             ptr_type = self._ptr_desc["type"]
             if ptr_type == target:
@@ -213,6 +232,8 @@ class Buffer(Serializable):
 
         Consider using `.restricted_ptr` instead.
         """
+        if self._view_desc:
+            return self._view_desc["base"].ptr + self._view_desc["offset"]
         if self._spill_manager is not None:
             self._spill_manager.spill_to_device_limit()
         with self._lock:
@@ -229,10 +250,14 @@ class Buffer(Serializable):
 
     @property
     def ptr_exposed(self) -> bool:
+        if self._view_desc:
+            return self._view_desc["base"].ptr_exposed
         return self._ptr_exposed
 
     @property
     def spillable(self) -> bool:
+        if self._view_desc:
+            return self._view_desc["base"].spillable
         return not self._ptr_exposed and self._access_counter.use_count() == 1
 
     @property
@@ -245,6 +270,8 @@ class Buffer(Serializable):
 
     @property
     def last_accessed(self) -> float:
+        if self._view_desc:
+            return self._view_desc["base"]._last_accessed
         return self._last_accessed
 
     @property
@@ -337,7 +364,8 @@ class Buffer(Serializable):
             f"<cudf.core.buffer.Buffer size={format_bytes(self._size)} "
             f"spillable={self.spillable} ptr_exposed={self.ptr_exposed} "
             f"access_counter={self._access_counter.use_count()} "
-            f"ptr={data_info} owner={repr(self._owner)}>"
+            f"ptr={data_info} owner={repr(self._owner)} "
+            f"view_desc: {self._view_desc}>"
         )
 
 

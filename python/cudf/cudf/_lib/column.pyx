@@ -72,26 +72,35 @@ ctypedef vector[shared_ptr[void]] OwnersVecT  # Type aliasing
 
 cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners) except *:
     """
-    Retrieve the raw data pointer of `buf`. If adds an owner reference
+    Retrieve the raw data pointer of `buf` and adds an owner reference
     to `owners`.
     """
     cdef AccessCounter ac
+    cdef size_t offset
 
     if buf is None:
         return NULL
 
     # TODO: use `buf.restricted_ptr()`
-    with buf._lock:
-        buf_ptr_exposed = buf._ptr_exposed
-        buf.move_inplace(target="gpu")  # Unspill
-        buf._ptr_exposed = True  # Expose the raw pointer
-        buf._last_accessed = time.monotonic()
-        ac = buf._access_counter
+
+    # Get base buffer
+    if buf._view_desc is None:
+        base = buf
+        offset = 0
+    else:
+        base = buf._view_desc["base"]
+        offset = buf._view_desc["offset"]
+
+    # We need to lock the base until we got a reference to `ac.counter`
+    with base._lock:
+        base.move_inplace(target="gpu")  # Unspill
+        base._last_accessed = time.monotonic()
+
+        # Grab the access counter of the base buffer
+        ac = base._access_counter
         deref(owners).push_back(static_pointer_cast[void, int](ac.counter))
-        # Now that we have a reference to `ac.counter`, we can recover
-        # the "expose" state of `buf`
-        buf._ptr_exposed = buf_ptr_exposed
-        return <void*><uintptr_t>buf._ptr
+
+        return <void*><uintptr_t> base._ptr + offset
 
 
 cdef class Column:
