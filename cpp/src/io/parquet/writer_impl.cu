@@ -37,7 +37,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
-#include <iomanip>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -862,6 +861,8 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                      size_type max_page_size_rows,
                      rmm::cuda_stream_view stream)
 {
+  if (chunks.host_view().flat_view().size() == 0) { return hostdevice_vector<size_type>{}; }
+
   chunks.host_to_device(stream);
   // Calculate number of pages and store in respective chunks
   gpu::InitEncoderPages(chunks,
@@ -902,12 +903,10 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
 
   // Get per-page max compressed size
   hostdevice_vector<size_type> comp_page_sizes(0, num_pages, stream);
-  auto pages_comp_max_size = 0;
   for (auto page_size : page_sizes) {
     size_t page_comp_max_size = 0;
     nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
       page_size, nvcompBatchedSnappyDefaultOpts, &page_comp_max_size);
-    pages_comp_max_size += page_comp_max_size;
     comp_page_sizes.insert(page_comp_max_size);
   }
   comp_page_sizes.host_to_device(stream);
@@ -1465,11 +1464,8 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   }
 
   // Build chunk dictionaries and count pages
-  hostdevice_vector<size_type> comp_page_sizes;
-  if (num_chunks != 0) {
-    comp_page_sizes = init_page_sizes(
-      chunks, col_desc, num_columns, max_page_size_bytes, max_page_size_rows, stream);
-  }
+  hostdevice_vector<size_type> comp_page_sizes =
+    init_page_sizes(chunks, col_desc, num_columns, max_page_size_bytes, max_page_size_rows, stream);
 
   // Get the maximum page size across all chunks
   size_type max_page_uncomp_data_size =

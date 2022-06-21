@@ -300,8 +300,9 @@ __global__ void __launch_bounds__(128)
         page_g.num_leaf_values = ck_g.num_dict_entries;
         page_g.num_values      = ck_g.num_dict_entries;  // TODO: shouldn't matter for dict page
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
-        if (not comp_page_sizes.empty())
+        if (not comp_page_sizes.empty()) {
           comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page];
+        }
         page_headers_size += page_g.max_hdr_size;
         max_page_data_size = max(max_page_data_size, page_g.max_data_size);
       }
@@ -370,8 +371,9 @@ __global__ void __launch_bounds__(128)
             page_g.max_hdr_size += stats_hdr_len;
           }
           page_g.page_data = ck_g.uncompressed_bfr + page_offset;
-          if (not comp_page_sizes.empty())
+          if (not comp_page_sizes.empty()) {
             page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
+          }
           page_g.start_row        = cur_row;
           page_g.num_rows         = rows_in_page;
           page_g.num_leaf_values  = leaf_values_in_page;
@@ -393,8 +395,9 @@ __global__ void __launch_bounds__(128)
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
           page_offset += page_g.max_hdr_size + page_g.max_data_size;
-          if (not comp_page_sizes.empty())
+          if (not comp_page_sizes.empty()) {
             comp_page_offset += page_g.max_hdr_size + comp_page_sizes[ck_g.first_page + num_pages];
+          }
           page_headers_size += page_g.max_hdr_size;
           max_page_data_size = max(max_page_data_size, page_g.max_data_size);
           cur_row += rows_in_page;
@@ -438,7 +441,7 @@ __global__ void __launch_bounds__(128)
       ck_g.bfr_size           = page_offset;
       ck_g.page_headers_size  = page_headers_size;
       ck_g.max_page_data_size = max_page_data_size;
-      if (not comp_page_sizes.empty()) ck_g.compressed_size = comp_page_offset;
+      if (not comp_page_sizes.empty()) { ck_g.compressed_size = comp_page_offset; }
       pagestats_g.start_chunk = ck_g.first_page + ck_g.use_dictionary;  // Exclude dictionary
       pagestats_g.num_chunks  = num_pages - ck_g.use_dictionary;
     }
