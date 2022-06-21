@@ -18,7 +18,17 @@
 #include <join/join_common_utils.hpp>
 
 #include <cudf/detail/join.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+
+#include <cuco/static_multimap.cuh>
 
 namespace cudf::detail {
 
@@ -26,10 +36,6 @@ namespace {
 
 using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
-
-using nan_equal_comparator =
-  cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
 
 /**
  * @brief Device functor to create a pair of hash value and index for a given row.
@@ -61,7 +67,7 @@ struct pair_comparator_fn {
 
   template <typename LHSPair, typename RHSPair>
   __device__ inline bool operator()(LHSPair const& lhs_hash_and_index,
-                                    RHSPair const& rhs_hash_and_index) const noexcept
+                                    RHSPair const& rhs_hash_and_index) const
   {
     auto const& [lhs_hash, lhs_index] = lhs_hash_and_index;
     auto const& [rhs_hash, rhs_index] = rhs_hash_and_index;
@@ -179,6 +185,10 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                         pair_comparator_fn{d_eqcomp},
                         stream.value());
     };
+
+    using nan_equal_comparator =
+      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
 
     if (compare_nans == nan_equality::ALL_EQUAL) {
       search_contains(nan_equal_comparator{});
