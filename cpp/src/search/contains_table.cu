@@ -176,7 +176,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
 
-    auto const search_contains = [&](auto const value_comp) {
+    auto const check_contains = [&](auto const value_comp) {
       auto const d_eqcomp = comparator.equal_to(
         nullate::DYNAMIC{needles_has_nulls || haystack_has_nulls}, compare_nulls, value_comp);
       map.pair_contains(kv_it,
@@ -191,9 +191,9 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
 
     if (compare_nans == nan_equality::ALL_EQUAL) {
-      search_contains(nan_equal_comparator{});
+      check_contains(nan_equal_comparator{});
     } else {
-      search_contains(nan_unequal_comparator{});
+      check_contains(nan_unequal_comparator{});
     }
   }
 
