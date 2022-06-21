@@ -74,7 +74,7 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
  */
 rmm::device_uvector<size_type> spare_reduce_by_row(
   hash_map_type const& map,
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const& preprocessed_input,
+  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
   cudf::nullate::DYNAMIC has_nulls,
   duplicate_keep_option keep,
