@@ -42,14 +42,6 @@ def make_boolean_mask_column(size):
     return cudf.core.column.as_column(rstate.randint(0, 2, size).astype(bool))
 
 
-def flatten(xs):
-    for x in xs:
-        if not isinstance(x, str):
-            yield from x
-        else:
-            yield x
-
-
 def accepts_cudf_fixture(
     cls, *, dtype="int", nulls=None, cols=None, rows=None, name=None
 ):

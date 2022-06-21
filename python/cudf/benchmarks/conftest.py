@@ -89,7 +89,9 @@ fixtures = OrderedSet()
 for dtype, column_generator in column_generators.items():
 
     def make_dataframe(nr, nc, column_generator=column_generator):
-        assert nc <= len(string.ascii_lowercase)
+        assert nc <= len(
+            string.ascii_lowercase
+        ), "make_dataframe only supports a maximum of 26 columns"
         return cudf.DataFrame(
             {
                 f"{string.ascii_lowercase[i]}": column_generator(nr)
