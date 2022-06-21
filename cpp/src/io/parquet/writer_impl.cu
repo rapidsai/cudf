@@ -902,13 +902,13 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   page_sizes.device_to_host(stream, true);
 
   // Get per-page max compressed size
-  hostdevice_vector<size_type> comp_page_sizes(0, num_pages, stream);
-  for (auto page_size : page_sizes) {
+  hostdevice_vector<size_type> comp_page_sizes(num_pages, stream);
+  std::transform(page_sizes.begin(), page_sizes.end(), comp_page_sizes.begin(), [](auto page_size) {
     size_t page_comp_max_size = 0;
     nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
       page_size, nvcompBatchedSnappyDefaultOpts, &page_comp_max_size);
-    comp_page_sizes.insert(page_comp_max_size);
-  }
+    return page_comp_max_size;
+  });
   comp_page_sizes.host_to_device(stream);
 
   // Use per-page max compressed size to calculate chunk.compressed_size
