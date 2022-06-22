@@ -105,26 +105,32 @@ std::unique_ptr<column> list_distinct(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
+  // Algorithm:
+  // - Generate labels for the child elements.
+  // - Get indices of distinct rows of the table {labels, child}.
+  // - Scatter the distinct indices into a marker array, which marks whether a row will be copied to
+  //   the output.
+  // - Collect output rows (with row order preserved) using the marker array and build the output
+  //   lists column.
+
   auto const child       = input.get_sliced_child(stream);
   auto const labels      = generate_labels(input, stream);
   auto const input_table = table_view{{labels->view(), child}};
 
-  auto const distinct_indices =
-    cudf::detail::get_distinct_indices(table_view{{labels->view(), child}},
-                                       duplicate_keep_option::KEEP_ANY,
-                                       nulls_equal,
-                                       nans_equal,
-                                       stream);
+  auto const distinct_indices = cudf::detail::get_distinct_indices(
+    input_table, duplicate_keep_option::KEEP_ANY, nulls_equal, nans_equal, stream);
 
-  auto index_markers = rmm::device_uvector<bool>(child.size(), stream);
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream), index_markers.begin(), index_markers.end(), false);
-  thrust::scatter(
-    rmm::exec_policy(stream),
-    thrust::constant_iterator<size_type>(true, 0),
-    thrust::constant_iterator<size_type>(true, static_cast<size_type>(distinct_indices.size())),
-    distinct_indices.begin(),
-    index_markers.begin());
+  auto const index_markers = [&] {
+    auto markers = rmm::device_uvector<bool>(child.size(), stream);
+    thrust::uninitialized_fill(rmm::exec_policy(stream), markers.begin(), markers.end(), false);
+    thrust::scatter(
+      rmm::exec_policy(stream),
+      thrust::constant_iterator<size_type>(true, 0),
+      thrust::constant_iterator<size_type>(true, static_cast<size_type>(distinct_indices.size())),
+      distinct_indices.begin(),
+      markers.begin());
+    return markers;
+  }();
 
   auto const distinct_table = cudf::detail::copy_if(
     input_table,
