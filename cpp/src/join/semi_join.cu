@@ -26,6 +26,7 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -266,7 +267,7 @@ std::unique_ptr<cudf::table> left_semi_join(cudf::table_view const& left,
                                      left_on,
                                      right_on,
                                      compare_nulls,
-                                     rmm::cuda_stream_default,
+                                     cudf::default_stream_value,
                                      mr);
 }
 
@@ -278,7 +279,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_join(
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join(
-    detail::join_kind::LEFT_SEMI_JOIN, left, right, compare_nulls, rmm::cuda_stream_default, mr);
+    detail::join_kind::LEFT_SEMI_JOIN, left, right, compare_nulls, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
@@ -295,7 +296,7 @@ std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
                                      left_on,
                                      right_on,
                                      compare_nulls,
-                                     rmm::cuda_stream_default,
+                                     cudf::default_stream_value,
                                      mr);
 }
 
@@ -307,7 +308,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_anti_join(
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join(
-    detail::join_kind::LEFT_ANTI_JOIN, left, right, compare_nulls, rmm::cuda_stream_default, mr);
+    detail::join_kind::LEFT_ANTI_JOIN, left, right, compare_nulls, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

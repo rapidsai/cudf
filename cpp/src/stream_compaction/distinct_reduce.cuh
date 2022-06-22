@@ -79,6 +79,6 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
   duplicate_keep_option keep,
   null_equality nulls_equal,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace cudf::detail

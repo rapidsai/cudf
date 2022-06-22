@@ -75,14 +75,8 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   }
 
   // For other keep options, perform a (sparse) reduce-by-row on the rows compared equal.
-  auto const reduction_results = hash_reduce_by_row(map,
-                                                    std::move(preprocessed_input),
-                                                    input.num_rows(),
-                                                    has_nulls,
-                                                    keep,
-                                                    nulls_equal,
-                                                    stream,
-                                                    rmm::mr::get_current_device_resource());
+  auto const reduction_results = hash_reduce_by_row(
+    map, std::move(preprocessed_input), input.num_rows(), has_nulls, keep, nulls_equal, stream);
 
   // Extract the desired output indices from reduction results.
   auto const map_end = [&] {
@@ -142,7 +136,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(input, keys, keep, nulls_equal, rmm::cuda_stream_default, mr);
+  return detail::distinct(input, keys, keep, nulls_equal, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf
