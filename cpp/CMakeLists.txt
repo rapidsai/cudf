@@ -54,8 +54,6 @@ option(
          stream to external libraries."
   OFF
 )
-option(PER_THREAD_DEFAULT_STREAM "[DEPRECATED] Build with per-thread default stream" OFF)
-mark_as_advanced(FORCE, PER_THREAD_DEFAULT_STREAM)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
@@ -64,16 +62,6 @@ option(CUDA_ENABLE_LINEINFO
 )
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-
-# PER_THREAD_DEFAULT_STREAM will be replaced with CUDF_USE_PER_THREAD_DEFAULT_STREAM
-if(PER_THREAD_DEFAULT_STREAM)
-  set(CUDF_USE_PER_THREAD_DEFAULT_STREAM ON)
-  message(
-    DEPRECATION
-      "CUDF: PER_THREAD_DEFAULT_STREAM is deprecated, and will be removed in a future release,
-        please use CUDF_USE_PER_THREAD_DEFAULT_STREAM instead."
-  )
-endif()
 
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
