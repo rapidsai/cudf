@@ -52,10 +52,6 @@ namespace {
 using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
 
-// using hash_map      = cuco::static_map<lhs_index_type,
-//                                  lhs_index_type,
-//                                  cuda::thread_scope_device,
-//                                  cudf::detail::hash_table_allocator_type>;
 using hash_multimap = cuco::static_multimap<hash_value_type,
                                             lhs_index_type,
                                             cuda::thread_scope_device,
@@ -99,11 +95,11 @@ struct pair_comparator_fn {
  *        Note: This need to be implemented in semi-anti-join
  *        https://github.com/rapidsai/cudf/issues/11037
  */
-rmm::device_uvector<bool> check_contains(table_view const& lhs,
-                                         table_view const& rhs,
-                                         null_equality nulls_equal,
-                                         nan_equality nans_equal,
-                                         rmm::cuda_stream_view stream)
+rmm::device_uvector<bool> contains(table_view const& lhs,
+                                   table_view const& rhs,
+                                   null_equality nulls_equal,
+                                   nan_equality nans_equal,
+                                   rmm::cuda_stream_view stream)
 {
   auto map = std::make_unique<hash_multimap>(
     compute_hash_table_size(lhs.num_rows()),
@@ -178,12 +174,12 @@ rmm::device_uvector<bool> check_contains(table_view const& lhs,
 }
 
 /**
- * @brief distinct_map
+ * @brief get_distinct_indices
  *
  * This is the future work: https://github.com/rapidsai/cudf/pull/11052, and
  * https://github.com/rapidsai/cudf/issues/11092
  */
-rmm::device_uvector<size_type> distinct_map(
+rmm::device_uvector<size_type> get_distinct_indices(
   table_view const& input,
   std::vector<size_type> const& keys,
   null_equality nulls_equal,
@@ -295,7 +291,7 @@ std::unique_ptr<column> list_distinct(
   auto const labels      = generate_labels(input, stream);
   auto const input_table = table_view{{labels->view(), child}};
 
-  auto const distinct_indices = temporary::distinct_map(
+  auto const distinct_indices = temporary::get_distinct_indices(
     table_view{{labels->view(), child}}, {0, 1}, nulls_equal, nans_equal, stream);
 
   auto index_markers = rmm::device_uvector<bool>(child.size(), stream);
@@ -350,8 +346,7 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
   // todo handle nans
-  auto const contained =
-    temporary::check_contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
+  auto const contained = temporary::contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
 
   // This stores the unique label values, used as scatter map.
   auto list_indices = rmm::device_uvector<size_type>(lhs.size(), stream);
@@ -415,8 +410,7 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
   // todo handle nans
-  auto const contained =
-    temporary::check_contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
+  auto const contained = temporary::contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
 
   auto const intersect_table = cudf::detail::copy_if(
     rhs_table,
@@ -490,8 +484,7 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
   auto const inv_contained = [&] {
-    auto contained =
-      temporary::check_contains(rhs_table, lhs_table, nulls_equal, nans_equal, stream);
+    auto contained = temporary::contains(rhs_table, lhs_table, nulls_equal, nans_equal, stream);
     thrust::transform(rmm::exec_policy(stream),
                       contained.begin(),
                       contained.end(),
@@ -508,7 +501,7 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
     stream);
 
   auto const distinct_indices =
-    temporary::distinct_map(lhs_table, {0, 1}, nulls_equal, nans_equal, stream);
+    temporary::get_distinct_indices(lhs_table, {0, 1}, nulls_equal, nans_equal, stream);
   auto index_markers = rmm::device_uvector<bool>(lhs_child.size(), stream);
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), index_markers.begin(), index_markers.end(), false);
