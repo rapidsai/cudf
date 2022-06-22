@@ -25,7 +25,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/lists/combine.hpp>
+#include <cudf/lists/detail/combine.hpp>
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -275,18 +275,15 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
 {
   check_compatibility(lhs, rhs);
 
-  // - concatenate_row(distinct(lhs), set_except(rhs, lhs))
-  // todo: add stream in detail version
-  // fix concatenate_rows params.
   auto const lhs_distinct = list_distinct(lhs, nulls_equal, nans_equal, stream);
 
   // The result table from set_different already contains distinct rows.
-  auto const diff = set_difference(rhs, lhs, nulls_equal, nans_equal, mr);
+  auto const diff = lists::detail::set_difference(rhs, lhs, nulls_equal, nans_equal, stream);
 
-  return lists::concatenate_rows(table_view{{lhs_distinct->view(), diff->view()}},
-                                 concatenate_null_policy::IGNORE,
-                                 //    stream, //todo: add detail interface
-                                 mr);
+  return lists::detail::concatenate_rows(table_view{{lhs_distinct->view(), diff->view()}},
+                                         concatenate_null_policy::NULLIFY_OUTPUT_ROW,
+                                         stream,
+                                         mr);
 }
 
 std::unique_ptr<column> set_difference(lists_column_view const& lhs,
