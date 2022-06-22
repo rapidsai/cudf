@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -37,7 +38,7 @@ namespace jni {
 class maps_column_view {
 public:
   maps_column_view(lists_column_view const &lists_of_structs,
-                   rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                   rmm::cuda_stream_view stream = cudf::default_stream_value);
 
   // Rule of 5.
   maps_column_view(maps_column_view const &maps_view) = default;
@@ -81,7 +82,7 @@ public:
    * @return std::unique_ptr<column> Column of values corresponding the value of the lookup key.
    */
   std::unique_ptr<column> get_values_for(
-      column_view const &keys, rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+      column_view const &keys, rmm::cuda_stream_view stream = cudf::default_stream_value,
       rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
 
   /**
@@ -99,7 +100,7 @@ public:
    * @return std::unique_ptr<column>
    */
   std::unique_ptr<column> get_values_for(
-      scalar const &key, rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+      scalar const &key, rmm::cuda_stream_view stream = cudf::default_stream_value,
       rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
 
   /**
@@ -119,7 +120,7 @@ public:
    * @return std::unique_ptr<column>
    */
   std::unique_ptr<column>
-  contains(scalar const &key, rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+  contains(scalar const &key, rmm::cuda_stream_view stream = cudf::default_stream_value,
            rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
 
 private:

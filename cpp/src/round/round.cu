@@ -28,6 +28,7 @@
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -343,7 +344,7 @@ std::unique_ptr<column> round(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::round(input, decimal_places, method, rmm::cuda_stream_default, mr);
+  return cudf::detail::round(input, decimal_places, method, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

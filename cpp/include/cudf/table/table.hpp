@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -67,7 +68,7 @@ class table {
    * @param mr Device memory resource used for allocating the device memory for the new columns
    */
   table(table_view view,
-        rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+        rmm::cuda_stream_view stream        = cudf::default_stream_value,
         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

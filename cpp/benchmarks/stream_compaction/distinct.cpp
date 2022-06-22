@@ -46,7 +46,11 @@ void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
-    auto result = cudf::detail::distinct(input_table, {0}, cudf::null_equality::EQUAL, stream_view);
+    auto result = cudf::detail::distinct(input_table,
+                                         {0},
+                                         cudf::duplicate_keep_option::KEEP_ANY,
+                                         cudf::null_equality::EQUAL,
+                                         stream_view);
   });
 }
 
@@ -86,7 +90,8 @@ void nvbench_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     rmm::cuda_stream_view stream_view{launch.get_stream()};
-    auto result = cudf::detail::distinct(*table, {0}, cudf::null_equality::EQUAL, stream_view);
+    auto result = cudf::detail::distinct(
+      *table, {0}, cudf::duplicate_keep_option::KEEP_ANY, cudf::null_equality::EQUAL, stream_view);
   });
 }
 
