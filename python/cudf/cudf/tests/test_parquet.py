@@ -1673,7 +1673,6 @@ def test_parquet_writer_column_index(tmpdir):
     assert s2 > s1
 
 
-
 @pytest.mark.parametrize("filename", ["myfile.parquet", None])
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
 def test_parquet_partitioned(tmpdir_factory, cols, filename):
