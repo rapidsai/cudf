@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/transpose.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -62,7 +63,7 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
                                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transpose(input, rmm::cuda_stream_default, mr);
+  return detail::transpose(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

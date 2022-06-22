@@ -24,6 +24,7 @@
 #include <cudf/lists/list_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/struct_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -228,7 +229,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
 bool contains(column_view const& haystack, scalar const& needle)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needle, rmm::cuda_stream_default);
+  return detail::contains(haystack, needle, cudf::default_stream_value);
 }
 
 std::unique_ptr<column> contains(column_view const& haystack,
@@ -236,7 +237,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needles, rmm::cuda_stream_default, mr);
+  return detail::contains(haystack, needles, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf
