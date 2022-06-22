@@ -75,14 +75,14 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   }
 
   // For other keep options, perform a (sparse) reduce-by-row on the rows compared equal.
-  auto const reduction_results = spare_reduce_by_row(map,
-                                                     std::move(preprocessed_input),
-                                                     input.num_rows(),
-                                                     has_nulls,
-                                                     keep,
-                                                     nulls_equal,
-                                                     stream,
-                                                     rmm::mr::get_current_device_resource());
+  auto const reduction_results = hash_reduce_by_row(map,
+                                                    std::move(preprocessed_input),
+                                                    input.num_rows(),
+                                                    has_nulls,
+                                                    keep,
+                                                    nulls_equal,
+                                                    stream,
+                                                    rmm::mr::get_current_device_resource());
 
   // Extract the desired output indices from reduction results.
   auto const map_end = [&] {
@@ -98,7 +98,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     }
 
     // Reduction results with `KEEP_FIRST` and `KEEP_LAST` are row indices of the first/last row in
-    // each group of equal rows (which are the desired output indicies), or the value given by
+    // each group of equal rows (which are the desired output indices), or the value given by
     // `reduction_init_value()`.
     return thrust::copy_if(rmm::exec_policy(stream),
                            reduction_results.begin(),

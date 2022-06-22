@@ -88,7 +88,7 @@ struct reduce_by_row_fn {
 
 }  // namespace
 
-rmm::device_uvector<size_type> spare_reduce_by_row(
+rmm::device_uvector<size_type> hash_reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
@@ -99,7 +99,7 @@ rmm::device_uvector<size_type> spare_reduce_by_row(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(keep != duplicate_keep_option::KEEP_ANY,
-               "KEEP_ANY should not be called with this function");
+               "This function should not be called with KEEP_ANY");
 
   auto reduction_results = rmm::device_uvector<size_type>(num_rows, stream, mr);
 

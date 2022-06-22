@@ -30,7 +30,7 @@
 namespace cudf::detail {
 
 /**
- * @brief Return the value to initialize reduction results of `spare_reduce_by_row`.
+ * @brief Return the reduction identity used to initialize results of `hash_reduce_by_row`.
  *
  * @param keep A value of `duplicate_keep_option` type, must not be `KEEP_ANY`.
  * @return The initial reduction value.
@@ -41,7 +41,7 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
     case duplicate_keep_option::KEEP_FIRST: return std::numeric_limits<size_type>::max();
     case duplicate_keep_option::KEEP_LAST: return std::numeric_limits<size_type>::min();
     case duplicate_keep_option::KEEP_NONE: return size_type{0};
-    default: CUDF_UNREACHABLE("KEEP_ANY should not be called with this function");
+    default: CUDF_UNREACHABLE("This function should not be called with KEEP_ANY");
   }
 }
 
@@ -53,26 +53,26 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
  * rows.
  *
  * Depending on the `keep` parameter, the reduction operation for each row group is:
- * - If `keep == KEEP_FIRST`: min of row index in the group.
- * - If `keep == KEEP_LAST`: max of row index in the group.
- * - If `keep == KEEP_NONE`: group size.
+ * - If `keep == KEEP_FIRST`: min of row indices in the group.
+ * - If `keep == KEEP_LAST`: max of row indices in the group.
+ * - If `keep == KEEP_NONE`: count of equivalent rows (group size).
  *
  * At the beginning of the operation, the entire output array is filled with a value given by
  * the `reduction_init_value()` function. Then, the reduction result for each row group is written
- * into the output array at an index that is the index of an unspecified row in the group.
+ * into the output array at the index of an unspecified row in the group.
  *
  * @param map The auxiliary map to perform reduction
  * @param preprocessed_input The preprocessed of the input rows for computing row hashing and row
  *        comparisons
  * @param num_rows The number of all input rows
  * @param has_nulls Indicate whether the input rows has any nulls at any nested levels
- * @param keep The parameter to determin what type of reduction to perform
+ * @param keep The parameter to determine what type of reduction to perform
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the sparse reduction results
  */
-rmm::device_uvector<size_type> spare_reduce_by_row(
+rmm::device_uvector<size_type> hash_reduce_by_row(
   hash_map_type const& map,
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> const preprocessed_input,
   size_type num_rows,
