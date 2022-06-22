@@ -63,7 +63,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     auto contained = contains(right_keys,
                               left_keys,
                               compare_nulls,
-                              nan_equality::UNEQUAL,
+                              nan_equality::ALL_EQUAL,
                               stream,
                               rmm::mr::get_current_device_resource());
     if (kind == join_kind::LEFT_ANTI_JOIN) {
