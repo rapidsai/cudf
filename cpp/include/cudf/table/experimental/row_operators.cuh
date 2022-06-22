@@ -205,6 +205,9 @@ struct sorting_physical_element_comparator {
   }
 };
 
+// #define PRINTF(...) printf(__VA_ARGS__)
+#define PRINTF(...)
+
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
  *
@@ -401,13 +404,13 @@ class device_row_comparator {
         lcol = detail::lists_column_device_view(lcol).get_sliced_child();
         rcol = detail::lists_column_device_view(rcol).get_sliced_child();
       }
-      printf("max_def_level: %d\n", _max_def_level);
+      PRINTF("max_def_level: %d\n", _max_def_level);
 
-      printf("t: %d, lhs_element_index: %d, rhs_element_index: %d\n",
+      PRINTF("t: %d, lhs_element_index: %d, rhs_element_index: %d\n",
              threadIdx.x,
              lhs_element_index,
              rhs_element_index);
-      printf("t: %d, l_start: %d, l_end: %d, r_start: %d, r_end: %d\n",
+      PRINTF("t: %d, l_start: %d, l_end: %d, r_start: %d, r_end: %d\n",
              threadIdx.x,
              l_start,
              l_end,
@@ -415,8 +418,8 @@ class device_row_comparator {
              r_end);
       weak_ordering state{weak_ordering::EQUIVALENT};
       for (int i = l_start, j = r_start, k = 0; i < l_end and j < r_end; ++i, ++j) {
-        printf("t: %d, i: %d, j: %d, k: %d\n", threadIdx.x, i, j, k);
-        printf("t: %d, def_l: %d, def_r: %d, rep_l: %d, rep_r: %d\n",
+        PRINTF("t: %d, i: %d, j: %d, k: %d\n", threadIdx.x, i, j, k);
+        PRINTF("t: %d, def_l: %d, def_r: %d, rep_l: %d, rep_r: %d\n",
                threadIdx.x,
                _def_level[i],
                _def_level[j],
@@ -424,12 +427,12 @@ class device_row_comparator {
                _rep_level[j]);
         if (_def_level[i] != _def_level[j]) {
           state = (_def_level[i] < _def_level[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
-          printf("t: %d, def, state: %d\n", threadIdx.x, state);
+          PRINTF("t: %d, def, state: %d\n", threadIdx.x, state);
           return cuda::std::pair(state, _depth);
         }
         if (_rep_level[i] != _rep_level[j]) {
           state = (_rep_level[i] < _rep_level[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
-          printf("t: %d, rep, state: %d\n", threadIdx.x, state);
+          PRINTF("t: %d, rep, state: %d\n", threadIdx.x, state);
           return cuda::std::pair(state, _depth);
         }
         if (_def_level[i] == _max_def_level) {
@@ -438,7 +441,7 @@ class device_row_comparator {
           cuda::std::tie(state, last_null_depth) =
             cudf::type_dispatcher<dispatch_void_if_nested>(lcol.type(), comparator, k, k);
           if (state != weak_ordering::EQUIVALENT) {
-            printf("t: %d, leaf, state: %d\n", threadIdx.x, state);
+            PRINTF("t: %d, leaf, state: %d\n", threadIdx.x, state);
             return cuda::std::pair(state, _depth);
           }
           ++k;

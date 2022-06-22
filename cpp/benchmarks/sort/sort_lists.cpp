@@ -44,6 +44,6 @@ void nvbench_sort_lists(nvbench::state& state)
 
 NVBENCH_BENCH(nvbench_sort_lists)
   .set_name("sort_list")
-  .add_int64_power_of_two_axis("size_bytes", {17})
-  .add_int64_axis("depth", {1})
-  .add_float64_axis("null_frequency", {0});
+  .add_int64_power_of_two_axis("size_bytes", {10, 18, 24, 28})
+  .add_int64_axis("depth", {1, 4})
+  .add_float64_axis("null_frequency", {0, 0.2});
