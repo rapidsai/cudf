@@ -23,6 +23,7 @@
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -417,10 +418,13 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
     [contained = contained.begin()] __device__(auto const idx) { return contained[idx]; },
     stream);
 
-  // todo: support nans equal
-  // todo use detail stream api
-  auto const output_table =
-    distinct(intersect_table->view(), {0, 1}, nulls_equal, /*nans_equal*/ /*stream*/ mr);
+  auto output_table = cudf::detail::distinct(intersect_table->view(),
+                                             {0, 1},
+                                             duplicate_keep_option::KEEP_ANY,
+                                             nulls_equal,
+                                             nans_equal,
+                                             stream,
+                                             mr);
 
   auto out_offsets =
     reconstruct_offsets(output_table->get_column(0).view(), lhs.size(), stream, mr);
