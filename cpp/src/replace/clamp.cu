@@ -81,10 +81,10 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
 
 template <typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& input,
-                                                  OptionalScalarIterator const& lo_itr,
-                                                  ReplaceScalarIterator const& lo_replace_itr,
-                                                  OptionalScalarIterator const& hi_itr,
-                                                  ReplaceScalarIterator const& hi_replace_itr,
+                                                  OptionalScalarIterator lo_itr,
+                                                  ReplaceScalarIterator lo_replace_itr,
+                                                  OptionalScalarIterator hi_itr,
+                                                  ReplaceScalarIterator hi_replace_itr,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
@@ -153,10 +153,10 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
-  OptionalScalarIterator const& lo_itr,
-  ReplaceScalarIterator const& lo_replace_itr,
-  OptionalScalarIterator const& hi_itr,
-  ReplaceScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator lo_itr,
+  ReplaceScalarIterator lo_replace_itr,
+  OptionalScalarIterator hi_itr,
+  ReplaceScalarIterator hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -200,10 +200,10 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
-  OptionalScalarIterator const& lo_itr,
-  ReplaceScalarIterator const& lo_replace_itr,
-  OptionalScalarIterator const& hi_itr,
-  ReplaceScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator lo_itr,
+  ReplaceScalarIterator lo_replace_itr,
+  OptionalScalarIterator hi_itr,
+  ReplaceScalarIterator hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -215,10 +215,10 @@ std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<cudf::column>> 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<column> clamp(
   column_view const& input,
-  OptionalScalarIterator const& lo_itr,
-  ReplaceScalarIterator const& lo_replace_itr,
-  OptionalScalarIterator const& hi_itr,
-  ReplaceScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator lo_itr,
+  ReplaceScalarIterator lo_replace_itr,
+  OptionalScalarIterator hi_itr,
+  ReplaceScalarIterator hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
