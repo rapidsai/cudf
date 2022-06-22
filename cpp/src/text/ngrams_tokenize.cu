@@ -27,6 +27,7 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -138,7 +139,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   cudf::size_type ngrams               = 2,
   cudf::string_scalar const& delimiter = cudf::string_scalar(""),
   cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream         = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
@@ -262,7 +263,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
 {
   CUDF_FUNC_RANGE();
   return detail::ngrams_tokenize(
-    strings, ngrams, delimiter, separator, rmm::cuda_stream_default, mr);
+    strings, ngrams, delimiter, separator, cudf::default_stream_value, mr);
 }
 
 }  // namespace nvtext

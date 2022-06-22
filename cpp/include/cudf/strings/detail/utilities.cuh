@@ -20,6 +20,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -52,7 +53,7 @@ template <typename InputIterator>
 std::unique_ptr<column> make_offsets_child_column(
   InputIterator begin,
   InputIterator end,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(begin < end, "Invalid iterator range");
@@ -120,7 +121,7 @@ auto make_strings_children(
   SizeAndExecuteFunction size_and_exec_fn,
   size_type exec_size,
   size_type strings_count,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto offsets_column = make_numeric_column(
@@ -177,7 +178,7 @@ template <typename SizeAndExecuteFunction>
 auto make_strings_children(
   SizeAndExecuteFunction size_and_exec_fn,
   size_type strings_count,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   return make_strings_children(size_and_exec_fn, strings_count, strings_count, stream, mr);

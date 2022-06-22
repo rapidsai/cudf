@@ -25,6 +25,7 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -65,7 +66,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
-  return detail::encode(input, rmm::cuda_stream_default, mr);
+  return detail::encode(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf
