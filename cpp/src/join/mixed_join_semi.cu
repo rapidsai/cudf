@@ -28,6 +28,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -502,7 +503,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
                                                      binary_predicate,
                                                      compare_nulls,
                                                      detail::join_kind::LEFT_SEMI_JOIN,
-                                                     rmm::cuda_stream_default,
+                                                     cudf::default_stream_value,
                                                      mr);
 }
 
@@ -525,7 +526,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
                                  compare_nulls,
                                  detail::join_kind::LEFT_SEMI_JOIN,
                                  output_size_data,
-                                 rmm::cuda_stream_default,
+                                 cudf::default_stream_value,
                                  mr);
 }
 
@@ -546,7 +547,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
                                                      binary_predicate,
                                                      compare_nulls,
                                                      detail::join_kind::LEFT_ANTI_JOIN,
-                                                     rmm::cuda_stream_default,
+                                                     cudf::default_stream_value,
                                                      mr);
 }
 
@@ -569,7 +570,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
                                  compare_nulls,
                                  detail::join_kind::LEFT_ANTI_JOIN,
                                  output_size_data,
-                                 rmm::cuda_stream_default,
+                                 cudf::default_stream_value,
                                  mr);
 }
 

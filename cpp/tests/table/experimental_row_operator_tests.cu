@@ -25,6 +25,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -50,7 +51,7 @@ auto self_comparison(cudf::table_view input,
                      std::vector<cudf::order> const& column_order,
                      PhysicalElementComparator comparator)
 {
-  rmm::cuda_stream_view stream{};
+  rmm::cuda_stream_view stream{cudf::default_stream_value};
 
   auto const table_comparator = lexicographic::self_comparator{input, column_order, {}, stream};
   auto const less_comparator  = table_comparator.less(cudf::nullate::NO{}, comparator);
@@ -73,7 +74,7 @@ auto two_table_comparison(cudf::table_view lhs,
                           std::vector<cudf::order> const& column_order,
                           PhysicalElementComparator comparator)
 {
-  rmm::cuda_stream_view stream{};
+  rmm::cuda_stream_view stream{cudf::default_stream_value};
 
   auto const table_comparator =
     lexicographic::two_table_comparator{lhs, rhs, column_order, {}, stream};
@@ -98,7 +99,7 @@ auto self_equality(cudf::table_view input,
                    std::vector<cudf::order> const& column_order,
                    PhysicalElementComparator comparator)
 {
-  rmm::cuda_stream_view stream{};
+  rmm::cuda_stream_view stream{cudf::default_stream_value};
 
   auto const table_comparator = equality::self_comparator{input, stream};
   auto const equal_comparator =
@@ -122,7 +123,7 @@ auto two_table_equality(cudf::table_view lhs,
                         std::vector<cudf::order> const& column_order,
                         PhysicalElementComparator comparator)
 {
-  rmm::cuda_stream_view stream{};
+  rmm::cuda_stream_view stream{cudf::default_stream_value};
 
   auto const table_comparator = equality::two_table_comparator{lhs, rhs, stream};
   auto const equal_comparator =

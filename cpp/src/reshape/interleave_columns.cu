@@ -24,6 +24,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -293,7 +294,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::interleave_columns(input, rmm::cuda_stream_default, mr);
+  return detail::interleave_columns(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

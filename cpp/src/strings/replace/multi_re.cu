@@ -26,6 +26,7 @@
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -196,7 +197,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(strings, patterns, replacements, flags, rmm::cuda_stream_default, mr);
+  return detail::replace_re(strings, patterns, replacements, flags, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings
