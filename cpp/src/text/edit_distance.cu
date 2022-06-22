@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -308,7 +309,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::edit_distance(strings, targets, rmm::cuda_stream_default, mr);
+  return detail::edit_distance(strings, targets, cudf::default_stream_value, mr);
 }
 
 /**
@@ -318,7 +319,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::edit_distance_matrix(strings, rmm::cuda_stream_default, mr);
+  return detail::edit_distance_matrix(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace nvtext

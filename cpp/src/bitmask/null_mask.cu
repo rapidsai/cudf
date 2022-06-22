@@ -25,6 +25,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -157,7 +158,7 @@ rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::mr::device_memory_resource* mr)
 {
-  return detail::create_null_mask(size, state, rmm::cuda_stream_default, mr);
+  return detail::create_null_mask(size, state, cudf::default_stream_value, mr);
 }
 
 // Set pre-allocated null mask of given bit range [begin_bit, end_bit) to valid, if valid==true,
@@ -509,25 +510,25 @@ rmm::device_buffer copy_bitmask(bitmask_type const* mask,
                                 size_type end_bit,
                                 rmm::mr::device_memory_resource* mr)
 {
-  return detail::copy_bitmask(mask, begin_bit, end_bit, rmm::cuda_stream_default, mr);
+  return detail::copy_bitmask(mask, begin_bit, end_bit, cudf::default_stream_value, mr);
 }
 
 // Create a bitmask from a column view
 rmm::device_buffer copy_bitmask(column_view const& view, rmm::mr::device_memory_resource* mr)
 {
-  return detail::copy_bitmask(view, rmm::cuda_stream_default, mr);
+  return detail::copy_bitmask(view, cudf::default_stream_value, mr);
 }
 
 std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  return detail::bitmask_and(view, rmm::cuda_stream_default, mr);
+  return detail::bitmask_and(view, cudf::default_stream_value, mr);
 }
 
 std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
                                                     rmm::mr::device_memory_resource* mr)
 {
-  return detail::bitmask_or(view, rmm::cuda_stream_default, mr);
+  return detail::bitmask_or(view, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

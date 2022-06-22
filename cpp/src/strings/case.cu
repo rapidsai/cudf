@@ -29,6 +29,7 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -187,21 +188,21 @@ std::unique_ptr<column> to_lower(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_lower(strings, rmm::cuda_stream_default, mr);
+  return detail::to_lower(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> to_upper(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_upper(strings, rmm::cuda_stream_default, mr);
+  return detail::to_upper(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> swapcase(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::swapcase(strings, rmm::cuda_stream_default, mr);
+  return detail::swapcase(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings
