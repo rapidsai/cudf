@@ -108,9 +108,8 @@ std::unique_ptr<column> list_distinct(
   // Algorithm:
   // - Generate labels for the child elements.
   // - Get indices of distinct rows of the table {labels, child}.
-  // - Scatter the distinct indices into a marker array, which marks whether a row will be copied to
-  //   the output.
-  // - Collect output rows (with row order preserved) using the marker array and build the output
+  // - Scatter these indices into a marker array that marks if a row will be copied to the output.
+  // - Collect output rows (with order preserved) using the marker array and build the output
   //   lists column.
 
   auto const child       = input.get_sliced_child(stream);
@@ -159,12 +158,14 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  check_compatibility(lhs, rhs);
-
+  // Algorithm:
   // - Generate labels for lhs and rhs child elements.
-  // - Insert {lhs_labels, lhs_child} table into map.
-  // - Check contains for {rhs_labels, rhs_child} table.
-  // - `reduce_by_key` with keys are rhs_labels and `logical_or` functor for contains values.
+  // - Check existence for rows of the table {rhs_labels, rhs_child} in the table
+  //   {lhs_labels, lhs_child}.
+  // - `reduce_by_key` with keys are rhs_labels and `logical_or` reduction on the existence array
+  //   computed in the previous step.
+
+  check_compatibility(lhs, rhs);
 
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
@@ -173,40 +174,40 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
   auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
-  // todo handle nans
+  // Check existence for each row of the rhs_table in the lhs_table.
   auto const contained =
     cudf::detail::contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
 
   // This stores the unique label values, used as scatter map.
   auto list_indices = rmm::device_uvector<size_type>(lhs.size(), stream);
 
-  // Stores the overlap check for non-empty lists.
-  auto overlap_result = rmm::device_uvector<bool>(lhs.size(), stream);
+  // Stores the result of checking overlap for non-empty lists.
+  auto overlap_results = rmm::device_uvector<bool>(lhs.size(), stream);
 
   auto const labels_begin           = rhs_labels->view().template begin<size_type>();
   auto const end                    = thrust::reduce_by_key(rmm::exec_policy(stream),
                                          labels_begin,  // keys
                                          labels_begin + rhs_labels->size(),  // keys
                                          contained.begin(),  // values to reduce
-                                         list_indices.begin(),    // out keys
-                                         overlap_result.begin(),  // out values
+                                         list_indices.begin(),     // out keys
+                                         overlap_results.begin(),  // out values
                                          thrust::equal_to{},  // comp for keys
                                          thrust::logical_or{});  // reduction op for values
-  auto const num_non_empty_segments = thrust::distance(overlap_result.begin(), end.second);
+  auto const num_non_empty_segments = thrust::distance(overlap_results.begin(), end.second);
 
+  auto [nullmask, null_count] =
+    cudf::detail::bitmask_or(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
   // todo fix null mask null count
-  auto result             = make_numeric_column(data_type{type_to_id<bool>()},
-                                    lhs.size(),
-                                    copy_bitmask(lhs.parent()),  // bitmask and(lhs, rhs)?
-                                    lhs.null_count(),
-                                    stream,
-                                    mr);
+  auto result = make_numeric_column(
+    data_type{type_to_id<bool>()}, lhs.size(), std::move(null_mask), null_count, stream, mr);
   auto const result_begin = result->mutable_view().template begin<bool>();
-  thrust::uninitialized_fill(rmm::exec_policy(stream), result_begin, result_begin, false);
 
+  // `overlap_results` only stores the results of non-empty lists.
+  // We need to initialize `false` for the entire output array then scatter these results over.
+  thrust::uninitialized_fill(rmm::exec_policy(stream), result_begin, result_begin, false);
   thrust::scatter(rmm::exec_policy(stream),
-                  overlap_result.begin(),
-                  overlap_result.begin() + num_non_empty_segments,
+                  overlap_results.begin(),
+                  overlap_results.begin() + num_non_empty_segments,
                   list_indices.begin(),
                   result_begin);
 
