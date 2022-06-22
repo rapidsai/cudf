@@ -28,6 +28,7 @@
 #include <cudf/structs/structs_column_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -622,7 +623,7 @@ class self_comparator {
   self_comparator(table_view const& t,
                   host_span<order const> column_order         = {},
                   host_span<null_order const> null_precedence = {},
-                  rmm::cuda_stream_view stream                = rmm::cuda_stream_default)
+                  rmm::cuda_stream_view stream                = cudf::default_stream_value)
     : d_t{preprocessed_table::create(t, column_order, null_precedence, stream)}
   {
   }
@@ -744,7 +745,7 @@ class two_table_comparator {
                        table_view const& right,
                        host_span<order const> column_order         = {},
                        host_span<null_order const> null_precedence = {},
-                       rmm::cuda_stream_view stream                = rmm::cuda_stream_default);
+                       rmm::cuda_stream_view stream                = cudf::default_stream_value);
 
   /**
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of

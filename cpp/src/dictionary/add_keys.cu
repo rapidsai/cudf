@@ -28,8 +28,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -131,7 +130,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::add_keys(dictionary_column, keys, rmm::cuda_stream_default, mr);
+  return detail::add_keys(dictionary_column, keys, cudf::default_stream_value, mr);
 }
 
 }  // namespace dictionary

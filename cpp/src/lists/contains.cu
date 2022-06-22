@@ -23,6 +23,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/row_operators.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -332,7 +333,7 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_key, rmm::cuda_stream_default, mr);
+  return detail::contains(lists, search_key, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> contains(lists_column_view const& lists,
@@ -340,14 +341,14 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_keys, rmm::cuda_stream_default, mr);
+  return detail::contains(lists, search_keys, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_nulls(lists, rmm::cuda_stream_default, mr);
+  return detail::contains_nulls(lists, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
@@ -356,7 +357,7 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::index_of(lists, search_key, find_option, rmm::cuda_stream_default, mr);
+  return detail::index_of(lists, search_key, find_option, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
@@ -365,7 +366,7 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::index_of(lists, search_keys, find_option, rmm::cuda_stream_default, mr);
+  return detail::index_of(lists, search_keys, find_option, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf::lists

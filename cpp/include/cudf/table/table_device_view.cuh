@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -171,7 +172,7 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
    * available in device memory
    */
   static auto create(table_view source_view,
-                     rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                     rmm::cuda_stream_view stream = cudf::default_stream_value)
   {
     auto deleter = [](table_device_view* t) { t->destroy(); };
     return std::unique_ptr<table_device_view, decltype(deleter)>{
@@ -208,7 +209,7 @@ class mutable_table_device_view
    * available in device memory
    */
   static auto create(mutable_table_view source_view,
-                     rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                     rmm::cuda_stream_view stream = cudf::default_stream_value)
   {
     auto deleter = [](mutable_table_device_view* t) { t->destroy(); };
     return std::unique_ptr<mutable_table_device_view, decltype(deleter)>{

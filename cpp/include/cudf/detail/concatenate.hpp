@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -34,7 +35,7 @@ namespace detail {
  */
 std::unique_ptr<column> concatenate(
   host_span<column_view const> columns_to_concat,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -44,7 +45,7 @@ std::unique_ptr<column> concatenate(
  */
 std::unique_ptr<table> concatenate(
   host_span<table_view const> tables_to_concat,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
