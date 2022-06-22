@@ -87,12 +87,13 @@ std::unique_ptr<column> contains(column_view const& haystack,
  * @param mr Device memory resource used to allocate the returned vector
  * @return A vector of bools indicating if each row in `needles` has matching rows in `haystack`
  */
-rmm::device_uvector<bool> contains(table_view const& haystack,
-                                   table_view const& needles,
-                                   null_equality compare_nulls,
-                                   nan_equality compare_nans,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+rmm::device_uvector<bool> contains(
+  table_view const& haystack,
+  table_view const& needles,
+  null_equality compare_nulls,
+  nan_equality compare_nans,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Check if the (unique) row of the `needle` column is contained in the `haystack` column.
