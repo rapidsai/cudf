@@ -102,14 +102,11 @@ class BaseIndex(Serializable):
         return item in self._values
 
     @_cudf_nvtx_annotate
-    def replace(
+    def _replace_for_rename(
         self,
         to_replace=None,
         value=None,
         inplace=False,
-        limit=None,
-        regex=False,
-        method=None,
     ):
         """Replace values given in ``to_replace`` with ``value``.
 
@@ -146,13 +143,8 @@ class BaseIndex(Serializable):
                     is_all_na,
                 )
             except OverflowError:
-                # We need to create a deep copy if:
-                # i. `find_and_replace` was not successful or any of
-                #    `values_to_replace`, `replacement_values`,
-                #    `is_all_na` don't contain the `name`
-                #    that exists in `copy_data`.
-                # ii. There is an OverflowError while trying to cast
-                #     `values_to_replace` to `replacement_values`.
+                # TODO: What is this error case really handling? Why is this
+                # the expected result?
                 copy_data[name] = col.copy(deep=True)
 
         result = self._from_data(copy_data)

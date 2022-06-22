@@ -3046,7 +3046,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 out = DataFrame(index=out_index)
             else:
                 out = DataFrame(
-                    index=self.index.replace(
+                    index=self.index._replace_for_rename(
                         to_replace=list(index.keys()),
                         value=list(index.values()),
                     )
