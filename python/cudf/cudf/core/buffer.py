@@ -166,7 +166,7 @@ class Buffer(Serializable):
             Start offset relative to `buffer.ptr`.
         """
 
-        ret = cls()
+        ret = cls(ptr_exposed=False)
         ret._size = buffer.size if size is None else size
         ret._owner = buffer
         if ret._spill_manager is None or buffer.ptr_exposed:
@@ -342,7 +342,7 @@ class Buffer(Serializable):
 
     @classmethod
     def empty(cls, size: int) -> Buffer:
-        return Buffer(rmm.DeviceBuffer(size=size))
+        return Buffer(rmm.DeviceBuffer(size=size), ptr_exposed=False)
 
     def copy(self) -> Buffer:
         """
