@@ -28,6 +28,7 @@
 #include <cudf/join.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <nvbench/nvbench.cuh>
@@ -125,7 +126,7 @@ static void BM_join(state_type& state, Join JoinFunc)
   // Benchmark the inner join operation
   if constexpr (std::is_same_v<state_type, benchmark::State> and (not is_conditional)) {
     for (auto _ : state) {
-      cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+      cuda_event_timer raii(state, true, cudf::default_stream_value);
 
       auto result = JoinFunc(
         probe_table, build_table, columns_to_join, columns_to_join, cudf::null_equality::UNEQUAL);
@@ -152,7 +153,7 @@ static void BM_join(state_type& state, Join JoinFunc)
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
 
     for (auto _ : state) {
-      cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+      cuda_event_timer raii(state, true, cudf::default_stream_value);
 
       auto result =
         JoinFunc(probe_table, build_table, left_zero_eq_right_zero, cudf::null_equality::UNEQUAL);
