@@ -54,6 +54,9 @@ std::unique_ptr<table> unique(table_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  // If keep is KEEP_ANY, just alias it to KEEP_FIRST.
+  if (keep == duplicate_keep_option::KEEP_ANY) { keep = duplicate_keep_option::KEEP_FIRST; }
+
   auto const num_rows = input.num_rows();
   if (num_rows == 0 or input.num_columns() == 0 or keys.empty()) { return empty_like(input); }
 
