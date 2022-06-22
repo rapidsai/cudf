@@ -87,7 +87,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     thrust::counting_iterator<size_type>(0),
     thrust::counting_iterator<size_type>(left_num_rows),
     gather_map->begin(),
-    [d_flagged = flagged.begin()] __device__(size_type const idx) { return d_flagged[idx]; });
+    [d_flagged = flagged.begin()] __device__(size_type const idx) { return *(d_flagged + idx); });
 
   gather_map->resize(thrust::distance(gather_map->begin(), gather_map_end), stream);
   return gather_map;
