@@ -83,10 +83,10 @@ template <typename KeyT>
 std::unique_ptr<column> contains_impl(maps_column_view const &maps_view, KeyT const &lookup_keys,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource *mr) {
-  auto const keys_ = maps_view.keys();
-  CUDF_EXPECTS(lookup_keys.type().id() == keys_.child().type().id(),
+  auto const keys = maps_view.keys();
+  CUDF_EXPECTS(lookup_keys.type().id() == keys.child().type().id(),
                "Lookup keys must have the same type as the keys of the map column.");
-  auto const contains = lists::detail::contains(keys_, lookup_keys, stream, mr);
+  auto const contains = lists::detail::contains(keys, lookup_keys, stream);
   // Replace nulls with BOOL8{false};
   auto const scalar_false = numeric_scalar<bool>{false, true, stream};
   return detail::replace_nulls(contains->view(), scalar_false, stream, mr);
