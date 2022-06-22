@@ -49,8 +49,7 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
  * @brief Perform a reduction on groups of rows that are compared equal.
  *
  * This is essentially a reduce-by-key operation with keys are non-contiguous rows and are compared
- * equal. Since the keys are sparsely distributed, a hash table is used to find groups of equal
- * rows.
+ * equal. A hash table is used to find groups of equal rows.
  *
  * Depending on the `keep` parameter, the reduction operation for each row group is:
  * - If `keep == KEEP_FIRST`: min of row indices in the group.
@@ -70,7 +69,7 @@ auto constexpr reduction_init_value(duplicate_keep_option keep)
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned vector
- * @return A device_uvector containing the sparse reduction results
+ * @return A device_uvector containing the reduction results
  */
 rmm::device_uvector<size_type> hash_reduce_by_row(
   hash_map_type const& map,
