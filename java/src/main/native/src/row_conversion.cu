@@ -27,6 +27,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -1333,7 +1334,7 @@ static std::unique_ptr<column> fixed_width_convert_to_rows(
       input_data.data(), input_nm.data(), data->mutable_view().data<int8_t>());
 
   return make_lists_column(num_rows, std::move(offsets), std::move(data), 0,
-                           rmm::device_buffer{0, rmm::cuda_stream_default, mr}, stream, mr);
+                           rmm::device_buffer{0, cudf::default_stream_value, mr}, stream, mr);
 }
 
 static inline bool are_all_fixed_width(std::vector<data_type> const &schema) {
@@ -1949,7 +1950,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
 
                    return make_lists_column(
                        batch_info.row_batches[batch].row_count, std::move(offsets), std::move(data),
-                       0, rmm::device_buffer{0, rmm::cuda_stream_default, mr}, stream, mr);
+                       0, rmm::device_buffer{0, cudf::default_stream_value, mr}, stream, mr);
                  });
 
   return ret;

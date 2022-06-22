@@ -19,6 +19,7 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -61,7 +62,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
-         rmm::cuda_stream_view stream        = rmm::cuda_stream_view{},
+         rmm::cuda_stream_view stream        = cudf::default_stream_value,
          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -116,7 +117,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::cuda_stream_view stream        = cudf::default_stream_value,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -173,12 +174,12 @@ class column {
    * @param new_null_count Optional, the count of null elements. If unknown, specify
    * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on the first invocation
    * of `null_count()`.
-   * @param stream The stream on which to perform the allocation and copy. Uses the default CUDA
+   * @param stream The stream on which to perform the allocation and copy. Uses the default CUDF
    * stream if none is specified.
    */
   void set_null_mask(rmm::device_buffer const& new_null_mask,
                      size_type new_null_count     = UNKNOWN_NULL_COUNT,
-                     rmm::cuda_stream_view stream = rmm::cuda_stream_view{});
+                     rmm::cuda_stream_view stream = cudf::default_stream_value);
 
   /**
    * @brief Updates the count of null elements.
