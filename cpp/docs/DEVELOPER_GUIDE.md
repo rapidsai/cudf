@@ -350,7 +350,7 @@ internal API in the `detail` namespace. The internal `detail` API has the same p
 public API, plus a `rmm::cuda_stream_view` parameter at the end with no default value. If the
 detail API also accepts a memory resource parameter, the stream parameter should be ideally placed
 just *before* the memory resource. The public API will call the detail API and provide
-`rmm::cuda_stream_default`. The implementation should be wholly contained in the `detail` API
+`cudf::default_stream_value`. The implementation should be wholly contained in the `detail` API
 definition and use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
@@ -381,7 +381,7 @@ namespace detail{
 
 void external_function(...){
     CUDF_FUNC_RANGE(); // Generates an NVTX range for the lifetime of this function.
-    detail::external_function(..., rmm::cuda_stream_default);
+    detail::external_function(..., cudf::default_stream_value);
 }
 ```
 

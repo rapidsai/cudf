@@ -30,7 +30,6 @@ from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    is_decimal_dtype,
     is_dict_like,
     is_dtype_equal,
     is_scalar,
@@ -73,21 +72,6 @@ class Frame(BinaryOperand, Scannable):
     _names: Optional[List]
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
-
-    _VALID_SCANS = {
-        "cumsum",
-        "cumprod",
-        "cummin",
-        "cummax",
-    }
-
-    # Necessary because the function names don't directly map to the docs.
-    _SCAN_DOCSTRINGS = {
-        "cumsum": {"op_name": "cumulative sum"},
-        "cumprod": {"op_name": "cumulative product"},
-        "cummin": {"op_name": "cumulative min"},
-        "cummax": {"op_name": "cumulative max"},
-    }
 
     def __init__(self, data=None, index=None):
         if data is None:
@@ -597,137 +581,6 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def clip(self, lower=None, upper=None, inplace=False, axis=1):
-        """
-        Trim values at input threshold(s).
-
-        Assigns values outside boundary to boundary values.
-        Thresholds can be singular values or array like,
-        and in the latter case the clipping is performed
-        element-wise in the specified axis. Currently only
-        `axis=1` is supported.
-
-        Parameters
-        ----------
-        lower : scalar or array_like, default None
-            Minimum threshold value. All values below this
-            threshold will be set to it. If it is None,
-            there will be no clipping based on lower.
-            In case of Series/Index, lower is expected to be
-            a scalar or an array of size 1.
-        upper : scalar or array_like, default None
-            Maximum threshold value. All values below this
-            threshold will be set to it. If it is None,
-            there will be no clipping based on upper.
-            In case of Series, upper is expected to be
-            a scalar or an array of size 1.
-        inplace : bool, default False
-
-        Returns
-        -------
-        Clipped DataFrame/Series/Index/MultiIndex
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"a":[1, 2, 3, 4], "b":['a', 'b', 'c', 'd']})
-        >>> df.clip(lower=[2, 'b'], upper=[3, 'c'])
-           a  b
-        0  2  b
-        1  2  b
-        2  3  c
-        3  3  c
-
-        >>> df.clip(lower=None, upper=[3, 'c'])
-           a  b
-        0  1  a
-        1  2  b
-        2  3  c
-        3  3  c
-
-        >>> df.clip(lower=[2, 'b'], upper=None)
-           a  b
-        0  2  b
-        1  2  b
-        2  3  c
-        3  4  d
-
-        >>> df.clip(lower=2, upper=3, inplace=True)
-        >>> df
-           a  b
-        0  2  2
-        1  2  3
-        2  3  3
-        3  3  3
-
-        >>> import cudf
-        >>> sr = cudf.Series([1, 2, 3, 4])
-        >>> sr.clip(lower=2, upper=3)
-        0    2
-        1    2
-        2    3
-        3    3
-        dtype: int64
-
-        >>> sr.clip(lower=None, upper=3)
-        0    1
-        1    2
-        2    3
-        3    3
-        dtype: int64
-
-        >>> sr.clip(lower=2, upper=None, inplace=True)
-        >>> sr
-        0    2
-        1    2
-        2    3
-        3    4
-        dtype: int64
-        """
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                "Index.clip is deprecated and will be removed.",
-                FutureWarning,
-            )
-
-        if axis != 1:
-            raise NotImplementedError("`axis is not yet supported in clip`")
-
-        if lower is None and upper is None:
-            return None if inplace is True else self.copy(deep=True)
-
-        if is_scalar(lower):
-            lower = np.full(self._num_columns, lower)
-        if is_scalar(upper):
-            upper = np.full(self._num_columns, upper)
-
-        if len(lower) != len(upper):
-            raise ValueError("Length of lower and upper should be equal")
-
-        if len(lower) != self._num_columns:
-            raise ValueError(
-                "Length of lower/upper should be equal to number of columns"
-            )
-
-        if self.ndim == 1:
-            # In case of series and Index,
-            # swap lower and upper if lower > upper
-            if (
-                lower[0] is not None
-                and upper[0] is not None
-                and (lower[0] > upper[0])
-            ):
-                lower[0], upper[0] = upper[0], lower[0]
-
-        data = {
-            name: col.clip(lower[i], upper[i])
-            for i, (name, col) in enumerate(self._data.items())
-        }
-        output = self._from_data(data, self._index)
-        output._copy_type_metadata(self, include_index=False)
-        return self._mimic_inplace(output, inplace=inplace)
-
-    @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
         """
         Replace values where the condition is False.
@@ -895,98 +748,6 @@ class Frame(BinaryOperand, Scannable):
         ...  )
         """
         return cudf.core.common.pipe(self, func, *args, **kwargs)
-
-    @_cudf_nvtx_annotate
-    def scatter_by_map(
-        self, map_index, map_size=None, keep_index=True, **kwargs
-    ):
-        """Scatter to a list of dataframes.
-
-        Uses map_index to determine the destination
-        of each row of the original DataFrame.
-
-        Parameters
-        ----------
-        map_index : Series, str or list-like
-            Scatter assignment for each row
-        map_size : int
-            Length of output list. Must be >= uniques in map_index
-        keep_index : bool
-            Conserve original index values for each row
-
-        Returns
-        -------
-        A list of cudf.DataFrame objects.
-        """
-        if not isinstance(self, cudf.DataFrame):
-            warnings.warn(
-                f"{self.__class__.__name__}.scatter_by_map is deprecated and "
-                "will be removed.",
-                FutureWarning,
-            )
-
-        # map_index might be a column name or array,
-        # make it a Column
-        if isinstance(map_index, str):
-            map_index = self._data[map_index]
-        elif isinstance(map_index, cudf.Series):
-            map_index = map_index._column
-        else:
-            map_index = as_column(map_index)
-
-        # Convert float to integer
-        if map_index.dtype.kind == "f":
-            map_index = map_index.astype(np.int32)
-
-        # Convert string or categorical to integer
-        if isinstance(map_index, cudf.core.column.StringColumn):
-            map_index = map_index.as_categorical_column(
-                "category"
-            ).as_numerical
-            warnings.warn(
-                "Using StringColumn for map_index in scatter_by_map. "
-                "Use an integer array/column for better performance."
-            )
-        elif isinstance(map_index, cudf.core.column.CategoricalColumn):
-            map_index = map_index.as_numerical
-            warnings.warn(
-                "Using CategoricalColumn for map_index in scatter_by_map. "
-                "Use an integer array/column for better performance."
-            )
-
-        if kwargs.get("debug", False) == 1 and map_size is not None:
-            count = map_index.distinct_count()
-            if map_size < count:
-                raise ValueError(
-                    f"ERROR: map_size must be >= {count} (got {map_size})."
-                )
-
-        partitioned_columns, output_offsets = libcudf.partitioning.partition(
-            [*(self._index._columns if keep_index else ()), *self._columns],
-            map_index,
-            map_size,
-        )
-        partitioned = self._from_columns_like_self(
-            partitioned_columns,
-            column_names=self._column_names,
-            index_names=self._index_names if keep_index else None,
-        )
-
-        # due to the split limitation mentioned
-        # here: https://github.com/rapidsai/cudf/issues/4607
-        # we need to remove first & last elements in offsets.
-        # TODO: Remove this after the above issue is fixed.
-        output_offsets = output_offsets[1:-1]
-
-        result = partitioned._split(output_offsets, keep_index=keep_index)
-
-        if map_size:
-            result += [
-                self._empty_like(keep_index)
-                for _ in range(map_size - len(result))
-            ]
-
-        return result
 
     @_cudf_nvtx_annotate
     def fillna(
@@ -1191,81 +952,6 @@ class Frame(BinaryOperand, Scannable):
         return self[out_cols]
 
     @_cudf_nvtx_annotate
-    def interpolate(
-        self,
-        method="linear",
-        axis=0,
-        limit=None,
-        inplace=False,
-        limit_direction=None,
-        limit_area=None,
-        downcast=None,
-        **kwargs,
-    ):
-        """
-        Interpolate data values between some points.
-
-        Parameters
-        ----------
-        method : str, default 'linear'
-            Interpolation technique to use. Currently,
-            only 'linear` is supported.
-            * 'linear': Ignore the index and treat the values as
-            equally spaced. This is the only method supported on MultiIndexes.
-            * 'index', 'values': linearly interpolate using the index as
-            an x-axis. Unsorted indices can lead to erroneous results.
-        axis : int, default 0
-            Axis to interpolate along. Currently,
-            only 'axis=0' is supported.
-        inplace : bool, default False
-            Update the data in place if possible.
-
-        Returns
-        -------
-        Series or DataFrame
-            Returns the same object type as the caller, interpolated at
-            some or all ``NaN`` values
-
-        """
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                "Index.interpolate is deprecated and will be removed.",
-                FutureWarning,
-            )
-
-        if method in {"pad", "ffill"} and limit_direction != "forward":
-            raise ValueError(
-                f"`limit_direction` must be 'forward' for method `{method}`"
-            )
-        if method in {"backfill", "bfill"} and limit_direction != "backward":
-            raise ValueError(
-                f"`limit_direction` must be 'backward' for method `{method}`"
-            )
-
-        data = self
-
-        if not isinstance(data._index, cudf.RangeIndex):
-            perm_sort = data._index.argsort()
-            data = data._gather(perm_sort)
-
-        interpolator = cudf.core.algorithms.get_column_interpolator(method)
-        columns = {}
-        for colname, col in data._data.items():
-            if col.nullable:
-                col = col.astype("float64").fillna(np.nan)
-
-            # Interpolation methods may or may not need the index
-            columns[colname] = interpolator(col, index=data._index)
-
-        result = self._from_data(columns, index=data._index)
-
-        return (
-            result
-            if isinstance(data._index, cudf.RangeIndex)
-            else result._gather(perm_sort.argsort())
-        )
-
-    @_cudf_nvtx_annotate
     def _quantiles(
         self,
         q,
@@ -1294,28 +980,6 @@ class Frame(BinaryOperand, Scannable):
                 null_precedence,
             ),
             column_names=self._column_names,
-        )
-
-    @_cudf_nvtx_annotate
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values by `periods` positions."""
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                "Index.shift is deprecated and will be removed.",
-                FutureWarning,
-            )
-
-        axis = self._get_axis_from_axis_arg(axis)
-        if axis != 0:
-            raise ValueError("Only axis=0 is supported.")
-        if freq is not None:
-            raise ValueError("The freq argument is not yet supported.")
-
-        data_columns = (
-            col.shift(periods, fill_value) for col in self._columns
-        )
-        return self.__class__._from_data(
-            zip(self._column_names, data_columns), self._index
         )
 
     @classmethod
@@ -2187,47 +1851,6 @@ class Frame(BinaryOperand, Scannable):
         dtype: float64
         """
         return self._unaryop("abs")
-
-    @_cudf_nvtx_annotate
-    def scale(self):
-        """
-        Scale values to [0, 1] in float64
-
-        Returns
-        -------
-        DataFrame or Series
-            Values scaled to [0, 1].
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 0.5, 1])
-        >>> series
-        0    10.0
-        1    11.0
-        2    12.0
-        3     0.5
-        4     1.0
-        dtype: float64
-        >>> series.scale()
-        0    0.826087
-        1    0.913043
-        2    1.000000
-        3    0.000000
-        4    0.043478
-        dtype: float64
-        """
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                "Index.scale is deprecated and will be removed.",
-                FutureWarning,
-            )
-
-        vmin = self.min()
-        vmax = self.max()
-        scaled = (self - vmin) / (vmax - vmin)
-        scaled._index = self._index.copy(deep=False)
-        return scaled
 
     @_cudf_nvtx_annotate
     def _merge(
@@ -3246,95 +2869,6 @@ class Frame(BinaryOperand, Scannable):
             numeric_only=numeric_only,
             **kwargs,
         )
-
-    # Scans
-    @_cudf_nvtx_annotate
-    def _scan(self, op, axis=None, skipna=True):
-        """
-        Return {op_name} of the {cls}.
-
-        Parameters
-        ----------
-
-        axis: {{index (0), columns(1)}}
-            Axis for the function to be applied on.
-        skipna: bool, default True
-            Exclude NA/null values. If an entire row/column is NA,
-            the result will be NA.
-
-
-        Returns
-        -------
-        {cls}
-
-        Examples
-        --------
-        **Series**
-
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.cumsum()
-        0    1
-        1    6
-        2    8
-        3    12
-        4    15
-
-        **DataFrame**
-
-        >>> import cudf
-        >>> df = cudf.DataFrame({{'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]}})
-        >>> s.cumsum()
-            a   b
-        0   1   7
-        1   3  15
-        2   6  24
-        3  10  34
-        """
-        if isinstance(self, cudf.BaseIndex):
-            warnings.warn(
-                f"Index.{op} is deprecated and will be removed.",
-                FutureWarning,
-            )
-
-        cast_to_int = op in ("cumsum", "cumprod")
-        skipna = True if skipna is None else skipna
-
-        results = {}
-        for name, col in self._data.items():
-            if skipna:
-                try:
-                    result_col = col.nans_to_nulls()
-                except AttributeError:
-                    result_col = col
-            else:
-                if col.has_nulls(include_nan=True):
-                    # Workaround as find_first_value doesn't seem to work
-                    # incase of bools.
-                    first_index = int(
-                        col.isnull().astype("int8").find_first_value(1)
-                    )
-                    result_col = col.copy()
-                    result_col[first_index:] = None
-                else:
-                    result_col = col
-
-            if (
-                cast_to_int
-                and not is_decimal_dtype(result_col.dtype)
-                and (
-                    np.issubdtype(result_col.dtype, np.integer)
-                    or np.issubdtype(result_col.dtype, np.bool_)
-                )
-            ):
-                # For reductions that accumulate a value (e.g. sum, not max)
-                # pandas returns an int64 dtype for all int or bool dtypes.
-                result_col = result_col.astype(np.int64)
-            results[name] = getattr(result_col, op)()
-        # TODO: This will work for Index because it's passing self._index
-        # (which is None), but eventually we may want to remove that parameter
-        # for Index._from_data and simplify.
-        return self._from_data(results, self._index)
 
     @_cudf_nvtx_annotate
     @ioutils.doc_to_json()
