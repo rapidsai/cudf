@@ -135,7 +135,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     auto const hasher   = cudf::experimental::row::hash::row_hasher(haystack, stream);
     auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{haystack_has_nulls});
 
-    auto const kv_it = cudf::detail::make_counting_transform_iterator(
+    auto const haystack_it = cudf::detail::make_counting_transform_iterator(
       size_type{0},
       make_pair_fn<lhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
 
@@ -151,13 +151,13 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
         cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream);
 
       // Insert only rows that do not have any nulls at any level.
-      map.insert_if(kv_it,
-                    kv_it + haystack.num_rows(),
+      map.insert_if(haystack_it,
+                    haystack_it + haystack.num_rows(),
                     thrust::counting_iterator<size_type>(0),  // stencil
                     row_is_valid{static_cast<bitmask_type const*>(row_bitmask.data())},
                     stream.value());
     } else {
-      map.insert(kv_it, kv_it + haystack.num_rows(), stream.value());
+      map.insert(haystack_it, haystack_it + haystack.num_rows(), stream.value());
     }
   }
 
@@ -169,38 +169,21 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     auto const hasher   = cudf::experimental::row::hash::row_hasher(needles, stream);
     auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{needles_has_nulls});
 
-    auto const kv_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0},
-      make_pair_fn<rhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
-
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
+
+    auto const needles_it = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      make_pair_fn<rhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
 
     auto const check_contains = [&](auto const value_comp) {
       auto const d_eqcomp = comparator.equal_to(
         nullate::DYNAMIC{needles_has_nulls || haystack_has_nulls}, compare_nulls, value_comp);
-
-      if (needles_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-        // Gather all nullable columns at all levels from the right table.
-        auto const needles_nullable_columns = accumulate_nullable_columns{needles}.release();
-
-        [[maybe_unused]] auto const [row_bitmask, tmp] =
-          cudf::detail::bitmask_and(table_view{needles_nullable_columns}, stream);
-
-        map.pair_contains_if(kv_it,
-                             kv_it + needles.num_rows(),
-                             thrust::counting_iterator<size_type>(0),  // stencil
-                             contained.begin(),
-                             pair_comparator_fn{d_eqcomp},
-                             row_is_valid{static_cast<bitmask_type const*>(row_bitmask.data())},
-                             stream.value());
-      } else {
-        map.pair_contains(kv_it,
-                          kv_it + needles.num_rows(),
-                          contained.begin(),
-                          pair_comparator_fn{d_eqcomp},
-                          stream.value());
-      }
+      map.pair_contains(needles_it,
+                        needles_it + needles.num_rows(),
+                        contained.begin(),
+                        pair_comparator_fn{d_eqcomp},
+                        stream.value());
     };
 
     using nan_equal_comparator =
