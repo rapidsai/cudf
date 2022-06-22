@@ -20,6 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -98,7 +99,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_reduce(
-    segmented_values, offsets, agg, output_dtype, null_handling, rmm::cuda_stream_default, mr);
+    segmented_values, offsets, agg, output_dtype, null_handling, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

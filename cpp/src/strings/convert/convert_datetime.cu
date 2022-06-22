@@ -26,6 +26,7 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -652,7 +653,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_timestamps(input, timestamp_type, format, rmm::cuda_stream_default, mr);
+  return detail::to_timestamps(input, timestamp_type, format, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
@@ -660,7 +661,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_timestamp(input, format, rmm::cuda_stream_default, mr);
+  return detail::is_timestamp(input, format, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -1148,7 +1149,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_timestamps(timestamps, format, names, rmm::cuda_stream_default, mr);
+  return detail::from_timestamps(timestamps, format, names, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

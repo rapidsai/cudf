@@ -27,6 +27,7 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -290,7 +291,7 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::capitalize(input, delimiter, rmm::cuda_stream_default, mr);
+  return detail::capitalize(input, delimiter, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> title(strings_column_view const& input,
@@ -298,14 +299,14 @@ std::unique_ptr<column> title(strings_column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::title(input, sequence_type, rmm::cuda_stream_default, mr);
+  return detail::title(input, sequence_type, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> is_title(strings_column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_title(input, rmm::cuda_stream_default, mr);
+  return detail::is_title(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -90,7 +91,7 @@ struct hash_join {
    */
   hash_join(cudf::table_view const& build,
             cudf::null_equality compare_nulls,
-            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+            rmm::cuda_stream_view stream = cudf::default_stream_value);
 
   /**
    * @copydoc cudf::hash_join::inner_join

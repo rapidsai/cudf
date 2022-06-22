@@ -20,6 +20,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 class Rank : public cudf::benchmark {
 };
@@ -38,7 +39,7 @@ static void BM_rank(benchmark::State& state, bool nulls)
   cudf::column_view input{keys_table->get_column(0)};
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
 
     auto result = cudf::rank(input,
                              cudf::rank_method::FIRST,

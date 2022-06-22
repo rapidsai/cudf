@@ -22,6 +22,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -40,8 +41,8 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest()
-    : data{_num_elements * cudf::size_of(type()), rmm::cuda_stream_default},
-      mask{cudf::bitmask_allocation_size_bytes(_num_elements), rmm::cuda_stream_default}
+    : data{_num_elements * cudf::size_of(type()), cudf::default_stream_value},
+      mask{cudf::bitmask_allocation_size_bytes(_num_elements), cudf::default_stream_value}
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
@@ -242,8 +243,8 @@ TYPED_TEST(TypedColumnTest, CopyDataAndMask)
 {
   cudf::column col{this->type(),
                    this->num_elements(),
-                   rmm::device_buffer{this->data, rmm::cuda_stream_default},
-                   rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default}};
+                   rmm::device_buffer{this->data, cudf::default_stream_value},
+                   rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}};
   EXPECT_EQ(this->type(), col.type());
   EXPECT_TRUE(col.nullable());
   EXPECT_EQ(0, col.null_count());
@@ -351,17 +352,17 @@ TYPED_TEST(TypedColumnTest, ConstructWithChildren)
   children.emplace_back(std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::INT8},
     42,
-    rmm::device_buffer{this->data, rmm::cuda_stream_default},
-    rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default}));
+    rmm::device_buffer{this->data, cudf::default_stream_value},
+    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
   children.emplace_back(std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::FLOAT64},
     314,
-    rmm::device_buffer{this->data, rmm::cuda_stream_default},
-    rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default}));
+    rmm::device_buffer{this->data, cudf::default_stream_value},
+    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
   cudf::column col{this->type(),
                    this->num_elements(),
-                   rmm::device_buffer{this->data, rmm::cuda_stream_default},
-                   rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default},
+                   rmm::device_buffer{this->data, cudf::default_stream_value},
+                   rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value},
                    cudf::UNKNOWN_NULL_COUNT,
                    std::move(children)};
 
@@ -396,17 +397,17 @@ TYPED_TEST(TypedColumnTest, ReleaseWithChildren)
   children.emplace_back(std::make_unique<cudf::column>(
     this->type(),
     this->num_elements(),
-    rmm::device_buffer{this->data, rmm::cuda_stream_default},
-    rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default}));
+    rmm::device_buffer{this->data, cudf::default_stream_value},
+    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
   children.emplace_back(std::make_unique<cudf::column>(
     this->type(),
     this->num_elements(),
-    rmm::device_buffer{this->data, rmm::cuda_stream_default},
-    rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default}));
+    rmm::device_buffer{this->data, cudf::default_stream_value},
+    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
   cudf::column col{this->type(),
                    this->num_elements(),
-                   rmm::device_buffer{this->data, rmm::cuda_stream_default},
-                   rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default},
+                   rmm::device_buffer{this->data, cudf::default_stream_value},
+                   rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value},
                    cudf::UNKNOWN_NULL_COUNT,
                    std::move(children)};
 
