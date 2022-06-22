@@ -2171,13 +2171,14 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
   if (dev_string_row_offsets.size() == 0) {
     detail::fixed_width_row_offset_functor offset_functor(size_per_row);
 
-    detail::copy_from_rows<<<blocks, NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
+    detail::copy_from_rows<<<gpu_tile_infos.size(), NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
                              total_shmem_in_bytes, stream.value()>>>(
         num_rows, num_columns, shmem_limit_per_tile, offset_functor,
         gpu_batch_row_boundaries.data(), dev_output_data.data(), dev_col_sizes.data(),
         dev_col_starts.data(), gpu_tile_infos, child.data<int8_t>());
 
-    detail::copy_validity_from_rows<<<validity_blocks, NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
+    detail::copy_validity_from_rows<<<validity_tile_infos.size(),
+                                      NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
                                       total_shmem_in_bytes, stream.value()>>>(
         num_rows, num_columns, shmem_limit_per_tile, offset_functor,
         gpu_batch_row_boundaries.data(), dev_output_nm.data(), column_info.column_starts.back(),
@@ -2185,13 +2186,14 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
 
   } else {
     detail::string_row_offset_functor offset_functor(device_span<size_type const>{input.offsets()});
-    detail::copy_from_rows<<<blocks, NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
+    detail::copy_from_rows<<<gpu_tile_infos.size(), NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
                              total_shmem_in_bytes, stream.value()>>>(
         num_rows, num_columns, shmem_limit_per_tile, offset_functor,
         gpu_batch_row_boundaries.data(), dev_output_data.data(), dev_col_sizes.data(),
         dev_col_starts.data(), gpu_tile_infos, child.data<int8_t>());
 
-    detail::copy_validity_from_rows<<<validity_blocks, NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
+    detail::copy_validity_from_rows<<<validity_tile_infos.size(),
+                                      NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
                                       total_shmem_in_bytes, stream.value()>>>(
         num_rows, num_columns, shmem_limit_per_tile, offset_functor,
         gpu_batch_row_boundaries.data(), dev_output_nm.data(), column_info.column_starts.back(),
