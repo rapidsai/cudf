@@ -106,7 +106,6 @@ class BaseIndex(Serializable):
         self,
         to_replace=None,
         value=None,
-        inplace=False,
     ):
         """Replace values given in ``to_replace`` with ``value``.
 
@@ -124,8 +123,6 @@ class BaseIndex(Serializable):
         value : list
             Value to replace any values matching ``to_replace`` with. Must be
             the same length as to_replace.
-        inplace : bool, default False
-            If True, in place.
 
         Returns
         -------
@@ -147,9 +144,7 @@ class BaseIndex(Serializable):
                 # the expected result?
                 copy_data[name] = col.copy(deep=True)
 
-        result = self._from_data(copy_data)
-
-        return self._mimic_inplace(result, inplace=inplace)
+        return self._from_data(copy_data)
 
     def get_level_values(self, level):
         """
