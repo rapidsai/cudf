@@ -218,8 +218,7 @@ enum class duplicate_keep_option {
  * @brief Create a new table with consecutive duplicate rows removed.
  *
  * Given an `input` table_view, each row is copied to the output table to create a set of distinct
- * rows. If there are duplicate rows, which row to be copied depends on the specified value of
- * the `keep` parameter.
+ * rows. If there are duplicate rows, which row is copied depends on the `keep` parameter.
  *
  * The order of rows in the output table remains the same as in the input.
  *
@@ -234,7 +233,7 @@ enum class duplicate_keep_option {
  *
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
- * @param[in] keep            keep the first, last, any, or no rows of the found duplicates
+ * @param[in] keep            keep any, first, last, or none of the found duplicates
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
  * @param[in] mr              Device memory resource used to allocate the returned table's device
@@ -263,7 +262,7 @@ std::unique_ptr<table> unique(
  *
  * @param[in] input           input table_view to copy only distinct rows
  * @param[in] keys            vector of indices representing key columns from `input`
- * @param[in] keep            keep the first, last, any, or no rows of the found duplicates
+ * @param[in] keep            keep any, first, last, or none of the found duplicates
  * @param[in] nulls_equal     flag to control if nulls are compared equal or not
  * @param[in] nans_equal      flag to control if floating-point NaN values are compared equal or not
  * @param[in] mr              Device memory resource used to allocate the returned table's device
