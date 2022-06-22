@@ -27,6 +27,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -171,7 +172,7 @@ std::unique_ptr<column> url_encode(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_encode(strings, rmm::cuda_stream_default, mr);
+  return detail::url_encode(strings, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -453,7 +454,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_decode(strings, rmm::cuda_stream_default, mr);
+  return detail::url_decode(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

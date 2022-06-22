@@ -23,6 +23,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -158,7 +159,7 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(std::string const& filena
                                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::load_merge_pairs_file(filename_merges, rmm::cuda_stream_default, mr);
+  return detail::load_merge_pairs_file(filename_merges, cudf::default_stream_value, mr);
 }
 
 bpe_merge_pairs::bpe_merge_pairs_impl::bpe_merge_pairs_impl(
