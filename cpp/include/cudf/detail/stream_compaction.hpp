@@ -96,9 +96,9 @@ std::unique_ptr<table> distinct(
  * generated. If there are duplicate rows, which index is kept depends on the `keep` parameter.
  *
  * @param input The input table
- * @param keep Get index of any, or the first, last, or none row among the found duplicates rows
+ * @param keep Get index of any, first, last, or none of the found duplicates
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
- * @param nans_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether NaN elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the result indices
