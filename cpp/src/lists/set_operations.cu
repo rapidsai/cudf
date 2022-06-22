@@ -174,63 +174,6 @@ rmm::device_uvector<bool> contains(table_view const& lhs,
   return contained;
 }
 
-/**
- * @brief get_distinct_indices
- *
- * This is the future work: https://github.com/rapidsai/cudf/pull/11052, and
- * https://github.com/rapidsai/cudf/issues/11092
- */
-rmm::device_uvector<size_type> get_distinct_indices(
-  table_view const& input,
-  std::vector<size_type> const& keys,
-  null_equality nulls_equal,
-  nan_equality nans_equal,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  if (input.num_rows() == 0 or input.num_columns() == 0 or keys.empty()) {
-    return rmm::device_uvector<size_type>(0, stream, mr);
-  }
-
-  auto const keys_tview = input.select(keys);
-  auto const preprocessed_keys =
-    cudf::experimental::row::hash::preprocessed_table::create(keys_tview, stream);
-  auto const has_null  = nullate::DYNAMIC{cudf::has_nested_nulls(keys_tview)};
-  auto const keys_size = keys_tview.num_rows();
-
-  auto key_map = cudf::detail::hash_map_type{
-    compute_hash_table_size(keys_size),
-    cuco::sentinel::empty_key{cudf::detail::COMPACTION_EMPTY_KEY_SENTINEL},
-    cuco::sentinel::empty_value{cudf::detail::COMPACTION_EMPTY_VALUE_SENTINEL},
-    cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-    stream.value()};
-
-  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_keys);
-  auto const key_hasher =
-    cudf::detail::experimental::compaction_hash(row_hasher.device_hasher(has_null));
-
-  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_keys);
-
-  auto const kv_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
-
-  auto const do_insert = [&](auto const& value_comp) {
-    auto const key_equal = row_comp.equal_to(has_null, nulls_equal, value_comp);
-    key_map.insert(kv_iter, kv_iter + input.num_rows(), key_hasher, key_equal, stream.value());
-  };
-
-  if (nans_equal == nan_equality::ALL_EQUAL) {
-    do_insert(nan_equal_comparator{});
-  } else {
-    do_insert(nan_unequal_comparator{});
-  }
-
-  // The output distinct map.
-  auto output_map = rmm::device_uvector<size_type>(key_map.get_size(), stream, mr);
-  key_map.retrieve_all(output_map.begin(), thrust::make_discard_iterator(), stream.value());
-  return output_map;
-}
-
 }  // namespace temporary
 
 namespace {
@@ -292,8 +235,12 @@ std::unique_ptr<column> list_distinct(
   auto const labels      = generate_labels(input, stream);
   auto const input_table = table_view{{labels->view(), child}};
 
-  auto const distinct_indices = temporary::get_distinct_indices(
-    table_view{{labels->view(), child}}, {0, 1}, nulls_equal, nans_equal, stream);
+  auto const distinct_indices =
+    cudf::detail::get_distinct_indices(table_view{{labels->view(), child}},
+                                       duplicate_keep_option::KEEP_ANY,
+                                       nulls_equal,
+                                       nans_equal,
+                                       stream);
 
   auto index_markers = rmm::device_uvector<bool>(child.size(), stream);
   thrust::uninitialized_fill(
@@ -504,8 +451,8 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
     },
     stream);
 
-  auto const distinct_indices =
-    temporary::get_distinct_indices(lhs_table, {0, 1}, nulls_equal, nans_equal, stream);
+  auto const distinct_indices = cudf::detail::get_distinct_indices(
+    lhs_table, duplicate_keep_option::KEEP_ANY, nulls_equal, nans_equal, stream);
   auto index_markers = rmm::device_uvector<bool>(lhs_child.size(), stream);
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), index_markers.begin(), index_markers.end(), false);
