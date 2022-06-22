@@ -32,6 +32,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
+from cudf.utils.utils import _cudf_nvtx_annotate
 
 _index_astype_docstring = """\
 Create an Index with values cast to dtypes.
@@ -99,6 +100,64 @@ class BaseIndex(Serializable):
 
     def __contains__(self, item):
         return item in self._values
+
+    @_cudf_nvtx_annotate
+    def replace(
+        self,
+        to_replace=None,
+        value=None,
+        inplace=False,
+        limit=None,
+        regex=False,
+        method=None,
+    ):
+        """Replace values given in ``to_replace`` with ``value``.
+
+        Note that this function replaces labels in _all_ columns of the
+        BaseIndex, i.e. it has the same effect on all columns of a MultiIndex.
+        That is OK for now since the only use case of this function is in
+        DataFrame.rename, but given the level of specialization we should
+        probably either inline this functionality there or make it more
+        general.
+
+        Parameters
+        ----------
+        to_replace : list
+            Value(s) to replace.
+        value : list
+            Value to replace any values matching ``to_replace`` with. Must be
+            the same length as to_replace.
+        inplace : bool, default False
+            If True, in place.
+
+        Returns
+        -------
+        result : BaseIndex
+            BaseIndex after replacement.
+        """
+        is_all_na = value.count(None) == len(value)
+
+        copy_data = {}
+        for name, col in self._data.items():
+            try:
+                copy_data[name] = col.find_and_replace(
+                    to_replace,
+                    value,
+                    is_all_na,
+                )
+            except OverflowError:
+                # We need to create a deep copy if:
+                # i. `find_and_replace` was not successful or any of
+                #    `values_to_replace`, `replacement_values`,
+                #    `is_all_na` don't contain the `name`
+                #    that exists in `copy_data`.
+                # ii. There is an OverflowError while trying to cast
+                #     `values_to_replace` to `replacement_values`.
+                copy_data[name] = col.copy(deep=True)
+
+        result = self._from_data(copy_data)
+
+        return self._mimic_inplace(result, inplace=inplace)
 
     def get_level_values(self, level):
         """
