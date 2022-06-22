@@ -164,10 +164,10 @@ std::unique_ptr<column> list_distinct(
   auto const child  = input.get_sliced_child(stream);
   auto const labels = generate_labels(input, stream);
 
-  auto [out_offsets, out_child] =
-    list_distinct_children(input.size(), labels, child, nulls_equal, nans_equal, stream, mr);
+  auto [out_offsets, out_child] = list_distinct_children(
+    input.size(), labels->view(), child, nulls_equal, nans_equal, stream, mr);
 
-  return make_lists_column(lhs.size(),
+  return make_lists_column(input.size(),
                            std::move(out_offsets),
                            std::move(out_child),
                            input.null_count(),
