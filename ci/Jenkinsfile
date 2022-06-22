@@ -1,0 +1,117 @@
+@Library('jenkins_shared_lib') _
+
+pipeline {
+  agent any
+  environment {
+    BUILD_TYPE = sh(returnStdout: true, script: 'rapids-build-type')
+  }
+
+  options {
+    buildDiscarder(logRotator(numToKeepStr: '10'))
+    ansiColor('xterm')
+    disableConcurrentBuilds(abortPrevious: true)
+  }
+
+  stages {
+    stage("Style & Size Checks") {
+      environment {
+        GH_TOKEN = credentials('gputester-github-token')
+      }
+      when { environment name: 'BUILD_TYPE', value: 'pull-request' }
+      agent {
+        docker {
+          image "gpuci/rapidsai-driver:22.08-cuda11.5-devel-centos7-py3.8" 
+          label 'cpu'
+        }
+      }
+      steps {
+        sh "rapids-size-checker"
+        sh "./ci/checks/style.sh"
+      }
+    }
+
+    stage("C++ Matrix Build") {
+      environment {
+        PARALLEL_LEVEL = '4'
+      }
+      options {
+        timeout(time: 30, unit: 'MINUTES', activity: true)
+      }
+      steps {
+        script {
+          parallel generateStage("cuda_build", {
+            sh "./ci/build_cpp.sh"
+          })
+        }
+      }
+    }
+
+    stage("Python Matrix Build") {
+      options {
+        timeout(time: 30, unit: 'MINUTES', activity: true)
+      }
+      steps {
+        script {
+          parallel generateStage("python_build", {
+            sh "./ci/build_py.sh"
+          })
+        }
+      }
+    }
+
+    stage("Java Test Stage") {
+      agent {
+	      label 'gpu'
+	      docker 'gpuci/rapidsai:22.08-cuda11.5-devel-centos7-py3.8'
+      }
+      when { environment name: 'BUILD_TYPE', value: 'pull-request' }
+      steps {
+        sh "./ci/java.sh"
+      }
+    }
+
+    stage("PR Test Stage") {
+      when { environment name: 'BUILD_TYPE', value: 'pull-request' }
+      options {
+        timeout(time: 10, unit: 'MINUTES', activity: true)
+      }
+      steps {
+        script {
+          parallel generateStage("pr_test",{
+            sh "./ci/gpu_test.sh"
+          })
+        }
+      }
+    }
+
+    stage("Nightly Test Stage") {
+      when { environment name: 'BUILD_TYPE', value: 'nightly' }
+      options {
+        timeout(time: 10, unit: 'MINUTES', activity: true)
+      }
+      steps {
+        script {
+          parallel generateStage("nightly_test",{
+            sh "./ci/gpu_test.sh"
+          })
+        }
+      }
+    }
+
+    stage("Upload Anaconda Packages") {
+      environment {
+        STABLE_CONDA_TOKEN = credentials('rapidsai-conda-upload-api')
+        NIGHTLY_CONDA_TOKEN = credentials('rapidsai-nightly-conda-upload-api')
+      }
+      when {
+        anyOf {
+          environment name: 'BUILD_TYPE', value: 'branch'
+          environment name: 'BUILD_TYPE', value: 'nightly'
+        }
+      }
+      steps {
+        sh "./ci/upload_to_anaconda.sh"
+      }
+    }
+  }
+}
