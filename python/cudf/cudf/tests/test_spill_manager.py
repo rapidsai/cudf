@@ -199,4 +199,3 @@ def test_spilling_df_views(manager):
     df_view = df.loc[1:]
     assert gen_df.is_spillable(df_view)
     assert gen_df.is_spillable(df)
-    del df.loc  # Delete the cached view

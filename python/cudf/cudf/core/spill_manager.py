@@ -1,5 +1,6 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+import gc
 import io
 import os
 import threading
@@ -176,6 +177,7 @@ class GlobalSpillManager:
 
     def clear(self) -> None:
         if self._manager is not None:
+            gc.collect()
             base_buffers = self._manager.base_buffers()
             if len(base_buffers) > 0:
                 warnings.warn(f"overwriting non-empty manager: {base_buffers}")
