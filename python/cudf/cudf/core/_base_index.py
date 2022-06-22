@@ -32,7 +32,6 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import _cudf_nvtx_annotate
 
 _index_astype_docstring = """\
 Create an Index with values cast to dtypes.
@@ -100,46 +99,6 @@ class BaseIndex(Serializable):
 
     def __contains__(self, item):
         return item in self._values
-
-    @_cudf_nvtx_annotate
-    def _replace_for_rename(
-        self,
-        to_replace=None,
-        value=None,
-    ):
-        """Replace values given in ``to_replace`` with ``value``.
-
-        Note that this function replaces labels in _all_ columns of the
-        BaseIndex, i.e. it has the same effect on all columns of a MultiIndex.
-        That is OK for now since the only use case of this function is in
-        DataFrame.rename, but given the level of specialization we should
-        probably either inline this functionality there or make it more
-        general.
-
-        Parameters
-        ----------
-        to_replace : list
-            Value(s) to replace.
-        value : list
-            Value to replace any values matching ``to_replace`` with. Must be
-            the same length as to_replace.
-
-        Returns
-        -------
-        result : BaseIndex
-            BaseIndex after replacement.
-        """
-        is_all_na = value.count(None) == len(value)
-
-        try:
-            copy_data = {
-                name: col.find_and_replace(to_replace, value, is_all_na)
-                for name, col in self._data.items()
-            }
-        except OverflowError:
-            copy_data = self._data.copy(deep=True)
-
-        return self._from_data(copy_data)
 
     def get_level_values(self, level):
         """
