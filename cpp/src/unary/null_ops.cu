@@ -19,9 +19,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -36,7 +35,7 @@ std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_
                          thrust::make_counting_iterator(input.size()),
                          input.size(),
                          predicate,
-                         rmm::cuda_stream_default,
+                         cudf::default_stream_value,
                          mr);
 }
 
@@ -51,7 +50,7 @@ std::unique_ptr<column> is_valid(cudf::column_view const& input,
                          thrust::make_counting_iterator(input.size()),
                          input.size(),
                          predicate,
-                         rmm::cuda_stream_default,
+                         cudf::default_stream_value,
                          mr);
 }
 

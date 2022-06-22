@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 
 #include <cudf/ast/expressions.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -47,7 +48,7 @@ conditional_join(table_view const& left,
                  ast::expression const& binary_predicate,
                  join_kind JoinKind,
                  std::optional<std::size_t> output_size = {},
-                 rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+                 rmm::cuda_stream_view stream           = cudf::default_stream_value,
                  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /**
@@ -67,7 +68,7 @@ std::size_t compute_conditional_join_output_size(
   table_view const& right,
   ast::expression const& binary_predicate,
   join_kind JoinKind,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

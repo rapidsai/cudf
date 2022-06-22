@@ -25,6 +25,7 @@
 #include <cudf/lists/detail/stream_compaction.hpp>
 #include <cudf/lists/stream_compaction.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -99,7 +100,7 @@ std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
                                            lists_column_view const& boolean_mask,
                                            rmm::mr::device_memory_resource* mr)
 {
-  return detail::apply_boolean_mask(input, boolean_mask, rmm::cuda_stream_default, mr);
+  return detail::apply_boolean_mask(input, boolean_mask, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf::lists
