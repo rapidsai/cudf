@@ -386,7 +386,7 @@ def read_parquet(path, columns=None, **kwargs):
     """Read parquet files into a Dask DataFrame
 
     Calls ``dask.dataframe.read_parquet`` with ``engine=CudfEngine``
-    to cordinate the execution of ``cudf.read_parquet``, and to
+    to coordinate the execution of ``cudf.read_parquet``, and to
     ultimately create a ``dask_cudf.DataFrame`` collection.
 
     See the ``dask.dataframe.read_parquet`` documentation for

@@ -25,6 +25,7 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -795,7 +796,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(t, partition_map, num_partitions, rmm::cuda_stream_default, mr);
+  return detail::partition(t, partition_map, num_partitions, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

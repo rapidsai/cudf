@@ -25,6 +25,7 @@
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -86,7 +87,7 @@ struct findall_fn {
 }  // namespace
 
 std::unique_ptr<table> findall(strings_column_view const& input,
-                               std::string const& pattern,
+                               std::string_view pattern,
                                regex_flags const flags,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
@@ -147,12 +148,12 @@ std::unique_ptr<table> findall(strings_column_view const& input,
 // external API
 
 std::unique_ptr<table> findall(strings_column_view const& input,
-                               std::string const& pattern,
+                               std::string_view pattern,
                                regex_flags const flags,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall(input, pattern, flags, rmm::cuda_stream_default, mr);
+  return detail::findall(input, pattern, flags, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

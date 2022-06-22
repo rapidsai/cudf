@@ -24,6 +24,7 @@
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -96,7 +97,7 @@ struct extract_fn {
  */
 std::unique_ptr<column> extract_all_record(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -165,12 +166,12 @@ std::unique_ptr<column> extract_all_record(
 // external API
 
 std::unique_ptr<column> extract_all_record(strings_column_view const& strings,
-                                           std::string const& pattern,
+                                           std::string_view pattern,
                                            regex_flags const flags,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_all_record(strings, pattern, flags, rmm::cuda_stream_default, mr);
+  return detail::extract_all_record(strings, pattern, flags, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

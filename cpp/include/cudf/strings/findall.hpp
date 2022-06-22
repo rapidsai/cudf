@@ -56,7 +56,7 @@ namespace strings {
  */
 std::unique_ptr<table> findall(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -90,7 +90,7 @@ std::unique_ptr<table> findall(
  */
 std::unique_ptr<column> findall_record(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

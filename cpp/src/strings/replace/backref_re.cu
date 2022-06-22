@@ -27,6 +27,7 @@
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -46,13 +47,14 @@ namespace {
  *
  * Reference: https://www.regular-expressions.info/refreplacebackref.html
  */
-std::string get_backref_pattern(std::string const& repl)
+std::string get_backref_pattern(std::string_view repl)
 {
   std::string const backslash_pattern = "\\\\(\\d+)";
   std::string const bracket_pattern   = "\\$\\{(\\d+)\\}";
+  std::string const r{repl};
   std::smatch m;
-  return std::regex_search(repl, m, std::regex(backslash_pattern)) ? backslash_pattern
-                                                                   : bracket_pattern;
+  return std::regex_search(r, m, std::regex(backslash_pattern)) ? backslash_pattern
+                                                                : bracket_pattern;
 }
 /**
  * @brief Parse the back-ref index and position values from a given replace format.
@@ -66,11 +68,11 @@ std::string get_backref_pattern(std::string const& repl)
  * For example, for input string 'hello \2 and \1' the returned `backref_type` vector
  * contains `[(2,6),(1,11)]` and the returned string is 'hello  and '.
  */
-std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string const& repl,
+std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string_view repl,
                                                                  int const group_count)
 {
   std::vector<backref_type> backrefs;
-  std::string str = repl;  // make a modifiable copy
+  std::string str{repl};  // make a modifiable copy
   std::smatch m;
   std::regex ex(get_backref_pattern(repl));
   std::string rtn;
@@ -100,8 +102,8 @@ std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string con
 
 //
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
-                                              std::string const& pattern,
-                                              std::string const& replacement,
+                                              std::string_view pattern,
+                                              std::string_view replacement,
                                               regex_flags const flags,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
@@ -144,14 +146,14 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& input,
 // external API
 
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
-                                              std::string const& pattern,
-                                              std::string const& replacement,
+                                              std::string_view pattern,
+                                              std::string_view replacement,
                                               regex_flags const flags,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::replace_with_backrefs(
-    strings, pattern, replacement, flags, rmm::cuda_stream_default, mr);
+    strings, pattern, replacement, flags, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

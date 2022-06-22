@@ -25,6 +25,7 @@
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -101,11 +102,11 @@ struct replace_regex_fn {
 //
 std::unique_ptr<column> replace_re(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   string_scalar const& replacement,
   std::optional<size_type> max_replace_count,
   regex_flags const flags,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
@@ -135,7 +136,7 @@ std::unique_ptr<column> replace_re(
 // external API
 
 std::unique_ptr<column> replace_re(strings_column_view const& strings,
-                                   std::string const& pattern,
+                                   std::string_view pattern,
                                    string_scalar const& replacement,
                                    std::optional<size_type> max_replace_count,
                                    regex_flags const flags,
@@ -143,7 +144,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::replace_re(
-    strings, pattern, replacement, max_replace_count, flags, rmm::cuda_stream_default, mr);
+    strings, pattern, replacement, max_replace_count, flags, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

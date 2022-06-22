@@ -90,20 +90,24 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
     initial_value = simple_op.template get_identity<ResultType>();
   }
 
+  auto const result_type =
+    cudf::is_fixed_point(col.type()) ? col.type() : data_type{type_to_id<ResultType>()};
+  auto result =
+    make_fixed_width_column(result_type, num_segments, mask_state::UNALLOCATED, stream, mr);
+  auto outit = result->mutable_view().template begin<ResultType>();
+
   // TODO: Explore rewriting null_replacing_element_transformer/element_transformer with nullate
-  auto result = [&] {
-    if (col.has_nulls()) {
-      auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
-      auto it = thrust::make_transform_iterator(dcol->pair_begin<InputType, true>(), f);
-      return cudf::reduction::detail::segmented_reduce(
-        it, offsets.begin(), num_segments, binary_op, initial_value, stream, mr);
-    } else {
-      auto f  = simple_op.template get_element_transformer<ResultType>();
-      auto it = thrust::make_transform_iterator(dcol->begin<InputType>(), f);
-      return cudf::reduction::detail::segmented_reduce(
-        it, offsets.begin(), num_segments, binary_op, initial_value, stream, mr);
-    }
-  }();
+  if (col.has_nulls()) {
+    auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
+    auto it = thrust::make_transform_iterator(dcol->pair_begin<InputType, true>(), f);
+    cudf::reduction::detail::segmented_reduce(
+      it, offsets.begin(), offsets.end(), outit, binary_op, initial_value, stream);
+  } else {
+    auto f  = simple_op.template get_element_transformer<ResultType>();
+    auto it = thrust::make_transform_iterator(dcol->begin<InputType>(), f);
+    cudf::reduction::detail::segmented_reduce(
+      it, offsets.begin(), offsets.end(), outit, binary_op, initial_value, stream);
+  }
 
   // Compute the output null mask
   auto const bitmask                 = col.null_mask();
@@ -166,14 +170,14 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
   auto constexpr identity =
     is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
 
-  auto gather_map =
-    cudf::reduction::detail::segmented_reduce(it,
-                                              offsets.begin(),
-                                              num_segments,
-                                              string_comparator,
-                                              identity,
-                                              stream,
-                                              rmm::mr::get_current_device_resource());
+  auto gather_map = make_fixed_width_column(
+    data_type{type_to_id<size_type>()}, num_segments, mask_state::UNALLOCATED, stream, mr);
+
+  auto gather_map_it = gather_map->mutable_view().begin<size_type>();
+
+  cudf::reduction::detail::segmented_reduce(
+    it, offsets.begin(), offsets.end(), gather_map_it, string_comparator, identity, stream);
+
   auto result = std::move(cudf::detail::gather(table_view{{col}},
                                                *gather_map,
                                                cudf::out_of_bounds_policy::NULLIFY,
@@ -211,8 +215,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
         masks,
         begin_bits,
         result->size(),
-        stream,
-        mr);
+        stream);
       result->set_null_count(result->size() - valid_count);
     }
   }
@@ -231,6 +234,52 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FAIL("Segmented reduction on string column only supports min and max reduction.");
+}
+
+/**
+ * @brief Fixed point segmented reduction for 'min', 'max'.
+ *
+ * @tparam InputType    the input column data-type
+ * @tparam Op           the operator of cudf::reduction::op::
+
+ * @param col Input column of data to reduce.
+ * @param offsets Indices to segment boundaries.
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
+ * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
+ * the reduced value is valid if any element in the segment is valid.
+ * @param stream Used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Output column in device memory
+ */
+
+template <typename InputType,
+          typename Op,
+          CUDF_ENABLE_IF(std::is_same_v<Op, cudf::reduction::op::min> ||
+                         std::is_same_v<Op, cudf::reduction::op::max>)>
+std::unique_ptr<column> fixed_point_segmented_reduction(column_view const& col,
+                                                        device_span<size_type const> offsets,
+                                                        null_policy null_handling,
+                                                        std::optional<const scalar*> init,
+                                                        rmm::cuda_stream_view stream,
+                                                        rmm::mr::device_memory_resource* mr)
+{
+  using RepType = device_storage_type_t<InputType>;
+  return simple_segmented_reduction<RepType, RepType, Op>(
+    col, offsets, null_handling, init, stream, mr);
+}
+
+template <typename InputType,
+          typename Op,
+          CUDF_ENABLE_IF(!std::is_same_v<Op, cudf::reduction::op::min>() &&
+                         !std::is_same_v<Op, cudf::reduction::op::max>())>
+std::unique_ptr<column> fixed_point_segmented_reduction(column_view const& col,
+                                                        device_span<size_type const> offsets,
+                                                        null_policy null_handling,
+                                                        std::optional<const scalar*>,
+                                                        rmm::cuda_stream_view stream,
+                                                        rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FAIL("Segmented reduction on fixed point column only supports min and max reduction.");
 }
 
 /**
@@ -279,15 +328,15 @@ struct same_column_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_fixed_point<ElementType>() || cudf::is_dictionary<ElementType>() ||
-             std::is_same_v<ElementType, cudf::list_view> ||
+    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view> ||
              std::is_same_v<ElementType, cudf::struct_view>);
   }
 
  public:
   template <typename ElementType,
             CUDF_ENABLE_IF(is_supported<ElementType>() &&
-                           !std::is_same_v<ElementType, string_view>)>
+                           !std::is_same_v<ElementType, string_view> &&
+                           !cudf::is_fixed_point<ElementType>())>
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
@@ -311,6 +360,19 @@ struct same_column_type_dispatcher {
     if (init.has_value()) { CUDF_FAIL("Initial value not support for strings"); }
 
     return string_segmented_reduction<ElementType, Op>(col, offsets, null_handling, stream, mr);
+  }
+
+  template <typename ElementType,
+            CUDF_ENABLE_IF(is_supported<ElementType>() && cudf::is_fixed_point<ElementType>())>
+  std::unique_ptr<column> operator()(column_view const& col,
+                                     device_span<size_type const> offsets,
+                                     null_policy null_handling,
+                                     std::optional<const scalar*> init,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    return fixed_point_segmented_reduction<ElementType, Op>(
+      col, offsets, null_handling, init, stream, mr);
   }
 
   template <typename ElementType, CUDF_ENABLE_IF(!is_supported<ElementType>())>

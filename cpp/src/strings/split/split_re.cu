@@ -26,6 +26,7 @@
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -184,7 +185,7 @@ struct tokens_transform_fn {
 };
 
 std::unique_ptr<table> split_re(strings_column_view const& input,
-                                std::string const& pattern,
+                                std::string_view pattern,
                                 split_direction direction,
                                 size_type maxsplit,
                                 rmm::cuda_stream_view stream,
@@ -252,7 +253,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
-                                        std::string const& pattern,
+                                        std::string_view pattern,
                                         split_direction direction,
                                         size_type maxsplit,
                                         rmm::cuda_stream_view stream,
@@ -289,7 +290,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
 }  // namespace
 
 std::unique_ptr<table> split_re(strings_column_view const& input,
-                                std::string const& pattern,
+                                std::string_view pattern,
                                 size_type maxsplit,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
@@ -298,7 +299,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
-                                        std::string const& pattern,
+                                        std::string_view pattern,
                                         size_type maxsplit,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
@@ -307,7 +308,7 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
 }
 
 std::unique_ptr<table> rsplit_re(strings_column_view const& input,
-                                 std::string const& pattern,
+                                 std::string_view pattern,
                                  size_type maxsplit,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
@@ -316,7 +317,7 @@ std::unique_ptr<table> rsplit_re(strings_column_view const& input,
 }
 
 std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
-                                         std::string const& pattern,
+                                         std::string_view pattern,
                                          size_type maxsplit,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
@@ -329,39 +330,39 @@ std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
 // external APIs
 
 std::unique_ptr<table> split_re(strings_column_view const& input,
-                                std::string const& pattern,
+                                std::string_view pattern,
                                 size_type maxsplit,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_re(input, pattern, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::split_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
-                                        std::string const& pattern,
+                                        std::string_view pattern,
                                         size_type maxsplit,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record_re(input, pattern, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::split_record_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> rsplit_re(strings_column_view const& input,
-                                 std::string const& pattern,
+                                 std::string_view pattern,
                                  size_type maxsplit,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit_re(input, pattern, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::rsplit_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
-                                         std::string const& pattern,
+                                         std::string_view pattern,
                                          size_type maxsplit,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit_record_re(input, pattern, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::rsplit_record_re(input, pattern, maxsplit, cudf::default_stream_value, mr);
 }
 }  // namespace strings
 }  // namespace cudf

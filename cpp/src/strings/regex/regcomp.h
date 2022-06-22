@@ -99,7 +99,7 @@ class reprog {
    * of this object
    *
    * @param pattern Regex pattern encoded as UTF-8
-   * @param flags For interpretting certain `pattern` characters
+   * @param flags For interpreting certain `pattern` characters
    * @return Instance of reprog
    */
   static reprog create_from(std::string_view pattern, regex_flags const flags);
@@ -124,8 +124,7 @@ class reprog {
   void set_start_inst(int32_t id);
   [[nodiscard]] int32_t get_start_inst() const;
 
-  void optimize1();
-  void optimize2();
+  void finalize();
   void check_for_errors();
 #ifndef NDEBUG
   void print(regex_flags const flags);
@@ -139,6 +138,8 @@ class reprog {
   int32_t _num_capturing_groups{};
 
   reprog() = default;
+  void collapse_nops();
+  void build_start_ids();
   void check_for_errors(int32_t id, int32_t next_id);
 };
 

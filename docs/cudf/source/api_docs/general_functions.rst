@@ -13,7 +13,6 @@ Data manipulations
    cudf.cut
    cudf.get_dummies
    cudf.melt
-   cudf.merge_sorted
    cudf.pivot
    cudf.unstack
 
@@ -23,6 +22,7 @@ Top-level conversions
    :toctree: api/
 
     cudf.to_numeric
+    cudf.from_dlpack
 
 Top-level dealing with datetimelike
 -----------------------------------

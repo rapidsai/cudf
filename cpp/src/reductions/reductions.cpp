@@ -25,8 +25,9 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -145,7 +146,7 @@ std::unique_ptr<scalar> reduce(
   std::unique_ptr<reduce_aggregation> const& agg,
   data_type output_dtype,
   std::optional<const scalar*> init,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
@@ -180,7 +181,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reduce(col, agg, output_dtype, std::nullopt, rmm::cuda_stream_default, mr);
+  return detail::reduce(col, agg, output_dtype, std::nullopt, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<scalar> reduce(column_view const& col,
@@ -198,6 +199,6 @@ std::unique_ptr<scalar> reduce(column_view const& col,
   }
 
   CUDF_FUNC_RANGE();
-  return detail::reduce(col, agg, output_dtype, &init, rmm::cuda_stream_default, mr);
+  return detail::reduce(col, agg, output_dtype, &init, cudf::default_stream_value, mr);
 }
 }  // namespace cudf

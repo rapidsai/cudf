@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ namespace strings {
 std::unique_ptr<column> to_timestamps(
   strings_column_view const& strings,
   data_type timestamp_type,
-  std::string const& format,
+  std::string_view format,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -115,7 +115,7 @@ std::unique_ptr<column> to_timestamps(
  */
 std::unique_ptr<column> is_timestamp(
   strings_column_view const& strings,
-  std::string const& format,
+  std::string_view format,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -225,7 +225,7 @@ std::unique_ptr<column> is_timestamp(
  */
 std::unique_ptr<column> from_timestamps(
   column_view const& timestamps,
-  std::string const& format           = "%Y-%m-%dT%H:%M:%SZ",
+  std::string_view format             = "%Y-%m-%dT%H:%M:%SZ",
   strings_column_view const& names    = strings_column_view(column_view{
     data_type{type_id::STRING}, 0, nullptr}),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

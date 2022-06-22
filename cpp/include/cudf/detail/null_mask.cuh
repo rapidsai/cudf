@@ -130,8 +130,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
                           masks,
                           masks_begin_bits,
                           mask_size_bits,
-                          stream,
-                          mr);
+                          stream);
 
   return std::pair(std::move(dest_mask), null_count);
 }
@@ -146,18 +145,15 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
  * @param[in] masks_begin_bits The bit offsets from which each mask is to be merged
  * @param[in] mask_size_bits The number of bits to be ANDed in each mask
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource used to allocate the returned device_buffer
  * @return size_type Count of set bits
  */
 template <typename Binop>
-size_type inplace_bitmask_binop(
-  Binop op,
-  device_span<bitmask_type> dest_mask,
-  host_span<bitmask_type const*> masks,
-  host_span<size_type const> masks_begin_bits,
-  size_type mask_size_bits,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+size_type inplace_bitmask_binop(Binop op,
+                                device_span<bitmask_type> dest_mask,
+                                host_span<bitmask_type const*> masks,
+                                host_span<size_type const> masks_begin_bits,
+                                size_type mask_size_bits,
+                                rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(
     std::all_of(masks_begin_bits.begin(), masks_begin_bits.end(), [](auto b) { return b >= 0; }),
@@ -166,6 +162,7 @@ size_type inplace_bitmask_binop(
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
                "Mask pointer cannot be null");
 
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource();
   rmm::device_scalar<size_type> d_counter{0, stream, mr};
   rmm::device_uvector<bitmask_type const*> d_masks(masks.size(), stream, mr);
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
