@@ -100,7 +100,7 @@ cdef void* get_data_ptr(buf, shared_ptr[OwnersVecT] owners) except *:
         ac = base._access_counter
         deref(owners).push_back(static_pointer_cast[void, int](ac.counter))
 
-        return <void*><uintptr_t> base._ptr + offset
+        return <void*><uintptr_t> (base._ptr + offset)
 
 
 cdef class Column:
