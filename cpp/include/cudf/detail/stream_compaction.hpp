@@ -85,7 +85,7 @@ std::unique_ptr<table> distinct(
   std::vector<size_type> const& keys,
   duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::UNEQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -107,7 +107,7 @@ rmm::device_uvector<size_type> get_distinct_indices(
   table_view const& input,
   duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::UNEQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
