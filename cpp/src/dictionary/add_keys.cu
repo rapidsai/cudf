@@ -62,6 +62,7 @@ std::unique_ptr<column> add_keys(
   // sort(distinct([a,b,c,d,f,d,b,e])) = [a,b,c,d,e,f]
   auto table_keys = cudf::detail::distinct(table_view{{combined_keys->view()}},
                                            std::vector<size_type>{0},  // only one key column
+                                           duplicate_keep_option::KEEP_ANY,
                                            null_equality::EQUAL,
                                            stream,
                                            mr);

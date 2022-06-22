@@ -128,9 +128,13 @@ std::unique_ptr<column> set_keys(
 
   // copy the keys -- use cudf::distinct to make sure there are no duplicates,
   // then sort the results.
-  auto distinct_keys = cudf::detail::distinct(
-    table_view{{new_keys}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr);
-  auto sorted_keys = cudf::detail::sort(distinct_keys->view(),
+  auto distinct_keys = cudf::detail::distinct(table_view{{new_keys}},
+                                              std::vector<size_type>{0},
+                                              duplicate_keep_option::KEEP_ANY,
+                                              null_equality::EQUAL,
+                                              stream,
+                                              mr);
+  auto sorted_keys   = cudf::detail::sort(distinct_keys->view(),
                                         std::vector<order>{order::ASCENDING},
                                         std::vector<null_order>{null_order::BEFORE},
                                         stream,

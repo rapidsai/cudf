@@ -223,8 +223,12 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
-  auto table_keys = cudf::detail::distinct(
-    table_view{{all_keys->view()}}, std::vector<size_type>{0}, null_equality::EQUAL, stream, mr);
+  auto table_keys  = cudf::detail::distinct(table_view{{all_keys->view()}},
+                                           std::vector<size_type>{0},
+                                           duplicate_keep_option::KEEP_ANY,
+                                           null_equality::EQUAL,
+                                           stream,
+                                           mr);
   auto sorted_keys = cudf::detail::sort(table_keys->view(),
                                         std::vector<order>{order::ASCENDING},
                                         std::vector<null_order>{null_order::BEFORE},

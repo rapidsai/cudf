@@ -47,8 +47,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   std::vector<size_type> drop_keys(num_cols);
   std::iota(drop_keys.begin(), drop_keys.end(), 0);
 
-  auto distinct_keys =
-    cudf::detail::distinct(input_table, drop_keys, null_equality::EQUAL, stream, mr);
+  auto distinct_keys = cudf::detail::distinct(
+    input_table, drop_keys, duplicate_keep_option::KEEP_ANY, null_equality::EQUAL, stream, mr);
 
   std::vector<order> column_order(num_cols, order::ASCENDING);
   std::vector<null_order> null_precedence(num_cols, null_order::AFTER);
