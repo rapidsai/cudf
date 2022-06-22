@@ -130,20 +130,6 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto const haystack_has_nulls = has_nested_nulls(haystack);
   auto const needles_has_nulls  = has_nested_nulls(needles);
 
-  // If the haystack table has nulls but they are compared unequal, don't insert them.
-  // Otherwise, it was known to cause performance issue:
-  // - https://github.com/rapidsai/cudf/pull/6943
-  // - https://github.com/rapidsai/cudf/pull/8277
-  auto const nullmask_and_count = [&] {
-    if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      // Gather all nullable columns at all levels from the right table.
-      auto const haystack_nullable_columns = accumulate_nullable_columns{haystack}.release();
-      return cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream);
-    }
-    return std::pair{rmm::device_buffer{}, size_type{0}};
-  }();
-  auto const& row_bitmask = nullmask_and_count.first;
-
   // Insert all row hash values and indices of the haystack table.
   {
     auto const hasher   = cudf::experimental::row::hash::row_hasher(haystack, stream);
@@ -153,8 +139,18 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       size_type{0},
       make_pair_fn<lhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
 
-    // Insert only rows that do not have any nulls at any level.
+    // If the haystack table has nulls but they are compared unequal, don't insert them.
+    // Otherwise, it was known to cause performance issue:
+    // - https://github.com/rapidsai/cudf/pull/6943
+    // - https://github.com/rapidsai/cudf/pull/8277
     if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+      // Gather all nullable columns at all levels from the right table.
+      auto const haystack_nullable_columns = accumulate_nullable_columns{haystack}.release();
+
+      [[maybe_unused]] auto const [row_bitmask, tmp] =
+        cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream);
+
+      // Insert only rows that do not have any nulls at any level.
       map.insert_if(kv_it,
                     kv_it + haystack.num_rows(),
                     thrust::counting_iterator<size_type>(0),  // stencil
@@ -184,7 +180,13 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       auto const d_eqcomp = comparator.equal_to(
         nullate::DYNAMIC{needles_has_nulls || haystack_has_nulls}, compare_nulls, value_comp);
 
-      if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+      if (needles_has_nulls && compare_nulls == null_equality::UNEQUAL) {
+        // Gather all nullable columns at all levels from the right table.
+        auto const needles_nullable_columns = accumulate_nullable_columns{needles}.release();
+
+        [[maybe_unused]] auto const [row_bitmask, tmp] =
+          cudf::detail::bitmask_and(table_view{needles_nullable_columns}, stream);
+
         map.pair_contains_if(kv_it,
                              kv_it + needles.num_rows(),
                              thrust::counting_iterator<size_type>(0),  // stencil
