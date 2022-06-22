@@ -51,7 +51,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
                                               drop_keys,
                                               duplicate_keep_option::KEEP_ANY,
                                               null_equality::EQUAL,
-                                              nan_equality::UNEQUAL,
+                                              nan_equality::ALL_EQUAL,
                                               stream,
                                               mr);
 

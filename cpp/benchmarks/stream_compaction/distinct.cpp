@@ -50,7 +50,7 @@ void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
                                          {0},
                                          cudf::duplicate_keep_option::KEEP_ANY,
                                          cudf::null_equality::EQUAL,
-                                         cudf::nan_equality::UNEQUAL,
+                                         cudf::nan_equality::ALL_EQUAL,
                                          stream_view);
   });
 }
@@ -95,7 +95,7 @@ void nvbench_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
                                          {0},
                                          cudf::duplicate_keep_option::KEEP_ANY,
                                          cudf::null_equality::EQUAL,
-                                         cudf::nan_equality::UNEQUAL,
+                                         cudf::nan_equality::ALL_EQUAL,
                                          stream_view);
   });
 }
