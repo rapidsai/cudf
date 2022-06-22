@@ -61,8 +61,10 @@ pipeline {
 
     stage("Java Test Stage") {
       agent {
-	      label 'gpu'
-	      docker 'gpuci/rapidsai:22.08-cuda11.5-devel-centos7-py3.8'
+        docker {
+          label 'gpu'
+          image 'gpuci/rapidsai:22.08-cuda11.5-devel-centos7-py3.8'
+        }
       }
       when { environment name: 'BUILD_TYPE', value: 'pull-request' }
       steps {
