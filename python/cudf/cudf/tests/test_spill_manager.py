@@ -10,6 +10,7 @@ import rmm
 import cudf
 from cudf.core.buffer import Buffer
 from cudf.core.spill_manager import SpillManager, global_manager
+from cudf.testing._utils import assert_eq
 
 
 def gen_df() -> cudf.DataFrame:
@@ -199,3 +200,20 @@ def test_spilling_df_views(manager):
     df_view = df.loc[1:]
     assert gen_df.is_spillable(df_view)
     assert gen_df.is_spillable(df)
+
+
+def test_modify_spilled_views(manager):
+    df = gen_df()
+    df_view = df.iloc[1:]
+    buf = gen_df.buffer(df)
+    buf.move_inplace(target="cpu")
+
+    # modify the spilled df and check that the changes are reflected
+    # in the view
+    df.iloc[1:] = 0
+    assert_eq(df_view, df.iloc[1:])
+
+    # now, modify the view and check that the changes are reflected in
+    # the df
+    df_view.iloc[:] = -1
+    assert_eq(df_view, df.iloc[1:])
