@@ -911,7 +911,7 @@ __global__ void copy_from_rows(const size_type num_rows, const size_type num_col
   // to shared memory for each of the tiles that we work on
 
   auto group = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<32>(group);
+  auto warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
   extern __shared__ int8_t shared[];
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
@@ -970,12 +970,14 @@ __global__ void copy_from_rows(const size_type num_rows, const size_type num_col
     // we do a global index instead of a double for loop with col/row.
     for (int relative_row = warp.thread_rank(); relative_row < rows_in_tile;
          relative_row += warp.size()) {
+
+      auto const absolute_row = relative_row + tile.start_row;
+      auto const shared_memory_row_offset = tile_row_size * relative_row;
+
       for (int relative_col = warp.meta_group_rank(); relative_col < cols_in_tile;
            relative_col += warp.meta_group_size()) {
         auto const absolute_col = relative_col + tile.start_col;
-        auto const absolute_row = relative_row + tile.start_row;
 
-        auto const shared_memory_row_offset = tile_row_size * relative_row;
         auto const shared_memory_offset =
             col_offsets[absolute_col] - col_offsets[tile.start_col] + shared_memory_row_offset;
         auto const column_size = col_sizes[absolute_col];
@@ -1075,7 +1077,7 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
       // so every thread that is participating in the warp has a byte, but it's row-based
       // data and we need it in column-based. So we shuffle the bits around to make
       // the bytes we actually write.
-      for (int i = 0, byte_mask = 1; i < cols_per_read && relative_col + i < num_columns;
+      for (int i = 0, byte_mask = 0x1; i < cols_per_read && relative_col + i < num_columns;
            ++i, byte_mask <<= 1) {
         auto const validity_data = __ballot_sync(participation_mask, my_byte & byte_mask);
         // lead thread in each warp writes data
