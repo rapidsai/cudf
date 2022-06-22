@@ -50,6 +50,7 @@ namespace detail {
  * @tparam Op           the operator of cudf::reduction::op::
 
  * @param col Input column of data to reduce
+ * @param init Optional initial value of the reduction.
  * @param stream Used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
@@ -99,6 +100,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
  * @tparam Op         The operator of cudf::reduction::op::
  *
  * @param col         Input column of data to reduce
+ * @param init        Optional initial value of the reduction.
  * @param stream      Used for device memory operations and kernel launches.
  * @param mr          Device memory resource used to allocate the returned scalar's device memory
  * @return            Output scalar in device memory
@@ -138,7 +140,7 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   auto const scale = [&] {
     if (std::is_same_v<Op, cudf::reduction::op::product>) {
       auto const valid_count = static_cast<int32_t>(col.size() - col.null_count());
-      return numeric::scale_type{col.type().scale() * valid_count};
+      return numeric::scale_type{col.type().scale() * (valid_count + initial_value.has_value())};
     } else if (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
       return numeric::scale_type{col.type().scale() * 2};
     }
@@ -161,6 +163,7 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
  * @tparam Op           The operator of cudf::reduction::op::
  *
  * @param col Input dictionary column of data to reduce
+ * @param init Optional initial value of the reduction.
  * @param stream Used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
@@ -171,25 +174,17 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
+  if (init.has_value()) { CUDF_FAIL("Initial value not support for dictionary reductions"); }
+
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
-
-  // Cast initial value
-  std::optional<ResultType> initial_value;
-  if (init.has_value() && init.value()->is_valid()) {
-    using ScalarType = cudf::scalar_type_t<ElementType>;
-    auto input_value = static_cast<const ScalarType*>(init.value())->value(stream);
-    initial_value    = static_cast<ResultType>(input_value);
-  } else {
-    initial_value = std::nullopt;
-  }
 
   auto result = [&] {
     auto f = simple_op.template get_null_replacing_element_transformer<ResultType>();
     auto p =
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls());
     auto it = thrust::make_transform_iterator(p, f);
-    return cudf::reduction::detail::reduce(it, col.size(), simple_op, initial_value, stream, mr);
+    return cudf::reduction::detail::reduce(it, col.size(), simple_op, {}, stream, mr);
   }();
 
   // set scalar is valid
@@ -332,6 +327,8 @@ struct same_element_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    if (init.has_value()) { CUDF_FAIL("Initial value not support for struct reductions"); }
+
     if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
 
     // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.

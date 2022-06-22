@@ -1040,6 +1040,35 @@ struct StringReductionTest : public cudf::test::BaseFixture,
       EXPECT_ANY_THROW(statement());
     }
   }
+
+  void reduction_test(const cudf::column_view underlying_column,
+                      std::string initial_value,
+                      std::string expected_value,
+                      bool succeeded_condition,
+                      std::unique_ptr<reduce_aggregation> const& agg,
+                      cudf::data_type output_dtype = cudf::data_type{})
+  {
+    if (cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
+    auto string_scalar = cudf::make_string_scalar(initial_value);
+
+    auto statement = [&]() {
+      std::unique_ptr<cudf::scalar> result =
+        cudf::reduce(underlying_column, agg, output_dtype, *string_scalar);
+      using ScalarType = cudf::scalar_type_t<cudf::string_view>;
+      auto result1     = static_cast<ScalarType*>(result.get());
+      EXPECT_TRUE(result1->is_valid());
+      if (!result1->is_valid())
+        std::cout << "expected=" << expected_value << ",got=" << result1->to_string() << std::endl;
+      EXPECT_EQ(expected_value, result1->to_string())
+        << (agg->kind == aggregation::MIN ? "MIN" : "MAX");
+    };
+
+    if (succeeded_condition) {
+      CUDF_EXPECT_NO_THROW(statement());
+    } else {
+      EXPECT_ANY_THROW(statement());
+    }
+  }
 };
 
 // ------------------------------------------------------------------------
@@ -1061,12 +1090,15 @@ TEST_P(StringReductionTest, MinMax)
   std::vector<std::string> host_strings(GetParam());
   std::vector<bool> host_bools({1, 0, 1, 1, 1, 1, 0, 0, 1});
   bool succeed(true);
+  std::string initial_value = "init";
 
   // all valid string column
   cudf::test::strings_column_wrapper col(host_strings.begin(), host_strings.end());
 
   std::string expected_min_result = *(std::min_element(host_strings.begin(), host_strings.end()));
   std::string expected_max_result = *(std::max_element(host_strings.begin(), host_strings.end()));
+  std::string expected_min_init_result = std::min(expected_min_result, initial_value);
+  std::string expected_max_init_result = std::max(expected_max_result, initial_value);
 
   // string column with nulls
   cudf::test::strings_column_wrapper col_nulls(
@@ -1080,17 +1112,39 @@ TEST_P(StringReductionTest, MinMax)
 
   std::string expected_min_null_result = *(std::min_element(r_strings.begin(), r_strings.end()));
   std::string expected_max_null_result = *(std::max_element(r_strings.begin(), r_strings.end()));
+  std::string expected_min_init_null_result = std::min(expected_min_null_result, initial_value);
+  std::string expected_max_init_null_result = std::max(expected_max_null_result, initial_value);
 
   // MIN
   this->reduction_test(
     col, expected_min_result, succeed, cudf::make_min_aggregation<reduce_aggregation>());
   this->reduction_test(
     col_nulls, expected_min_null_result, succeed, cudf::make_min_aggregation<reduce_aggregation>());
+  this->reduction_test(col,
+                       initial_value,
+                       expected_min_init_result,
+                       succeed,
+                       cudf::make_min_aggregation<reduce_aggregation>());
+  this->reduction_test(col_nulls,
+                       initial_value,
+                       expected_min_init_null_result,
+                       succeed,
+                       cudf::make_min_aggregation<reduce_aggregation>());
   // MAX
   this->reduction_test(
     col, expected_max_result, succeed, cudf::make_max_aggregation<reduce_aggregation>());
   this->reduction_test(
     col_nulls, expected_max_null_result, succeed, cudf::make_max_aggregation<reduce_aggregation>());
+  this->reduction_test(col,
+                       initial_value,
+                       expected_max_init_result,
+                       succeed,
+                       cudf::make_max_aggregation<reduce_aggregation>());
+  this->reduction_test(col_nulls,
+                       initial_value,
+                       expected_max_init_null_result,
+                       succeed,
+                       cudf::make_max_aggregation<reduce_aggregation>());
 
   // MINMAX
   auto result = cudf::minmax(col);
@@ -1157,6 +1211,8 @@ TEST_F(StringReductionTest, AllNull)
   std::vector<std::string> host_strings(
     {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
   std::vector<bool> host_bools(host_strings.size(), false);
+  auto initial_value = cudf::make_string_scalar("init");
+  initial_value->set_valid_async(false);
 
   // string column with nulls
   cudf::test::strings_column_wrapper col_nulls(
@@ -1167,8 +1223,14 @@ TEST_F(StringReductionTest, AllNull)
   auto result =
     cudf::reduce(col_nulls, cudf::make_min_aggregation<reduce_aggregation>(), output_dtype);
   EXPECT_FALSE(result->is_valid());
+  result = cudf::reduce(
+    col_nulls, cudf::make_min_aggregation<reduce_aggregation>(), output_dtype, *initial_value);
+  EXPECT_FALSE(result->is_valid());
   // MAX
   result = cudf::reduce(col_nulls, cudf::make_max_aggregation<reduce_aggregation>(), output_dtype);
+  EXPECT_FALSE(result->is_valid());
+  result = cudf::reduce(
+    col_nulls, cudf::make_max_aggregation<reduce_aggregation>(), output_dtype, *initial_value);
   EXPECT_FALSE(result->is_valid());
   // MINMAX
   auto mm_result = cudf::minmax(col_nulls);
@@ -1321,6 +1383,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProductZeroScale)
   auto const THREE = decimalXX{3, scale_type{0}};
   auto const FOUR  = decimalXX{4, scale_type{0}};
   auto const _24   = decimalXX{24, scale_type{0}};
+  auto const _48   = decimalXX{48, scale_type{0}};
 
   auto const in       = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
   auto const column   = cudf::test::fixed_width_column_wrapper<decimalXX>(in.cbegin(), in.cend());
@@ -1334,6 +1397,19 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProductZeroScale)
 
   EXPECT_EQ(result_fp, expected);
   EXPECT_EQ(result_fp, _24);
+
+  // Test with initial Value
+  auto const init_expected =
+    std::accumulate(in.cbegin(), in.cend(), TWO, std::multiplies<decimalXX>());
+  auto const init_scalar = cudf::make_fixed_point_scalar<decimalXX>(2, scale_type{0});
+
+  auto const init_result = cudf::reduce(
+    column, cudf::make_product_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+  auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+  auto const init_result_fp     = decimalXX{init_result_scalar->value()};
+
+  EXPECT_EQ(init_result_fp, init_expected);
+  EXPECT_EQ(init_result_fp, _48);
 }
 
 TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProduct)
@@ -1354,6 +1430,16 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProduct)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+
+    // Test with initial Value
+    auto const init_expected = decimalXX{scaled_integer<RepType>{72, scale_type{i * 7}}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_product_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1375,6 +1461,16 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProductWithNulls)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+
+    // Test with initial Value
+    auto const init_expected = decimalXX{scaled_integer<RepType>{12, scale_type{i * 4}}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_product_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1397,6 +1493,16 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSum)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+
+    // Test with initial Value
+    auto const init_expected = decimalXX{scaled_integer<RepType>{12, scale}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_sum_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1405,12 +1511,13 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumAlternate)
   using namespace numeric;
   using decimalXX = TypeParam;
 
-  auto const ZERO  = decimalXX{0, scale_type{0}};
-  auto const ONE   = decimalXX{1, scale_type{0}};
-  auto const TWO   = decimalXX{2, scale_type{0}};
-  auto const THREE = decimalXX{3, scale_type{0}};
-  auto const FOUR  = decimalXX{4, scale_type{0}};
-  auto const TEN   = decimalXX{10, scale_type{0}};
+  auto const ZERO   = decimalXX{0, scale_type{0}};
+  auto const ONE    = decimalXX{1, scale_type{0}};
+  auto const TWO    = decimalXX{2, scale_type{0}};
+  auto const THREE  = decimalXX{3, scale_type{0}};
+  auto const FOUR   = decimalXX{4, scale_type{0}};
+  auto const TEN    = decimalXX{10, scale_type{0}};
+  auto const TWELVE = decimalXX{12, scale_type{0}};
 
   auto const in       = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
   auto const column   = cudf::test::fixed_width_column_wrapper<decimalXX>(in.cbegin(), in.cend());
@@ -1423,6 +1530,17 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumAlternate)
 
   EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   EXPECT_EQ(result_scalar->fixed_point_value(), TEN);
+
+  // Test with initial Value
+  auto const init_expected = std::accumulate(in.cbegin(), in.cend(), TWO, std::plus<decimalXX>());
+  auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(2, scale_type{0});
+
+  auto const init_result =
+    cudf::reduce(column, cudf::make_sum_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+  auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+
+  EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
+  EXPECT_EQ(init_result_scalar->fixed_point_value(), TWELVE);
 }
 
 TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumFractional)
@@ -1443,6 +1561,16 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumFractional)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+
+    // Test with initial Value
+    auto const init_expected = decimalXX{scaled_integer<RepType>{668, scale}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_sum_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1467,6 +1595,19 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumLarge)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+
+    // Test with initial Value
+    int const init_value = 2;
+    auto const init_expected_value =
+      std::accumulate(values.cbegin(), values.cend(), RepType{init_value});
+    auto const init_expected = decimalXX{scaled_integer<RepType>{init_expected_value, scale}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(init_value, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_sum_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1488,6 +1629,16 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMin)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), ONE);
+
+    // Test with initial Value
+    auto const init_expected = decimalXX{scaled_integer<RepType>{0, scale}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(0, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_min_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1510,6 +1661,16 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMinLarge)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+
+    // Test with initial Value
+    auto const init_expected = decimalXX{scaled_integer<RepType>{0, scale}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(0, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_min_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1531,6 +1692,16 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMax)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), FOUR);
+
+    // Test with initial Value
+    auto const init_expected = decimalXX{scaled_integer<RepType>{5, scale}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(5, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_max_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1553,6 +1724,16 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMaxLarge)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+
+    // Test with initial Value
+    auto const init_expected = decimalXX{scaled_integer<RepType>{43, scale}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(43, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_max_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1707,6 +1888,17 @@ TEST_F(Decimal128Only, Decimal128ProductReduction)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+
+    // Test with initial Value
+    auto const init_expected = decimal128{scaled_integer<RepType>{1024, scale_type{i * 10}}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimal128>(2, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_product_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar =
+      static_cast<cudf::scalar_type_t<decimal128>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1727,6 +1919,17 @@ TEST_F(Decimal128Only, Decimal128ProductReduction2)
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+
+    // Test with initial Value
+    auto const init_expected = decimal128{scaled_integer<RepType>{2160, scale_type{i * 7}}};
+    auto const init_scalar   = cudf::make_fixed_point_scalar<decimal128>(3, scale);
+
+    auto const init_result = cudf::reduce(
+      column, cudf::make_product_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+    auto const init_result_scalar =
+      static_cast<cudf::scalar_type_t<decimal128>*>(init_result.get());
+
+    EXPECT_EQ(init_result_scalar->fixed_point_value(), init_expected);
   }
 }
 
@@ -1748,6 +1951,15 @@ TEST_F(Decimal128Only, Decimal128ProductReduction3)
   auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
 
   EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+
+  // Test with initial Value
+  auto const init_scalar = cudf::make_fixed_point_scalar<decimal128>(5, scale);
+
+  auto const init_result = cudf::reduce(
+    column, cudf::make_product_aggregation<reduce_aggregation>(), out_type, *init_scalar);
+  auto const init_result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(init_result.get());
+
+  EXPECT_EQ(init_result_scalar->fixed_point_value(), expected);
 }
 
 TYPED_TEST(ReductionTest, NthElement)

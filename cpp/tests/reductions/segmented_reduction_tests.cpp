@@ -814,32 +814,6 @@ TEST_F(SegmentedReductionStringTest, MaxIncludeNulls)
                               output_dtype,
                               null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
-
-  // Test with initial value
-  auto init_scalar = cudf::make_fixed_width_scalar<std::string>("test");
-  auto init_expect = strings_column_wrapper{{"world", XXX, "rapids", "zebras", "test", XXX, XXX},
-                                            {true, false, true, true, true, false, false}};
-
-  res = segmented_reduce(input,
-                         column_view(offsets),
-                         *make_max_aggregation<segmented_reduce_aggregation>(),
-                         output_dtype,
-                         null_policy::INCLUDE,
-                         *init_scalar);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, init_expect);
-
-  // Test with null initial value
-  init_scalar->set_valid_async(false);
-  auto null_init_expect = strings_column_wrapper{{XXX, XXX, XXX, XXX, XXX, XXX, XXX},
-                                                 {false, false, false, false, false, false, false}};
-
-  res = segmented_reduce(input,
-                         column_view(offsets),
-                         *make_max_aggregation<segmented_reduce_aggregation>(),
-                         output_dtype,
-                         null_policy::INCLUDE,
-                         *init_scalar);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, null_init_expect);
 }
 
 TEST_F(SegmentedReductionStringTest, MaxExcludeNulls)

@@ -58,6 +58,7 @@ namespace detail {
  * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
  * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
  * the reduced value is valid if any element in the segment is valid.
+ * @param init Optional initial value of the reduction.
  * @param stream Used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -150,7 +151,6 @@ template <typename InputType,
 std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                                                    device_span<size_type const> offsets,
                                                    null_policy null_handling,
-                                                   std::optional<const scalar*> init,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
@@ -165,16 +165,13 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
     cudf::detail::element_argminmax_fn<InputType>{*device_col, col.has_nulls(), is_argmin};
   auto constexpr identity =
     is_argmin ? cudf::detail::ARGMIN_SENTINEL : cudf::detail::ARGMAX_SENTINEL;
-  auto initial_value = (init.has_value() && init.value()->is_valid())
-                         ? static_cast<const cudf::scalar_type_t<size_type>*>(init.value())->value()
-                         : identity;
 
   auto gather_map =
     cudf::reduction::detail::segmented_reduce(it,
                                               offsets.begin(),
                                               num_segments,
                                               string_comparator,
-                                              initial_value,
+                                              identity,
                                               stream,
                                               rmm::mr::get_current_device_resource());
   auto result = std::move(cudf::detail::gather(table_view{{col}},
@@ -190,8 +187,8 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                                                 offsets.end() - 1,
                                                 offsets.begin() + 1,
                                                 null_handling,
-                                                init.has_value(),
-                                                init.has_value() ? init.value()->is_valid() : false,
+                                                false,
+                                                false,
                                                 stream,
                                                 mr);
 
@@ -311,8 +308,9 @@ struct same_column_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return string_segmented_reduction<ElementType, Op>(
-      col, offsets, null_handling, init, stream, mr);
+    if (init.has_value()) { CUDF_FAIL("Initial value not support for strings"); }
+
+    return string_segmented_reduction<ElementType, Op>(col, offsets, null_handling, stream, mr);
   }
 
   template <typename ElementType, CUDF_ENABLE_IF(!is_supported<ElementType>())>
