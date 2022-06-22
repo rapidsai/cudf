@@ -169,7 +169,7 @@ function buildLibCudfJniInDocker {
                 -DUSE_GDS=ON \
                 -DGPU_ARCHS=${CUDF_CMAKE_CUDA_ARCHITECTURES} \
                 -DCUDF_JNI_LIBCUDF_STATIC=ON \
-                -Dtest=*,!CuFileTest"
+                -Dtest=*,!CuFileTest,!CudaFatalTest"
 }
 
 if hasArg -h || hasArg --h || hasArg --help; then
@@ -249,7 +249,7 @@ if hasArg clean; then
     done
 
     # Cleaning up python artifacts
-    find ${REPODIR}/python/ | grep -E "(__pycache__|\.pyc|\.pyo|\.so$)"  | xargs rm -rf
+    find ${REPODIR}/python/ | grep -E "(__pycache__|\.pyc|\.pyo|\.so|\_skbuild$)"  | xargs rm -rf
 
 fi
 

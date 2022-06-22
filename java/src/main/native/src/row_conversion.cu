@@ -69,8 +69,7 @@ constexpr auto NUM_STRING_ROWS_PER_BLOCK_FROM_ROWS = 64;
 constexpr auto MIN_STRING_BLOCKS = 32;
 constexpr auto MAX_STRING_BLOCKS = MAX_BATCH_SIZE;
 
-constexpr auto NUM_THREADS_IN_WARP = 32;
-constexpr auto NUM_THREADS = 1024;
+constexpr auto NUM_WARPS_IN_BLOCK = 32;
 
 // needed to suppress warning about cuda::barrier
 #pragma nv_diag_suppress static_var_with_dynamic_init
@@ -95,31 +94,26 @@ namespace detail {
  * complicating factors. They are spelled out below:
  *
  * Row Batches:
- * The row data has to fit inside a
- * cuDF column, which limits it to 2 gigs currently. The calling code attempts
- * to keep the data size under 2 gigs, but due to padding this isn't always
- * the case, so being able to break this up into multiple columns is necessary.
- * Internally, this is referred to as the row batch, which is a group of rows
- * that will fit into this 2 gig space requirement. There are typically 1 of
- * these batches, but there can be 2.
+ * The row data has to fit inside a cuDF column, which limits it to 2 gigs
+ * currently. The calling code attempts to keep the data size under 2 gigs,
+ * but due to padding this isn't always the case, so being able to break
+ * this up into multiple columns is necessary. Internally, this is
+ * referred to as the row batch, which is a group of rows that will fit
+ * into this 2 gig space requirement. There are typically 1 of these
+ * batches, but there can be 2.
  *
  * Async Memcpy:
  * The CUDA blocks are using memcpy_async, which allows for the device to
  * schedule memcpy operations and then wait on them to complete at a later
- * time with a barrier. The recommendation is to double-buffer the work
- * so that processing can occur while a copy operation is being completed.
- * On Ampere or later hardware there is dedicated hardware to do this copy
- * and on pre-Ampere it should generate the same code that a hand-rolled
- * loop would generate, so performance should be the same or better than
- * a hand-rolled kernel.
+ * time with a barrier. On Ampere or later hardware there is dedicated
+ * hardware to do this copy and on pre-Ampere it should generate the same
+ * code that a hand-rolled loop would generate, so performance should be
+ * the same or better than a hand-rolled kernel.
  *
  * Tile Info:
- * Each CUDA block will work on NUM_TILES_PER_KERNEL_*_ROWS tile infos
- * before exiting. It will have enough shared memory available to load
- * NUM_TILES_PER_KERNEL_LOADED tiles at one time. The block will load
- * as many tiles as it can fit into shared memory and then wait on the
- * first tile to completely load before processing. Processing in this
- * case means copying the data from shared memory back out to device
+ * Each CUDA block will work on a single tile info before exiting. This
+ * single tile consumes all available shared memory. The kernel reads
+ * data into shared memory and then back out from shared memory to device
  * memory via memcpy_async. This kernel is completely memory bound.
  *
  * Batch Data:
@@ -128,10 +122,9 @@ namespace detail {
  *
  * Tiles:
  * The tile info describes a tile of data to process. In a GPU with
- * 48KB of shared memory each tile uses approximately 24KB of memory
- * which equates to about 144 bytes in each direction. The tiles are
- * kept as square as possible to attempt to coalesce memory operations.
- * The taller a tile is the better coalescing of columns, but row
+ * 48KB this equates to about 288 bytes in each direction of a table.
+ * The tiles are kept as square as possible to attempt to coalesce memory
+ * operations. The taller a tile is the better coalescing of columns, but row
  * coalescing suffers. The wider a tile is the better the row coalescing,
  * but columns coalescing suffers. The code attempts to produce a square
  * tile to balance the coalescing. It starts by figuring out the optimal
@@ -154,7 +147,7 @@ namespace detail {
  ************************************************************************/
 
 /**
- * @brief The CUDA blocks work on one or more tile_info structs of data.
+ * @brief The CUDA blocks work on one tile_info struct of data.
  *        This structure defines the workspaces for the blocks.
  *
  */
@@ -589,7 +582,7 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
   // any calculation to do here, but it is important to note.
 
   auto group = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(group);
+  auto warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
   extern __shared__ int8_t shared_data[];
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
@@ -615,23 +608,33 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
 
   // read each column across the tile
   // each warp takes a column with each thread of a warp taking a row
+  // this is done with cooperative groups where each column is chosen
+  // by the tiled partition and each thread in that partition works on a row
   for (int relative_col = warp.meta_group_rank(); relative_col < num_tile_cols;
        relative_col += warp.meta_group_size()) {
+
+    auto const absolute_col = relative_col + tile.start_col;
+    auto const col_size = col_sizes[absolute_col];
+    auto const col_offset = col_offsets[absolute_col];
+    auto const relative_col_offset = col_offset - starting_column_offset;
+    auto const col_ptr = input_data[absolute_col];
+
+    if (col_ptr == nullptr) {
+      // variable-width data column
+      continue;
+    }
+
     for (int relative_row = warp.thread_rank(); relative_row < num_tile_rows;
          relative_row += warp.size()) {
-      auto const absolute_col = relative_col + tile.start_col;
 
-      if (input_data[absolute_col] == nullptr || relative_row >= num_tile_rows) {
-        // variable-width data
+      if (relative_row >= num_tile_rows) {
+        // out of bounds
         continue;
       }
       auto const absolute_row = relative_row + tile.start_row;
-      auto const col_size = col_sizes[absolute_col];
-      auto const col_offset = col_offsets[absolute_col];
-      auto const relative_col_offset = col_offset - starting_column_offset;
 
       auto const shared_offset = relative_row * tile_row_size + relative_col_offset;
-      auto const input_src = input_data[absolute_col] + col_size * absolute_row;
+      auto const input_src = col_ptr + col_size * absolute_row;
 
       // copy the element from global memory
       switch (col_size) {
@@ -664,11 +667,9 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
   auto const tile_output_buffer = output_data[tile.batch_number];
   auto const row_batch_start = tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
-  tile_barrier.arrive_and_wait();
-#else
+  // no async copies above waiting on the barrier, so we sync the group here to ensure
+  // all copies to shared memory are completed before copying data out
   group.sync();
-#endif // ASYNC_MEMCPY_SUPPORTED
 
   // each warp takes a row
   for (int copy_row = warp.meta_group_rank(); copy_row < tile.num_rows();
@@ -721,7 +722,7 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
   // then ballot_sync the bits and write the result to shmem
   // after we fill shared mem memcpy it out in a blob.
   auto group = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(group);
+  auto warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
   // Initialize cuda barriers for each tile.
@@ -766,12 +767,12 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
       // every thread that is participating in the warp has 4 bytes, but it's column-based
       // data and we need it in row-based. So we shuffle the bits around with ballot_sync to
       // make the bytes we actually write.
-      bitmask_type dw_mask = 1;
+      bitmask_type dw_mask = 0x1;
       for (int i = 0; i < threads_per_warp && relative_row + i < num_rows; ++i, dw_mask <<= 1) {
         auto validity_data = __ballot_sync(participation_mask, my_data & dw_mask);
         // lead thread in each warp writes data
         auto const validity_write_offset =
-            validity_data_row_length * (relative_row + i) + relative_col / CHAR_BIT;
+            validity_data_row_length * (relative_row + i) + (relative_col / CHAR_BIT);
         if (warp.thread_rank() == 0) {
           *reinterpret_cast<bitmask_type *>(&shared_data[validity_write_offset]) = validity_data;
         }
@@ -787,6 +788,8 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
   auto const row_batch_start = tile.batch_number == 0 ? 0 : batch_row_boundaries[tile.batch_number];
 
   // make sure entire tile has finished copy
+  // Note that this was copied from above just under the for loop due to nsight complaints about
+  // divergent threads
   group.sync();
 
   for (int relative_row = warp.meta_group_rank(); relative_row < num_tile_rows;
@@ -836,8 +839,8 @@ __global__ void copy_strings_to_rows(size_type const num_rows, size_type const n
   // Each warp will copy a row at a time. The base thread will first go through column data and
   // fill out offset/length information for the column. Then all threads of the warp will
   // participate in the memcpy of the string data.
-  auto my_block = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(my_block);
+  auto const my_block = cooperative_groups::this_thread_block();
+  auto const warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(my_block);
 #ifdef ASYNC_MEMCPY_SUPPORTED
   cuda::barrier<cuda::thread_scope_block> block_barrier;
 #endif
@@ -1024,7 +1027,7 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
   // after we fill shared mem memcpy it out in a blob.
   // probably need knobs for number of rows vs columns to balance read/write
   auto group = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(group);
+  auto warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
   // Initialize cuda barriers for each tile.
@@ -1139,7 +1142,7 @@ __global__ void copy_strings_from_rows(RowOffsetIter row_offsets, int32_t **stri
   // will not wrap around the bottom of the table. The warp will copy the strings for each row
   // in the tile. Traversing in row-major order to coalesce the offsets and size reads.
   auto my_block = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<NUM_THREADS_IN_WARP>(my_block);
+  auto warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(my_block);
 #ifdef ASYNC_MEMCPY_SUPPORTED
   cuda::barrier<cuda::thread_scope_block> block_barrier;
 #endif
@@ -1402,7 +1405,6 @@ build_validity_tile_infos(size_type const &num_columns, size_type const &num_row
       util::div_rounding_up_unsafe(column_stride, CHAR_BIT), JCUDF_ROW_ALIGNMENT);
   auto const row_stride =
       std::min(num_rows, util::round_down_safe(shmem_limit_per_tile / bytes_per_row, 64));
-
   std::vector<detail::tile_info> validity_tile_infos;
   validity_tile_infos.reserve(num_columns / column_stride * num_rows / row_stride);
   for (int col = 0; col < num_columns; col += column_stride) {
@@ -1415,7 +1417,6 @@ build_validity_tile_infos(size_type const &num_columns, size_type const &num_row
         rows_left_in_batch = row_batches[current_tile_row_batch].row_count;
       }
       int const tile_height = std::min(row_stride, rows_left_in_batch);
-
       validity_tile_infos.emplace_back(
           detail::tile_info{col, row, std::min(col + column_stride - 1, num_columns - 1),
                             row + tile_height - 1, current_tile_row_batch});
@@ -1482,7 +1483,7 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
   // should occur every 2 rows, but if a lower bound is run at 2 gigs, 4 gigs, 6 gigs.
   // the batches will be 2 rows, 2 rows, 3 rows, which will be invalid. The previous
   // batch size must be taken into account when building a new batch. One way is to
-  // pull the batch size back to the PC and add it to MAX_BATCH_SIZE for the lower
+  // pull the batch size back to the host and add it to MAX_BATCH_SIZE for the lower
   // bound search. The other method involves keeping everything on device, but subtracting
   // the previous batch from cumulative_row_sizes based on index. This involves no
   // synchronization between GPU and CPU, but involves more work on the GPU. These further
@@ -1498,7 +1499,7 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
     auto search_end = offset_row_sizes + num_rows;
 
     // find the next MAX_BATCH_SIZE boundary
-    auto lb =
+    auto const lb =
         thrust::lower_bound(rmm::exec_policy(stream), search_start, search_end, MAX_BATCH_SIZE);
     size_type const batch_size = lb - search_start;
 
@@ -1665,7 +1666,7 @@ void determine_tiles(std::vector<size_type> const &column_sizes,
   auto const square_bias = 32; // bias towards columns for performance reasons
   auto const optimal_square_len = static_cast<size_type>(sqrt(shmem_limit_per_tile));
   auto const desired_tile_height = util::round_up_safe<int>(
-      std::min(optimal_square_len / square_bias, total_number_of_rows), NUM_THREADS_IN_WARP);
+      std::min(optimal_square_len / square_bias, total_number_of_rows), cudf::detail::warp_size);
   auto const tile_height = std::clamp(desired_tile_height, 1, first_row_batch_size);
 
   int row_size = 0;
@@ -1803,29 +1804,26 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
             gpu_batch_row_boundaries, start_col, end_col, tile_height, num_rows, stream);
       });
 
-  // blast through the entire table and convert it
-  dim3 const blocks(gpu_tile_infos.size());
-  dim3 const threads(NUM_THREADS);
-
   // build validity tiles for ALL columns, variable and fixed width.
   auto validity_tile_infos = detail::build_validity_tile_infos(
       tbl.num_columns(), num_rows, shmem_limit_per_tile, batch_info.row_batches);
 
   auto dev_validity_tile_infos = make_device_uvector_async(validity_tile_infos, stream);
-  dim3 const validity_blocks(validity_tile_infos.size());
-  dim3 const validity_threads(NUM_THREADS);
 
   auto const validity_offset = column_info.column_starts.back();
 
-  detail::copy_to_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
+  // blast through the entire table and convert it
+  detail::copy_to_rows<<<gpu_tile_infos.size(), NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
+                         total_shmem_in_bytes, stream.value()>>>(
       num_rows, tbl.num_columns(), shmem_limit_per_tile, gpu_tile_infos, dev_input_data.data(),
       dev_col_sizes.data(), dev_col_starts.data(), offset_functor,
       batch_info.d_batch_row_boundaries.data(),
       reinterpret_cast<int8_t **>(dev_output_data.data()));
 
   // note that validity gets the entire table and not the fixed-width portion
-  detail::copy_validity_to_rows<<<validity_blocks, validity_threads, total_shmem_in_bytes,
-                                  stream.value()>>>(
+  detail::copy_validity_to_rows<<<validity_tile_infos.size(),
+                                  NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
+                                  total_shmem_in_bytes, stream.value()>>>(
       num_rows, tbl.num_columns(), shmem_limit_per_tile, offset_functor,
       batch_info.d_batch_row_boundaries.data(), dev_output_data.data(), validity_offset,
       dev_validity_tile_infos, dev_input_nm.data());
@@ -1850,7 +1848,6 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
     auto dev_variable_col_output_offsets =
         make_device_uvector_async(column_info.variable_width_column_starts, stream);
 
-    dim3 const string_threads(NUM_THREADS);
     for (uint i = 0; i < batch_info.row_batches.size(); i++) {
       auto const batch_row_offset = batch_info.batch_row_boundaries[i];
       auto const batch_num_rows = batch_info.row_batches[i].row_count;
@@ -1859,7 +1856,8 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
           MAX_STRING_BLOCKS,
           util::div_rounding_up_unsafe(batch_num_rows, NUM_STRING_ROWS_PER_BLOCK_TO_ROWS)));
 
-      detail::copy_strings_to_rows<<<string_blocks, string_threads, 0, stream.value()>>>(
+      detail::copy_strings_to_rows<<<string_blocks, NUM_WARPS_IN_BLOCK * cudf::detail::warp_size, 0,
+                                     stream.value()>>>(
           batch_num_rows, variable_width_table.num_columns(), dev_variable_input_data.data(),
           dev_variable_col_output_offsets.data(), variable_width_offsets->data(),
           column_info.size_per_row, offset_functor, batch_row_offset,
@@ -2161,7 +2159,6 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
       });
 
   dim3 const blocks(gpu_tile_infos.size());
-  dim3 const threads(NUM_THREADS);
 
   // validity needs to be calculated based on the actual number of final table columns
   auto validity_tile_infos =
@@ -2170,31 +2167,32 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
   auto dev_validity_tile_infos = make_device_uvector_async(validity_tile_infos, stream);
 
   dim3 const validity_blocks(validity_tile_infos.size());
-  dim3 const validity_threads(NUM_THREADS);
 
   if (dev_string_row_offsets.size() == 0) {
     detail::fixed_width_row_offset_functor offset_functor(size_per_row);
 
-    detail::copy_from_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
+    detail::copy_from_rows<<<blocks, NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
+                             total_shmem_in_bytes, stream.value()>>>(
         num_rows, num_columns, shmem_limit_per_tile, offset_functor,
         gpu_batch_row_boundaries.data(), dev_output_data.data(), dev_col_sizes.data(),
         dev_col_starts.data(), gpu_tile_infos, child.data<int8_t>());
 
-    detail::copy_validity_from_rows<<<validity_blocks, validity_threads, total_shmem_in_bytes,
-                                      stream.value()>>>(
+    detail::copy_validity_from_rows<<<validity_blocks, NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
+                                      total_shmem_in_bytes, stream.value()>>>(
         num_rows, num_columns, shmem_limit_per_tile, offset_functor,
         gpu_batch_row_boundaries.data(), dev_output_nm.data(), column_info.column_starts.back(),
         dev_validity_tile_infos, child.data<int8_t>());
 
   } else {
     detail::string_row_offset_functor offset_functor(device_span<size_type const>{input.offsets()});
-    detail::copy_from_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
+    detail::copy_from_rows<<<blocks, NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
+                             total_shmem_in_bytes, stream.value()>>>(
         num_rows, num_columns, shmem_limit_per_tile, offset_functor,
         gpu_batch_row_boundaries.data(), dev_output_data.data(), dev_col_sizes.data(),
         dev_col_starts.data(), gpu_tile_infos, child.data<int8_t>());
 
-    detail::copy_validity_from_rows<<<validity_blocks, validity_threads, total_shmem_in_bytes,
-                                      stream.value()>>>(
+    detail::copy_validity_from_rows<<<validity_blocks, NUM_WARPS_IN_BLOCK * cudf::detail::warp_size,
+                                      total_shmem_in_bytes, stream.value()>>>(
         num_rows, num_columns, shmem_limit_per_tile, offset_functor,
         gpu_batch_row_boundaries.data(), dev_output_nm.data(), column_info.column_starts.back(),
         dev_validity_tile_infos, child.data<int8_t>());
@@ -2224,10 +2222,12 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
     auto dev_string_col_offsets = make_device_uvector_async(string_col_offset_ptrs, stream);
     auto dev_string_data_cols = make_device_uvector_async(string_data_col_ptrs, stream);
 
-    dim3 const string_blocks(std::clamp(num_rows, MIN_STRING_BLOCKS, MAX_STRING_BLOCKS));
-    dim3 const string_threads(NUM_THREADS);
+    dim3 const string_blocks(
+        std::min(std::max(MIN_STRING_BLOCKS, num_rows / NUM_STRING_ROWS_PER_BLOCK_FROM_ROWS),
+                 MAX_STRING_BLOCKS));
 
-    detail::copy_strings_from_rows<<<string_blocks, string_threads, 0, stream.value()>>>(
+    detail::copy_strings_from_rows<<<string_blocks, NUM_WARPS_IN_BLOCK * cudf::detail::warp_size, 0,
+                                     stream.value()>>>(
         offset_functor, dev_string_row_offsets.data(), dev_string_lengths.data(),
         dev_string_col_offsets.data(), dev_string_data_cols.data(), child.data<int8_t>(), num_rows,
         static_cast<cudf::size_type>(string_col_offsets.size()));

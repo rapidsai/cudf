@@ -136,10 +136,10 @@ namespace detail {
 // @cond
 inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line)
 {
-  // Calls cudaGetLastError twice. It is nearly certain that a fatal error occurred if the second
-  // call doesn't return with cudaSuccess.
+  // Calls cudaGetLastError to clear the error status. It is nearly certain that a fatal error
+  // occurred if it still returns the same error after a cleanup.
   cudaGetLastError();
-  auto const last = cudaGetLastError();
+  auto const last = cudaFree(0);
   auto const msg  = std::string{"CUDA error encountered at: " + std::string{file} + ":" +
                                std::to_string(line) + ": " + std::to_string(error) + " " +
                                cudaGetErrorName(error) + " " + cudaGetErrorString(error)};
