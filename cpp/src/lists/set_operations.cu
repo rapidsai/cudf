@@ -131,7 +131,7 @@ std::unique_ptr<column> list_distinct(
     return markers;
   }();
 
-  auto const distinct_table = cudf::detail::copy_if(
+  auto const output_table = cudf::detail::copy_if(
     input_table,
     [index_markers = index_markers.begin()] __device__(auto const idx) {
       return index_markers[idx];
@@ -140,11 +140,11 @@ std::unique_ptr<column> list_distinct(
     mr);
 
   auto out_offsets =
-    reconstruct_offsets(distinct_table->get_column(0).view(), input.size(), stream, mr);
+    reconstruct_offsets(output_table->get_column(0).view(), input.size(), stream, mr);
 
   return make_lists_column(input.size(),
                            std::move(out_offsets),
-                           std::move(distinct_table->release().back()),
+                           std::move(output_table->release().back()),
                            input.null_count(),
                            cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
@@ -195,9 +195,8 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
                                          thrust::logical_or{});  // reduction op for values
   auto const num_non_empty_segments = thrust::distance(overlap_results.begin(), end.second);
 
-  auto [nullmask, null_count] =
+  auto [null_mask, null_count] =
     cudf::detail::bitmask_or(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-  // todo fix null mask null count
   auto result = make_numeric_column(
     data_type{type_to_id<bool>()}, lhs.size(), std::move(null_mask), null_count, stream, mr);
   auto const result_begin = result->mutable_view().template begin<bool>();
@@ -221,16 +220,14 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  check_compatibility(lhs, rhs);
-
+  // Algorithm:
   // - Generate labels for lhs and rhs child elements.
-  // - Insert {lhs_labels, lhs_child} table into map.
-  // - Check contains for {rhs_labels, rhs_child} table.
-  // - copy_if {rhs_indices, rhs_labels} using contains conditions to {gather_map,
-  // intersect_labels}.
-  // - output_child = pull rhs child elements from gather_map.
-  // - output_offsets = reconstruct offsets from intersect_labels.
-  // - return lists_column(output_child, output_offsets)
+  // - Check existence for rows of the table {rhs_labels, rhs_child} in the table
+  //   {lhs_labels, lhs_child}.
+  // - Copy child elements of the rhs table using the existence array computed in the previous step.
+  // - Remove duplicate rows, and build the output lists.
+
+  check_compatibility(lhs, rhs);
 
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
@@ -239,7 +236,6 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
   auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
-  // todo handle nans
   auto const contained =
     cudf::detail::contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
 
@@ -259,12 +255,13 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
   auto out_offsets =
     reconstruct_offsets(output_table->get_column(0).view(), lhs.size(), stream, mr);
 
-  // todo : fix null
+  auto [null_mask, null_count] =
+    cudf::detail::bitmask_or(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
   return make_lists_column(lhs.size(),
                            std::move(out_offsets),
                            std::move(output_table->release().back()),
-                           0,
-                           {},
+                           null_count,
+                           std::move(null_mask),
                            stream,
                            mr);
 }
