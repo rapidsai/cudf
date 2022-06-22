@@ -208,35 +208,32 @@ std::unique_ptr<table> apply_boolean_mask(
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
  */
 enum class duplicate_keep_option {
-  KEEP_FIRST = 0,  ///< Keeps first duplicate element and unique elements
-  KEEP_LAST,       ///< Keeps last duplicate element and unique elements
-  KEEP_NONE        ///< Keeps only unique elements
+  KEEP_ANY = 0,  ///< Keep an unspecified occurrence
+  KEEP_FIRST,    ///< Keep first occurrence
+  KEEP_LAST,     ///< Keep last occurrence
+  KEEP_NONE      ///< Keep no (remove all) occurrences of duplicates
 };
 
 /**
  * @brief Create a new table with consecutive duplicate rows removed.
  *
- * Given an `input` table_view, one specific row from a group of equivalent elements is copied to
- * output table depending on the value of @p keep:
- * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
- * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
- * - KEEP_NONE: no duplicate rows are copied
+ * Given an `input` table_view, each row is copied to the output table to create a set of distinct
+ * rows. If there are duplicate rows, which row is copied depends on the `keep` parameter.
+ *
+ * The order of rows in the output table remains the same as in the input.
  *
  * A row is distinct if there are no equivalent rows in the table. A row is unique if there is no
  * adjacent equivalent row. That is, keeping distinct rows removes all duplicates in the
  * table/column, while keeping unique rows only removes duplicates from consecutive groupings.
  *
- * Performance hints:
- * - Always use `cudf::unique` instead of `cudf::distinct` if the input is pre-sorted
- * - If the input is not pre-sorted and the behavior of pandas.DataFrame.drop_duplicates is desired:
- *   - If `keep` is not relevant, use `cudf::distinct`
- *   - If `keep` control is required, stable sort the input then `cudf::unique`
+ * Performance hint: if the input is pre-sorted, `cudf::unique` can produce an equivalent result
+ * (i.e., same set of output rows) but with less running time than `cudf::distinct`.
  *
  * @throws cudf::logic_error if the `keys` column indices are out of bounds in the `input` table.
  *
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
- * @param[in] keep            keep first row, last row, or no rows of the found duplicates
+ * @param[in] keep            keep any, first, last, or none of the found duplicates
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
  * @param[in] mr              Device memory resource used to allocate the returned table's device
@@ -254,20 +251,18 @@ std::unique_ptr<table> unique(
 /**
  * @brief Create a new table without duplicate rows.
  *
- * Given an `input` table_view, each row is copied to output table if the corresponding
- * row of `keys` columns is distinct (no other equivalent row exists in the table). If duplicate
- * rows are present, it is unspecified which row is copied.
+ * Given an `input` table_view, each row is copied to the output table to create a set of distinct
+ * rows. If there are duplicate rows, which row to be copied depends on the specified value of
+ * the `keep` parameter.
  *
- * The order of elements in the output table is not specified.
+ * The order of rows in the output table is not specified.
  *
- * Performance hints:
- * - Always use `cudf::unique` instead of `cudf::distinct` if the input is pre-sorted
- * - If the input is not pre-sorted and the behavior of pandas.DataFrame.drop_duplicates is desired:
- *   - If `keep` is not relevant, use `cudf::distinct`
- *   - If `keep` control is required, stable sort the input then `cudf::unique`
+ * Performance hint: if the input is pre-sorted, `cudf::unique` can produce an equivalent result
+ * (i.e., same set of output rows) but with less running time than `cudf::distinct`.
  *
  * @param[in] input           input table_view to copy only distinct rows
  * @param[in] keys            vector of indices representing key columns from `input`
+ * @param[in] keep            keep any, first, last, or none of the found duplicates
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
  *                            equal if null_equality::UNEQUAL
  * @param[in] mr              Device memory resource used to allocate the returned table's device
@@ -278,6 +273,7 @@ std::unique_ptr<table> unique(
 std::unique_ptr<table> distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal           = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

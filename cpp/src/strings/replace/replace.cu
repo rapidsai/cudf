@@ -27,6 +27,7 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -843,7 +844,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace(strings, target, repl, maxrepl, rmm::cuda_stream_default, mr);
+  return detail::replace(strings, target, repl, maxrepl, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> replace_slice(strings_column_view const& strings,
@@ -853,7 +854,7 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_slice(strings, repl, start, stop, rmm::cuda_stream_default, mr);
+  return detail::replace_slice(strings, repl, start, stop, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> replace(strings_column_view const& strings,
@@ -862,7 +863,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace(strings, targets, repls, rmm::cuda_stream_default, mr);
+  return detail::replace(strings, targets, repls, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

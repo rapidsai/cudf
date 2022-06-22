@@ -2550,3 +2550,34 @@ def test_parquet_reader_zstd_compression(datadir):
         assert_eq(df, pdf)
     except RuntimeError:
         pytest.mark.xfail(reason="zstd support is not enabled")
+
+
+def test_read_parquet_multiple_files(tmpdir):
+    df_1_path = tmpdir / "df_1.parquet"
+    df_2_path = tmpdir / "df_2.parquet"
+    df_1 = cudf.DataFrame({"id": range(100), "a": [1] * 100})
+    df_1.to_parquet(df_1_path)
+
+    df_2 = cudf.DataFrame({"id": range(200, 2200), "a": [2] * 2000})
+    df_2.to_parquet(df_2_path)
+
+    expected = pd.read_parquet([df_1_path, df_2_path])
+    actual = cudf.read_parquet([df_1_path, df_2_path])
+    assert_eq(expected, actual)
+
+    expected = pd.read_parquet([df_2_path, df_1_path])
+    actual = cudf.read_parquet([df_2_path, df_1_path])
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("index", [True, False, None])
+@pytest.mark.parametrize("columns", [None, [], ["b", "a"]])
+def test_parquet_columns_and_index_param(index, columns):
+    buffer = BytesIO()
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    df.to_parquet(buffer, index=index)
+
+    expected = pd.read_parquet(buffer, columns=columns)
+    got = cudf.read_parquet(buffer, columns=columns)
+
+    assert_eq(expected, got, check_index_type=True)
