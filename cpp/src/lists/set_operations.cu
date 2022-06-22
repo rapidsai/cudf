@@ -96,25 +96,27 @@ std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
   return out_offsets;
 }
 
-}  // namespace
-
-std::unique_ptr<column> list_distinct(
-  lists_column_view const& input,
+/**
+ * @brief list_distinct
+ * @param input
+ * @param child_labels
+ * @param child
+ * @param nulls_equal
+ * @param nans_equal
+ * @param stream
+ * @param mr
+ * @return
+ */
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> list_distinct_children(
+  size_type n_lists,
+  column_view const& child_labels,
+  column_view const& child,
   null_equality nulls_equal,
   nan_equality nans_equal,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  rmm::mr::device_memory_resource* mr)
 {
-  // Algorithm:
-  // - Generate labels for the child elements.
-  // - Get indices of distinct rows of the table {labels, child}.
-  // - Scatter these indices into a marker array that marks if a row will be copied to the output.
-  // - Collect output rows (with order preserved) using the marker array and build the output
-  //   lists column.
-
-  auto const child       = input.get_sliced_child(stream);
-  auto const labels      = generate_labels(input, stream);
-  auto const input_table = table_view{{labels->view(), child}};
+  auto const input_table = table_view{{child_labels, child}};
 
   auto const distinct_indices = cudf::detail::get_distinct_indices(
     input_table, duplicate_keep_option::KEEP_ANY, nulls_equal, nans_equal, stream);
@@ -138,13 +140,36 @@ std::unique_ptr<column> list_distinct(
     },
     stream,
     mr);
+  auto out_offsets = reconstruct_offsets(output_table->get_column(0).view(), n_lists, stream, mr);
 
-  auto out_offsets =
-    reconstruct_offsets(output_table->get_column(0).view(), input.size(), stream, mr);
+  return std::pair(std::move(out_offsets), std::move(output_table->release().back()));
+}
 
-  return make_lists_column(input.size(),
+}  // namespace
+
+std::unique_ptr<column> list_distinct(
+  lists_column_view const& input,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  // Algorithm:
+  // - Generate labels for the child elements.
+  // - Get indices of distinct rows of the table {labels, child}.
+  // - Scatter these indices into a marker array that marks if a row will be copied to the output.
+  // - Collect output rows (with order preserved) using the marker array and build the output
+  //   lists column.
+
+  auto const child  = input.get_sliced_child(stream);
+  auto const labels = generate_labels(input, stream);
+
+  auto [out_offsets, out_child] =
+    list_distinct_children(input.size(), labels, child, nulls_equal, nans_equal, stream, mr);
+
+  return make_lists_column(lhs.size(),
                            std::move(out_offsets),
-                           std::move(output_table->release().back()),
+                           std::move(out_child),
                            input.null_count(),
                            cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
@@ -224,7 +249,7 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
   // - Generate labels for lhs and rhs child elements.
   // - Check existence for rows of the table {rhs_labels, rhs_child} in the table
   //   {lhs_labels, lhs_child}.
-  // - Copy child elements of the rhs table using the existence array computed in the previous step.
+  // - Extract rows of the rhs table using the existence array computed in the previous step.
   // - Remove duplicate rows, and build the output lists.
 
   check_compatibility(lhs, rhs);
@@ -244,22 +269,19 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
     [contained = contained.begin()] __device__(auto const idx) { return contained[idx]; },
     stream);
 
-  auto output_table = cudf::detail::distinct(intersect_table->view(),
-                                             {0, 1},
-                                             duplicate_keep_option::KEEP_ANY,
-                                             nulls_equal,
-                                             nans_equal,
-                                             stream,
-                                             mr);
-
-  auto out_offsets =
-    reconstruct_offsets(output_table->get_column(0).view(), lhs.size(), stream, mr);
-
+  auto [out_offsets, out_child] = list_distinct_children(lhs.size(),
+                                                         intersect_table->get_column(0).view(),
+                                                         intersect_table->get_column(1).view(),
+                                                         nulls_equal,
+                                                         nans_equal,
+                                                         stream,
+                                                         mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_or(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
+
   return make_lists_column(lhs.size(),
                            std::move(out_offsets),
-                           std::move(output_table->release().back()),
+                           std::move(out_child),
                            null_count,
                            std::move(null_mask),
                            stream,
@@ -293,16 +315,15 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  check_compatibility(lhs, rhs);
-
+  // Algorithm:
   // - Generate labels for lhs and rhs child elements.
-  // - Insert {rhs_labels, rhs_child} table into map.
-  // - Check contains for {lhs_labels, lhs_child} table.
-  // - Invert contains for lhs child element.
-  // - copy_if {indices, labels} using the inverted contains conditions to {gather_map,
-  //   except_labels} for lhs child elements.
-  // - Pull lhs child elements from gather_map.
-  // - Reconstruct output offsets from except_labels for lhs.
+  // - Check existence for rows of the table {lhs_labels, lhs_child} in the table
+  //   {rhs_labels, rhs_child}.
+  // - Invert the existence array computed in the previous step, resulting in a difference array.
+  // - Extract rows of the lhs table using that difference array.
+  // - Remove duplicate rows, and build the output lists.
+
+  check_compatibility(lhs, rhs);
 
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
@@ -328,34 +349,21 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
     },
     stream);
 
-  auto const distinct_indices = cudf::detail::get_distinct_indices(
-    lhs_table, duplicate_keep_option::KEEP_ANY, nulls_equal, nans_equal, stream);
-  auto index_markers = rmm::device_uvector<bool>(lhs_child.size(), stream);
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream), index_markers.begin(), index_markers.end(), false);
-  thrust::scatter(
-    rmm::exec_policy(stream),
-    thrust::constant_iterator<size_type>(true, 0),
-    thrust::constant_iterator<size_type>(true, static_cast<size_type>(distinct_indices.size())),
-    distinct_indices.begin(),
-    index_markers.begin());
-
-  auto const output_table = cudf::detail::copy_if(
-    lhs_table,
-    [index_markers = index_markers.begin()] __device__(auto const idx) {
-      return index_markers[idx];
-    },
-    stream,
-    mr);
-
-  auto out_offsets =
-    reconstruct_offsets(output_table->get_column(0).view(), lhs.size(), stream, mr);
+  auto [out_offsets, out_child] = list_distinct_children(lhs.size(),
+                                                         difference_table->get_column(0).view(),
+                                                         difference_table->get_column(1).view(),
+                                                         nulls_equal,
+                                                         nans_equal,
+                                                         stream,
+                                                         mr);
+  auto [null_mask, null_count] =
+    cudf::detail::bitmask_or(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
 
   return make_lists_column(lhs.size(),
                            std::move(out_offsets),
-                           std::move(output_table->release().back()),
-                           lhs.null_count(),
-                           cudf::detail::copy_bitmask(lhs.parent(), stream, mr),
+                           std::move(out_child),
+                           null_count,
+                           std::move(null_mask),
                            stream,
                            mr);
 }
