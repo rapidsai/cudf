@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 
 namespace cudf {
 namespace strings {
@@ -54,7 +55,12 @@ enum string_character_types : uint32_t {
  * @param rhs right-hand side of OR operation
  * @return combined string_character_types
  */
-string_character_types operator|(string_character_types lhs, string_character_types rhs);
+constexpr string_character_types operator|(string_character_types lhs, string_character_types rhs)
+{
+  return static_cast<string_character_types>(
+    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+    static_cast<std::underlying_type_t<string_character_types>>(rhs));
+}
 
 /**
  * @brief Compound assignment OR operator for combining string_character_types
@@ -63,7 +69,14 @@ string_character_types operator|(string_character_types lhs, string_character_ty
  * @param rhs right-hand side of OR operation
  * @return Reference to `lhs` after combining `lhs` and `rhs`
  */
-string_character_types& operator|=(string_character_types& lhs, string_character_types rhs);
+constexpr string_character_types& operator|=(string_character_types& lhs,
+                                             string_character_types rhs)
+{
+  lhs = static_cast<string_character_types>(
+    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+    static_cast<std::underlying_type_t<string_character_types>>(rhs));
+  return lhs;
+}
 
 /** @} */  // end of doxygen group
 }  // namespace strings
