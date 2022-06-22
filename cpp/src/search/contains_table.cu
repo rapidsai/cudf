@@ -146,9 +146,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
       // Gather all nullable columns at all levels from the right table.
       auto const haystack_nullable_columns = accumulate_nullable_columns{haystack}.release();
-
-      [[maybe_unused]] auto const [row_bitmask, tmp] =
-        cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream);
+      auto const row_bitmask =
+        std::move(cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream).first);
 
       // Insert only rows that do not have any nulls at any level.
       map.insert_if(haystack_it,
