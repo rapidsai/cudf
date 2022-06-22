@@ -131,18 +131,13 @@ class BaseIndex(Serializable):
         """
         is_all_na = value.count(None) == len(value)
 
-        copy_data = {}
-        for name, col in self._data.items():
-            try:
-                copy_data[name] = col.find_and_replace(
-                    to_replace,
-                    value,
-                    is_all_na,
-                )
-            except OverflowError:
-                # TODO: What is this error case really handling? Why is this
-                # the expected result?
-                copy_data[name] = col.copy(deep=True)
+        try:
+            copy_data = {
+                name: col.find_and_replace(to_replace, value, is_all_na)
+                for name, col in self._data.items()
+            }
+        except OverflowError:
+            copy_data = self._data.copy(deep=True)
 
         return self._from_data(copy_data)
 
