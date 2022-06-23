@@ -116,6 +116,33 @@ constexpr inline size_type from_char_utf8(char_utf8 character, char* str)
   return chr_width;
 }
 
+/**
+ * @brief Test to see if byte array contains valid UTF-8
+ *
+ * @param str Array of bytes to test.
+ * @param length Length of array.
+ * @return true if the array contains a valid UTF-8 string.
+ */
+constexpr inline bool is_valid_utf8(const char* str, size_type length)
+{
+  if (length == 0) return true;
+
+  size_type idx = 0;
+  do {
+    // check for valid beginning byte
+    if (!is_begin_utf8_char(str[idx])) return false;
+
+    size_type width = bytes_in_utf8_byte(str[idx]);
+    for (size_type i = 1; i < width && i+idx < length; i++) {
+      // check for valid continuation byte
+      if ((str[idx+i] & 0xC0) != 0x80) return false;
+    }
+    idx += width;
+  } while (idx < length);
+  // check that str ends at a UTF-8 char boundary
+  return idx == length;
+}
+
 }  // namespace detail
 }  // namespace strings
 }  // namespace cudf

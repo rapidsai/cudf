@@ -246,6 +246,11 @@ __device__ inline string_view::const_iterator string_view::end() const
 }
 // @endcond
 
+__device__ inline bool string_view::is_valid_utf8() const
+{
+  return strings::detail::is_valid_utf8(data(), size_bytes());
+}
+
 __device__ inline char_utf8 string_view::operator[](size_type pos) const
 {
   size_type offset = byte_offset(pos);

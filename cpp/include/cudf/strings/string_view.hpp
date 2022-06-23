@@ -130,6 +130,13 @@ class string_view {
   __device__ [[nodiscard]] inline const_iterator end() const;
 
   /**
+   * @brief Test that this string contains valid UTF-8
+   *
+   * @return true if this is a valid UTF-8 string
+   */
+  __device__ [[nodiscard]] inline bool string_view::is_valid_utf8() const;
+
+  /**
    * @brief Return single UTF-8 character at the given character position
    *
    * @param pos Character position
