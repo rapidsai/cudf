@@ -3112,12 +3112,11 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
-        return self._from_data(
+        return self._from_data_like_self(
             {
                 name: _apply_inverse_column(col)
                 for name, col in self._data.items()
-            },
-            self._index,
+            }
         )
 
     def nunique(self, dropna: bool = True):
