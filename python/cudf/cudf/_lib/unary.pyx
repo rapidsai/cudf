@@ -12,7 +12,7 @@ import numpy as np
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
+from cudf._lib.cpp.column.column_view cimport column_view
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 

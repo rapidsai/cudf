@@ -7,6 +7,7 @@ import warnings
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
+import weakref
 from typing import (
     Any,
     Dict,
@@ -358,6 +359,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("Column has no null mask")
         return self.mask_array_view
 
+    def custom_deep_copy(self: T)-> T:
+        result = libcudf.copying.copy_column(self)
+        return cast(T, result._with_type_metadata(self.dtype))
+    
     def copy(self: T, deep: bool = True) -> T:
         """Columns are immutable, so a deep copy produces a copy of the
         underlying data and mask and a shallow copy creates a new column and
@@ -483,7 +488,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         If ``value`` and ``self`` are of different types, ``value`` is coerced
         to ``self.dtype``. Assumes ``self`` and ``value`` are index-aligned.
         """
-
+        raise TypeError("hi")
         # Normalize value to scalar/column
         value_normalized = (
             cudf.Scalar(value, dtype=self.dtype)

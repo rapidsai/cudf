@@ -9,6 +9,7 @@ import warnings
 from collections import abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
+import weakref
 
 import cupy
 import numpy as np
@@ -144,7 +145,11 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     self._frame._column.astype(to_dtype), inplace=True
                 )
 
-        self._frame._column[key] = value
+        if weakref.getweakrefcount(self._frame._column) == 0:
+            self._frame._column[key] = value
+        else:
+            self._frame._column = self._frame._column.custom_deep_copy()
+            self._frame._column[key] = value
 
 
 class _SeriesLocIndexer(_FrameIndexer):

@@ -3367,6 +3367,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # No column from index is transposed with libcudf.
         source_columns = [*self._columns]
+        # import pdb;pdb.set_trace()
         source_dtype = source_columns[0].dtype
         if is_categorical_dtype(source_dtype):
             if any(not is_categorical_dtype(c.dtype) for c in source_columns):
@@ -3380,7 +3381,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if any(c.dtype != source_columns[0].dtype for c in source_columns):
             raise ValueError("Columns must all have the same dtype")
-
+        # import pdb;pdb.set_trace()
         result_columns = libcudf.transpose.transpose(source_columns)
 
         if is_categorical_dtype(source_dtype):
@@ -4637,9 +4638,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Set index
         index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
-        result = df.set_index(index)
+        df._index = index
+        #set_index(index, inplace=True)
 
-        return result
+        return df
 
     @classmethod
     @_cudf_nvtx_annotate

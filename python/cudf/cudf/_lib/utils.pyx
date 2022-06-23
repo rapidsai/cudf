@@ -7,6 +7,7 @@ import cudf
 
 from cython.operator cimport dereference
 from libc.stdint cimport uint8_t
+from libc.stdint cimport uintptr_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -42,6 +43,8 @@ cdef table_view table_view_from_columns(columns) except*:
 
     cdef Column col
     for col in columns:
+        mask_ptr = <uintptr_t>(col.view().null_mask())
+        print("45", mask_ptr)
         column_views.push_back(col.view())
 
     return table_view(column_views)
@@ -323,7 +326,7 @@ cdef columns_from_table_view(
     in the table view is ``owners[i]``. For more about memory ownership,
     see ``Column.from_column_view``.
     """
-
+    print("326")
     return [
         Column.from_column_view(
             tv.column(i), owners[i] if isinstance(owners, list) else None

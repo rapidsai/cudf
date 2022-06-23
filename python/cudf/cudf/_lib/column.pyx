@@ -490,6 +490,7 @@ cdef class Column:
         ``Buffer`` from the ``owner`` ``cudf.Column``. If ``owner`` is
         ``None``, we allocate new memory for the resulting ``cudf.Column``.
         """
+        print("493")
         column_owner = isinstance(owner, Column)
         mask_owner = owner
         if column_owner and is_categorical_dtype(owner.dtype):
@@ -522,13 +523,17 @@ cdef class Column:
             data = Buffer(
                 rmm.DeviceBuffer(ptr=data_ptr, size=0)
             )
-
+        print("526")
         mask_ptr = <uintptr_t>(cv.null_mask())
+        print("528")
         mask = None
         if mask_ptr:
+            print("531")
             if column_owner:
+                print("533")
                 mask_owner = mask_owner.base_mask
             if mask_owner is None:
+                print("536", mask_ptr)
                 mask = Buffer(
                     rmm.DeviceBuffer(
                         ptr=mask_ptr,
@@ -536,12 +541,13 @@ cdef class Column:
                     )
                 )
             else:
+                print("544")
                 mask = Buffer(
                     data=mask_ptr,
                     size=bitmask_allocation_size_bytes(base_size),
                     owner=mask_owner
                 )
-
+        print("545")
         if cv.has_nulls():
             null_count = cv.null_count()
         else:
@@ -559,7 +565,7 @@ cdef class Column:
                 )
             )
         children = tuple(children)
-
+        print("563")
         result = cudf.core.column.build_column(
             data=data,
             dtype=dtype,

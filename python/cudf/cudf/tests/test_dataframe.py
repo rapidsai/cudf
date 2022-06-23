@@ -4555,15 +4555,15 @@ def test_df_constructor_dtype(dtype):
 @pytest.mark.parametrize(
     "data",
     [
-        cudf.datasets.randomdata(
-            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": int}
-        ),
-        cudf.datasets.randomdata(
-            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": str}
-        ),
-        cudf.datasets.randomdata(
-            nrows=10, dtypes={"a": bool, "b": int, "c": float, "d": str}
-        ),
+        # cudf.datasets.randomdata(
+        #     nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": int}
+        # ),
+        # cudf.datasets.randomdata(
+        #     nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": str}
+        # ),
+        # cudf.datasets.randomdata(
+        #     nrows=10, dtypes={"a": bool, "b": int, "c": float, "d": str}
+        # ),
         cudf.DataFrame(),
         cudf.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
         cudf.DataFrame(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import weakref
 from collections import abc
 from functools import cached_property, reduce
 from typing import (
@@ -132,6 +133,7 @@ class ColumnAccessor(abc.MutableMapping):
 
             self.multiindex = multiindex
             self._level_names = level_names
+            self._weak_ref = {}
 
     @classmethod
     def _create_unsafe(
@@ -308,8 +310,11 @@ class ColumnAccessor(abc.MutableMapping):
         Make a copy of this ColumnAccessor.
         """
         if deep:
+            # import pdb;pdb.set_trace()
+            self._weak_ref = {k: weakref.ref(v) for k, v in self._data.items()}
             return self.__class__(
-                {k: v.copy(deep=True) for k, v in self._data.items()},
+                # {k: v.copy(deep=True) for k, v in self._data.items()},
+                self._data.copy(),
                 multiindex=self.multiindex,
                 level_names=self.level_names,
             )
