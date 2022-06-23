@@ -173,6 +173,7 @@ outputs:
         - test -f $PREFIX/include/cudf/lists/detail/extract.hpp
         - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
         - test -f $PREFIX/include/cudf/lists/detail/scatter_helper.cuh
+        - test -f $PREFIX/include/cudf/lists/detail/set_operations.hpp
         - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
         - test -f $PREFIX/include/cudf/lists/detail/stream_compaction.hpp
         - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
