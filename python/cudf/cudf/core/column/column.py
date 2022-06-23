@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pickle
 import warnings
+import weakref
 from functools import cached_property
 from itertools import chain
 from types import SimpleNamespace
-import weakref
 from typing import (
     Any,
     Dict,
@@ -359,10 +359,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             raise ValueError("Column has no null mask")
         return self.mask_array_view
 
-    def custom_deep_copy(self: T)-> T:
+    def custom_deep_copy(self: T) -> T:
         result = libcudf.copying.copy_column(self)
         return cast(T, result._with_type_metadata(self.dtype))
-    
+
     def copy(self: T, deep: bool = True) -> T:
         """Columns are immutable, so a deep copy produces a copy of the
         underlying data and mask and a shallow copy creates a new column and

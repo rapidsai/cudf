@@ -4639,7 +4639,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Set index
         index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         df._index = index
-        #set_index(index, inplace=True)
+        # set_index(index, inplace=True)
 
         return df
 
