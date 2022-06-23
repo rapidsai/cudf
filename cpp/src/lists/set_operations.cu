@@ -52,6 +52,11 @@ namespace detail {
 
 namespace {
 
+/**
+ * @brief Check if two input lists columns are valid input into the list operations.
+ * @param lhs The left lists column
+ * @param rhs The right lists column
+ */
 void check_compatibility(lists_column_view const& lhs, lists_column_view const& rhs)
 {
   CUDF_EXPECTS(lhs.size() == rhs.size(), "The input lists column must have the same size.");
@@ -60,8 +65,11 @@ void check_compatibility(lists_column_view const& lhs, lists_column_view const& 
 }
 
 /**
- * @brief Generate labels for elements in the child column of the input lists column.
- * @param input
+ * @brief Generate list labels for elements in the child column of the input lists column.
+ *
+ * @param input The input lists column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A column containing list labels corresponding to each input list elements
  */
 std::unique_ptr<column> generate_labels(lists_column_view const& input,
                                         rmm::cuda_stream_view stream)
@@ -76,15 +84,21 @@ std::unique_ptr<column> generate_labels(lists_column_view const& input,
 
 /**
  * @brief Reconstruct an offsets column from the input labels array.
+ *
+ * @param labels The list labels corresponding to each input list elements
+ * @param n_lists The number of lists in the input lists column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned object
+ * @return The offsets column reconstructed from labels
  */
 std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
-                                            size_type n_rows,
+                                            size_type n_lists,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 
 {
   auto out_offsets = make_numeric_column(
-    data_type{type_to_id<offset_type>()}, n_rows + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_to_id<offset_type>()}, n_lists + 1, mask_state::UNALLOCATED, stream, mr);
 
   auto const labels_begin  = labels.template begin<size_type>();
   auto const offsets_begin = out_offsets->mutable_view().template begin<size_type>();
@@ -97,15 +111,24 @@ std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
 }
 
 /**
- * @brief list_distinct
- * @param input
- * @param child_labels
- * @param child
- * @param nulls_equal
- * @param nans_equal
- * @param stream
- * @param mr
- * @return
+ * @brief Remove duplicate list elements from a lists column.
+ *
+ * For an input lists column, the distinct elements from each of its list row are copied (with
+ * order preserved) into an output child column to form a set of new lists without duplicates. An
+ * output offsets column corresponding to these new lists is also constructed and returned.
+ *
+ * The input lists column is not given to this function directly. Instead, its child column and a
+ * label array containing the corresponding list labels for each element are used to access the
+ * input lists.
+ *
+ * @param n_lists Number of lists in the input lists column
+ * @param child_labels Array containing list labels of the list elements
+ * @param child The child column of the input lists column
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned object
+ * @return A pair of output columns `{out_offsets, out_child}`
  */
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> list_distinct_children(
   size_type n_lists,
