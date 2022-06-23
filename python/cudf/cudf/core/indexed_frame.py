@@ -35,13 +35,14 @@ from cudf.api.types import (
     is_bool_dtype,
     is_categorical_dtype,
     is_decimal_dtype,
+    is_dict_like,
     is_integer_dtype,
     is_list_dtype,
     is_list_like,
     is_scalar,
 )
 from cudf.core._base_index import BaseIndex
-from cudf.core.column import ColumnBase
+from cudf.core.column import ColumnBase, as_column, full
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.index import Index, RangeIndex, _index_from_columns
@@ -501,6 +502,264 @@ class IndexedFrame(Frame):
                 f"new values have {len(value)} elements"
             )
         self._index = Index(value)
+
+    @_cudf_nvtx_annotate
+    def replace(
+        self,
+        to_replace=None,
+        value=None,
+        inplace=False,
+        limit=None,
+        regex=False,
+        method=None,
+    ):
+        """Replace values given in ``to_replace`` with ``value``.
+
+        Parameters
+        ----------
+        to_replace : numeric, str or list-like
+            Value(s) to replace.
+
+            * numeric or str:
+                - values equal to ``to_replace`` will be replaced
+                  with ``value``
+            * list of numeric or str:
+                - If ``value`` is also list-like, ``to_replace`` and
+                  ``value`` must be of same length.
+            * dict:
+                - Dicts can be used to specify different replacement values
+                  for different existing values. For example, {'a': 'b',
+                  'y': 'z'} replaces the value ‘a’ with ‘b’ and
+                  ‘y’ with ‘z’.
+                  To use a dict in this way the ``value`` parameter should
+                  be ``None``.
+        value : scalar, dict, list-like, str, default None
+            Value to replace any values matching ``to_replace`` with.
+        inplace : bool, default False
+            If True, in place.
+
+        See also
+        --------
+        Series.fillna
+
+        Raises
+        ------
+        TypeError
+            - If ``to_replace`` is not a scalar, array-like, dict, or None
+            - If ``to_replace`` is a dict and value is not a list, dict,
+              or Series
+        ValueError
+            - If a list is passed to ``to_replace`` and ``value`` but they
+              are not the same length.
+
+        Returns
+        -------
+        result : Series
+            Series after replacement. The mask and index are preserved.
+
+        Notes
+        -----
+        Parameters that are currently not supported are: `limit`, `regex`,
+        `method`
+
+        Examples
+        --------
+        **Series**
+
+        Scalar ``to_replace`` and ``value``
+
+        >>> import cudf
+        >>> s = cudf.Series([0, 1, 2, 3, 4])
+        >>> s
+        0    0
+        1    1
+        2    2
+        3    3
+        4    4
+        dtype: int64
+        >>> s.replace(0, 5)
+        0    5
+        1    1
+        2    2
+        3    3
+        4    4
+        dtype: int64
+
+        List-like ``to_replace``
+
+        >>> s.replace([1, 2], 10)
+        0     0
+        1    10
+        2    10
+        3     3
+        4     4
+        dtype: int64
+
+        dict-like ``to_replace``
+
+        >>> s.replace({1:5, 3:50})
+        0     0
+        1     5
+        2     2
+        3    50
+        4     4
+        dtype: int64
+        >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
+        >>> s
+        0     b
+        1     a
+        2     a
+        3     b
+        4     a
+        dtype: object
+        >>> s.replace({'a': None})
+        0       b
+        1    <NA>
+        2    <NA>
+        3       b
+        4    <NA>
+        dtype: object
+
+        If there is a mismatch in types of the values in
+        ``to_replace`` & ``value`` with the actual series, then
+        cudf exhibits different behavior with respect to pandas
+        and the pairs are ignored silently:
+
+        >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
+        >>> s
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
+        >>> s.replace('a', 1)
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
+        >>> s.replace(['a', 'c'], [1, 2])
+        0    b
+        1    a
+        2    a
+        3    b
+        4    a
+        dtype: object
+
+        **DataFrame**
+
+        Scalar ``to_replace`` and ``value``
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'A': [0, 1, 2, 3, 4],
+        ...                    'B': [5, 6, 7, 8, 9],
+        ...                    'C': ['a', 'b', 'c', 'd', 'e']})
+        >>> df
+           A  B  C
+        0  0  5  a
+        1  1  6  b
+        2  2  7  c
+        3  3  8  d
+        4  4  9  e
+        >>> df.replace(0, 5)
+           A  B  C
+        0  5  5  a
+        1  1  6  b
+        2  2  7  c
+        3  3  8  d
+        4  4  9  e
+
+        List-like ``to_replace``
+
+        >>> df.replace([0, 1, 2, 3], 4)
+           A  B  C
+        0  4  5  a
+        1  4  6  b
+        2  4  7  c
+        3  4  8  d
+        4  4  9  e
+        >>> df.replace([0, 1, 2, 3], [4, 3, 2, 1])
+           A  B  C
+        0  4  5  a
+        1  3  6  b
+        2  2  7  c
+        3  1  8  d
+        4  4  9  e
+
+        dict-like ``to_replace``
+
+        >>> df.replace({0: 10, 1: 100})
+             A  B  C
+        0   10  5  a
+        1  100  6  b
+        2    2  7  c
+        3    3  8  d
+        4    4  9  e
+        >>> df.replace({'A': 0, 'B': 5}, 100)
+             A    B  C
+        0  100  100  a
+        1    1    6  b
+        2    2    7  c
+        3    3    8  d
+        4    4    9  e
+        """
+        if isinstance(self, cudf.BaseIndex):
+            warnings.warn(
+                "Index.replace is deprecated and will be removed.",
+                FutureWarning,
+            )
+
+        if limit is not None:
+            raise NotImplementedError("limit parameter is not implemented yet")
+
+        if regex:
+            raise NotImplementedError("regex parameter is not implemented yet")
+
+        if method not in ("pad", None):
+            raise NotImplementedError(
+                "method parameter is not implemented yet"
+            )
+
+        if not (to_replace is None and value is None):
+            copy_data = {}
+            (
+                all_na_per_column,
+                to_replace_per_column,
+                replacements_per_column,
+            ) = _get_replacement_values_for_columns(
+                to_replace=to_replace,
+                value=value,
+                # TODO: This should be replaced with `DataFrame._dtypes` once
+                # that is moved up to `Frame`.
+                columns_dtype_map={
+                    col: self._data[col].dtype for col in self._data
+                },
+            )
+
+            for name, col in self._data.items():
+                try:
+                    copy_data[name] = col.find_and_replace(
+                        to_replace_per_column[name],
+                        replacements_per_column[name],
+                        all_na_per_column[name],
+                    )
+                except (KeyError, OverflowError):
+                    # We need to create a deep copy if:
+                    # i. `find_and_replace` was not successful or any of
+                    #    `to_replace_per_column`, `replacements_per_column`,
+                    #    `all_na_per_column` don't contain the `name`
+                    #    that exists in `copy_data`.
+                    # ii. There is an OverflowError while trying to cast
+                    #     `to_replace_per_column` to `replacements_per_column`.
+                    copy_data[name] = col.copy(deep=True)
+        else:
+            copy_data = self._data.copy(deep=True)
+
+        result = self._from_data(copy_data, self._index)
+
+        return self._mimic_inplace(result, inplace=inplace)
 
     @_cudf_nvtx_annotate
     def clip(self, lower=None, upper=None, inplace=False, axis=1):
@@ -4127,3 +4386,170 @@ def _check_duplicate_level_names(specified, level_names):
             f"The names {duplicates_specified} occurs multiple times, use a"
             " level number"
         )
+
+
+@_cudf_nvtx_annotate
+def _get_replacement_values_for_columns(
+    to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
+) -> Tuple[Dict[Any, bool], Dict[Any, Any], Dict[Any, Any]]:
+    """
+    Returns a per column mapping for the values to be replaced, new
+    values to be replaced with and if all the values are empty.
+
+    Parameters
+    ----------
+    to_replace : numeric, str, list-like or dict
+        Contains the values to be replaced.
+    value : numeric, str, list-like, or dict
+        Contains the values to replace `to_replace` with.
+    columns_dtype_map : dict
+        A column to dtype mapping representing dtype of columns.
+
+    Returns
+    -------
+    all_na_columns : dict
+        A dict mapping of all columns if they contain all na values
+    to_replace_columns : dict
+        A dict mapping of all columns and the existing values that
+        have to be replaced.
+    values_columns : dict
+        A dict mapping of all columns and the corresponding values
+        to be replaced with.
+    """
+    to_replace_columns: Dict[Any, Any] = {}
+    values_columns: Dict[Any, Any] = {}
+    all_na_columns: Dict[Any, Any] = {}
+
+    if is_scalar(to_replace) and is_scalar(value):
+        to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
+        values_columns = {col: [value] for col in columns_dtype_map}
+    elif cudf.api.types.is_list_like(to_replace) or isinstance(
+        to_replace, ColumnBase
+    ):
+        if is_scalar(value):
+            to_replace_columns = {col: to_replace for col in columns_dtype_map}
+            values_columns = {
+                col: [value]
+                if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
+                else full(
+                    len(to_replace),
+                    value,
+                    cudf.dtype(type(value)),
+                )
+                for col in columns_dtype_map
+            }
+        elif cudf.api.types.is_list_like(value):
+            if len(to_replace) != len(value):
+                raise ValueError(
+                    f"Replacement lists must be "
+                    f"of same length."
+                    f" Expected {len(to_replace)}, got {len(value)}."
+                )
+            else:
+                to_replace_columns = {
+                    col: to_replace for col in columns_dtype_map
+                }
+                values_columns = {col: value for col in columns_dtype_map}
+        elif cudf.utils.dtypes.is_column_like(value):
+            to_replace_columns = {col: to_replace for col in columns_dtype_map}
+            values_columns = {col: value for col in columns_dtype_map}
+        else:
+            raise TypeError(
+                "value argument must be scalar, list-like or Series"
+            )
+    elif _is_series(to_replace):
+        if value is None:
+            to_replace_columns = {
+                col: as_column(to_replace.index) for col in columns_dtype_map
+            }
+            values_columns = {col: to_replace for col in columns_dtype_map}
+        elif is_dict_like(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: value[col] for col in to_replace_columns if col in value
+            }
+        elif is_scalar(value) or _is_series(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: [value] if is_scalar(value) else value[col]
+                for col in to_replace_columns
+                if col in value
+            }
+        else:
+            raise ValueError(
+                "Series.replace cannot use dict-like to_replace and non-None "
+                "value"
+            )
+    elif is_dict_like(to_replace):
+        if value is None:
+            to_replace_columns = {
+                col: list(to_replace.keys()) for col in columns_dtype_map
+            }
+            values_columns = {
+                col: list(to_replace.values()) for col in columns_dtype_map
+            }
+        elif is_dict_like(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: value[col] for col in columns_dtype_map if col in value
+            }
+        elif is_scalar(value) or _is_series(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: [value] if is_scalar(value) else value
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+        else:
+            raise TypeError("value argument must be scalar, dict, or Series")
+    else:
+        raise TypeError(
+            "Expecting 'to_replace' to be either a scalar, array-like, "
+            "dict or None, got invalid type "
+            f"'{type(to_replace).__name__}'"
+        )
+
+    to_replace_columns = {
+        key: [value] if is_scalar(value) else value
+        for key, value in to_replace_columns.items()
+    }
+    values_columns = {
+        key: [value] if is_scalar(value) else value
+        for key, value in values_columns.items()
+    }
+
+    for i in to_replace_columns:
+        if i in values_columns:
+            if isinstance(values_columns[i], list):
+                all_na = values_columns[i].count(None) == len(
+                    values_columns[i]
+                )
+            else:
+                all_na = False
+            all_na_columns[i] = all_na
+
+    return all_na_columns, to_replace_columns, values_columns
+
+
+def _is_series(obj):
+    """
+    Checks if the `obj` is of type `cudf.Series`
+    instead of checking for isinstance(obj, cudf.Series)
+    """
+    return isinstance(obj, Frame) and obj.ndim == 1 and obj._index is not None
