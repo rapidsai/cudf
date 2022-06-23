@@ -8,7 +8,7 @@ import numpy
 import pytest
 
 from ..common.config import cudf, cupy
-from ..common.utils import accepts_cudf_fixture
+from ..common.utils import benchmark_with_object
 
 
 @pytest.mark.parametrize("N", [100, 1_000_000])
@@ -16,7 +16,7 @@ def bench_construction(benchmark, N):
     benchmark(cudf.DataFrame, {None: cupy.random.rand(N)})
 
 
-@accepts_cudf_fixture(cls="dataframe", dtype="float", cols=6)
+@benchmark_with_object(cls="dataframe", dtype="float", cols=6)
 @pytest.mark.parametrize(
     "expr", ["a+b", "a+b+c+d+e", "a / (sin(a) + cos(b)) * tanh(d*e*f)"]
 )
@@ -24,7 +24,7 @@ def bench_eval_func(benchmark, expr, dataframe):
     benchmark(dataframe.eval, expr)
 
 
-@accepts_cudf_fixture(
+@benchmark_with_object(
     cls="dataframe", dtype="int", nulls=False, cols=6, name="df"
 )
 @pytest.mark.parametrize(
@@ -37,7 +37,7 @@ def bench_merge(benchmark, df, num_key_cols):
 
 # TODO: Some of these cases could be generalized to an IndexedFrame benchmark
 # instead of a DataFrame benchmark.
-@accepts_cudf_fixture(cls="dataframe", dtype="int")
+@benchmark_with_object(cls="dataframe", dtype="int")
 @pytest.mark.parametrize(
     "values",
     [
@@ -60,7 +60,7 @@ def random_state(request):
     return rs if isinstance(rs, int) else rs(seed=42)
 
 
-@accepts_cudf_fixture(cls="dataframe", dtype="int")
+@benchmark_with_object(cls="dataframe", dtype="int")
 @pytest.mark.parametrize("frac", [0.5])
 def bench_sample(benchmark, dataframe, axis, frac, random_state):
     if axis == 1 and isinstance(random_state, cupy.random.RandomState):
@@ -70,7 +70,7 @@ def bench_sample(benchmark, dataframe, axis, frac, random_state):
     )
 
 
-@accepts_cudf_fixture(cls="dataframe", dtype="int", nulls=False, cols=6)
+@benchmark_with_object(cls="dataframe", dtype="int", nulls=False, cols=6)
 @pytest.mark.parametrize(
     "num_key_cols",
     [2, 3, 4],
@@ -79,7 +79,7 @@ def bench_groupby(benchmark, dataframe, num_key_cols):
     benchmark(dataframe.groupby, by=list(dataframe.columns[:num_key_cols]))
 
 
-@accepts_cudf_fixture(cls="dataframe", dtype="int", nulls=False, cols=6)
+@benchmark_with_object(cls="dataframe", dtype="int", nulls=False, cols=6)
 @pytest.mark.parametrize(
     "agg",
     [
@@ -102,7 +102,7 @@ def bench_groupby_agg(benchmark, dataframe, agg, num_key_cols, as_index, sort):
     benchmark(dataframe.groupby(by=by, as_index=as_index, sort=sort).agg, agg)
 
 
-@accepts_cudf_fixture(cls="dataframe", dtype="int")
+@benchmark_with_object(cls="dataframe", dtype="int")
 @pytest.mark.parametrize("num_cols_to_sort", [1])
 def bench_sort_values(benchmark, dataframe, num_cols_to_sort):
     benchmark(
@@ -110,7 +110,7 @@ def bench_sort_values(benchmark, dataframe, num_cols_to_sort):
     )
 
 
-@accepts_cudf_fixture(cls="dataframe", dtype="int")
+@benchmark_with_object(cls="dataframe", dtype="int")
 @pytest.mark.parametrize("num_cols_to_sort", [1])
 @pytest.mark.parametrize("n", [10])
 def bench_nsmallest(benchmark, dataframe, num_cols_to_sort, n):

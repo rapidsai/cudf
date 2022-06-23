@@ -43,7 +43,7 @@ def make_boolean_mask_column(size):
     return cudf.core.column.as_column(rstate.randint(0, 2, size).astype(bool))
 
 
-def accepts_cudf_fixture(
+def benchmark_with_object(
     cls, *, dtype="int", nulls=None, cols=None, rows=None, name=None
 ):
     """Pass "standard" cudf fixtures to functions without renaming parameters.
@@ -91,7 +91,7 @@ def accepts_cudf_fixture(
     --------
     # Note: As an internal function, this example is not meant for doctesting.
 
-    @accepts_cudf_fixture("dataframe", dtype="int", nulls=False, name="df")
+    @benchmark_with_object("dataframe", dtype="int", nulls=False, name="df")
     def bench_columns(benchmark, df):
         benchmark(df.columns)
     """
@@ -150,7 +150,7 @@ def accepts_cudf_fixture(
         # decorator is to define a new benchmark function with a signature
         # identical to that of the decorated benchmark except with the user's
         # fixture name replaced by the true fixture name based on the arguments
-        # to accepts_cudf_fixture.
+        # to benchmark_with_object.
         parameters = inspect.signature(bm).parameters
 
         # Note: This logic assumes that any benchmark using this fixture has at
