@@ -3273,7 +3273,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   private static void assertIsSupportedMapKeyType(DType keyType) {
-    boolean isSupportedKeyType = 
+    boolean isSupportedKeyType =
       !keyType.equals(DType.EMPTY) && !keyType.equals(DType.LIST) && !keyType.equals(DType.STRUCT);
     assert isSupportedKeyType : "Map lookup by STRUCT and LIST keys is not supported.";
   }
@@ -3291,7 +3291,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookupForKeys(getNativeView(), keys.getNativeView()));
   }
 
-  /** 
+  /**
    * Given a column of type List<Struct<X, Y>> and a key of type X, return a column of type Y,
    * where each row in the output column is the Y value corresponding to the X key.
    * If the key is not found, the corresponding output value is null.
@@ -3500,6 +3500,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector listSortRows(boolean isDescending, boolean isNullSmallest) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     return new ColumnVector(listSortRows(getNativeView(), isDescending, isNullSmallest));
+  }
+
+  public static ColumnVector listOverlap(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(listOverlap(lhs.getNativeView(), rhs.getNativeView()));
+  }
+
+  public static ColumnVector setIntersect(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(setIntersect(lhs.getNativeView(), rhs.getNativeView()));
+  }
+
+  public static ColumnVector setUnion(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(setUnion(lhs.getNativeView(), rhs.getNativeView()));
+  }
+
+  public static ColumnVector setDifference(ColumnView lhs, ColumnView rhs) {
+    assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
+        "Input columns type must be of type LIST";
+    assert lhs.getRowCount() == rhs.getRowCount() : "Input columns must have the same size";
+    return new ColumnVector(setDifference(lhs.getNativeView(), rhs.getNativeView()));
   }
 
   /**
@@ -4038,6 +4066,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long listIndexOfColumn(long nativeView, long keyColumnHandle, boolean isFindFirst);
 
   private static native long listSortRows(long nativeView, boolean isDescending, boolean isNullSmallest);
+
+  private static native long listOverlap(long lhsViewHandle, long rhsViewHandle);
+
+  private static native long setIntersect(long lhsViewHandle, long rhsViewHandle);
+
+  private static native long setUnion(long lhsViewHandle, long rhsViewHandle);
+
+  private static native long setDifference(long lhsViewHandle, long rhsViewHandle);
 
   private static native long getElement(long nativeView, int index);
 
