@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf_test/column_utilities.hpp>
-
 #include <stream_compaction/stream_compaction_common.cuh>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/gather.cuh>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -68,63 +65,22 @@ void check_compatibility(lists_column_view const& lhs, lists_column_view const& 
 }
 
 /**
- * @brief Generate list labels for elements in the child column of the input lists column ignoring
- *        elements in the lists having invalid bitmask.
+ * @brief Generate list labels for elements in the child column of the input lists column.
  *
  * @param input The input lists column
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param invalid_count The number of unset bits (i.e., invalid lists)
- * @param null_mask The bitmask indicating if an input list is valid or not
  * @return A column containing list labels corresponding to each input list elements
  */
 std::unique_ptr<column> generate_labels(lists_column_view const& input,
                                         size_type n_elements,
-                                        size_type invalid_count,
-                                        rmm::device_buffer const& bitmask,
                                         rmm::cuda_stream_view stream)
 {
-  // Generate labels from offsets.
-  auto const get_labels = [&](auto const offsets_begin, auto const offsets_end, auto const size) {
-    auto labels = make_numeric_column(
-      data_type(type_to_id<size_type>()), size, cudf::mask_state::UNALLOCATED, stream);
-    auto const labels_begin = labels->mutable_view().template begin<size_type>();
-    cudf::detail::label_segments(
-      offsets_begin, offsets_end, labels_begin, labels_begin + size, stream);
-    return labels;
-  };
-
-  // If there is not any invalid lists, just create element labels using offsets of the input lists
-  // column directly. The number of output labels will be the same as the number of input elements.
-  if (invalid_count == 0) {
-    return get_labels(input.offsets_begin(), input.offsets_end(), n_elements);
-  }
-
-  // Otherwise, we need to recompute the offsets to ignore the invalid lists.
-  auto const offsets = make_numeric_column(
-    data_type{type_to_id<offset_type>()}, input.size() + 1, mask_state::UNALLOCATED, stream);
-  auto const offsets_cv    = offsets->mutable_view();
-  auto const offsets_begin = offsets_cv.template begin<offset_type>();
-  auto const offsets_end   = offsets_cv.template end<offset_type>();
-
-  // Firstly compute sizes of the input lists. If a list is invalid, set its size to `0`.
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::counting_iterator<offset_type>(0),
-    input.size(),
-    [bitmask     = static_cast<bitmask_type const*>(bitmask.data()),
-     inp_offsets = input.offsets_begin(),
-     d_output    = offsets_begin] __device__(auto const idx) {
-      d_output[idx] = cudf::bit_is_set(bitmask, idx) ? inp_offsets[idx + 1] - inp_offsets[idx] : 0;
-    });
-
-  // Compute offsets from sizes.
-  thrust::exclusive_scan(rmm::exec_policy(stream), offsets_begin, offsets_end, offsets_begin);
-
-  // The number of output labels.
-  auto const size = cudf::detail::get_value<size_type>(offsets_cv, input.size(), stream);
-
-  // Generate labels from the new offsets.
-  return get_labels(offsets_begin, offsets_end, size);
+  auto labels = make_numeric_column(
+    data_type(type_to_id<size_type>()), n_elements, cudf::mask_state::UNALLOCATED, stream);
+  auto const labels_begin = labels->mutable_view().template begin<size_type>();
+  cudf::detail::label_segments(
+    input.offsets_begin(), input.offsets_end(), labels_begin, labels_begin + n_elements, stream);
+  return labels;
 }
 
 /**
@@ -230,7 +186,7 @@ std::unique_ptr<column> list_distinct(
   //   lists column.
 
   auto const child  = input.get_sliced_child(stream);
-  auto const labels = generate_labels(input, child.size(), 0, rmm::device_buffer{}, stream);
+  auto const labels = generate_labels(input, child.size(), stream);
 
   auto [out_offsets, out_child] = list_distinct_children(
     input.size(), labels->view(), child, nulls_equal, nans_equal, stream, mr);
@@ -260,15 +216,10 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
 
   check_compatibility(lhs, rhs);
 
-  // Generate null mask and null count for the output. These are also used to exclude the input
-  // lists from any computation if their corresponding output rows are null.
-  auto [null_mask, null_count] =
-    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
-  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), null_count, null_mask, stream);
-  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), null_count, null_mask, stream);
+  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), stream);
+  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), stream);
   auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
@@ -293,6 +244,8 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
                                          thrust::logical_or{});  // reduction op for values
   auto const num_non_empty_segments = thrust::distance(overlap_results.begin(), end.second);
 
+  auto [null_mask, null_count] =
+    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
   auto result = make_numeric_column(
     data_type{type_to_id<bool>()}, lhs.size(), std::move(null_mask), null_count, stream, mr);
   auto const result_begin = result->mutable_view().template begin<bool>();
@@ -325,15 +278,10 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
 
   check_compatibility(lhs, rhs);
 
-  // Generate null mask and null count for the output. These are also used to exclude the input
-  // lists from any computation if their corresponding output rows are null.
-  auto [null_mask, null_count] =
-    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
-  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), null_count, null_mask, stream);
-  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), null_count, null_mask, stream);
+  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), stream);
+  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), stream);
   auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
@@ -352,6 +300,8 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                                          nans_equal,
                                                          stream,
                                                          mr);
+  auto [null_mask, null_count] =
+    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
 
   return make_lists_column(lhs.size(),
                            std::move(out_offsets),
@@ -399,23 +349,12 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
 
   check_compatibility(lhs, rhs);
 
-  // Generate null mask and null count for the output. These are also used to exclude the input
-  // lists from any computation if their corresponding output rows are null.
-  auto [null_mask, null_count] =
-    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
-  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), null_count, null_mask, stream);
-  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), null_count, null_mask, stream);
+  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), stream);
+  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), stream);
   auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
-
-  printf("line %d\n", __LINE__);
-  printf("null count %d\n", null_count);
-
-  cudf::test::print(lhs_labels->view());
-  cudf::test::print(rhs_labels->view());
 
   auto const inv_contained = [&] {
     auto contained = cudf::detail::contains(rhs_table, lhs_table, nulls_equal, nans_equal, stream);
@@ -441,6 +380,8 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
                                                          nans_equal,
                                                          stream,
                                                          mr);
+  auto [null_mask, null_count] =
+    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
 
   return make_lists_column(lhs.size(),
                            std::move(out_offsets),
