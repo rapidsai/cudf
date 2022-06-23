@@ -577,6 +577,10 @@ def test_dataframe_swaplevel():
     )
     pdf1 = cdf1.to_pandas()
 
+    cdf2 = cudf.DataFrame(
+        {"a": [1, 2, 3], "c": [10, 20, 30]}, index=["x", "y", "z"]
+    )
+
     assert_eq(pdf.swaplevel(1, 2), cdf.swaplevel(1, 2))
     assert_eq(pdf.swaplevel(2, 1), cdf.swaplevel(2, 1))
     assert_eq(cdf.swaplevel(2, 1), cdf.swaplevel(1, 2))
@@ -587,6 +591,9 @@ def test_dataframe_swaplevel():
     assert_eq(pdf1.swaplevel(1, 2), cdf1.swaplevel(1, 2))
     assert_eq(pdf1.swaplevel(2, 1), cdf1.swaplevel(2, 1))
     assert_eq(cdf1.swaplevel(2, 1), cdf1.swaplevel(1, 2))
+
+    with pytest.raises(TypeError):
+        cdf2.swaplevel()
 
 
 def test_dataframe_drop_raises():
