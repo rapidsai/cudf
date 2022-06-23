@@ -284,8 +284,8 @@ def test_axes(data):
     expected = psr.axes
     actual = csr.axes
 
-    for i in range(len(actual)):
-        assert_eq(expected[i], actual[i])
+    for e, a in zip(expected, actual):
+        assert_eq(e, a)
 
 
 def test_series_init_none():
