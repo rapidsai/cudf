@@ -89,7 +89,7 @@ std::unique_ptr<column> generate_labels(lists_column_view const& input,
  * @param n_lists The number of lists in the input lists column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned object
- * @return The offsets column reconstructed from labels
+ * @return The output offsets column
  */
 std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
                                             size_type n_lists,
