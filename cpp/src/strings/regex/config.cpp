@@ -25,18 +25,18 @@ namespace cudf::strings {
 namespace detail {
 
 std::pair<std::size_t, size_type> compute_regex_state_memory(strings_column_view const& input,
-                                                             std::string const& pattern,
+                                                             std::string_view pattern,
                                                              regex_flags const flags,
                                                              rmm::cuda_stream_view stream)
 {
-  auto d_prog = reprog_device::create(pattern, flags, stream);
+  auto const d_prog = reprog_device::create(pattern, flags, stream);
   return d_prog->compute_strided_working_memory(input.size());
 }
 
 }  // namespace detail
 
 std::pair<std::size_t, size_type> compute_regex_state_memory(strings_column_view const& input,
-                                                             std::string const& pattern,
+                                                             std::string_view pattern,
                                                              regex_flags const flags)
 {
   CUDF_FUNC_RANGE();

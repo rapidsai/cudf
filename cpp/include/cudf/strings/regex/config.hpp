@@ -47,7 +47,7 @@ namespace cudf::strings {
  */
 std::pair<std::size_t, size_type> compute_regex_state_memory(
   strings_column_view const& input,
-  std::string const& pattern,
+  std::string_view pattern,
   regex_flags const flags = regex_flags::DEFAULT);
 
 /** @} */  // end of doxygen group
