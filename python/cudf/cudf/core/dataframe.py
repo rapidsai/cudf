@@ -3045,12 +3045,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 out = DataFrame(index=out_index)
             else:
-                out = DataFrame(
-                    index=self.index.replace(
-                        to_replace=list(index.keys()),
-                        value=list(index.values()),
-                    )
-                )
+                to_replace = list(index.keys())
+                vals = list(index.values())
+                is_all_na = vals.count(None) == len(vals)
+
+                try:
+                    index_data = {
+                        name: col.find_and_replace(to_replace, vals, is_all_na)
+                        for name, col in self.index._data.items()
+                    }
+                except OverflowError:
+                    index_data = self.index._data.copy(deep=True)
+
+                out = DataFrame(index=self.index._from_data(index_data))
         else:
             out = DataFrame(index=self.index)
 
