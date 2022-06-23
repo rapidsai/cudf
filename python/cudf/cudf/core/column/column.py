@@ -1988,10 +1988,10 @@ def as_column(
         data = Buffer(arbitrary._data.view("|u1"))
         data = build_column(data, dtype=cudf_dtype)
 
-        mask = arbitrary._mask
-        mask = bools_to_mask(as_column(mask).unary_operator("not"))
-
-        data = data.set_mask(mask)
+        pandas_mask = arbitrary._mask
+        if pandas_mask.any():
+            mask = bools_to_mask(as_column(pandas_mask).unary_operator("not"))
+            data = data.set_mask(mask)
     else:
         try:
             data = as_column(
