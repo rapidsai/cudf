@@ -33,6 +33,7 @@
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/gather.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/lists/set_operations.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/lists/stream_compaction.hpp>
 #include <cudf/null_mask.hpp>
@@ -633,6 +634,66 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_generateListOffsets(JNIEn
     cudf::jni::auto_set_device(env);
     auto const cv = reinterpret_cast<cudf::column_view const *>(handle);
     return release_as_jlong(cudf::jni::generate_list_offsets(*cv));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listOverlap(JNIEnv *env, jclass,
+                                                                   jlong lhs_handle,
+                                                                   jlong rhs_handle) {
+  JNI_NULL_CHECK(env, lhs_handle, "lhs_handle is null", 0)
+  JNI_NULL_CHECK(env, rhs_handle, "rhs_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const lhs = reinterpret_cast<cudf::column_view const *>(lhs_handle);
+    auto const rhs = reinterpret_cast<cudf::column_view const *>(rhs_handle);
+    return release_as_jlong(
+        cudf::lists::list_overlap(cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs}));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_setIntersect(JNIEnv *env, jclass,
+                                                                    jlong lhs_handle,
+                                                                    jlong rhs_handle) {
+  JNI_NULL_CHECK(env, lhs_handle, "lhs_handle is null", 0)
+  JNI_NULL_CHECK(env, rhs_handle, "rhs_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const lhs = reinterpret_cast<cudf::column_view const *>(lhs_handle);
+    auto const rhs = reinterpret_cast<cudf::column_view const *>(rhs_handle);
+    return release_as_jlong(
+        cudf::lists::set_intersect(cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs}));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_setUnion(JNIEnv *env, jclass,
+                                                                jlong lhs_handle,
+                                                                jlong rhs_handle) {
+  JNI_NULL_CHECK(env, lhs_handle, "lhs_handle is null", 0)
+  JNI_NULL_CHECK(env, rhs_handle, "rhs_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const lhs = reinterpret_cast<cudf::column_view const *>(lhs_handle);
+    auto const rhs = reinterpret_cast<cudf::column_view const *>(rhs_handle);
+    return release_as_jlong(
+        cudf::lists::set_union(cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs}));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_setDifference(JNIEnv *env, jclass,
+                                                                     jlong lhs_handle,
+                                                                     jlong rhs_handle) {
+  JNI_NULL_CHECK(env, lhs_handle, "lhs_handle is null", 0)
+  JNI_NULL_CHECK(env, rhs_handle, "rhs_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const lhs = reinterpret_cast<cudf::column_view const *>(lhs_handle);
+    auto const rhs = reinterpret_cast<cudf::column_view const *>(rhs_handle);
+    return release_as_jlong(
+        cudf::lists::set_difference(cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs}));
   }
   CATCH_STD(env, 0);
 }
