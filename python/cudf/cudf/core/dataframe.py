@@ -3272,24 +3272,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._n_largest_or_smallest(False, n, columns, keep)
 
     @_cudf_nvtx_annotate
-    def swaplevel(self, i=0, j=1, axis=0):
+    def swaplevel(self, i=-2, j=-1, Axis=0):
         """
         Swap level i with level j.
         Calling this method does not change the ordering of the values.
 
         Parameters
         ----------
-        i : int, str, default 0
+        i : int or str, default -2
             First level of index to be swapped.
-        j : int, str, default 1
+        j : int or str, default -1
             Second level of index to be swapped.
         axis : The axis to swap levels on.
-        0 or 'index' for row-wise, 1 or 'columns' for column-wise.
+            0 or 'index' for row-wise, 1 or 'columns' for column-wise.
 
         Examples
         --------
         >>> import cudf
-        >>> midx = cudf.MultiIndex(levels=[['lama', 'cow', 'falcon'],
+        >>> midx = cudf.MultiIndex(levels=[['llama', 'cow', 'falcon'],
         ...   ['speed', 'weight', 'length'],['first','second']],
         ...   codes=[[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2],
         ...             [0, 0, 0, 0, 0, 0, 1, 1, 1]])
@@ -3299,7 +3299,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         >>> cdf
                                      big  small
-             lama   speed  first    45.0   30.0
+             llama  speed  first    45.0   30.0
                     weight first   200.0  100.0
                     length first     1.5    1.0
              cow    speed  first    30.0   20.0
@@ -3311,9 +3311,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         >>> cdf.swaplevel()
                                     big  small
-             speed  lama   first    45.0   30.0
-             weight lama   first   200.0  100.0
-             length lama   first     1.5    1.0
+             speed  llama  first    45.0   30.0
+             weight llama  first   200.0  100.0
+             length llama  first     1.5    1.0
              speed  cow    first    30.0   20.0
              weight cow    first   250.0  150.0
              length cow    first     1.5    0.8
@@ -3323,16 +3323,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         result = self.copy()
 
+        # To get axis number
+        get_axis_number = {0: 0, "index": 0, "rows": 0, 1: 1, "columns": 1}
+        try:
+            axis = get_axis_number[Axis]
+        except KeyError:
+            raise ValueError(f"No axis named {Axis}")
+
+        assert axis in {0, 1}
+
         if axis == 0:
             if not isinstance(result.index, MultiIndex):
                 raise TypeError("Can only swap levels on a hierarchical axis.")
-            result.index = MultiIndex.swapij(result.index, i, j)
+            result.index = result.index.swaplevel(i, j)
         else:
             if not isinstance(result._data.to_pandas_index(), MultiIndex):
                 raise TypeError("Can only swap levels on a hierarchical axis.")
-            result.columns = MultiIndex.swapij(
-                result._data.to_pandas_index(), i, j
-            )
+            result.columns = result._data.to_pandas_index().swaplevel(i, j)
 
         return result
 

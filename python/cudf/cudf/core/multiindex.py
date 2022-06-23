@@ -1303,16 +1303,16 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         return popped
 
     @_cudf_nvtx_annotate
-    def swapij(self, i=0, j=1):
+    def swaplevel(self, i=-2, j=-1):
         """
         Swap level i with level j.
         Calling this method does not change the ordering of the values.
 
         Parameters
         ----------
-        i : int, str, default 0
+        i : int or str, default -2
             First level of index to be swapped.
-        j : int, str, default 1
+        j : int or str, default -1
             Second level of index to be swapped.
 
         Returns
@@ -1339,16 +1339,24 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ('aa', 'b')],
            )
         """
-        result = self.copy()
-        new_levels = result.levels
-        new_codes = result.codes
-        new_names = list(result.names)
-
-        new_levels[i], new_levels[j] = new_levels[j], new_levels[i]
-        new_codes[i], new_codes[j] = new_codes[j], new_codes[i]
-        new_names[i], new_names[j] = new_names[j], new_names[i]
-
-        return MultiIndex(levels=new_levels, codes=new_codes, names=new_names)
+        i = self._level_index_from_level(i)
+        j = self._level_index_from_level(j)
+        name_i = self._data.names[i]
+        name_j = self._data.names[j]
+        new_data = {}
+        for k, v in self._data.items():
+            if k not in (name_i, name_j):
+                new_data[k] = v
+            elif k == name_i:
+                new_data[name_j] = self._data[name_j]
+            elif k == name_j:
+                new_data[name_i] = self._data[name_i]
+        if None in self.names:
+            return MultiIndex._from_data(new_data).set_names(
+                names=[None] * len(self.names)
+            )
+        else:
+            return MultiIndex._from_data(new_data, None)
 
     @_cudf_nvtx_annotate
     def droplevel(self, level=-1):

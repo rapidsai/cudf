@@ -528,7 +528,7 @@ def test_dataframe_drop_error():
     )
 
 
-def test_dataframe_swaplevels():
+def test_dataframe_swaplevel():
     midx = cudf.MultiIndex(
         levels=[
             ["Work"],
@@ -558,6 +558,7 @@ def test_dataframe_swaplevels():
             [0, 1, 2, 0, 1, 2, 0, 1, 2],
             [0, 0, 0, 0, 0, 0, 1, 1, 1],
         ],
+        names=["Col1", "Col2", "Col3"],
     )
     cdf1 = cudf.DataFrame(
         index=midx1,
