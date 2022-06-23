@@ -48,10 +48,10 @@ template <typename T>
 struct ListOverlapTypedTest : public cudf::test::BaseFixture {
 };
 
-using ContainsTestTypes = cudf::test::
+using TestTypes = cudf::test::
   Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes, cudf::test::ChronoTypes>;
 
-TYPED_TEST_SUITE(ListOverlapTypedTest, ContainsTestTypes);
+TYPED_TEST_SUITE(ListOverlapTypedTest, TestTypes);
 
 TEST_F(ListOverlapTest, TrivialTest)
 {
@@ -65,8 +65,8 @@ TEST_F(ListOverlapTest, TrivialTest)
                               lists_col{{2.0, 1.0, null, 0.0, 0.0, null}, nulls_at({2, 5})},
                               {} /*NULL*/},
                              null_at(3)};
-  auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
 
+  auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
   auto const expected = bools_col{{1, 1, null, null}, nulls_at({2, 3})};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
 }
