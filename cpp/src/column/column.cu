@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -143,7 +144,7 @@ size_type column::null_count() const
   CUDF_FUNC_RANGE();
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count = cudf::detail::null_count(
-      static_cast<bitmask_type const*>(_null_mask.data()), 0, size(), rmm::cuda_stream_default);
+      static_cast<bitmask_type const*>(_null_mask.data()), 0, size(), cudf::default_stream_value);
   }
   return _null_count;
 }
@@ -181,7 +182,7 @@ void column::set_null_count(size_type new_null_count)
 namespace {
 struct create_column_from_view {
   cudf::column_view view;
-  rmm::cuda_stream_view stream{};
+  rmm::cuda_stream_view stream{cudf::default_stream_value};
   rmm::mr::device_memory_resource* mr;
 
   template <typename ColumnType,

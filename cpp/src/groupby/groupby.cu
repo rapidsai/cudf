@@ -33,6 +33,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -65,8 +66,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  using namespace cudf::structs::detail;
-
   // If sort groupby has been called once on this groupby object, then
   // always use sort groupby from now on. Because once keys are sorted,
   // all the aggs that can be done by hash groupby are efficiently done by
@@ -74,16 +73,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
   if (_keys_are_sorted == sorted::NO and not _helper and
-      detail::hash::can_use_hash_groupby(_keys, requests)) {
-    // Optionally flatten nested key columns.
-    auto flattened             = flatten_nested_columns(_keys, {}, {}, column_nullability::FORCE);
-    auto flattened_keys        = flattened.flattened_columns();
-    auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
-    CUDF_EXPECTS(std::all_of(flattened_keys.begin(), flattened_keys.end(), is_supported_key_type),
-                 "Unsupported groupby key type does not support equality comparison");
-    auto [grouped_keys, results] =
-      detail::hash::groupby(flattened_keys, requests, _include_null_keys, stream, mr);
-    return std::pair(unflatten_nested_columns(std::move(grouped_keys), _keys), std::move(results));
+      detail::hash::can_use_hash_groupby(requests)) {
+    return detail::hash::groupby(_keys, requests, _include_null_keys, stream, mr);
   } else {
     return sort_aggregate(requests, stream, mr);
   }
@@ -205,7 +196,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
 
-  return dispatch_aggregation(requests, rmm::cuda_stream_default, mr);
+  return dispatch_aggregation(requests, cudf::default_stream_value, mr);
 }
 
 // Compute scan requests
@@ -223,13 +214,13 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
 
   if (_keys.num_rows() == 0) { return std::pair(empty_like(_keys), empty_results(requests)); }
 
-  return sort_scan(requests, rmm::cuda_stream_default, mr);
+  return sort_scan(requests, cudf::default_stream_value, mr);
 }
 
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
   auto grouped_keys = helper().sorted_keys(stream, mr);
 
   auto const& group_offsets       = helper().group_offsets(stream);
@@ -261,7 +252,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
                "Size mismatch between num_columns and replace_policies.");
 
   if (values.is_empty()) { return std::pair(empty_like(_keys), empty_like(values)); }
-  auto const stream = rmm::cuda_stream_default;
+  auto const stream = cudf::default_stream_value;
 
   auto const& group_labels = helper().group_labels(stream);
   std::vector<std::unique_ptr<column>> results;
@@ -307,7 +298,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
                 [&](auto i) { return values.column(i).type() == fill_values[i].get().type(); }),
     "values and fill_value should have the same type.");
 
-  auto stream = rmm::cuda_stream_default;
+  auto stream = cudf::default_stream_value;
   std::vector<std::unique_ptr<column>> results;
   auto const& group_offsets = helper().group_offsets(stream);
   std::transform(

@@ -26,6 +26,7 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -251,7 +252,7 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
   return detail::is_letter(strings,
                            ltype,
                            thrust::make_constant_iterator<cudf::size_type>(character_index),
-                           rmm::cuda_stream_default,
+                           cudf::default_stream_value,
                            mr);
 }
 
@@ -261,7 +262,7 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_letter(strings, ltype, indices, rmm::cuda_stream_default, mr);
+  return detail::is_letter(strings, ltype, indices, cudf::default_stream_value, mr);
 }
 
 /**
@@ -271,7 +272,7 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
                                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::porter_stemmer_measure(strings, rmm::cuda_stream_default, mr);
+  return detail::porter_stemmer_measure(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace nvtext

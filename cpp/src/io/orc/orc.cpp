@@ -212,51 +212,59 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          TypeKind kind,
                                          ColStatsBlob const* stats)
 {
-  size_t sz = 0, lpos;
-  put_uint(encode_field_number(1, ProtofType::FIXEDLEN));  // 1:RowIndex.entry
-  lpos = m_buf->size();
-  put_byte(0xcd);                                          // sz+2
-  put_uint(encode_field_number(1, ProtofType::FIXEDLEN));  // 1:positions[packed=true]
-  put_byte(0xcd);                                          // sz
-  if (present_blk >= 0) sz += put_uint(present_blk);
+  std::vector<uint8_t> positions_data;
+  ProtobufWriter position_writer(&positions_data);
+  auto const positions_size_offset = position_writer.put_uint(
+    encode_field_number(1, ProtofType::FIXEDLEN));  // 1:positions[packed=true]
+  position_writer.put_byte(0xcd);                   // positions size placeholder
+  uint32_t positions_size = 0;
+  if (present_blk >= 0) positions_size += position_writer.put_uint(present_blk);
   if (present_ofs >= 0) {
-    sz += put_uint(present_ofs);
-    sz += put_byte(0);  // run pos = 0
-    sz += put_byte(0);  // bit pos = 0
+    positions_size += position_writer.put_uint(present_ofs);
+    positions_size += position_writer.put_byte(0);  // run pos = 0
+    positions_size += position_writer.put_byte(0);  // bit pos = 0
   }
-  if (data_blk >= 0) { sz += put_uint(data_blk); }
+  if (data_blk >= 0) { positions_size += position_writer.put_uint(data_blk); }
   if (data_ofs >= 0) {
-    sz += put_uint(data_ofs);
+    positions_size += position_writer.put_uint(data_ofs);
     if (kind != STRING && kind != FLOAT && kind != DOUBLE && kind != DECIMAL) {
       // RLE run pos always zero (assumes RLE aligned with row index boundaries)
-      sz += put_byte(0);
+      positions_size += position_writer.put_byte(0);
       if (kind == BOOLEAN) {
         // bit position in byte, always zero
-        sz += put_byte(0);
+        positions_size += position_writer.put_byte(0);
       }
     }
   }
   // INT kind can be passed in to bypass 2nd stream index (dictionary length streams)
   if (kind != INT) {
-    if (data2_blk >= 0) { sz += put_uint(data2_blk); }
+    if (data2_blk >= 0) { positions_size += position_writer.put_uint(data2_blk); }
     if (data2_ofs >= 0) {
-      sz += put_uint(data2_ofs);
+      positions_size += position_writer.put_uint(data2_ofs);
       // RLE run pos always zero (assumes RLE aligned with row index boundaries)
-      sz += put_byte(0);
+      positions_size += position_writer.put_byte(0);
     }
   }
   // size of the field 1
-  m_buf->data()[lpos + 2] = (uint8_t)(sz);
+  positions_data[positions_size_offset] = static_cast<uint8_t>(positions_size);
+
+  auto const stats_size = (stats == nullptr)
+                            ? 0
+                            : varint_size(encode_field_number<decltype(*stats)>(2)) +
+                                varint_size(stats->size()) + stats->size();
+  auto const entry_size = positions_data.size() + stats_size;
+
+  // 1:RowIndex.entry
+  put_uint(encode_field_number(1, ProtofType::FIXEDLEN));
+  put_uint(entry_size);
+  put_bytes<uint8_t>(positions_data);
 
   if (stats != nullptr) {
-    sz += put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
+    put_uint(encode_field_number<decltype(*stats)>(2));  // 2: statistics
     // Statistics field contains its length as varint and dtype specific data (encoded on the GPU)
-    sz += put_uint(stats->size());
-    sz += put_bytes<typename ColStatsBlob::value_type>(*stats);
+    put_uint(stats->size());
+    put_bytes<typename ColStatsBlob::value_type>(*stats);
   }
-
-  // size of the whole row index entry
-  m_buf->data()[lpos] = (uint8_t)(sz + 2);
 }
 
 size_t ProtobufWriter::write(const PostScript& s)
@@ -373,12 +381,16 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize) : m_b
       break;
     case LZO: _compression = compression_type::LZO; break;
     case LZ4: _compression = compression_type::LZ4; break;
-    case ZSTD: _compression = compression_type::ZSTD; break;
+    case ZSTD:
+      m_log2MaxRatio = 11;
+      _compression   = compression_type::ZSTD;
+      break;
     default: CUDF_FAIL("Invalid compression type");
   }
 }
 
-host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t const> src)
+host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t const> src,
+                                                            rmm::cuda_stream_view stream)
 {
   // If uncompressed, just pass-through the input
   if (src.empty() or _compression == compression_type::NONE) { return src; }
@@ -419,7 +431,7 @@ host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t co
     } else {
       // Compressed block
       dst_length += decompress(
-        _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize});
+        _compression, src.subspan(i, block_len), {m_buf.data() + dst_length, m_blockSize}, stream);
     }
     i += block_len;
   }
@@ -428,7 +440,7 @@ host_span<uint8_t const> OrcDecompressor::decompress_blocks(host_span<uint8_t co
   return m_buf;
 }
 
-metadata::metadata(datasource* const src) : source(src)
+metadata::metadata(datasource* const src, rmm::cuda_stream_view stream) : source(src)
 {
   const auto len         = source->size();
   const auto max_ps_size = std::min(len, static_cast<size_t>(256));
@@ -446,14 +458,14 @@ metadata::metadata(datasource* const src) : source(src)
 
   // Read compressed filefooter section
   buffer             = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
-  auto const ff_data = decompressor->decompress_blocks({buffer->data(), buffer->size()});
+  auto const ff_data = decompressor->decompress_blocks({buffer->data(), buffer->size()}, stream);
   ProtobufReader(ff_data.data(), ff_data.size()).read(ff);
   CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
 
   // Read compressed metadata section
   buffer =
     source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
-  auto const md_data = decompressor->decompress_blocks({buffer->data(), buffer->size()});
+  auto const md_data = decompressor->decompress_blocks({buffer->data(), buffer->size()}, stream);
   orc::ProtobufReader(md_data.data(), md_data.size()).read(md);
 
   init_parent_descriptors();

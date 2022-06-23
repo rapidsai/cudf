@@ -20,7 +20,7 @@
 
 namespace cudf {
 
-using hash_value_type = uint32_t;
+using hash_value_type = uint32_t;  ///< Type of hash value
 
 /**
  * @addtogroup column_hash
@@ -47,12 +47,12 @@ static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 /**
  * @brief Computes the hash value of each row in the input set of columns.
  *
- * @param input The table of columns to hash.
- * @param hash_function The hash function enum to use.
- * @param seed Optional seed value to use for the hash function.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param input The table of columns to hash
+ * @param hash_function The hash function enum to use
+ * @param seed Optional seed value to use for the hash function
+ * @param mr Device memory resource used to allocate the returned column's device memory
  *
- * @returns A column where each row is the hash of a column from the input.
+ * @returns A column where each row is the hash of a column from the input
  */
 std::unique_ptr<column> hash(
   table_view const& input,
