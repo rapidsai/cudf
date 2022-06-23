@@ -44,7 +44,7 @@ def make_boolean_mask_column(size):
 
 
 def benchmark_with_object(
-    cls, *, dtype="int", nulls=None, cols=None, rows=None, name=None
+    cls, *, dtype="int", nulls=None, cols=None, rows=None
 ):
     """Pass "standard" cudf fixtures to functions without renaming parameters.
 
@@ -75,12 +75,6 @@ def benchmark_with_object(
     rows : Optional[int], None
         The number of rows. If None, use all possible numbers of rows.
         Specifying multiple values is unsupported.
-    name : str, default None
-        The name of the fixture as used in the decorated test. If None,
-        defaults to `cls.lower()` if cls is a string, otherwise
-        `cls.__name__.lower()`. Use of this name allows the decorated function
-        to masquerade as a pytest receiving a fixture while substituting the
-        real fixture (with a much longer name).
 
     Raises
     ------
@@ -91,7 +85,7 @@ def benchmark_with_object(
     --------
     # Note: As an internal function, this example is not meant for doctesting.
 
-    @benchmark_with_object("dataframe", dtype="int", nulls=False, name="df")
+    @benchmark_with_object("dataframe", dtype="int", nulls=False)
     def bench_columns(benchmark, df):
         benchmark(df.columns)
     """
@@ -110,8 +104,6 @@ def benchmark_with_object(
     assert cls in supported_classes, (
         f"cls {cls} is invalid, choose from " f"{', '.join(supported_classes)}"
     )
-
-    name = name or cls
 
     if not isinstance(dtype, list):
         dtype = [dtype]
@@ -156,8 +148,8 @@ def benchmark_with_object(
         # Note: This logic assumes that any benchmark using this fixture has at
         # least two parameters since they must be using both the
         # pytest-benchmark `benchmark` fixture and the cudf object.
-        params_str = ", ".join(f"{p}" for p in parameters if p != name)
-        arg_str = ", ".join(f"{p}={p}" for p in parameters if p != name)
+        params_str = ", ".join(f"{p}" for p in parameters if p != cls)
+        arg_str = ", ".join(f"{p}={p}" for p in parameters if p != cls)
 
         if params_str:
             params_str += ", "
@@ -165,14 +157,14 @@ def benchmark_with_object(
             arg_str += ", "
 
         params_str += f"{fixture_name}"
-        arg_str += f"{name}={fixture_name}"
+        arg_str += f"{cls}={fixture_name}"
 
         src = textwrap.dedent(
             f"""
             import makefun
             @makefun.wraps(
                 bm,
-                remove_args=("{name}",),
+                remove_args=("{cls}",),
                 prepend_args=("{fixture_name}",)
             )
             def wrapped_bm({params_str}):

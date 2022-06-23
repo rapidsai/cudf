@@ -24,15 +24,15 @@ def bench_eval_func(benchmark, expr, dataframe):
     benchmark(dataframe.eval, expr)
 
 
-@benchmark_with_object(
-    cls="dataframe", dtype="int", nulls=False, cols=6, name="df"
-)
+@benchmark_with_object(cls="dataframe", dtype="int", nulls=False, cols=6)
 @pytest.mark.parametrize(
     "num_key_cols",
     [2, 3, 4],
 )
-def bench_merge(benchmark, df, num_key_cols):
-    benchmark(df.merge, df, on=list(df.columns[:num_key_cols]))
+def bench_merge(benchmark, dataframe, num_key_cols):
+    benchmark(
+        dataframe.merge, dataframe, on=list(dataframe.columns[:num_key_cols])
+    )
 
 
 # TODO: Some of these cases could be generalized to an IndexedFrame benchmark
