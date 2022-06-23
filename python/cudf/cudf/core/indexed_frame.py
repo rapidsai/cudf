@@ -290,7 +290,7 @@ class IndexedFrame(Frame):
         data_columns = columns
         index = None
 
-        if index_names:
+        if index_names is not None:
             n_index_columns = len(index_names)
             data_columns = columns[n_index_columns:]
             index = _index_from_columns(columns[:n_index_columns])
@@ -300,7 +300,9 @@ class IndexedFrame(Frame):
                 index.name = index_names[0]
 
         out = super()._from_columns(data_columns, column_names)
-        out._index = index
+
+        if index is not None:
+            out._index = index
 
         return out
 
