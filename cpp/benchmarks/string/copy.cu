@@ -23,6 +23,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -58,7 +59,7 @@ static void BM_copy(benchmark::State& state, copy_type ct)
                        thrust::default_random_engine());
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (ct) {
       case gather: cudf::gather(source->view(), index_map); break;
       case scatter: cudf::scatter(source->view(), index_map, target->view()); break;

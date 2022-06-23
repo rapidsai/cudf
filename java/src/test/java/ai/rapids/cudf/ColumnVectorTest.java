@@ -5865,6 +5865,21 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testGetMapValueForKeys() {
+    List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(1, 2)));
+    List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(2, 3)));
+    List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(5, 4)));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.INT32),
+        new HostColumnVector.BasicType(true, DType.INT32)));
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
+         ColumnVector lookupKey = ColumnVector.fromInts(1, 6, 5);
+         ColumnVector res = cv.getMapValue(lookupKey);
+         ColumnVector expected = ColumnVector.fromBoxedInts(2, null, 4)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
   void testGetMapValueForInteger() {
     List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(1, 2)));
     List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(1, 3)));

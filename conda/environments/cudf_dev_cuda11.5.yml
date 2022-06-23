@@ -43,11 +43,12 @@ dependencies:
   - black=22.3.0
   - isort=5.6.4
   - mypy=0.782
+  - doxygen=1.8.20
   - pydocstyle=6.1.1
   - typing_extensions
   - pre-commit
-  - dask==2022.05.2
-  - distributed==2022.05.2
+  - dask>=2022.05.2
+  - distributed>=2022.05.2
   - streamz
   - arrow-cpp=8.0.0
   - dlpack>=0.5,<0.6.0a0

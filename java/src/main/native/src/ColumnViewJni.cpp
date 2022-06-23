@@ -72,6 +72,7 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -480,7 +481,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
 
     // Extract list offsets and a column of struct<keys, values> from the input lists column.
     auto const lists_keys_vals = cudf::lists_column_view(*input_cv);
-    auto const keys_vals = lists_keys_vals.get_sliced_child(rmm::cuda_stream_default);
+    auto const keys_vals = lists_keys_vals.get_sliced_child(cudf::default_stream_value);
     CUDF_EXPECTS(keys_vals.type().id() == cudf::type_id::STRUCT,
                  "Input column has child that is not a structs column.");
     CUDF_EXPECTS(keys_vals.num_children() == 2,
@@ -1387,6 +1388,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplace(JNIEnv *env
     cudf::string_scalar *ss_target = reinterpret_cast<cudf::string_scalar *>(target);
     cudf::string_scalar *ss_replace = reinterpret_cast<cudf::string_scalar *>(replace);
     return release_as_jlong(cudf::strings::replace(scv, *ss_target, *ss_replace));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookupForKeys(JNIEnv *env, jclass,
+                                                                        jlong map_column_view,
+                                                                        jlong lookup_keys) {
+  JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_keys, "lookup key is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    auto const *column_keys = reinterpret_cast<cudf::column_view *>(lookup_keys);
+    auto const maps_view = cudf::jni::maps_column_view{*cv};
+    return release_as_jlong(maps_view.get_values_for(*column_keys));
   }
   CATCH_STD(env, 0);
 }
