@@ -270,6 +270,10 @@ class IndexedFrame(Frame):
         out._index = RangeIndex(out._data.nrows) if index is None else index
         return out
 
+    @_cudf_nvtx_annotate
+    def _from_data_like_self(self, data: MutableMapping):
+        return self._from_data(data, self._index)
+
     @classmethod
     @_cudf_nvtx_annotate
     def _from_columns(
@@ -284,19 +288,21 @@ class IndexedFrame(Frame):
         used to construct the index of the frame.
         """
         data_columns = columns
+        index = None
 
-        n_index_columns = len(index_names) if index_names else 0
-        index_columns = columns[:n_index_columns]
-        data_columns = columns[n_index_columns:]
+        if index_names is not None:
+            n_index_columns = len(index_names)
+            data_columns = columns[n_index_columns:]
+            index = _index_from_columns(columns[:n_index_columns])
+            if isinstance(index, cudf.MultiIndex):
+                index.names = index_names
+            else:
+                index.name = index_names[0]
 
         out = super()._from_columns(data_columns, column_names)
 
-        if index_names is not None:
-            out._index = cudf.core.index._index_from_columns(index_columns)
-            if isinstance(out._index, cudf.MultiIndex):
-                out._index.names = index_names
-            else:
-                out._index.name = index_names[0]
+        if index is not None:
+            out._index = index
 
         return out
 
@@ -312,6 +318,8 @@ class IndexedFrame(Frame):
         If `index_names` is set, the first `len(index_names)` columns are
         used to construct the index of the frame.
         """
+        if column_names is None:
+            column_names = self._column_names
         frame = self.__class__._from_columns(
             columns, column_names, index_names
         )

@@ -127,6 +127,10 @@ class Frame(BinaryOperand, Scannable):
         Frame.__init__(obj, data)
         return obj
 
+    @_cudf_nvtx_annotate
+    def _from_data_like_self(self, data: MutableMapping):
+        return self._from_data(data)
+
     @classmethod
     @_cudf_nvtx_annotate
     def _from_columns(
@@ -136,7 +140,6 @@ class Frame(BinaryOperand, Scannable):
     ):
         """Construct a `Frame` object from a list of columns."""
         data = {name: columns[i] for i, name in enumerate(column_names)}
-
         return cls._from_data(data)
 
     @_cudf_nvtx_annotate
@@ -1535,9 +1538,7 @@ class Frame(BinaryOperand, Scannable):
         GenericIndex([False, False, True, True, False, False], dtype='bool')
         """
         data_columns = (col.isnull() for col in self._columns)
-        return self.__class__._from_data(
-            zip(self._column_names, data_columns), self._index
-        )
+        return self._from_data_like_self(zip(self._column_names, data_columns))
 
     # Alias for isnull
     isna = isnull
@@ -1617,9 +1618,7 @@ class Frame(BinaryOperand, Scannable):
         GenericIndex([True, True, False, False, True, True], dtype='bool')
         """
         data_columns = (col.notnull() for col in self._columns)
-        return self.__class__._from_data(
-            zip(self._column_names, data_columns), self._index
-        )
+        return self._from_data_like_self(zip(self._column_names, data_columns))
 
     # Alias for notnull
     notna = notnull
@@ -1983,9 +1982,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
-        return self.__class__._from_data(
-            zip(self._column_names, data_columns), self._index
-        )
+        return self._from_data_like_self(zip(self._column_names, data_columns))
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -3110,17 +3107,16 @@ class Frame(BinaryOperand, Scannable):
                 result_data[name] = col.nans_to_nulls()
             except AttributeError:
                 result_data[name] = col.copy()
-        return self._from_data(result_data, self._index)
+        return self._from_data_like_self(result_data)
 
     @_cudf_nvtx_annotate
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
-        return self._from_data(
+        return self._from_data_like_self(
             {
                 name: _apply_inverse_column(col)
                 for name, col in self._data.items()
-            },
-            self._index,
+            }
         )
 
     def nunique(self, dropna: bool = True):
