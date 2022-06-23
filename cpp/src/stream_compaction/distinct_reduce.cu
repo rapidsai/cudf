@@ -124,13 +124,12 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
         map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
   };
 
-  using nan_equal_comparator =
-    cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-  using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
-
   if (nans_equal == nan_equality::ALL_EQUAL) {
+    using nan_equal_comparator =
+      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
     reduce_by_row(nan_equal_comparator{});
   } else {
+    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
     reduce_by_row(nan_unequal_comparator{});
   }
 

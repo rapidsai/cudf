@@ -70,13 +70,12 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
   };
 
-  using nan_equal_comparator =
-    cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-  using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
-
   if (nans_equal == nan_equality::ALL_EQUAL) {
+    using nan_equal_comparator =
+      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
     insert_keys(nan_equal_comparator{});
   } else {
+    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
     insert_keys(nan_unequal_comparator{});
   }
 
@@ -88,7 +87,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     return output_indices;
   }
 
-  // For other keep options, perform a (sparse) reduce-by-row on the rows compared equal.
+  // For other keep options, reduce by row on rows that compare equal.
   auto const reduction_results = hash_reduce_by_row(map,
                                                     std::move(preprocessed_input),
                                                     input.num_rows(),
