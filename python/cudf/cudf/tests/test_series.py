@@ -1580,7 +1580,7 @@ def test_series_nunique_index(data):
         [None, None, None],
     ],
 )
-def test_axes_series(data):
+def test_axes(data):
     csr = cudf.Series(data)
     psr = csr.to_pandas()
 
