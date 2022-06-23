@@ -106,7 +106,7 @@ def setitem_case_int_column_align_to_col_size(column):
 #       column(int) (scatter)
 # value:    scalar,
 #           column (len(val) == len(key)),
-#           column (len(val) != len(key) & len == num_true)
+#           column (len(val) != len(key) and len == num_true)
 
 
 @pytest_cases.parametrize_with_cases(

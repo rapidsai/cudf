@@ -1,5 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+"""Benchmarks of MultiIndex methods."""
+
 import numpy as np
 import pandas as pd
 import pytest
