@@ -6,7 +6,8 @@ import operator
 
 import numpy as np
 import pytest
-from utils import accepts_cudf_fixture, make_gather_map
+
+from ..common.utils import accepts_cudf_fixture, make_gather_map
 
 
 @accepts_cudf_fixture(cls="frame_or_index", dtype="int")

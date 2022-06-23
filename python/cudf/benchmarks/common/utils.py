@@ -10,7 +10,8 @@ from itertools import groupby
 from numbers import Real
 
 import pytest_cases
-from config import NUM_COLS, NUM_ROWS, cudf, cupy
+
+from .config import NUM_COLS, NUM_ROWS, cudf, cupy
 
 
 def make_gather_map(len_gather_map: Real, len_column: Real, how: str):

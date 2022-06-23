@@ -44,39 +44,23 @@ specialized fixtures:
       As a result, it is provided as a separate fixture.
 """
 
-import os
 import string
-import sys
 
 import pytest_cases
 
-# TODO: Rather than doing this path hacking (including the sessionstart and
-# sessionfinish hooks), we could just make the benchmarks a (sub)package to
-# enable relative imports. A minor change to consider when these are ported
-# into the main repo.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
-
-from config import cudf  # noqa: W0611, E402, F401
-from utils import (  # noqa: E402
+from .common.config import (  # noqa: W0611, F401
+    NUM_COLS,
+    NUM_ROWS,
+    collect_ignore,
+    cudf,
+    pytest_collection_modifyitems,
+)
+from .common.utils import (
     OrderedSet,
     collapse_fixtures,
     column_generators,
     make_fixture,
 )
-
-# Turn off isort until we upgrade to 5.8.0
-# https://github.com/pycqa/isort/issues/1594
-# isort: off
-from config import (  # noqa: W0611, E402, F401
-    NUM_COLS,
-    NUM_ROWS,
-    collect_ignore,
-    pytest_collection_modifyitems,
-    pytest_sessionfinish,
-    pytest_sessionstart,
-)
-
-# isort: on
 
 
 @pytest_cases.fixture(params=[0, 1], ids=["AxisIndex", "AxisColumn"])

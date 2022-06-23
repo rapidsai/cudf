@@ -3,8 +3,9 @@
 """Benchmarks of Index methods."""
 
 import pytest
-from config import cudf, cupy
-from utils import accepts_cudf_fixture
+
+from ..common.config import cudf, cupy
+from ..common.utils import accepts_cudf_fixture
 
 
 @pytest.mark.parametrize("N", [100, 1_000_000])

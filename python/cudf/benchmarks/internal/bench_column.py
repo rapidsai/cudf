@@ -4,7 +4,8 @@
 
 import pytest
 import pytest_cases
-from utils import (
+
+from ..common.utils import (
     accepts_cudf_fixture,
     make_boolean_mask_column,
     make_gather_map,

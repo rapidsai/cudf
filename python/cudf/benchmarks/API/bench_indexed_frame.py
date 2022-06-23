@@ -3,7 +3,8 @@
 """Benchmarks of IndexedFrame methods."""
 
 import pytest
-from utils import accepts_cudf_fixture
+
+from ..common.utils import accepts_cudf_fixture
 
 
 @accepts_cudf_fixture(cls="indexedframe", dtype="int")
