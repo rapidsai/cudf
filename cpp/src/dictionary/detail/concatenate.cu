@@ -227,6 +227,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                            std::vector<size_type>{0},
                                            duplicate_keep_option::KEEP_ANY,
                                            null_equality::EQUAL,
+                                           nan_equality::ALL_EQUAL,
                                            stream,
                                            mr);
   auto sorted_keys = cudf::detail::sort(table_keys->view(),

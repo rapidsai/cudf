@@ -64,6 +64,7 @@ std::unique_ptr<column> add_keys(
                                            std::vector<size_type>{0},  // only one key column
                                            duplicate_keep_option::KEEP_ANY,
                                            null_equality::EQUAL,
+                                           nan_equality::ALL_EQUAL,
                                            stream,
                                            mr);
   std::vector<order> column_order{order::ASCENDING};
