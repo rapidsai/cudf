@@ -17,6 +17,7 @@
 #include <stream_compaction/stream_compaction_common.cuh>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.cuh>
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
@@ -302,14 +303,17 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                                          mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
+  auto output = make_lists_column(lhs.size(),
+                                  std::move(out_offsets),
+                                  std::move(out_child),
+                                  null_count,
+                                  std::move(null_mask),
+                                  stream,
+                                  mr);
 
-  return make_lists_column(lhs.size(),
-                           std::move(out_offsets),
-                           std::move(out_child),
-                           null_count,
-                           std::move(null_mask),
-                           stream,
-                           mr);
+  return null_count == 0
+           ? std::move(output)
+           : cudf::detail::purge_nonempty_nulls(lists_column_view{output->view()}, stream, mr);
 }
 
 std::unique_ptr<column> set_union(lists_column_view const& lhs,
@@ -382,14 +386,17 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
                                                          mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
+  auto output = make_lists_column(lhs.size(),
+                                  std::move(out_offsets),
+                                  std::move(out_child),
+                                  null_count,
+                                  std::move(null_mask),
+                                  stream,
+                                  mr);
 
-  return make_lists_column(lhs.size(),
-                           std::move(out_offsets),
-                           std::move(out_child),
-                           null_count,
-                           std::move(null_mask),
-                           stream,
-                           mr);
+  return null_count == 0
+           ? std::move(output)
+           : cudf::detail::purge_nonempty_nulls(lists_column_view{output->view()}, stream, mr);
 }
 
 }  // namespace detail
