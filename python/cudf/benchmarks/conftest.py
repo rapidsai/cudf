@@ -31,7 +31,7 @@ that allow us to write benchmarks that naturally express the set of objects for
 which they are valid, e.g. `def bench_sort_values(frame_or_index)`.
 
 The generated fixtures are named according to the following convention:
-`{classname}_dtype_{dtype}[_nulls_{true|false}][[_cols_{num_cols}]_rows_{num_rows}]`
+`{classname}_dtype_{dtype}[_nulls_{true|false}][_cols_{num_cols}][_rows_{num_rows}]`
 where classname is one of the following: index, series, dataframe,
 indexedframe, frame, frame_or_index. Note that in the case of indexes, to match
 Series/DataFrame we simply set `classname=index` and rely on the

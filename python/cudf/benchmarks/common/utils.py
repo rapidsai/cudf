@@ -50,7 +50,7 @@ def accepts_cudf_fixture(
     The fixture generation logic in conftest.py provides a plethora of useful
     fixtures to allow developers to easily select an appropriate cross-section
     of the space of objects to apply a particular benchmark to. However, the
-    usage of this fixtures is cumbersome because creating them in a principled
+    usage of these fixtures is cumbersome because creating them in a principled
     fashion results in long names and very specific naming schemes. This
     decorator abstracts that naming logic away from the developer, allowing
     them to instead focus on defining the fixture semantically by describing
@@ -74,7 +74,7 @@ def accepts_cudf_fixture(
     rows : Optional[int], None
         The number of rows. If None, use all possible numbers of rows.
         Specifying multiple values is unsupported.
-    fixture : str, default None
+    name : str, default None
         The name of the fixture as used in the decorated test. If None,
         defaults to `cls.lower()` if cls is a string, otherwise
         `cls.__name__.lower()`. Use of this name allows the decorated function
@@ -107,8 +107,7 @@ def accepts_cudf_fixture(
         "frame_or_index",
     )
     assert cls in supported_classes, (
-        f"cls {cls} is invalid, choose from "
-        f"{', '.join(c for c in supported_classes)}"
+        f"cls {cls} is invalid, choose from " f"{', '.join(supported_classes)}"
     )
 
     name = name or cls
@@ -116,8 +115,7 @@ def accepts_cudf_fixture(
     if not isinstance(dtype, list):
         dtype = [dtype]
     assert all(dt in column_generators for dt in dtype), (
-        f"The only supported dtypes are "
-        f"{', '.join(dt for dt in column_generators)}"
+        f"The only supported dtypes are " f"{', '.join(column_generators)}"
     )
 
     dtype_str = "_dtype_" + "_or_".join(dtype)
@@ -130,7 +128,7 @@ def accepts_cudf_fixture(
     if cols is not None:
         assert cols in NUM_COLS, (
             f"You have requested a DataFrame with {cols} columns but fixtures "
-            f"only exist for the values {', '.join(c for c in NUM_COLS)}"
+            f"only exist for the values {', '.join(NUM_COLS)}"
         )
         col_str = f"_cols_{cols}"
 
@@ -138,14 +136,14 @@ def accepts_cudf_fixture(
     if rows is not None:
         assert rows in NUM_ROWS, (
             f"You have requested a {cls} with {rows} rows but fixtures "
-            f"only exist for the values {', '.join(c for c in NUM_ROWS)}"
+            f"only exist for the values {', '.join(NUM_ROWS)}"
         )
         row_str = f"_rows_{rows}"
 
     fixture_name = f"{cls}{dtype_str}{null_str}{col_str}{row_str}"
 
     def deco(bm):
-        # pytests's test collection process relies on parsing the globals dict
+        # pytest's test collection process relies on parsing the globals dict
         # to find test functions and identify their parameters for the purpose
         # of fixtures and parameters. Therefore, the primary purpose of this
         # decorator is to define a new benchmark function with a signature

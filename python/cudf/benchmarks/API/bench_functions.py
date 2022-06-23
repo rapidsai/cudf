@@ -26,9 +26,7 @@ def bench_concat_axis_1(benchmark, objs, axis, join, ignore_index):
 @pytest.mark.parametrize("cardinality", [10, 100, 1000])
 @pytest.mark.parametrize("dtype", [cupy.bool_, cupy.float64])
 def bench_get_dummies_high_cardinality(benchmark, size, cardinality, dtype):
-    """This test is mean to test the performance of get_dummies given the
-    cardinality of column to encode is high.
-    """
+    """Benchmark when the cardinality of column to encode is high."""
     df = cudf.DataFrame(
         {
             "col": cudf.Series(
@@ -41,9 +39,7 @@ def bench_get_dummies_high_cardinality(benchmark, size, cardinality, dtype):
 
 @pytest.mark.parametrize("prefix", [None, "pre"])
 def bench_get_dummies_simple(benchmark, prefix):
-    """This test provides a small input to get_dummies to test the efficiency
-    of the API itself.
-    """
+    """Benchmark with small input to test the efficiency of the API itself."""
     df = cudf.DataFrame(
         {
             "col1": list(range(10)),

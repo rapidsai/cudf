@@ -27,11 +27,11 @@ def bench_eval_func(benchmark, expr, dataframe):
     cls="dataframe", dtype="int", nulls=False, cols=6, name="df"
 )
 @pytest.mark.parametrize(
-    "nkey_cols",
+    "num_key_cols",
     [2, 3, 4],
 )
-def bench_merge(benchmark, df, nkey_cols):
-    benchmark(df.merge, df, on=list(df.columns[:nkey_cols]))
+def bench_merge(benchmark, df, num_key_cols):
+    benchmark(df.merge, df, on=list(df.columns[:num_key_cols]))
 
 
 # TODO: Some of these cases could be generalized to an IndexedFrame benchmark
@@ -71,11 +71,11 @@ def bench_sample(benchmark, dataframe, axis, frac, random_state):
 
 @accepts_cudf_fixture(cls="dataframe", dtype="int", nulls=False, cols=6)
 @pytest.mark.parametrize(
-    "nkey_cols",
+    "num_key_cols",
     [2, 3, 4],
 )
-def bench_groupby(benchmark, dataframe, nkey_cols):
-    benchmark(dataframe.groupby, by=list(dataframe.columns[:nkey_cols]))
+def bench_groupby(benchmark, dataframe, num_key_cols):
+    benchmark(dataframe.groupby, by=list(dataframe.columns[:num_key_cols]))
 
 
 @accepts_cudf_fixture(cls="dataframe", dtype="int", nulls=False, cols=6)
@@ -91,25 +91,27 @@ def bench_groupby(benchmark, dataframe, nkey_cols):
     ],
 )
 @pytest.mark.parametrize(
-    "nkey_cols",
+    "num_key_cols",
     [2, 3, 4],
 )
 @pytest.mark.parametrize("as_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
-def bench_groupby_agg(benchmark, dataframe, agg, nkey_cols, as_index, sort):
-    by = list(dataframe.columns[:nkey_cols])
+def bench_groupby_agg(benchmark, dataframe, agg, num_key_cols, as_index, sort):
+    by = list(dataframe.columns[:num_key_cols])
     benchmark(dataframe.groupby(by=by, as_index=as_index, sort=sort).agg, agg)
 
 
 @accepts_cudf_fixture(cls="dataframe", dtype="int")
-@pytest.mark.parametrize("ncol_sort", [1])
-def bench_sort_values(benchmark, dataframe, ncol_sort):
-    benchmark(dataframe.sort_values, list(dataframe.columns[:ncol_sort]))
+@pytest.mark.parametrize("num_cols_to_sort", [1])
+def bench_sort_values(benchmark, dataframe, num_cols_to_sort):
+    benchmark(
+        dataframe.sort_values, list(dataframe.columns[:num_cols_to_sort])
+    )
 
 
 @accepts_cudf_fixture(cls="dataframe", dtype="int")
-@pytest.mark.parametrize("ncol_sort", [1])
+@pytest.mark.parametrize("num_cols_to_sort", [1])
 @pytest.mark.parametrize("n", [10])
-def bench_nsmallest(benchmark, dataframe, ncol_sort, n):
-    by = list(dataframe.columns[:ncol_sort])
+def bench_nsmallest(benchmark, dataframe, num_cols_to_sort, n):
+    by = list(dataframe.columns[:num_cols_to_sort])
     benchmark(dataframe.nsmallest, n, by)

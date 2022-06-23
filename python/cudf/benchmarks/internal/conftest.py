@@ -2,7 +2,7 @@
 
 """Defines pytest fixtures for internal benchmarks."""
 
-from config import NUM_ROWS, cudf  # noqa: E402
+from config import NUM_ROWS, cudf
 from utils import (
     OrderedSet,
     collapse_fixtures,

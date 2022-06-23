@@ -28,8 +28,8 @@ dependencies:
   - cython>=0.29,<0.30
   - fsspec>=0.6.0
   - pytest
-  - pytest-cases
   - pytest-benchmark
+  - pytest-cases
   - pytest-xdist
   - sphinx
   - sphinxcontrib-websupport
