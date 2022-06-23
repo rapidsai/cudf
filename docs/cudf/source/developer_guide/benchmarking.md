@@ -82,26 +82,26 @@ Furthermore, the default fixtures are designed to work when
 [comparing to pandas](pandascompare) or [running tests](testing).
 New fixtures must also account for these use cases.
 
-### The `accepts_cudf_fixture` decorator
+### The `benchmark_with_object` decorator
 
 The standard fixtures described above are convenient for generating benchmarks.
 However, the long names required to disambiguate all the parameters are cumbersome when writing tests.
 Moreover, having this information embedded in the name means that in order to change the parameters used,
 the entire benchmark needs to have the fixture name replaced.
 
-To avoid this problem, our benchmarks provide the `accepts_cudf_fixture` decorator.
-This decorator allows developers to write benchmarks using a simple object name, such as `"df"`,
+To avoid this problem, our benchmarks provide the `benchmark_with_object` decorator.
+This decorator allows developers to write benchmarks using just the (lowercased) class name,
 and then request the desired parameters using the decorator.
 The decorator takes care of remapping the real fixture onto the alias used by the developer.
 For example, a benchmark in `bench_dataframe.py` might look like this:
 
 ```python
-@accepts_cudf_fixture(cls="dataframe", dtype="int", nulls=False, cols=6, name="df")
-def bench_foo(benchmark, df):
-    benchmark(df.foo)
+@benchmark_with_object(cls="dataframe", dtype="int", nulls=False, cols=6)
+def bench_foo(benchmark, dataframe):
+    benchmark(dataframe.foo)
 ```
 
-This code benchmarks `DataFrame` objects (`cls="dataframe"`) but remaps them to the name `"df"` for convenience.
+This code benchmarks `DataFrame` objects (`cls="dataframe"`).
 
 
 ## Parametrization vs fixtures
