@@ -570,7 +570,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         --------
         >>> import cudf
         >>> csf1 = cudf.Series([1, 2, 3, 4])
-        >>> print(csf1.axes)
+        >>> csf1.axes
         [RangeIndex(start=0, stop=4, step=1)]
 
         """
