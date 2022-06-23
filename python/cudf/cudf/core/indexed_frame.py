@@ -20,7 +20,6 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
 )
 from uuid import uuid4
 
@@ -288,17 +287,20 @@ class IndexedFrame(Frame):
         If `index_names` is set, the first `len(index_names)` columns are
         used to construct the index of the frame.
         """
-        n_index_columns = len(index_names) if index_names else 0
-        out = super()._from_columns(columns[n_index_columns:], column_names)
+        data_columns = columns
+        index = None
 
-        if n_index_columns:
-            out._index = _index_from_columns(columns[:n_index_columns])
-            if isinstance(out._index, cudf.MultiIndex):
-                out._index.names = index_names
+        if index_names:
+            n_index_columns = len(index_names)
+            data_columns = columns[n_index_columns:]
+            index = _index_from_columns(columns[:n_index_columns])
+            if isinstance(index, cudf.MultiIndex):
+                index.names = index_names
             else:
-                # TODO: The cast should instead be inferred by already knowing
-                # that index_names is not None.
-                out._index.name = cast(List[str], index_names)[0]
+                index.name = index_names[0]
+
+        out = super()._from_columns(data_columns, column_names)
+        out._index = index
 
         return out
 

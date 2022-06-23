@@ -128,8 +128,8 @@ class Frame(BinaryOperand, Scannable):
         return obj
 
     @_cudf_nvtx_annotate
-    def _from_data_like_self(cls, data: MutableMapping):
-        return cls._from_data(data)
+    def _from_data_like_self(self, data: MutableMapping):
+        return self._from_data(data)
 
     @classmethod
     @_cudf_nvtx_annotate
