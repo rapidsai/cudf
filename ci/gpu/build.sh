@@ -236,9 +236,12 @@ gpuci_logger "Python py.test for cuDF"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --ignore="$WORKSPACE/python/cudf/cudf/benchmarks" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope tests
 
 # Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
-cd "$WORKSPACE/python/cudf"
-CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 benchmarks
-CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 benchmarks
+# Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.
+# Therefore, these runs only verify that benchmarks are valid.
+# They do not generate meaningful performance measurements.
+cd "$WORKSPACE/python/cudf/benchmarks/"
+CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 .
+CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 .
 
 cd "$WORKSPACE/python/dask_cudf"
 gpuci_logger "Python py.test for dask-cudf"
