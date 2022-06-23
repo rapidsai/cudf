@@ -336,3 +336,11 @@ TEST_F(StringsCharsTest, EmptyStringsColumn)
   EXPECT_EQ(cudf::type_id::STRING, results->view().type().id());
   EXPECT_EQ(0, results->view().size());
 }
+
+TEST_F(StringsCharsTest, ValidUTF8)
+{
+  const char * utf8 = "thesé";
+  char bin[] = { 0xff, 0xff, 0xff, 0xff, 0xff };
+  EXPECT_EQ(cudf::strings::detail::is_valid_utf8(utf8, 6), true);
+  EXPECT_EQ(cudf::strings::detail::is_valid_utf8(bin, 5), false);
+}
