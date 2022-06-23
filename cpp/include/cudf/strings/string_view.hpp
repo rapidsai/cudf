@@ -134,7 +134,7 @@ class string_view {
    *
    * @return true if this is a valid UTF-8 string
    */
-  __device__ [[nodiscard]] inline bool string_view::is_valid_utf8() const;
+  __device__ [[nodiscard]] inline bool is_valid_utf8() const;
 
   /**
    * @brief Return single UTF-8 character at the given character position

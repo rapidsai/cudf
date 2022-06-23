@@ -339,8 +339,8 @@ TEST_F(StringsCharsTest, EmptyStringsColumn)
 
 TEST_F(StringsCharsTest, ValidUTF8)
 {
-  const char * utf8 = "thesé";
-  char bin[] = { 0xff, 0xff, 0xff, 0xff, 0xff };
-  EXPECT_EQ(cudf::strings::detail::is_valid_utf8(utf8, 6), true);
-  EXPECT_EQ(cudf::strings::detail::is_valid_utf8(bin, 5), false);
+  const char* utf8 = "thesé";
+  const char* bin  = "\xff\xff\xff\xff\xff";
+  EXPECT_TRUE(cudf::strings::detail::is_valid_utf8(utf8, 6));
+  EXPECT_FALSE(cudf::strings::detail::is_valid_utf8(bin, 5));
 }

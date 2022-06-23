@@ -133,9 +133,9 @@ constexpr inline bool is_valid_utf8(const char* str, size_type length)
     if (!is_begin_utf8_char(str[idx])) return false;
 
     size_type width = bytes_in_utf8_byte(str[idx]);
-    for (size_type i = 1; i < width && i+idx < length; i++) {
+    for (size_type i = 1; i < width && i + idx < length; i++) {
       // check for valid continuation byte
-      if ((str[idx+i] & 0xC0) != 0x80) return false;
+      if ((str[idx + i] & 0xC0) != 0x80) return false;
     }
     idx += width;
   } while (idx < length);
