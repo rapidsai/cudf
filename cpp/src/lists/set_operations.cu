@@ -72,13 +72,14 @@ void check_compatibility(lists_column_view const& lhs, lists_column_view const& 
  * @return A column containing list labels corresponding to each input list elements
  */
 std::unique_ptr<column> generate_labels(lists_column_view const& input,
+                                        size_type n_elements,
                                         rmm::cuda_stream_view stream)
 {
   auto labels = make_numeric_column(
-    data_type(type_to_id<size_type>()), input.size(), cudf::mask_state::UNALLOCATED, stream);
+    data_type(type_to_id<size_type>()), n_elements, cudf::mask_state::UNALLOCATED, stream);
   auto const labels_begin = labels->mutable_view().template begin<size_type>();
   cudf::detail::label_segments(
-    input.offsets_begin(), input.offsets_end(), labels_begin, labels_begin + input.size(), stream);
+    input.offsets_begin(), input.offsets_end(), labels_begin, labels_begin + n_elements, stream);
   return labels;
 }
 
@@ -185,7 +186,7 @@ std::unique_ptr<column> list_distinct(
   //   lists column.
 
   auto const child  = input.get_sliced_child(stream);
-  auto const labels = generate_labels(input, stream);
+  auto const labels = generate_labels(input, child.size(), stream);
 
   auto [out_offsets, out_child] = list_distinct_children(
     input.size(), labels->view(), child, nulls_equal, nans_equal, stream, mr);
@@ -217,8 +218,8 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
 
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
-  auto const lhs_labels = generate_labels(lhs, stream);
-  auto const rhs_labels = generate_labels(rhs, stream);
+  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), stream);
+  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), stream);
   auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
@@ -244,7 +245,7 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
   auto const num_non_empty_segments = thrust::distance(overlap_results.begin(), end.second);
 
   auto [null_mask, null_count] =
-    cudf::detail::bitmask_or(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
+    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
   auto result = make_numeric_column(
     data_type{type_to_id<bool>()}, lhs.size(), std::move(null_mask), null_count, stream, mr);
   auto const result_begin = result->mutable_view().template begin<bool>();
@@ -279,8 +280,8 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
 
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
-  auto const lhs_labels = generate_labels(lhs, stream);
-  auto const rhs_labels = generate_labels(rhs, stream);
+  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), stream);
+  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), stream);
   auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
@@ -300,7 +301,7 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                                          stream,
                                                          mr);
   auto [null_mask, null_count] =
-    cudf::detail::bitmask_or(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
+    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
 
   return make_lists_column(lhs.size(),
                            std::move(out_offsets),
@@ -350,8 +351,8 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
 
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
-  auto const lhs_labels = generate_labels(lhs, stream);
-  auto const rhs_labels = generate_labels(rhs, stream);
+  auto const lhs_labels = generate_labels(lhs, lhs_child.size(), stream);
+  auto const rhs_labels = generate_labels(rhs, rhs_child.size(), stream);
   auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
@@ -380,7 +381,7 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
                                                          stream,
                                                          mr);
   auto [null_mask, null_count] =
-    cudf::detail::bitmask_or(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
+    cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
 
   return make_lists_column(lhs.size(),
                            std::move(out_offsets),
