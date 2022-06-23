@@ -277,7 +277,7 @@ def test_append_index(a, b):
         ),
     ],
 )
-def test_axes_dataframe(data):
+def test_axes(data):
     csr = cudf.DataFrame(data)
     psr = pd.DataFrame(data)
 
