@@ -38,22 +38,10 @@ project(
 option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_SHARED_LIBS "Build cuDF JNI shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(PER_THREAD_DEFAULT_STREAM "[DEPRECATED] Build with per-thread default stream" OFF)
-mark_as_advanced(FORCE, PER_THREAD_DEFAULT_STREAM)
 option(CUDF_USE_PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
-
-# PER_THREAD_DEFAULT_STREAM will be replaced with CUDF_USE_PER_THREAD_DEFAULT_STREAM
-if(PER_THREAD_DEFAULT_STREAM)
-  set(CUDF_USE_PER_THREAD_DEFAULT_STREAM ON)
-  message(
-    DEPRECATION
-      "CUDF: PER_THREAD_DEFAULT_STREAM is deprecated, and will be removed in a future release,
-        please use CUDF_USE_PER_THREAD_DEFAULT_STREAM instead."
-  )
-endif()
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF_JNI: Build cuDF JNI shared libraries: ${BUILD_SHARED_LIBS}")

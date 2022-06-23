@@ -54,8 +54,6 @@ option(
          stream to external libraries."
   OFF
 )
-option(PER_THREAD_DEFAULT_STREAM "[DEPRECATED] Build with per-thread default stream" OFF)
-mark_as_advanced(FORCE, PER_THREAD_DEFAULT_STREAM)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
@@ -65,16 +63,6 @@ option(CUDA_ENABLE_LINEINFO
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
-# PER_THREAD_DEFAULT_STREAM will be replaced with CUDF_USE_PER_THREAD_DEFAULT_STREAM
-if(PER_THREAD_DEFAULT_STREAM)
-  set(CUDF_USE_PER_THREAD_DEFAULT_STREAM ON)
-  message(
-    DEPRECATION
-      "CUDF: PER_THREAD_DEFAULT_STREAM is deprecated, and will be removed in a future release,
-        please use CUDF_USE_PER_THREAD_DEFAULT_STREAM instead."
-  )
-endif()
-
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
@@ -82,7 +70,7 @@ message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
 message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
-message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_PER_THREAD_DEFAULT_STREAM}")
+message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
