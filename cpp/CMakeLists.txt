@@ -152,7 +152,8 @@ include(cmake/thirdparty/get_arrow.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
 # find libcu++
-include(cmake/thirdparty/get_libcudacxx.cmake)
+include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
+rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 # find cuCollections Should come after including thrust and libcudacxx
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
