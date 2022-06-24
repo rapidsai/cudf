@@ -68,7 +68,13 @@ from cudf.core.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
+from cudf.core.index import (
+    BaseIndex,
+    Index,
+    RangeIndex,
+    _index_from_data,
+    as_index,
+)
 from cudf.core.indexed_frame import (
     IndexedFrame,
     _FrameIndexer,
@@ -3057,7 +3063,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 except OverflowError:
                     index_data = self.index._data.copy(deep=True)
 
-                out = DataFrame(index=self.index._from_data(index_data))
+                out = DataFrame(index=_index_from_data(index_data))
         else:
             out = DataFrame(index=self.index)
 
