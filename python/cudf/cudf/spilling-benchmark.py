@@ -10,12 +10,14 @@ from distributed import Client, LocalCluster, wait
 
 import cudf
 
-NROWS = 130_000_000
+NROWS = 10_000_000
 
 
 def main(args):
     os.environ["CUDF_SPILL"] = "on" if args.spill == "cudf" else "off"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+        str(i) for i in reversed(range(args.n_workers))
+    )
 
     device_memory_limit = None
     if args.spill == "dask":
@@ -26,7 +28,7 @@ def main(args):
     if args.spill == "cudf":
         cluster = LocalCluster(
             protocol="tcp",
-            n_workers=1,
+            n_workers=args.n_workers,
             threads_per_worker=1,
             memory_limit=None,
         )
@@ -35,11 +37,11 @@ def main(args):
 
         cluster = dask_cuda.LocalCUDACluster(
             protocol="tcp",
-            n_workers=1,
+            n_workers=args.n_workers,
             device_memory_limit=device_memory_limit,
             memory_limit="auto",
             jit_unspill=args.spill == "jit",
-            CUDA_VISIBLE_DEVICES=[1],
+            CUDA_VISIBLE_DEVICES=os.environ["CUDA_VISIBLE_DEVICES"],
         )
 
     with Client(cluster):
@@ -72,6 +74,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--npartitions",
         default=10,
+        type=int,
+    )
+    parser.add_argument(
+        "-n",
+        "--n-workers",
+        default=1,
         type=int,
     )
 
