@@ -4,7 +4,7 @@
 
 import pytest_cases
 
-from ..common.config import NUM_ROWS, cudf, cupy
+from benchmarks.common.config import NUM_ROWS, cudf, cupy
 
 
 @pytest_cases.parametrize("nr", NUM_ROWS)

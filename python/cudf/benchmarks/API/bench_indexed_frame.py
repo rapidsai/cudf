@@ -4,7 +4,7 @@
 
 import pytest
 
-from ..common.utils import benchmark_with_object
+from benchmarks.common.utils import benchmark_with_object
 
 
 @benchmark_with_object(cls="indexedframe", dtype="int")
