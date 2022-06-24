@@ -2273,7 +2273,8 @@ void EncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          size_type column_index_truncate_length,
                          rmm::cuda_stream_view stream)
 {
-  gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(chunks, column_stats, column_index_truncate_length);
+  gpuEncodeColumnIndexes<<<chunks.size(), 1, 0, stream.value()>>>(
+    chunks, column_stats, column_index_truncate_length);
 }
 
 }  // namespace gpu
