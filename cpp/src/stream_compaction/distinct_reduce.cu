@@ -95,6 +95,7 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
   cudf::nullate::DYNAMIC has_nulls,
   duplicate_keep_option keep,
   null_equality nulls_equal,
+  nan_equality nans_equal,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -111,15 +112,26 @@ rmm::device_uvector<size_type> hash_reduce_by_row(
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
 
-  auto const row_comp  = cudf::experimental::row::equality::self_comparator(preprocessed_input);
-  auto const key_equal = row_comp.equal_to(has_nulls, nulls_equal);
+  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_rows),
-    reduce_by_row_fn{
-      map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
+  auto const reduce_by_row = [&](auto const value_comp) {
+    auto const key_equal = row_comp.equal_to(has_nulls, nulls_equal, value_comp);
+    thrust::for_each(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(num_rows),
+      reduce_by_row_fn{
+        map.get_device_view(), key_hasher, key_equal, keep, reduction_results.begin()});
+  };
+
+  if (nans_equal == nan_equality::ALL_EQUAL) {
+    using nan_equal_comparator =
+      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+    reduce_by_row(nan_equal_comparator{});
+  } else {
+    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
+    reduce_by_row(nan_unequal_comparator{});
+  }
 
   return reduction_results;
 }
