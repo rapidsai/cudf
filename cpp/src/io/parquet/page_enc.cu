@@ -1308,7 +1308,13 @@ static __device__ void swap128(__int128_t v, unsigned char* dst)
                dst);
 }
 
-__device__ uint8_t get_dtype_len(uint8_t dtype)
+__device__ void get_extremum(const statistics_chunk* s,
+                             uint8_t dtype,
+                             bool is_min,
+                             unsigned char* scratch,
+                             const void** val,
+                             uint32_t* len,
+                             size_type column_index_truncate_length)
 {
   uint8_t dtype_len;
   switch (dtype) {
@@ -1326,74 +1332,36 @@ __device__ uint8_t get_dtype_len(uint8_t dtype)
     case dtype_string:
     default: dtype_len = 0; break;
   }
-  return dtype_len;
-}
 
-__device__ void get_min(const statistics_chunk* s,
-                        uint8_t dtype,
-                        unsigned char* scratch,
-                        const void** vmin,
-                        uint32_t* lmin,
-                        size_type column_index_truncate_length)
-{
-  uint8_t dtype_len = get_dtype_len(dtype);
   if (s->has_minmax) {
+    statistics_val& stats_val = is_min ? s->min_value : s->maxx_value;
     if (dtype == dtype_string) {
-      // truncating min values is easy, just reduce lmin
-      *lmin =
-        std::min(s->min_value.str_val.length, static_cast<uint32_t>(column_index_truncate_length));
-      *vmin = s->min_value.str_val.ptr;
+      // TODO truncate max
+      // check for utf8.  if not, then truncate and increment last byte (checking for overflow)
+      // if utf8, then need to truncate to pos of last symbol, and increment that.
+      // but if str is all 1 byte vals, can use the non-utf version
+      string_view str = stats_val.str_val;
+      if (str.is_valid_utf8() && str.size_bytes() != str.length()) {
+        // truncate utf8
+      } else {
+        // truncate binary
+      }
     } else {
-      *lmin = dtype_len;
+      *len = dtype_len;
       if (dtype == dtype_float32) {  // Convert from double to float32
         float* fp_scratch = reinterpret_cast<float*>(scratch);
-        fp_scratch[0]     = s->min_value.fp_val;
-        *vmin             = &fp_scratch[0];
+        fp_scratch[0]     = stats_val.fp_val;
+        *val              = &fp_scratch[0];
       } else if (dtype == dtype_decimal128) {
-        swap128(s->min_value.d128_val, &scratch[0]);
-        *vmin = &scratch[0];
+        swap128(stats_val.d128_val, &scratch[0]);
+        *val = &scratch[0];
       } else {
-        *vmin = &s->min_value;
+        *val = &stats_val.i_val;
       }
     }
   } else {
-    *lmin = 0;
-    *vmin = nullptr;
-  }
-}
-
-__device__ void get_max(const statistics_chunk* s,
-                        uint8_t dtype,
-                        unsigned char* scratch,
-                        const void** vmax,
-                        uint32_t* lmax,
-                        size_type column_index_truncate_length)
-{
-  uint8_t dtype_len = get_dtype_len(dtype);
-  if (s->has_minmax) {
-    if (dtype == dtype_string) {
-      // truncating max values is hard, esp with unicode involved.
-      // TODO need a truncate method w/ scratch space big enough for
-      // the truncated string.  or maybe truncate in place?  that's
-      // probably bad form though.
-      *lmax = s->max_value.str_val.length;
-      *vmax = s->max_value.str_val.ptr;
-    } else {
-      *lmax = dtype_len;
-      if (dtype == dtype_float32) {  // Convert from double to float32
-        float* fp_scratch = reinterpret_cast<float*>(scratch);
-        fp_scratch[0]     = s->max_value.fp_val;
-        *vmax             = &fp_scratch[0];
-      } else if (dtype == dtype_decimal128) {
-        swap128(s->max_value.d128_val, &scratch[0]);
-        *vmax = &scratch[0];
-      } else {
-        *vmax = &s->max_value;
-      }
-    }
-  } else {
-    *lmax = 0;
-    *vmax = nullptr;
+    *len = 0;
+    *val = nullptr;
   }
 }
 
@@ -1409,9 +1377,10 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     const void *vmin, *vmax;
     uint32_t lmin, lmax;
 
-    get_max(s, dtype, scratch, &vmax, &lmax, INT_MAX);
+    // TODO replace INT_MAX with truncation param for statistics
+    get_extremum(s, dtype, false, scratch, &vmax, &lmax, INT_MAX);
     encoder.field_binary(5, vmax, lmax);
-    get_min(s, dtype, scratch, &vmin, &lmin, INT_MAX);
+    get_extremum(s, dtype, true, scratch, &vmin, &lmin, INT_MAX);
     encoder.field_binary(6, vmin, lmin);
   }
   encoder.end(&end);
@@ -1690,8 +1659,9 @@ __global__ void __launch_bounds__(1)
   // min_values
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_min(&column_stats[pageidx + page],
+    get_extremum(&column_stats[pageidx + page],
             col_g.stats_dtype,
+            true,
             scratch,
             &vmin,
             &lmin,
@@ -1702,8 +1672,9 @@ __global__ void __launch_bounds__(1)
   // max_values
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
-    get_max(&column_stats[pageidx + page],
+    get_extremum(&column_stats[pageidx + page],
             col_g.stats_dtype,
+            false,
             scratch,
             &vmax,
             &lmax,
@@ -1711,6 +1682,7 @@ __global__ void __launch_bounds__(1)
     encoder.put_binary(vmax, lmax);
   }
   encoder.field_list_end(3);
+  // boundary_order
   encoder.field_int32(4,
                       calculateBoundaryOrder(&column_stats[first_data_page + pageidx],
                                              col_g.physical_type,
