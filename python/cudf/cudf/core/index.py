@@ -183,9 +183,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # whereas _stop is an upper bound.
         self._end = self._start + self._step * (len(self._range) - 1)
 
-    def _copy_type_metadata(
-        self, other: Frame, include_index: bool = True
-    ) -> RangeIndex:
+    def _copy_type_metadata(self, other: Frame) -> RangeIndex:
         # There is no metadata to be copied for RangeIndex since it does not
         # have an underlying column.
         return self
@@ -895,9 +893,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return ret
 
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self, other: Frame, include_index: bool = True
-    ) -> GenericIndex:
+    def _copy_type_metadata(self, other: Frame) -> GenericIndex:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
