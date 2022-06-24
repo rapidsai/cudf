@@ -733,7 +733,7 @@ TEST_F(SparkMurmurHash3Test, StringsWithSeed)
   constexpr auto hasher   = cudf::hash_id::HASH_SPARK_MURMUR3;
   auto const hash_strings = cudf::hash(cudf::table_view({strings_col}), hasher, 314);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_strings, hash_strings_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_strings, hash_strings_expected_seed_314, verbosity);
 }
 
 TEST_F(SparkMurmurHash3Test, ListThrows)
