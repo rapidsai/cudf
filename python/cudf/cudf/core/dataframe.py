@@ -2000,6 +2000,91 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return operands, index
 
     @_cudf_nvtx_annotate
+    def scatter_by_map(
+        self, map_index, map_size=None, keep_index=True, **kwargs
+    ):
+        """Scatter to a list of dataframes.
+
+        Uses map_index to determine the destination
+        of each row of the original DataFrame.
+
+        Parameters
+        ----------
+        map_index : Series, str or list-like
+            Scatter assignment for each row
+        map_size : int
+            Length of output list. Must be >= uniques in map_index
+        keep_index : bool
+            Conserve original index values for each row
+
+        Returns
+        -------
+        A list of cudf.DataFrame objects.
+        """
+        # map_index might be a column name or array,
+        # make it a Column
+        if isinstance(map_index, str):
+            map_index = self._data[map_index]
+        elif isinstance(map_index, cudf.Series):
+            map_index = map_index._column
+        else:
+            map_index = as_column(map_index)
+
+        # Convert float to integer
+        if map_index.dtype.kind == "f":
+            map_index = map_index.astype(np.int32)
+
+        # Convert string or categorical to integer
+        if isinstance(map_index, cudf.core.column.StringColumn):
+            map_index = map_index.as_categorical_column(
+                "category"
+            ).as_numerical
+            warnings.warn(
+                "Using StringColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+        elif isinstance(map_index, cudf.core.column.CategoricalColumn):
+            map_index = map_index.as_numerical
+            warnings.warn(
+                "Using CategoricalColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+
+        if kwargs.get("debug", False) == 1 and map_size is not None:
+            count = map_index.distinct_count()
+            if map_size < count:
+                raise ValueError(
+                    f"ERROR: map_size must be >= {count} (got {map_size})."
+                )
+
+        partitioned_columns, output_offsets = libcudf.partitioning.partition(
+            [*(self._index._columns if keep_index else ()), *self._columns],
+            map_index,
+            map_size,
+        )
+        partitioned = self._from_columns_like_self(
+            partitioned_columns,
+            column_names=self._column_names,
+            index_names=self._index_names if keep_index else None,
+        )
+
+        # due to the split limitation mentioned
+        # here: https://github.com/rapidsai/cudf/issues/4607
+        # we need to remove first & last elements in offsets.
+        # TODO: Remove this after the above issue is fixed.
+        output_offsets = output_offsets[1:-1]
+
+        result = partitioned._split(output_offsets, keep_index=keep_index)
+
+        if map_size:
+            result += [
+                self._empty_like(keep_index)
+                for _ in range(map_size - len(result))
+            ]
+
+        return result
+
+    @_cudf_nvtx_annotate
     def update(
         self,
         other,
@@ -2960,12 +3045,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 out = DataFrame(index=out_index)
             else:
-                out = DataFrame(
-                    index=self.index.replace(
-                        to_replace=list(index.keys()),
-                        value=list(index.values()),
-                    )
-                )
+                to_replace = list(index.keys())
+                vals = list(index.values())
+                is_all_na = vals.count(None) == len(vals)
+
+                try:
+                    index_data = {
+                        name: col.find_and_replace(to_replace, vals, is_all_na)
+                        for name, col in self.index._data.items()
+                    }
+                except OverflowError:
+                    index_data = self.index._data.copy(deep=True)
+
+                out = DataFrame(index=self.index._from_data(index_data))
         else:
             out = DataFrame(index=self.index)
 

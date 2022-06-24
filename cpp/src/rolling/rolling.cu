@@ -17,6 +17,7 @@
 #include "rolling_detail.cuh"
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -131,7 +132,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                 following_window,
                                 min_periods,
                                 agg,
-                                rmm::cuda_stream_default,
+                                cudf::default_stream_value,
                                 mr);
 }
 
@@ -158,7 +159,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   return detail::rolling_window(
-    input, preceding_window, following_window, min_periods, agg, rmm::cuda_stream_default, mr);
+    input, preceding_window, following_window, min_periods, agg, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

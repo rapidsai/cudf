@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 
 #include <cudf/replace.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -33,7 +34,7 @@ namespace detail {
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
   cudf::column_view const& replacement,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -45,7 +46,7 @@ std::unique_ptr<column> replace_nulls(
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
   scalar const& replacement,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -57,7 +58,7 @@ std::unique_ptr<column> replace_nulls(
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
   replace_policy const& replace_policy,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -69,7 +70,7 @@ std::unique_ptr<column> replace_nulls(
 std::unique_ptr<column> replace_nans(
   column_view const& input,
   column_view const& replacement,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -81,7 +82,7 @@ std::unique_ptr<column> replace_nans(
 std::unique_ptr<column> replace_nans(
   column_view const& input,
   scalar const& replacement,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -93,7 +94,7 @@ std::unique_ptr<column> find_and_replace_all(
   column_view const& input_col,
   column_view const& values_to_replace,
   column_view const& replacement_values,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -103,7 +104,7 @@ std::unique_ptr<column> find_and_replace_all(
  */
 std::unique_ptr<column> normalize_nans_and_zeros(
   column_view const& input,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

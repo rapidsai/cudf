@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -126,6 +127,6 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
                                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::one_hot_encode(input, categories, rmm::cuda_stream_default, mr);
+  return detail::one_hot_encode(input, categories, cudf::default_stream_value, mr);
 }
 }  // namespace cudf

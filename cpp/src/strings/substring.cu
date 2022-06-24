@@ -27,6 +27,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -109,7 +110,7 @@ std::unique_ptr<column> slice_strings(
   numeric_scalar<size_type> const& start = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& stop  = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& step  = numeric_scalar<size_type>(1),
-  rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream           = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource())
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
@@ -142,7 +143,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice_strings(strings, start, stop, step, rmm::cuda_stream_default, mr);
+  return detail::slice_strings(strings, start, stop, step, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -371,7 +372,8 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice_strings(strings, starts_column, stops_column, rmm::cuda_stream_default, mr);
+  return detail::slice_strings(
+    strings, starts_column, stops_column, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> slice_strings(strings_column_view const& strings,
@@ -383,7 +385,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   return detail::slice_strings(strings,
                                cudf::detail::make_pair_iterator<string_view>(delimiter),
                                count,
-                               rmm::cuda_stream_default,
+                               cudf::default_stream_value,
                                mr);
 }
 
@@ -397,20 +399,20 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
 
   CUDF_FUNC_RANGE();
   auto delimiters_dev_view_ptr =
-    cudf::column_device_view::create(delimiters.parent(), rmm::cuda_stream_default);
+    cudf::column_device_view::create(delimiters.parent(), cudf::default_stream_value);
   auto delimiters_dev_view = *delimiters_dev_view_ptr;
   return (delimiters_dev_view.nullable())
            ? detail::slice_strings(
                strings,
                cudf::detail::make_pair_iterator<string_view, true>(delimiters_dev_view),
                count,
-               rmm::cuda_stream_default,
+               cudf::default_stream_value,
                mr)
            : detail::slice_strings(
                strings,
                cudf::detail::make_pair_iterator<string_view, false>(delimiters_dev_view),
                count,
-               rmm::cuda_stream_default,
+               cudf::default_stream_value,
                mr);
 }
 

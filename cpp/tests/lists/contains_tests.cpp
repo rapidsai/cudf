@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,17 +118,18 @@ TYPED_TEST(TypedContainsTest, ScalarKeyWithNoNulls)
 {
   using T = TypeParam;
 
-  auto search_space   = lists_column_view{lists_column_wrapper<T, int32_t>{{0, 1, 2, 1},
-                                                                         {3, 4, 5},
-                                                                         {6, 7, 8},
-                                                                         {9, 0, 1, 3, 1},
-                                                                         {2, 3, 4},
-                                                                         {5, 6, 7},
-                                                                         {8, 9, 0},
-                                                                         {},
-                                                                         {1, 2, 1, 3},
-                                                                         {}}};
-  auto search_key_one = create_scalar_search_key<T>(1);
+  auto const search_space_col = lists_column_wrapper<T, int32_t>{{0, 1, 2, 1},
+                                                                 {3, 4, 5},
+                                                                 {6, 7, 8},
+                                                                 {9, 0, 1, 3, 1},
+                                                                 {2, 3, 4},
+                                                                 {5, 6, 7},
+                                                                 {8, 9, 0},
+                                                                 {},
+                                                                 {1, 2, 1, 3},
+                                                                 {}};
+  auto const search_space     = lists_column_view{search_space_col};
+  auto search_key_one         = create_scalar_search_key<T>(1);
 
   {
     // CONTAINS
@@ -161,19 +162,20 @@ TYPED_TEST(TypedContainsTest, ScalarKeyWithNullLists)
   // Test List columns that have NULL list rows.
   using T = TypeParam;
 
-  auto search_space   = lists_column_view{lists_column_wrapper<T, int32_t>{{{0, 1, 2, 1},
-                                                                          {3, 4, 5},
-                                                                          {6, 7, 8},
-                                                                          {},
-                                                                          {9, 0, 1, 3, 1},
-                                                                          {2, 3, 4},
-                                                                          {5, 6, 7},
-                                                                          {8, 9, 0},
-                                                                          {},
-                                                                          {1, 2, 2, 3},
-                                                                          {}},
-                                                                         nulls_at({3, 10})}};
-  auto search_key_one = create_scalar_search_key<T>(1);
+  auto const search_space_col = lists_column_wrapper<T, int32_t>{{{0, 1, 2, 1},
+                                                                  {3, 4, 5},
+                                                                  {6, 7, 8},
+                                                                  {},
+                                                                  {9, 0, 1, 3, 1},
+                                                                  {2, 3, 4},
+                                                                  {5, 6, 7},
+                                                                  {8, 9, 0},
+                                                                  {},
+                                                                  {1, 2, 2, 3},
+                                                                  {}},
+                                                                 nulls_at({3, 10})};
+  auto const search_space     = lists_column_view{search_space_col};
+  auto search_key_one         = create_scalar_search_key<T>(1);
   {
     // CONTAINS
     auto result   = lists::contains(search_space, *search_key_one);
