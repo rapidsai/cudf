@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import itertools
-
-# from builtins import breakpoint
 from collections import abc
 from functools import cached_property, reduce
-
-# from logging import raiseExceptions
 from typing import (
     TYPE_CHECKING,
     Any,
