@@ -20,7 +20,7 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         MOD "cudf::binary_operator::MOD"
         PYMOD "cudf::binary_operator::PYMOD"
         POW "cudf::binary_operator::POW"
-        INTPOW "cudf::binary_operator::INTPOW"
+        INT_POW "cudf::binary_operator::INT_POW"
         EQUAL "cudf::binary_operator::EQUAL"
         NOT_EQUAL "cudf::binary_operator::NOT_EQUAL"
         LESS "cudf::binary_operator::LESS"
