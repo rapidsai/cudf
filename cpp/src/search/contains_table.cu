@@ -194,13 +194,13 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
                         stream.value());
     };
 
-    using nan_equal_comparator =
-      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
-
     if (compare_nans == nan_equality::ALL_EQUAL) {
+      using nan_equal_comparator =
+        cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
       check_contains(nan_equal_comparator{});
     } else {
+      using nan_unequal_comparator =
+        cudf::experimental::row::equality::physical_equality_comparator;
       check_contains(nan_unequal_comparator{});
     }
   }
