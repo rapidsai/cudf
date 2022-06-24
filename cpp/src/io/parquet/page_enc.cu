@@ -1327,8 +1327,30 @@ __device__ uint32_t truncate_string(const string_view& str,
   // and the original buffer.
   if (str.is_valid_utf8() && str.size_bytes() != str.length()) {
     // truncate utf8
+    uint32_t len = column_index_truncate_length;
+    auto num_chars = strings::detail::characters_in_string(str.data(), len);
+    len = str.byte_offset(num_chars-1);
+    if (is_min) {
+      *res = str.data();
+      return len;
+    } else {
+      //FIXME not correct
+      memcpy(scratch, str.data(), len);
+      *res = scratch;
+      return len;
+    }
   } else {
     // truncate binary
+    uint32_t len = column_index_truncate_length;
+    if (is_min) {
+      *res = str.data();
+      return len;
+    } else {
+      //FIXME not correct
+      memcpy(scratch, str.data(), len);
+      *res = scratch;
+      return len;
+    }
   }
 
   // couldn't truncate, return original value
@@ -1370,7 +1392,7 @@ __device__ void get_extremum(const statistics_chunk* s,
       if (dtype == dtype_float32) {  // Convert from double to float32
         float* fp_scratch = reinterpret_cast<float*>(scratch);
         fp_scratch[0]     = stats_val.fp_val;
-        *val              = &fp_scratch[0];
+        *val              = scratch;
       } else if (dtype == dtype_decimal128) {
         swap128(stats_val.d128_val, scratch);
         *val = scratch;
