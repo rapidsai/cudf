@@ -561,10 +561,7 @@ class parquet_writer_options {
    *
    * @return length min/max will be truncated to
    */
-  auto get_column_index_truncate_length() const
-  {
-    return _column_index_truncate_length;
-  }
+  auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
 
   /**
    * @brief Sets partitions.
@@ -682,7 +679,7 @@ class parquet_writer_options {
       "The maximum page size cannot be smaller than the fragment size, which is 5000 rows.");
     _max_page_size_rows = size_rows;
   }
- 
+
   /**
    * @brief Sets the maximum length of min or max values in column index, in bytes.
    *
@@ -858,10 +855,10 @@ class parquet_writer_options_builder {
    * @brief Sets the maximum size in bytes for min and max values in the column index.
    * Values exceeding this limit will be truncated, but modified such that they will still
    * be valid lower and upper bounds.
-   * 
+   *
    * @param val length min/max will be truncated to
    * @return this for chaining
-   */ 
+   */
   parquet_writer_options_builder& column_index_truncate_length(size_type val)
   {
     options.set_column_index_truncate_length(val);
@@ -1064,10 +1061,7 @@ class chunked_parquet_writer_options {
    *
    * @return length min/max will be truncated to
    */
-  auto get_column_index_truncate_length() const
-  {
-    return _column_index_truncate_length;
-  }
+  auto get_column_index_truncate_length() const { return _column_index_truncate_length; }
 
   /**
    * @brief Sets metadata.
@@ -1325,10 +1319,10 @@ class chunked_parquet_writer_options_builder {
    * @brief Sets the maximum size in bytes for min and max values in the column index.
    * Values exceeding this limit will be truncated, but modified such that they will still
    * be valid lower and upper bounds.
-   * 
+   *
    * @param val length min/max will be truncated to
    * @return this for chaining
-   */ 
+   */
   chunked_parquet_writer_options_builder& column_index_truncate_length(size_type val)
   {
     options.set_column_index_truncate_length(val);
