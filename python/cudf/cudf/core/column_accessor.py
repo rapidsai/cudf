@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import itertools
+
+# from builtins import breakpoint
 from collections import abc
 from functools import cached_property, reduce
+
+# from logging import raiseExceptions
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -380,6 +384,51 @@ class ColumnAccessor(abc.MutableMapping):
         return self.__class__(
             data,
             multiindex=self.multiindex,
+            level_names=self.level_names,
+        )
+
+    def swaplevel(self, i=-2, j=-1):
+        """
+        Swap level i with level j.
+        Calling this method does not change the ordering of the values.
+
+        Parameters
+        ----------
+        i : int or str, default -2
+            First level of index to be swapped.
+        j : int or str, default -1
+            Second level of index to be swapped.
+
+        Returns
+        -------
+        ColumnAccessor
+        """
+
+        def get_level(x, nlevels):
+            if x < 0:
+                x += nlevels
+            if x >= self.nlevels:
+                raise IndexError(
+                    f"Level {x} out of bounds. " f"Index has {nlevels} levels."
+                )
+            return x
+
+        i = get_level(i, self.nlevels)
+        j = get_level(j, self.nlevels)
+
+        new_keys = [list(row) for row, _ in self.items()].copy()
+        new_dict = {}
+
+        # Swap old keys for i and j
+        for n, row in enumerate(self.names):
+            new_keys[n][i], new_keys[n][j] = row[j], row[i]
+            new_dict.update({row: tuple(new_keys[n])})
+
+        new_data = {new_dict[k]: v.copy(deep=True) for k, v in self.items()}
+
+        return self.__class__(
+            new_data,
+            multiindex=True,
             level_names=self.level_names,
         )
 

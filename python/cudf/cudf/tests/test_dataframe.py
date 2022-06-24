@@ -581,6 +581,19 @@ def test_dataframe_swaplevel():
         {"a": [1, 2, 3], "c": [10, 20, 30]}, index=["x", "y", "z"]
     )
 
+    midx3 = [
+        np.array(["bar", "bar", "baz", "baz", "foo", "foo", "qux", "qux"]),
+        np.array(["one", "two", "one", "two", "one", "two", "one", "two"]),
+        np.array(
+            ["tone", "ttwo", "tone", "ttwo", "tone", "ttwo", "tone", "ttwo"]
+        ),
+    ]
+
+    pdf3 = pd.DataFrame(
+        np.random.randn(3, 8), index=["A", "B", "C"], columns=midx3
+    )
+    cdf3 = cudf.DataFrame.from_pandas(pdf3)
+
     assert_eq(pdf.swaplevel(1, 2), cdf.swaplevel(1, 2))
     assert_eq(pdf.swaplevel(2, 1), cdf.swaplevel(2, 1))
     assert_eq(cdf.swaplevel(2, 1), cdf.swaplevel(1, 2))
@@ -594,6 +607,13 @@ def test_dataframe_swaplevel():
 
     with pytest.raises(TypeError):
         cdf2.swaplevel()
+
+    assert_eq(pdf3.swaplevel(1, 2, 1), cdf3.swaplevel(1, 2, 1))
+    assert_eq(pdf3.swaplevel(2, 1, 1), cdf3.swaplevel(2, 1, 1))
+    assert_eq(cdf3.swaplevel(2, 1, 1), cdf3.swaplevel(1, 2, 1))
+    assert_eq(pdf3.swaplevel(0, 2, 1), cdf3.swaplevel(0, 2, 1))
+    assert_eq(pdf3.swaplevel(2, 0, 1), cdf3.swaplevel(2, 0, 1))
+    assert_eq(cdf3.swaplevel(1, 1, 1), cdf3.swaplevel(1, 1, 1))
 
 
 def test_dataframe_drop_raises():

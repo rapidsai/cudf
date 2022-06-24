@@ -1332,7 +1332,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ('b', 'bb'),
             ('b', 'aa')],
            )
-        >>> mi.swapij(0, 1)
+        >>> mi.swaplevel(0, 1)
         MultiIndex([('bb', 'a'),
             ('aa', 'a'),
             ('bb', 'b'),

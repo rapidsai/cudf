@@ -3310,16 +3310,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     length second    0.3    0.2
 
         >>> cdf.swaplevel()
-                                    big  small
-             speed  llama  first    45.0   30.0
-             weight llama  first   200.0  100.0
-             length llama  first     1.5    1.0
-             speed  cow    first    30.0   20.0
-             weight cow    first   250.0  150.0
-             length cow    first     1.5    0.8
-             speed  falcon second  320.0  250.0
-             weight falcon second    1.0    0.8
-             length falcon second    0.3    0.2
+                                     big  small
+             llama  first  speed    45.0   30.0
+                           weight  200.0  100.0
+                           length    1.5    1.0
+             cow    first  speed    30.0   20.0
+                           weight  250.0  150.0
+                           length    1.5    0.8
+             falcon second speed   320.0  250.0
+                           weight    1.0    0.8
+                           length    0.3    0.2
         """
         result = self.copy()
 
@@ -3337,9 +3337,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 raise TypeError("Can only swap levels on a hierarchical axis.")
             result.index = result.index.swaplevel(i, j)
         else:
-            if not isinstance(result._data.to_pandas_index(), MultiIndex):
+            if not result._data.multiindex:
                 raise TypeError("Can only swap levels on a hierarchical axis.")
-            result.columns = result._data.to_pandas_index().swaplevel(i, j)
+            result._data = result._data.swaplevel(i, j)
 
         return result
 
