@@ -28,6 +28,7 @@
 #include <cudf/structs/structs_column_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -456,19 +457,36 @@ struct weak_ordering_comparator_impl {
  * @brief Wraps and interprets the result of device_row_comparator, true if the result is
  * weak_ordering::LESS meaning one row is lexicographically *less* than another row.
  *
- * @tparam Nullate A cudf::nullate type describing whether to check for nulls.
+ * @tparam Comparator generic comparator that returns a weak_ordering
  */
 template <typename Comparator>
 struct less_comparator : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS> {
+  /**
+   * @brief Constructs a less_comparator
+   *
+   * @param comparator The comparator to wrap
+   */
   less_comparator(Comparator const& comparator)
     : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS>{comparator}
   {
   }
 };
 
+/**
+ * @brief Wraps and interprets the result of device_row_comparator, true if the result is
+ * weak_ordering::LESS or weak_ordering::EQUIVALENT meaning one row is lexicographically *less* than
+ * or *equivalent* to another row.
+ *
+ * @tparam Comparator generic comparator that returns a weak_ordering
+ */
 template <typename Comparator>
 struct less_equivalent_comparator
   : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT> {
+  /**
+   * @brief Constructs a less_equivalent_comparator
+   *
+   * @param comparator The comparator to wrap
+   */
   less_equivalent_comparator(Comparator const& comparator)
     : weak_ordering_comparator_impl<Comparator, weak_ordering::LESS, weak_ordering::EQUIVALENT>{
         comparator}
@@ -605,7 +623,7 @@ class self_comparator {
   self_comparator(table_view const& t,
                   host_span<order const> column_order         = {},
                   host_span<null_order const> null_precedence = {},
-                  rmm::cuda_stream_view stream                = rmm::cuda_stream_default)
+                  rmm::cuda_stream_view stream                = cudf::default_stream_value)
     : d_t{preprocessed_table::create(t, column_order, null_precedence, stream)}
   {
   }
@@ -644,6 +662,7 @@ class self_comparator {
       nullate, *d_t, *d_t, d_t->depths(), d_t->column_order(), d_t->null_precedence(), comparator}};
   }
 
+  /// @copydoc less()
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less_equivalent(Nullate nullate                      = {},
@@ -726,7 +745,7 @@ class two_table_comparator {
                        table_view const& right,
                        host_span<order const> column_order         = {},
                        host_span<null_order const> null_precedence = {},
-                       rmm::cuda_stream_view stream                = rmm::cuda_stream_default);
+                       rmm::cuda_stream_view stream                = cudf::default_stream_value);
 
   /**
    * @brief Construct an owning object for performing a lexicographic comparison between two rows of
@@ -781,6 +800,7 @@ class two_table_comparator {
                                                             comparator}}};
   }
 
+  /// @copydoc less()
   template <typename Nullate,
             typename PhysicalElementComparator = sorting_physical_element_comparator>
   auto less_equivalent(Nullate nullate                      = {},

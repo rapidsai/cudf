@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -48,7 +49,7 @@ namespace jni {
  */
 std::unique_ptr<column>
 map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nulls = true,
-           rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+           rmm::cuda_stream_view stream = cudf::default_stream_value,
            rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -79,7 +80,7 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
  */
 std::unique_ptr<column>
 map_contains(column_view const &map_column, string_scalar lookup_key, bool has_nulls = true,
-             rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+             rmm::cuda_stream_view stream = cudf::default_stream_value,
              rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 } // namespace jni

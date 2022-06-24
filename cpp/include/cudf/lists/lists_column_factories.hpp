@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 namespace cudf {
 namespace lists {
@@ -35,7 +36,7 @@ namespace detail {
 std::unique_ptr<cudf::column> make_lists_column_from_scalar(
   list_scalar const& value,
   size_type size,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
