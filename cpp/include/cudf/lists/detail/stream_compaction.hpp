@@ -70,7 +70,7 @@ std::unique_ptr<column> distinct(
  * @param mr Device memory resource used to allocate the returned object
  * @return A pair of output columns `{out_offsets, out_child}`
  */
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> distinct(
+std::unique_ptr<column> distinct(
   size_type n_lists,
   column_view const& child_labels,
   column_view const& child,
