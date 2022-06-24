@@ -1652,12 +1652,10 @@ static __device__ int32_t calculateBoundaryOrder(const statistics_chunk* s,
 
 static __device__ void* align8(void* ptr)
 {
-  uint64_t p = reinterpret_cast<uint64_t>(ptr);
   // it's ok to round down because we have an extra 8 bytes
   // in the buffer
-  p >>= 3;
-  p <<= 3;
-  return reinterpret_cast<void*>(p);
+  uint64_t algn = 3 & reinterpret_cast<uint64_t>(ptr);
+  return reinterpret_cast<char*>(ptr) - algn;
 }
 
 // blockDim(1, 1, 1)
