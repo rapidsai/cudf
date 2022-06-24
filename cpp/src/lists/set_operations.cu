@@ -141,6 +141,12 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> list_distinct_childr
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  // Algorithm:
+  // - Get indices of distinct rows of the table {labels, child}.
+  // - Scatter these indices into a marker array that marks if a row will be copied to the output.
+  // - Collect output rows (with order preserved) using the marker array and build the output
+  //   offsets column.
+
   auto const input_table = table_view{{child_labels, child}};
 
   auto const distinct_indices = cudf::detail::get_distinct_indices(
