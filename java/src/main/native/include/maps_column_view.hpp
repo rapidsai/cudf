@@ -114,13 +114,34 @@ public:
    * The returned column contains no nulls. i.e. If the search key is null, or if the
    * map row is null, the result row is `false`.
    *
-   * @param keys Column of keys to be looked up in each corresponding map row.
+   * @param key Scalar key to be looked up in each corresponding map row.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned column's device memory.
    * @return std::unique_ptr<column>
    */
   std::unique_ptr<column>
   contains(scalar const &key, rmm::cuda_stream_view stream = cudf::default_stream_value,
+           rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
+
+  /**
+   * @brief Check if each map row contains keys specified by a column
+   *
+   * The type of the lookup column must match the key-type of the map.
+   * A column of values is returned, with the same number of rows as the map column.
+   *
+   * Each row in the returned column contains a bool indicating whether the row contains
+   * the specified key (`true`) or not (`false`).
+   * The returned column contains no nulls. i.e. If the search key is null, or if the
+   * map row is null, the result row is `false`.
+   *
+   * @param keys Column of keys to be looked up in each corresponding map row.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned column's device memory.
+   * @return std::unique_ptr<column>
+   */
+
+  std::unique_ptr<column>
+  contains(column_view const &key, rmm::cuda_stream_view stream = rmm::cuda_stream_default,
            rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
 
 private:
