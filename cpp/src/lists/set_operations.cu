@@ -28,6 +28,7 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/detail/combine.hpp>
 #include <cudf/lists/detail/set_operations.hpp>
+#include <cudf/lists/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 
@@ -132,7 +133,7 @@ std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
  * @param mr Device memory resource used to allocate the returned object
  * @return A pair of output columns `{out_offsets, out_child}`
  */
-std::pair<std::unique_ptr<column>, std::unique_ptr<column>> list_distinct_children(
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> distinct(
   size_type n_lists,
   column_view const& child_labels,
   column_view const& child,
@@ -178,12 +179,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> list_distinct_childr
 
 }  // namespace
 
-std::unique_ptr<column> list_distinct(
-  lists_column_view const& input,
-  null_equality nulls_equal,
-  nan_equality nans_equal,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> distinct(lists_column_view const& input,
+                                 null_equality nulls_equal,
+                                 nan_equality nans_equal,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   // Algorithm:
   // - Generate labels for the child elements.
@@ -195,8 +195,8 @@ std::unique_ptr<column> list_distinct(
   auto const child  = input.get_sliced_child(stream);
   auto const labels = generate_labels(input, child.size(), stream);
 
-  auto [out_offsets, out_child] = list_distinct_children(
-    input.size(), labels->view(), child, nulls_equal, nans_equal, stream, mr);
+  auto [out_offsets, out_child] =
+    distinct(input.size(), labels->view(), child, nulls_equal, nans_equal, stream, mr);
 
   return make_lists_column(input.size(),
                            std::move(out_offsets),
@@ -300,13 +300,13 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
     [contained = contained.begin()] __device__(auto const idx) { return contained[idx]; },
     stream);
 
-  auto [out_offsets, out_child] = list_distinct_children(lhs.size(),
-                                                         intersect_table->get_column(0).view(),
-                                                         intersect_table->get_column(1).view(),
-                                                         nulls_equal,
-                                                         nans_equal,
-                                                         stream,
-                                                         mr);
+  auto [out_offsets, out_child] = distinct(lhs.size(),
+                                           intersect_table->get_column(0).view(),
+                                           intersect_table->get_column(1).view(),
+                                           nulls_equal,
+                                           nans_equal,
+                                           stream,
+                                           mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
   auto output = make_lists_column(lhs.size(),
@@ -331,7 +331,7 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
 {
   check_compatibility(lhs, rhs);
 
-  auto const lhs_distinct = list_distinct(lhs, nulls_equal, nans_equal, stream);
+  auto const lhs_distinct = distinct(lhs, nulls_equal, nans_equal, stream);
 
   // The result table from set_different already contains distinct rows.
   auto const diff = lists::detail::set_difference(rhs, lhs, nulls_equal, nans_equal, stream);
@@ -383,13 +383,13 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
     },
     stream);
 
-  auto [out_offsets, out_child] = list_distinct_children(lhs.size(),
-                                                         difference_table->get_column(0).view(),
-                                                         difference_table->get_column(1).view(),
-                                                         nulls_equal,
-                                                         nans_equal,
-                                                         stream,
-                                                         mr);
+  auto [out_offsets, out_child] = distinct(lhs.size(),
+                                           difference_table->get_column(0).view(),
+                                           difference_table->get_column(1).view(),
+                                           nulls_equal,
+                                           nans_equal,
+                                           stream,
+                                           mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
   auto output = make_lists_column(lhs.size(),
