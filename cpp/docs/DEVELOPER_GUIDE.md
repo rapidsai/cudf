@@ -170,7 +170,7 @@ resource in destruction ([RAII](https://en.cppreference.com/w/cpp/language/raii)
 object does not own resources. Any class in libcudf with the `*_view` suffix is non-owning. For more
 detail see the [`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing)
 
-libcudf functions typically take views as input (`column_view`, `table_view`, or `scalar_view`)
+libcudf functions typically take views as input (`column_view` or `table_view`)
 and produce `unique_ptr`s to owning objects as output. For example,
 
 ```c++

@@ -83,7 +83,31 @@ std::unique_ptr<table> unique(
 std::unique_ptr<table> distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
   null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create a column of indices of all distinct rows in the input table.
+ *
+ * Given an `input` table_view, an output vector of all row indices of the distinct rows is
+ * generated. If there are duplicate rows, which index is kept depends on the `keep` parameter.
+ *
+ * @param input The input table
+ * @param keep Get index of any, first, last, or none of the found duplicates
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether NaN elements should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned vector
+ * @return A device_uvector containing the result indices
+ */
+rmm::device_uvector<size_type> get_distinct_indices(
+  table_view const& input,
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

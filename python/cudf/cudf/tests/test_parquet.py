@@ -2552,9 +2552,9 @@ def test_parquet_reader_zstd_compression(datadir):
         pytest.mark.xfail(reason="zstd support is not enabled")
 
 
-def test_read_parquet_multiple_files(datadir):
-    df_1_path = datadir / "df_1.parquet"
-    df_2_path = datadir / "df_2.parquet"
+def test_read_parquet_multiple_files(tmpdir):
+    df_1_path = tmpdir / "df_1.parquet"
+    df_2_path = tmpdir / "df_2.parquet"
     df_1 = cudf.DataFrame({"id": range(100), "a": [1] * 100})
     df_1.to_parquet(df_1_path)
 
