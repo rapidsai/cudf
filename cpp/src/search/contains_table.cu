@@ -38,9 +38,9 @@ using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
 
 /**
- * @brief Device functor to create a pair of hash value and index for a given row.
- * @tparam T Type of the index, must be `size_type` or a strong index type.
- * @tparam Hasher The functor type to compute row hash.
+ * @brief Device functor to create a pair of {hash_value, row_index} for a given row.
+ * @tparam T Type of row index, must be `size_type` or a strong index type.
+ * @tparam Hasher The type of internal hasher to compute row hash.
  */
 template <typename T, typename Hasher>
 struct make_pair_fn {
@@ -55,9 +55,9 @@ struct make_pair_fn {
 };
 
 /**
- * @brief The functor to compare two rows using row hash and row indices for comparison.
+ * @brief The functor to compare two rows using row hashes and row indices.
  *
- * @tparam Comparator The row comparator type to perform row equality comparison.
+ * @tparam Comparator The row comparator type to perform row equality comparison from row indices.
  */
 template <typename Comparator>
 struct pair_comparator_fn {
