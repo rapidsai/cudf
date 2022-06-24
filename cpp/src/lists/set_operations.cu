@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include "utilities.hpp"
-
+#include <lists/utilities.hpp>
 #include <stream_compaction/stream_compaction_common.cuh>
 
 #include <cudf/column/column_factories.hpp>
@@ -68,84 +67,6 @@ void check_compatibility(lists_column_view const& lhs, lists_column_view const& 
 }
 
 }  // namespace
-
-std::unique_ptr<column> distinct(size_type n_lists,
-                                 column_view const& child_labels,
-                                 column_view const& child,
-                                 rmm::device_buffer&& null_mask,
-                                 size_type null_count,
-                                 null_equality nulls_equal,
-                                 nan_equality nans_equal,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
-{
-  // Algorithm:
-  // - Get indices of distinct rows of the table {labels, child}.
-  // - Scatter these indices into a marker array that marks if a row will be copied to the output.
-  // - Collect output rows (with order preserved) using the marker array and build the output
-  //   offsets column.
-
-  auto const input_table = table_view{{child_labels, child}};
-
-  auto const distinct_indices = cudf::detail::get_distinct_indices(
-    input_table, duplicate_keep_option::KEEP_ANY, nulls_equal, nans_equal, stream);
-
-  auto const index_markers = [&] {
-    auto markers = rmm::device_uvector<bool>(child.size(), stream);
-    thrust::uninitialized_fill(rmm::exec_policy(stream), markers.begin(), markers.end(), false);
-    thrust::scatter(
-      rmm::exec_policy(stream),
-      thrust::constant_iterator<size_type>(true, 0),
-      thrust::constant_iterator<size_type>(true, static_cast<size_type>(distinct_indices.size())),
-      distinct_indices.begin(),
-      markers.begin());
-    return markers;
-  }();
-
-  auto const out_table = cudf::detail::copy_if(
-    input_table,
-    [index_markers = index_markers.begin()] __device__(auto const idx) {
-      return index_markers[idx];
-    },
-    stream,
-    mr);
-  auto out_offsets = reconstruct_offsets(out_table->get_column(0).view(), n_lists, stream, mr);
-
-  return make_lists_column(n_lists,
-                           std::move(out_offsets),
-                           std::move(out_table->release().back()),
-                           null_count,
-                           std::move(null_mask),
-                           stream,
-                           mr);
-}
-
-std::unique_ptr<column> distinct(lists_column_view const& input,
-                                 null_equality nulls_equal,
-                                 nan_equality nans_equal,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
-{
-  // Algorithm:
-  // - Generate labels for the child elements.
-  // - Get indices of distinct rows of the table {labels, child}.
-  // - Scatter these indices into a marker array that marks if a row will be copied to the output.
-  // - Collect output rows (with order preserved) using the marker array and build the output
-  //   lists column.
-
-  auto const child  = input.get_sliced_child(stream);
-  auto const labels = generate_labels(input, child.size(), stream);
-
-  return distinct(input.size(),
-                  labels->view(),
-                  child,
-                  cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                  input.null_count(),
-                  nulls_equal,
-                  nans_equal,
-                  stream,
-                  mr);
-}
 
 std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
                                      lists_column_view const& rhs,
@@ -242,15 +163,15 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
 
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-  auto output = distinct(lhs.size(),
-                         intersect_table->get_column(0).view(),
-                         intersect_table->get_column(1).view(),
-                         std::move(null_mask),
-                         null_count,
-                         nulls_equal,
-                         nans_equal,
-                         stream,
-                         mr);
+  auto output = cudf::lists::detail::distinct(lhs.size(),
+                                              intersect_table->get_column(0).view(),
+                                              intersect_table->get_column(1).view(),
+                                              std::move(null_mask),
+                                              null_count,
+                                              nulls_equal,
+                                              nans_equal,
+                                              stream,
+                                              mr);
 
   return null_count == 0
            ? std::move(output)
@@ -311,15 +232,15 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
 
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-  auto output = distinct(lhs.size(),
-                         difference_table->get_column(0).view(),
-                         difference_table->get_column(1).view(),
-                         std::move(null_mask),
-                         null_count,
-                         nulls_equal,
-                         nans_equal,
-                         stream,
-                         mr);
+  auto output = cudf::lists::detail::distinct(lhs.size(),
+                                              difference_table->get_column(0).view(),
+                                              difference_table->get_column(1).view(),
+                                              std::move(null_mask),
+                                              null_count,
+                                              nulls_equal,
+                                              nans_equal,
+                                              stream,
+                                              mr);
 
   return null_count == 0
            ? std::move(output)

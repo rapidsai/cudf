@@ -369,7 +369,6 @@ add_library(
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
-  src/lists/apply_boolean_mask.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
   src/lists/combine/concatenate_rows.cu
@@ -388,6 +387,8 @@ add_library(
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
   src/lists/set_operations.cu
+  src/lists/stream_compaction/apply_boolean_mask.cu
+  src/lists/stream_compaction/distinct.cu
   src/lists/utilities.cu
   src/merge/merge.cu
   src/partitioning/partitioning.cu
