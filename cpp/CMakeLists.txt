@@ -388,6 +388,7 @@ add_library(
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
   src/lists/set_operations.cu
+  src/lists/utilities.cu
   src/merge/merge.cu
   src/partitioning/partitioning.cu
   src/partitioning/round_robin.cu

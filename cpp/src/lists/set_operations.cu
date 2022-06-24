@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "utilities.hpp"
+
 #include <stream_compaction/stream_compaction_common.cuh>
 
 #include <cudf/column/column_factories.hpp>
@@ -21,7 +23,6 @@
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
@@ -64,53 +65,6 @@ void check_compatibility(lists_column_view const& lhs, lists_column_view const& 
   CUDF_EXPECTS(lhs.size() == rhs.size(), "The input lists column must have the same size.");
   CUDF_EXPECTS(lhs.child().type() == rhs.child().type(),
                "The input lists column must have children having the same data types");
-}
-
-/**
- * @brief Generate list labels for elements in the child column of the input lists column.
- *
- * @param input The input lists column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @return A column containing list labels corresponding to each input list elements
- */
-std::unique_ptr<column> generate_labels(lists_column_view const& input,
-                                        size_type n_elements,
-                                        rmm::cuda_stream_view stream)
-{
-  auto labels = make_numeric_column(
-    data_type(type_to_id<size_type>()), n_elements, cudf::mask_state::UNALLOCATED, stream);
-  auto const labels_begin = labels->mutable_view().template begin<size_type>();
-  cudf::detail::label_segments(
-    input.offsets_begin(), input.offsets_end(), labels_begin, labels_begin + n_elements, stream);
-  return labels;
-}
-
-/**
- * @brief Reconstruct an offsets column from the input labels array.
- *
- * @param labels The list labels corresponding to each input list elements
- * @param n_lists The number of lists in the input lists column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned object
- * @return The output offsets column
- */
-std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
-                                            size_type n_lists,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
-
-{
-  auto out_offsets = make_numeric_column(
-    data_type{type_to_id<offset_type>()}, n_lists + 1, mask_state::UNALLOCATED, stream, mr);
-
-  auto const labels_begin  = labels.template begin<size_type>();
-  auto const offsets_begin = out_offsets->mutable_view().template begin<size_type>();
-  cudf::detail::labels_to_offsets(labels_begin,
-                                  labels_begin + labels.size(),
-                                  offsets_begin,
-                                  offsets_begin + out_offsets->size(),
-                                  stream);
-  return out_offsets;
 }
 
 }  // namespace
