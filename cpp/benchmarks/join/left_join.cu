@@ -17,6 +17,7 @@
 #include <benchmarks/join/join_common.hpp>
 
 // Run each benchmark for at least `benchmark_min_time` seconds.
+// By increasing run time, average running time for each test will be measured more accurately.
 auto constexpr benchmark_min_time{5};
 
 template <typename key_type, typename payload_type>

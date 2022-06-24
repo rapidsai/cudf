@@ -111,6 +111,8 @@ static void BM_join(state_type& state, Join JoinFunc)
     selectivity,
     multiplicity);
 
+  // Copy build_key_column0 and probe_key_column0 into new columns.
+  // If Nullable, the new columns will be assigned new nullmasks.
   auto const build_key_column1 = [&]() {
     auto col = std::make_unique<cudf::column>(build_key_column0->view());
     if (Nullable) { col->set_null_mask(build_random_null_mask(build_table_size)); }
