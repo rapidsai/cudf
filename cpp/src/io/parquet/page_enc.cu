@@ -1302,11 +1302,45 @@ class header_encoder {
 static __device__ void swap128(__int128_t v, void* dst)
 {
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
-  auto d_char_ptr = reinterpret_cast<unsigned char *>(dst);
+  auto d_char_ptr       = reinterpret_cast<unsigned char*>(dst);
   thrust::copy(thrust::seq,
                thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
                thrust::make_reverse_iterator(v_char_ptr),
                d_char_ptr);
+}
+
+static __device__ bool increment_utf8_at(uint8_t* ptr)
+{
+  uint8_t elem = *ptr;
+  // elem is one of:
+  //  0b0vvvvvvv 1 byte
+  //  0b10vvvvvv continuation
+  //  0b110vvvvv 2 byte
+  //  0b1110vvvv 3 byte
+  //  0b11110vvv 4 byte
+  //  0b111110vv 5 byte
+  //  0b1111110v 6 byte
+
+  uint8_t mask  = 0xFE;
+  uint8_t valid = 0xFC;
+
+  do {
+    if ((elem & mask) == valid) {
+      elem++;
+      if ((elem & mask) != mask) {  // no overflow
+        *ptr = elem;
+        return true;
+      } else {
+        *ptr = valid;
+        return false;
+      }
+    }
+    mask <<= 1;
+    valid <<= 1;
+  } while (mask > 0);
+
+  // was not a valid utf-8 character, leave it alone
+  return false;
 }
 
 __device__ uint32_t truncate_string(const string_view& str,
@@ -1325,19 +1359,28 @@ __device__ uint32_t truncate_string(const string_view& str,
   // otherwise, just truncate, and increment last byte if max.
   // in either case, min can just return the appropriate length
   // and the original buffer.
+  // TODO if it's ascii, do we care if we wind up w/ 0x80 in the stats?
   if (str.is_valid_utf8() && str.size_bytes() != str.length()) {
     // truncate utf8
     uint32_t len = column_index_truncate_length;
+    // find number of utf chars in truncated buffer. last char might not be complete
     auto num_chars = strings::detail::characters_in_string(str.data(), len);
-    len = str.byte_offset(num_chars-1);
+    // len now points to the begining of the last char, so we'll start working
+    // backwards from there.
+    len = str.byte_offset(num_chars - 1);
     if (is_min) {
       *res = str.data();
       return len;
     } else {
-      //FIXME not correct
       memcpy(scratch, str.data(), len);
-      *res = scratch;
-      return len;
+      *res         = scratch;
+      uint8_t* ptr = reinterpret_cast<uint8_t*>(scratch);
+      for (int32_t i = len - 1; i >= 0; i--) {
+        if (increment_utf8_at(&ptr[i])) {  // true if didn't overflow
+          return len;
+        }
+      }
+      // cannot increment, so fall through
     }
   } else {
     // truncate binary
@@ -1346,10 +1389,18 @@ __device__ uint32_t truncate_string(const string_view& str,
       *res = str.data();
       return len;
     } else {
-      //FIXME not correct
       memcpy(scratch, str.data(), len);
-      *res = scratch;
-      return len;
+      uint8_t* ptr = reinterpret_cast<uint8_t*>(scratch);
+      for (int32_t i = len - 1; i >= 0; i--) {
+        uint8_t elem = ptr[i];
+        elem++;
+        ptr[i] = elem;
+        if (elem != 0) {  // no overflow
+          *res = scratch;
+          return i + 1;
+        }
+      }
+      // cannot increment, so fall through
     }
   }
 
