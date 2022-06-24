@@ -1308,10 +1308,37 @@ static __device__ void swap128(__int128_t v, unsigned char* dst)
                dst);
 }
 
+__device__ uint32_t truncate_string(const string_view& str,
+                                    const void** res,
+                                    bool is_min,
+                                    void* scratch,
+                                    size_type column_index_truncate_length)
+{
+  if (str.size_bytes() <= column_index_truncate_length) {
+    *res = str.data();
+    return str.size_bytes();
+  }
+
+  // if utf8 and not solely 8 bit then need to truncate to pos of
+  // last symbol, and increment that if max.
+  // otherwise, just truncate, and increment last byte if max.
+  // in either case, min can just return the appropriate length
+  // and the original buffer.
+  if (str.is_valid_utf8() && str.size_bytes() != str.length()) {
+    // truncate utf8
+  } else {
+    // truncate binary
+  }
+
+  // couldn't truncate, return original value
+  *res = str.data();
+  return str.size_bytes();
+}
+
 __device__ void get_extremum(const statistics_chunk* s,
                              uint8_t dtype,
                              bool is_min,
-                             unsigned char* scratch,
+                             void* scratch,
                              const void** val,
                              uint32_t* len,
                              size_type column_index_truncate_length)
@@ -1334,18 +1361,9 @@ __device__ void get_extremum(const statistics_chunk* s,
   }
 
   if (s->has_minmax) {
-    statistics_val& stats_val = is_min ? s->min_value : s->maxx_value;
+    const statistics_val& stats_val = is_min ? s->min_value : s->max_value;
     if (dtype == dtype_string) {
-      // TODO truncate max
-      // check for utf8.  if not, then truncate and increment last byte (checking for overflow)
-      // if utf8, then need to truncate to pos of last symbol, and increment that.
-      // but if str is all 1 byte vals, can use the non-utf version
-      string_view str = stats_val.str_val;
-      if (str.is_valid_utf8() && str.size_bytes() != str.length()) {
-        // truncate utf8
-      } else {
-        // truncate binary
-      }
+      *len = truncate_string(stats_val.str_val, val, is_min, scratch, column_index_truncate_length);
     } else {
       *len = dtype_len;
       if (dtype == dtype_float32) {  // Convert from double to float32
@@ -1353,8 +1371,8 @@ __device__ void get_extremum(const statistics_chunk* s,
         fp_scratch[0]     = stats_val.fp_val;
         *val              = &fp_scratch[0];
       } else if (dtype == dtype_decimal128) {
-        swap128(stats_val.d128_val, &scratch[0]);
-        *val = &scratch[0];
+        swap128(stats_val.d128_val, reinterpret_cast<unsigned char*>(scratch));
+        *val = scratch;
       } else {
         *val = &stats_val.i_val;
       }
@@ -1630,6 +1648,16 @@ static __device__ int32_t calculateBoundaryOrder(const statistics_chunk* s,
     return BoundaryOrder::UNORDERED;
 }
 
+static __device__ void* align8(void* ptr)
+{
+  uint64_t p = reinterpret_cast<uint64_t>(ptr);
+  // it's ok to round down because we have an extra 8 bytes
+  // in the buffer
+  p >>= 3;
+  p <<= 3;
+  return reinterpret_cast<void*>(p);
+}
+
 // blockDim(1, 1, 1)
 __global__ void __launch_bounds__(1)
   gpuEncodeColumnIndexes(device_span<EncColumnChunk> chunks,
@@ -1639,17 +1667,19 @@ __global__ void __launch_bounds__(1)
   const void *vmin, *vmax;
   uint32_t lmin, lmax;
   uint8_t* col_idx_end;
-  unsigned char scratch[16];
+  void* scratch;
 
   if (column_stats.empty()) return;
 
-  EncColumnChunk ck_g              = chunks[blockIdx.x];
+  EncColumnChunk& ck_g             = chunks[blockIdx.x];
   uint32_t num_pages               = ck_g.num_pages;
   parquet_column_device_view col_g = *ck_g.col_desc;
   size_t first_data_page           = ck_g.use_dictionary ? 1 : 0;
   uint32_t pageidx                 = ck_g.first_page;
 
   header_encoder encoder(ck_g.column_index_blob);
+  // make sure scratch is aligned properly
+  scratch = align8(ck_g.column_index_blob + ck_g.column_index_size - column_index_truncate_length);
 
   // null_pages
   encoder.field_list_begin(1, num_pages - first_data_page, ST_FLD_TRUE);
@@ -1660,12 +1690,12 @@ __global__ void __launch_bounds__(1)
   encoder.field_list_begin(2, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     get_extremum(&column_stats[pageidx + page],
-            col_g.stats_dtype,
-            true,
-            scratch,
-            &vmin,
-            &lmin,
-            column_index_truncate_length);
+                 col_g.stats_dtype,
+                 true,
+                 scratch,
+                 &vmin,
+                 &lmin,
+                 column_index_truncate_length);
     encoder.put_binary(vmin, lmin);
   }
   encoder.field_list_end(2);
@@ -1673,12 +1703,12 @@ __global__ void __launch_bounds__(1)
   encoder.field_list_begin(3, num_pages - first_data_page, ST_FLD_BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     get_extremum(&column_stats[pageidx + page],
-            col_g.stats_dtype,
-            false,
-            scratch,
-            &vmax,
-            &lmax,
-            column_index_truncate_length);
+                 col_g.stats_dtype,
+                 false,
+                 scratch,
+                 &vmax,
+                 &lmax,
+                 column_index_truncate_length);
     encoder.put_binary(vmax, lmax);
   }
   encoder.field_list_end(3);
@@ -1695,7 +1725,7 @@ __global__ void __launch_bounds__(1)
   encoder.field_list_end(5);
   encoder.end(&col_idx_end, false);
 
-  chunks[blockIdx.x].column_index_size = (uint32_t)(col_idx_end - ck_g.column_index_blob);
+  ck_g.column_index_size = (uint32_t)(col_idx_end - ck_g.column_index_blob);
 }
 
 /**

@@ -204,6 +204,14 @@ class writer::impl {
                     const statistics_chunk* chunk_stats,
                     const statistics_chunk* column_stats);
 
+  /**
+   * @brief Function to calculate the memory needed to encode the column index of the given
+   * column chunk
+   *
+   * @param chunk pointer to column chunk
+   */
+  size_t column_index_buffer_size(gpu::EncColumnChunk* chunk) const;
+
  private:
   // TODO : figure out if we want to keep this. It is currently unused.
   rmm::mr::device_memory_resource* _mr = nullptr;

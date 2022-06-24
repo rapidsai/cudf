@@ -82,18 +82,6 @@ parquet::Compression to_parquet_compression(compression_type compression)
   }
 }
 
-/**
- * @brief Function to calculate the memory needed to encode the column index of the given
- * column chunk
- */
-size_t column_index_buffer_size(gpu::EncColumnChunk* ck)
-{
-  // fixed 26 bytes + (sizeof(bool)+sizeof(int64)+2*max_statsize)*num_pages_in_chunk
-  // ck_stat_size is a good proxy for how much memory is needed for the min/max values
-  // calculating this per-chunk because the sizes can be wildly different
-  return 26 + (ck->ck_stat_size + 9) * ck->num_pages;
-}
-
 }  // namespace
 
 struct aggregate_writer_metadata {
@@ -1150,6 +1138,16 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   stream.synchronize();
 }
 
+size_t writer::impl::column_index_buffer_size(gpu::EncColumnChunk* ck) const
+{
+  // fixed 26 bytes + (sizeof(bool)+sizeof(int64)+2*max_statsize)*num_pages_in_chunk.
+  // ck_stat_size is a good proxy for how much memory is needed for the min/max values.
+  // add on some extra padding at the end (plus extra for alignment) for scratch space
+  // to do stats truncation.
+  // calculating this per-chunk because the sizes can be wildly different.
+  return 26 + (ck->ck_stat_size + 9) * ck->num_pages + column_index_truncate_length + 8;
+}
+
 writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,
                    SingleWriteMode mode,
@@ -1533,9 +1531,10 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         ck.uncompressed_bfr     = bfr;
         ck.compressed_bfr       = bfr_c;
         ck.column_index_blob    = bfr_i;
+        ck.column_index_size    = column_index_buffer_size(&ck);
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
-        bfr_i += column_index_buffer_size(&ck);
+        bfr_i += ck.column_index_size;
       }
     }
   }
