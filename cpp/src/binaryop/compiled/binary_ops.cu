@@ -394,10 +394,10 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT,
-  "Both columns must be struct columns");
+               "Both columns must be struct columns");
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(lhs) and
-  !cudf::structs::detail::is_or_has_nested_lists(rhs),
-  "Lists not supported");
+                 !cudf::structs::detail::is_or_has_nested_lists(rhs),
+               "Lists not supported");
   // Struct child column type and structure mismatches are caught within the two_table_comparator
   // clang-format off
 switch (op) {
