@@ -1137,7 +1137,8 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   if (column_stats != nullptr) {
     auto batch_column_stats =
       device_span<statistics_chunk const>(column_stats + first_page_in_batch, pages_in_batch);
-    EncodeColumnIndexes(d_chunks_in_batch.flat_view(), batch_column_stats, stream);
+    EncodeColumnIndexes(
+      d_chunks_in_batch.flat_view(), batch_column_stats, column_index_truncate_length, stream);
   }
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
