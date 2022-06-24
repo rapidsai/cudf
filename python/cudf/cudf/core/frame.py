@@ -1158,9 +1158,7 @@ class Frame(BinaryOperand, Scannable):
             if name in set(column_names)
         ]
 
-    def _copy_type_metadata(
-        self, other: Frame, include_index: bool = True
-    ) -> Frame:
+    def _copy_type_metadata(self, other: Frame) -> Frame:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.

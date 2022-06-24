@@ -895,7 +895,7 @@ class IndexedFrame(Frame):
         column of `self`.
         See `ColumnBase._with_type_metadata` for more information.
         """
-        super()._copy_type_metadata(other, include_index)
+        super()._copy_type_metadata(other)
 
         if include_index:
             if self._index is not None and other._index is not None:
