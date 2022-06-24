@@ -596,9 +596,7 @@ def test_concat_empty_dataframes(df, other, ignore_index):
                 actual[key] = col.fillna(-1)
         assert_eq(expected, actual, check_dtype=False, check_index_type=True)
     else:
-        assert_eq(
-            expected, actual, check_index_type=False if gdf.empty else True
-        )
+        assert_eq(expected, actual, check_index_type=not gdf.empty)
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -1113,7 +1111,7 @@ def test_concat_join_series(ignore_index, sort, join, axis):
     assert_eq(
         expected,
         actual,
-        check_index_type=False if axis == 1 and join == "outer" else True,
+        check_index_type=not (axis == 1 and join == "outer"),
     )
 
 
