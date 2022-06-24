@@ -145,24 +145,15 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     // - https://github.com/rapidsai/cudf/pull/8277
     if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
       // Gather all nullable columns at all levels from the right table.
-      auto const nullable_columns = accumulate_nullable_columns{haystack}.release();
-      CUDF_EXPECTS(nullable_columns.size() > 0,
-                   "The haystack table has nulls but cannot collect any nullable column.");
-
-      // If there is just a single nullable column, just use the column nullmask directly
-      // to avoid launching a kernel for `bitmask_and`.
-      auto const buff = [&] {
-        if (nullable_columns.size() == 1) { return rmm::device_buffer{0, stream}; }
-        return std::move(cudf::detail::bitmask_and(table_view{nullable_columns}, stream).first);
-      }();
-      auto const row_bitmask = buff.size() > 0 ? static_cast<bitmask_type const*>(buff.data())
-                                               : nullable_columns.front().null_mask();
+      auto const haystack_nullable_columns = accumulate_nullable_columns{haystack}.release();
+      auto const row_bitmask =
+        std::move(cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream).first);
 
       // Insert only rows that do not have any nulls at any level.
       map.insert_if(haystack_it,
                     haystack_it + haystack.num_rows(),
                     thrust::counting_iterator<size_type>(0),  // stencil
-                    row_is_valid{row_bitmask},                // pred
+                    row_is_valid{static_cast<bitmask_type const*>(row_bitmask.data())},
                     stream.value());
     } else {
       map.insert(haystack_it, haystack_it + haystack.num_rows(), stream.value());
