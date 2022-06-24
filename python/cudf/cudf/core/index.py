@@ -892,21 +892,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             return ret.values
         return ret
 
-    @_cudf_nvtx_annotate
-    def _copy_type_metadata(self, other: Frame) -> GenericIndex:
-        """
-        Copy type metadata from each column of `other` to the corresponding
-        column of `self`.
-        See `ColumnBase._with_type_metadata` for more information.
-        """
-        for name, col, other_col in zip(
-            self._data.keys(), self._data.values(), other._data.values()
-        ):
-            self._data.set_by_label(
-                name, col._with_type_metadata(other_col.dtype), validate=False
-            )
-        return self
-
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def _values(self):
