@@ -221,7 +221,7 @@ namespace binops {
 rmm::device_buffer scalar_col_valid_mask_and(
   column_view const& col,
   scalar const& s,
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 namespace compiled {
 
@@ -236,18 +236,20 @@ namespace compiled {
  */
 std::pair<column_view, std::unique_ptr<column>> scalar_to_column_view(
   scalar const& scal,
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+namespace detail {
 /**
- * @brief 
- * 
- * @param out 
- * @param lhs 
- * @param rhs 
- * @param is_lhs_scalar 
- * @param is_rhs_scalar 
- * @param stream 
+ * @brief struct binary operation using `NaN` aware sorting physical element comparators
+ *
+ * @param out mutable view of output column
+ * @param lhs view of left operand column
+ * @param rhs view of right operand column
+ * @param is_lhs_scalar true if @p lhs is a single element column representing a scalar
+ * @param is_rhs_scalar true if @p rhs is a single element column representing a scalar
+ * @param op binary operator identifier
+ * @param stream CUDA stream used for device memory operations
  */
 void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     column_view const& lhs,
@@ -256,6 +258,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                                     bool is_rhs_scalar,
                                     binary_operator op,
                                     rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+}  // namespace detail
 }  // namespace compiled
 }  // namespace binops
 

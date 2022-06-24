@@ -193,7 +193,6 @@ ConfigureTest(
   binaryop/binop-compiled-test.cpp
   binaryop/binop-compiled-fixed_point-test.cpp
   binaryop/binop-generic-ptx-test.cpp
-  binaryop/binop-struct-test.cpp
 )
 
 # ##################################################################################################

@@ -15,12 +15,16 @@
  */
 
 #include <cudf/binaryop.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
+#include <cudf/types.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
+
+using cudf::jni::release_as_jlong;
 
 extern "C" {
 
@@ -496,10 +500,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclas
     cudf::scalar *lhs = reinterpret_cast<cudf::scalar *>(lhs_ptr);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
     cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
-
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
-    std::unique_ptr<cudf::column> result = cudf::binary_operation(*lhs, *rhs, op, n_data_type);
-    return reinterpret_cast<jlong>(result.release());
+
+    if ((lhs->type().id() == cudf::type_id::STRUCT)) {
+      auto new_mask = cudf::binops::scalar_col_valid_mask_and(*rhs, *lhs, rmm::cuda_stream_default);
+      auto out = make_fixed_width_column(n_data_type, rhs->size(), std::move(new_mask),
+                                         cudf::UNKNOWN_NULL_COUNT, rmm::cuda_stream_default);
+      auto [lhsv, aux] =
+          cudf::binops::compiled::scalar_to_column_view(*lhs, rmm::cuda_stream_default);
+      auto out_view = out->mutable_view();
+      cudf::binops::compiled::detail::apply_sorting_struct_binary_op(
+          out_view, lhsv, *rhs, true, false, op, rmm::cuda_stream_default);
+      return release_as_jlong(out);
+    }
+
+    return release_as_jlong(cudf::binary_operation(*lhs, *rhs, op, n_data_type));
   }
   CATCH_STD(env, 0);
 }
