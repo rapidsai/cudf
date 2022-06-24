@@ -217,6 +217,7 @@ class writer::impl {
   Compression compression_           = Compression::UNCOMPRESSED;
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
   bool int96_timestamps              = false;
+  size_type column_index_truncate_length = default_column_index_truncate_length;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   std::unique_ptr<aggregate_writer_metadata> md;
   // File footer key-value metadata. Written during write_chunked_end()
