@@ -1299,13 +1299,14 @@ class header_encoder {
 };
 
 // byteswap 128 bit integer into char array in network byte order
-static __device__ void swap128(__int128_t v, unsigned char* dst)
+static __device__ void swap128(__int128_t v, void* dst)
 {
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
+  auto d_char_ptr = reinterpret_cast<unsigned char *>(dst);
   thrust::copy(thrust::seq,
                thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
                thrust::make_reverse_iterator(v_char_ptr),
-               dst);
+               d_char_ptr);
 }
 
 __device__ uint32_t truncate_string(const string_view& str,
@@ -1371,7 +1372,7 @@ __device__ void get_extremum(const statistics_chunk* s,
         fp_scratch[0]     = stats_val.fp_val;
         *val              = &fp_scratch[0];
       } else if (dtype == dtype_decimal128) {
-        swap128(stats_val.d128_val, reinterpret_cast<unsigned char*>(scratch));
+        swap128(stats_val.d128_val, scratch);
         *val = scratch;
       } else {
         *val = &stats_val.i_val;
@@ -1396,6 +1397,7 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
     uint32_t lmin, lmax;
 
     // TODO replace INT_MAX with truncation param for statistics
+    // will also need scratch big enough to fit truncated min/max
     get_extremum(s, dtype, false, scratch, &vmax, &lmax, INT_MAX);
     encoder.field_binary(5, vmax, lmax);
     get_extremum(s, dtype, true, scratch, &vmin, &lmin, INT_MAX);
