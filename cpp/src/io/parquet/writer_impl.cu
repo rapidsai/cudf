@@ -861,7 +861,7 @@ auto init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                      size_type max_page_size_rows,
                      rmm::cuda_stream_view stream)
 {
-  if (chunks.host_view().flat_view().size() == 0) { return hostdevice_vector<size_type>{}; }
+  if (chunks.is_empty()) { return hostdevice_vector<size_type>{}; }
 
   chunks.host_to_device(stream);
   // Calculate number of pages and store in respective chunks
