@@ -29,12 +29,13 @@ export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
+unset GIT_DESCRIBE_TAG
 
 # Dask & Distributed option to install main(nightly) or `conda-forge` packages.
 export INSTALL_DASK_MAIN=1
 
 # ucx-py version
-export UCX_PY_VERSION='0.26.*'
+export UCX_PY_VERSION='0.27.*'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -79,29 +80,8 @@ conda info
 conda config --show-sources
 conda list --show-channel-urls
 
-gpuci_logger "Install dependencies"
-gpuci_mamba_retry install -y \
-                  "cudatoolkit=$CUDA_REL" \
-                  "rapids-build-env=$MINOR_VERSION.*" \
-                  "rapids-notebook-env=$MINOR_VERSION.*" \
-                  "dask-cuda=${MINOR_VERSION}" \
-                  "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=${UCX_PY_VERSION}"
-
-# https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-# gpuci_mamba_retry install -y "your-pkg=1.0.0"
-
-
 gpuci_logger "Check compiler versions"
 python --version
-$CC --version
-$CXX --version
-
-gpuci_logger "Check conda environment"
-conda info
-conda config --show-sources
-conda list --show-channel-urls
 
 function install_dask {
     # Install the conda-forge or nightly version of dask and distributed
@@ -112,8 +92,8 @@ function install_dask {
         gpuci_mamba_retry update dask
         conda list
     else
-        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.03.0 conda-forge::distributed>=2022.03.0 conda-forge::dask-core>=2022.03.0 --force-reinstall"
-        gpuci_mamba_retry install conda-forge::dask>=2022.03.0 conda-forge::distributed>=2022.03.0 conda-forge::dask-core>=2022.03.0 --force-reinstall
+        gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall"
+        gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall
     fi
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
@@ -124,6 +104,19 @@ function install_dask {
 }
 
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
+
+    gpuci_logger "Install dependencies"
+    gpuci_mamba_retry install -y \
+                  "cudatoolkit=$CUDA_REL" \
+                  "rapids-build-env=$MINOR_VERSION.*" \
+                  "rapids-notebook-env=$MINOR_VERSION.*" \
+                  "dask-cuda=${MINOR_VERSION}" \
+                  "rmm=$MINOR_VERSION.*" \
+                  "ucx-py=${UCX_PY_VERSION}"
+
+    # https://docs.rapids.ai/maintainers/depmgmt/
+    # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
+    # gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
     install_dask
 
@@ -171,7 +164,20 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
+    gpuci_logger "Installing libcudf, libcudf_kafka and libcudf-tests"
     gpuci_mamba_retry install -y -c ${CONDA_ARTIFACT_PATH} libcudf libcudf_kafka libcudf-tests
+
+    # TODO: Move boa install to gpuci/rapidsai
+    gpuci_mamba_retry install boa
+    gpuci_logger "Building cudf, dask-cudf, cudf_kafka and custreamz"
+    export CONDA_BLD_DIR="$WORKSPACE/.conda-bld"
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/dask-cudf --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/cudf_kafka --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+    gpuci_conda_retry mambabuild --croot ${CONDA_BLD_DIR} conda/recipes/custreamz --python=$PYTHON -c ${CONDA_ARTIFACT_PATH}
+
+    gpuci_logger "Installing cudf, dask-cudf, cudf_kafka and custreamz"
+    gpuci_mamba_retry install cudf dask-cudf cudf_kafka custreamz -c "${CONDA_BLD_DIR}" -c "${CONDA_ARTIFACT_PATH}"
 
     gpuci_logger "GoogleTests"
     # Run libcudf and libcudf_kafka gtests from libcudf-tests package
@@ -209,12 +215,6 @@ else
             # test-results/*.cs.log are processed in gpuci
         fi
     fi
-
-    install_dask
-
-    gpuci_logger "Build python libs from source"
-    "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka --ptds
-
 fi
 
 # Both regular and Project Flash proceed here

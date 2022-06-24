@@ -42,7 +42,7 @@ def _align_objs(objs, how="outer", sort=None):
 
     if not_matching_index:
         if not all(o.index.is_unique for o in objs):
-            raise ValueError("cannot reindex from a duplicate axis")
+            raise ValueError("cannot reindex on an axis with duplicate labels")
 
         index = objs[0].index
         name = index.name
@@ -757,7 +757,7 @@ def get_dummies(
         return cudf.DataFrame._from_data(data, index=ser._index)
 
 
-def merge_sorted(
+def _merge_sorted(
     objs,
     keys=None,
     by_index=False,
@@ -783,14 +783,13 @@ def merge_sorted(
         be used in the output dataframe.
     ascending : bool, default True
         Sorting is in ascending order, otherwise it is descending
-    na_position : {‘first’, ‘last’}, default ‘last’
+    na_position : {'first', 'last'}, default 'last'
         'first' nulls at the beginning, 'last' nulls at the end
 
     Returns
     -------
     A new, lexicographically sorted, DataFrame/Series.
     """
-
     if not pd.api.types.is_list_like(objs):
         raise TypeError("objs must be a list-like of Frame-like objects")
 

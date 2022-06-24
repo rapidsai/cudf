@@ -19,6 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 namespace nvtext {
 
@@ -35,19 +36,43 @@ namespace nvtext {
  */
 struct bpe_merge_pairs {
   struct bpe_merge_pairs_impl;
-  std::unique_ptr<bpe_merge_pairs_impl> impl{};
+  std::unique_ptr<bpe_merge_pairs_impl> impl{};  ///< Implementation of the BPE merge pairs table.
 
+  /**
+   * @brief Construct a new bpe merge pairs object
+   *
+   * @param input The input file containing the BPE merge pairs
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the device memory
+   */
   bpe_merge_pairs(std::unique_ptr<cudf::column>&& input,
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::cuda_stream_view stream        = cudf::default_stream_value,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+  /**
+   * @brief Construct a new bpe merge pairs object
+   *
+   * @param input The input column of strings
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the device memory
+   */
   bpe_merge_pairs(cudf::strings_column_view const& input,
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::cuda_stream_view stream        = cudf::default_stream_value,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   ~bpe_merge_pairs();
 
+  /**
+   * @brief Returns the number of merge pairs in the table.
+   *
+   * @return The number of merge pairs in the table
+   */
   cudf::size_type get_size();
+  /**
+   * @brief  Returns the number of unique merge pairs in the table.
+   *
+   * @return The number of unique merge pairs in the table
+   */
   std::size_t get_map_size();
 };
 
@@ -80,6 +105,7 @@ struct bpe_merge_pairs {
  *
  * @param filename_merges Local file path of pairs encoded in UTF-8.
  * @param mr Memory resource to allocate any returned objects.
+ * @return A nvtext::bpe_merge_pairs object
  */
 std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(
   std::string const& filename_merges,
@@ -107,10 +133,11 @@ std::unique_ptr<bpe_merge_pairs> load_merge_pairs_file(
  * @throw cudf::logic_error if `separator` is invalid
  *
  * @param input Strings to encode.
- * @param merge_pairs Created by a call to @ref nvtext::load_merge_pairs_file.
+ * @param merges_pairs Created by a call to @ref nvtext::load_merge_pairs_file.
  * @param separator String used to build the output after encoding.
  *                  Default is a space.
  * @param mr Memory resource to allocate any returned objects.
+ * @return An encoded column of strings.
  */
 std::unique_ptr<cudf::column> byte_pair_encoding(
   cudf::strings_column_view const& input,

@@ -65,7 +65,6 @@ namespace hash {
 template <typename Map>
 struct compute_single_pass_aggs_fn {
   Map map;
-  size_type num_keys;
   table_device_view input_values;
   mutable_table_device_view output_values;
   aggregation::Kind const* __restrict__ aggs;
@@ -76,7 +75,6 @@ struct compute_single_pass_aggs_fn {
    * @brief Construct a new compute_single_pass_aggs_fn functor object
    *
    * @param map Hash map object to insert key,value pairs into.
-   * @param num_keys The number of rows in input keys table
    * @param input_values The table whose rows will be aggregated in the values
    * of the hash map
    * @param output_values Table that stores the results of aggregating rows of
@@ -90,14 +88,12 @@ struct compute_single_pass_aggs_fn {
    * bitmask where bit `i` indicates the presence of a null value in row `i`.
    */
   compute_single_pass_aggs_fn(Map map,
-                              size_type num_keys,
                               table_device_view input_values,
                               mutable_table_device_view output_values,
                               aggregation::Kind const* aggs,
                               bitmask_type const* row_bitmask,
                               bool skip_rows_with_nulls)
     : map(map),
-      num_keys(num_keys),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),

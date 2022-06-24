@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -217,7 +218,7 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
  */
 std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
   column_view const& parent,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -243,8 +244,22 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
  */
 std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
   table_view const& table,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Checks if a column or any of its children is a struct column with structs that are null.
+ *
+ * This function searches for structs that are null -- differentiating between structs that are null
+ * and structs containing null values. Null structs add a column to the result of the flatten column
+ * utility and necessitates column_nullability::FORCE when flattening the column for comparison
+ * operations.
+ *
+ * @param col Column to check for null structs
+ * @return A boolean indicating if the column is or contains a struct column that contains a null
+ * struct.
+ */
+bool contains_null_structs(column_view const& col);
 }  // namespace detail
 }  // namespace structs
 }  // namespace cudf

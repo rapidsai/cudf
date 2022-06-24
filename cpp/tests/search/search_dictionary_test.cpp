@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,7 +88,7 @@ TEST_F(DictionarySearchTest, contains_dictionary)
   EXPECT_FALSE(cudf::contains(column, string_scalar{"28"}));
 
   cudf::test::dictionary_column_wrapper<std::string> needles({"00", "17", "23", "27"});
-  fixed_width_column_wrapper<bool> expect{1, 1, 1, 1, 1, 1, 0};
+  fixed_width_column_wrapper<bool> expect{1, 1, 1, 0};
   auto result = cudf::contains(column, needles);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
@@ -101,7 +101,7 @@ TEST_F(DictionarySearchTest, contains_nullable_dictionary)
   EXPECT_FALSE(cudf::contains(column, numeric_scalar<int64_t>{28}));
 
   cudf::test::dictionary_column_wrapper<int64_t> needles({0, 17, 23, 27});
-  fixed_width_column_wrapper<bool> expect({1, 0, 1, 1, 1, 1, 0}, {1, 0, 1, 1, 1, 1, 1});
+  fixed_width_column_wrapper<bool> expect{1, 1, 1, 0};
   auto result = cudf::contains(column, needles);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }

@@ -21,8 +21,8 @@
 #include <cudf/copying.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -40,7 +40,7 @@ class ScatterLists : public cudf::benchmark {
 template <class TypeParam, bool coalesce>
 void BM_lists_scatter(::benchmark::State& state)
 {
-  auto stream = rmm::cuda_stream_default;
+  auto stream = cudf::default_stream_value;
   auto mr     = rmm::mr::get_current_device_resource();
 
   const size_type base_size{(size_type)state.range(0)};

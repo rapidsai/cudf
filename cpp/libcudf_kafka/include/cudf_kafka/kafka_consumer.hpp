@@ -141,6 +141,7 @@ class kafka_consumer : public cudf::io::datasource {
    * @param[in] cached If True uses the last retrieved value from the Kafka broker, if False
    *            the latest value will be retrieved from the Kafka broker by making a network
    *            request.
+   * @return The watermark offset value for the specified topic/partition
    */
   std::map<std::string, int64_t> get_watermark_offset(std::string const& topic,
                                                       int partition,
@@ -179,6 +180,7 @@ class kafka_consumer : public cudf::io::datasource {
    * @brief Close the underlying socket connection to Kafka and clean up system resources
    *
    * @throws cudf::logic_error on failure to close the connection
+   * @param timeout Max milliseconds to wait on a response
    */
   void close(int timeout);
 

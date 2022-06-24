@@ -157,6 +157,18 @@ TEST_F(StringsReplaceRegexTest, WordBoundary)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
+TEST_F(StringsReplaceRegexTest, ZeroLengthMatch)
+{
+  cudf::test::strings_column_wrapper input({"DD", "zéz", "DsDs", ""});
+  auto repl     = cudf::string_scalar("_");
+  auto results  = cudf::strings::replace_re(cudf::strings_column_view(input), "D*", repl);
+  auto expected = cudf::test::strings_column_wrapper({"__", "_z_é_z_", "__s__s_", "_"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results  = cudf::strings::replace_re(cudf::strings_column_view(input), "D?s?", repl);
+  expected = cudf::test::strings_column_wrapper({"___", "_z_é_z_", "___", "_"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
 TEST_F(StringsReplaceRegexTest, Multiline)
 {
   auto const multiline = cudf::strings::regex_flags::MULTILINE;

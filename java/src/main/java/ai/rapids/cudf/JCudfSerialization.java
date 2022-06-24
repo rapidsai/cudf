@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ public class JCudfSerialization {
     }
 
     /** Constructor for a row-count only table (no columns) */
-    SerializedTableHeader(int numRows) {
+    public SerializedTableHeader(int numRows) {
       this(new SerializedColumnHeader[0], numRows, 0);
     }
 

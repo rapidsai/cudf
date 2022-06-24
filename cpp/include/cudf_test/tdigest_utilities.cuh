@@ -20,6 +20,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/tdigest/tdigest_column_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -42,16 +43,34 @@ namespace test {
 
 using expected_value = thrust::tuple<size_type, double, double>;
 
+/**
+ * @brief Device functor to compute min of a sequence of values serially.
+ */
 template <typename T>
 struct column_min {
+  /**
+   * @brief Computes the min of a sequence of values serially.
+   *
+   * @param vals The sequence of values to compute the min of
+   * @return The min value
+   */
   __device__ double operator()(device_span<T const> vals)
   {
     return static_cast<double>(*thrust::min_element(thrust::seq, vals.begin(), vals.end()));
   }
 };
 
+/**
+ * @brief Device functor to compute max of a sequence of values serially.
+ */
 template <typename T>
 struct column_max {
+  /**
+   * @brief Computes the max of a sequence of values serially.
+   *
+   * @param vals The sequence of values to compute the max of
+   * @return The max value
+   */
   __device__ double operator()(device_span<T const> vals)
   {
     return static_cast<double>(*thrust::max_element(thrust::seq, vals.begin(), vals.end()));
@@ -62,6 +81,7 @@ struct column_max {
  * @brief Functor to generate a tdigest.
  */
 struct tdigest_gen {
+  // @cond
   template <
     typename T,
     typename Func,
@@ -79,6 +99,7 @@ struct tdigest_gen {
   {
     CUDF_FAIL("Invalid tdigest test type");
   }
+  // @endcond
 };
 
 /**
@@ -101,7 +122,7 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
 
   auto expected_min = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, spans.size(), mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(rmm::cuda_stream_default),
+  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                     spans.begin(),
                     spans.end(),
                     expected_min->mutable_view().template begin<double>(),
@@ -111,7 +132,7 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
 
   auto expected_max = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, spans.size(), mask_state::UNALLOCATED);
-  thrust::transform(rmm::exec_policy(rmm::cuda_stream_default),
+  thrust::transform(rmm::exec_policy(cudf::default_stream_value),
                     spans.begin(),
                     spans.end(),
                     expected_max->mutable_view().template begin<double>(),
@@ -120,10 +141,13 @@ void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_max, *expected_max);
 }
 
+/// Expected values for tdigest tests
 struct expected_tdigest {
+  // @cond
   column_view mean;
   column_view weight;
   double min, max;
+  // @endcond
 };
 
 /**
@@ -436,7 +460,7 @@ void tdigest_merge_simple(Func op, MergeFunc merge_op)
 
   int const delta = 1000;
 
-  // generate seperate digests
+  // generate separate digests
   std::vector<std::unique_ptr<column>> parts;
   auto iter = thrust::make_counting_iterator(0);
   std::transform(

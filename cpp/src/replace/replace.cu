@@ -48,6 +48,7 @@
 #include <cudf/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -530,6 +531,6 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
                                                    rmm::mr::device_memory_resource* mr)
 {
   return cudf::detail::find_and_replace_all(
-    input_col, values_to_replace, replacement_values, rmm::cuda_stream_default, mr);
+    input_col, values_to_replace, replacement_values, cudf::default_stream_value, mr);
 }
 }  // namespace cudf

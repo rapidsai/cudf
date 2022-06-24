@@ -194,17 +194,11 @@ ConfigureBench(FILL_BENCH filling/repeat.cpp)
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(
-  GROUPBY_BENCH
-  groupby/group_sum.cu
-  groupby/group_nth.cu
-  groupby/group_shift.cu
-  groupby/group_struct.cu
-  groupby/group_no_requests.cu
-  groupby/group_scan.cu
-  groupby/group_rank_benchmark.cu
+  GROUPBY_BENCH groupby/group_sum.cpp groupby/group_nth.cpp groupby/group_shift.cpp
+  groupby/group_struct_values.cpp groupby/group_no_requests.cpp groupby/group_scan.cpp
 )
 
-ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank_benchmark.cu)
+ConfigureNVBench(GROUPBY_NVBENCH groupby/group_rank.cpp groupby/group_struct_keys.cpp)
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
@@ -241,6 +235,10 @@ ConfigureBench(PARQUET_WRITER_BENCH io/parquet/parquet_writer.cpp)
 # ##################################################################################################
 # * orc writer benchmark --------------------------------------------------------------------------
 ConfigureBench(ORC_WRITER_BENCH io/orc/orc_writer.cpp)
+
+# ##################################################################################################
+# * orc writer chunks benchmark ---------------------------------------------------------------
+ConfigureNVBench(ORC_WRITER_CHUNKS_NVBENCH io/orc/orc_writer_chunks.cpp)
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------

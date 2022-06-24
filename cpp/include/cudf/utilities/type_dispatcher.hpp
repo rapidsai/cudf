@@ -51,6 +51,7 @@ namespace cudf {
  * ```
  *
  * @tparam T The type to map to a `cudf::type_id`
+ * @return The `cudf::type_id` corresponding to the specified type
  */
 template <typename T>
 inline constexpr type_id type_to_id()
@@ -58,7 +59,16 @@ inline constexpr type_id type_to_id()
   return type_id::EMPTY;
 };
 
+/**
+ * @brief Maps a `cudf::type_id` types to it's corresponding C++ type name string
+ *
+ */
 struct type_to_name {
+  /**
+   * @brief Maps a `cudf::type_id` types to it's corresponding C++ type name string
+   *
+   * @return The C++ type name as string
+   */
   template <typename T>
   inline std::string operator()()
   {
@@ -124,6 +134,7 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
 /**
  * @brief Checks if `id` is fixed_point (DECIMAL32/64/128)
  *
+ * @param id The `data_type::id` to check
  * @return    `true` if `id` is `DECIMAL32`, `DECIMAL64` or `DECIMAL128`
  * @return    `false` otherwise
  */
@@ -156,41 +167,38 @@ constexpr bool is_fixed_point(cudf::type_id id)
   template <>                                         \
   struct id_to_type_impl<Id> {                        \
     using type = Type;                                \
-  }
+  };
 #endif
 
-/**
- * @brief Defines all of the mappings between C++ types and their corresponding
- * `cudf::type_id` values.
- */
-CUDF_TYPE_MAPPING(bool, type_id::BOOL8);
-CUDF_TYPE_MAPPING(int8_t, type_id::INT8);
-CUDF_TYPE_MAPPING(int16_t, type_id::INT16);
-CUDF_TYPE_MAPPING(int32_t, type_id::INT32);
-CUDF_TYPE_MAPPING(int64_t, type_id::INT64);
-CUDF_TYPE_MAPPING(uint8_t, type_id::UINT8);
-CUDF_TYPE_MAPPING(uint16_t, type_id::UINT16);
-CUDF_TYPE_MAPPING(uint32_t, type_id::UINT32);
-CUDF_TYPE_MAPPING(uint64_t, type_id::UINT64);
-CUDF_TYPE_MAPPING(float, type_id::FLOAT32);
-CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
-CUDF_TYPE_MAPPING(cudf::string_view, type_id::STRING);
-CUDF_TYPE_MAPPING(cudf::timestamp_D, type_id::TIMESTAMP_DAYS);
-CUDF_TYPE_MAPPING(cudf::timestamp_s, type_id::TIMESTAMP_SECONDS);
-CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
-CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
-CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
-CUDF_TYPE_MAPPING(cudf::duration_D, type_id::DURATION_DAYS);
-CUDF_TYPE_MAPPING(cudf::duration_s, type_id::DURATION_SECONDS);
-CUDF_TYPE_MAPPING(cudf::duration_ms, type_id::DURATION_MILLISECONDS);
-CUDF_TYPE_MAPPING(cudf::duration_us, type_id::DURATION_MICROSECONDS);
-CUDF_TYPE_MAPPING(cudf::duration_ns, type_id::DURATION_NANOSECONDS);
-CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
-CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
-CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32);
-CUDF_TYPE_MAPPING(numeric::decimal64, type_id::DECIMAL64);
-CUDF_TYPE_MAPPING(numeric::decimal128, type_id::DECIMAL128);
-CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT);
+// Defines all of the mappings between C++ types and their corresponding `cudf::type_id` values.
+CUDF_TYPE_MAPPING(bool, type_id::BOOL8)
+CUDF_TYPE_MAPPING(int8_t, type_id::INT8)
+CUDF_TYPE_MAPPING(int16_t, type_id::INT16)
+CUDF_TYPE_MAPPING(int32_t, type_id::INT32)
+CUDF_TYPE_MAPPING(int64_t, type_id::INT64)
+CUDF_TYPE_MAPPING(uint8_t, type_id::UINT8)
+CUDF_TYPE_MAPPING(uint16_t, type_id::UINT16)
+CUDF_TYPE_MAPPING(uint32_t, type_id::UINT32)
+CUDF_TYPE_MAPPING(uint64_t, type_id::UINT64)
+CUDF_TYPE_MAPPING(float, type_id::FLOAT32)
+CUDF_TYPE_MAPPING(double, type_id::FLOAT64)
+CUDF_TYPE_MAPPING(cudf::string_view, type_id::STRING)
+CUDF_TYPE_MAPPING(cudf::timestamp_D, type_id::TIMESTAMP_DAYS)
+CUDF_TYPE_MAPPING(cudf::timestamp_s, type_id::TIMESTAMP_SECONDS)
+CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS)
+CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS)
+CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS)
+CUDF_TYPE_MAPPING(cudf::duration_D, type_id::DURATION_DAYS)
+CUDF_TYPE_MAPPING(cudf::duration_s, type_id::DURATION_SECONDS)
+CUDF_TYPE_MAPPING(cudf::duration_ms, type_id::DURATION_MILLISECONDS)
+CUDF_TYPE_MAPPING(cudf::duration_us, type_id::DURATION_MICROSECONDS)
+CUDF_TYPE_MAPPING(cudf::duration_ns, type_id::DURATION_NANOSECONDS)
+CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32)
+CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST)
+CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32)
+CUDF_TYPE_MAPPING(numeric::decimal64, type_id::DECIMAL64)
+CUDF_TYPE_MAPPING(numeric::decimal128, type_id::DECIMAL128)
+CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT)
 
 /**
  * @brief Use this specialization on `type_dispatcher` whenever you only need to operate on the
@@ -202,7 +210,7 @@ CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT);
  */
 template <cudf::type_id Id>
 struct dispatch_storage_type {
-  using type = device_storage_type_t<typename id_to_type_impl<Id>::type>;
+  using type = device_storage_type_t<typename id_to_type_impl<Id>::type>;  ///< The underlying type
 };
 
 template <typename T>
@@ -210,6 +218,12 @@ struct type_to_scalar_type_impl {
   using ScalarType = cudf::scalar;
 };
 
+/**
+ * @brief Macro used to define scalar type and scalar device type for
+ * `cudf::numeric_scalar` template class for numeric C++ types.
+ *
+ * @param Type The numeric C++ type
+ */
 #ifndef MAP_NUMERIC_SCALAR
 #define MAP_NUMERIC_SCALAR(Type)                                     \
   template <>                                                        \
@@ -230,7 +244,7 @@ MAP_NUMERIC_SCALAR(uint32_t)
 MAP_NUMERIC_SCALAR(uint64_t)
 MAP_NUMERIC_SCALAR(float)
 MAP_NUMERIC_SCALAR(double)
-MAP_NUMERIC_SCALAR(bool);
+MAP_NUMERIC_SCALAR(bool)
 
 template <>
 struct type_to_scalar_type_impl<std::string> {
@@ -281,6 +295,12 @@ struct type_to_scalar_type_impl<cudf::struct_view> {
   // using ScalarDeviceType = cudf::struct_scalar_device_view; // CALEB: TODO!
 };
 
+/**
+ * @brief Macro used to define scalar type and scalar device type for
+ * `cudf::timestamp_scalar` template class for timestamp C++ types.
+ *
+ * @param Type The timestamp C++ type
+ */
 #ifndef MAP_TIMESTAMP_SCALAR
 #define MAP_TIMESTAMP_SCALAR(Type)                                     \
   template <>                                                          \
@@ -296,6 +316,12 @@ MAP_TIMESTAMP_SCALAR(timestamp_ms)
 MAP_TIMESTAMP_SCALAR(timestamp_us)
 MAP_TIMESTAMP_SCALAR(timestamp_ns)
 
+/**
+ * @brief Macro used to define scalar type and scalar device type for
+ * `cudf::duration_scalar` template class for duration C++ types.
+ *
+ * @param Type The duration C++ type
+ */
 #ifndef MAP_DURATION_SCALAR
 #define MAP_DURATION_SCALAR(Type)                                     \
   template <>                                                         \
@@ -319,6 +345,11 @@ MAP_DURATION_SCALAR(duration_ns)
 template <typename T>
 using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
 
+/**
+ * @brief Maps a C++ type to the scalar device type required to hold its value
+ *
+ * @tparam T The concrete C++ type to map
+ */
 template <typename T>
 using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceType;
 
@@ -519,6 +550,7 @@ CUDF_HOST_DEVICE __forceinline__ constexpr decltype(auto) type_dispatcher(cudf::
   }
 }
 
+// @cond
 namespace detail {
 template <typename T1>
 struct double_type_dispatcher_second_type {
@@ -545,6 +577,7 @@ struct double_type_dispatcher_first_type {
   }
 };
 }  // namespace detail
+// @endcond
 
 /**
  * @brief Dispatches two type template parameters to a callable.
@@ -558,6 +591,8 @@ struct double_type_dispatcher_first_type {
  * parameter of the callable `F`
  * @param f The callable whose `operator()` template is invoked
  * @param args Parameter pack forwarded to the `operator()` invocation `F`.
+ *
+ * @return The result of invoking `f.template operator<T1, T2>(args)`
  */
 #pragma nv_exec_check_disable
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl, typename F, typename... Ts>

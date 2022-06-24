@@ -722,6 +722,36 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         return new_index
 
+    def sort_values(
+        self,
+        return_indexer=False,
+        ascending=True,
+        na_position="last",
+        key=None,
+    ):
+        if key is not None:
+            raise NotImplementedError("key parameter is not yet implemented.")
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
+        sorted_index = self
+        indexer = RangeIndex(range(len(self)))
+
+        sorted_index = self
+        if ascending:
+            if self.step < 0:
+                sorted_index = self[::-1]
+                indexer = indexer[::-1]
+        else:
+            if self.step > 0:
+                sorted_index = self[::-1]
+                indexer = indexer = indexer[::-1]
+
+        if return_indexer:
+            return sorted_index, indexer
+        else:
+            return sorted_index
+
     @_cudf_nvtx_annotate
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
@@ -2116,7 +2146,7 @@ class TimedeltaIndex(GenericIndex):
         This is not yet supported
     closed : str, optional
         This is not yet supported
-    dtype : str or numpy.dtype, optional
+    dtype : str or :class:`numpy.dtype`, optional
         Data type for the output Index. If not specified, the
         default dtype will be ``timedelta64[ns]``.
     name : object
