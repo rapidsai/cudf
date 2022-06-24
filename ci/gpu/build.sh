@@ -248,6 +248,7 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml
 # Therefore, these runs only verify that benchmarks are valid.
 # They do not generate meaningful performance measurements.
 cd "$WORKSPACE"
+gpuci_logger "Python pytest for cuDF benchmarks"
 CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 python/cudf/benchmarks
 CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 python/cudf/benchmarks
 
