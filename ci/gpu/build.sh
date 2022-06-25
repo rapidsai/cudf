@@ -249,8 +249,9 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml
 # They do not generate meaningful performance measurements.
 cd "$WORKSPACE"
 gpuci_logger "Python pytest for cuDF benchmarks"
-CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 python/cudf/benchmarks
-CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 python/cudf/benchmarks
+gpuci_logger "The path is ${PYTHONPATH}"
+CUDF_BENCHMARKS_DEBUG_ONLY=ON py.test -n 8 python/cudf/benchmarks
+CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON py.test -n 8 python/cudf/benchmarks
 
 gpuci_logger "Test notebooks"
 "$WORKSPACE/ci/gpu/test-notebooks.sh" 2>&1 | tee nbtest.log
