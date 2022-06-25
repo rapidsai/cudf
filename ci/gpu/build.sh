@@ -247,11 +247,10 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml
 # Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.
 # Therefore, these runs only verify that benchmarks are valid.
 # They do not generate meaningful performance measurements.
-cd "$WORKSPACE"
+cd "$WORKSPACE/python/cudf"
 gpuci_logger "Python pytest for cuDF benchmarks"
-gpuci_logger "The path is ${PYTHONPATH}"
-CUDF_BENCHMARKS_DEBUG_ONLY=ON py.test -n 8 python/cudf/benchmarks
-CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON py.test -n 8 python/cudf/benchmarks
+CUDF_BENCHMARKS_DEBUG_ONLY=ON py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope benchmarks
+CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope benchmarks
 
 gpuci_logger "Test notebooks"
 "$WORKSPACE/ci/gpu/test-notebooks.sh" 2>&1 | tee nbtest.log
