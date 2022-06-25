@@ -183,7 +183,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # whereas _stop is an upper bound.
         self._end = self._start + self._step * (len(self._range) - 1)
 
-    def _copy_type_metadata(self, other: Frame) -> RangeIndex:
+    def _copy_type_metadata(self: RangeIndex, other: RangeIndex) -> RangeIndex:
         # There is no metadata to be copied for RangeIndex since it does not
         # have an underlying column.
         return self

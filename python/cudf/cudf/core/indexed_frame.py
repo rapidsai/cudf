@@ -888,8 +888,8 @@ class IndexedFrame(Frame):
         return self._mimic_inplace(output, inplace=inplace)
 
     def _copy_type_metadata(
-        self, other: Frame, include_index: bool = True
-    ) -> Frame:
+        self: T, other: T, include_index: bool = True
+    ) -> T:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
