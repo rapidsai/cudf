@@ -801,7 +801,10 @@ def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
         axis=axis,
     )
 
-    assert_eq(expected, actual, check_index_type=True)
+    # TODO: Remove special handling of check_index_type below
+    # after the following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/47501
+    assert_eq(expected, actual, check_index_type=not (axis == 1 and sort))
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -868,7 +871,10 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
         [gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
     )
 
-    assert_eq(expected, actual, check_index_type=True)
+    # TODO: Remove special handling of check_index_type below
+    # after the following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/47501
+    assert_eq(expected, actual, check_index_type=not (axis == 1 and sort))
 
 
 @pytest.mark.parametrize(
@@ -917,7 +923,10 @@ def test_concat_join_no_overlapping_columns(
         axis=axis,
     )
 
-    assert_eq(expected, actual, check_index_type=True)
+    # TODO: Remove special handling of check_index_type below
+    # after the following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/47501
+    assert_eq(expected, actual, check_index_type=not (axis == 1 and sort))
 
 
 @pytest.mark.parametrize("ignore_index", [False, True])
@@ -1105,13 +1114,14 @@ def test_concat_join_series(ignore_index, sort, join, axis):
         axis=axis,
     )
 
-    # TODO: Remove special handling below
-    # after following bug from pandas is fixed:
+    # TODO: Remove special handling of check_index_type below
+    # after the following bugs from pandas are fixed:
     # https://github.com/pandas-dev/pandas/issues/46675
+    # https://github.com/pandas-dev/pandas/issues/47501
     assert_eq(
         expected,
         actual,
-        check_index_type=not (axis == 1 and join == "outer"),
+        check_index_type=(axis == 0),
     )
 
 
