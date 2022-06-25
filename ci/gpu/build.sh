@@ -249,8 +249,10 @@ py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml
 # They do not generate meaningful performance measurements.
 cd "$WORKSPACE/python/cudf"
 gpuci_logger "Python pytest for cuDF benchmarks"
-CUDF_BENCHMARKS_DEBUG_ONLY=ON py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope benchmarks
-CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON py.test -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" --junitxml="$WORKSPACE/junit-cudf.xml" -v --cov-config="$WORKSPACE/python/cudf/.coveragerc" --cov=cudf --cov-report=xml:"$WORKSPACE/python/cudf/cudf-coverage.xml" --cov-report term --dist=loadscope benchmarks
+CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" -v --dist=loadscope benchmarks
+
+gpuci_logger "Python pytest for cuDF benchmarks using pandas"
+CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" -v --dist=loadscope benchmarks
 
 gpuci_logger "Test notebooks"
 "$WORKSPACE/ci/gpu/test-notebooks.sh" 2>&1 | tee nbtest.log
