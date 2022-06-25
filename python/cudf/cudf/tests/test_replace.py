@@ -1171,59 +1171,6 @@ def test_series_exceptions_for_clip():
 
 
 @pytest.mark.parametrize(
-    ("data", "lower", "upper"),
-    [
-        ([1, 2, 3, 4, 5], 2, 4),
-        ([1, 2, 3, 4, 5], 2, None),
-        ([1, 2, 3, 4, 5], None, 4),
-        ([1, 2, 3, 4, 5], None, None),
-        (["a", "b", "c", "d", "e"], "b", "d"),
-        (["a", "b", "c", "d", "e"], "b", None),
-        (["a", "b", "c", "d", "e"], None, "d"),
-    ],
-)
-@pytest.mark.parametrize("inplace", [True, False])
-def test_index_clip(data, lower, upper, inplace):
-    pdf = pd.DataFrame({"a": data})
-    index = cudf.from_pandas(pdf).set_index("a").index
-
-    expect = pdf.clip(lower=lower, upper=upper)
-    got = index.clip(lower=lower, upper=upper, inplace=inplace)
-
-    if inplace is True:
-        assert_eq(expect, index.to_frame(index=False))
-    else:
-        assert_eq(expect, got.to_frame(index=False))
-
-
-@pytest.mark.parametrize(
-    ("lower", "upper"),
-    [
-        ([2, 3], [4, 5]),
-        ([2, 3], None),
-        (
-            None,
-            [4, 5],
-        ),
-    ],
-)
-@pytest.mark.parametrize("inplace", [True, False])
-def test_multiindex_clip(lower, upper, inplace):
-    df = pd.DataFrame({"a": [1, 2, 3, 4, 5], "b": [1, 2, 3, 4, 5]})
-    gdf = cudf.from_pandas(df)
-
-    index = gdf.set_index(["a", "b"]).index
-
-    expected = df.clip(lower=lower, upper=upper, inplace=inplace, axis=1)
-    got = index.clip(lower=lower, upper=upper, inplace=inplace)
-
-    if inplace is True:
-        assert_eq(df, index.to_frame(index=False))
-    else:
-        assert_eq(expected, got.to_frame(index=False))
-
-
-@pytest.mark.parametrize(
     "data", [[1, 2.0, 3, 4, None, 1, None, 10, None], ["a", "b", "c"]]
 )
 @pytest.mark.parametrize(

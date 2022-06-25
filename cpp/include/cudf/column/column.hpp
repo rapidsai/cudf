@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -61,7 +62,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
-         rmm::cuda_stream_view stream        = rmm::cuda_stream_view{},
+         rmm::cuda_stream_view stream        = cudf::default_stream_value,
          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -116,16 +117,20 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::cuda_stream_view stream        = cudf::default_stream_value,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns the column's logical element type
+   *
+   * @return The column's logical element type
    */
   [[nodiscard]] data_type type() const noexcept { return _type; }
 
   /**
    * @brief Returns the number of elements
+   *
+   * @return The number of elements
    */
   [[nodiscard]] size_type size() const noexcept { return _size; }
 
@@ -136,6 +141,8 @@ class column {
    * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
+   *
+   * @return The number of null elements
    */
   [[nodiscard]] size_type null_count() const;
 
@@ -167,12 +174,12 @@ class column {
    * @param new_null_count Optional, the count of null elements. If unknown, specify
    * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on the first invocation
    * of `null_count()`.
-   * @param stream The stream on which to perform the allocation and copy. Uses the default CUDA
+   * @param stream The stream on which to perform the allocation and copy. Uses the default CUDF
    * stream if none is specified.
    */
   void set_null_mask(rmm::device_buffer const& new_null_mask,
                      size_type new_null_count     = UNKNOWN_NULL_COUNT,
-                     rmm::cuda_stream_view stream = rmm::cuda_stream_view{});
+                     rmm::cuda_stream_view stream = cudf::default_stream_value);
 
   /**
    * @brief Updates the count of null elements.
@@ -211,6 +218,8 @@ class column {
 
   /**
    * @brief Returns the number of child columns
+   *
+   * @return The number of child columns
    */
   [[nodiscard]] size_type num_children() const noexcept { return _children.size(); }
 
@@ -239,9 +248,9 @@ class column {
    * Returned by `column::release()`.
    */
   struct contents {
-    std::unique_ptr<rmm::device_buffer> data;
-    std::unique_ptr<rmm::device_buffer> null_mask;
-    std::vector<std::unique_ptr<column>> children;
+    std::unique_ptr<rmm::device_buffer> data;       ///< data device memory buffer
+    std::unique_ptr<rmm::device_buffer> null_mask;  ///< null mask device memory buffer
+    std::vector<std::unique_ptr<column>> children;  ///< child columns
   };
 
   /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <arrow/api.h>
 #include <cudf/interop.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <string>
 
@@ -33,7 +34,7 @@ namespace detail {
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -43,7 +44,7 @@ std::unique_ptr<table> from_dlpack(
  */
 DLManagedTensor* to_dlpack(
   table_view const& input,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 // Creating arrow as per given type_id and buffer arguments
@@ -103,7 +104,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
  */
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata = {},
-                                       rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+                                       rmm::cuda_stream_view stream = cudf::default_stream_value,
                                        arrow::MemoryPool* ar_mr     = arrow::default_memory_pool());
 
 /**
@@ -113,7 +114,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  */
 std::unique_ptr<table> from_arrow(
   arrow::Table const& input_table,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -85,26 +86,26 @@ std::vector<cudf::column_view> split(cudf::column_view const& input,
                                      host_span<size_type const> splits)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, rmm::cuda_stream_default);
+  return detail::split(input, splits, cudf::default_stream_value);
 }
 
 std::vector<cudf::table_view> split(cudf::table_view const& input,
                                     host_span<size_type const> splits)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, rmm::cuda_stream_default);
+  return detail::split(input, splits, cudf::default_stream_value);
 }
 
 std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> splits)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, rmm::cuda_stream_default);
+  return detail::split(input, splits, cudf::default_stream_value);
 }
 
 std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> splits)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, rmm::cuda_stream_default);
+  return detail::split(input, splits, cudf::default_stream_value);
 }
 
 }  // namespace cudf

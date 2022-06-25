@@ -24,6 +24,7 @@
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
@@ -210,7 +211,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                         following_window_bounds,
                                         min_periods,
                                         aggr,
-                                        rmm::cuda_stream_default,
+                                        cudf::default_stream_value,
                                         mr);
 }
 
@@ -1082,7 +1083,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                       following,
                                       min_periods,
                                       aggr,
-                                      rmm::cuda_stream_default,
+                                      cudf::default_stream_value,
                                       mr);
 }
 
@@ -1116,7 +1117,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                               following,
                                               min_periods,
                                               aggr,
-                                              rmm::cuda_stream_default,
+                                              cudf::default_stream_value,
                                               mr);
 }
 

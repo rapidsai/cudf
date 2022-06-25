@@ -25,6 +25,7 @@
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -268,7 +269,7 @@ std::unique_ptr<column> split_record(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
@@ -304,7 +305,7 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::split_record<detail::Dir::FORWARD>(
-    strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
+    strings, delimiter, maxsplit, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
@@ -314,7 +315,7 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::split_record<detail::Dir::BACKWARD>(
-    strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
+    strings, delimiter, maxsplit, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

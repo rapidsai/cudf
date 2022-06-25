@@ -2861,16 +2861,31 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expect, result);
     }
 
-    assertThrows(CudfException.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3);
-           ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
-      }
-    });
-
-    assertThrows(CudfException.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.ListType(true,
               new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(1)));
+         ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv);
+         ColumnVector expect = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(1), Arrays.asList(1)))){
+      assertColumnsAreEqual(expect, result);
+    }
+
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(1, null, 2)));
+         ColumnVector cv2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(null, null, 5, 6, null)));
+         ColumnVector result = ColumnVector.listConcatenateByRow(cv1, cv2);
+         ColumnVector expect = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(1, null, 2), Arrays.asList(null, null, 5, 6, null)))){
+      assertColumnsAreEqual(expect, result);
+    }
+
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3);
            ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
       }
     });
@@ -5850,6 +5865,21 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testGetMapValueForKeys() {
+    List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(1, 2)));
+    List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(2, 3)));
+    List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(5, 4)));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.INT32),
+        new HostColumnVector.BasicType(true, DType.INT32)));
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
+         ColumnVector lookupKey = ColumnVector.fromInts(1, 6, 5);
+         ColumnVector res = cv.getMapValue(lookupKey);
+         ColumnVector expected = ColumnVector.fromBoxedInts(2, null, 4)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
   void testGetMapValueForInteger() {
     List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(1, 2)));
     List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(1, 3)));
@@ -5892,6 +5922,25 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testGetMapKeyExistenceForKeys() {
+    List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(1, 2));
+    List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(1, 3));
+    List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData(5, 4));
+    List<HostColumnVector.StructData> list4 = Arrays.asList(new HostColumnVector.StructData(1, 7));
+    List<HostColumnVector.StructData> list5 = Arrays.asList(new HostColumnVector.StructData(1, null));
+    List<HostColumnVector.StructData> list6 = Arrays.asList(new HostColumnVector.StructData(null, null));
+    List<HostColumnVector.StructData> list7 = Arrays.asList(new HostColumnVector.StructData());
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.INT32),
+        new HostColumnVector.BasicType(true, DType.INT32)));
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3, list4, list5, list6, list7);
+         ColumnVector lookup = ColumnVector.fromInts(1, 5, 5, 5, 5, 5, 6);
+         ColumnVector resValidKey = cv.getMapKeyExistence(lookup);
+         ColumnVector expectedValid = ColumnVector.fromBooleans(true, false, true, false, false, false, false)) {
+      assertColumnsAreEqual(expectedValid, resValidKey);
+    }
+  }
+
+  @Test
   void testGetMapKeyExistenceForInteger() {
     List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(1, 2));
     List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(1, 3));
@@ -5915,7 +5964,8 @@ public class ColumnVectorTest extends CudfTestBase {
 
     AssertionError e = assertThrows(AssertionError.class, () -> {
       try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3, list4, list5, list6, list7);
-           ColumnVector resNullKey = cv.getMapKeyExistence(null)) {
+           Scalar key = null;
+           ColumnVector resNullKey = cv.getMapKeyExistence(key)) {
       }
     });
     assertTrue(e.getMessage().contains("Lookup key may not be null"));
@@ -5945,7 +5995,8 @@ public class ColumnVectorTest extends CudfTestBase {
 
     AssertionError e = assertThrows(AssertionError.class, () -> {
       try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3, list4, list5, list6, list7);
-           ColumnVector resNullKey = cv.getMapKeyExistence(null)) {
+           Scalar key = null;
+           ColumnVector resNullKey = cv.getMapKeyExistence(key)) {
       }
     });
     assertTrue(e.getMessage().contains("Lookup key may not be null"));

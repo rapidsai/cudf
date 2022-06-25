@@ -25,6 +25,7 @@
 #include <cudf/dictionary/update_keys.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -58,7 +59,7 @@ template <typename KeysKeeper>
 std::unique_ptr<column> remove_keys_fn(
   dictionary_column_view const& dictionary_column,
   KeysKeeper keys_to_keep_fn,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto const keys_view    = dictionary_column.keys();
@@ -150,7 +151,7 @@ std::unique_ptr<column> remove_keys_fn(
 std::unique_ptr<column> remove_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& keys_to_remove,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(!keys_to_remove.has_nulls(), "keys_to_remove must not have nulls");
@@ -167,7 +168,7 @@ std::unique_ptr<column> remove_keys(
 
 std::unique_ptr<column> remove_unused_keys(
   dictionary_column_view const& dictionary_column,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   // locate the keys to remove
@@ -199,14 +200,14 @@ std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_col
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::remove_keys(dictionary_column, keys_to_remove, rmm::cuda_stream_default, mr);
+  return detail::remove_keys(dictionary_column, keys_to_remove, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& dictionary_column,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::remove_unused_keys(dictionary_column, rmm::cuda_stream_default, mr);
+  return detail::remove_unused_keys(dictionary_column, cudf::default_stream_value, mr);
 }
 
 }  // namespace dictionary

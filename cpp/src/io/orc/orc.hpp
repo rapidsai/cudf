@@ -495,6 +495,17 @@ class ProtobufWriter {
     put_byte(static_cast<uint8_t>(v));
     return l;
   }
+
+  uint32_t varint_size(uint64_t val)
+  {
+    auto len = 1u;
+    while (val > 0x7f) {
+      val >>= 7;
+      ++len;
+    }
+    return len;
+  }
+
   uint32_t put_int(int64_t v)
   {
     int64_t s = (v < 0);
@@ -538,10 +549,12 @@ class OrcDecompressor {
    * @brief ORC block decompression
    *
    * @param src compressed data
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return decompressed data
    */
-  host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src);
+  host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src,
+                                             rmm::cuda_stream_view stream);
   [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
   [[nodiscard]] uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
@@ -601,7 +614,7 @@ class metadata {
   };
 
  public:
-  explicit metadata(datasource* const src);
+  explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
 
   [[nodiscard]] size_t get_total_rows() const { return ff.numberOfRows; }
   [[nodiscard]] int get_num_stripes() const { return ff.stripes.size(); }

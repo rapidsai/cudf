@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2022, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -12,16 +12,15 @@
 # the License.
 # =============================================================================
 
-# This function finds libcudacxx and sets any additional necessary environment variables.
-function(find_and_configure_libcudacxx)
-  include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
+set(cython_sources partition.pyx split.pyx)
 
-  rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+set(linked_libraries cudf::cudf)
+rapids_cython_create_modules(
+  CXX
+  SOURCE_FILES "${cython_sources}"
+  LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX strings_
+)
 
-  set(LIBCUDACXX_INCLUDE_DIR
-      "${libcudacxx_SOURCE_DIR}/include"
-      PARENT_SCOPE
-  )
-endfunction()
-
-find_and_configure_libcudacxx()
+foreach(cython_module IN LISTS RAPIDS_CYTHON_CREATED_TARGETS)
+  set_target_properties(${cython_module} PROPERTIES INSTALL_RPATH "\$ORIGIN;\$ORIGIN/../../cpp")
+endforeach()

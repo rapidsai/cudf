@@ -286,8 +286,8 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
     _composite_bitmask{cudf::detail::bitmask_and(build, stream).first},
     _nulls_equal{compare_nulls},
     _hash_table{compute_hash_table_size(build.num_rows()),
-                std::numeric_limits<hash_value_type>::max(),
-                cudf::detail::JoinNoneValue,
+                cuco::sentinel::empty_key{std::numeric_limits<hash_value_type>::max()},
+                cuco::sentinel::empty_value{cudf::detail::JoinNoneValue},
                 stream.value(),
                 detail::hash_table_allocator_type{default_allocator<char>{}, stream}}
 {
