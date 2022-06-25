@@ -2,8 +2,8 @@
 
 """Defines pytest fixtures for internal benchmarks."""
 
-from benchmarks.common.config import NUM_ROWS, cudf
-from benchmarks.common.utils import (
+from config import NUM_ROWS, cudf
+from utils import (
     OrderedSet,
     collapse_fixtures,
     column_generators,

@@ -2,10 +2,7 @@
 
 """Benchmarks of internal DataFrame methods."""
 
-from benchmarks.common.utils import (
-    benchmark_with_object,
-    make_boolean_mask_column,
-)
+from utils import benchmark_with_object, make_boolean_mask_column
 
 
 @benchmark_with_object(cls="dataframe", dtype="int")

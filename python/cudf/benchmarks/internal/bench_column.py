@@ -5,7 +5,7 @@
 import pytest
 import pytest_cases
 
-from benchmarks.common.utils import (
+from utils import (
     benchmark_with_object,
     make_boolean_mask_column,
     make_gather_map,

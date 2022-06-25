@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarks.common.config import cudf
+from config import cudf
 
 
 @pytest.fixture

@@ -21,6 +21,7 @@ in this file and import them in conftest.py to ensure that they are handled
 appropriately.
 """
 import os
+import sys
 
 # Environment variable-based configuration of benchmarking pandas or cudf.
 collect_ignore = []
@@ -46,6 +47,17 @@ else:
 
     def pytest_collection_modifyitems(session, config, items):
         pass
+
+
+def pytest_sessionstart(session):
+    """Add the common files to the path for all tests to import."""
+    sys.path.insert(0, os.path.join(os.getcwd(), "common"))
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up sys.path after exit."""
+    if "common" in sys.path[0]:
+        del sys.path[0]
 
 
 # Constants used to define benchmarking standards.

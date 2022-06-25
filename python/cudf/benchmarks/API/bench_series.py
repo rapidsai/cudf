@@ -4,8 +4,8 @@
 
 import pytest
 
-from benchmarks.common.config import cudf, cupy
-from benchmarks.common.utils import benchmark_with_object
+from config import cudf, cupy
+from utils import benchmark_with_object
 
 
 @pytest.mark.parametrize("N", [100, 1_000_000])

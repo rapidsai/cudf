@@ -7,7 +7,7 @@ import operator
 import numpy as np
 import pytest
 
-from benchmarks.common.utils import benchmark_with_object, make_gather_map
+from utils import benchmark_with_object, make_gather_map
 
 
 @benchmark_with_object(cls="frame_or_index", dtype="int")

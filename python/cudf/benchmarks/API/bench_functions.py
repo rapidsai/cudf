@@ -5,7 +5,7 @@
 import pytest
 import pytest_cases
 
-from benchmarks.common.config import cudf, cupy
+from config import cudf, cupy
 
 
 @pytest_cases.parametrize_with_cases("objs", prefix="concat")
