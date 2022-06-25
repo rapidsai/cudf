@@ -3,7 +3,6 @@
 """Benchmarks of Index methods."""
 
 import pytest
-
 from config import cudf, cupy
 from utils import benchmark_with_object
 

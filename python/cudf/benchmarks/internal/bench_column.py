@@ -4,7 +4,6 @@
 
 import pytest
 import pytest_cases
-
 from utils import (
     benchmark_with_object,
     make_boolean_mask_column,

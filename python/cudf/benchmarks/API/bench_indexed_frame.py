@@ -3,7 +3,6 @@
 """Benchmarks of IndexedFrame methods."""
 
 import pytest
-
 from utils import benchmark_with_object
 
 

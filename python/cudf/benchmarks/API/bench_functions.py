@@ -4,7 +4,6 @@
 
 import pytest
 import pytest_cases
-
 from config import cudf, cupy
 
 

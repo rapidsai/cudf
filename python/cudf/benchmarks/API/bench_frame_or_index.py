@@ -6,7 +6,6 @@ import operator
 
 import numpy as np
 import pytest
-
 from utils import benchmark_with_object, make_gather_map
 
 
