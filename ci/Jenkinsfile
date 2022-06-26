@@ -16,8 +16,7 @@ pipeline {
     stage("Style & Size Checks") {
       environment {
         GH_TOKEN = credentials('gputester-github-token')
-        COMMIT_HASH = "$GIT_COMMIT"
-        TARGET_BRANCH = "branch-22.08"
+        HOME = "$WORKSPACE"
       }
       when { environment name: 'BUILD_TYPE', value: 'pull-request' }
       agent {
@@ -27,11 +26,6 @@ pipeline {
         }
       }
       steps {
-        cleanWs (
-          deleteDirs: true,
-          externalDelete: 'sudo rm -rf %s'
-        )
-        checkout scm
         sh "rapids-size-checker"
         sh "./ci/checks/style.sh"
       }
