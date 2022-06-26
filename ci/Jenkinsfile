@@ -27,6 +27,11 @@ pipeline {
         }
       }
       steps {
+        cleanWs (
+          deleteDirs: true,
+          externalDelete: 'sudo rm -rf %s'
+        )
+        checkout scm
         sh "rapids-size-checker"
         sh "./ci/checks/style.sh"
       }
