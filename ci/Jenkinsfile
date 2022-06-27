@@ -67,14 +67,22 @@ pipeline {
 
     stage("Java Test Stage") {
       agent {
-        docker {
-          label 'gpu'
-          image 'gpuci/rapidsai:22.08-cuda11.5-devel-centos7-py3.8'
-        }
+        label 'gpu'
       }
       when { environment name: 'BUILD_TYPE', value: 'pull-request' }
       steps {
-        sh "./ci/java.sh"
+        script {
+            docker.image("gpuci/rapidsai:22.08-cuda11.5-devel-centos7-py3.8").inside("""
+            --runtime=nvidia
+            --pull=always
+            -e NVIDIA_VISIBLE_DEVICES=$EXECUTOR_NUMBER
+            -e ARCH=${test_config.arch}
+            -e CUDA=11.5
+            -e PY_VER=3.8
+            """) {
+              sh "./ci/java.sh"
+            }
+        }
       }
     }
 
