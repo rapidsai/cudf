@@ -77,5 +77,5 @@ TEST_F(ListDistinctTest, TrivialTest)
                                    lists_col{} /*NULL*/,
                                    lists_col{{null, 0.0, 1.0, 5.0, NaN}, null_at(0)}},
                                   null_at(2)};
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results_sorted);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
 }

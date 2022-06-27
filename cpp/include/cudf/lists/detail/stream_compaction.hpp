@@ -47,17 +47,17 @@ std::unique_ptr<column> distinct(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Remove duplicate list elements from a lists column.
+ * @brief Remove duplicate list elements from a lists column given by its child column and an
+ *        associated list labels column.
  *
  * The input lists column is not given to this function directly. Instead, its child column and a
- * label array containing the corresponding list labels for each element are used to access the
- * input lists. The output null mask and null count are also provided as the input into this
- * function.
+ * label column containing the corresponding list labels for each element are given. The output null
+ * mask and null count are also provided as input parameters to this function.
  *
- * This function performs exactly the same as the API
+ * This function generates exactly the same output as the API
  * `cudf::lists::distinct(lists_column_view const& input)` but requires a different set of
- * parameters. This is because it is called internally in various APIs where the label array and the
- * output null_mask and null_count already exist.
+ * input parameters. This is because it is going to be called internally in various other APIs where
+ * the label column and the output null_mask and null_count already exist.
  *
  * @param n_lists Number of lists in the input and output lists columns
  * @param child_labels Array containing labels of the list elements
@@ -68,9 +68,9 @@ std::unique_ptr<column> distinct(
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned object
- * @return A pair of output columns `{out_offsets, out_child}`
+ * @return The final lists column without duplicate list elements
  */
-std::unique_ptr<column> distinct(
+std::unique_ptr<column> distinct_by_labels(
   size_type n_lists,
   column_view const& child_labels,
   column_view const& child,

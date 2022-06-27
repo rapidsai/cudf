@@ -50,15 +50,15 @@
 namespace cudf::lists {
 namespace detail {
 
-std::unique_ptr<column> distinct(size_type n_lists,
-                                 column_view const& child_labels,
-                                 column_view const& child,
-                                 rmm::device_buffer&& null_mask,
-                                 size_type null_count,
-                                 null_equality nulls_equal,
-                                 nan_equality nans_equal,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> distinct_by_labels(size_type n_lists,
+                                           column_view const& child_labels,
+                                           column_view const& child,
+                                           rmm::device_buffer&& null_mask,
+                                           size_type null_count,
+                                           null_equality nulls_equal,
+                                           nan_equality nans_equal,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   // Algorithm:
   // - Get indices of distinct rows of the table {labels, child}.
@@ -117,15 +117,15 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
   auto const child  = input.get_sliced_child(stream);
   auto const labels = generate_labels(input, child.size(), stream);
 
-  return distinct(input.size(),
-                  labels->view(),
-                  child,
-                  cudf::detail::copy_bitmask(input.parent(), stream, mr),
-                  input.null_count(),
-                  nulls_equal,
-                  nans_equal,
-                  stream,
-                  mr);
+  return distinct_by_labels(input.size(),
+                            labels->view(),
+                            child,
+                            cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                            input.null_count(),
+                            nulls_equal,
+                            nans_equal,
+                            stream,
+                            mr);
 }
 
 }  // namespace detail
