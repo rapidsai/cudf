@@ -29,6 +29,7 @@ dependencies:
   - fsspec>=0.6.0
   - pytest
   - pytest-benchmark
+  - pytest-cases
   - pytest-xdist
   - sphinx
   - sphinxcontrib-websupport
