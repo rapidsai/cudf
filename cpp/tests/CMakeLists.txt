@@ -480,8 +480,8 @@ ConfigureTest(
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
   lists/sort_lists_tests.cpp
-  lists/stream_compaction/apply_boolean_mask_test.cpp
-  lists/stream_compaction/distinct.cpp
+  lists/stream_compaction/apply_boolean_mask_tests.cpp
+  lists/stream_compaction/distinct_tests.cpp
 )
 
 # ##################################################################################################
