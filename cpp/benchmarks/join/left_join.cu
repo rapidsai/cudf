@@ -16,10 +16,6 @@
 
 #include <benchmarks/join/join_common.hpp>
 
-// Run each benchmark for at least `benchmark_min_time` seconds.
-// By increasing run time, average running time for each test will be measured more accurately.
-auto constexpr benchmark_min_time{5};
-
 template <typename key_type, typename payload_type>
 class Join : public cudf::benchmark {
 };
@@ -73,14 +69,12 @@ BENCHMARK_REGISTER_F(Join, left_anti_join_32bit)
   ->Args({10'000'000, 100'000'000})
   ->Args({100'000'000, 100'000'000})
   ->Args({80'000'000, 240'000'000})
-  ->MinTime(benchmark_min_time)
   ->UseManualTime();
 
 BENCHMARK_REGISTER_F(Join, left_anti_join_64bit)
   ->Unit(benchmark::kMillisecond)
   ->Args({50'000'000, 50'000'000})
   ->Args({40'000'000, 120'000'000})
-  ->MinTime(benchmark_min_time)
   ->UseManualTime();
 
 BENCHMARK_REGISTER_F(Join, left_anti_join_32bit_nulls)
@@ -93,14 +87,12 @@ BENCHMARK_REGISTER_F(Join, left_anti_join_32bit_nulls)
   ->Args({10'000'000, 100'000'000})
   ->Args({100'000'000, 100'000'000})
   ->Args({80'000'000, 240'000'000})
-  ->MinTime(benchmark_min_time)
   ->UseManualTime();
 
 BENCHMARK_REGISTER_F(Join, left_anti_join_64bit_nulls)
   ->Unit(benchmark::kMillisecond)
   ->Args({50'000'000, 50'000'000})
   ->Args({40'000'000, 120'000'000})
-  ->MinTime(benchmark_min_time)
   ->UseManualTime();
 
 // left semi-join -------------------------------------------------------------
@@ -114,7 +106,6 @@ BENCHMARK_REGISTER_F(Join, left_semi_join_32bit)
   ->Args({10'000'000, 100'000'000})
   ->Args({100'000'000, 100'000'000})
   ->Args({80'000'000, 240'000'000})
-  ->MinTime(benchmark_min_time)
   ->UseManualTime();
 
 BENCHMARK_REGISTER_F(Join, left_semi_join_64bit)
@@ -133,12 +124,10 @@ BENCHMARK_REGISTER_F(Join, left_semi_join_32bit_nulls)
   ->Args({10'000'000, 100'000'000})
   ->Args({100'000'000, 100'000'000})
   ->Args({80'000'000, 240'000'000})
-  ->MinTime(benchmark_min_time)
   ->UseManualTime();
 
 BENCHMARK_REGISTER_F(Join, left_semi_join_64bit_nulls)
   ->Unit(benchmark::kMillisecond)
   ->Args({50'000'000, 50'000'000})
   ->Args({40'000'000, 120'000'000})
-  ->MinTime(benchmark_min_time)
   ->UseManualTime();
