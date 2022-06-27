@@ -54,7 +54,12 @@ pipeline {
       steps {
         script {
           parallel generateStage("python_build", {
-            sh "./ci/build_py.sh"
+            sh '''
+            set -x 
+            git config --global user.name "ayodeawe" 
+            git config --global user.email "jawe@nvidia.com" 
+            ./ci/build_py.sh
+            '''
           })
         }
       }
