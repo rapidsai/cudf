@@ -50,14 +50,14 @@ namespace detail {
  * @tparam Op           the operator of cudf::reduction::op::
 
  * @param col Input column of data to reduce
- * @param init Optional initial value of the reduction.
+ * @param init Optional initial value of the reduction
  * @param stream Used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
  */
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> simple_reduction(column_view const& col,
-                                         std::optional<const scalar*> init,
+                                         std::optional<std::reference_wrapper<const scalar>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
@@ -66,14 +66,15 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   auto simple_op = Op{};
 
   // Cast initial value
-  std::optional<ResultType> initial_value;
-  if (init.has_value() && init.value()->is_valid()) {
-    using ScalarType = cudf::scalar_type_t<ElementType>;
-    auto input_value = static_cast<const ScalarType*>(init.value())->value(stream);
-    initial_value    = static_cast<ResultType>(input_value);
-  } else {
-    initial_value = std::nullopt;
-  }
+  std::optional<ResultType> const initial_value = [&] {
+    if (init.has_value() && init.value().get().is_valid()) {
+      using ScalarType = cudf::scalar_type_t<ElementType>;
+      auto input_value = static_cast<const ScalarType*>(&init.value().get())->value(stream);
+      return std::optional<ResultType>(static_cast<ResultType>(input_value));
+    } else {
+      return std::optional<ResultType>(std::nullopt);
+    }
+  }();
 
   auto result = [&] {
     if (col.has_nulls()) {
@@ -89,7 +90,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 
   // set scalar is valid
   result->set_valid_async(
-    col.null_count() < col.size() && (!init.has_value() || init.value()->is_valid()), stream);
+    col.null_count() < col.size() && (!init.has_value() || init.value().get().is_valid()), stream);
   return result;
 }
 
@@ -100,16 +101,17 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
  * @tparam Op         The operator of cudf::reduction::op::
  *
  * @param col         Input column of data to reduce
- * @param init        Optional initial value of the reduction.
+ * @param init        Optional initial value of the reduction
  * @param stream      Used for device memory operations and kernel launches.
  * @param mr          Device memory resource used to allocate the returned scalar's device memory
  * @return            Output scalar in device memory
  */
 template <typename DecimalXX, typename Op>
-std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
-                                              std::optional<const scalar*> init,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+std::unique_ptr<scalar> fixed_point_reduction(
+  column_view const& col,
+  std::optional<std::reference_wrapper<const scalar>> init,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   using Type = device_storage_type_t<DecimalXX>;
 
@@ -117,13 +119,15 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   auto simple_op = Op{};
 
   // Cast initial value
-  std::optional<Type> initial_value;
-  if (init.has_value() && init.value()->is_valid()) {
-    using ScalarType = cudf::scalar_type_t<Type>;
-    initial_value    = static_cast<const ScalarType*>(init.value())->value(stream);
-  } else {
-    initial_value = std::nullopt;
-  }
+  std::optional<Type> const initial_value = [&] {
+    if (init.has_value() && init.value().get().is_valid()) {
+      using ScalarType = cudf::scalar_type_t<Type>;
+      return std::optional<Type>(
+        static_cast<const ScalarType*>(&init.value().get())->value(stream));
+    } else {
+      return std::optional<Type>(std::nullopt);
+    }
+  }();
 
   auto result = [&] {
     if (col.has_nulls()) {
@@ -140,7 +144,8 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   auto const scale = [&] {
     if (std::is_same_v<Op, cudf::reduction::op::product>) {
       auto const valid_count = static_cast<int32_t>(col.size() - col.null_count());
-      return numeric::scale_type{col.type().scale() * (valid_count + initial_value.has_value())};
+      return numeric::scale_type{col.type().scale() *
+                                 (valid_count + (initial_value.has_value() ? 1 : 0))};
     } else if (std::is_same_v<Op, cudf::reduction::op::sum_of_squares>) {
       return numeric::scale_type{col.type().scale() * 2};
     }
@@ -151,7 +156,7 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   auto result_scalar =
     cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale, stream, mr);
   result_scalar->set_valid_async(
-    col.null_count() < col.size() && (!init.has_value() || init.value()->is_valid()), stream);
+    col.null_count() < col.size() && (!init.has_value() || init.value().get().is_valid()), stream);
   return result_scalar;
 }
 
@@ -163,16 +168,17 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
  * @tparam Op           The operator of cudf::reduction::op::
  *
  * @param col Input dictionary column of data to reduce
- * @param init Optional initial value of the reduction.
+ * @param init Optional initial value of the reduction
  * @param stream Used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
  */
 template <typename ElementType, typename ResultType, typename Op>
-std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
-                                             std::optional<const scalar*> init,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+std::unique_ptr<scalar> dictionary_reduction(
+  column_view const& col,
+  std::optional<std::reference_wrapper<const scalar>> init,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   if (init.has_value()) { CUDF_FAIL("Initial value not support for dictionary reductions"); }
 
@@ -189,7 +195,7 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
 
   // set scalar is valid
   result->set_valid_async(
-    col.null_count() < col.size() && (!init.has_value() || init.value()->is_valid()), stream);
+    col.null_count() < col.size() && (!init.has_value() || init.value().get().is_valid()), stream);
   return result;
 }
 
@@ -264,7 +270,7 @@ template <typename Op>
 struct bool_result_element_dispatcher {
   template <typename ElementType, std::enable_if_t<std::is_arithmetic_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
-                                     std::optional<const scalar*> init,
+                                     std::optional<std::reference_wrapper<const scalar>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -274,7 +280,7 @@ struct bool_result_element_dispatcher {
   template <typename ElementType,
             std::enable_if_t<not std::is_arithmetic_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
-                                     std::optional<const scalar*>,
+                                     std::optional<std::reference_wrapper<const scalar>>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -323,11 +329,11 @@ struct same_element_type_dispatcher {
                              (std::is_same_v<Op, cudf::reduction::op::min> ||
                               std::is_same_v<Op, cudf::reduction::op::max>)>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
-                                     std::optional<const scalar*> init,
+                                     std::optional<std::reference_wrapper<const scalar>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    if (init.has_value()) { CUDF_FAIL("Initial value not support for struct reductions"); }
+    if (init.has_value()) { CUDF_FAIL("Initial value not supported for struct reductions"); }
 
     if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
 
@@ -347,7 +353,7 @@ struct same_element_type_dispatcher {
             std::enable_if_t<is_supported<ElementType>() && !cudf::is_fixed_point<ElementType>() &&
                              !std::is_same_v<ElementType, cudf::struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
-                                     std::optional<const scalar*> init,
+                                     std::optional<std::reference_wrapper<const scalar>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -364,7 +370,7 @@ struct same_element_type_dispatcher {
 
   template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
-                                     std::optional<const scalar*> init,
+                                     std::optional<std::reference_wrapper<const scalar>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -373,7 +379,7 @@ struct same_element_type_dispatcher {
 
   template <typename ElementType, std::enable_if_t<not is_supported<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
-                                     std::optional<const scalar*>,
+                                     std::optional<std::reference_wrapper<const scalar>>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -399,7 +405,7 @@ struct element_type_dispatcher {
             std::enable_if_t<std::is_floating_point_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
                                          data_type const output_type,
-                                         std::optional<const scalar*> init,
+                                         std::optional<std::reference_wrapper<const scalar>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
@@ -422,7 +428,7 @@ struct element_type_dispatcher {
   template <typename ElementType, std::enable_if_t<std::is_integral_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
                                          data_type const output_type,
-                                         std::optional<const scalar*> init,
+                                         std::optional<std::reference_wrapper<const scalar>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
@@ -452,7 +458,7 @@ struct element_type_dispatcher {
   template <typename ElementType, std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_type,
-                                     std::optional<const scalar*> init,
+                                     std::optional<std::reference_wrapper<const scalar>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -470,7 +476,7 @@ struct element_type_dispatcher {
   template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_type,
-                                     std::optional<const scalar*> init,
+                                     std::optional<std::reference_wrapper<const scalar>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -484,7 +490,7 @@ struct element_type_dispatcher {
                              not cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      data_type const,
-                                     std::optional<const scalar*> init,
+                                     std::optional<std::reference_wrapper<const scalar>> init,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {

@@ -34,8 +34,7 @@ std::unique_ptr<cudf::scalar> variance(column_view const& col,
   using reducer = compound::detail::element_type_dispatcher<cudf::reduction::op::variance>;
   auto col_type =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
-  return cudf::type_dispatcher(
-    col_type, reducer(), col, output_dtype, ddof, std::nullopt, stream, mr);
+  return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, ddof, stream, mr);
 #else
   // workaround for bug 200529165 which causes compilation error only at device debug build
   // hopefully the bug will be fixed in future cuda version (still failing in 11.2)

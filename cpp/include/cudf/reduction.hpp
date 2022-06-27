@@ -73,14 +73,15 @@ std::unique_ptr<scalar> reduce(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Computes the reduction of the values in all rows of a column with an initial value.
+ * @brief  Computes the reduction of the values in all rows of a column with an initial value. Only
+ * SUM, PRODUCT, MIN, MAX, ANY and ALL aggregations are supported.
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
- * @param output_dtype The computation and output precision.
- * @param init The initial value of the reduction.
+ * @param output_dtype The computation and output precision
+ * @param init The initial value of the reduction
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @returns Output scalar with reduce result.
+ * @returns Output scalar with reduce result
  */
 std::unique_ptr<scalar> reduce(
   column_view const& col,
@@ -140,18 +141,19 @@ std::unique_ptr<column> segmented_reduce(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief  Compute reduction of each segment in the input column with an initial value.
+ * @brief  Compute reduction of each segment in the input column with an initial value. Only SUM,
+ * PRODUCT, MIN, MAX, ANY and ALL aggregations are supported.
  *
- * @param segmented_values Column view of segmented inputs.
+ * @param segmented_values Column view of segmented inputs
  * @param offsets Each segment's offset of @p segmented_values. A list of offsets
  * with size `num_segments + 1`. The size of `i`th segment is `offsets[i+1] -
  * offsets[i]`.
- * @param agg Aggregation operator applied by the reduction.
- * @param output_dtype  The output precision.
+ * @param agg Aggregation operator applied by the reduction
+ * @param output_dtype  The output precision
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
- * @param init The initial value of the reduction.
+ * @param init The initial value of the reduction
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @returns Output column with results of segmented reduction.
  */

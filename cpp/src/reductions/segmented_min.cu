@@ -21,13 +21,14 @@
 namespace cudf {
 namespace reduction {
 
-std::unique_ptr<cudf::column> segmented_min(column_view const& col,
-                                            device_span<size_type const> offsets,
-                                            data_type const output_dtype,
-                                            null_policy null_handling,
-                                            std::optional<const scalar*> init,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> segmented_min(
+  column_view const& col,
+  device_span<size_type const> offsets,
+  data_type const output_dtype,
+  null_policy null_handling,
+  std::optional<std::reference_wrapper<const scalar>> init,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(col.type() == output_dtype,
                "segmented_min() operation requires matching output type");

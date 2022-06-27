@@ -35,13 +35,13 @@ namespace detail {
 struct reduce_dispatch_functor {
   column_view const col;
   data_type output_dtype;
-  std::optional<const scalar*> init;
+  std::optional<std::reference_wrapper<const scalar>> init;
   rmm::mr::device_memory_resource* mr;
   rmm::cuda_stream_view stream;
 
   reduce_dispatch_functor(column_view const& col,
                           data_type output_dtype,
-                          std::optional<const scalar*> init,
+                          std::optional<std::reference_wrapper<const scalar>> init,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr)
     : col(col), output_dtype(output_dtype), init(init), mr(mr), stream(stream)
@@ -145,10 +145,18 @@ std::unique_ptr<scalar> reduce(
   column_view const& col,
   std::unique_ptr<reduce_aggregation> const& agg,
   data_type output_dtype,
-  std::optional<const scalar*> init,
+  std::optional<std::reference_wrapper<const scalar>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
+  CUDF_EXPECTS(!init.has_value() || col.type() == init.value().get().type(),
+               "column and initial value must be the same type");
+  if (init.has_value() && !(agg->kind == aggregation::SUM || agg->kind == aggregation::PRODUCT ||
+                            agg->kind == aggregation::MIN || agg->kind == aggregation::MAX ||
+                            agg->kind == aggregation::ANY || agg->kind == aggregation::ALL)) {
+    CUDF_FAIL(
+      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
+  }
   // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
   // handcraft the default scalar with input column.
   if (col.size() <= col.null_count()) {
@@ -190,15 +198,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                scalar const& init,
                                rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(col.type() == init.type(), "column and initial value must be the same type");
-  if (!(agg->kind == aggregation::SUM || agg->kind == aggregation::PRODUCT ||
-        agg->kind == aggregation::MIN || agg->kind == aggregation::MAX ||
-        agg->kind == aggregation::ANY || agg->kind == aggregation::ALL)) {
-    CUDF_FAIL(
-      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
-  }
-
   CUDF_FUNC_RANGE();
-  return detail::reduce(col, agg, output_dtype, &init, cudf::default_stream_value, mr);
+  return detail::reduce(col, agg, output_dtype, init, cudf::default_stream_value, mr);
 }
 }  // namespace cudf

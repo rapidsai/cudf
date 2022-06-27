@@ -32,7 +32,7 @@ struct segmented_reduce_dispatch_functor {
   device_span<size_type const> offsets;
   data_type output_dtype;
   null_policy null_handling;
-  std::optional<const scalar*> init;
+  std::optional<std::reference_wrapper<const scalar>> init;
   rmm::mr::device_memory_resource* mr;
   rmm::cuda_stream_view stream;
 
@@ -40,7 +40,7 @@ struct segmented_reduce_dispatch_functor {
                                     device_span<size_type const> offsets,
                                     data_type output_dtype,
                                     null_policy null_handling,
-                                    std::optional<const scalar*> init,
+                                    std::optional<std::reference_wrapper<const scalar>> init,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
     : col(segmented_values),
@@ -52,19 +52,15 @@ struct segmented_reduce_dispatch_functor {
       stream(stream)
   {
   }
+
   segmented_reduce_dispatch_functor(column_view const& segmented_values,
                                     device_span<size_type const> offsets,
                                     data_type output_dtype,
                                     null_policy null_handling,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
-    : col(segmented_values),
-      offsets(offsets),
-      output_dtype(output_dtype),
-      null_handling(null_handling),
-      init(std::nullopt),
-      mr(mr),
-      stream(stream)
+    : segmented_reduce_dispatch_functor(
+        segmented_values, offsets, output_dtype, null_handling, std::nullopt, stream, mr)
   {
   }
 
@@ -102,10 +98,18 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          segmented_reduce_aggregation const& agg,
                                          data_type output_dtype,
                                          null_policy null_handling,
-                                         std::optional<const scalar*> init,
+                                         std::optional<std::reference_wrapper<const scalar>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(!init.has_value() || segmented_values.type() == init.value().get().type(),
+               "column and initial value must be the same type");
+  if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
+                            agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
+                            agg.kind == aggregation::ANY || agg.kind == aggregation::ALL)) {
+    CUDF_FAIL(
+      "Initial value is only supported for SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregation types");
+  }
   CUDF_EXPECTS(offsets.size() > 0, "`offsets` should have at least 1 element.");
 
   return aggregation_dispatcher(
@@ -141,15 +145,13 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          scalar const& init,
                                          rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(segmented_values.type() == init.type(),
-               "column and initial value must be the same type");
   CUDF_FUNC_RANGE();
   return detail::segmented_reduce(segmented_values,
                                   offsets,
                                   agg,
                                   output_dtype,
                                   null_handling,
-                                  &init,
+                                  init,
                                   cudf::default_stream_value,
                                   mr);
 }

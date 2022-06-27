@@ -530,8 +530,7 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
   OffsetIterator first_bit_indices_end,
   OffsetIterator last_bit_indices_begin,
   null_policy null_handling,
-  bool initial_value_provided,
-  bool valid_initial_value,
+  std::optional<bool> valid_initial_value,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -551,8 +550,9 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
     return cudf::detail::valid_if(
       segment_length_iterator,
       segment_length_iterator + num_segments,
-      [valid_initial_value, initial_value_provided] __device__(auto const& length) {
-        return valid_initial_value || (!initial_value_provided && length > 0);
+      [valid_initial_value] __device__(auto const& length) {
+        return valid_initial_value.value_or(false) ||
+               (!valid_initial_value.has_value() && length > 0);
       },
       stream,
       mr);
@@ -571,13 +571,13 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
   return cudf::detail::valid_if(
     length_and_valid_count,
     length_and_valid_count + num_segments,
-    [null_handling, initial_value_provided, valid_initial_value] __device__(
-      auto const& length_and_valid_count) {
+    [null_handling, valid_initial_value] __device__(auto const& length_and_valid_count) {
       auto const length      = thrust::get<0>(length_and_valid_count);
       auto const valid_count = thrust::get<1>(length_and_valid_count);
       return (null_handling == null_policy::EXCLUDE)
-               ? ((valid_count > 0 && length > 0) || valid_initial_value)
-               : ((valid_initial_value || (!initial_value_provided && length > 0)) &&
+               ? (valid_initial_value.value_or(false) || valid_count > 0)
+               : ((valid_initial_value.value_or(false) ||
+                   (!valid_initial_value.has_value() && length > 0)) &&
                   (valid_count == length));
     },
     stream,

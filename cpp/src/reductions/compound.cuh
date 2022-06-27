@@ -47,26 +47,15 @@ template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            data_type const output_dtype,
                                            cudf::size_type ddof,
-                                           std::optional<const scalar*> init,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
-  cudf::size_type valid_count = col.size() - col.null_count() + init.has_value();
+  cudf::size_type valid_count = col.size() - col.null_count();
 
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
   std::unique_ptr<scalar> result;
   Op compound_op{};
-
-  // Cast initial value
-  std::optional<ResultType> initial_value;
-  if (init.has_value() && init.value()->is_valid()) {
-    using ScalarType = cudf::scalar_type_t<ElementType>;
-    auto input_value = static_cast<const ScalarType*>(init.value())->value(stream);
-    initial_value    = static_cast<ResultType>(input_value);
-  } else {
-    initial_value = std::nullopt;
-  };
 
   if (!cudf::is_dictionary(col.type())) {
     if (col.has_nulls()) {
@@ -74,19 +63,19 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
         dcol->pair_begin<ElementType, true>(),
         compound_op.template get_null_replacing_element_transformer<ResultType>());
       result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
-        it, col.size(), compound_op, valid_count, ddof, initial_value, stream, mr);
+        it, col.size(), compound_op, valid_count, ddof, std::nullopt, stream, mr);
     } else {
       auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
       result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
-        it, col.size(), compound_op, valid_count, ddof, initial_value, stream, mr);
+        it, col.size(), compound_op, valid_count, ddof, std::nullopt, stream, mr);
     }
   } else {
     auto it = thrust::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls()),
       compound_op.template get_null_replacing_element_transformer<ResultType>());
     result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
-      it, col.size(), compound_op, valid_count, ddof, initial_value, stream, mr);
+      it, col.size(), compound_op, valid_count, ddof, std::nullopt, stream, mr);
   }
 
   // set scalar is valid
@@ -111,19 +100,16 @@ struct result_type_dispatcher {
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
-                                     std::optional<const scalar*> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return compound_reduction<ElementType, ResultType, Op>(
-      col, output_dtype, ddof, init, stream, mr);
+    return compound_reduction<ElementType, ResultType, Op>(col, output_dtype, ddof, stream, mr);
   }
 
   template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
-                                     std::optional<const scalar*> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -147,25 +133,17 @@ struct element_type_dispatcher {
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
-                                     std::optional<const scalar*> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return cudf::type_dispatcher(output_dtype,
-                                 result_type_dispatcher<ElementType, Op>(),
-                                 col,
-                                 output_dtype,
-                                 ddof,
-                                 init,
-                                 stream,
-                                 mr);
+    return cudf::type_dispatcher(
+      output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, stream, mr);
   }
 
   template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
-                                     std::optional<const scalar*> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {

@@ -82,7 +82,7 @@ struct all_fn {
 
 std::unique_ptr<cudf::scalar> all(column_view const& col,
                                   cudf::data_type const output_dtype,
-                                  std::optional<const scalar*> init,
+                                  std::optional<std::reference_wrapper<const scalar>> init,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
