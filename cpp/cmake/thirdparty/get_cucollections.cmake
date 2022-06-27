@@ -15,11 +15,10 @@
 # This function finds cuCollections and performs any additional configuration.
 function(find_and_configure_cucollections)
   include(${rapids-cmake-dir}/cpm/cuco.cmake)
-  rapids_cpm_cuco(BUILD_EXPORT_SET cudf-exports)
-
-  # Have to manually export cuco for static builds.
-  if(NOT BUILD_SHARED_LIBS)
-    rapids_export_package(INSTALL cuco cudf-exports)
+  if(BUILD_SHARED_LIBS)
+    rapids_cpm_cuco(BUILD_EXPORT_SET cudf-exports)
+  else()
+    rapids_cpm_cuco(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
   endif()
 endfunction()
 
