@@ -121,11 +121,11 @@ function install_dask {
 ################################################################################
 # INSTALL - Install libcudf artifacts
 ################################################################################
+CPP_CHANNEL=$(rapids-download-conda-from-s3 cpp)
 
 gpuci_logger "Installing libcudf & libcudf_kafka"
 gpuci_mamba_retry install -y \
   -c "${CPP_CHANNEL}" \
-  -c "${PYTHON_CHANNEL}" \
   libcudf libcudf_kafka
 
 install_dask
