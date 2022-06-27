@@ -12,24 +12,15 @@
 # the License.
 # =============================================================================
 
-# This function finds cucollections and sets any additional necessary environment variables.
+# This function finds cuCollections and performs any additional configuration.
 function(find_and_configure_cucollections)
+  include(${rapids-cmake-dir}/cpm/cuco.cmake)
+  rapids_cpm_cuco(BUILD_EXPORT_SET cudf-exports)
 
-  # Find or install cuCollections
-  rapids_cpm_find(
-    # cuCollections doesn't have a version yet
-    cuco 0.0.1
-    GLOBAL_TARGETS cuco::cuco
-    BUILD_EXPORT_SET cudf-exports
-    CPM_ARGS GITHUB_REPOSITORY NVIDIA/cuCollections
-    GIT_TAG 55029034c3f82bca36148c9be29941b37492394d
-    EXCLUDE_FROM_ALL ${BUILD_SHARED_LIBS}
-    OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
-  )
+  # Have to manually export cuco for static builds.
   if(NOT BUILD_SHARED_LIBS)
     rapids_export_package(INSTALL cuco cudf-exports)
   endif()
-
 endfunction()
 
 find_and_configure_cucollections()
