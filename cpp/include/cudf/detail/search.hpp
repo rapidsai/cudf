@@ -67,11 +67,11 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                  rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Check if rows in the given `needles` table exists in the `haystack` table.
+ * @brief Check if rows in the given `needles` table exist in the `haystack` table.
  *
- * Given two tables, each row in the `needles` table is checked if there is any matching row (i.e.,
- * compared equal to it) in the `haystack` table. The boolean search results are written into the
- * corresponding rows of the output array.
+ * Given two tables, each row in the `needles` table is checked to see if there is any matching row
+ * (i.e., compared equal to it) in the `haystack` table. The boolean search results are written into
+ * the corresponding rows of the output array.
  *
  * @code{.pseudo}
  * Example:
