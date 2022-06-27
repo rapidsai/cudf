@@ -91,7 +91,7 @@ std::unique_ptr<table> distinct(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a new table without duplicate rows while preserving the original row order.
+ * @brief Create a new table without duplicate rows with the original row order preserved.
  *
  * Given an `input` table_view, each row is copied to the output table (with row order preserved) to
  * create a set of distinct rows. If there are duplicate rows, which row to be copied depends on the
