@@ -892,6 +892,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             return ret.values
         return ret
 
+    # Override just to make mypy happy.
+    def _copy_type_metadata(
+        self: GenericIndex, other: GenericIndex
+    ) -> GenericIndex:
+        return super()._copy_type_metadata(other)
+
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def _values(self):
@@ -914,12 +920,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         result.name = name
         return result
-
-    # Override just to make mypy happy.
-    def _copy_type_metadata(
-        self: GenericIndex, other: GenericIndex
-    ) -> GenericIndex:
-        return super()._copy_type_metadata(other)
 
     @_cudf_nvtx_annotate
     def memory_usage(self, deep=False):
