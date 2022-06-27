@@ -213,6 +213,7 @@ int32_t binary_operation_fixed_point_scale(binary_operator op,
 cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
                                                          cudf::data_type const& lhs,
                                                          cudf::data_type const& rhs);
+
 namespace binops {
 
 /**
@@ -223,6 +224,7 @@ rmm::device_buffer scalar_col_valid_mask_and(
   scalar const& s,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 namespace compiled {
 
 /**
@@ -240,6 +242,7 @@ std::pair<column_view, std::unique_ptr<column>> scalar_to_column_view(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 namespace detail {
+
 /**
  * @brief struct binary operation using `NaN` aware sorting physical element comparators
  *
