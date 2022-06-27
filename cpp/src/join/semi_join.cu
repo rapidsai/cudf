@@ -67,6 +67,10 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
                                 stream,
                                 rmm::mr::get_current_device_resource());
 
+  // Materialize a gather map from the boolean values in the `flagged` array.
+  // Note that, in the past there was performance related issue with generating the gather map
+  // by calling to `map.contains` directly inside the `thrust::copy_if` kernel, which leads to
+  // increasing register usage (https://github.com/rapidsai/cudf/pull/10511).
   auto const left_num_rows = left_keys.num_rows();
   auto gather_map =
     std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
