@@ -41,7 +41,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
   auto const distinct_indices =
     get_distinct_indices(input.select(keys), keep, nulls_equal, nans_equal, stream);
 
-  // Markers to denote which row to be copied to the output.
+  // Markers to denote which rows to be copied to the output.
   auto const output_markers = [&] {
     auto markers = rmm::device_uvector<bool>(input.num_rows(), stream);
     thrust::uninitialized_fill(rmm::exec_policy(stream), markers.begin(), markers.end(), false);
