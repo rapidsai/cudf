@@ -36,6 +36,7 @@ public class BinaryOpTest extends CudfTestBase {
   private static final int dec32Scale_2 = -3;
   private static final int dec64Scale_1 = 6;
   private static final int dec64Scale_2 = -2;
+
   private static final Integer[] INTS_1 = new Integer[]{1, 2, 3, 4, 5, null, 100};
   private static final Integer[] INTS_2 = new Integer[]{10, 20, 30, 40, 50, 60, 100};
   private static final Integer[] UINTS_1 = new Integer[]{10, -20, 30, -40, 50, -60, 100};

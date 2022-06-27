@@ -1295,12 +1295,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
 
     if (lhs->type().id() == cudf::type_id::STRUCT) {
       auto [new_mask, null_count] =
-          cudf::detail::bitmask_and(cudf::table_view({*lhs, *rhs}), rmm::cuda_stream_default);
+          cudf::detail::bitmask_and(cudf::table_view({*lhs, *rhs}), cudf::default_stream_value);
       auto out = make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask), null_count,
-                                         rmm::cuda_stream_default);
+                                         cudf::default_stream_value);
       auto out_view = out->mutable_view();
       cudf::binops::compiled::detail::apply_sorting_struct_binary_op(
-          out_view, *lhs, *rhs, false, false, op, rmm::cuda_stream_default);
+          out_view, *lhs, *rhs, false, false, op, cudf::default_stream_value);
       return release_as_jlong(out);
     }
 
@@ -1335,14 +1335,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
 
     if (lhs->type().id() == cudf::type_id::STRUCT) {
-      auto new_mask = cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs, rmm::cuda_stream_default);
+      auto new_mask =
+          cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs, cudf::default_stream_value);
       auto out = make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask),
-                                         cudf::UNKNOWN_NULL_COUNT, rmm::cuda_stream_default);
+                                         cudf::UNKNOWN_NULL_COUNT, cudf::default_stream_value);
       auto [rhsv, aux] =
-          cudf::binops::compiled::scalar_to_column_view(*rhs, rmm::cuda_stream_default);
+          cudf::binops::compiled::scalar_to_column_view(*rhs, cudf::default_stream_value);
       auto out_view = out->mutable_view();
       cudf::binops::compiled::detail::apply_sorting_struct_binary_op(
-          out_view, *lhs, rhsv, false, true, op, rmm::cuda_stream_default);
+          out_view, *lhs, rhsv, false, true, op, cudf::default_stream_value);
       return release_as_jlong(out);
     }
 

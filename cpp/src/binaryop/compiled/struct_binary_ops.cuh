@@ -41,7 +41,7 @@ void apply_struct_binary_op(mutable_column_view& out,
                             bool is_lhs_scalar,
                             bool is_rhs_scalar,
                             PhysicalElementComparator c  = {},
-                            rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                            rmm::cuda_stream_view stream = cudf::default_stream_value)
 {
   auto compare_orders   = std::vector<order>(lhs.size(),
                                            is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
@@ -93,7 +93,7 @@ void apply_struct_equality_op(mutable_column_view& out,
                               bool is_rhs_scalar,
                               binary_operator op,
                               PhysicalEqualityComparator c = {},
-                              rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                              rmm::cuda_stream_view stream = cudf::default_stream_value)
 {
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL,
                "Unsupported operator for these types");
@@ -110,19 +110,18 @@ void apply_struct_equality_op(mutable_column_view& out,
   auto outd = column_device_view::create(out, stream);
   auto optional_iter =
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    out.begin<bool>(),
-    out.end<bool>(),
-    [optional_iter,
-     is_lhs_scalar,
-     is_rhs_scalar,
-     flip_output = (op == binary_operator::NOT_EQUAL),
-     device_comparator] __device__(size_type i) {
-      auto lhs = cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i};
-      auto rhs = cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i};
-      return optional_iter[i].has_value() and
-             (flip_output ? not device_comparator(lhs, rhs) : device_comparator(lhs, rhs));
-    });
+  thrust::tabulate(rmm::exec_policy(stream),
+                   out.begin<bool>(),
+                   out.end<bool>(),
+                   [optional_iter,
+                    is_lhs_scalar,
+                    is_rhs_scalar,
+                    preserve_output = (op != binary_operator::NOT_EQUAL),
+                    device_comparator] __device__(size_type i) {
+                     auto lhs = cudf::experimental::row::lhs_index_type{is_lhs_scalar ? 0 : i};
+                     auto rhs = cudf::experimental::row::rhs_index_type{is_rhs_scalar ? 0 : i};
+                     return optional_iter[i].has_value() and
+                            (device_comparator(lhs, rhs) == preserve_output);
+                   });
 }
 }  // namespace cudf::binops::compiled::detail
