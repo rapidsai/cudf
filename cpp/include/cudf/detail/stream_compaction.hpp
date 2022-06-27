@@ -22,6 +22,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 namespace detail {
@@ -81,6 +82,32 @@ std::unique_ptr<table> unique(
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> distinct(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create a new table without duplicate rows while preserving the original row order.
+ *
+ * Given an `input` table_view, each row is copied to the output table (with row order preserved) to
+ * create a set of distinct rows. If there are duplicate rows, which row to be copied depends on the
+ * specified value of the `keep` parameter.
+ *
+ * This API produces exactly the same set of output rows as `cudf::distinct`.
+ *
+ * @param input The input table
+ * @param keep Get index of any, first, last, or none of the found duplicates
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether NaN elements should be considered as equal
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table
+ * @return A device_uvector containing the result indices
+ */
+std::unique_ptr<table> stable_distinct(
   table_view const& input,
   std::vector<size_type> const& keys,
   duplicate_keep_option keep          = duplicate_keep_option::KEEP_ANY,

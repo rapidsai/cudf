@@ -452,6 +452,7 @@ add_library(
   src/stream_compaction/distinct_reduce.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
+  src/stream_compaction/stable_distinct.cu
   src/stream_compaction/unique.cu
   src/stream_compaction/unique_count.cu
   src/strings/attributes.cu
