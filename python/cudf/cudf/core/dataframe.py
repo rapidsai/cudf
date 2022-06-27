@@ -1590,7 +1590,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 # include different types that are not comparable.
                 names = sorted(names)
             except TypeError:
-                names = list(names)
+                # For pandas compatibility, we also try to handle the case
+                # where some column names are strings and others are ints. Just
+                # assume that everything that isn't a str is numerical, we
+                # can't sort anything else.
+                try:
+                    str_names = sorted(n for n in names if isinstance(n, str))
+                    non_str_names = sorted(
+                        n for n in names if not isinstance(n, str)
+                    )
+                    names = non_str_names + str_names
+                except TypeError:
+                    names = list(names)
         else:
             names = list(names)
 
