@@ -25,6 +25,8 @@
 #include <rmm/device_buffer.hpp>
 
 #include <algorithm>
+#include <functional>
+#include <numeric>
 
 namespace cudf {
 namespace strings {
@@ -63,9 +65,12 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   // compute size of each section
   auto insts_size    = insts_count * sizeof(_insts[0]);
   auto startids_size = starts_count * sizeof(_startinst_ids[0]);
-  auto classes_size  = classes_count * sizeof(_classes[0]);
-  for (auto idx = 0; idx < classes_count; ++idx)
-    classes_size += static_cast<int32_t>((h_prog.class_at(idx).literals.size()) * sizeof(char32_t));
+  auto classes_size  = std::transform_reduce(
+    h_prog.classes_data(),
+    h_prog.classes_data() + h_prog.classes_count(),
+    classes_count * sizeof(_classes[0]),
+    std::plus<std::size_t>{},
+    [&h_prog](auto& cls) { return cls.literals.size() * sizeof(reclass_range); });
   // make sure each section is aligned for the subsequent section's data type
   auto const memsize = cudf::util::round_up_safe(insts_size, sizeof(_startinst_ids[0])) +
                        cudf::util::round_up_safe(startids_size, sizeof(_classes[0])) +
@@ -104,14 +109,14 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   auto d_end = d_ptr + (classes_count * sizeof(reclass_device));
   // place each class and append the variable length data
   for (int32_t idx = 0; idx < classes_count; ++idx) {
-    reclass& h_class = h_prog.class_at(idx);
+    auto const& h_class = h_prog.class_at(idx);
     reclass_device d_class{h_class.builtins,
-                           static_cast<int32_t>(h_class.literals.size() / 2),
-                           reinterpret_cast<char32_t*>(d_end)};
+                           static_cast<int32_t>(h_class.literals.size()),
+                           reinterpret_cast<reclass_range*>(d_end)};
     *classes++ = d_class;
-    memcpy(h_end, h_class.literals.c_str(), h_class.literals.size() * sizeof(char32_t));
-    h_end += h_class.literals.size() * sizeof(char32_t);
-    d_end += h_class.literals.size() * sizeof(char32_t);
+    memcpy(h_end, h_class.literals.data(), h_class.literals.size() * sizeof(reclass_range));
+    h_end += h_class.literals.size() * sizeof(reclass_range);
+    d_end += h_class.literals.size() * sizeof(reclass_range);
   }
 
   // initialize the rest of the elements

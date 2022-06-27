@@ -141,7 +141,8 @@ __device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
                                                          uint8_t const* codepoint_flags) const
 {
   for (int i = 0; i < count; ++i) {
-    if ((ch >= literals[i * 2]) && (ch <= literals[(i * 2) + 1])) { return true; }
+    auto const literal = literals[i];
+    if ((ch >= literal.first) && (ch <= literal.last)) { return true; }
   }
 
   if (!builtins) return false;
@@ -204,11 +205,11 @@ __device__ __forceinline__ void reprog_device::store(void* buffer) const
   auto classes     = reinterpret_cast<reclass_device*>(ptr);
   result->_classes = classes;
   // fill in each class
-  auto d_ptr = reinterpret_cast<char32_t*>(classes + _classes_count);
+  auto d_ptr = reinterpret_cast<reclass_range*>(classes + _classes_count);
   for (int idx = 0; idx < _classes_count; ++idx) {
     classes[idx]          = _classes[idx];
     classes[idx].literals = d_ptr;
-    for (int jdx = 0; jdx < _classes[idx].count * 2; ++jdx)
+    for (int jdx = 0; jdx < _classes[idx].count; ++jdx)
       *d_ptr++ = _classes[idx].literals[jdx];
   }
 }
