@@ -189,8 +189,11 @@ class regex_parser {
   bool _has_counted{false};
 
   /**
-   * @brief Parses octal characters from current expression position
+   * @brief Parses octal characters at the current expression position
    * to return the represented character
+   *
+   * Reads up to 3 octal digits. The first digit should be passed
+   * in `in_chr`.
    *
    * @param in_chr The first character of the octal pattern
    * @return The resulting character
@@ -209,7 +212,7 @@ class regex_parser {
   }
 
   /**
-   * @brief Parses hex characters from current expression position
+   * @brief Parses 2 hex characters at the current expression position
    * to return the represented character
    *
    * @return The resulting character
