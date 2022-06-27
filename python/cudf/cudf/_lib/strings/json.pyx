@@ -12,7 +12,7 @@ from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
-def get_json_object(Column col, object py_json_path):
+def get_json_object(Column col, object py_json_path, allow_single_quotes=False, strip_quotes_from_single_strings=False, missing_fields_as_nulls=False):
     """
     Apply a JSONPath string to all rows in an input column
     of json strings.
@@ -25,10 +25,17 @@ def get_json_object(Column col, object py_json_path):
     cdef const string_scalar* scalar_json_path = <const string_scalar*>(
         json_path.get_raw_ptr()
     )
+
+    cdef get_json_object_options options
+    options.set_allow_single_quotes(allow_single_quotes)
+    options.set_strip_quotes_from_single_strings(strip_quotes_from_single_strings)
+    options.set_missing_fields_as_nulls(missing_fields_as_nulls)
+
     with nogil:
         c_result = move(cpp_get_json_object(
             col_view,
             scalar_json_path[0],
+            options,
         ))
 
     return Column.from_unique_ptr(move(c_result))
