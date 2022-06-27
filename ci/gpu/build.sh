@@ -243,6 +243,17 @@ cd "$WORKSPACE/python/custreamz"
 gpuci_logger "Python py.test for cuStreamz"
 py.test -n 8 --cache-clear --basetemp="$WORKSPACE/custreamz-cuda-tmp" --junitxml="$WORKSPACE/junit-custreamz.xml" -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:"$WORKSPACE/python/custreamz/custreamz-coverage.xml" --cov-report term custreamz
 
+# Run benchmarks with both cudf and pandas to ensure compatibility is maintained.
+# Benchmarks are run in DEBUG_ONLY mode, meaning that only small data sizes are used.
+# Therefore, these runs only verify that benchmarks are valid.
+# They do not generate meaningful performance measurements.
+cd "$WORKSPACE/python/cudf"
+gpuci_logger "Python pytest for cuDF benchmarks"
+CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" -v --dist=loadscope benchmarks
+
+gpuci_logger "Python pytest for cuDF benchmarks using pandas"
+CUDF_BENCHMARKS_USE_PANDAS=ON CUDF_BENCHMARKS_DEBUG_ONLY=ON pytest -n 8 --cache-clear --basetemp="$WORKSPACE/cudf-cuda-tmp" -v --dist=loadscope benchmarks
+
 gpuci_logger "Test notebooks"
 "$WORKSPACE/ci/gpu/test-notebooks.sh" 2>&1 | tee nbtest.log
 python "$WORKSPACE/ci/utils/nbtestlog2junitxml.py" nbtest.log
