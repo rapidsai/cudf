@@ -42,7 +42,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
     get_distinct_indices(input.select(keys), keep, nulls_equal, nans_equal, stream);
 
   // Markers to denote which row to be copied to the output.
-  auto const index_markers = [&] {
+  auto const output_markers = [&] {
     auto markers = rmm::device_uvector<bool>(input.num_rows(), stream);
     thrust::uninitialized_fill(rmm::exec_policy(stream), markers.begin(), markers.end(), false);
     thrust::scatter(
@@ -56,8 +56,8 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
 
   return cudf::detail::copy_if(
     input,
-    [index_markers = index_markers.begin()] __device__(auto const idx) {
-      return index_markers[idx];
+    [output_markers = output_markers.begin()] __device__(auto const idx) {
+      return output_markers[idx];
     },
     stream,
     mr);
