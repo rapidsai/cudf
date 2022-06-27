@@ -108,13 +108,17 @@ class Buffer(Serializable):
 
         if isinstance(data, Buffer):
             self._size = data.size
-            self._owner = owner or data._owner
-            if ptr_exposed:
+            if ptr_exposed or owner:
                 self._ptr = data.ptr  # Exposing `data`
+                self._owner = owner or data._owner
             else:
-                self._ptr_desc = data._ptr_desc
-                self._ptr = data._ptr
-                self._view_desc = data._view_desc
+                # Create a new buffer view that spans all of `data`
+                if data._view_desc is None:
+                    self._view_desc = {"base": data, "offset": 0}
+                else:
+                    self._view_desc = data._view_desc.copy()
+                self._ptr = None
+                self._owner = None
         elif isinstance(data, rmm.DeviceBuffer):
             self._ptr = data.ptr
             self._size = data.size
