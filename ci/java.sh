@@ -23,7 +23,7 @@ export HOME="$WORKSPACE"
 cd "$WORKSPACE"
 
 # Determine CUDA release version
-export CUDA_REL=${CUDA_VERSION%.*}
+export CUDA_REL=${CUDA%.*}
 export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 
 # Parse git describe
