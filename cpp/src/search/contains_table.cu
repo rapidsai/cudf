@@ -15,7 +15,6 @@
  */
 
 #include <join/join_common_utils.cuh>
-#include <join/join_common_utils.hpp>
 
 #include <cudf/detail/join.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -36,72 +35,6 @@ namespace {
 
 using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
-
-/**
- * @brief Device functor to create a pair of {hash_value, row_index} for a given row.
- * @tparam T Type of row index, must be `size_type` or a strong index type.
- * @tparam Hasher The type of internal hasher to compute row hash.
- */
-template <typename T, typename Hasher>
-struct make_pair_fn {
-  Hasher const hasher;
-  hash_value_type const empty_key_sentinel;
-
-  __device__ inline auto operator()(size_type const i) const
-  {
-    auto const hash_value = remap_sentinel_hash(hasher(i), empty_key_sentinel);
-    return cuco::make_pair(hash_value, T{i});
-  }
-};
-
-/**
- * @brief The functor to compare two rows using row hashes and row indices.
- *
- * @tparam Comparator The row comparator type to perform row equality comparison from row indices.
- */
-template <typename Comparator>
-struct pair_comparator_fn {
-  Comparator const d_eqcomp;
-
-  pair_comparator_fn(Comparator const d_eqcomp) : d_eqcomp{d_eqcomp} {}
-
-  template <typename LHSPair, typename RHSPair>
-  __device__ inline bool operator()(LHSPair const& lhs_hash_and_index,
-                                    RHSPair const& rhs_hash_and_index) const
-  {
-    auto const& [lhs_hash, lhs_index] = lhs_hash_and_index;
-    auto const& [rhs_hash, rhs_index] = rhs_hash_and_index;
-    return lhs_hash == rhs_hash ? d_eqcomp(lhs_index, rhs_index) : false;
-  }
-};
-
-/**
- * @brief The functor to accumulate all nullable columns at all nested levels from a given column.
- *
- * This is to avoid expensive materializing the bitmask into a real column when calling to
- * `structs::detail::flatten_nested_columns`.
- */
-struct accumulate_nullable_columns {
-  std::vector<column_view> result;
-
-  accumulate_nullable_columns(table_view const& table)
-  {
-    for (auto const& col : table) {
-      accumulate(col);
-    }
-  }
-
-  auto release() { return std::move(result); }
-
- private:
-  void accumulate(column_view const& col)
-  {
-    if (col.nullable()) { result.push_back(col); }
-    for (auto it = col.child_begin(); it != col.child_end(); ++it) {
-      if (it->size() == col.size()) { accumulate(*it); }
-    }
-  }
-};
 
 }  // namespace
 
@@ -137,7 +70,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 
     auto const haystack_it = cudf::detail::make_counting_transform_iterator(
       size_type{0},
-      make_pair_fn<lhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
+      make_pair_function<decltype(d_hasher), lhs_index_type>{d_hasher,
+                                                             map.get_empty_key_sentinel()});
 
     // If the haystack table has nulls but they are compared unequal, don't insert them.
     // Otherwise, it was known to cause performance issue:
@@ -145,7 +79,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     // - https://github.com/rapidsai/cudf/pull/8277
     if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
       // Gather all nullable columns at all levels from the right table.
-      auto const haystack_nullable_columns = accumulate_nullable_columns{haystack}.release();
+      auto const haystack_nullable_columns = accumulate_nullable_columns(haystack);
       auto const row_bitmask =
         std::move(cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream).first);
 
@@ -173,7 +107,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
 
     auto const needles_it = cudf::detail::make_counting_transform_iterator(
       size_type{0},
-      make_pair_fn<rhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
+      make_pair_function<decltype(d_hasher), rhs_index_type>{d_hasher,
+                                                             map.get_empty_key_sentinel()});
 
     auto const check_contains = [&](auto const value_comp) {
       auto const d_eqcomp = comparator.equal_to(
@@ -181,7 +116,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       map.pair_contains(needles_it,
                         needles_it + needles.num_rows(),
                         contained.begin(),
-                        pair_comparator_fn{d_eqcomp},
+                        pair_equality{d_eqcomp},
                         stream.value());
     };
 

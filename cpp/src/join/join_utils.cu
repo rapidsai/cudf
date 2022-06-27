@@ -29,6 +29,22 @@
 namespace cudf {
 namespace detail {
 
+std::vector<column_view> accumulate_nullable_columns(table_view const& table)
+{
+  std::vector<column_view> result;
+  for (auto const& col : table) {
+    if (col.nullable()) { result.push_back(col); }
+    for (auto it = col.child_begin(); it != col.child_end(); ++it) {
+      auto const& child = *it;
+      if (child.size() == col.size()) {
+        auto const child_result = accumulate_nullable_columns(table_view{{child}});
+        result.insert(result.end(), child_result.begin(), child_result.end());
+      }
+    }
+  }
+  return result;
+}
+
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
 {
   // If there is nothing to join, then send empty table with all columns

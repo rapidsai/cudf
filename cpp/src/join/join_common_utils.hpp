@@ -32,8 +32,7 @@
 
 #include <limits>
 
-namespace cudf {
-namespace detail {
+namespace cudf::detail {
 constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
@@ -65,5 +64,16 @@ using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 using row_equality = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
 
 bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type);
-}  // namespace detail
-}  // namespace cudf
+
+/**
+ * @brief The function to accumulate all nullable columns at all nested levels from a given table.
+ *
+ * This is to avoid expensive materializing the column bitmask into a real column when calling to
+ * `structs::detail::flatten_nested_columns`.
+ *
+ * @param table The input table
+ * @return A vector containing all nullable columns
+ */
+std::vector<column_view> accumulate_nullable_columns(table_view const& table);
+
+}  // namespace cudf::detail
