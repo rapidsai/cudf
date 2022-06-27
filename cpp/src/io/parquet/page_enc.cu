@@ -345,7 +345,7 @@ __global__ void __launch_bounds__(128)
 
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > this_max_page_size)) ||
-          rows_in_page > max_page_size_rows) {
+          rows_in_page >= max_page_size_rows) {
         if (ck_g.use_dictionary) {
           page_size =
             1 + 5 + ((values_in_page * ck_g.dict_rle_bits + 7) >> 3) + (values_in_page >> 8);
@@ -1619,6 +1619,51 @@ dremel_data get_dremel_data(column_view h_col,
     auto empties_size = empties_end - empties.begin();
     return std::make_tuple(std::move(empties), std::move(empties_idx), empties_size);
   };
+
+  // Check if there are empty lists with empty offsets in this column
+  bool has_empty_list_offsets = false;
+  {
+    auto curr_col = h_col;
+    while (is_nested(curr_col.type())) {
+      if (curr_col.type().id() == type_id::LIST) {
+        auto lcv = lists_column_view(curr_col);
+        if (lcv.offsets().size() == 0) {
+          has_empty_list_offsets = true;
+          break;
+        }
+        curr_col = lcv.child();
+      } else if (curr_col.type().id() == type_id::STRUCT) {
+        curr_col = curr_col.child(0);
+      }
+    }
+  }
+  std::unique_ptr<column> empty_list_offset_col;
+  if (has_empty_list_offsets) {
+    empty_list_offset_col = make_fixed_width_column(data_type(type_id::INT32), 1);
+    cudaMemsetAsync(empty_list_offset_col->mutable_view().head(), 0, sizeof(size_type), stream);
+    std::function<column_view(column_view const&)> normalize_col = [&](column_view const& col) {
+      auto children = [&]() -> std::vector<column_view> {
+        if (col.type().id() == type_id::LIST) {
+          auto lcol = lists_column_view(col);
+          auto offset_col =
+            lcol.offsets().head() == nullptr ? empty_list_offset_col->view() : lcol.offsets();
+          return {offset_col, normalize_col(lcol.child())};
+        } else if (col.type().id() == type_id::STRUCT) {
+          return {normalize_col(col.child(0))};
+        } else {
+          return {col.child_begin(), col.child_end()};
+        }
+      }();
+      return column_view(col.type(),
+                         col.size(),
+                         col.head(),
+                         col.null_mask(),
+                         UNKNOWN_NULL_COUNT,
+                         col.offset(),
+                         std::move(children));
+    };
+    h_col = normalize_col(h_col);
+  }
 
   auto curr_col = h_col;
   std::vector<column_view> nesting_levels;
