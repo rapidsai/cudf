@@ -25,6 +25,7 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -138,7 +139,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::wrap<detail::execute_wrap>(strings, width, rmm::cuda_stream_default, mr);
+  return detail::wrap<detail::execute_wrap>(strings, width, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

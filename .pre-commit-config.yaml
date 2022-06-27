@@ -101,6 +101,14 @@ repos:
                 stages: [commit]
                 entry: python ./ci/checks/copyright.py --git-modified-only
                 language: python
+              - id: doxygen-check
+                name: doxygen-check
+                entry: ./ci/checks/doxygen.sh
+                files: ^cpp/include/
+                types_or: [file]
+                language: system
+                pass_filenames: false
+                verbose: true
 
 default_language_version:
       python: python3
