@@ -32,6 +32,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -214,6 +215,16 @@ public final class MemoryCleaner {
         if (defaultGpu >= 0) {
           Cuda.setDevice(defaultGpu);
         }
+
+        try {
+          // Shutdown hooks are executed concurrently, and there is no execution order guarantee.
+          // See the doc of `Runtime.addShutdownHook`.
+          // Some resources may be closed in other hooks.
+          // Wait other hooks to be done, or a false leak may be detected.
+          Thread.sleep(TimeUnit.SECONDS.toMillis(1));
+        } catch (InterruptedException e) {
+        }
+
         for (CleanerWeakReference cwr : all) {
           cwr.clean();
         }
