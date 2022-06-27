@@ -8,13 +8,17 @@ import pytest
 import rmm
 
 import cudf
+from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.spill_manager import SpillManager, global_manager
 from cudf.testing._utils import assert_eq
 
 
-def gen_df() -> cudf.DataFrame:
-    return cudf.DataFrame({"a": [1, 2, 3]})
+def gen_df(target="gpu") -> cudf.DataFrame:
+    ret = cudf.DataFrame({"a": [1, 2, 3]})
+    if target != "gpu":
+        gen_df.buffer(ret).move_inplace(target=target)
+    return ret
 
 
 gen_df.buffer = lambda df: df._data._data["a"].data
@@ -217,3 +221,18 @@ def test_modify_spilled_views(manager):
     # the df
     df_view.iloc[:] = -1
     assert_eq(df_view, df.iloc[1:])
+
+
+@pytest.mark.parametrize("target", ["gpu", "cpu"])
+@pytest.mark.parametrize("view", [None, slice(0, 2), slice(1, 3)])
+def test_host_serialize(manager, target, view):
+    # Unspilled df becomes spilled after host serialization
+    df1 = gen_df(target=target)
+    if view is not None:
+        df1 = df1.iloc[view]
+    header, frames = df1.host_serialize()
+    assert all(isinstance(f, memoryview) for f in frames)
+    assert gen_df.is_spilled(df1)
+    df2 = Serializable.host_deserialize(header, frames)
+    assert gen_df.is_spilled(df2)
+    assert_eq(df1, df2)

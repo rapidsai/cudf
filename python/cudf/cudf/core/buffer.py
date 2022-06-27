@@ -107,9 +107,14 @@ class Buffer(Serializable):
         )
 
         if isinstance(data, Buffer):
-            self._ptr = data.ptr
             self._size = data.size
             self._owner = owner or data._owner
+            if ptr_exposed:
+                self._ptr = data.ptr  # Exposing `data`
+            else:
+                self._ptr_desc = data._ptr_desc
+                self._ptr = data._ptr
+                self._view_desc = data._view_desc
         elif isinstance(data, rmm.DeviceBuffer):
             self._ptr = data.ptr
             self._size = data.size
@@ -119,7 +124,14 @@ class Buffer(Serializable):
         ):
             self._init_from_array_like(data, owner)
         elif isinstance(data, memoryview):
-            self._init_from_array_like(np.asarray(data), owner)
+            if ptr_exposed:
+                self._init_from_array_like(np.asarray(data), owner)
+            else:
+                # Create an already spilled Buffer
+                self._ptr_desc = {"type": "cpu", "memoryview": data}
+                self._ptr = None
+                self._size = data.nbytes
+                self._owner = data
         elif isinstance(data, int):
             if not isinstance(size, int):
                 raise TypeError("size must be integer")
@@ -325,13 +337,7 @@ class Buffer(Serializable):
         assert (
             header["frame_count"] == 1
         ), "Only expecting to deserialize Buffer with a single frame."
-
-        if type(cls) is Buffer:
-            return Buffer.from_buffer(frames[0])
-
-        # Currently, downstream classes depend on this for deserialization.
-        # TODO: This should be removed when they don't depend on this anymore.
-        buf = cls(frames[0])
+        buf = cls(frames[0], ptr_exposed=False)
         if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(
                 f"Received a `Buffer` with the wrong size."
@@ -339,6 +345,30 @@ class Buffer(Serializable):
                 f"but got {buf.__cuda_array_interface__['shape']}"
             )
         return buf
+
+    def memoryview_read_only(self) -> memoryview:
+        # Get base buffer
+        if self._view_desc is None:
+            base = self
+            offset = 0
+        else:
+            base = self._view_desc["base"]
+            offset = self._view_desc["offset"]
+
+        with base._lock:
+            if base.spillable:
+                base.move_inplace(target="cpu")
+                return base._ptr_desc["memoryview"][
+                    offset : offset + self.size
+                ]
+            else:
+                assert base._ptr_desc["type"] == "gpu"
+                assert base._ptr is not None
+                ret = memoryview(bytearray(self.size))
+                rmm._lib.device_buffer.copy_ptr_to_host(
+                    base._ptr + offset, ret
+                )
+                return ret
 
     @classmethod
     def empty(cls, size: int) -> Buffer:

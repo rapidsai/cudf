@@ -1,9 +1,7 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 """Common abstract base classes for cudf."""
 
 import sys
-
-import rmm
 
 import cudf
 
@@ -130,17 +128,12 @@ class Serializable:
         """
         typ = pickle.loads(header["type-serialized"])
         frames = [
-            cudf.core.buffer.Buffer(f) if c else memoryview(f)
+            cudf.core.buffer.Buffer(f, ptr_exposed=False)
+            if c
+            else memoryview(f)
             for c, f in zip(header["is-cuda"], frames)
         ]
-        assert all(
-            (type(f._owner) is rmm.DeviceBuffer)
-            if c
-            else (type(f) is memoryview)
-            for c, f in zip(header["is-cuda"], frames)
-        )
         obj = typ.deserialize(header, frames)
-
         return obj
 
     def host_serialize(self):
@@ -158,7 +151,7 @@ class Serializable:
         header, frames = self.device_serialize()
         header["writeable"] = len(frames) * (None,)
         frames = [
-            f.to_host_array().data if c else memoryview(f)
+            f.memoryview_read_only() if c else memoryview(f)
             for c, f in zip(header["is-cuda"], frames)
         ]
         return header, frames
@@ -184,7 +177,7 @@ class Serializable:
         :meta private:
         """
         frames = [
-            rmm.DeviceBuffer.to_device(f) if c else f
+            cudf.core.buffer.Buffer(f, ptr_exposed=False) if c else f
             for c, f in zip(header["is-cuda"], map(memoryview, frames))
         ]
         obj = cls.device_deserialize(header, frames)
