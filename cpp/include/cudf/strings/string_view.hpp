@@ -29,13 +29,6 @@ namespace cudf {
 using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 
 /**
- * @brief The string length is initialized to this value as a place-holder
- *
- * The number of characters in a string computed on-demand.
- */
-constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
-
-/**
  * @brief A non-owning, immutable view of device data that is a variable length
  * char array representing a UTF-8 string.
  *
@@ -374,6 +367,13 @@ class string_view {
   const char* _data{};          ///< Pointer to device memory contain char array for this string
   size_type _bytes{};           ///< Number of bytes in _data for this string
   mutable size_type _length{};  ///< Number of characters in this string (computed)
+
+  /**
+   * @brief The string length is initialized to this value as a place-holder
+   *
+   * The number of characters in a string computed on-demand.
+   */
+  static inline cudf::size_type const UNKNOWN_STRING_LENGTH{-1};
 
   /**
    * @brief Return the character position of the given byte offset.
