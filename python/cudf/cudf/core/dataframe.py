@@ -2660,6 +2660,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: int64
         """
         from cudf.core._internals.where import (
+            _make_categorical_like,
+            _normalize_categorical,
             _normalize_columns_and_scalars_type,
         )
 
@@ -2714,39 +2716,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             source_df._data.items(), others
         ):
             if column_name in cond._data:
-                if isinstance(input_col, cudf.core.column.CategoricalColumn):
-                    if cudf.api.types.is_scalar(other_column):
-                        try:
-                            other_column = input_col._encode(other_column)
-                        except ValueError:
-                            # When other is not present in categories,
-                            # fill with Null.
-                            other_column = None
-                        other_column = cudf.Scalar(
-                            other_column, dtype=input_col.codes.dtype
-                        )
-                    elif isinstance(
-                        other_column, cudf.core.column.CategoricalColumn
-                    ):
-                        other_column = other_column.codes
-                    input_col = input_col.codes
+                input_col, other_column = _normalize_categorical(
+                    input_col, other_column
+                )
 
                 result = cudf._lib.copying.copy_if_else(
                     input_col, other_column, cond._data[column_name]
                 )
 
                 self_column = self._data[column_name]
-                if isinstance(self_column, cudf.core.column.CategoricalColumn):
-                    result = cudf.core.column.build_categorical_column(
-                        categories=self_column.categories,
-                        codes=cudf.core.column.build_column(
-                            result.base_data, dtype=result.dtype
-                        ),
-                        mask=result.base_mask,
-                        size=result.size,
-                        offset=result.offset,
-                        ordered=self_column.ordered,
-                    )
+                result = _make_categorical_like(result, self_column)
             else:
                 out_mask = cudf._lib.null_mask.create_null_mask(
                     len(input_col),

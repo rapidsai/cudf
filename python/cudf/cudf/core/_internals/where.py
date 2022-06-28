@@ -170,3 +170,35 @@ def _normalize_columns_and_scalars_type(
                 f"Inappropriate input {type(frame)} "
                 f"and other {type(other)} combination"
             )
+
+
+def _normalize_categorical(input_col, other):
+    if isinstance(input_col, cudf.core.column.CategoricalColumn):
+        if cudf.api.types.is_scalar(other):
+            try:
+                other = input_col._encode(other)
+            except ValueError:
+                # When other is not present in categories,
+                # fill with Null.
+                other = None
+            other = cudf.Scalar(other, dtype=input_col.codes.dtype)
+        elif isinstance(other, cudf.core.column.CategoricalColumn):
+            other = other.codes
+
+        input_col = input_col.codes
+    return input_col, other
+
+
+def _make_categorical_like(result, column):
+    if isinstance(column, cudf.core.column.CategoricalColumn):
+        result = cudf.core.column.build_categorical_column(
+            categories=column.categories,
+            codes=cudf.core.column.build_column(
+                result.base_data, dtype=result.dtype
+            ),
+            mask=result.base_mask,
+            size=result.size,
+            offset=result.offset,
+            ordered=column.ordered,
+        )
+    return result

@@ -450,6 +450,8 @@ class SingleColumnFrame(Frame, NotIterable):
         dtype: int64
         """
         from cudf.core._internals.where import (
+            _make_categorical_like,
+            _normalize_categorical,
             _normalize_columns_and_scalars_type,
         )
 
@@ -468,34 +470,12 @@ class SingleColumnFrame(Frame, NotIterable):
             other,
         ) = _normalize_columns_and_scalars_type(self, other, inplace)
 
-        if isinstance(input_col, cudf.core.column.CategoricalColumn):
-            if cudf.api.types.is_scalar(other):
-                try:
-                    other = input_col._encode(other)
-                except ValueError:
-                    # When other is not present in categories,
-                    # fill with Null.
-                    other = None
-                other = cudf.Scalar(other, dtype=input_col.codes.dtype)
-            elif isinstance(other, cudf.core.column.CategoricalColumn):
-                other = other.codes
-
-            input_col = input_col.codes
+        input_col, other = _normalize_categorical(input_col, other)
 
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
 
         self_column = self._column
-        if isinstance(self_column, cudf.core.column.CategoricalColumn):
-            result = cudf.core.column.build_categorical_column(
-                categories=self_column.categories,
-                codes=cudf.core.column.build_column(
-                    result.base_data, dtype=result.dtype
-                ),
-                mask=result.base_mask,
-                size=result.size,
-                offset=result.offset,
-                ordered=self_column.ordered,
-            )
+        result = _make_categorical_like(result, self_column)
 
         if isinstance(self, cudf.Index):
             result = cudf.Index(result, name=self.name)
