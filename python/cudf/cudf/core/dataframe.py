@@ -2634,6 +2634,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
+            _normalize_categorical,
         )
 
         if isinstance(other, DataFrame):
@@ -2655,6 +2656,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 source_col=col,
                 other=o,
                 inplace=inplace,
+            )
+            source_col, other_scalar = _normalize_categorical(
+                source_col, other_scalar
             )
             source_cols[colname] = source_col
             others.append(other_scalar)
@@ -2713,10 +2717,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         4    <NA>
         dtype: int64
         """
-        from cudf.core._internals.where import (
-            _make_categorical_like,
-            _normalize_categorical,
-        )
+        from cudf.core._internals.where import _make_categorical_like
 
         if hasattr(cond, "__cuda_array_interface__"):
             if isinstance(cond, Series):
@@ -2768,10 +2769,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             source_cols.items(), others
         ):
             if column_name in cond._data:
-                input_col, other_column = _normalize_categorical(
-                    input_col, other_column
-                )
-
                 result = cudf._lib.copying.copy_if_else(
                     input_col, other_column, cond._data[column_name]
                 )
