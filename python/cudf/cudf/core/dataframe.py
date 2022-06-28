@@ -2648,19 +2648,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             other_cols = other
 
-        # TODO: It looks like Frame is missing a declaration of `copy`, need to
-        # add that.
-        source_df = self.copy(deep=False)
+        source_cols = {}
         others = []
-        for (colname, col), o in zip(source_df._data.items(), other_cols):
+        for (colname, col), o in zip(self._data.items(), other_cols):
             source_col, other_scalar = _check_and_cast_columns_with_other(
                 source_col=col,
                 other=o,
                 inplace=inplace,
             )
-            source_df._data[colname] = source_col
+            source_cols[colname] = source_col
             others.append(other_scalar)
-        return source_df, others
+        return source_cols, others
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
@@ -2755,7 +2753,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             cond._set_column_names_like(self)
 
         (
-            source_df,
+            source_cols,
             others,
         ) = self._normalize_columns_and_scalars_type(other)
 
@@ -2767,7 +2765,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         out = {}
         for (column_name, input_col), other_column in zip(
-            source_df._data.items(), others
+            source_cols.items(), others
         ):
             if column_name in cond._data:
                 input_col, other_column = _normalize_categorical(
