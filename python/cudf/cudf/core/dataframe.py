@@ -2606,6 +2606,160 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.index = idx
         return df if not inplace else None
 
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        """
+        Replace values where the condition is False.
+
+        Parameters
+        ----------
+        cond : bool Series/DataFrame, array-like
+            Where cond is True, keep the original value.
+            Where False, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, list of scalars, Series/DataFrame
+            Entries where cond is False are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+            DataFrame expects only Scalar or array like with scalars or
+            dataframe with same dimension as self.
+
+            Series expects only scalar or series like with same length
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
+
+        Returns
+        -------
+        Same type as caller
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
+        >>> df.where(df % 2 == 0, [-1, -1])
+           A  B
+        0 -1 -1
+        1  4 -1
+        2 -1  8
+
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> ser.where(ser > 2, 10)
+        0     4
+        1     3
+        2    10
+        3    10
+        4    10
+        dtype: int64
+        >>> ser.where(ser > 2)
+        0       4
+        1       3
+        2    <NA>
+        3    <NA>
+        4    <NA>
+        dtype: int64
+        """
+        from cudf.core._internals.where import (
+            _normalize_columns_and_scalars_type,
+        )
+
+        if hasattr(cond, "__cuda_array_interface__"):
+            if isinstance(cond, Series):
+                cond = DataFrame(
+                    {name: cond for name in self._column_names},
+                    index=self.index,
+                )
+            else:
+                cond = DataFrame(
+                    cond, columns=self._column_names, index=self.index
+                )
+        elif (
+            hasattr(cond, "__array_interface__")
+            and cond.__array_interface__["shape"] != self.shape
+        ):
+            raise ValueError("conditional must be same shape as self")
+        elif not isinstance(cond, DataFrame):
+            cond = self.from_pandas(pd.DataFrame(cond))
+
+        common_cols = set(self._column_names).intersection(
+            set(cond._column_names)
+        )
+        if len(common_cols) > 0:
+            # If `self` and `cond` are having unequal index,
+            # then re-index `cond`.
+            if not self.index.equals(cond.index):
+                cond = cond.reindex(self.index)
+        else:
+            if cond.shape != self.shape:
+                raise ValueError(
+                    """Array conditional must be same shape as self"""
+                )
+            # Setting `self` column names to `cond`
+            # as `cond` has no column names.
+            cond._set_column_names_like(self)
+
+        (
+            source_df,
+            others,
+        ) = _normalize_columns_and_scalars_type(self, other)
+        if isinstance(others, Frame):
+            others = others._data.columns
+
+        out_df = DataFrame(index=self.index)
+        if len(self._columns) != len(others):
+            raise ValueError(
+                """Replacement list length or number of dataself columns
+                should be equal to Number of columns of dataself"""
+            )
+        for i, column_name in enumerate(self._column_names):
+            input_col = source_df._data[column_name]
+            other_column = others[i]
+            if column_name in cond._data:
+                if isinstance(input_col, cudf.core.column.CategoricalColumn):
+                    if cudf.api.types.is_scalar(other_column):
+                        try:
+                            other_column = input_col._encode(other_column)
+                        except ValueError:
+                            # When other is not present in categories,
+                            # fill with Null.
+                            other_column = None
+                        other_column = cudf.Scalar(
+                            other_column, dtype=input_col.codes.dtype
+                        )
+                    elif isinstance(
+                        other_column, cudf.core.column.CategoricalColumn
+                    ):
+                        other_column = other_column.codes
+                    input_col = input_col.codes
+
+                result = cudf._lib.copying.copy_if_else(
+                    input_col, other_column, cond._data[column_name]
+                )
+
+                if isinstance(
+                    self._data[column_name],
+                    cudf.core.column.CategoricalColumn,
+                ):
+                    result = cudf.core.column.build_categorical_column(
+                        categories=self._data[column_name].categories,
+                        codes=cudf.core.column.build_column(
+                            result.base_data, dtype=result.dtype
+                        ),
+                        mask=result.base_mask,
+                        size=result.size,
+                        offset=result.offset,
+                        ordered=self._data[column_name].ordered,
+                    )
+            else:
+                out_mask = cudf._lib.null_mask.create_null_mask(
+                    len(input_col),
+                    state=cudf._lib.null_mask.MaskState.ALL_NULL,
+                )
+                result = input_col.set_mask(out_mask)
+            out_df[column_name] = self[column_name].__class__(result)
+
+        return self._mimic_inplace(out_df, inplace=inplace)
+
     @docutils.doc_apply(
         doc_reset_index_template.format(
             klass="DataFrame",

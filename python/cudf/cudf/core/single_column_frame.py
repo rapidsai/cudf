@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union, cast
 
 import cupy
 import numpy as np
@@ -395,3 +395,119 @@ class SingleColumnFrame(Frame, NotIterable):
             if is_bool_dtype(arg.dtype):
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
+
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        """
+        Replace values where the condition is False.
+
+        Parameters
+        ----------
+        cond : bool Series/DataFrame, array-like
+            Where cond is True, keep the original value.
+            Where False, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, list of scalars, Series/DataFrame
+            Entries where cond is False are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+            DataFrame expects only Scalar or array like with scalars or
+            dataframe with same dimension as self.
+
+            Series expects only scalar or series like with same length
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
+
+        Returns
+        -------
+        Same type as caller
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
+        >>> df.where(df % 2 == 0, [-1, -1])
+           A  B
+        0 -1 -1
+        1  4 -1
+        2 -1  8
+
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> ser.where(ser > 2, 10)
+        0     4
+        1     3
+        2    10
+        3    10
+        4    10
+        dtype: int64
+        >>> ser.where(ser > 2)
+        0       4
+        1       3
+        2    <NA>
+        3    <NA>
+        4    <NA>
+        dtype: int64
+        """
+        from cudf.core._internals.where import (
+            _normalize_columns_and_scalars_type,
+        )
+
+        if isinstance(other, cudf.DataFrame):
+            raise NotImplementedError(
+                "cannot align with a higher dimensional Frame"
+            )
+        input_col = self._data[self.name]
+        cond = cudf.core.column.as_column(cond)
+        if len(cond) != len(self):
+            raise ValueError(
+                """Array conditional must be same shape as self"""
+            )
+
+        (
+            input_col,
+            other,
+        ) = _normalize_columns_and_scalars_type(self, other, inplace)
+
+        if isinstance(input_col, cudf.core.column.CategoricalColumn):
+            if cudf.api.types.is_scalar(other):
+                try:
+                    other = input_col._encode(other)
+                except ValueError:
+                    # When other is not present in categories,
+                    # fill with Null.
+                    other = None
+                other = cudf.Scalar(other, dtype=input_col.codes.dtype)
+            elif isinstance(other, cudf.core.column.CategoricalColumn):
+                other = other.codes
+
+            input_col = input_col.codes
+
+        result = cudf._lib.copying.copy_if_else(input_col, other, cond)
+
+        if isinstance(
+            self._data[self.name], cudf.core.column.CategoricalColumn
+        ):
+            result = cudf.core.column.build_categorical_column(
+                categories=cast(
+                    cudf.core.column.CategoricalColumn,
+                    self._data[self.name],
+                ).categories,
+                codes=cudf.core.column.build_column(
+                    result.base_data, dtype=result.dtype
+                ),
+                mask=result.base_mask,
+                size=result.size,
+                offset=result.offset,
+                ordered=cast(
+                    cudf.core.column.CategoricalColumn,
+                    self._data[self.name],
+                ).ordered,
+            )
+
+        if isinstance(self, cudf.Index):
+            result = cudf.Index(result, name=self.name)
+        else:
+            result = self._from_data({self.name: result}, self._index)
+
+        return self._mimic_inplace(result, inplace=inplace)
