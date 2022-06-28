@@ -109,7 +109,8 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
 
   // `overlap_results` only stores the results of non-empty lists.
   // We need to initialize `false` for the entire output array then scatter these results over.
-  thrust::uninitialized_fill(rmm::exec_policy(stream), result_begin, result_begin, false);
+  thrust::uninitialized_fill(
+    rmm::exec_policy(stream), result_begin, result_begin + lhs.size(), false);
   thrust::scatter(rmm::exec_policy(stream),
                   overlap_results.begin(),
                   overlap_results.begin() + num_non_empty_segments,
