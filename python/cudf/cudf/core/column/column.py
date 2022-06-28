@@ -287,8 +287,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
-        elif isinstance(array.type, pa.StructType):
-            return cudf.core.column.StructColumn.from_arrow(array)
         elif isinstance(
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
         ):
