@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union, cast
+from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -457,7 +457,6 @@ class SingleColumnFrame(Frame, NotIterable):
             raise NotImplementedError(
                 "cannot align with a higher dimensional Frame"
             )
-        input_col = self._data[self.name]
         cond = cudf.core.column.as_column(cond)
         if len(cond) != len(self):
             raise ValueError(
@@ -485,29 +484,22 @@ class SingleColumnFrame(Frame, NotIterable):
 
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
 
-        if isinstance(
-            self._data[self.name], cudf.core.column.CategoricalColumn
-        ):
+        self_column = self._column
+        if isinstance(self_column, cudf.core.column.CategoricalColumn):
             result = cudf.core.column.build_categorical_column(
-                categories=cast(
-                    cudf.core.column.CategoricalColumn,
-                    self._data[self.name],
-                ).categories,
+                categories=self_column.categories,
                 codes=cudf.core.column.build_column(
                     result.base_data, dtype=result.dtype
                 ),
                 mask=result.base_mask,
                 size=result.size,
                 offset=result.offset,
-                ordered=cast(
-                    cudf.core.column.CategoricalColumn,
-                    self._data[self.name],
-                ).ordered,
+                ordered=self_column.ordered,
             )
 
         if isinstance(self, cudf.Index):
             result = cudf.Index(result, name=self.name)
         else:
-            result = self._from_data({self.name: result}, self._index)
+            result = self._from_data_like_self({self.name: result})
 
         return self._mimic_inplace(result, inplace=inplace)
