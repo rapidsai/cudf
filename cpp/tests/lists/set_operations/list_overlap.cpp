@@ -27,7 +27,7 @@ using float_type = double;
 using namespace cudf::test::iterators;
 
 auto constexpr null{0};  // null at current level
-// auto constexpr XXX{0};   // null pushed down from parent level
+auto constexpr XXX{0};   // null pushed down from parent level
 auto constexpr neg_NaN      = -std::numeric_limits<float_type>::quiet_NaN();
 auto constexpr neg_Inf      = -std::numeric_limits<float_type>::infinity();
 auto constexpr NaN          = std::numeric_limits<float_type>::quiet_NaN();
@@ -357,4 +357,177 @@ TYPED_TEST(ListOverlapTypedTest, InputHaveNullsTests)
     auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
+}
+
+TEST_F(ListOverlapTest, InputListsOfNestedStructsHaveNull)
+{
+  auto const get_structs_lhs = [] {
+    auto grandchild1 = int32s_col{{
+                                    1,    XXX,  null, XXX, XXX, 1, 1,    1,  // list1
+                                    1,    1,    1,    1,   2,   1, null, 2,  // list2
+                                    null, null, 2,    2,   3,   2, 3,    3   // list3
+                                  },
+                                  nulls_at({2, 14, 16, 17})};
+    auto grandchild2 = strings_col{{
+                                     // begin list1
+                                     "Banana",
+                                     "YYY", /*NULL*/
+                                     "Apple",
+                                     "XXX", /*NULL*/
+                                     "YYY", /*NULL*/
+                                     "Banana",
+                                     "Cherry",
+                                     "Kiwi",  // end list1
+                                              // begin list2
+                                     "Bear",
+                                     "Duck",
+                                     "Cat",
+                                     "Dog",
+                                     "Panda",
+                                     "Bear",
+                                     "" /*NULL*/,
+                                     "Panda",  // end list2
+                                               // begin list3
+                                     "ÁÁÁ",
+                                     "ÉÉÉÉÉ",
+                                     "ÍÍÍÍÍ",
+                                     "ÁBC",
+                                     "" /*NULL*/,
+                                     "ÁÁÁ",
+                                     "ÁBC",
+                                     "XYZ"  // end list3
+                                   },
+                                   nulls_at({14, 20})};
+    auto child1      = structs_col{{grandchild1, grandchild2}, nulls_at({1, 3, 4})};
+    return structs_col{{child1}};
+  };
+
+  // Only grandchild1 of rhs is different from lhs'. The rest is exactly the same.
+  auto const get_structs_rhs = [] {
+    auto grandchild1 = int32s_col{{
+                                    2,    XXX,  null, XXX, XXX, 2, 2,    2,  // list1
+                                    3,    3,    3,    3,   3,   3, null, 3,  // list2
+                                    null, null, 4,    4,   4,   4, 4,    4   // list3
+                                  },
+                                  nulls_at({2, 14, 16, 17})};
+    auto grandchild2 = strings_col{{
+                                     // begin list1
+                                     "Banana",
+                                     "YYY", /*NULL*/
+                                     "Apple",
+                                     "XXX", /*NULL*/
+                                     "YYY", /*NULL*/
+                                     "Banana",
+                                     "Cherry",
+                                     "Kiwi",  // end list1
+                                              // begin list2
+                                     "Bear",
+                                     "Duck",
+                                     "Cat",
+                                     "Dog",
+                                     "Panda",
+                                     "Bear",
+                                     "" /*NULL*/,
+                                     "Panda",  // end list2
+                                               // begin list3
+                                     "ÁÁÁ",
+                                     "ÉÉÉÉÉ",
+                                     "ÍÍÍÍÍ",
+                                     "ÁBC",
+                                     "" /*NULL*/,
+                                     "ÁÁÁ",
+                                     "ÁBC",
+                                     "XYZ"  // end list3
+                                   },
+                                   nulls_at({14, 20})};
+    auto child1      = structs_col{{grandchild1, grandchild2}, nulls_at({1, 3, 4})};
+    return structs_col{{child1}};
+  };
+
+  // Nulls are equal.
+  {
+    auto const lhs = cudf::make_lists_column(
+      3, int32s_col{0, 8, 16, 24}.release(), get_structs_lhs().release(), 0, {});
+    auto const rhs = cudf::make_lists_column(
+      3, int32s_col{0, 8, 16, 24}.release(), get_structs_rhs().release(), 0, {});
+    auto const expected = bools_col{1, 1, 1};
+    auto const results  = cudf::lists::list_overlap(lists_cv{*lhs}, lists_cv{*rhs}, NULL_EQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // Nulls are unequal.
+  {
+    auto const lhs = cudf::make_lists_column(
+      3, int32s_col{0, 8, 16, 24}.release(), get_structs_lhs().release(), 0, {});
+    auto const rhs = cudf::make_lists_column(
+      3, int32s_col{0, 8, 16, 24}.release(), get_structs_rhs().release(), 0, {});
+    auto const expected = bools_col{0, 0, 0};
+    auto const results  = cudf::lists::list_overlap(lists_cv{*lhs}, lists_cv{*rhs}, NULL_UNEQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+}
+
+TEST_F(ListOverlapTest, InputListsOfStructsOfLists)
+{
+  auto const lhs = [] {
+    auto const get_structs = [] {
+      auto child1 = int32s_col{// begin list1
+                               0,
+                               1,
+                               2,  // end list1
+                                   // begin list2
+                               3,  // end list2
+                                   // begin list3
+                               4,
+                               5,
+                               6};
+      auto child2 = floats_lists{// begin list1
+                                 floats_lists{0, 1},
+                                 floats_lists{0, 2},
+                                 floats_lists{1, 1},     // end list1
+                                                         // begin list2
+                                 floats_lists{3, 4, 5},  // end list2
+                                                         // begin list3
+                                 floats_lists{6, 7},
+                                 floats_lists{6, 8},
+                                 floats_lists{6, 7, 8}};
+      return structs_col{{child1, child2}};
+    };
+
+    return cudf::make_lists_column(
+      3, int32s_col{0, 3, 4, 7}.release(), get_structs().release(), 0, {});
+  }();
+
+  auto const rhs = [] {
+    auto const get_structs = [] {
+      auto child1 = int32s_col{// begin list1
+                               0,
+                               1,
+                               2,  // end list1
+                                   // begin list2
+                               3,  // end list2
+                                   // begin list3
+                               4,
+                               5,
+                               6};
+      auto child2 = floats_lists{// begin list1
+                                 floats_lists{1, 1},
+                                 floats_lists{1, 2},
+                                 floats_lists{1, 2},     // end list1
+                                                         // begin list2
+                                 floats_lists{3, 4, 5},  // end list2
+                                                         // begin list3
+                                 floats_lists{6, 7, 8, 9},
+                                 floats_lists{6, 8},
+                                 floats_lists{3, 4, 5}};
+      return structs_col{{child1, child2}};
+    };
+
+    return cudf::make_lists_column(
+      3, int32s_col{0, 3, 4, 7}.release(), get_structs().release(), 0, {});
+  }();
+
+  auto const expected = bools_col{0, 1, 1};
+  auto const results  = cudf::lists::list_overlap(lists_cv{*lhs}, lists_cv{*rhs});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
 }
