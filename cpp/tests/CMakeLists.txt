@@ -485,8 +485,8 @@ ConfigureTest(
   lists/set_operations/set_intersect.cpp
   lists/set_operations/set_union.cpp
   lists/sort_lists_tests.cpp
-  lists/stream_compaction/apply_boolean_mask_test.cpp
-  lists/stream_compaction/distinct.cpp
+  lists/stream_compaction/apply_boolean_mask_tests.cpp
+  lists/stream_compaction/distinct_tests.cpp
 )
 
 # ##################################################################################################
