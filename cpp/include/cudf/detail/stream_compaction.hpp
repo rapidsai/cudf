@@ -100,7 +100,7 @@ std::unique_ptr<table> distinct(
  * This API produces exactly the same set of output rows as `cudf::distinct`.
  *
  * @param input The input table
- * @param keep Get index of any, first, last, or none of the found duplicates
+ * @param keep Copy any, first, last, or none of the found duplicates
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether NaN elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
