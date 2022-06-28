@@ -26,6 +26,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <memory>
+#include <utility>
+
 namespace cudf::lists {
 namespace detail {
 

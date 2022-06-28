@@ -20,6 +20,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf::lists::detail {
 

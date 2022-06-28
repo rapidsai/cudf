@@ -73,7 +73,7 @@ std::unique_ptr<column> apply_boolean_mask(
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
- * @return A column of type BOOL containing the check result
+ * @return The resulting lists column containing lists without duplicates
  */
 std::unique_ptr<column> distinct(
   lists_column_view const& input,

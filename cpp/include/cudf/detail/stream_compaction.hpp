@@ -100,12 +100,13 @@ std::unique_ptr<table> distinct(
  * This API produces exactly the same set of output rows as `cudf::distinct`.
  *
  * @param input The input table
+ * @param keys Vector of indices indicating key columns in the `input` table
  * @param keep Copy any, first, last, or none of the found duplicates
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether NaN elements should be considered as equal
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table
- * @return A device_uvector containing the result indices
+ * @return A table containing the resulting distinct rows
  */
 std::unique_ptr<table> stable_distinct(
   table_view const& input,
