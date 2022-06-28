@@ -20,19 +20,30 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/lists/set_operations.hpp>
+
+using float_type = double;
+using namespace cudf::test::iterators;
 
 auto constexpr null{0};  // null at current level
 // auto constexpr XXX{0};   // null pushed down from parent level
-auto constexpr NaN = std::numeric_limits<double>::quiet_NaN();
+auto constexpr neg_NaN      = -std::numeric_limits<float_type>::quiet_NaN();
+auto constexpr neg_Inf      = -std::numeric_limits<float_type>::infinity();
+auto constexpr NaN          = std::numeric_limits<float_type>::quiet_NaN();
+auto constexpr Inf          = std::numeric_limits<float_type>::infinity();
+auto constexpr NULL_EQUAL   = cudf::null_equality::EQUAL;
+auto constexpr NULL_UNEQUAL = cudf::null_equality::UNEQUAL;
+auto constexpr NAN_EQUAL    = cudf::nan_equality::ALL_EQUAL;
+auto constexpr NAN_UNEQUAL  = cudf::nan_equality::UNEQUAL;
 
-using bools_col = cudf::test::fixed_width_column_wrapper<bool>;
-// using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
-// using floats_col  = cudf::test::fixed_width_column_wrapper<float>;
-using lists_col = cudf::test::lists_column_wrapper<float>;
-// using strings_col = cudf::test::strings_column_wrapper;
-// using structs_col = cudf::test::structs_column_wrapper;
-using lists_cv = cudf::lists_column_view;
+using bools_col     = cudf::test::fixed_width_column_wrapper<bool>;
+using int32s_col    = cudf::test::fixed_width_column_wrapper<int32_t>;
+using floats_lists  = cudf::test::lists_column_wrapper<float_type>;
+using strings_lists = cudf::test::lists_column_wrapper<cudf::string_view>;
+using strings_col   = cudf::test::strings_column_wrapper;
+using structs_col   = cudf::test::structs_column_wrapper;
+using lists_cv      = cudf::lists_column_view;
 
 // using cudf::nan_policy;
 // using cudf::null_equality;
@@ -48,25 +59,70 @@ template <typename T>
 struct ListOverlapTypedTest : public cudf::test::BaseFixture {
 };
 
-using TestTypes = cudf::test::
-  Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes, cudf::test::ChronoTypes>;
+using TestTypes =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
 TYPED_TEST_SUITE(ListOverlapTypedTest, TestTypes);
 
 TEST_F(ListOverlapTest, TrivialTest)
 {
-  auto const lhs = lists_col{{lists_col{{NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 0.0}, null_at(6)},
-                              lists_col{{NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 1.0}, null_at(6)},
-                              {} /*NULL*/,
-                              lists_col{{NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 1.0}, null_at(6)}},
-                             null_at(2)};
-  auto const rhs = lists_col{{lists_col{{1.0, 0.5, null, 0.0, 0.0, null, NaN}, nulls_at({2, 5})},
-                              lists_col{{2.0, 1.0, null, 0.0, 0.0, null}, nulls_at({2, 5})},
-                              lists_col{{2.0, 1.0, null, 0.0, 0.0, null}, nulls_at({2, 5})},
-                              {} /*NULL*/},
-                             null_at(3)};
+  auto const lhs =
+    floats_lists{{floats_lists{{NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 0.0}, null_at(6)},
+                  floats_lists{{NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 1.0}, null_at(6)},
+                  {} /*NULL*/,
+                  floats_lists{{NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 1.0}, null_at(6)}},
+                 null_at(2)};
+  auto const rhs =
+    floats_lists{{floats_lists{{1.0, 0.5, null, 0.0, 0.0, null, NaN}, nulls_at({2, 5})},
+                  floats_lists{{2.0, 1.0, null, 0.0, 0.0, null}, nulls_at({2, 5})},
+                  floats_lists{{2.0, 1.0, null, 0.0, 0.0, null}, nulls_at({2, 5})},
+                  {} /*NULL*/},
+                 null_at(3)};
 
   auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
   auto const expected = bools_col{{1, 1, null, null}, nulls_at({2, 3})};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+}
+
+TEST_F(ListOverlapTest, FloatingPointTestsWithSignedZero)
+{
+  // -0.0 and 0.0 should be considered equal.
+  auto const lhs      = floats_lists{{0.0, 0.0, 0.0, 0.0, 0.0}, {-0.0, 1.0}, {0.0}};
+  auto const rhs      = floats_lists{{-0.0, -0.0, -0.0, -0.0, -0.0}, {0.0, 2.0}, {1.0}};
+  auto const expected = bools_col{1, 1, 0};
+  auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+}
+
+TEST_F(ListOverlapTest, FloatingPointTestsWithInf)
+{
+  auto const lhs      = floats_lists{{Inf, Inf, Inf}, {Inf, 0.0, neg_Inf}};
+  auto const rhs      = floats_lists{{neg_Inf, neg_Inf}, {0.0}};
+  auto const expected = bools_col{0, 1};
+  auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+}
+
+TEST_F(ListOverlapTest, FloatingPointTestsWithNaNs)
+{
+  auto const lhs =
+    floats_lists{{0, -1, 1, NaN}, {2, 0, neg_NaN}, {1, -2, 2, 0, 1, 2}, {NaN, NaN, NaN, NaN, NaN}};
+  auto const rhs =
+    floats_lists{{2, 3, 4, neg_NaN}, {2, 0}, {neg_NaN, 1, -2, 2, 0, 1, 2}, {neg_NaN, neg_NaN}};
+
+  // NaNs are equal.
+  {
+    auto const expected = bools_col{1, 1, 1, 1};
+    auto const results =
+      cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL, NAN_EQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // NaNs are unequal.
+  {
+    auto const expected = bools_col{0, 1, 1, 0};
+    auto const results =
+      cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL, NAN_UNEQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
 }
