@@ -20,17 +20,15 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/lists/stream_compaction.hpp>
 
 using float_type = double;
 using namespace cudf::test::iterators;
-// using cudf::nan_policy;
-// using cudf::null_equality;
-// using cudf::null_policy;
 
 auto constexpr null{0};  // null at current level
-// auto constexpr XXX{0};   // null pushed down from parent level
+auto constexpr XXX{0};   // null pushed down from parent level
 auto constexpr neg_NaN      = -std::numeric_limits<float_type>::quiet_NaN();
 auto constexpr neg_Inf      = -std::numeric_limits<float_type>::infinity();
 auto constexpr NaN          = std::numeric_limits<float_type>::quiet_NaN();
@@ -40,14 +38,12 @@ auto constexpr NULL_UNEQUAL = cudf::null_equality::UNEQUAL;
 auto constexpr NAN_EQUAL    = cudf::nan_equality::ALL_EQUAL;
 auto constexpr NAN_UNEQUAL  = cudf::nan_equality::UNEQUAL;
 
-using bools_col = cudf::test::fixed_width_column_wrapper<bool>;
-// using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
-using floats_col    = cudf::test::fixed_width_column_wrapper<float_type>;
+using int32s_col    = cudf::test::fixed_width_column_wrapper<int32_t>;
 using floats_lists  = cudf::test::lists_column_wrapper<float_type>;
 using strings_lists = cudf::test::lists_column_wrapper<cudf::string_view>;
-// using strings_col = cudf::test::strings_column_wrapper;
-// using structs_col = cudf::test::structs_column_wrapper;
-using lists_cv = cudf::lists_column_view;
+using strings_col   = cudf::test::strings_column_wrapper;
+using structs_col   = cudf::test::structs_column_wrapper;
+using lists_cv      = cudf::lists_column_view;
 
 namespace {
 
@@ -351,4 +347,386 @@ TYPED_TEST(ListDistinctTypedTest, InputHaveNullsTests)
     auto const results_sorted = distinct_sorted(input, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
+}
+
+TEST_F(ListDistinctTest, InputListsOfStructsNoNull)
+{
+  auto const get_structs = [] {
+    auto child1 = int32s_col{
+      1, 1, 1, 1, 1, 1, 1, 1,  // list1
+      1, 1, 1, 1, 2, 1, 2, 2,  // list2
+      2, 2, 2, 2, 3, 2, 3, 3   // list3
+    };
+    auto child2 = strings_col{
+      // begin list1
+      "Banana",
+      "Mango",
+      "Apple",
+      "Cherry",
+      "Kiwi",
+      "Banana",
+      "Cherry",
+      "Kiwi",  // end list1
+      // begin list2
+      "Bear",
+      "Duck",
+      "Cat",
+      "Dog",
+      "Panda",
+      "Bear",
+      "Cat",
+      "Panda",  // end list2
+      // begin list3
+      "ÁÁÁ",
+      "ÉÉÉÉÉ",
+      "ÍÍÍÍÍ",
+      "ÁBC",
+      "XYZ",
+      "ÁÁÁ",
+      "ÁBC",
+      "XYZ"  // end list3
+    };
+    return structs_col{{child1, child2}};
+  };
+
+  auto const get_expected = [] {
+    auto child1 = int32s_col{1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3};
+    auto child2 = strings_col{
+      // begin list1
+      "Apple",
+      "Banana",
+      "Cherry",
+      "Kiwi",
+      "Mango",  // end list1
+      // begin list2
+      "Bear",
+      "Cat",
+      "Dog",
+      "Duck",
+      "Cat",
+      "Panda",  // end list2
+      // begin list3
+      "ÁBC",
+      "ÁÁÁ",
+      "ÉÉÉÉÉ",
+      "ÍÍÍÍÍ",
+      "XYZ",
+      "ÁBC"  // end list3
+    };
+    return structs_col{{child1, child2}};
+  };
+
+  // Test full columns.
+  {
+    auto const input = cudf::make_lists_column(
+      3, int32s_col{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
+    auto const expected = cudf::make_lists_column(
+      3, int32s_col{0, 5, 11, 17}.release(), get_expected().release(), 0, {});
+    auto const results_sorted = distinct_sorted(*input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results_sorted);
+  }
+
+  // Test sliced columns.
+  {
+    auto const input_original = cudf::make_lists_column(
+      3, int32s_col{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
+    auto const expected_original = cudf::make_lists_column(
+      3, int32s_col{0, 5, 11, 17}.release(), get_expected().release(), 0, {});
+    auto const input          = cudf::slice(*input_original, {1, 3})[0];
+    auto const expected       = cudf::slice(*expected_original, {1, 3})[0];
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+}
+
+TEST_F(ListDistinctTest, InputListsOfStructsHaveNull)
+{
+  auto const get_structs = [] {
+    auto child1 = int32s_col{{
+                               1,    1,    null, XXX, XXX, 1, 1,    1,  // list1
+                               1,    1,    1,    1,   2,   1, null, 2,  // list2
+                               null, null, 2,    2,   3,   2, 3,    3   // list3
+                             },
+                             nulls_at({2, 14, 16, 17})};
+    auto child2 = strings_col{{
+                                // begin list1
+                                "Banana",
+                                "Mango",
+                                "Apple",
+                                "XXX", /*NULL*/
+                                "XXX", /*NULL*/
+                                "Banana",
+                                "Cherry",
+                                "Kiwi",  // end list1
+                                         // begin list2
+                                "Bear",
+                                "Duck",
+                                "Cat",
+                                "Dog",
+                                "Panda",
+                                "Bear",
+                                "" /*NULL*/,
+                                "Panda",  // end list2
+                                          // begin list3
+                                "ÁÁÁ",
+                                "ÉÉÉÉÉ",
+                                "ÍÍÍÍÍ",
+                                "ÁBC",
+                                "" /*NULL*/,
+                                "ÁÁÁ",
+                                "ÁBC",
+                                "XYZ"  // end list3
+                              },
+                              nulls_at({14, 20})};
+    return structs_col{{child1, child2}, nulls_at({3, 4})};
+  };
+
+  auto const get_expected = [] {
+    auto child1 = int32s_col{{      // begin list1
+                              XXX,  // end list1
+                              null,
+                              1,
+                              1,
+                              1,
+                              1,
+                              // begin list2
+                              null,  // end list2
+                              1,
+                              1,
+                              1,
+                              1,
+                              2,
+                              // begin list3
+                              null,
+                              null,
+                              2,
+                              2,
+                              2,
+                              3,
+                              3,
+                              3},  // end list3
+                             nulls_at({1, 6, 12, 13})};
+    auto child2 = strings_col{{       // begin list1
+                               "XXX", /*NULL*/
+                               "Apple",
+                               "Banana",
+                               "Cherry",
+                               "Kiwi",
+                               "Mango",  // end list1
+                                         // begin list2
+                               "",       /*NULL*/
+                               "Bear",
+                               "Cat",
+                               "Dog",
+                               "Duck",
+                               "Panda",  // end list2
+                                         // begin list3
+                               "ÁÁÁ",
+                               "ÉÉÉÉÉ",
+                               "ÁBC",
+                               "ÁÁÁ",
+                               "ÍÍÍÍÍ",
+                               "", /*NULL*/
+                               "XYZ",
+                               "ÁBC"},  // end list3
+                              nulls_at({6, 17})};
+    return structs_col{{child1, child2}, null_at(0)};
+  };
+
+  // Test full columns.
+  {
+    auto const input = cudf::make_lists_column(
+      3, int32s_col{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
+    auto const expected = cudf::make_lists_column(
+      3, int32s_col{0, 6, 12, 20}.release(), get_expected().release(), 0, {});
+    auto const results_sorted = distinct_sorted(*input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results_sorted);
+  }
+
+  // Test sliced columns.
+  {
+    auto const input_original = cudf::make_lists_column(
+      3, int32s_col{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
+    auto const expected_original = cudf::make_lists_column(
+      3, int32s_col{0, 6, 12, 20}.release(), get_expected().release(), 0, {});
+    auto const input          = cudf::slice(*input_original, {1, 3})[0];
+    auto const expected       = cudf::slice(*expected_original, {1, 3})[0];
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+}
+
+TEST_F(ListDistinctTest, InputListsOfNestedStructsHaveNull)
+{
+  auto const get_structs = [] {
+    auto grandchild1 = int32s_col{{
+                                    1,    XXX,  null, XXX, XXX, 1, 1,    1,  // list1
+                                    1,    1,    1,    1,   2,   1, null, 2,  // list2
+                                    null, null, 2,    2,   3,   2, 3,    3   // list3
+                                  },
+                                  nulls_at({2, 14, 16, 17})};
+    auto grandchild2 = strings_col{{
+                                     // begin list1
+                                     "Banana",
+                                     "YYY", /*NULL*/
+                                     "Apple",
+                                     "XXX", /*NULL*/
+                                     "YYY", /*NULL*/
+                                     "Banana",
+                                     "Cherry",
+                                     "Kiwi",  // end list1
+                                              // begin list2
+                                     "Bear",
+                                     "Duck",
+                                     "Cat",
+                                     "Dog",
+                                     "Panda",
+                                     "Bear",
+                                     "" /*NULL*/,
+                                     "Panda",  // end list2
+                                               // begin list3
+                                     "ÁÁÁ",
+                                     "ÉÉÉÉÉ",
+                                     "ÍÍÍÍÍ",
+                                     "ÁBC",
+                                     "" /*NULL*/,
+                                     "ÁÁÁ",
+                                     "ÁBC",
+                                     "XYZ"  // end list3
+                                   },
+                                   nulls_at({14, 20})};
+    auto child1      = structs_col{{grandchild1, grandchild2}, nulls_at({1, 3, 4})};
+    return structs_col{{child1}};
+  };
+
+  auto const get_expected = [] {
+    auto grandchild1 = int32s_col{{// begin list1
+                                   XXX,
+                                   null,
+                                   1,
+                                   1,
+                                   1,  // end list1
+                                       // begin list2
+                                   null,
+                                   1,
+                                   1,
+                                   1,
+                                   1,
+                                   2,  // end list2
+                                       // begin list3
+                                   null,
+                                   null,
+                                   2,
+                                   2,
+                                   2,
+                                   3,
+                                   3,
+                                   3},
+                                  nulls_at({1, 5, 11, 12})};
+    auto grandchild2 = strings_col{{
+                                     // begin list1
+                                     "XXX" /*NULL*/,
+                                     "Apple",
+                                     "Banana",
+                                     "Cherry",
+                                     "Kiwi",  // end list1
+                                              // begin list2
+                                     "" /*NULL*/,
+                                     "Bear",
+                                     "Cat",
+                                     "Dog",
+                                     "Duck",
+                                     "Panda",  // end list2
+                                               // begin list3
+                                     "ÁÁÁ",
+                                     "ÉÉÉÉÉ",
+                                     "ÁBC",
+                                     "ÁÁÁ",
+                                     "ÍÍÍÍÍ",
+                                     "", /*NULL*/
+                                     "XYZ",
+                                     "ÁBC"  // end list3
+                                   },
+                                   nulls_at({5, 16})};
+    auto child1      = structs_col{{grandchild1, grandchild2}, nulls_at({0})};
+    return structs_col{{child1}};
+  };
+
+  // Test full columns.
+  {
+    auto const input = cudf::make_lists_column(
+      3, int32s_col{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
+    auto const expected = cudf::make_lists_column(
+      3, int32s_col{0, 5, 11, 19}.release(), get_expected().release(), 0, {});
+    auto const results_sorted = distinct_sorted(*input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results_sorted);
+  }
+
+  // Test sliced columns.
+  {
+    auto const input_original = cudf::make_lists_column(
+      3, int32s_col{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
+    auto const expected_original = cudf::make_lists_column(
+      3, int32s_col{0, 5, 11, 19}.release(), get_expected().release(), 0, {});
+    auto const input          = cudf::slice(*input_original, {1, 3})[0];
+    auto const expected       = cudf::slice(*expected_original, {1, 3})[0];
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+}
+
+TEST_F(ListDistinctTest, InputListsOfStructsOfLists)
+{
+  auto const input = [] {
+    auto const get_structs = [] {
+      auto child1 = int32s_col{// begin list1
+                               0,
+                               0,
+                               0,  // end list1
+                                   // begin list2
+                               2,  // end list2
+                                   // begin list3
+                               3,
+                               3,
+                               3};
+      auto child2 = floats_lists{// begin list1
+                                 floats_lists{0, 1},
+                                 floats_lists{0, 1},
+                                 floats_lists{0, 1},     // end list1
+                                                         // begin list2
+                                 floats_lists{3, 4, 5},  // end list2
+                                                         // begin list3
+                                 floats_lists{6, 7},
+                                 floats_lists{6, 7},
+                                 floats_lists{6, 7}};
+      return structs_col{{child1, child2}};
+    };
+
+    return cudf::make_lists_column(
+      3, int32s_col{0, 3, 4, 7}.release(), get_structs().release(), 0, {});
+  }();
+
+  auto const expected = [] {
+    auto const get_structs = [] {
+      auto child1 = int32s_col{    // begin list1
+                               0,  // end list1
+                                   // begin list2
+                               2,  // end list2
+                                   // begin list3
+                               3};
+      auto child2 = floats_lists{                        // begin list1
+                                 floats_lists{0, 1},     // end list1
+                                                         // begin list2
+                                 floats_lists{3, 4, 5},  // end list2
+                                                         // begin list3
+                                 floats_lists{6, 7}};
+      return structs_col{{child1, child2}};
+    };
+
+    return cudf::make_lists_column(
+      3, int32s_col{0, 1, 2, 3}.release(), get_structs().release(), 0, {});
+  }();
+
+  auto const results = cudf::lists::distinct(lists_cv{*input});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results);
 }
