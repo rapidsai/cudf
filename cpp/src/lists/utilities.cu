@@ -43,7 +43,7 @@ std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
     data_type{type_to_id<offset_type>()}, n_lists + 1, mask_state::UNALLOCATED, stream, mr);
 
   auto const labels_begin  = labels.template begin<size_type>();
-  auto const offsets_begin = out_offsets->mutable_view().template begin<size_type>();
+  auto const offsets_begin = out_offsets->mutable_view().template begin<offset_type>();
   cudf::detail::labels_to_offsets(labels_begin,
                                   labels_begin + labels.size(),
                                   offsets_begin,
