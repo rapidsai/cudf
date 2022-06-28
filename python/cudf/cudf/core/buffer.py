@@ -390,16 +390,18 @@ class Buffer(Serializable):
         return out
 
     def __repr__(self) -> str:
-        if self._ptr is None:
-            data_info = str(self._ptr_desc)
+        if self._view_desc is None:
+            if self._ptr is None:
+                ptr_info = str(self._ptr_desc)
+            else:
+                ptr_info = str(hex(self._ptr))
         else:
-            data_info = str(hex(self._ptr))
+            ptr_info = str(self._view_desc)
         return (
             f"<cudf.core.buffer.Buffer size={format_bytes(self._size)} "
             f"spillable={self.spillable} ptr_exposed={self.ptr_exposed} "
             f"access_counter={self._access_counter.use_count()} "
-            f"ptr={data_info} owner={repr(self._owner)} "
-            f"view_desc: {self._view_desc}>"
+            f"ptr={ptr_info} owner={repr(self._owner)} "
         )
 
 

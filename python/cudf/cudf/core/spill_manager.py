@@ -204,13 +204,5 @@ class GlobalSpillManager:
             return self._manager
         raise ValueError("No global SpillManager")
 
-    def register_buffer(
-        self,
-        obj: Buffer,
-    ) -> bool:
-        if global_manager.enabled:
-            global_manager.get().add(obj)
-        return global_manager.enabled
-
 
 global_manager = GlobalSpillManager()
