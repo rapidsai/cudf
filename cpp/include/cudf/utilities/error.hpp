@@ -112,8 +112,15 @@ struct fatal_cuda_error : public cuda_error {
  * CUDF_EXPECTS(not cudf::is_nested(child_col.type()), std::invalid_argument,
  *      "Nested types are not supported.");
  * @endcode
- *
- * @param[in] _condition Expression that evaluates to true or false
+ */
+#define CUDF_EXPECTS(...)                                             \
+  GET_CUDF_EXPECTS_MACRO(__VA_ARGS__, CUDF_EXPECTS_3, CUDF_EXPECTS_2) \
+  (__VA_ARGS__)
+
+//! @cond Doxygen_Suppress
+#define GET_CUDF_EXPECTS_MACRO(_1, _2, _3, NAME, ...) NAME
+
+/** @param[in] _condition Expression that evaluates to true or false
  * @param[in] _expection_type The exception type to throw; must inherit
  *     `std::exception`. If not specified (i.e. if only two macro
  *     arguments are provided), defaults to `cudf::logic_error`
@@ -121,16 +128,13 @@ struct fatal_cuda_error : public cuda_error {
  *     thrown, i.e. why `_condition` was expected to be true.
  * @throw `_exception_type` if the condition evaluates to 0 (false).
  */
-#define CUDF_EXPECTS(...)                                             \
-  GET_CUDF_EXPECTS_MACRO(__VA_ARGS__, CUDF_EXPECTS_3, CUDF_EXPECTS_2) \
-  (__VA_ARGS__)
-#define GET_CUDF_EXPECTS_MACRO(_1, _2, _3, NAME, ...) NAME
 #define CUDF_EXPECTS_3(_condition, _exception_type, _reason)               \
   (!!(_condition)) ? static_cast<void>(0) : throw _exception_type          \
   {                                                                        \
     "cuDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _reason \
   }
 #define CUDF_EXPECTS_2(_condition, _reason) CUDF_EXPECTS_3(_condition, cudf::logic_error, _reason)
+//! @endcond
 
 /**
  * @brief Indicates that an erroneous code path has been taken.
@@ -147,11 +151,13 @@ struct fatal_cuda_error : public cuda_error {
 #define CUDF_FAIL(...)                                       \
   GET_CUDF_FAIL_MACRO(__VA_ARGS__, CUDF_FAIL_2, CUDF_FAIL_1) \
   (__VA_ARGS__)
+//! @cond Doxygen_Suppress
 #define GET_CUDF_FAIL_MACRO(_1, _2, NAME, ...) NAME
 #define CUDF_FAIL_2(_what, _exception_type)      \
   /*NOLINTNEXTLINE(bugprone-macro-parentheses)*/ \
   throw _exception_type{"cuDF failure at:" __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what};
 #define CUDF_FAIL_1(_what) CUDF_FAIL_2(_what, cudf::logic_error)
+//! @endcond
 
 namespace cudf {
 namespace detail {
