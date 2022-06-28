@@ -160,7 +160,7 @@ struct capitalize_fn : base_fn<capitalize_fn> {
 
   __device__ bool capitalize_next(char_utf8 const chr, character_flags_table_type const)
   {
-    return !d_delimiters.empty() && (d_delimiters.find(chr) >= 0);
+    return !d_delimiters.empty() && (d_delimiters.find(chr) != string_view::npos);
   }
 };
 
