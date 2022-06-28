@@ -2665,9 +2665,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if hasattr(cond, "__cuda_array_interface__"):
             if isinstance(cond, Series):
-                cond = DataFrame(
-                    {name: cond for name in self._column_names},
-                    index=self.index,
+                cond = self._from_data_like_self(
+                    {name: cond._column for name in self._column_names},
                 )
             else:
                 cond = DataFrame(
@@ -2705,15 +2704,15 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if isinstance(others, Frame):
             others = others._data.columns
 
-        out_df = DataFrame(index=self.index)
+        out = {}
         if len(self._columns) != len(others):
             raise ValueError(
                 """Replacement list length or number of dataself columns
                 should be equal to Number of columns of dataself"""
             )
-        for i, column_name in enumerate(self._column_names):
-            input_col = source_df._data[column_name]
-            other_column = others[i]
+        for (column_name, input_col), other_column in zip(
+            source_df._data.items(), others
+        ):
             if column_name in cond._data:
                 if isinstance(input_col, cudf.core.column.CategoricalColumn):
                     if cudf.api.types.is_scalar(other_column):
@@ -2736,19 +2735,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     input_col, other_column, cond._data[column_name]
                 )
 
-                if isinstance(
-                    self._data[column_name],
-                    cudf.core.column.CategoricalColumn,
-                ):
+                self_column = self._data[column_name]
+                if isinstance(self_column, cudf.core.column.CategoricalColumn):
                     result = cudf.core.column.build_categorical_column(
-                        categories=self._data[column_name].categories,
+                        categories=self_column.categories,
                         codes=cudf.core.column.build_column(
                             result.base_data, dtype=result.dtype
                         ),
                         mask=result.base_mask,
                         size=result.size,
                         offset=result.offset,
-                        ordered=self._data[column_name].ordered,
+                        ordered=self_column.ordered,
                     )
             else:
                 out_mask = cudf._lib.null_mask.create_null_mask(
@@ -2756,9 +2753,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     state=cudf._lib.null_mask.MaskState.ALL_NULL,
                 )
                 result = input_col.set_mask(out_mask)
-            out_df[column_name] = self[column_name].__class__(result)
+            out[column_name] = self[column_name].__class__(result)
 
-        return self._mimic_inplace(out_df, inplace=inplace)
+        return self._mimic_inplace(
+            self._from_data_like_self(out), inplace=inplace
+        )
 
     @docutils.doc_apply(
         doc_reset_index_template.format(
