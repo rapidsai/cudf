@@ -15,13 +15,10 @@
  */
 
 #include <lists/utilities.hpp>
-#include <stream_compaction/stream_compaction_common.cuh>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.cuh>
 #include <cudf/detail/copy_if.cuh>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
@@ -29,25 +26,16 @@
 #include <cudf/lists/detail/combine.hpp>
 #include <cudf/lists/detail/set_operations.hpp>
 #include <cudf/lists/detail/stream_compaction.hpp>
-#include <cudf/stream_compaction.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 
-#include <thrust/copy.h>
+#include <thrust/distance.h>
 #include <thrust/functional.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scatter.h>
-#include <thrust/transform.h>
 #include <thrust/uninitialized_fill.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <cuco/static_map.cuh>
-#include <cuco/static_multimap.cuh>
 
 namespace cudf::lists {
 namespace detail {
@@ -161,17 +149,25 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
     [contained = contained.begin()] __device__(auto const idx) { return contained[idx]; },
     stream);
 
+  auto out_table = cudf::detail::stable_distinct(intersect_table->view(),
+                                                 std::vector<size_type>{0, 1},  // keys
+                                                 duplicate_keep_option::KEEP_ANY,
+                                                 nulls_equal,
+                                                 nans_equal,
+                                                 stream,
+                                                 mr);
+
+  auto out_offsets = reconstruct_offsets(out_table->get_column(0).view(), lhs.size(), stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-  auto output = cudf::lists::detail::distinct(lhs.size(),
-                                              intersect_table->get_column(0).view(),
-                                              intersect_table->get_column(1).view(),
-                                              std::move(null_mask),
-                                              null_count,
-                                              nulls_equal,
-                                              nans_equal,
-                                              stream,
-                                              mr);
+
+  auto output = make_lists_column(lhs.size(),
+                                  std::move(out_offsets),
+                                  std::move(out_table->release().back()),
+                                  null_count,
+                                  std::move(null_mask),
+                                  stream,
+                                  mr);
 
   return null_count == 0
            ? std::move(output)
@@ -185,17 +181,15 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
+  // Algorithm: `return distinct(concatenate(lhs, rhs))`.
+
   check_compatibility(lhs, rhs);
 
-  auto const lhs_distinct = distinct(lhs, nulls_equal, nans_equal, stream);
+  auto const union_col = lists::detail::concatenate_rows(
+    table_view{{lhs.parent(), rhs.parent()}}, concatenate_null_policy::NULLIFY_OUTPUT_ROW, stream);
 
-  // The result table from set_different already contains distinct rows.
-  auto const diff = lists::detail::set_difference(rhs, lhs, nulls_equal, nans_equal, stream);
-
-  return lists::detail::concatenate_rows(table_view{{lhs_distinct->view(), diff->view()}},
-                                         concatenate_null_policy::NULLIFY_OUTPUT_ROW,
-                                         stream,
-                                         mr);
+  return cudf::lists::detail::distinct(
+    lists_column_view{union_col->view()}, nulls_equal, nans_equal, stream, mr);
 }
 
 std::unique_ptr<column> set_difference(lists_column_view const& lhs,
@@ -230,17 +224,25 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
     [contained = contained.begin()] __device__(auto const idx) { return !contained[idx]; },
     stream);
 
+  auto out_table = cudf::detail::stable_distinct(difference_table->view(),
+                                                 std::vector<size_type>{0, 1},  // keys
+                                                 duplicate_keep_option::KEEP_ANY,
+                                                 nulls_equal,
+                                                 nans_equal,
+                                                 stream,
+                                                 mr);
+
+  auto out_offsets = reconstruct_offsets(out_table->get_column(0).view(), lhs.size(), stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-  auto output = cudf::lists::detail::distinct(lhs.size(),
-                                              difference_table->get_column(0).view(),
-                                              difference_table->get_column(1).view(),
-                                              std::move(null_mask),
-                                              null_count,
-                                              nulls_equal,
-                                              nans_equal,
-                                              stream,
-                                              mr);
+
+  auto output = make_lists_column(lhs.size(),
+                                  std::move(out_offsets),
+                                  std::move(out_table->release().back()),
+                                  null_count,
+                                  std::move(null_mask),
+                                  stream,
+                                  mr);
 
   return null_count == 0
            ? std::move(output)
