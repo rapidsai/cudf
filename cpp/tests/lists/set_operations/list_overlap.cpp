@@ -126,3 +126,119 @@ TEST_F(ListOverlapTest, FloatingPointTestsWithNaNs)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
+
+TEST_F(ListOverlapTest, StringTestsNonNull)
+{
+  // Trivial cases - empty input.
+  {
+    auto const lhs      = strings_lists{};
+    auto const rhs      = strings_lists{};
+    auto const expected = bools_col{};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // Trivial cases - empty input.
+  {
+    auto const lhs      = strings_lists{strings_lists{}};
+    auto const rhs      = strings_lists{strings_lists{}};
+    auto const expected = bools_col{0};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // No overlap.
+  {
+    auto const lhs      = strings_lists{"this", "is", "a", "string"};
+    auto const rhs      = strings_lists{"aha", "bear", "blow", "heat"};
+    auto const expected = bools_col{0};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // One list column.
+  {
+    auto const lhs      = strings_lists{"this", "is", "a", "string"};
+    auto const rhs      = strings_lists{"a", "delicious", "banana"};
+    auto const expected = bools_col{1};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // Multiple lists column.
+  {
+    auto const lhs      = strings_lists{strings_lists{"one", "two", "three"},
+                                   strings_lists{"four", "five", "six"},
+                                   strings_lists{"1", "2", "3"}};
+    auto const rhs      = strings_lists{strings_lists{"one", "banana"},
+                                   strings_lists{"apple", "kiwi", "cherry"},
+                                   strings_lists{"two", "and", "1"}};
+    auto const expected = bools_col{1, 0, 1};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+}
+
+TEST_F(ListOverlapTest, StringTestsWithNullsEqual)
+{
+  auto const null = std::string("");
+
+  // One list column with null entries.
+  {
+    auto const lhs = strings_lists{
+      {"this", null, "is", "is", "is", "a", null, "string", null, "string"}, nulls_at({1, 6, 8})};
+    auto const rhs =
+      strings_lists{{"aha", null, "abc", null, "1111", null, "2222"}, nulls_at({1, 3, 5})};
+    auto const expected = bools_col{1};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // Multiple lists column with null lists and null entries.
+  {
+    auto const lhs = strings_lists{
+      strings_lists{{"this", null, "is", null, "a", null, null, "string"}, nulls_at({1, 3, 5, 6})},
+      strings_lists{},
+      strings_lists{"this", "is", "a", "string"}};
+    auto const rhs = strings_lists{
+      {strings_lists{{"aha", null, "abc", null, "1111", null, "2222"}, nulls_at({1, 3, 5})},
+       strings_lists{}, /* NULL */
+       strings_lists{"aha", "this", "is another", "string???"}},
+      null_at(1)};
+    auto const expected = bools_col{{1, 0 /*null*/, 1}, null_at(1)};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+}
+
+TEST_F(ListOverlapTest, StringTestsWithNullsUnequal)
+{
+  auto const null = std::string("");
+
+  // One list column with null entries.
+  {
+    auto const lhs = strings_lists{
+      {"this", null, "is", "is", "is", "a", null, "string", null, "string"}, nulls_at({1, 6, 8})};
+    auto const rhs =
+      strings_lists{{"aha", null, "abc", null, "1111", null, "2222"}, nulls_at({1, 3, 5})};
+    auto const expected = bools_col{0};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_UNEQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // Multiple lists column with null lists and null entries.
+  {
+    auto const lhs = strings_lists{
+      strings_lists{{"this", null, "is", null, "a", null, null, "string"}, nulls_at({1, 3, 5, 6})},
+      strings_lists{},
+      strings_lists{"this", "is", "a", "string"}};
+    auto const rhs = strings_lists{
+      {strings_lists{{"aha", null, "abc", null, "1111", null, "2222"}, nulls_at({1, 3, 5})},
+       strings_lists{}, /* NULL */
+       strings_lists{"aha", "this", "is another", "string???"}},
+      null_at(1)};
+    auto const expected = bools_col{{0, 0 /*null*/, 1}, null_at(1)};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_UNEQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+}
