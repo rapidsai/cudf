@@ -826,6 +826,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def max(self):
         return self._end
 
+    def isna(self):
+        return cupy.zeros(len(self), dtype=bool)
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.
