@@ -1318,11 +1318,12 @@ static __device__ bool increment_utf8_at(uint8_t* ptr)
   //  0b110vvvvv 2 byte
   //  0b1110vvvv 3 byte
   //  0b11110vvv 4 byte
+  //  og spec, but no longer used? anyway, cudf is only 4 byte
   //  0b111110vv 5 byte
   //  0b1111110v 6 byte
 
-  uint8_t mask  = 0xFE;
-  uint8_t valid = 0xFC;
+  uint8_t mask  = 0xF8;
+  uint8_t valid = 0xF0;
 
   do {
     if ((elem & mask) == valid) {
@@ -1359,29 +1360,34 @@ __device__ uint32_t truncate_string(const string_view& str,
   // otherwise, just truncate, and increment last byte if max.
   // in either case, min can just return the appropriate length
   // and the original buffer.
-  // TODO if it's ascii, do we care if we wind up w/ 0x80 in the stats?
-  if (str.is_valid_utf8() && str.size_bytes() != str.length()) {
+  if (str.size_bytes() != str.length() && str.is_valid_utf8()) {
     // truncate utf8
-    uint32_t len = column_index_truncate_length;
-    // find number of utf chars in truncated buffer. last char might not be complete
-    auto num_chars = strings::detail::characters_in_string(str.data(), len);
-    // len now points to the begining of the last char, so we'll start working
-    // backwards from there.
-    len = str.byte_offset(num_chars - 1);
-    if (is_min) {
-      *res = str.data();
-      return len;
-    } else {
-      memcpy(scratch, str.data(), len);
-      *res         = scratch;
-      uint8_t* ptr = reinterpret_cast<uint8_t*>(scratch);
-      for (int32_t i = len - 1; i >= 0; i--) {
-        if (increment_utf8_at(&ptr[i])) {  // true if didn't overflow
-          return len;
-        }
-      }
-      // cannot increment, so fall through
+    // we know at this point that truncate_length < size_bytes, so
+    // there is a character at [len].  work backwards until we find
+    // the start of a unicode character.
+    uint32_t len        = column_index_truncate_length;
+    const uint8_t* dptr = reinterpret_cast<uint8_t*>(&str.data()[len]);
+    while (not strings::detail::is_begin_utf8_char(*dptr) && len > 0) {
+      dptr--;
+      len--;
     }
+    if (len != 0) {
+      if (is_min) {
+        *res = str.data();
+        return len;
+      } else {
+        memcpy(scratch, str.data(), len);
+        *res         = scratch;
+        uint8_t* ptr = reinterpret_cast<uint8_t*>(scratch);
+        for (int32_t i = len - 1; i >= 0; i--) {
+          if (increment_utf8_at(&ptr[i])) {  // true if didn't overflow
+            return len;
+          }
+        }
+        // cannot increment, so fall through
+      }
+    }
+    // cannot find start of character??? don't truncate
   } else {
     // truncate binary
     uint32_t len = column_index_truncate_length;
