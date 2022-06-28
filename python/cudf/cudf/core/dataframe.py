@@ -2606,6 +2606,70 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.index = idx
         return df if not inplace else None
 
+    def _normalize_columns_and_scalars_type(
+        self: DataFrame,
+        other: Any,
+        inplace: bool = False,
+    ) -> Tuple[Union[Frame, ColumnLike], Any]:
+        """
+        Try to normalize the other's dtypes as per frame.
+
+        Parameters
+        ----------
+
+        frame : Can be a DataFrame or Series or Index
+        other : Can be a DataFrame, Series, Index, Array
+            like object or a scalar value
+
+            if frame is DataFrame, other can be only a
+            scalar or array like with size of number of columns
+            in DataFrame or a DataFrame with same dimension
+
+            if frame is Series, other can be only a scalar or
+            a series like with same length as frame
+
+        Returns:
+        --------
+        A dataframe/series/list/scalar form of normalized other
+        """
+        from cudf.core._internals.where import (
+            _check_and_cast_columns_with_other,
+        )
+
+        # TODO: It looks like Frame is missing a declaration of `copy`, need to
+        # add that.
+        source_df = self.copy(deep=False)
+
+        if isinstance(other, DataFrame):
+            other_df = other.copy(deep=False)
+            for self_col in source_df._column_names:
+                source_col, other_col = _check_and_cast_columns_with_other(
+                    source_col=source_df._data[self_col],
+                    other=other_df._data[self_col],
+                    inplace=inplace,
+                )
+                source_df._data[self_col] = source_col
+                other_df._data[self_col] = other_col
+            return source_df, other_df
+
+        else:
+            others = []
+            if cudf.api.types.is_scalar(other):
+                other = [other] * len(self._column_names)
+
+            for i, col_name in enumerate(self._column_names):
+                (
+                    source_col,
+                    other_scalar,
+                ) = _check_and_cast_columns_with_other(
+                    source_col=source_df._data[col_name],
+                    other=other[i],
+                    inplace=inplace,
+                )
+                source_df._data[col_name] = source_col
+                others.append(other_scalar)
+            return source_df, others
+
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
         """
@@ -2662,7 +2726,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         from cudf.core._internals.where import (
             _make_categorical_like,
             _normalize_categorical,
-            _normalize_columns_and_scalars_type,
         )
 
         if hasattr(cond, "__cuda_array_interface__"):
@@ -2702,16 +2765,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         (
             source_df,
             others,
-        ) = _normalize_columns_and_scalars_type(self, other)
+        ) = self._normalize_columns_and_scalars_type(other)
         if isinstance(others, Frame):
             others = others._data.columns
 
-        out = {}
         if len(self._columns) != len(others):
             raise ValueError(
                 """Replacement list length or number of dataself columns
                 should be equal to Number of columns of dataself"""
             )
+
+        out = {}
         for (column_name, input_col), other_column in zip(
             source_df._data.items(), others
         ):
@@ -2724,15 +2788,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     input_col, other_column, cond._data[column_name]
                 )
 
-                self_column = self._data[column_name]
-                result = _make_categorical_like(result, self_column)
+                result = _make_categorical_like(
+                    result, self._data[column_name]
+                )
             else:
                 out_mask = cudf._lib.null_mask.create_null_mask(
                     len(input_col),
                     state=cudf._lib.null_mask.MaskState.ALL_NULL,
                 )
                 result = input_col.set_mask(out_mask)
-            out[column_name] = self[column_name].__class__(result)
+            out[column_name] = result
 
         return self._mimic_inplace(
             self._from_data_like_self(out), inplace=inplace

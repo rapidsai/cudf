@@ -1,18 +1,14 @@
 # Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import warnings
-from typing import Any, Tuple, Union
+from typing import Tuple, Union
 
 import numpy as np
 
 import cudf
-from cudf._typing import ColumnLike, ScalarLike
+from cudf._typing import ScalarLike
 from cudf.core.column import ColumnBase
-from cudf.core.dataframe import DataFrame
-from cudf.core.frame import Frame
-from cudf.core.index import Index
 from cudf.core.missing import NA
-from cudf.core.series import Series
 
 
 def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
@@ -87,89 +83,6 @@ def _check_and_cast_columns_with_other(
             else:
                 device_obj = device_obj.astype(common_dtype)
             return source_col.astype(common_dtype), device_obj
-
-
-def _normalize_columns_and_scalars_type(
-    frame: Frame,
-    other: Any,
-    inplace: bool = False,
-) -> Tuple[Union[Frame, ColumnLike], Any]:
-    """
-    Try to normalize the other's dtypes as per frame.
-
-    Parameters
-    ----------
-
-    frame : Can be a DataFrame or Series or Index
-    other : Can be a DataFrame, Series, Index, Array
-        like object or a scalar value
-
-        if frame is DataFrame, other can be only a
-        scalar or array like with size of number of columns
-        in DataFrame or a DataFrame with same dimension
-
-        if frame is Series, other can be only a scalar or
-        a series like with same length as frame
-
-    Returns:
-    --------
-    A dataframe/series/list/scalar form of normalized other
-    """
-    if isinstance(frame, DataFrame) and isinstance(other, DataFrame):
-        source_df = frame.copy(deep=False)
-        other_df = other.copy(deep=False)
-        for self_col in source_df._column_names:
-            source_col, other_col = _check_and_cast_columns_with_other(
-                source_col=source_df._data[self_col],
-                other=other_df._data[self_col],
-                inplace=inplace,
-            )
-            source_df._data[self_col] = source_col
-            other_df._data[self_col] = other_col
-        return source_df, other_df
-
-    elif isinstance(frame, (Series, Index)) and not cudf.api.types.is_scalar(
-        other
-    ):
-        other = cudf.core.column.as_column(other)
-        input_col = frame._data[frame.name]
-        return _check_and_cast_columns_with_other(
-            source_col=input_col, other=other, inplace=inplace
-        )
-    else:
-        # Handles scalar or list/array like scalars
-        if isinstance(frame, (Series, Index)) and cudf.api.types.is_scalar(
-            other
-        ):
-            input_col = frame._data[frame.name]
-            return _check_and_cast_columns_with_other(
-                source_col=frame._data[frame.name],
-                other=other,
-                inplace=inplace,
-            )
-
-        elif isinstance(frame, DataFrame):
-            source_df = frame.copy(deep=False)
-            others = []
-            for i, col_name in enumerate(frame._column_names):
-                (
-                    source_col,
-                    other_scalar,
-                ) = _check_and_cast_columns_with_other(
-                    source_col=source_df._data[col_name],
-                    other=other
-                    if cudf.api.types.is_scalar(other)
-                    else other[i],
-                    inplace=inplace,
-                )
-                source_df._data[col_name] = source_col
-                others.append(other_scalar)
-            return source_df, others
-        else:
-            raise ValueError(
-                f"Inappropriate input {type(frame)} "
-                f"and other {type(other)} combination"
-            )
 
 
 def _normalize_categorical(input_col, other):

@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf._typing import Dtype, ScalarLike
+from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_bool_dtype,
@@ -396,6 +396,42 @@ class SingleColumnFrame(Frame, NotIterable):
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
 
+    def _normalize_columns_and_scalars_type(
+        self: SingleColumnFrame,
+        other: Any,
+        inplace: bool = False,
+    ) -> Tuple[Union[Frame, ColumnLike], Any]:
+        """
+        Try to normalize the other's dtypes as per frame.
+
+        Parameters
+        ----------
+
+        frame : Can be a DataFrame or Series or Index
+        other : Can be a DataFrame, Series, Index, Array
+            like object or a scalar value
+
+            if frame is DataFrame, other can be only a
+            scalar or array like with size of number of columns
+            in DataFrame or a DataFrame with same dimension
+
+            if frame is Series, other can be only a scalar or
+            a series like with same length as frame
+
+        Returns:
+        --------
+        A dataframe/series/list/scalar form of normalized other
+        """
+        from cudf.core._internals.where import (
+            _check_and_cast_columns_with_other,
+        )
+
+        if not cudf.api.types.is_scalar(other):
+            other = cudf.core.column.as_column(other)
+        return _check_and_cast_columns_with_other(
+            source_col=self._column, other=other, inplace=inplace
+        )
+
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
         """
@@ -452,7 +488,6 @@ class SingleColumnFrame(Frame, NotIterable):
         from cudf.core._internals.where import (
             _make_categorical_like,
             _normalize_categorical,
-            _normalize_columns_and_scalars_type,
         )
 
         if isinstance(other, cudf.DataFrame):
@@ -468,7 +503,7 @@ class SingleColumnFrame(Frame, NotIterable):
         (
             input_col,
             other,
-        ) = _normalize_columns_and_scalars_type(self, other, inplace)
+        ) = self._normalize_columns_and_scalars_type(other, inplace)
 
         input_col, other = _normalize_categorical(input_col, other)
 
