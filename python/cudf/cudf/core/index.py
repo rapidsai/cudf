@@ -801,7 +801,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int64().where(cond, other, inplace)
 
     def to_numpy(self):
-        return self._as_int64().to_numpy()
+        return self.values_host
 
     def replace(self, to_replace, value):
         return self._as_int64().replace(to_replace=to_replace, value=value)
