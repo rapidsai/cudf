@@ -45,13 +45,6 @@ using strings_col   = cudf::test::strings_column_wrapper;
 using structs_col   = cudf::test::structs_column_wrapper;
 using lists_cv      = cudf::lists_column_view;
 
-// using cudf::nan_policy;
-// using cudf::null_equality;
-// using cudf::null_policy;
-using cudf::test::iterators::no_nulls;
-using cudf::test::iterators::null_at;
-using cudf::test::iterators::nulls_at;
-
 struct ListOverlapTest : public cudf::test::BaseFixture {
 };
 
