@@ -4138,6 +4138,88 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
   }
 }
 
+TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
+{
+  // in-range 7 bit.  should truncate to "yyyyyyyz"
+  column_wrapper<cudf::string_view> col0{"yyyyyyyyy"};
+  // max 7 bit. should truncate to "x7fx7fx7fx7fx7fx7fx7fx80". but is this what
+  // we want?  or should this not truncate?
+  column_wrapper<cudf::string_view> col1{"\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f\x7f"};
+  // max binary.  this should not truncate
+  column_wrapper<cudf::string_view> col2{"\xff\xff\xff\xff\xff\xff\xff\xff\xff"};
+  // in-range 2-byte UTF8. should truncate to "éééê"
+  column_wrapper<cudf::string_view> col3{"ééééé"};
+  // max 2-byte UTF8. should not truncate
+  column_wrapper<cudf::string_view> col4{"߿߿߿߿߿"};
+  // in-range 3-byte UTF8. should truncate to "ࠀࠁ"
+  column_wrapper<cudf::string_view> col5{"ࠀࠀࠀ"};
+  // max 3-byte UTF8. should not truncate
+  column_wrapper<cudf::string_view> col6{"\xef\xbf\xbf\xef\xbf\xbf\xef\xbf\xbf"};
+  // in-range 4-byte UTF8. should truncate to "𐀀𐀁"
+  column_wrapper<cudf::string_view> col7{"𐀀𐀀𐀀"};
+  // max unicode. should truncate to \xf4\x8f\xbf\xbf\xf4\x90\x80\x80, which is no longer
+  // valid unicode, but is still ok UTF-8???
+  column_wrapper<cudf::string_view> col8{"\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf\xf4\x8f\xbf\xbf"};
+  // max 4-byte UTF8. should not truncate
+  column_wrapper<cudf::string_view> col9{"\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf\xf7\xbf\xbf\xbf"};
+  
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  cols.push_back(col4.release());
+  cols.push_back(col5.release());
+  cols.push_back(col6.release());
+  cols.push_back(col7.release());
+  cols.push_back(col8.release());
+  cols.push_back(col9.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto filepath = temp_env->get_temp_filepath("CheckColumnIndexTruncation.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .column_index_truncate_length(8);
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  EXPECT_EQ(read_footer(source, &fmd), 0);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      auto& chunk = rg.columns[c];
+
+      // read column index
+      cudf_io::parquet::ColumnIndex ci;
+      cudf_io::parquet::CompactProtocolReader cp;
+      const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
+      printf("col %ld\n", c);
+      printHex(ci_buf->data(), ci_buf->size());
+      cp.init(ci_buf->data(), ci_buf->size());
+      EXPECT_TRUE(cp.read(&ci));
+      auto& chunk_meta = chunk.meta_data;
+
+      // decode min and max from statistics blob
+      cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      cudf_io::parquet::Statistics stats;
+      EXPECT_TRUE(cp.read(&stats));
+
+      // loop over page stats. trunc(page.min) <= stats.min && trun(page.max) >= stats.max
+      int8_t ptype = fmd.schema[c + 1].type;
+      int8_t ctype = fmd.schema[c + 1].converted_type;
+      printHex(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      for (size_t p = 0; p < ci.min_values.size(); p++)
+        EXPECT_TRUE(compare_binary(ci.min_values[p], stats.min_value, ptype, ctype) <= 0);
+      for (size_t p = 0; p < ci.max_values.size(); p++)
+        EXPECT_TRUE(compare_binary(ci.max_values[p], stats.max_value, ptype, ctype) >= 0);
+    }
+  }
+}
+
 TEST_F(ParquetReaderTest, EmptyColumnsParam)
 {
   srand(31337);
