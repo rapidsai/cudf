@@ -1366,7 +1366,7 @@ __device__ uint32_t truncate_string(const string_view& str,
     // there is a character at [len].  work backwards until we find
     // the start of a unicode character.
     uint32_t len        = column_index_truncate_length;
-    const uint8_t* dptr = reinterpret_cast<uint8_t*>(&str.data()[len]);
+    const uint8_t* dptr = reinterpret_cast<const uint8_t*>(&str.data()[len]);
     while (not strings::detail::is_begin_utf8_char(*dptr) && len > 0) {
       dptr--;
       len--;
