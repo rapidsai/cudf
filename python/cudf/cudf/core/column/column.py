@@ -1981,15 +1981,7 @@ def as_column(
     elif isinstance(arbitrary, cudf.Scalar):
         data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
-        cudf_dtype = arbitrary._data.dtype
-
-        data = Buffer(arbitrary._data.view("|u1"))
-        data = build_column(data, dtype=cudf_dtype)
-
-        pandas_mask = arbitrary._mask
-        if pandas_mask.any():
-            mask = bools_to_mask(as_column(pandas_mask).unary_operator("not"))
-            data = data.set_mask(mask)
+        data = as_column(pa.Array.from_pandas(arbitrary), dtype=dtype)
     else:
         try:
             data = as_column(
