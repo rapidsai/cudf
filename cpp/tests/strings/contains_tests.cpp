@@ -406,6 +406,23 @@ TEST_F(StringsContainsTests, FixedQuantifier)
   }
 }
 
+TEST_F(StringsContainsTests, OverlappedClasses)
+{
+  auto input = cudf::test::strings_column_wrapper({"abcdefg", "defghí", "", "éééééé", "ghijkl"});
+  auto sv = cudf::strings_column_view(input);
+
+  {
+    auto results = cudf::strings::count_re(sv, "[e-gb-da-c]");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({7, 4, 0, 0, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto results = cudf::strings::count_re(sv, "[á-éê-ú]");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 1, 0, 6, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
 TEST_F(StringsContainsTests, MultiLine)
 {
   auto input =
