@@ -37,7 +37,7 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
 {
   // Algorithm:
   // - Generate labels for the child elements.
-  // - Get distinct rows of the table {labels, child} using `cudf::stable_distinct`.
+  // - Get distinct rows of the table {labels, child} using `stable_distinct`.
   // - Build the output lists column from the output distinct rows above.
 
   auto const child  = input.get_sliced_child(stream);
