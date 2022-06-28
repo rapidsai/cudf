@@ -76,11 +76,17 @@ pipeline {
             --runtime=nvidia
             --pull=always
             -e NVIDIA_VISIBLE_DEVICES=$EXECUTOR_NUMBER
-            -e ARCH=${test_config.arch}
             -e CUDA=11.5
             -e PY_VER=3.8
             """) {
-              sh "./ci/java.sh"
+              withCredentials([[
+                $class: 'AmazonWebServicesCredentialsBinding',
+                credentialsId: "aws-s3-gpuci",
+                accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+              ]]) {
+                sh "./ci/java.sh"
+              }
             }
         }
       }
