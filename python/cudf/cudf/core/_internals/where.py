@@ -7,82 +7,18 @@ import numpy as np
 
 import cudf
 from cudf._typing import ScalarLike
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    is_categorical_dtype,
+    is_scalar,
+)
 from cudf.core.column import ColumnBase
 from cudf.core.missing import NA
-
-
-def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
-    """
-    Try to normalize scalar values as per col dtype
-    """
-    if (isinstance(other, float) and not np.isnan(other)) and (
-        col.dtype.type(other) != other
-    ):
-        raise TypeError(
-            f"Cannot safely cast non-equivalent "
-            f"{type(other).__name__} to {col.dtype.name}"
-        )
-
-    return cudf.Scalar(other, dtype=col.dtype if other in {None, NA} else None)
-
-
-def _check_and_cast_columns_with_other(
-    source_col: ColumnBase,
-    other: Union[ScalarLike, ColumnBase],
-    inplace: bool,
-) -> Tuple[ColumnBase, Union[ScalarLike, ColumnBase]]:
-    """
-    Returns type-casted column `source_col` & scalar `other_scalar`
-    based on `inplace` parameter.
-    """
-    if cudf.api.types.is_categorical_dtype(source_col.dtype):
-        return source_col, other
-
-    if cudf.api.types.is_scalar(other):
-        device_obj = _normalize_scalars(source_col, other)
-    else:
-        device_obj = other
-
-    if other is None:
-        return source_col, device_obj
-    elif cudf.utils.dtypes.is_mixed_with_object_dtype(device_obj, source_col):
-        raise TypeError(
-            "cudf does not support mixed types, please type-cast "
-            "the column of dataframe/series and other "
-            "to same dtypes."
-        )
-    if inplace:
-        if not cudf.utils.dtypes._can_cast(device_obj.dtype, source_col.dtype):
-            warnings.warn(
-                f"Type-casting from {device_obj.dtype} "
-                f"to {source_col.dtype}, there could be potential data loss"
-            )
-        return source_col, device_obj.astype(source_col.dtype)
-    else:
-        if (
-            cudf.api.types.is_scalar(other)
-            and cudf.api.types._is_non_decimal_numeric_dtype(source_col.dtype)
-            and cudf.utils.dtypes._can_cast(other, source_col.dtype)
-        ):
-            common_dtype = source_col.dtype
-            return (
-                source_col.astype(common_dtype),
-                cudf.Scalar(other, dtype=common_dtype),
-            )
-        else:
-            common_dtype = cudf.utils.dtypes.find_common_type(
-                [
-                    source_col.dtype,
-                    np.min_scalar_type(other)
-                    if cudf.api.types.is_scalar(other)
-                    else other.dtype,
-                ]
-            )
-            if cudf.api.types.is_scalar(device_obj):
-                device_obj = cudf.Scalar(other, dtype=common_dtype)
-            else:
-                device_obj = device_obj.astype(common_dtype)
-            return source_col.astype(common_dtype), device_obj
+from cudf.utils.dtypes import (
+    _can_cast,
+    find_common_type,
+    is_mixed_with_object_dtype,
+)
 
 
 def _normalize_categorical(input_col, other):
@@ -100,6 +36,73 @@ def _normalize_categorical(input_col, other):
 
         input_col = input_col.codes
     return input_col, other
+
+
+def _check_and_cast_columns_with_other(
+    source_col: ColumnBase,
+    other: Union[ScalarLike, ColumnBase],
+    inplace: bool,
+) -> Tuple[ColumnBase, Union[ScalarLike, ColumnBase]]:
+    """
+    Returns type-casted column `source_col` & scalar `other_scalar`
+    based on `inplace` parameter.
+    """
+    source_dtype = source_col.dtype
+    if is_categorical_dtype(source_dtype):
+        return _normalize_categorical(source_col, other)
+
+    other_is_scalar = is_scalar(other)
+    if other_is_scalar:
+        if (isinstance(other, float) and not np.isnan(other)) and (
+            source_dtype.type(other) != other
+        ):
+            raise TypeError(
+                f"Cannot safely cast non-equivalent "
+                f"{type(other).__name__} to {source_dtype.name}"
+            )
+
+        if other in {None, NA}:
+            return _normalize_categorical(
+                source_col, cudf.Scalar(other, dtype=source_dtype)
+            )
+
+    mixed_err = (
+        "cudf does not support mixed types, please type-cast the column of "
+        "dataframe/series and other to same dtypes."
+    )
+
+    if inplace:
+        other = cudf.Scalar(other) if other_is_scalar else other
+        if is_mixed_with_object_dtype(other, source_col):
+            raise TypeError(mixed_err)
+
+        if not _can_cast(other.dtype, source_dtype):
+            warnings.warn(
+                f"Type-casting from {other.dtype} "
+                f"to {source_dtype}, there could be potential data loss"
+            )
+        return _normalize_categorical(source_col, other.astype(source_dtype))
+
+    if _is_non_decimal_numeric_dtype(source_dtype) and _can_cast(
+        other, source_dtype
+    ):
+        common_dtype = source_dtype
+    else:
+        common_dtype = find_common_type(
+            [
+                source_dtype,
+                np.min_scalar_type(other) if other_is_scalar else other.dtype,
+            ]
+        )
+
+    if other_is_scalar:
+        other = cudf.Scalar(other, dtype=common_dtype)
+    else:
+        other = other.astype(common_dtype)
+
+    if is_mixed_with_object_dtype(other, source_col):
+        raise TypeError(mixed_err)
+    return _normalize_categorical(source_col.astype(common_dtype), other)
 
 
 def _make_categorical_like(result, column):

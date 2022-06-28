@@ -2634,7 +2634,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
-            _normalize_categorical,
         )
 
         if isinstance(other, DataFrame):
@@ -2656,9 +2655,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 source_col=col,
                 other=o,
                 inplace=inplace,
-            )
-            source_col, other_scalar = _normalize_categorical(
-                source_col, other_scalar
             )
             source_cols[colname] = source_col
             others.append(other_scalar)

@@ -452,7 +452,6 @@ class SingleColumnFrame(Frame, NotIterable):
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
             _make_categorical_like,
-            _normalize_categorical,
         )
 
         if isinstance(other, cudf.DataFrame):
@@ -472,8 +471,6 @@ class SingleColumnFrame(Frame, NotIterable):
         input_col, other = _check_and_cast_columns_with_other(
             source_col=self_column, other=other, inplace=inplace
         )
-
-        input_col, other = _normalize_categorical(input_col, other)
 
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
 
