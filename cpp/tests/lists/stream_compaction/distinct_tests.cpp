@@ -73,8 +73,8 @@ template <typename T>
 struct ListDistinctTypedTest : public cudf::test::BaseFixture {
 };
 
-using TestTypes = cudf::test::
-  Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes, cudf::test::ChronoTypes>;
+using TestTypes =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
 TYPED_TEST_SUITE(ListDistinctTypedTest, TestTypes);
 
@@ -235,6 +235,119 @@ TEST_F(ListDistinctTest, StringTestsWithNullsUnequal)
        strings_lists{}, /* NULL */
        strings_lists{"a", "is", "one duplicate", "string", "this"}},
       null_at(1)};
+    auto const results_sorted = distinct_sorted(input, NULL_UNEQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+}
+
+TYPED_TEST(ListDistinctTypedTest, TrivialInputTests)
+{
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam>;
+
+  // Empty input.
+  {
+    auto const input          = lists_col{};
+    auto const expected       = lists_col{};
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+
+  // All input lists are empty.
+  {
+    auto const input          = lists_col{lists_col{}, lists_col{}, lists_col{}};
+    auto const expected       = lists_col{lists_col{}, lists_col{}, lists_col{}};
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+
+  // Trivial cases.
+  {
+    auto const input          = lists_col{0, 1, 2, 3, 4, 5};
+    auto const expected       = lists_col{0, 1, 2, 3, 4, 5};
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+
+  // Multiple empty lists.
+  {
+    auto const input          = lists_col{{}, {}, {5, 4, 3, 2, 1, 0}, {}, {6}, {}};
+    auto const expected       = lists_col{{}, {}, {0, 1, 2, 3, 4, 5}, {}, {6}, {}};
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+}
+
+TYPED_TEST(ListDistinctTypedTest, SlicedNonNullInputTests)
+{
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam>;
+
+  auto const input_original =
+    lists_col{{1, 2, 3, 2, 3, 2, 3, 2, 3}, {3, 2, 1, 4, 1}, {5}, {10, 8, 9}, {6, 7}};
+
+  {
+    auto const expected       = lists_col{{1, 2, 3}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}};
+    auto const results_sorted = distinct_sorted(input_original);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+
+  {
+    auto const input          = cudf::slice(input_original, {0, 5})[0];
+    auto const expected       = lists_col{{1, 2, 3}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}};
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+
+  {
+    auto const input          = cudf::slice(input_original, {1, 5})[0];
+    auto const expected       = lists_col{{1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}};
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+
+  {
+    auto const input          = cudf::slice(input_original, {1, 3})[0];
+    auto const expected       = lists_col{{1, 2, 3, 4}, {5}};
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+
+  {
+    auto const input          = cudf::slice(input_original, {0, 3})[0];
+    auto const expected       = lists_col{{1, 2, 3}, {1, 2, 3, 4}, {5}};
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+}
+
+TYPED_TEST(ListDistinctTypedTest, InputHaveNullsTests)
+{
+  using lists_col     = cudf::test::lists_column_wrapper<TypeParam>;
+  auto constexpr null = TypeParam{0};
+
+  // Nullable lists.
+  {
+    auto const input = lists_col{
+      {{3, 2, 1, 4, 1}, {5}, {} /*NULL*/, {} /*NULL*/, {10, 8, 9}, {6, 7}}, nulls_at({2, 3})};
+    auto const expected = lists_col{
+      {{1, 2, 3, 4}, {5}, {} /*NULL*/, {} /*NULL*/, {8, 9, 10}, {6, 7}}, nulls_at({2, 3})};
+    auto const results_sorted = distinct_sorted(input);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+
+  // Nullable child and nulls are equal.
+  {
+    auto const input =
+      lists_col{{null, 1, null, 3, null, 5, null, 7, null, 9}, nulls_at({0, 2, 4, 6, 8})};
+    auto const expected       = lists_col{{null, 1, 3, 5, 7, 9}, null_at(0)};
+    auto const results_sorted = distinct_sorted(input, NULL_EQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+  }
+
+  // Nullable child and nulls are unequal.
+  {
+    auto const input = lists_col{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nulls_at({0, 2, 4, 6, 8})};
+    auto const expected =
+      lists_col{{null, null, null, null, null, 1, 3, 5, 7, 9}, nulls_at({0, 1, 2, 3, 4})};
     auto const results_sorted = distinct_sorted(input, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
