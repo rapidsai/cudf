@@ -2636,39 +2636,31 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             _check_and_cast_columns_with_other,
         )
 
-        # TODO: It looks like Frame is missing a declaration of `copy`, need to
-        # add that.
-        source_df = self.copy(deep=False)
-
         if isinstance(other, DataFrame):
-            other_df = other.copy(deep=False)
-            for self_col in source_df._column_names:
-                source_col, other_col = _check_and_cast_columns_with_other(
-                    source_col=source_df._data[self_col],
-                    other=other_df._data[self_col],
-                    inplace=inplace,
-                )
-                source_df._data[self_col] = source_col
-                other_df._data[self_col] = other_col
-            return source_df, other_df
-
+            other_cols = (other._data[col] for col in self._column_names)
         else:
-            others = []
             if cudf.api.types.is_scalar(other):
                 other = [other] * len(self._column_names)
 
-            for i, col_name in enumerate(self._column_names):
-                (
-                    source_col,
-                    other_scalar,
-                ) = _check_and_cast_columns_with_other(
-                    source_col=source_df._data[col_name],
-                    other=other[i],
-                    inplace=inplace,
-                )
-                source_df._data[col_name] = source_col
-                others.append(other_scalar)
-            return source_df, others
+            # Need an iterable
+            if isinstance(other, cudf.Series):
+                other = other.to_pandas()
+
+            other_cols = other
+
+        # TODO: It looks like Frame is missing a declaration of `copy`, need to
+        # add that.
+        source_df = self.copy(deep=False)
+        others = []
+        for (colname, col), o in zip(source_df._data.items(), other_cols):
+            source_col, other_scalar = _check_and_cast_columns_with_other(
+                source_col=col,
+                other=o,
+                inplace=inplace,
+            )
+            source_df._data[colname] = source_col
+            others.append(other_scalar)
+        return source_df, others
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
@@ -2766,13 +2758,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             source_df,
             others,
         ) = self._normalize_columns_and_scalars_type(other)
-        if isinstance(others, Frame):
-            others = others._data.columns
 
         if len(self._columns) != len(others):
             raise ValueError(
-                """Replacement list length or number of dataself columns
-                should be equal to Number of columns of dataself"""
+                """Replacement list length or number of data columns
+                should be equal to number of columns of self"""
             )
 
         out = {}
