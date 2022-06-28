@@ -39,6 +39,7 @@ namespace detail {
 rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
                                                     duplicate_keep_option keep,
                                                     null_equality nulls_equal,
+                                                    nan_equality nans_equal,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
@@ -59,12 +60,24 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
   auto const key_hasher = experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
 
-  auto const row_comp  = cudf::experimental::row::equality::self_comparator(preprocessed_input);
-  auto const key_equal = row_comp.equal_to(has_nulls, nulls_equal);
+  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const pair_iter = cudf::detail::make_counting_transform_iterator(
     size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
-  map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+
+  auto const insert_keys = [&](auto const value_comp) {
+    auto const key_equal = row_comp.equal_to(has_nulls, nulls_equal, value_comp);
+    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+  };
+
+  if (nans_equal == nan_equality::ALL_EQUAL) {
+    using nan_equal_comparator =
+      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+    insert_keys(nan_equal_comparator{});
+  } else {
+    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
+    insert_keys(nan_unequal_comparator{});
+  }
 
   auto output_indices = rmm::device_uvector<size_type>(map.get_size(), stream, mr);
 
@@ -74,9 +87,15 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
     return output_indices;
   }
 
-  // For other keep options, perform a (sparse) reduce-by-row on the rows compared equal.
-  auto const reduction_results = hash_reduce_by_row(
-    map, std::move(preprocessed_input), input.num_rows(), has_nulls, keep, nulls_equal, stream);
+  // For other keep options, reduce by row on rows that compare equal.
+  auto const reduction_results = hash_reduce_by_row(map,
+                                                    std::move(preprocessed_input),
+                                                    input.num_rows(),
+                                                    has_nulls,
+                                                    keep,
+                                                    nulls_equal,
+                                                    nans_equal,
+                                                    stream);
 
   // Extract the desired output indices from reduction results.
   auto const map_end = [&] {
@@ -111,6 +130,7 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 std::vector<size_type> const& keys,
                                 duplicate_keep_option keep,
                                 null_equality nulls_equal,
+                                nan_equality nans_equal,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
@@ -118,7 +138,8 @@ std::unique_ptr<table> distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto const gather_map = get_distinct_indices(input.select(keys), keep, nulls_equal, stream);
+  auto const gather_map =
+    get_distinct_indices(input.select(keys), keep, nulls_equal, nans_equal, stream);
   return detail::gather(input,
                         gather_map,
                         out_of_bounds_policy::DONT_CHECK,
@@ -133,10 +154,12 @@ std::unique_ptr<table> distinct(table_view const& input,
                                 std::vector<size_type> const& keys,
                                 duplicate_keep_option keep,
                                 null_equality nulls_equal,
+                                nan_equality nans_equal,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct(input, keys, keep, nulls_equal, cudf::default_stream_value, mr);
+  return detail::distinct(
+    input, keys, keep, nulls_equal, nans_equal, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

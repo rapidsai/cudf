@@ -5989,16 +5989,12 @@ def test_dataframe_init_1d_list(data, columns):
     expect = pd.DataFrame(data, columns=columns)
     actual = cudf.DataFrame(data, columns=columns)
 
-    assert_eq(
-        expect, actual, check_index_type=False if len(data) == 0 else True
-    )
+    assert_eq(expect, actual, check_index_type=len(data) != 0)
 
     expect = pd.DataFrame(data, columns=None)
     actual = cudf.DataFrame(data, columns=None)
 
-    assert_eq(
-        expect, actual, check_index_type=False if len(data) == 0 else True
-    )
+    assert_eq(expect, actual, check_index_type=len(data) != 0)
 
 
 @pytest.mark.parametrize(
@@ -6818,9 +6814,7 @@ def test_dataframe_append_dataframe(df, other, sort, ignore_index):
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
-        assert_eq(
-            expected, actual, check_index_type=False if gdf.empty else True
-        )
+        assert_eq(expected, actual, check_index_type=not gdf.empty)
 
 
 @pytest.mark.parametrize(
@@ -6888,9 +6882,7 @@ def test_dataframe_append_series_dict(df, other, sort):
             check_index_type=True,
         )
     else:
-        assert_eq(
-            expected, actual, check_index_type=False if gdf.empty else True
-        )
+        assert_eq(expected, actual, check_index_type=not gdf.empty)
 
 
 def test_dataframe_append_series_mixed_index():
@@ -7044,9 +7036,7 @@ def test_dataframe_append_dataframe_lists(df, other, sort, ignore_index):
     if expected.shape != df.shape:
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
-        assert_eq(
-            expected, actual, check_index_type=False if gdf.empty else True
-        )
+        assert_eq(expected, actual, check_index_type=not gdf.empty)
 
 
 @pytest.mark.parametrize(
@@ -7109,12 +7099,10 @@ def test_dataframe_append_lists(df, other, sort, ignore_index):
             expected.fillna(-1),
             actual.fillna(-1),
             check_dtype=False,
-            check_column_type=False if gdf.empty else True,
+            check_column_type=not gdf.empty,
         )
     else:
-        assert_eq(
-            expected, actual, check_index_type=False if gdf.empty else True
-        )
+        assert_eq(expected, actual, check_index_type=not gdf.empty)
 
 
 def test_dataframe_append_error():
@@ -7396,8 +7384,8 @@ def test_dataframe_init_with_columns(data, columns):
     assert_eq(
         pdf,
         gdf,
-        check_index_type=False if len(pdf.index) == 0 else True,
-        check_dtype=False if pdf.empty and len(pdf.columns) else True,
+        check_index_type=len(pdf.index) != 0,
+        check_dtype=not (pdf.empty and len(pdf.columns)),
     )
 
 
@@ -8175,7 +8163,7 @@ def test_dataframe_from_pandas_duplicate_columns():
 @pytest.mark.parametrize("index", [["abc", "def", "ghi"]])
 def test_dataframe_constructor_columns(df, columns, index):
     def assert_local_eq(actual, df, expected, host_columns):
-        check_index_type = False if expected.empty else True
+        check_index_type = not expected.empty
         if host_columns is not None and any(
             col not in df.columns for col in host_columns
         ):
@@ -8651,7 +8639,7 @@ def test_dataframe_init_from_series(data, columns, index):
     assert_eq(
         expected,
         actual,
-        check_index_type=False if len(expected) == 0 else True,
+        check_index_type=len(expected) != 0,
     )
 
 

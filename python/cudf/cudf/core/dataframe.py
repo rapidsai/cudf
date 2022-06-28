@@ -1590,7 +1590,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 # include different types that are not comparable.
                 names = sorted(names)
             except TypeError:
-                names = list(names)
+                # For pandas compatibility, we also try to handle the case
+                # where some column names are strings and others are ints. Just
+                # assume that everything that isn't a str is numerical, we
+                # can't sort anything else.
+                try:
+                    str_names = sorted(n for n in names if isinstance(n, str))
+                    non_str_names = sorted(
+                        n for n in names if not isinstance(n, str)
+                    )
+                    names = non_str_names + str_names
+                except TypeError:
+                    names = list(names)
         else:
             names = list(names)
 
@@ -3045,12 +3056,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 out = DataFrame(index=out_index)
             else:
-                out = DataFrame(
-                    index=self.index.replace(
-                        to_replace=list(index.keys()),
-                        value=list(index.values()),
-                    )
-                )
+                to_replace = list(index.keys())
+                vals = list(index.values())
+                is_all_na = vals.count(None) == len(vals)
+
+                try:
+                    index_data = {
+                        name: col.find_and_replace(to_replace, vals, is_all_na)
+                        for name, col in self.index._data.items()
+                    }
+                except OverflowError:
+                    index_data = self.index._data.copy(deep=True)
+
+                out = DataFrame(index=self.index._from_data(index_data))
         else:
             out = DataFrame(index=self.index)
 
@@ -4609,37 +4627,35 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not dataframe.columns.is_unique:
             raise ValueError("Duplicate column names are not allowed")
 
-        df = cls()
         # Set columns
+        data = {}
         for col_name, col_value in dataframe.items():
             # necessary because multi-index can return multiple
             # columns for a single key
             if len(col_value.shape) == 1:
-                df[col_name] = column.as_column(
+                data[col_name] = column.as_column(
                     col_value.array, nan_as_null=nan_as_null
                 )
             else:
                 vals = col_value.values.T
                 if vals.shape[0] == 1:
-                    df[col_name] = column.as_column(
+                    data[col_name] = column.as_column(
                         vals.flatten(), nan_as_null=nan_as_null
                     )
                 else:
                     if isinstance(col_name, tuple):
                         col_name = str(col_name)
                     for idx in range(len(vals.shape)):
-                        df[col_name] = column.as_column(
+                        data[col_name] = column.as_column(
                             vals[idx], nan_as_null=nan_as_null
                         )
+
+        index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
+        df = cls._from_data(data, index)
 
         # Set columns only if it is a MultiIndex
         if isinstance(dataframe.columns, pd.MultiIndex):
             df.columns = dataframe.columns
-
-        # Set index
-        index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
-        df._index = index
-        # set_index(index, inplace=True)
 
         return df
 
