@@ -387,7 +387,7 @@ def test_groupby_2keys_agg(nelem, func):
     )
     got_df = make_frame(DataFrame, nelem=nelem).groupby(["x", "y"]).agg(func)
 
-    check_dtype = False if func in _index_type_aggs else True
+    check_dtype = func not in _index_type_aggs
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
 
 
@@ -467,7 +467,7 @@ def test_series_groupby(agg):
     gg = g.groupby(g // 2)
     sa = getattr(sg, agg)()
     ga = getattr(gg, agg)()
-    check_dtype = False if agg in _index_type_aggs else True
+    check_dtype = agg not in _index_type_aggs
     assert_groupby_results_equal(sa, ga, check_dtype=check_dtype)
 
 
@@ -479,7 +479,7 @@ def test_series_groupby_agg(agg):
     g = Series([1, 2, 3])
     sg = s.groupby(s // 2).agg(agg)
     gg = g.groupby(g // 2).agg(agg)
-    check_dtype = False if agg in _index_type_aggs else True
+    check_dtype = agg not in _index_type_aggs
     assert_groupby_results_equal(sg, gg, check_dtype=check_dtype)
 
 
@@ -509,7 +509,7 @@ def test_groupby_level_zero(agg):
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, agg)()
     gdresult = getattr(gdg, agg)()
-    check_dtype = False if agg in _index_type_aggs else True
+    check_dtype = agg not in _index_type_aggs
     assert_groupby_results_equal(pdresult, gdresult, check_dtype=check_dtype)
 
 
@@ -539,7 +539,7 @@ def test_groupby_series_level_zero(agg):
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, agg)()
     gdresult = getattr(gdg, agg)()
-    check_dtype = False if agg in _index_type_aggs else True
+    check_dtype = agg not in _index_type_aggs
     assert_groupby_results_equal(pdresult, gdresult, check_dtype=check_dtype)
 
 
@@ -892,7 +892,7 @@ def test_groupby_multi_agg_hash_groupby(agg):
         seed=1,
     ).reset_index(drop=True)
     pdf = gdf.to_pandas()
-    check_dtype = False if "count" in agg else True
+    check_dtype = "count" not in agg
     pdg = pdf.groupby("id").agg(agg)
     gdg = gdf.groupby("id").agg(agg)
     assert_groupby_results_equal(pdg, gdg, check_dtype=check_dtype)
@@ -902,7 +902,7 @@ def test_groupby_multi_agg_hash_groupby(agg):
     "agg", ["min", "max", "idxmax", "idxmax", "sum", "prod", "count", "mean"]
 )
 def test_groupby_nulls_basic(agg):
-    check_dtype = False if agg in _index_type_aggs else True
+    check_dtype = agg not in _index_type_aggs
 
     pdf = pd.DataFrame({"a": [0, 0, 1, 1, 2, 2], "b": [1, 2, 1, 2, 1, None]})
     gdf = cudf.from_pandas(pdf)
@@ -1816,7 +1816,7 @@ def test_groupby_2keys_scan(nelem, func):
     if isinstance(expect_df, pd.Series):
         expect_df = expect_df.to_frame("val")
 
-    check_dtype = False if func in _index_type_aggs else True
+    check_dtype = func not in _index_type_aggs
     assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
 
 
