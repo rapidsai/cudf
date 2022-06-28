@@ -4562,7 +4562,7 @@ def _drop_rows_by_labels(
     level: Union[int, str],
     errors: str,
 ) -> DataFrameOrSeries:
-    """Remove rows specified by `labels`. If `errors=True`, an error is raised
+    """Remove rows specified by `labels`. If `errors="raise"`, an error is raised
     if some items in `labels` do not exist in `obj._index`.
 
     Will raise if level(int) is greater or equal to index nlevels
@@ -4590,7 +4590,7 @@ def _drop_rows_by_labels(
         # | id | ._index df | data column(s) |
         idx_nlv = obj._index.nlevels
         working_df = obj._index.to_frame(index=False)
-        working_df.columns = [i for i in range(idx_nlv)]
+        working_df.columns = list(range(idx_nlv))
         for i, col in enumerate(obj._data):
             working_df[idx_nlv + i] = obj._data[col]
         # 2. Set `level` as common index:
