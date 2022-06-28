@@ -232,21 +232,6 @@ rmm::device_buffer scalar_col_valid_mask_and(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 namespace compiled {
-
-/**
- * @brief Converts scalar to column_view with single element.
- *
- * @param scal    scalar to convert
- * @param stream  CUDA stream used for device memory operations and kernel launches
- * @param mr      Device memory resource used to allocate the returned column's device memory
- * @return        pair with column_view and column containing any auxiliary data to create
- * column_view from scalar
- */
-std::pair<column_view, std::unique_ptr<column>> scalar_to_column_view(
-  scalar const& scal,
-  rmm::cuda_stream_view stream        = cudf::default_stream_value,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 namespace detail {
 
 /**

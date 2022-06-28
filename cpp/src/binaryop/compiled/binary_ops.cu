@@ -95,6 +95,23 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   return std::pair{col_v, std::move(offsets_column)};
 }
 
+/**
+ * @brief Converts scalar to column_view with single element.
+ *
+ * @param scal    scalar to convert
+ * @param stream  CUDA stream used for device memory operations and kernel launches.
+ * @param mr      Device memory resource used to allocate the returned column's device memory
+ * @return        pair with column_view and column containing any auxiliary data to create
+ * column_view from scalar
+ */
+auto scalar_to_column_view(
+  scalar const& scal,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
+}
+
 // This functor does the actual comparison between string column value and a scalar string
 // or between two string column values using a comparator
 template <typename LhsDeviceViewT, typename RhsDeviceViewT, typename OutT, typename CompareFunc>
@@ -233,21 +250,6 @@ struct null_considering_binop {
 };
 
 }  // namespace
-
-/**
- * @brief Converts scalar to column_view with single element.
- *
- * @param scal    scalar to convert
- * @param stream  CUDA stream used for device memory operations and kernel launches.
- * @param mr      Device memory resource used to allocate the returned column's device memory
- * @return        pair with column_view and column containing any auxiliary data to create
- * column_view from scalar
- */
-std::pair<column_view, std::unique_ptr<column>> scalar_to_column_view(
-  scalar const& scal, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
-{
-  return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
-}
 
 std::unique_ptr<column> string_null_min_max(scalar const& lhs,
                                             column_view const& rhs,
