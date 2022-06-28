@@ -242,3 +242,119 @@ TEST_F(ListOverlapTest, StringTestsWithNullsUnequal)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
+
+TYPED_TEST(ListOverlapTypedTest, TrivialInputTests)
+{
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam>;
+
+  // Empty input.
+  {
+    auto const lhs      = lists_col{};
+    auto const rhs      = lists_col{};
+    auto const expected = bools_col{};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // All input lists are empty.
+  {
+    auto const lhs      = lists_col{lists_col{}, lists_col{}, lists_col{}};
+    auto const rhs      = lists_col{lists_col{}, lists_col{}, lists_col{}};
+    auto const expected = bools_col{0, 0, 0};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // Multiple empty lists.
+  {
+    auto const lhs      = lists_col{{}, {1, 2}, {}, {5, 4, 3, 2, 1, 0}, {}, {6}, {}};
+    auto const rhs      = lists_col{{}, {}, {0}, {0, 1, 2, 3, 4, 5}, {}, {6, 7}, {}};
+    auto const expected = bools_col{0, 0, 0, 1, 0, 1, 0};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+}
+
+TYPED_TEST(ListOverlapTypedTest, SlicedNonNullInputTests)
+{
+  using lists_col = cudf::test::lists_column_wrapper<TypeParam>;
+
+  auto const lhs_original =
+    lists_col{{1, 2, 3, 2, 3, 2, 3, 2, 3}, {3, 2, 1, 4, 1}, {5}, {10, 8, 9}, {6, 7}};
+  auto const rhs_original =
+    lists_col{{1, 2, 3, 2, 3, 2, 3, 2, 3}, {5, 6, 7, 8, 7, 5}, {}, {1, 2, 3}, {6, 7}};
+
+  {
+    auto const expected = bools_col{1, 0, 0, 0, 1};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs_original}, lists_cv{rhs_original});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  {
+    auto const lhs      = cudf::slice(lhs_original, {1, 5})[0];
+    auto const rhs      = cudf::slice(rhs_original, {1, 5})[0];
+    auto const expected = bools_col{0, 0, 0, 1};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  {
+    auto const lhs      = cudf::slice(lhs_original, {1, 3})[0];
+    auto const rhs      = cudf::slice(rhs_original, {1, 3})[0];
+    auto const expected = bools_col{0, 0};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  {
+    auto const lhs      = cudf::slice(lhs_original, {0, 3})[0];
+    auto const rhs      = cudf::slice(rhs_original, {0, 3})[0];
+    auto const expected = bools_col{1, 0, 0};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+}
+
+TYPED_TEST(ListOverlapTypedTest, InputHaveNullsTests)
+{
+  using lists_col     = cudf::test::lists_column_wrapper<TypeParam>;
+  auto constexpr null = TypeParam{0};
+
+  // Nullable lists.
+  {
+    auto const lhs = lists_col{{{3, 2, 1, 4, 1}, {5}, {} /*NULL*/, {} /*NULL*/, {10, 8, 9}, {6, 7}},
+                               nulls_at({2, 3})};
+    auto const rhs =
+      lists_col{{{1, 2}, {} /*NULL*/, {3}, {} /*NULL*/, {10, 11, 12}, {1, 2}}, nulls_at({1, 3})};
+    auto const expected =
+      bools_col{{1, 0 /*null*/, 0 /*null*/, 0 /*null*/, 1, 0}, nulls_at({1, 2, 3})};
+    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // Nullable child and nulls are equal.
+  {
+    auto const lhs      = lists_col{lists_col{{null, 1, null, 3}, nulls_at({0, 2})},
+                               lists_col{{null, 5}, null_at(0)},
+                               lists_col{{null, 7, null, 9}, nulls_at({0, 2})}};
+    auto const rhs      = lists_col{lists_col{{null, null, 5}, nulls_at({0, 1})},
+                               lists_col{{5, null}, null_at(1)},
+                               lists_col{7, 8, 9}};
+    auto const expected = bools_col{1, 1, 1};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+
+  // Nullable child and nulls are unequal.
+  {
+    auto const lhs      = lists_col{lists_col{{null, 1, null, 3}, nulls_at({0, 2})},
+                               lists_col{{null, 5}, null_at(0)},
+                               lists_col{{null, 7, null, 9}, nulls_at({0, 2})}};
+    auto const rhs      = lists_col{lists_col{{null, null, 5}, nulls_at({0, 1})},
+                               lists_col{{5, null}, null_at(1)},
+                               lists_col{7, 8, 9}};
+    auto const expected = bools_col{0, 1, 1};
+    auto const results  = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_UNEQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+  }
+}
