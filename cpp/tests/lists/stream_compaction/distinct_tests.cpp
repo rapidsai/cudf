@@ -684,8 +684,11 @@ TEST_F(ListDistinctTest, InputListsOfStructsOfLists)
                                0,
                                0,  // end list1
                                    // begin list2
-                               2,  // end list2
+                               1,  // end list2
                                    // begin list3
+                               2,
+                               2,  // end list3
+                                   // begin list4
                                3,
                                3,
                                3};
@@ -696,6 +699,9 @@ TEST_F(ListDistinctTest, InputListsOfStructsOfLists)
                                                          // begin list2
                                  floats_lists{3, 4, 5},  // end list2
                                                          // begin list3
+                                 floats_lists{},
+                                 floats_lists{},  // end list3
+                                                  // begin list4
                                  floats_lists{6, 7},
                                  floats_lists{6, 7},
                                  floats_lists{6, 7}};
@@ -703,28 +709,19 @@ TEST_F(ListDistinctTest, InputListsOfStructsOfLists)
     };
 
     return cudf::make_lists_column(
-      3, int32s_col{0, 3, 4, 7}.release(), get_structs().release(), 0, {});
+      4, int32s_col{0, 3, 4, 6, 9}.release(), get_structs().release(), 0, {});
   }();
 
   auto const expected = [] {
     auto const get_structs = [] {
-      auto child1 = int32s_col{    // begin list1
-                               0,  // end list1
-                                   // begin list2
-                               2,  // end list2
-                                   // begin list3
-                               3};
-      auto child2 = floats_lists{                        // begin list1
-                                 floats_lists{0, 1},     // end list1
-                                                         // begin list2
-                                 floats_lists{3, 4, 5},  // end list2
-                                                         // begin list3
-                                 floats_lists{6, 7}};
+      auto child1 = int32s_col{0, 1, 2, 3};
+      auto child2 =
+        floats_lists{floats_lists{0, 1}, floats_lists{3, 4, 5}, floats_lists{}, floats_lists{6, 7}};
       return structs_col{{child1, child2}};
     };
 
     return cudf::make_lists_column(
-      3, int32s_col{0, 1, 2, 3}.release(), get_structs().release(), 0, {});
+      4, int32s_col{0, 1, 2, 3, 4}.release(), get_structs().release(), 0, {});
   }();
 
   auto const results = cudf::lists::distinct(lists_cv{*input});
