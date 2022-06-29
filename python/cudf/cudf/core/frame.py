@@ -7,6 +7,7 @@ import operator
 import pickle
 import warnings
 from collections import abc
+import weakref
 from typing import (
     Any,
     Callable,
@@ -157,6 +158,9 @@ class Frame(BinaryOperand, Scannable):
         if inplace:
             for col in self._data:
                 if col in result._data:
+                    if weakref.getweakrefcount(self._data[col]) > 0:
+                        self._data[col] = self._data[col].custom_deep_copy()
+
                     self._data[col]._mimic_inplace(
                         result._data[col], inplace=True
                     )

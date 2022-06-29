@@ -486,7 +486,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         If ``value`` and ``self`` are of different types, ``value`` is coerced
         to ``self.dtype``. Assumes ``self`` and ``value`` are index-aligned.
         """
-        raise TypeError("hi")
         # Normalize value to scalar/column
         value_normalized = (
             cudf.Scalar(value, dtype=self.dtype)
