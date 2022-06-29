@@ -1,6 +1,7 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
 
+import gc
 import warnings
 
 import pytest
@@ -10,7 +11,12 @@ import rmm
 import cudf
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
-from cudf.core.spill_manager import SpillManager, get_columns, global_manager
+from cudf.core.spill_manager import (
+    SpillManager,
+    get_columns,
+    global_manager,
+    mark_columns_as_read_only_inplace,
+)
 from cudf.testing._utils import assert_eq
 
 
@@ -246,3 +252,35 @@ def test_get_columns():
     assert cols[0] is df1._data["a"]
     assert cols[1] is df2._data["b"]
     assert cols[2] is df2._data["c"]
+
+
+def test_mark_columns_as_read_only(manager: SpillManager):
+    df_base = cudf.DataFrame({"a": range(10)})
+    df_views = df_base.iloc[0:1], df_base.iloc[1:3]
+    manager.spill_to_device_limit(0)
+    assert len(manager.base_buffers()) == 1
+
+    mark_columns_as_read_only_inplace(df_views)
+    assert len(manager.base_buffers()) == 3
+    del df_base
+    gc.collect()
+    assert len(manager.base_buffers()) == 2
+
+    assert_eq(df_views[0], cudf.DataFrame({"a": range(10)}).iloc[0:1])
+    assert_eq(df_views[1], cudf.DataFrame({"a": range(10)}).iloc[1:3])
+
+
+def test_concat_of_spilled_views(manager: SpillManager):
+    df_base = cudf.DataFrame({"a": range(10)})
+    df1, df2 = df_base.iloc[0:1], df_base.iloc[1:3]
+    manager.spill_to_device_limit(0)
+    assert len(manager.base_buffers()) == 1
+    assert gen_df.is_spilled(df_base)
+
+    res = cudf.concat([df1, df2])
+
+    assert len(manager.base_buffers()) == 4
+    assert gen_df.is_spilled(df_base)
+    assert not gen_df.is_spilled(df1)
+    assert not gen_df.is_spilled(df2)
+    assert not gen_df.is_spilled(res)

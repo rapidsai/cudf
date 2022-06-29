@@ -235,3 +235,31 @@ def get_columns(obj: object) -> List[Column]:
 
     _get_columns(obj)
     return found
+
+
+def mark_columns_as_read_only_inplace(obj: object) -> None:
+    """
+    By marking all columns found in `obj`, spilled buffers
+    can be partially unspilled.
+    """
+    for col in get_columns(obj):
+        if col.base_children:
+            continue  # TODO: support non-fixed-length data types
+
+        if col.base_mask is not None:
+            continue  # TODO: support masks
+
+        if col.base_data is None:
+            continue
+        assert col.data is not None
+
+        buf_base: Buffer = col.base_data
+        buf_view: Buffer = col.data
+        if buf_base is buf_view:
+            continue  # We can ignore non-views columns
+        with buf_base._lock:
+            if not buf_base.is_spilled:
+                continue  # We can ignore non-spilled columns
+            mem = buf_view.memoryview_read_only()
+        col.set_base_data(Buffer(mem, ptr_exposed=False))
+        col._offset = 0

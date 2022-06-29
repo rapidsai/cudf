@@ -10,7 +10,7 @@ from distributed import Client, LocalCluster, wait
 
 import cudf
 
-NROWS = 10_000_000
+NROWS = 130_000_000
 
 
 def main(args):
