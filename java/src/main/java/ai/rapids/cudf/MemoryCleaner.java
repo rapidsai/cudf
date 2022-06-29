@@ -32,7 +32,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -203,7 +202,7 @@ public final class MemoryCleaner {
     t.start();
     if (REF_COUNT_DEBUG) {
       // If we are debugging things do a best effort to check for leaks at the end
-      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      Runnable hook = () -> {
         System.gc();
         // Avoid issues on shutdown with the cleaner thread.
         t.interrupt();
@@ -216,19 +215,23 @@ public final class MemoryCleaner {
           Cuda.setDevice(defaultGpu);
         }
 
-        try {
-          // Shutdown hooks are executed concurrently, and there is no execution order guarantee.
-          // See the doc of `Runtime.addShutdownHook`.
-          // Some resources may be closed in other hooks.
-          // Wait other hooks to be done, or a false leak may be detected.
-          Thread.sleep(TimeUnit.SECONDS.toMillis(1));
-        } catch (InterruptedException e) {
-        }
-
         for (CleanerWeakReference cwr : all) {
           cwr.clean();
         }
-      }));
+      };
+
+      // Shutdown hooks are executed concurrently in JVM, and there is no execution order guarantee.
+      // See the doc of `Runtime.addShutdownHook`.
+      // Some resources are closed in other Spark hooks.
+      // Here we should wait other Spark hooks to be done, or a false leak will be detected.
+      //
+      // `Spark ShutdownHookManager` leverages `Hadoop ShutdownHookManager` to manage hooks with
+      // priority. The priority parameter will guarantee the execution order.
+      //
+      // Here also use `Hadoop ShutdownHookManager` to add a lower priority hook.
+      // 20 priority is small enough, will run after Spark hooks
+      // Note: `ShutdownHookManager.get()` is a singleton, Spark and JNI both use the same singleton
+      org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(hook, 20);
     }
   }
 

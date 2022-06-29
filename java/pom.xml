@@ -145,10 +145,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <!-- Depend on `org.apache.hadoop.util.ShutdownHookManager` in `MemoryCleaner` -->
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
             <version>3.2.3</version>
-            <scope>test</scope>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 
