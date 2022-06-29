@@ -10,7 +10,7 @@ import rmm
 import cudf
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
-from cudf.core.spill_manager import SpillManager, global_manager
+from cudf.core.spill_manager import SpillManager, get_columns, global_manager
 from cudf.testing._utils import assert_eq
 
 
@@ -236,3 +236,13 @@ def test_host_serialize(manager, target, view):
     df2 = Serializable.host_deserialize(header, frames)
     assert gen_df.is_spilled(df2)
     assert_eq(df1, df2)
+
+
+def test_get_columns():
+    df1 = cudf.DataFrame({"a": [1, 2, 3]})
+    df2 = cudf.DataFrame({"b": [4, 5, 6], "c": [7, 8, 9]})
+    cols = get_columns(({"x": [df1, df2], "y": [df2]},))
+    assert len(cols) == 3
+    assert cols[0] is df1._data["a"]
+    assert cols[1] is df2._data["b"]
+    assert cols[2] is df2._data["c"]

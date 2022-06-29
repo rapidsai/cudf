@@ -8,11 +8,14 @@ import traceback
 import warnings
 import weakref
 from functools import cached_property
-from typing import MutableMapping, Optional, Tuple
+from typing import List, Mapping, MutableMapping, Optional, Set, Tuple
 
 import rmm.mr
 
+from cudf._lib.column import Column
 from cudf.core.buffer import Buffer, format_bytes
+from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.frame import Frame
 
 
 class SpillManager:
@@ -206,3 +209,29 @@ class GlobalSpillManager:
 
 
 global_manager = GlobalSpillManager()
+
+
+def get_columns(obj: object) -> List[Column]:
+    """Return all columns in `obj` (no duplicates)"""
+    found: List[Column] = []
+    found_ids: Set[int] = set()
+
+    def _get_columns(obj: object) -> None:
+        if isinstance(obj, Column):
+            if id(obj) not in found_ids:
+                found_ids.add(id(obj))
+                found.append(obj)
+        elif isinstance(obj, Frame):
+            _get_columns(obj._data)
+        elif isinstance(obj, ColumnAccessor):
+            for o in obj.columns:
+                _get_columns(o)
+        elif isinstance(obj, (list, tuple)):
+            for o in obj:
+                _get_columns(o)
+        elif isinstance(obj, Mapping):
+            for o in obj.values():
+                _get_columns(o)
+
+    _get_columns(obj)
+    return found
