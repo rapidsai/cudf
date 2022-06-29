@@ -464,27 +464,88 @@ TEST_F(SetDifferenceTest, InputListsOfNestedStructsHaveNull)
 
   // Nulls are equal.
   {
+    auto const get_structs_expected = [] {
+      auto grandchild1 = int32s_col{
+        1,
+        1,
+        1,  // end list1
+        1,
+        1,
+        1,
+        1,
+        2,  // end list2
+        2,
+        2,
+        2,
+        3,
+        3,
+        3  // end list3
+      };
+      auto grandchild2 = strings_col{{
+                                       "Banana",
+                                       "Cherry",
+                                       "Kiwi",  // end list1
+                                       "Bear",
+                                       "Cat",
+                                       "Dog",
+                                       "Duck",
+                                       "Panda",  // end list2
+                                       "ÁBC",
+                                       "ÁÁÁ",
+                                       "ÍÍÍÍÍ",
+                                       "" /*NULL*/,
+                                       "XYZ",
+                                       "ÁBC"  // end list3
+                                     },
+                                     null_at(11)};
+      auto child1      = structs_col{grandchild1, grandchild2};
+      return structs_col{{child1}};
+    };
+
     auto const lhs = cudf::make_lists_column(
       3, int32s_col{0, 8, 16, 24}.release(), get_structs_lhs().release(), 0, {});
     auto const rhs = cudf::make_lists_column(
       3, int32s_col{0, 8, 16, 24}.release(), get_structs_rhs().release(), 0, {});
-    auto const expected = bools_col{1, 1, 1};
-    auto const results  = cudf::lists::set_difference(lists_cv{*lhs}, lists_cv{*rhs}, NULL_EQUAL);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+    auto const expected = cudf::make_lists_column(
+      3, int32s_col{0, 3, 8, 14}.release(), get_structs_expected().release(), 0, {});
+    auto const results_sorted = set_op_sorted(*lhs, *rhs, NULL_EQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results_sorted);
   }
 
   // Nulls are unequal.
   {
+    auto const get_structs_expected = [] {
+      auto grandchild1 = int32s_col{{
+                                      null, null, null, null, 1, 1, 1,    // end list1
+                                      null, 1,    1,    1,    1, 2,       // end list2
+                                      null, null, 2,    2,    2, 3, 3, 3  // end list3
+                                    },
+                                    nulls_at({0, 1, 2, 3, 7, 13, 14})};
+      auto grandchild2 = strings_col{{
+                                       "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "Apple", "Banana",
+                                       "Cherry",    "Kiwi",  // end list1
+                                       "" /*NULL*/, "Bear",      "Cat",       "Dog",   "Duck",
+                                       "Panda",  // end list2
+                                       "ÁÁÁ",       "ÉÉÉÉÉ",     "ÁBC",       "ÁÁÁ",   "ÍÍÍÍÍ",
+                                       "" /*NULL*/, "XYZ",
+                                       "ÁBC"  // end list3
+                                     },
+                                     nulls_at({0, 1, 2, 7, 18})};
+      auto child1      = structs_col{{grandchild1, grandchild2}, nulls_at({0, 1, 2})};
+      return structs_col{{child1}};
+    };
+
     auto const lhs = cudf::make_lists_column(
       3, int32s_col{0, 8, 16, 24}.release(), get_structs_lhs().release(), 0, {});
     auto const rhs = cudf::make_lists_column(
       3, int32s_col{0, 8, 16, 24}.release(), get_structs_rhs().release(), 0, {});
-    auto const expected = bools_col{0, 0, 0};
-    auto const results  = cudf::lists::set_difference(lists_cv{*lhs}, lists_cv{*rhs}, NULL_UNEQUAL);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
+    auto const expected = cudf::make_lists_column(
+      3, int32s_col{0, 7, 13, 21}.release(), get_structs_expected().release(), 0, {});
+    auto const results_sorted = set_op_sorted(*lhs, *rhs, NULL_UNEQUAL);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results_sorted);
   }
 }
-#if 0
+
 TEST_F(SetDifferenceTest, InputListsOfStructsOfLists)
 {
   auto const lhs = [] {
@@ -530,7 +591,7 @@ TEST_F(SetDifferenceTest, InputListsOfStructsOfLists)
                                6};
       auto child2 = floats_lists{// begin list1
                                  floats_lists{1, 1},
-                                 floats_lists{1, 2},
+                                 floats_lists{0, 2},
                                  floats_lists{1, 2},     // end list1
                                                          // begin list2
                                  floats_lists{3, 4, 5},  // end list2
@@ -545,9 +606,18 @@ TEST_F(SetDifferenceTest, InputListsOfStructsOfLists)
       3, int32s_col{0, 3, 4, 7}.release(), get_structs().release(), 0, {});
   }();
 
-  auto const expected = bools_col{0, 1, 1};
-  auto const results  = cudf::lists::set_difference(lists_cv{*lhs}, lists_cv{*rhs});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
-}
+  auto const expected = [] {
+    auto const get_structs = [] {
+      auto child1 = int32s_col{0, 2, 4, 6};
+      auto child2 = floats_lists{
+        floats_lists{0, 1}, floats_lists{1, 1}, floats_lists{6, 7}, floats_lists{6, 7, 8}};
+      return structs_col{{child1, child2}};
+    };
 
-#endif
+    return cudf::make_lists_column(
+      3, int32s_col{0, 2, 2, 4}.release(), get_structs().release(), 0, {});
+  }();
+
+  auto const results = cudf::lists::set_difference(lists_cv{*lhs}, lists_cv{*rhs});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results);
+}
