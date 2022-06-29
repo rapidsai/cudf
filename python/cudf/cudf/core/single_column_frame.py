@@ -424,12 +424,4 @@ class SingleColumnFrame(Frame, NotIterable):
 
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
 
-        result = _make_categorical_like(result, self_column)
-
-        # TODO: Move these to subclasses.
-        if isinstance(self, cudf.Index):
-            result = cudf.Index(result, name=self.name)
-        else:
-            result = self._from_data_like_self({self.name: result})
-
-        return self._mimic_inplace(result, inplace=inplace)
+        return _make_categorical_like(result, self_column)

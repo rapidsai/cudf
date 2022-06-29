@@ -3394,6 +3394,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         change = diff / data.shift(periods=periods, freq=freq)
         return change
 
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        result_col = super().where(cond, other, inplace)
+        return self._mimic_inplace(
+            self._from_data_like_self({self.name: result_col}),
+            inplace=inplace,
+        )
+
 
 def make_binop_func(op):
     # This function is used to wrap binary operations in Frame with an
