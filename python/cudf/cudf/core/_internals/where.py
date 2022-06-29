@@ -43,10 +43,7 @@ def _check_and_cast_columns_with_other(
     other: Union[ScalarLike, ColumnBase],
     inplace: bool,
 ) -> Tuple[ColumnBase, Union[ScalarLike, ColumnBase]]:
-    """
-    Returns type-casted column `source_col` & scalar `other_scalar`
-    based on `inplace` parameter.
-    """
+    # Returns type-casted `source_col` & `other` based on `inplace`.
     source_dtype = source_col.dtype
     if is_categorical_dtype(source_dtype):
         return _normalize_categorical(source_col, other)
