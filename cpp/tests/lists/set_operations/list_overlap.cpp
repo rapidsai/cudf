@@ -364,10 +364,10 @@ TEST_F(ListOverlapTest, InputListsOfNestedStructsHaveNull)
     auto grandchild2 = strings_col{{
                                      // begin list1
                                      "Banana",
-                                     "YYY", /*NULL*/
+                                     "XXX", /*NULL*/
                                      "Apple",
                                      "XXX", /*NULL*/
-                                     "YYY", /*NULL*/
+                                     "XXX", /*NULL*/
                                      "Banana",
                                      "Cherry",
                                      "Kiwi",  // end list1
@@ -406,10 +406,10 @@ TEST_F(ListOverlapTest, InputListsOfNestedStructsHaveNull)
     auto grandchild2 = strings_col{{
                                      // begin list1
                                      "Banana",
-                                     "YYY", /*NULL*/
+                                     "XXX", /*NULL*/
                                      "Apple",
                                      "XXX", /*NULL*/
-                                     "YYY", /*NULL*/
+                                     "XXX", /*NULL*/
                                      "Banana",
                                      "Cherry",
                                      "Kiwi",  // end list1
