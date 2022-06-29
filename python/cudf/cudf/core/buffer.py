@@ -135,7 +135,7 @@ class Buffer(Serializable):
                 self._ptr_desc = {"type": "cpu", "memoryview": data}
                 self._ptr = None
                 self._size = data.nbytes
-                self._owner = data
+                self._owner = None
         elif isinstance(data, int):
             if not isinstance(size, int):
                 raise TypeError("size must be integer")
@@ -156,10 +156,12 @@ class Buffer(Serializable):
         self._spill_manager = None
         if global_manager.enabled:
             self._spill_manager = global_manager.get()
-            if self._ptr:
-                base = self._spill_manager.lookup_address_range(
-                    self._ptr, self._size
-                )
+            if data is not None:
+                base = None
+                if self._ptr:
+                    base = self._spill_manager.lookup_address_range(
+                        self._ptr, self._size
+                    )
                 if base is not None:
                     base.ptr  # expose base buffer
                 elif not self._ptr_exposed:
