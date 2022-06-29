@@ -1294,13 +1294,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
 
     if (lhs->type().id() == cudf::type_id::STRUCT) {
-      auto [new_mask, null_count] =
-          cudf::detail::bitmask_and(cudf::table_view({*lhs, *rhs}), cudf::default_stream_value);
-      auto out = make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask), null_count,
-                                         cudf::default_stream_value);
+      auto [new_mask, null_count] = cudf::bitmask_and(cudf::table_view{{*lhs, *rhs}});
+      auto out = make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask), null_count);
       auto out_view = out->mutable_view();
-      cudf::binops::compiled::detail::apply_sorting_struct_binary_op(
-          out_view, *lhs, *rhs, false, false, op, cudf::default_stream_value);
+      cudf::binops::compiled::detail::apply_sorting_struct_binary_op(out_view, *lhs, *rhs, false,
+                                                                     false, op);
       return release_as_jlong(out);
     }
 
@@ -1335,14 +1333,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
 
     if (lhs->type().id() == cudf::type_id::STRUCT) {
-      auto new_mask =
-          cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs, cudf::default_stream_value);
+      auto new_mask = cudf::binops::scalar_col_valid_mask_and(*lhs, *rhs);
       auto out = make_fixed_width_column(n_data_type, lhs->size(), std::move(new_mask),
-                                         cudf::UNKNOWN_NULL_COUNT, cudf::default_stream_value);
-      auto rhsv = cudf::make_column_from_scalar(rhs, 1);
+                                         cudf::UNKNOWN_NULL_COUNT);
+      auto rhsv = cudf::make_column_from_scalar(*rhs, 1);
       auto out_view = out->mutable_view();
-      cudf::binops::compiled::detail::apply_sorting_struct_binary_op(
-          out_view, *lhs, rhsv->view(), false, true, op, cudf::default_stream_value);
+      cudf::binops::compiled::detail::apply_sorting_struct_binary_op(out_view, *lhs, rhsv->view(),
+                                                                     false, true, op);
       return release_as_jlong(out);
     }
 
