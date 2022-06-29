@@ -893,6 +893,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         return ret
 
     # Override just to make mypy happy.
+    @cudf_nvtx_annotate
     def _copy_type_metadata(
         self: GenericIndex, other: GenericIndex
     ) -> GenericIndex:
