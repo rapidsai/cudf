@@ -56,6 +56,11 @@ def bench_to_numpy(benchmark, frame_or_index):
     benchmark(frame_or_index.to_numpy)
 
 
+@benchmark_with_object(cls="frame_or_index", dtype="int")
+def bench_isna(benchmark, frame_or_index):
+    benchmark(frame_or_index.isna)
+
+
 @benchmark_with_object(cls="frame_or_index", dtype="int", nulls=False)
 @pytest.mark.pandas_incompatible
 def bench_to_cupy(benchmark, frame_or_index):
