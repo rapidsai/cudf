@@ -29,7 +29,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
-from cudf._typing import ColumnLike
+from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
@@ -44,7 +44,7 @@ from cudf.api.types import (
 from cudf.core._base_index import BaseIndex
 from cudf.core.column import ColumnBase, as_column, full
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, _drop_rows_by_labels
+from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
@@ -4553,3 +4553,84 @@ def _is_series(obj):
     instead of checking for isinstance(obj, cudf.Series)
     """
     return isinstance(obj, Frame) and obj.ndim == 1 and obj._index is not None
+
+
+@_cudf_nvtx_annotate
+def _drop_rows_by_labels(
+    obj: DataFrameOrSeries,
+    labels: Union[ColumnLike, abc.Iterable, str],
+    level: Union[int, str],
+    errors: str,
+) -> DataFrameOrSeries:
+    """Remove rows specified by `labels`. If `errors="raise"`, an error is raised
+    if some items in `labels` do not exist in `obj._index`.
+
+    Will raise if level(int) is greater or equal to index nlevels
+    """
+    if isinstance(level, int) and level >= obj.index.nlevels:
+        raise ValueError("Param level out of bounds.")
+
+    if not isinstance(labels, cudf.core.single_column_frame.SingleColumnFrame):
+        labels = as_column(labels)
+
+    if isinstance(obj._index, cudf.MultiIndex):
+        if level is None:
+            level = 0
+
+        levels_index = obj.index.get_level_values(level)
+        if errors == "raise" and not labels.isin(levels_index).all():
+            raise KeyError("One or more values not found in axis")
+
+        if isinstance(level, int):
+            ilevel = level
+        else:
+            ilevel = obj._index.names.index(level)
+
+        # 1. Merge Index df and data df along column axis:
+        # | id | ._index df | data column(s) |
+        idx_nlv = obj._index.nlevels
+        working_df = obj._index.to_frame(index=False)
+        working_df.columns = list(range(idx_nlv))
+        for i, col in enumerate(obj._data):
+            working_df[idx_nlv + i] = obj._data[col]
+        # 2. Set `level` as common index:
+        # | level | ._index df w/o level | data column(s) |
+        working_df = working_df.set_index(level)
+
+        # 3. Use "leftanti" join to drop
+        # TODO: use internal API with "leftanti" and specify left and right
+        # join keys to bypass logic check
+        to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
+        join_res = working_df.join(to_join, how="leftanti")
+
+        # 4. Reconstruct original layout, and rename
+        join_res._insert(
+            ilevel, name=join_res._index.name, value=join_res._index
+        )
+
+        midx = cudf.MultiIndex.from_frame(
+            join_res.iloc[:, 0:idx_nlv], names=obj._index.names
+        )
+
+        if isinstance(obj, cudf.Series):
+            return obj.__class__._from_data(
+                join_res.iloc[:, idx_nlv:]._data, index=midx, name=obj.name
+            )
+        else:
+            return obj.__class__._from_data(
+                join_res.iloc[:, idx_nlv:]._data,
+                index=midx,
+                columns=obj._data.to_pandas_index(),
+            )
+
+    else:
+        if errors == "raise" and not labels.isin(obj.index).all():
+            raise KeyError("One or more values not found in axis")
+
+        key_df = cudf.DataFrame(index=labels)
+        if isinstance(obj, cudf.DataFrame):
+            return obj.join(key_df, how="leftanti")
+        else:
+            res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
+            res.name = obj.name
+            return res
