@@ -16,7 +16,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
     cdef cppclass parquet_reader_options:
         parquet_reader_options() except +
         cudf_io_types.source_info get_source_info() except +
-        vector[string] get_columns() except +
         vector[vector[size_type]] get_row_groups() except +
         data_type get_timestamp_type() except +
         bool is_enabled_convert_strings_to_categories() except +

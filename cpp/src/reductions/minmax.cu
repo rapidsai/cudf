@@ -23,6 +23,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -275,7 +276,7 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   const column_view& col, rmm::mr::device_memory_resource* mr)
 {
-  return detail::minmax(col, rmm::cuda_stream_default, mr);
+  return detail::minmax(col, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf
