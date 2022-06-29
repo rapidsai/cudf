@@ -85,10 +85,10 @@ TEST_F(SetDifferenceTest, TrivialTest)
                   floats_lists{{2.0, 1.0, null, 0.0, 0.0, null}, nulls_at({2, 5})},
                   {} /*NULL*/},
                  null_at(3)};
-
   auto const expected = floats_lists{
     {floats_lists{5.0}, floats_lists{5.0, NaN}, floats_lists{} /*NULL*/, floats_lists{} /*NULL*/},
     nulls_at({2, 3})};
+
   auto const results_sorted = set_op_sorted(lhs, rhs);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results_sorted);
 }
@@ -96,18 +96,20 @@ TEST_F(SetDifferenceTest, TrivialTest)
 TEST_F(SetDifferenceTest, FloatingPointTestsWithSignedZero)
 {
   // -0.0 and 0.0 should be considered equal.
-  auto const lhs            = floats_lists{{0.0, 0.0, 0.0, 0.0, 0.0}, {-0.0, 1.0}, {0.0}};
-  auto const rhs            = floats_lists{{-0.0, -0.0, -0.0, -0.0, -0.0}, {0.0, 2.0}, {1.0}};
-  auto const expected       = floats_lists{floats_lists{}, floats_lists{1.0}, floats_lists{0.0}};
+  auto const lhs      = floats_lists{{0.0, 0.0, 0.0, 0.0, 0.0}, {-0.0, 1.0}, {0.0}};
+  auto const rhs      = floats_lists{{-0.0, -0.0, -0.0, -0.0, -0.0}, {0.0, 2.0}, {1.0}};
+  auto const expected = floats_lists{floats_lists{}, floats_lists{1.0}, floats_lists{0.0}};
+
   auto const results_sorted = set_op_sorted(lhs, rhs);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
 }
 
 TEST_F(SetDifferenceTest, FloatingPointTestsWithInf)
 {
-  auto const lhs            = floats_lists{{Inf, Inf, Inf}, {Inf, 0.0, neg_Inf}};
-  auto const rhs            = floats_lists{{neg_Inf, neg_Inf}, {0.0}};
-  auto const expected       = floats_lists{floats_lists{Inf}, floats_lists{neg_Inf, Inf}};
+  auto const lhs      = floats_lists{{Inf, Inf, Inf}, {Inf, 0.0, neg_Inf}};
+  auto const rhs      = floats_lists{{neg_Inf, neg_Inf}, {0.0}};
+  auto const expected = floats_lists{floats_lists{Inf}, floats_lists{neg_Inf, Inf}};
+
   auto const results_sorted = set_op_sorted(lhs, rhs);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
 }
@@ -138,36 +140,40 @@ TEST_F(SetDifferenceTest, StringTestsNonNull)
 {
   // Trivial cases - empty input.
   {
-    auto const lhs            = strings_lists{};
-    auto const rhs            = strings_lists{};
-    auto const expected       = strings_lists{};
+    auto const lhs      = strings_lists{};
+    auto const rhs      = strings_lists{};
+    auto const expected = strings_lists{};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
   // Trivial cases - empty input.
   {
-    auto const lhs            = strings_lists{strings_lists{}};
-    auto const rhs            = strings_lists{strings_lists{}};
-    auto const expected       = strings_lists{strings_lists{}};
+    auto const lhs      = strings_lists{strings_lists{}};
+    auto const rhs      = strings_lists{strings_lists{}};
+    auto const expected = strings_lists{strings_lists{}};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
   // No overlap.
   {
-    auto const lhs            = strings_lists{"this", "is", "a", "string"};
-    auto const rhs            = strings_lists{"aha", "bear", "blow", "heat"};
-    auto const expected       = strings_lists{"a", "is", "string", "this"};
+    auto const lhs      = strings_lists{"this", "is", "a", "string"};
+    auto const rhs      = strings_lists{"aha", "bear", "blow", "heat"};
+    auto const expected = strings_lists{"a", "is", "string", "this"};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
   // One list column.
   {
-    auto const lhs            = strings_lists{"this", "is", "a", "string"};
-    auto const rhs            = strings_lists{"a", "delicious", "banana"};
-    auto const expected       = strings_lists{"is", "string", "this"};
+    auto const lhs      = strings_lists{"this", "is", "a", "string"};
+    auto const rhs      = strings_lists{"a", "delicious", "banana"};
+    auto const expected = strings_lists{"is", "string", "this"};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
@@ -182,6 +188,7 @@ TEST_F(SetDifferenceTest, StringTestsNonNull)
                                    strings_lists{"two", "and", "1"}};
     auto const expected = strings_lists{
       strings_lists{"three", "two"}, strings_lists{"five", "four", "six"}, strings_lists{"2", "3"}};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
@@ -197,7 +204,8 @@ TEST_F(SetDifferenceTest, StringTestsWithNullsEqual)
       {"this", null, "is", "is", "is", "a", null, "string", null, "string"}, nulls_at({1, 6, 8})};
     auto const rhs =
       strings_lists{{"aha", null, "abc", null, "1111", null, "2222"}, nulls_at({1, 3, 5})};
-    auto const expected       = strings_lists{"a", "is", "string", "this"};
+    auto const expected = strings_lists{"a", "is", "string", "this"};
+
     auto const results_sorted = set_op_sorted(lhs, rhs, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results_sorted);
   }
@@ -213,10 +221,11 @@ TEST_F(SetDifferenceTest, StringTestsWithNullsEqual)
        strings_lists{}, /* NULL */
        strings_lists{"aha", "this", "is another", "string???"}},
       null_at(1)};
-    auto const expected       = strings_lists{{strings_lists{"a", "is", "string", "this"},
+    auto const expected = strings_lists{{strings_lists{"a", "is", "string", "this"},
                                          strings_lists{} /*NULL*/,
                                          strings_lists{"a", "is", "string"}},
                                         null_at(1)};
+
     auto const results_sorted = set_op_sorted(lhs, rhs, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
@@ -234,6 +243,7 @@ TEST_F(SetDifferenceTest, StringTestsWithNullsUnequal)
       strings_lists{{"aha", null, "abc", null, "1111", null, "2222"}, nulls_at({1, 3, 5})};
     auto const expected =
       strings_lists{{null, null, null, "a", "is", "string", "this"}, nulls_at({0, 1, 2})};
+
     auto const results_sorted = set_op_sorted(lhs, rhs, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
@@ -254,6 +264,7 @@ TEST_F(SetDifferenceTest, StringTestsWithNullsUnequal)
        strings_lists{} /*NULL*/,
        strings_lists{"a", "is", "string"}},
       null_at(1)};
+
     auto const results_sorted = set_op_sorted(lhs, rhs, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
@@ -265,27 +276,30 @@ TYPED_TEST(SetDifferenceTypedTest, TrivialInputTests)
 
   // Empty input.
   {
-    auto const lhs            = lists_col{};
-    auto const rhs            = lists_col{};
-    auto const expected       = lists_col{};
+    auto const lhs      = lists_col{};
+    auto const rhs      = lists_col{};
+    auto const expected = lists_col{};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
   // All input lists are empty.
   {
-    auto const lhs            = lists_col{lists_col{}, lists_col{}, lists_col{}};
-    auto const rhs            = lists_col{lists_col{}, lists_col{}, lists_col{}};
-    auto const expected       = lists_col{lists_col{}, lists_col{}, lists_col{}};
+    auto const lhs      = lists_col{lists_col{}, lists_col{}, lists_col{}};
+    auto const rhs      = lists_col{lists_col{}, lists_col{}, lists_col{}};
+    auto const expected = lists_col{lists_col{}, lists_col{}, lists_col{}};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
   // Multiple empty lists.
   {
-    auto const lhs            = lists_col{{}, {1, 2}, {}, {5, 4, 3, 2, 1, 0}, {}, {6}, {}};
-    auto const rhs            = lists_col{{}, {}, {0}, {0, 1, 2, 3, 4, 5}, {}, {6, 7}, {}};
-    auto const expected       = lists_col{{}, {1, 2}, {}, {}, {}, {}, {}};
+    auto const lhs      = lists_col{{}, {1, 2}, {}, {5, 4, 3, 2, 1, 0}, {}, {6}, {}};
+    auto const rhs      = lists_col{{}, {}, {0}, {0, 1, 2, 3, 4, 5}, {}, {6, 7}, {}};
+    auto const expected = lists_col{{}, {1, 2}, {}, {}, {}, {}, {}};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
@@ -301,31 +315,35 @@ TYPED_TEST(SetDifferenceTypedTest, SlicedNonNullInputTests)
     lists_col{{1, 2, 3, 2, 3, 2, 3, 2, 3}, {5, 6, 7, 8, 7, 5}, {}, {1, 2, 3}, {6, 7}};
 
   {
-    auto const expected       = lists_col{{}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {}};
+    auto const expected = lists_col{{}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {}};
+
     auto const results_sorted = set_op_sorted(lhs_original, rhs_original);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
   {
-    auto const lhs            = cudf::slice(lhs_original, {1, 5})[0];
-    auto const rhs            = cudf::slice(rhs_original, {1, 5})[0];
-    auto const expected       = lists_col{{1, 2, 3, 4}, {5}, {8, 9, 10}, {}};
+    auto const lhs      = cudf::slice(lhs_original, {1, 5})[0];
+    auto const rhs      = cudf::slice(rhs_original, {1, 5})[0];
+    auto const expected = lists_col{{1, 2, 3, 4}, {5}, {8, 9, 10}, {}};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
   {
-    auto const lhs            = cudf::slice(lhs_original, {1, 3})[0];
-    auto const rhs            = cudf::slice(rhs_original, {1, 3})[0];
-    auto const expected       = lists_col{{1, 2, 3, 4}, {5}};
+    auto const lhs      = cudf::slice(lhs_original, {1, 3})[0];
+    auto const rhs      = cudf::slice(rhs_original, {1, 3})[0];
+    auto const expected = lists_col{{1, 2, 3, 4}, {5}};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
   {
-    auto const lhs            = cudf::slice(lhs_original, {0, 3})[0];
-    auto const rhs            = cudf::slice(rhs_original, {0, 3})[0];
-    auto const expected       = lists_col{{}, {1, 2, 3, 4}, {5}};
+    auto const lhs      = cudf::slice(lhs_original, {0, 3})[0];
+    auto const rhs      = cudf::slice(rhs_original, {0, 3})[0];
+    auto const expected = lists_col{{}, {1, 2, 3, 4}, {5}};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
@@ -344,6 +362,7 @@ TYPED_TEST(SetDifferenceTypedTest, InputHaveNullsTests)
       lists_col{{{1, 2}, {} /*NULL*/, {3}, {} /*NULL*/, {10, 11, 12}, {1, 2}}, nulls_at({1, 3})};
     auto const expected = lists_col{{{3, 4}, {} /*NULL*/, {} /*NULL*/, {} /*NULL*/, {8, 9}, {6, 7}},
                                     nulls_at({1, 2, 3})};
+
     auto const results_sorted = set_op_sorted(lhs, rhs);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
@@ -357,21 +376,23 @@ TYPED_TEST(SetDifferenceTypedTest, InputHaveNullsTests)
                                lists_col{{5, null}, null_at(1)},
                                lists_col{7, 8, 9}};
     auto const expected = lists_col{lists_col{1, 3}, lists_col{}, lists_col{{null}, null_at(0)}};
+
     auto const results_sorted = set_op_sorted(lhs, rhs, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
 
   // Nullable child and nulls are unequal.
   {
-    auto const lhs            = lists_col{lists_col{{null, 1, null, 3}, nulls_at({0, 2})},
+    auto const lhs      = lists_col{lists_col{{null, 1, null, 3}, nulls_at({0, 2})},
                                lists_col{{null, 5}, null_at(0)},
                                lists_col{{null, 7, null, 9}, nulls_at({0, 2})}};
-    auto const rhs            = lists_col{lists_col{{null, null, 5}, nulls_at({0, 1})},
+    auto const rhs      = lists_col{lists_col{{null, null, 5}, nulls_at({0, 1})},
                                lists_col{{5, null}, null_at(1)},
                                lists_col{7, 8, 9}};
-    auto const expected       = lists_col{lists_col{{null, null, 1, 3}, nulls_at({0, 1})},
+    auto const expected = lists_col{lists_col{{null, null, 1, 3}, nulls_at({0, 1})},
                                     lists_col{{null}, null_at(0)},
                                     lists_col{{null, null}, nulls_at({0, 1})}};
+
     auto const results_sorted = set_op_sorted(lhs, rhs, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
   }
@@ -508,6 +529,7 @@ TEST_F(SetDifferenceTest, InputListsOfNestedStructsHaveNull)
       3, int32s_col{0, 8, 16, 24}.release(), get_structs_rhs().release(), 0, {});
     auto const expected = cudf::make_lists_column(
       3, int32s_col{0, 3, 8, 14}.release(), get_structs_expected().release(), 0, {});
+
     auto const results_sorted = set_op_sorted(*lhs, *rhs, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results_sorted);
   }
@@ -541,6 +563,7 @@ TEST_F(SetDifferenceTest, InputListsOfNestedStructsHaveNull)
       3, int32s_col{0, 8, 16, 24}.release(), get_structs_rhs().release(), 0, {});
     auto const expected = cudf::make_lists_column(
       3, int32s_col{0, 7, 13, 21}.release(), get_structs_expected().release(), 0, {});
+
     auto const results_sorted = set_op_sorted(*lhs, *rhs, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results_sorted);
   }
