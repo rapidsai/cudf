@@ -63,19 +63,19 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
         dcol->pair_begin<ElementType, true>(),
         compound_op.template get_null_replacing_element_transformer<ResultType>());
       result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
-        it, col.size(), compound_op, valid_count, ddof, std::nullopt, stream, mr);
+        it, col.size(), compound_op, valid_count, ddof, stream, mr);
     } else {
       auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
       result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
-        it, col.size(), compound_op, valid_count, ddof, std::nullopt, stream, mr);
+        it, col.size(), compound_op, valid_count, ddof, stream, mr);
     }
   } else {
     auto it = thrust::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls()),
       compound_op.template get_null_replacing_element_transformer<ResultType>());
     result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
-      it, col.size(), compound_op, valid_count, ddof, std::nullopt, stream, mr);
+      it, col.size(), compound_op, valid_count, ddof, stream, mr);
   }
 
   // set scalar is valid

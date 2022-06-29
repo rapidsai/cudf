@@ -180,7 +180,7 @@ std::unique_ptr<scalar> dictionary_reduction(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (init.has_value()) { CUDF_FAIL("Initial value not support for dictionary reductions"); }
+  if (init.has_value()) { CUDF_FAIL("Initial value not supported for dictionary reductions"); }
 
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};

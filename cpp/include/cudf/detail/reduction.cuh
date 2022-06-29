@@ -41,7 +41,7 @@ namespace detail {
  * @param[in] d_in      the begin iterator
  * @param[in] num_items the number of items
  * @param[in] op        the reduction operator
- * @param[in] init          Optional initial value of the reduction
+ * @param[in] init      Optional initial value of the reduction
  * @param[in] stream    CUDA stream used for device memory operations and kernel launches.
  * @param[in] mr        Device memory resource used to allocate the returned scalar's device
  * memory
@@ -64,7 +64,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                rmm::mr::device_memory_resource* mr)
 {
   auto binary_op     = sop.get_binary_op();
-  auto initial_value = init.has_value() ? init.value() : sop.template get_identity<OutputType>();
+  auto initial_value = init.value_or(sop.template get_identity<OutputType>());
   auto dev_result    = rmm::device_scalar<OutputType>{initial_value, stream, mr};
 
   // Allocate temporary storage
@@ -102,7 +102,7 @@ template <typename Op,
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
-                               std::optional<std::reference_wrapper<const scalar>> init,
+                               std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
@@ -124,7 +124,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                rmm::mr::device_memory_resource* mr)
 {
   auto binary_op     = sop.get_binary_op();
-  auto initial_value = init.has_value() ? init.value() : sop.template get_identity<OutputType>();
+  auto initial_value = init.value_or(sop.template get_identity<OutputType>());
   auto dev_result    = rmm::device_scalar<OutputType>{initial_value, stream};
 
   // Allocate temporary storage
@@ -158,14 +158,14 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 /**
  * @brief compute reduction by the compound operator (reduce and transform)
  *
- * @param[in] d_in      the begin iterator
- * @param[in] num_items the number of items
- * @param[in] op        the reduction operator
- * @param[in] valid_count   the intermediate operator argument 1
- * @param[in] ddof      the intermediate operator argument 2
- * @param[in] init      Optional initial value of the reduction.
- * @param[in] stream    CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr        Device memory resource used to allocate the returned scalar's device
+ * @param[in] d_in        the begin iterator
+ * @param[in] num_items   the number of items
+ * @param[in] op          the reduction operator
+ * @param[in] valid_count the intermediate operator argument 1
+ * @param[in] ddof        the intermediate operator argument 2
+ * @param[in] init        Optional initial value of the reduction.
+ * @param[in] stream      CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr          Device memory resource used to allocate the returned scalar's device
  * memory
  * @returns   Output scalar in device memory
  *
@@ -186,13 +186,11 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                op::compound_op<Op> cop,
                                cudf::size_type valid_count,
                                cudf::size_type ddof,
-                               std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op = cop.get_binary_op();
-  auto initial_value =
-    init.has_value() ? init.value() : cop.template get_identity<IntermediateType>();
+  auto binary_op     = cop.get_binary_op();
+  auto initial_value = cop.template get_identity<IntermediateType>();
 
   rmm::device_scalar<IntermediateType> intermediate_result{initial_value, stream};
 

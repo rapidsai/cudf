@@ -36,8 +36,7 @@ template <typename T>
 struct SegmentedReductionTest : public cudf::test::BaseFixture {
 };
 
-struct SegmentedReductionTestUntyped : public cudf::test::BaseFixture {
-};
+struct SegmentedReductionTestUntyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(SegmentedReductionTest, NumericTypes);
 
@@ -50,7 +49,7 @@ TYPED_TEST(SegmentedReductionTest, SumExcludeNulls)
   // outputs:  {6, 4, 1, XXX, XXX, XXX}
   // output nullmask: {1, 1, 1, 0, 0, 0}
   auto input     = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
-                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+                                                         {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
   auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect = fixed_width_column_wrapper<TypeParam>{{6, 4, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
@@ -94,7 +93,7 @@ TYPED_TEST(SegmentedReductionTest, ProductExcludeNulls)
   // outputs:   {15, 15, 1, XXX, XXX, XXX}
   // output nullmask: {1, 1, 1, 0, 0, 0}
   auto input     = fixed_width_column_wrapper<TypeParam>{{1, 3, 5, XXX, 3, 5, 1, XXX, XXX, XXX},
-                                                     {1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
+                                                         {1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
   auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect =
@@ -140,7 +139,7 @@ TYPED_TEST(SegmentedReductionTest, MaxExcludeNulls)
   // outputs:   {3, 3, 1, XXX, XXX, XXX}
   // output nullmask: {1, 1, 1, 0, 0, 0}
   auto input     = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
-                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+                                                         {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
   auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect = fixed_width_column_wrapper<TypeParam>{{3, 3, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
@@ -184,7 +183,7 @@ TYPED_TEST(SegmentedReductionTest, MinExcludeNulls)
   // outputs:  {1, 1, 1, XXX, XXX, XXX}
   // output nullmask: {1, 1, 1, 0, 0, 0}
   auto input     = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
-                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+                                                         {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
   auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect = fixed_width_column_wrapper<TypeParam>{{1, 1, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
@@ -233,8 +232,8 @@ TYPED_TEST(SegmentedReductionTest, AnyExcludeNulls)
   auto offsets   = std::vector<size_type>{0, 3, 6, 9, 12, 12, 13, 14, 15, 17};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect    = fixed_width_column_wrapper<bool>{
-    {false, false, true, true, bool{XXX}, false, true, bool{XXX}, bool{XXX}},
-    {true, true, true, true, false, true, true, false, false}};
+       {false, false, true, true, bool{XXX}, false, true, bool{XXX}, bool{XXX}},
+       {true, true, true, true, false, true, true, false, false}};
 
   auto res = segmented_reduce(input,
                               d_offsets,
@@ -282,8 +281,8 @@ TYPED_TEST(SegmentedReductionTest, AllExcludeNulls)
   auto offsets   = std::vector<size_type>{0, 3, 6, 6, 7, 8, 10, 13, 16, 17};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect    = fixed_width_column_wrapper<bool>{
-    {true, true, bool{XXX}, true, bool{XXX}, bool{XXX}, false, false, false},
-    {true, true, false, true, false, false, true, true, true}};
+       {true, true, bool{XXX}, true, bool{XXX}, bool{XXX}, false, false, false},
+       {true, true, false, true, false, false, true, true, true}};
 
   auto res = segmented_reduce(input,
                               d_offsets,
@@ -327,7 +326,7 @@ TYPED_TEST(SegmentedReductionTest, SumIncludeNulls)
   // outputs:  {6, XXX, 1, XXX, XXX, XXX}
   // output nullmask: {1, 0, 1, 0, 0, 0}
   auto input     = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
-                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+                                                         {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
   auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect =
@@ -376,7 +375,7 @@ TYPED_TEST(SegmentedReductionTest, ProductIncludeNulls)
   // outputs:   {15, XXX, 1, XXX, XXX, XXX}
   // output nullmask: {1, 0, 1, 0, 0, 0}
   auto input     = fixed_width_column_wrapper<TypeParam>{{1, 3, 5, XXX, 3, 5, 1, XXX, XXX, XXX},
-                                                     {1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
+                                                         {1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
   auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect =
@@ -425,7 +424,7 @@ TYPED_TEST(SegmentedReductionTest, MaxIncludeNulls)
   // outputs:   {3, XXX, 1, XXX, XXX, XXX}
   // output nullmask: {1, 0, 1, 0, 0, 0}
   auto input     = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
-                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+                                                         {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
   auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect =
@@ -474,7 +473,7 @@ TYPED_TEST(SegmentedReductionTest, MinIncludeNulls)
   // outputs:  {1, XXX, 1, XXX, XXX, XXX}
   // output nullmask: {1, 0, 1, 0, 0, 0}
   auto input     = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
-                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0}};
+                                                         {1, 1, 1, 1, 0, 1, 1, 0, 0}};
   auto offsets   = std::vector<size_type>{0, 3, 6, 7, 8, 10, 10};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect =
@@ -528,8 +527,8 @@ TYPED_TEST(SegmentedReductionTest, AnyIncludeNulls)
   auto offsets   = std::vector<size_type>{0, 3, 6, 9, 12, 12, 13, 14, 15, 17};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect    = fixed_width_column_wrapper<bool>{
-    {false, bool{XXX}, true, bool{XXX}, bool{XXX}, false, true, bool{XXX}, bool{XXX}},
-    {true, false, true, false, false, true, true, false, false}};
+       {false, bool{XXX}, true, bool{XXX}, bool{XXX}, false, true, bool{XXX}, bool{XXX}},
+       {true, false, true, false, false, true, true, false, false}};
 
   auto res = segmented_reduce(input,
                               d_offsets,
@@ -589,8 +588,8 @@ TYPED_TEST(SegmentedReductionTest, AllIncludeNulls)
   auto offsets   = std::vector<size_type>{0, 3, 6, 6, 7, 8, 10, 13, 16, 17};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect    = fixed_width_column_wrapper<bool>{
-    {true, bool{XXX}, bool{XXX}, true, bool{XXX}, bool{XXX}, false, bool{XXX}, false},
-    {true, false, false, true, false, false, true, false, true}};
+       {true, bool{XXX}, bool{XXX}, true, bool{XXX}, bool{XXX}, false, bool{XXX}, false},
+       {true, false, false, true, false, false, true, false, true}};
 
   auto res = segmented_reduce(input,
                               d_offsets,
@@ -648,7 +647,7 @@ TEST_F(SegmentedReductionTestUntyped, PartialSegmentReduction)
   // output nullmask: {1, 1, 1}
 
   auto input     = fixed_width_column_wrapper<int32_t>{{1, 2, 3, 4, 5, 6, 7},
-                                                   {true, true, true, true, true, true, true}};
+                                                       {true, true, true, true, true, true, true}};
   auto offsets   = std::vector<size_type>{0, 1, 3, 4};
   auto d_offsets = thrust::device_vector<size_type>(offsets);
   auto expect    = fixed_width_column_wrapper<int32_t>{{1, 5, 4}, {true, true, true}};

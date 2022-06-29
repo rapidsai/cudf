@@ -74,7 +74,7 @@ std::unique_ptr<scalar> reduce(
 
 /**
  * @brief  Computes the reduction of the values in all rows of a column with an initial value. Only
- * SUM, PRODUCT, MIN, MAX, ANY and ALL aggregations are supported.
+ * SUM, PRODUCT, MIN, MAX, ANY, and ALL aggregations are supported.
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
@@ -142,7 +142,7 @@ std::unique_ptr<column> segmented_reduce(
 
 /**
  * @brief  Compute reduction of each segment in the input column with an initial value. Only SUM,
- * PRODUCT, MIN, MAX, ANY and ALL aggregations are supported.
+ * PRODUCT, MIN, MAX, ANY, and ALL aggregations are supported.
  *
  * @param segmented_values Column view of segmented inputs
  * @param offsets Each segment's offset of @p segmented_values. A list of offsets

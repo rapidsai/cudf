@@ -56,7 +56,7 @@ std::unique_ptr<scalar> sum(
  *
  * @param col input column to compute minimum.
  * @param output_dtype data type of return type and typecast elements of input column
- * @param init initial value of the min
+ * @param init initial value of the minimum
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Minimum element as scalar of type `output_dtype`.
@@ -77,7 +77,7 @@ std::unique_ptr<scalar> min(
  *
  * @param col input column to compute maximum.
  * @param output_dtype data type of return type and typecast elements of input column
- * @param init initial value of the max
+ * @param init initial value of the maximum
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Maximum element as scalar of type `output_dtype`.
@@ -99,7 +99,7 @@ std::unique_ptr<scalar> max(
  *
  * @param col input column to compute any_of.
  * @param output_dtype data type of return type and typecast elements of input column
- * @param init initial value of the any
+ * @param init initial value of the any_of
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return bool scalar if any of elements is true when typecasted to bool
@@ -121,7 +121,7 @@ std::unique_ptr<scalar> any(
  *
  * @param col input column to compute all_of.
  * @param output_dtype data type of return type and typecast elements of input column
- * @param init initial value of the all
+ * @param init initial value of the all_of
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return bool scalar if all of elements is true when typecasted to bool
@@ -350,6 +350,7 @@ std::unique_ptr<scalar> merge_sets(
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
+ * @param init Initial value of each sum
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Sums of segments in type `output_dtype`.
@@ -377,6 +378,7 @@ std::unique_ptr<column> segmented_sum(
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
+ * @param init Initial value of each product
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Product as scalar of type `output_dtype`.
@@ -403,6 +405,7 @@ std::unique_ptr<column> segmented_product(
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
+ * @param init Initial value of each minimum
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Minimums of segments in type `output_dtype`.
@@ -429,6 +432,7 @@ std::unique_ptr<column> segmented_min(
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
+ * @param init Initial value of each maximum
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Maximums of segments in type `output_dtype`.
@@ -456,6 +460,7 @@ std::unique_ptr<column> segmented_max(
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
+ * @param init Initial value of each any_of
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Column of bool8 for the results of the segments.
@@ -483,6 +488,7 @@ std::unique_ptr<column> segmented_any(
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
+ * @param init Initial value of each all_of
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned scalar's device memory.
  * @return Column of bool8 for the results of the segments.
