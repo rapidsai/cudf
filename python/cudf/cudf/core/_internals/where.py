@@ -93,12 +93,13 @@ def _check_and_cast_columns_with_other(
         )
 
     if other_is_scalar:
-        other = cudf.Scalar(other, dtype=common_dtype)
-    else:
-        other = other.astype(common_dtype)
+        other = cudf.Scalar(other)
 
     if is_mixed_with_object_dtype(other, source_col):
         raise TypeError(mixed_err)
+
+    other = other.astype(common_dtype)
+
     return _normalize_categorical(source_col.astype(common_dtype), other)
 
 
