@@ -398,57 +398,7 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
-        """
-        Replace values where the condition is False.
-
-        Parameters
-        ----------
-        cond : bool Series/DataFrame, array-like
-            Where cond is True, keep the original value.
-            Where False, replace with corresponding value from other.
-            Callables are not supported.
-        other: scalar, list of scalars, Series/DataFrame
-            Entries where cond is False are replaced with
-            corresponding value from other. Callables are not
-            supported. Default is None.
-
-            DataFrame expects only Scalar or array like with scalars or
-            dataframe with same dimension as self.
-
-            Series expects only scalar or series like with same length
-        inplace : bool, default False
-            Whether to perform the operation in place on the data.
-
-        Returns
-        -------
-        Same type as caller
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
-        >>> df.where(df % 2 == 0, [-1, -1])
-           A  B
-        0 -1 -1
-        1  4 -1
-        2 -1  8
-
-        >>> ser = cudf.Series([4, 3, 2, 1, 0])
-        >>> ser.where(ser > 2, 10)
-        0     4
-        1     3
-        2    10
-        3    10
-        4    10
-        dtype: int64
-        >>> ser.where(ser > 2)
-        0       4
-        1       3
-        2    <NA>
-        3    <NA>
-        4    <NA>
-        dtype: int64
-        """
+        # TODO: Implement other parameters that pandas supports.
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
             _make_categorical_like,

@@ -631,11 +631,7 @@ class Frame(BinaryOperand, Scannable):
         4    <NA>
         dtype: int64
         """
-        import cudf.core._internals.where
-
-        return cudf.core._internals.where.where(
-            frame=self, cond=cond, other=other, inplace=inplace
-        )
+        raise NotImplementedError
 
     @_cudf_nvtx_annotate
     def mask(self, cond, other=None, inplace=False):
