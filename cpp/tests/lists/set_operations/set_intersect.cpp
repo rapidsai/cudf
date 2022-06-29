@@ -100,7 +100,7 @@ TEST_F(SetIntersectTest, FloatingPointTestsWithSignedZero)
   // -0.0 and 0.0 should be considered equal.
   auto const lhs      = floats_lists{{0.0, 0.0, 0.0, 0.0, 0.0}, {-0.0, 1.0}, {0.0}};
   auto const rhs      = floats_lists{{-0.0, -0.0, -0.0, -0.0, -0.0}, {0.0, 2.0}, {1.0}};
-  auto const expected = floats_lists{floats_lists{0.0}, floats_lists{0.0}, floats_lists{}};
+  auto const expected = floats_lists{floats_lists{0}, floats_lists{0}, floats_lists{}};
 
   auto const results_sorted = set_op_sorted(lhs, rhs);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
