@@ -4593,7 +4593,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
             cudf.DataFrame(index=sr.index).join(
                 cudf.DataFrame(index=combined_index),
                 sort=True,
-                how="inner",
+                how=how,
             )
         ).index
     combined_index.names = new_index_names
