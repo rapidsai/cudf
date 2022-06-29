@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -137,7 +138,7 @@ void copy_range(SourceValueIterator source_value_begin,
                 mutable_column_view& target,
                 size_type target_begin,
                 size_type target_end,
-                rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                rmm::cuda_stream_view stream = cudf::default_stream_value)
 {
   CUDF_EXPECTS((target_begin <= target_end) && (target_begin >= 0) &&
                  (target_begin < target.size()) && (target_end <= target.size()),
@@ -198,7 +199,7 @@ void copy_range_in_place(column_view const& source,
                          size_type source_begin,
                          size_type source_end,
                          size_type target_begin,
-                         rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                         rmm::cuda_stream_view stream = cudf::default_stream_value);
 
 /**
  * @copydoc cudf::copy_range
@@ -211,7 +212,7 @@ std::unique_ptr<column> copy_range(
   size_type source_begin,
   size_type source_end,
   size_type target_begin,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

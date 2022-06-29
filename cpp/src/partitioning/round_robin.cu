@@ -25,6 +25,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -152,7 +153,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
   table_view const& input,
   cudf::size_type num_partitions,
   cudf::size_type start_partition     = 0,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto nrows = input.num_rows();
@@ -267,7 +268,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> round_robi
 {
   CUDF_FUNC_RANGE();
   return cudf::detail::round_robin_partition(
-    input, num_partitions, start_partition, rmm::cuda_stream_default, mr);
+    input, num_partitions, start_partition, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

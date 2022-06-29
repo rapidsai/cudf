@@ -18,6 +18,7 @@
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/wrappers/durations.hpp>
 
 namespace cudf {
@@ -119,7 +120,8 @@ RepT range_comparable_value_impl(scalar const& range_scalar, rmm::cuda_stream_vi
  */
 template <typename OrderByType>
 range_rep_type<OrderByType> range_comparable_value(
-  range_window_bounds const& range_bounds, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+  range_window_bounds const& range_bounds,
+  rmm::cuda_stream_view stream = cudf::default_stream_value)
 {
   auto const& range_scalar = range_bounds.range_scalar();
   using range_type         = cudf::detail::range_type<OrderByType>;

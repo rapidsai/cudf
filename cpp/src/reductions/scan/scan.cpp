@@ -19,8 +19,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scan.hpp>
 #include <cudf/reduction.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 namespace cudf {
 
@@ -38,19 +37,19 @@ std::unique_ptr<column> scan(column_view const& input,
     auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(*agg);
     if (rank_agg._method == rank_method::MIN) {
       if (rank_agg._percentage == rank_percentage::NONE) {
-        return inclusive_rank_scan(input, rmm::cuda_stream_default, mr);
+        return inclusive_rank_scan(input, cudf::default_stream_value, mr);
       } else if (rank_agg._percentage == rank_percentage::ONE_NORMALIZED) {
-        return inclusive_one_normalized_percent_rank_scan(input, rmm::cuda_stream_default, mr);
+        return inclusive_one_normalized_percent_rank_scan(input, cudf::default_stream_value, mr);
       }
     } else if (rank_agg._method == rank_method::DENSE) {
-      return inclusive_dense_rank_scan(input, rmm::cuda_stream_default, mr);
+      return inclusive_dense_rank_scan(input, cudf::default_stream_value, mr);
     }
     CUDF_FAIL("Unsupported rank aggregation method for inclusive scan");
   }
 
   return inclusive == scan_type::EXCLUSIVE
-           ? detail::scan_exclusive(input, agg, null_handling, rmm::cuda_stream_default, mr)
-           : detail::scan_inclusive(input, agg, null_handling, rmm::cuda_stream_default, mr);
+           ? detail::scan_exclusive(input, agg, null_handling, cudf::default_stream_value, mr)
+           : detail::scan_inclusive(input, agg, null_handling, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

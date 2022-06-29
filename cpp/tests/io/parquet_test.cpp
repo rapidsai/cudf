@@ -3348,7 +3348,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   // check first page header and make sure it has only 5000 values
   int fd = open(filepath.c_str(), O_RDONLY);
   unsigned char buf[1024];
-  read(fd, buf, sizeof(buf));
+  (void)!read(fd, buf, sizeof(buf));
 
   // check magic
   EXPECT_EQ(buf[0], 0x50);  // P
@@ -3378,7 +3378,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
     // seek to next page header and read
     int32_t pos = 4 + reader.bytecount() + comp_size;
     lseek(fd, pos, SEEK_SET);
-    read(fd, buf, sizeof(buf));
+    (void)!read(fd, buf, sizeof(buf));
     reader.init(buf, sizeof(buf));
 
     reader.get_i32();  // fld 1
@@ -3396,6 +3396,26 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   close(fd);
 
   EXPECT_EQ(nvals, page_rows);
+}
+
+TEST_F(ParquetReaderTest, EmptyColumnsParam)
+{
+  srand(31337);
+  auto const expected = create_random_fixed_table<int>(2, 4, false);
+
+  std::vector<char> out_buffer;
+  cudf_io::parquet_writer_options args =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{&out_buffer}, *expected);
+  cudf_io::write_parquet(args);
+
+  cudf_io::parquet_reader_options read_opts =
+    cudf_io::parquet_reader_options::builder(
+      cudf_io::source_info{out_buffer.data(), out_buffer.size()})
+      .columns({});
+  auto const result = cudf_io::read_parquet(read_opts);
+
+  EXPECT_EQ(result.tbl->num_columns(), 0);
+  EXPECT_EQ(result.tbl->num_rows(), 0);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

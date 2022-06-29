@@ -22,6 +22,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -68,7 +69,7 @@ std::unique_ptr<column> search_ordered(table_view const& haystack,
   auto const comparator = cudf::experimental::row::lexicographic::two_table_comparator(
     matched_haystack, matched_needles, column_order, null_precedence, stream);
   auto const has_nulls    = has_nested_nulls(matched_haystack) or has_nested_nulls(matched_needles);
-  auto const d_comparator = comparator.device_comparator(nullate::DYNAMIC{has_nulls});
+  auto const d_comparator = comparator.less(nullate::DYNAMIC{has_nulls});
 
   auto const haystack_it = cudf::experimental::row::lhs_iterator(0);
   auto const needles_it  = cudf::experimental::row::rhs_iterator(0);
@@ -126,7 +127,7 @@ std::unique_ptr<column> lower_bound(table_view const& haystack,
 {
   CUDF_FUNC_RANGE();
   return detail::lower_bound(
-    haystack, needles, column_order, null_precedence, rmm::cuda_stream_default, mr);
+    haystack, needles, column_order, null_precedence, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& haystack,
@@ -137,7 +138,7 @@ std::unique_ptr<column> upper_bound(table_view const& haystack,
 {
   CUDF_FUNC_RANGE();
   return detail::upper_bound(
-    haystack, needles, column_order, null_precedence, rmm::cuda_stream_default, mr);
+    haystack, needles, column_order, null_precedence, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

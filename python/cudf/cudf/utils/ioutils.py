@@ -247,7 +247,7 @@ int96_timestamps : bool, default False
     timestamps will not be altered.
 row_group_size_bytes: integer or None, default None
     Maximum size of each stripe of the output.
-    If None, 13369344 (128MB) will be used.
+    If None, 134217728 (128MB) will be used.
 row_group_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
@@ -425,7 +425,7 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', None }}, default None
+compression : {{ 'snappy', 'ZLIB', None }}, default None
     Name of the compression to use. Use None for no compression.
 enable_statistics: boolean, default True
     Enable writing column statistics.
