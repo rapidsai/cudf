@@ -398,7 +398,6 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
-        # TODO: Implement other parameters that pandas supports.
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
             _make_categorical_like,
@@ -408,7 +407,7 @@ class SingleColumnFrame(Frame, NotIterable):
             raise NotImplementedError(
                 "cannot align with a higher dimensional Frame"
             )
-        cond = cudf.core.column.as_column(cond)
+        cond = as_column(cond)
         if len(cond) != len(self):
             raise ValueError(
                 """Array conditional must be same shape as self"""

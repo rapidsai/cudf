@@ -2608,32 +2608,27 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
-        # TODO: Implement other parameters that pandas supports.
         from cudf.core._internals.where import (
             _check_and_cast_columns_with_other,
             _make_categorical_like,
         )
 
         # First process the condition.
-        if hasattr(cond, "__cuda_array_interface__"):
-            if isinstance(cond, Series):
-                cond = self._from_data_like_self(
-                    {name: cond._column for name in self._column_names},
-                )
-            else:
-                cond = DataFrame(
-                    cond, columns=self._column_names, index=self.index
-                )
+        if isinstance(cond, Series):
+            cond = self._from_data_like_self(
+                {name: cond._column for name in self._column_names},
+            )
+        elif hasattr(cond, "__cuda_array_interface__"):
+            cond = DataFrame(
+                cond, columns=self._column_names, index=self.index
+            )
         elif (
             hasattr(cond, "__array_interface__")
             and cond.__array_interface__["shape"] != self.shape
         ):
             raise ValueError("conditional must be same shape as self")
         elif not isinstance(cond, DataFrame):
-            # TODO: Can we just use cudf.DataFrame(...) directly? I don't think
-            # we want to support any objects that _have_ to go through the
-            # pd.DataFrame constructor.
-            cond = self.from_pandas(pd.DataFrame(cond))
+            cond = cudf.DataFrame(cond)
 
         if set(self._column_names).intersection(set(cond._column_names)):
             if not self.index.equals(cond.index):
