@@ -2614,6 +2614,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             _make_categorical_like,
         )
 
+        # First process the condition.
         if hasattr(cond, "__cuda_array_interface__"):
             if isinstance(cond, Series):
                 cond = self._from_data_like_self(
@@ -2645,8 +2646,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # Setting `self` column names to `cond` as it has no column names.
             cond._set_column_names_like(self)
 
+        # If other was provided, process that next.
         if isinstance(other, DataFrame):
-            other_cols = (other._data[col] for col in self._column_names)
+            other_cols = [other._data[col] for col in self._column_names]
         elif cudf.api.types.is_scalar(other):
             other_cols = [other] * len(self._column_names)
         elif isinstance(other, cudf.Series):
@@ -2654,24 +2656,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             other_cols = other
 
-        cast_src = {}
-        others = []
-        for (name, col), other_col in zip(self._data.items(), other_cols):
-            cast_src[name], cast_other = _check_and_cast_columns_with_other(
-                source_col=col,
-                other=other_col,
-                inplace=inplace,
-            )
-            others.append(cast_other)
-
-        if len(self._columns) != len(others):
+        if len(self._columns) != len(other_cols):
             raise ValueError(
                 """Replacement list length or number of data columns
                 should be equal to number of columns of self"""
             )
 
         out = {}
-        for (name, col), other_col in zip(cast_src.items(), others):
+        for (name, col), other_col in zip(self._data.items(), other_cols):
+            col, other_col = _check_and_cast_columns_with_other(
+                source_col=col,
+                other=other_col,
+                inplace=inplace,
+            )
+
             if cond_col := cond._data.get(name):
                 result = cudf._lib.copying.copy_if_else(
                     col, other_col, cond_col
