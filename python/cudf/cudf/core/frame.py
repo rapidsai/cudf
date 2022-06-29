@@ -6,8 +6,8 @@ import copy
 import operator
 import pickle
 import warnings
-from collections import abc
 import weakref
+from collections import abc
 from typing import (
     Any,
     Callable,
