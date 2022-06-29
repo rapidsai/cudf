@@ -53,7 +53,9 @@ from cudf.utils.dtypes import (
     np_dtypes_to_pandas_dtypes,
     numeric_normalize_types,
     to_cudf_compatible_scalar,
+    _limit_to_max_precision
 )
+from cudf.config import get_config
 
 from .numerical_base import NumericalBaseColumn
 
@@ -183,6 +185,8 @@ class NumericalColumn(NumericalBaseColumn):
         out_dtype = self.dtype
         if other is not None:
             out_dtype = np.result_type(self.dtype, other.dtype)
+            if get_config("binary_operation_result_type") == "LARGEST":
+                out_dtype = _limit_to_max_precision(self.dtype, other.dtype, out_dtype)
             if op in {"__mod__", "__floordiv__"}:
                 tmp = self if reflect else other
                 # Guard against division by zero for integers.
@@ -246,7 +250,11 @@ class NumericalColumn(NumericalBaseColumn):
         if other_dtype.kind in {"b", "i", "u", "f"}:
             if isinstance(other, cudf.Scalar):
                 return other
-            other_dtype = np.promote_types(self.dtype, other_dtype)
+            promoted_dtype = np.promote_types(self.dtype, other_dtype)
+            if get_config("binary_operation_result_type") == "LARGEST":
+                other_dtype = _limit_to_max_precision(self.dtype, other_dtype, promoted_dtype)
+            else:
+                other_dtype = promoted_dtype
             if other_dtype == np.dtype("float16"):
                 other_dtype = cudf.dtype("float32")
                 other = other_dtype.type(other)

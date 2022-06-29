@@ -639,6 +639,13 @@ def _can_cast(from_dtype, to_dtype):
     else:
         return np.can_cast(from_dtype, to_dtype)
 
+def _limit_to_max_precision(
+    self_dtype: np.dtype, other_dtype: np.dtype, promoted_dtype: np.dtype
+) -> np.dtype:
+    max_itemsize = max(self_dtype.itemsize, other_dtype.itemsize)
+    # Use the data type "kind" from the inferred promoted_dtype, but limit its
+    # output bitwidth to no larger than the maximum bit width of input type.
+    return np.dtype(f"{promoted_dtype.str[:2]}{max_itemsize}")
 
 # Type dispatch loops similar to what are found in `np.add.types`
 # In NumPy, whether or not an op can be performed between two

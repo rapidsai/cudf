@@ -23,6 +23,7 @@ from cudf.utils.dtypes import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
 )
+from cudf.config import set_config
 
 STRING_TYPES = {"str"}
 
@@ -2962,3 +2963,68 @@ def test_binops_dot(df, other):
     got = df @ other
 
     utils.assert_eq(expected, got)
+
+
+@pytest.fixture
+def limit_maximum_binop_precisions():
+    set_config("binary_operation_result_type", "LARGEST")
+    yield
+    set_config("binary_operation_result_type", "PROMOTE")
+
+@pytest.mark.parametrize(
+    "ldtype", NUMERIC_TYPES
+)
+@pytest.mark.parametrize(
+    "rdtype", NUMERIC_TYPES
+)
+@pytest.mark.parametrize(
+    "op", [op for op in _binops if op not in (operator.truediv, operator.mod, operator.floordiv)]
+)
+def test_limiting_maximum_binop_precisions_series(ldtype, rdtype, op, limit_maximum_binop_precisions):
+    s = cudf.Series([1, 2, 3, 4, 5])
+    lhs, rhs = s.astype(ldtype), s.astype(rdtype)
+    max_itemsize = max(np.dtype(ldtype).itemsize, np.dtype(rdtype).itemsize)
+    result_dtype = op(lhs, rhs).dtype
+
+    assert result_dtype.itemsize <= max_itemsize
+
+@pytest.mark.parametrize(
+    "ldtype", NUMERIC_TYPES
+)
+@pytest.mark.parametrize(
+    "rdtype", NUMERIC_TYPES
+)
+@pytest.mark.parametrize(
+    "op", [op for op in _binops if op not in (operator.truediv, operator.mod, operator.floordiv)]
+)
+@pytest.mark.parametrize(
+    "reflected", [True, False]
+)
+def test_limiting_maximum_binop_precisions_series_scalar(ldtype, rdtype, op, reflected, limit_maximum_binop_precisions):
+    lhs = cudf.Series([1, 2, 3, 4, 5], dtype=ldtype)
+    rhs = cudf.Scalar(1, dtype=rdtype)
+    if reflected:
+        lhs, rhs = rhs, lhs
+    max_itemsize = max(np.dtype(ldtype).itemsize, np.dtype(rdtype).itemsize)
+    result_dtype = op(lhs, rhs).dtype
+
+    assert result_dtype.itemsize <= max_itemsize
+
+
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES
+)
+@pytest.mark.parametrize(
+    "op", [op for op in _binops if op not in (operator.truediv, operator.mod, operator.floordiv)]
+)
+@pytest.mark.parametrize(
+    "reflected", [True, False]
+)
+def test_limiting_maximum_binop_precisions_series_literal(dtype, op, reflected, limit_maximum_binop_precisions):
+    lhs = cudf.Series([1, 2, 3, 4, 5], dtype=dtype)
+    rhs = 1
+    if reflected:
+        lhs, rhs = rhs, lhs
+    result_dtype = op(lhs, rhs).dtype
+
+    assert result_dtype.itemsize <= np.dtype(dtype).itemsize
