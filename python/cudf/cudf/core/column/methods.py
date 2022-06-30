@@ -79,14 +79,12 @@ class ColumnMethods:
                 table = new_col
 
                 if isinstance(self._parent, cudf.BaseIndex):
-                    idx = self._parent._constructor_expanddim._from_data(
-                        table._data, table._index
-                    )
+                    idx = self._parent._constructor_expanddim._from_data(table)
                     idx.names = None
                     return idx
                 else:
                     return self._parent._constructor_expanddim._from_data(
-                        data=table._data, index=self._parent.index
+                        data=table, index=self._parent.index
                     )
             elif isinstance(self._parent, cudf.Series):
                 if retain_index:
