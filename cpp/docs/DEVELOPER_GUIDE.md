@@ -413,7 +413,7 @@ should avoid creating streams (even if it is slightly less efficient). It is a g
 
 ## Memory Allocation
 
-Device [memory resources](#memory_resource) are used in libcudf to abstract and control how device
+Device [memory resources](#rmmdevice_memory_resource) are used in libcudf to abstract and control how device
 memory is allocated.
 
 ### Output Memory
@@ -1169,7 +1169,7 @@ instance of a class object to represent a null string.
 
 The `string_view` contains comparison operators `<,>,==,<=,>=` that can be used in many cudf
 functions like `sort` without string-specific code. The data for a `string_view` instance is
-required to be [UTF-8](#UTF-8) and all operators and methods expect this encoding. Unless documented
+required to be [UTF-8](#utf-8) and all operators and methods expect this encoding. Unless documented
 otherwise, position and length parameters are specified in characters and not bytes. The class also
 includes a `string_view::const_iterator` which can be used to navigate through individual characters
 within the string.
