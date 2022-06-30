@@ -1311,7 +1311,7 @@ static __device__ void swap128(__int128_t v, void* dst)
 
 __device__ void get_min_max(const statistics_chunk* s,
                             uint8_t dtype,
-                            unsigned char* scratch,
+                            void* scratch,
                             const void** vmin,
                             const void** vmax,
                             uint32_t* lmin,
@@ -1348,10 +1348,11 @@ __device__ void get_min_max(const statistics_chunk* s,
         *vmin             = &fp_scratch[0];
         *vmax             = &fp_scratch[1];
       } else if (dtype == dtype_decimal128) {
-        swap128(s->min_value.d128_val, &scratch[0]);
-        swap128(s->max_value.d128_val, &scratch[16]);
-        *vmin = &scratch[0];
-        *vmax = &scratch[16];
+        uint8_t* d128_scratch = reinterpret_cast<uint8_t*>(scratch);
+        swap128(s->min_value.d128_val, &d128_scratch[0]);
+        swap128(s->max_value.d128_val, &d128_scratch[16]);
+        *vmin = &d128_scratch[0];
+        *vmax = &d128_scratch[16];
       } else {
         *vmin = &s->min_value;
         *vmax = &s->max_value;
@@ -1366,7 +1367,7 @@ __device__ void get_min_max(const statistics_chunk* s,
 __device__ uint8_t* EncodeStatistics(uint8_t* start,
                                      const statistics_chunk* s,
                                      uint8_t dtype,
-                                     unsigned char* scratch)
+                                     void* scratch)
 {
   uint8_t* end;
   header_encoder encoder(start);
