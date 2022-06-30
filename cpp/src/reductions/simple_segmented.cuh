@@ -53,13 +53,13 @@ namespace detail {
  * @tparam ResultType   the output data-type
  * @tparam Op           the operator of cudf::reduction::op::
 
- * @param col Input column of data to reduce.
- * @param offsets Indices to segment boundaries.
+ * @param col Input column of data to reduce
+ * @param offsets Indices to segment boundaries
  * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
  * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
  * the reduced value is valid if any element in the segment is valid.
- * @param init Optional initial value of the reduction.
- * @param stream Used for device memory operations and kernel launches.
+ * @param init Optional initial value of the reduction
+ * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
  */
@@ -75,11 +75,11 @@ std::unique_ptr<column> simple_segmented_reduction(
   // TODO: Rewrites this function to accept a pair of iterators for start/end indices
   // to enable `2N` type offset input.
   // reduction by iterator
-  auto dcol              = cudf::column_device_view::create(col, stream);
-  auto simple_op         = Op{};
-  size_type num_segments = offsets.size() - 1;
+  auto dcol               = cudf::column_device_view::create(col, stream);
+  auto simple_op          = Op{};
+  auto const num_segments = offsets.size() - 1;
 
-  auto binary_op = simple_op.get_binary_op();
+  auto const binary_op = simple_op.get_binary_op();
 
   // Cast initial value
   ResultType initial_value = [&] {
@@ -139,12 +139,12 @@ std::unique_ptr<column> simple_segmented_reduction(
  * @tparam InputType    the input column data-type
  * @tparam Op           the operator of cudf::reduction::op::
 
- * @param col Input column of data to reduce.
- * @param offsets Indices to segment boundaries.
+ * @param col Input column of data to reduce
+ * @param offsets Indices to segment boundaries
  * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
  * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
  * the reduced value is valid if any element in the segment is valid.
- * @param stream Used for device memory operations and kernel launches.
+ * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
  */
@@ -242,12 +242,12 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
  * @tparam InputType    the input column data-type
  * @tparam Op           the operator of cudf::reduction::op::
 
- * @param col Input column of data to reduce.
- * @param offsets Indices to segment boundaries.
+ * @param col Input column of data to reduce
+ * @param offsets Indices to segment boundaries
  * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
  * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
  * the reduced value is valid if any element in the segment is valid.
- * @param stream Used for device memory operations and kernel launches.
+ * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
  */
@@ -444,14 +444,14 @@ struct column_type_dispatcher {
    * @brief Called by the type-dispatcher to reduce the input column `col` using
    * the `Op` operation.
    *
-   * @tparam ElementType The input column type or key type.
+   * @tparam ElementType The input column type or key type
    * @param col Input column (must be numeric)
    * @param offsets Indices to segment boundaries
    * @param output_type Requested type of the scalar result
    * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
    * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
    * the reduced value is valid if any element in the segment is valid.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
   template <typename ElementType,

@@ -40,41 +40,23 @@ using aggregation        = cudf::aggregation;
 using reduce_aggregation = cudf::reduce_aggregation;
 
 template <typename T>
-std::enable_if_t<!cudf::is_timestamp_t<T>::value, std::vector<T>> convert_values(
-  std::vector<int> const& int_values)
-{
-  std::vector<T> v(int_values.size());
-  std::transform(int_values.begin(), int_values.end(), v.begin(), [](int x) {
-    if (std::is_unsigned_v<T>) x = std::abs(x);
-    return static_cast<T>(x);
-  });
-  return v;
-}
-
-template <typename T>
-std::enable_if_t<cudf::is_timestamp_t<T>::value, std::vector<T>> convert_values(
-  std::vector<int> const& int_values)
-{
-  std::vector<T> v(int_values.size());
-  std::transform(int_values.begin(), int_values.end(), v.begin(), [](int x) {
-    if (std::is_unsigned_v<T>) x = std::abs(x);
-    return T{typename T::duration(x)};
-  });
-  return v;
-}
-
-template <typename T>
-std::enable_if_t<!cudf::is_timestamp_t<T>::value, T> convert_int(int value)
+auto convert_int(int value)
 {
   if (std::is_unsigned_v<T>) value = std::abs(value);
-  return static_cast<T>(value);
+  if constexpr (cudf::is_timestamp_t<T>::value) {
+    return T{typename T::duration(value)};
+  } else {
+    return static_cast<T>(value);
+  }
 }
 
 template <typename T>
-std::enable_if_t<cudf::is_timestamp_t<T>::value, T> convert_int(int value)
+auto convert_values(std::vector<int> const& int_values)
 {
-  if (std::is_unsigned_v<T>) value = std::abs(value);
-  return T{typename T::duration(value)};
+  std::vector<T> v(int_values.size());
+  std::transform(
+    int_values.begin(), int_values.end(), v.begin(), [](int x) { return convert_int<T>(x); });
+  return v;
 }
 
 template <typename T>
@@ -111,7 +93,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
   ~ReductionTest() {}
 
   template <typename T_out>
-  void reduction_test(const cudf::column_view underlying_column,
+  void reduction_test(cudf::column_view const& underlying_column,
                       T_out expected_value,
                       bool succeeded_condition,
                       std::unique_ptr<reduce_aggregation> const& agg,
@@ -137,7 +119,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
 
   // Test with initial value
   template <typename T_out>
-  void reduction_test(const cudf::column_view underlying_column,
+  void reduction_test(cudf::column_view const& underlying_column,
                       cudf::scalar const& initial_value,
                       T_out expected_value,
                       bool succeeded_condition,
@@ -178,9 +160,9 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 0, 1});
   std::vector<bool> all_null({0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
-  std::vector<T> v = convert_values<T>(int_values);
-  T init_value     = convert_int<T>(321);
-  auto init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
+  std::vector<T> v       = convert_values<T>(int_values);
+  T init_value           = convert_int<T>(321);
+  auto const init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
 
   // Min/Max succeeds for any gdf types including
   // non-arithmetic types (date32, date64, timestamp, category)
@@ -329,9 +311,9 @@ TYPED_TEST(SumReductionTest, Sum)
   using T = TypeParam;
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
-  std::vector<T> v = convert_values<T>(int_values);
-  T init_value     = convert_int<T>(321);
-  auto init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
+  std::vector<T> v       = convert_values<T>(int_values);
+  T init_value           = convert_int<T>(321);
+  auto const init_scalar = cudf::make_fixed_width_scalar<T>(init_value);
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
@@ -375,17 +357,15 @@ TYPED_TEST(ReductionTest, Product)
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1});
   std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
   T init_value             = convert_int<T>(4);
-  auto init_scalar         = cudf::make_fixed_width_scalar<T>(init_value);
+  auto const init_scalar   = cudf::make_fixed_width_scalar<T>(init_value);
 
   auto calc_prod = [](std::vector<T>& v) {
-    T expected_value =
-      std::accumulate(v.begin(), v.end(), T{1}, [](T acc, T i) { return acc * i; });
+    T expected_value = std::accumulate(v.begin(), v.end(), T{1}, std::multiplies<T>());
     return expected_value;
   };
 
   auto calc_prod_init = [](std::vector<T>& v, T init) {
-    T expected_value =
-      std::accumulate(v.begin(), v.end(), init, [](T acc, T i) { return acc * i; });
+    T expected_value = std::accumulate(v.begin(), v.end(), init, std::multiplies<T>());
     return expected_value;
   };
 
@@ -466,8 +446,8 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
   using T = TypeParam;
   std::vector<int> int_values({true, true, true, true});
   std::vector<bool> host_bools({1, 1, 0, 1});
-  std::vector<T> v = convert_values<T>(int_values);
-  auto init_scalar = cudf::make_fixed_width_scalar<T>(convert_int<T>(true));
+  std::vector<T> v       = convert_values<T>(int_values);
+  auto const init_scalar = cudf::make_fixed_width_scalar<T>(convert_int<T>(true));
 
   // Min/Max succeeds for any gdf types including
   // non-arithmetic types (date32, date64, timestamp, category)
@@ -530,8 +510,8 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
   using T = TypeParam;
   std::vector<int> int_values({false, false, false, false});
   std::vector<bool> host_bools({1, 1, 0, 1});
-  std::vector<T> v = convert_values<T>(int_values);
-  auto init_scalar = cudf::make_fixed_width_scalar<T>(convert_int<T>(false));
+  std::vector<T> v       = convert_values<T>(int_values);
+  auto const init_scalar = cudf::make_fixed_width_scalar<T>(convert_int<T>(false));
 
   // Min/Max succeeds for any gdf types including
   // non-arithmetic types (date32, date64, timestamp, category)
@@ -926,7 +906,7 @@ struct ReductionErrorTest : public cudf::test::BaseFixture {
 TEST_F(ReductionErrorTest, empty_column)
 {
   using T        = int32_t;
-  auto statement = [](const cudf::column_view col) {
+  auto statement = [](cudf::column_view const& col) {
     std::unique_ptr<cudf::scalar> result = cudf::reduce(
       col, cudf::make_sum_aggregation<reduce_aggregation>(), cudf::data_type(cudf::type_id::INT64));
     EXPECT_EQ(result->is_valid(), false);
@@ -1017,7 +997,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
                              public testing::WithParamInterface<std::vector<std::string>> {
   // Min/Max
 
-  void reduction_test(const cudf::column_view underlying_column,
+  void reduction_test(cudf::column_view const& underlying_column,
                       std::string expected_value,
                       bool succeeded_condition,
                       std::unique_ptr<reduce_aggregation> const& agg,
@@ -1043,7 +1023,7 @@ struct StringReductionTest : public cudf::test::BaseFixture,
     }
   }
 
-  void reduction_test(const cudf::column_view underlying_column,
+  void reduction_test(cudf::column_view const& underlying_column,
                       std::string initial_value,
                       std::string expected_value,
                       bool succeeded_condition,
@@ -1400,7 +1380,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProductZeroScale)
   EXPECT_EQ(result_fp, expected);
   EXPECT_EQ(result_fp, _24);
 
-  // Test with initial Value
+  // Test with initial value
   auto const init_expected =
     std::accumulate(in.cbegin(), in.cend(), TWO, std::multiplies<decimalXX>());
   auto const init_scalar = cudf::make_fixed_point_scalar<decimalXX>(2, scale_type{0});
@@ -1433,7 +1413,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProduct)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 
-    // Test with initial Value
+    // Test with initial value
     auto const init_expected = decimalXX{scaled_integer<RepType>{72, scale_type{i * 7}}};
     auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
 
@@ -1464,7 +1444,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProductWithNulls)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 
-    // Test with initial Value
+    // Test with initial value
     auto const init_expected = decimalXX{scaled_integer<RepType>{12, scale_type{i * 4}}};
     auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
 
@@ -1496,7 +1476,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSum)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 
-    // Test with initial Value
+    // Test with initial value
     auto const init_expected = decimalXX{scaled_integer<RepType>{12, scale}};
     auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
 
@@ -1533,7 +1513,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumAlternate)
   EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   EXPECT_EQ(result_scalar->fixed_point_value(), TEN);
 
-  // Test with initial Value
+  // Test with initial value
   auto const init_expected = std::accumulate(in.cbegin(), in.cend(), TWO, std::plus<decimalXX>());
   auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(2, scale_type{0});
 
@@ -1564,7 +1544,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumFractional)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 
-    // Test with initial Value
+    // Test with initial value
     auto const init_expected = decimalXX{scaled_integer<RepType>{668, scale}};
     auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
 
@@ -1598,7 +1578,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumLarge)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 
-    // Test with initial Value
+    // Test with initial value
     int const init_value = 2;
     auto const init_expected_value =
       std::accumulate(values.cbegin(), values.cend(), RepType{init_value});
@@ -1632,7 +1612,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMin)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), ONE);
 
-    // Test with initial Value
+    // Test with initial value
     auto const init_expected = decimalXX{scaled_integer<RepType>{0, scale}};
     auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(0, scale);
 
@@ -1664,7 +1644,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMinLarge)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 
-    // Test with initial Value
+    // Test with initial value
     auto const init_expected = decimalXX{scaled_integer<RepType>{0, scale}};
     auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(0, scale);
 
@@ -1695,7 +1675,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMax)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), FOUR);
 
-    // Test with initial Value
+    // Test with initial value
     auto const init_expected = decimalXX{scaled_integer<RepType>{5, scale}};
     auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(5, scale);
 
@@ -1727,7 +1707,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMaxLarge)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 
-    // Test with initial Value
+    // Test with initial value
     auto const init_expected = decimalXX{scaled_integer<RepType>{43, scale}};
     auto const init_scalar   = cudf::make_fixed_point_scalar<decimalXX>(43, scale);
 
@@ -1892,7 +1872,7 @@ TEST_F(Decimal128Only, Decimal128ProductReduction)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 
-    // Test with initial Value
+    // Test with initial value
     auto const init_expected = decimal128{scaled_integer<RepType>{1024, scale_type{i * 10}}};
     auto const init_scalar   = cudf::make_fixed_point_scalar<decimal128>(2, scale);
 
@@ -1923,7 +1903,7 @@ TEST_F(Decimal128Only, Decimal128ProductReduction2)
 
     EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 
-    // Test with initial Value
+    // Test with initial value
     auto const init_expected = decimal128{scaled_integer<RepType>{2160, scale_type{i * 7}}};
     auto const init_scalar   = cudf::make_fixed_point_scalar<decimal128>(3, scale);
 
@@ -1955,7 +1935,7 @@ TEST_F(Decimal128Only, Decimal128ProductReduction3)
 
   EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 
-  // Test with initial Value
+  // Test with initial value
   auto const init_scalar = cudf::make_fixed_point_scalar<decimal128>(5, scale);
 
   auto const init_result = cudf::reduce(
@@ -2207,7 +2187,7 @@ TYPED_TEST(DictionaryReductionTest, Product)
   cudf::data_type output_type{cudf::type_to_id<T>()};
 
   auto calc_prod = [](std::vector<T> const& v) {
-    return std::accumulate(v.cbegin(), v.cend(), T{1}, [](T acc, T i) { return acc * i; });
+    return std::accumulate(v.cbegin(), v.cend(), T{1}, std::multiplies<T>());
   };
 
   // test without nulls

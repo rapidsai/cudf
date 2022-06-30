@@ -42,7 +42,7 @@ namespace detail {
  * @param[in] num_items the number of items
  * @param[in] op        the reduction operator
  * @param[in] init      Optional initial value of the reduction
- * @param[in] stream    CUDA stream used for device memory operations and kernel launches.
+ * @param[in] stream    CUDA stream used for device memory operations and kernel launches
  * @param[in] mr        Device memory resource used to allocate the returned scalar's device
  * memory
  * @returns   Output scalar in device memory
@@ -58,14 +58,14 @@ template <typename Op,
                            not cudf::is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
-                               op::simple_op<Op> sop,
+                               op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op     = sop.get_binary_op();
-  auto initial_value = init.value_or(sop.template get_identity<OutputType>());
-  auto dev_result    = rmm::device_scalar<OutputType>{initial_value, stream, mr};
+  auto const binary_op     = op.get_binary_op();
+  auto const initial_value = init.value_or(op.template get_identity<OutputType>());
+  auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream, mr};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -101,7 +101,7 @@ template <typename Op,
           std::enable_if_t<is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
-                               op::simple_op<Op> sop,
+                               op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
@@ -118,14 +118,14 @@ template <typename Op,
           std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
-                               op::simple_op<Op> sop,
+                               op::simple_op<Op> op,
                                std::optional<OutputType> init,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op     = sop.get_binary_op();
-  auto initial_value = init.value_or(sop.template get_identity<OutputType>());
-  auto dev_result    = rmm::device_scalar<OutputType>{initial_value, stream};
+  auto const binary_op     = op.get_binary_op();
+  auto const initial_value = init.value_or(op.template get_identity<OutputType>());
+  auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -161,10 +161,10 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @param[in] d_in        the begin iterator
  * @param[in] num_items   the number of items
  * @param[in] op          the reduction operator
- * @param[in] valid_count the intermediate operator argument 1
- * @param[in] ddof        the intermediate operator argument 2
- * @param[in] init        Optional initial value of the reduction.
- * @param[in] stream      CUDA stream used for device memory operations and kernel launches.
+ * @param[in] valid_count Number of valid items
+ * @param[in] ddof        Delta degrees of freedom used for standard deviation and variance
+ * @param[in] init        Optional initial value of the reduction
+ * @param[in] stream      CUDA stream used for device memory operations and kernel launches
  * @param[in] mr          Device memory resource used to allocate the returned scalar's device
  * memory
  * @returns   Output scalar in device memory
@@ -183,14 +183,14 @@ template <typename Op,
           typename IntermediateType = typename thrust::iterator_value<InputIterator>::type>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
-                               op::compound_op<Op> cop,
+                               op::compound_op<Op> op,
                                cudf::size_type valid_count,
                                cudf::size_type ddof,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op     = cop.get_binary_op();
-  auto initial_value = cop.template get_identity<IntermediateType>();
+  auto const binary_op     = op.get_binary_op();
+  auto const initial_value = op.template get_identity<IntermediateType>();
 
   rmm::device_scalar<IntermediateType> intermediate_result{initial_value, stream};
 
@@ -223,8 +223,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   thrust::for_each_n(rmm::exec_policy(stream),
                      intermediate_result.data(),
                      1,
-                     [dres = result->data(), cop, valid_count, ddof] __device__(auto i) {
-                       *dres = cop.template compute_result<OutputType>(i, valid_count, ddof);
+                     [dres = result->data(), op, valid_count, ddof] __device__(auto i) {
+                       *dres = op.template compute_result<OutputType>(i, valid_count, ddof);
                      });
   return std::unique_ptr<scalar>(result);
 }
@@ -246,8 +246,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @param[out] d_out        the begin iterator to output
  * @param[in] binary_op     the reduction operator
  * @param[in] identity      the identity element of the reduction operator
- * @param[in] initial_value Initial value of the reduction.
- * @param[in] stream        CUDA stream used for device memory operations and kernel launches.
+ * @param[in] initial_value Initial value of the reduction
+ * @param[in] stream        CUDA stream used for device memory operations and kernel launches
  *
  */
 template <typename InputIterator,
@@ -265,7 +265,7 @@ void segmented_reduce(InputIterator d_in,
                       OutputType initial_value,
                       rmm::cuda_stream_view stream)
 {
-  auto num_segments = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
+  auto const num_segments = static_cast<size_type>(std::distance(d_offset_begin, d_offset_end)) - 1;
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;

@@ -36,9 +36,9 @@ namespace reduction {
  * @param col input column to compute sum
  * @param output_dtype data type of return type and typecast elements of input column
  * @param init initial value of the sum
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Sum as scalar of type `output_dtype`.
+ * @return Sum as scalar of type `output_dtype`
  */
 std::unique_ptr<scalar> sum(
   column_view const& col,
@@ -54,12 +54,12 @@ std::unique_ptr<scalar> sum(
  *
  * @throw cudf::logic_error if input column type is convertible to `output_dtype`
  *
- * @param col input column to compute minimum.
+ * @param col input column to compute minimum
  * @param output_dtype data type of return type and typecast elements of input column
  * @param init initial value of the minimum
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Minimum element as scalar of type `output_dtype`.
+ * @return Minimum element as scalar of type `output_dtype`
  */
 std::unique_ptr<scalar> min(
   column_view const& col,
@@ -75,12 +75,12 @@ std::unique_ptr<scalar> min(
  *
  * @throw cudf::logic_error if input column type is convertible to `output_dtype`
  *
- * @param col input column to compute maximum.
+ * @param col input column to compute maximum
  * @param output_dtype data type of return type and typecast elements of input column
  * @param init initial value of the maximum
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Maximum element as scalar of type `output_dtype`.
+ * @return Maximum element as scalar of type `output_dtype`
  */
 std::unique_ptr<scalar> max(
   column_view const& col,
@@ -97,10 +97,10 @@ std::unique_ptr<scalar> max(
  * @throw cudf::logic_error if input column type is not convertible to bool
  * @throw cudf::logic_error if `output_dtype` is not bool
  *
- * @param col input column to compute any_of.
+ * @param col input column to compute any
  * @param output_dtype data type of return type and typecast elements of input column
- * @param init initial value of the any_of
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param init initial value of the any
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return bool scalar if any of elements is true when typecasted to bool
  */
@@ -119,10 +119,10 @@ std::unique_ptr<scalar> any(
  * @throw cudf::logic_error if input column type is not convertible to bool
  * @throw cudf::logic_error if `output_dtype` is not bool
  *
- * @param col input column to compute all_of.
+ * @param col input column to compute all
  * @param output_dtype data type of return type and typecast elements of input column
- * @param init initial value of the all_of
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param init initial value of the all
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return bool scalar if all of elements is true when typecasted to bool
  */
@@ -141,12 +141,12 @@ std::unique_ptr<scalar> all(
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
  * @throw cudf::logic_error if `output_dtype` is not an arithmetic type
  *
- * @param col input column to compute product.
+ * @param col input column to compute product
  * @param output_dtype data type of return type and typecast elements of input column
  * @param init initial value of the product
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Product as scalar of type `output_dtype`.
+ * @return Product as scalar of type `output_dtype`
  */
 std::unique_ptr<scalar> product(
   column_view const& col,
@@ -163,11 +163,11 @@ std::unique_ptr<scalar> product(
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
  * @throw cudf::logic_error if `output_dtype` is not an arithmetic type
  *
- * @param col input column to compute sum of squares.
+ * @param col input column to compute sum of squares
  * @param output_dtype data type of return type and typecast elements of input column
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
- * @return Sum of squares as scalar of type `output_dtype`.
+ * @return Sum of squares as scalar of type `output_dtype`
  */
 std::unique_ptr<scalar> sum_of_squares(
   column_view const& col,
@@ -183,11 +183,11 @@ std::unique_ptr<scalar> sum_of_squares(
  * @throw cudf::logic_error if input column type is not arithmetic type
  * @throw cudf::logic_error if `output_dtype` is not floating point type
  *
- * @param col input column to compute mean.
- * @param output_dtype data type of return type and typecast elements of input column.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
- * @return Mean as scalar of type `output_dtype`.
+ * @param col input column to compute mean
+ * @param output_dtype data type of return type and typecast elements of input column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Mean as scalar of type `output_dtype`
  */
 std::unique_ptr<scalar> mean(
   column_view const& col,
@@ -203,13 +203,13 @@ std::unique_ptr<scalar> mean(
  * @throw cudf::logic_error if input column type is not arithmetic type
  * @throw cudf::logic_error if `output_dtype` is not floating point type
  *
- * @param col input column to compute variance.
- * @param output_dtype data type of return type and typecast elements of input column.
+ * @param col input column to compute variance
+ * @param output_dtype data type of return type and typecast elements of input column
  * @param ddof Delta degrees of freedom. The divisor used is N - ddof, where N represents the number
  * of elements.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
- * @return Variance as scalar of type `output_dtype`.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Variance as scalar of type `output_dtype`
  */
 std::unique_ptr<scalar> variance(
   column_view const& col,
@@ -226,13 +226,13 @@ std::unique_ptr<scalar> variance(
  * @throw cudf::logic_error if input column type is not arithmetic type
  * @throw cudf::logic_error if `output_dtype` is not floating point type
  *
- * @param col input column to compute standard deviation.
- * @param output_dtype data type of return type and typecast elements of input column.
+ * @param col input column to compute standard deviation
+ * @param output_dtype data type of return type and typecast elements of input column
  * @param ddof Delta degrees of freedom. The divisor used is N - ddof, where N represents the number
  * of elements.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
- * @return Standard deviation as scalar of type `output_dtype`.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Standard deviation as scalar of type `output_dtype`
  */
 std::unique_ptr<scalar> standard_deviation(
   column_view const& col,
@@ -258,11 +258,11 @@ std::unique_ptr<scalar> standard_deviation(
  * number of valid * elements in the input column if `null_handling` is `null_policy::EXCLUDE`,
  * else `col.size()`.
  *
- * @param col input column to get nth element from.
+ * @param col input column to get nth element from
  * @param n index of element to get
- * @param null_handling Indicates if null values will be counted while indexing.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
+ * @param null_handling Indicates if null values will be counted while indexing
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return nth element as scalar
  */
 std::unique_ptr<scalar> nth_element(
@@ -276,7 +276,7 @@ std::unique_ptr<scalar> nth_element(
  * @brief Collect input column into a (list) scalar
  *
  * @param col input column to collect from
- * @param null_handling Indicates if null values will be counted while collecting.
+ * @param null_handling Indicates if null values will be counted while collecting
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return collected list as scalar
@@ -304,10 +304,10 @@ std::unique_ptr<scalar> merge_lists(
  * @brief Collect input column into a (list) scalar without duplicated elements
  *
  * @param col input column to collect from
- * @param null_handling Indicates if null values will be counted while collecting.
- * @param nulls_equal Indicates if null values will be considered as equal values.
- * @param nans_equal Indicates if nan values will be considered as equal values.
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param null_handling Indicates if null values will be counted while collecting
+ * @param nulls_equal Indicates if null values will be considered as equal values
+ * @param nans_equal Indicates if nan values will be considered as equal values
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return collected list with unique elements as scalar
  */
@@ -323,8 +323,8 @@ std::unique_ptr<scalar> collect_set(
  * @brief Merge a bunch of list scalars into single list scalar then drop duplicated elements
  *
  * @param col input list column representing numbers of list scalars to be merged
- * @param nulls_equal Indicates if null values will be considered as equal values.
- * @param nans_equal Indicates if nan values will be considered as equal values.
+ * @param nulls_equal Indicates if null values will be considered as equal values
+ * @param nans_equal Indicates if nan values will be considered as equal values
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return collected list with unique elements as scalar
@@ -344,16 +344,16 @@ std::unique_ptr<scalar> merge_sets(
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`.
  * @throw cudf::logic_error if `output_dtype` is not an arithmetic type.
  *
- * @param col Input column to compute sum.
- * @param offsets Indices to identify segment boundaries.
- * @param output_dtype Data type of return type and typecast elements of input column.
+ * @param col Input column to compute sum
+ * @param offsets Indices to identify segment boundaries
+ * @param output_dtype Data type of return type and typecast elements of input column
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
  * @param init Initial value of each sum
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return Sums of segments in type `output_dtype`.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Sums of segments in type `output_dtype`
  */
 std::unique_ptr<column> segmented_sum(
   column_view const& col,
@@ -372,16 +372,16 @@ std::unique_ptr<column> segmented_sum(
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`.
  * @throw cudf::logic_error if `output_dtype` is not an arithmetic type.
  *
- * @param col Input column to compute product.
- * @param offsets Indices to identify segment boundaries.
- * @param output_dtype data type of return type and typecast elements of input column.
+ * @param col Input column to compute product
+ * @param offsets Indices to identify segment boundaries
+ * @param output_dtype data type of return type and typecast elements of input column
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
  * @param init Initial value of each product
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
- * @return Product as scalar of type `output_dtype`.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Product as scalar of type `output_dtype`
  */
 std::unique_ptr<column> segmented_product(
   column_view const& col,
@@ -399,16 +399,16 @@ std::unique_ptr<column> segmented_product(
  *
  * @throw cudf::logic_error if input column type is convertible to `output_dtype`.
  *
- * @param col Input column to compute minimum.
- * @param offsets Indices to identify segment boundaries.
- * @param output_dtype Data type of return type and typecast elements of input column.
+ * @param col Input column to compute minimum
+ * @param offsets Indices to identify segment boundaries
+ * @param output_dtype Data type of return type and typecast elements of input column
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
  * @param init Initial value of each minimum
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
- * @return Minimums of segments in type `output_dtype`.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Minimums of segments in type `output_dtype`
  */
 std::unique_ptr<column> segmented_min(
   column_view const& col,
@@ -426,16 +426,16 @@ std::unique_ptr<column> segmented_min(
  *
  * @throw cudf::logic_error if input column type is convertible to `output_dtype`.
  *
- * @param col Input column to compute maximum.
- * @param offsets Indices to identify segment boundaries.
- * @param output_dtype Data type of return type and typecast elements of input column.
+ * @param col Input column to compute maximum
+ * @param offsets Indices to identify segment boundaries
+ * @param output_dtype Data type of return type and typecast elements of input column
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
  * @param init Initial value of each maximum
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
- * @return Maximums of segments in type `output_dtype`.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Maximums of segments in type `output_dtype`
  */
 std::unique_ptr<column> segmented_max(
   column_view const& col,
@@ -454,16 +454,16 @@ std::unique_ptr<column> segmented_max(
  * @throw cudf::logic_error if input column type is not convertible to bool.
  * @throw cudf::logic_error if `output_dtype` is not bool8.
  *
- * @param col Input column to compute any_of.
- * @param offsets Indices to identify segment boundaries.
- * @param output_dtype Data type of return type and typecast elements of input column.
+ * @param col Input column to compute any
+ * @param offsets Indices to identify segment boundaries
+ * @param output_dtype Data type of return type and typecast elements of input column
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
- * @param init Initial value of each any_of
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
- * @return Column of bool8 for the results of the segments.
+ * @param init Initial value of each any
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Column of bool8 for the results of the segments
  */
 std::unique_ptr<column> segmented_any(
   column_view const& col,
@@ -482,16 +482,16 @@ std::unique_ptr<column> segmented_any(
  * @throw cudf::logic_error if input column type is not convertible to bool.
  * @throw cudf::logic_error if `output_dtype` is not bool8.
  *
- * @param col Input column to compute all_of.
- * @param offsets Indices to identify segment boundaries.
- * @param output_dtype Data type of return type and typecast elements of input column.
+ * @param col Input column to compute all
+ * @param offsets Indices to identify segment boundaries
+ * @param output_dtype Data type of return type and typecast elements of input column
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
  * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
  * any element in the segment is valid, otherwise null.
- * @param init Initial value of each all_of
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned scalar's device memory.
- * @return Column of bool8 for the results of the segments.
+ * @param init Initial value of each all
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Column of bool8 for the results of the segments
  */
 std::unique_ptr<column> segmented_all(
   column_view const& col,

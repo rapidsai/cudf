@@ -51,7 +51,7 @@ namespace detail {
 
  * @param col Input column of data to reduce
  * @param init Optional initial value of the reduction
- * @param stream Used for device memory operations and kernel launches.
+ * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
  */
@@ -102,7 +102,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
  *
  * @param col         Input column of data to reduce
  * @param init        Optional initial value of the reduction
- * @param stream      Used for device memory operations and kernel launches.
+ * @param stream      Used for device memory operations and kernel launches
  * @param mr          Device memory resource used to allocate the returned scalar's device memory
  * @return            Output scalar in device memory
  */
@@ -169,7 +169,7 @@ std::unique_ptr<scalar> fixed_point_reduction(
  *
  * @param col Input dictionary column of data to reduce
  * @param init Optional initial value of the reduction
- * @param stream Used for device memory operations and kernel launches.
+ * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
  */
@@ -449,10 +449,10 @@ struct element_type_dispatcher {
    * @brief Called by the type-dispatcher to reduce the input column `col` using
    * the `Op` operation.
    *
-   * @tparam ElementType The input column type or key type.
+   * @tparam ElementType The input column type or key type
    * @param col Input column (must be numeric)
    * @param output_type Requested type of the scalar result
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
   template <typename ElementType, std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
