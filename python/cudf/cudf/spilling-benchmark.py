@@ -7,7 +7,7 @@ import time
 import dask
 import dask.dataframe
 import dask_cuda
-from distributed import Client, LocalCluster, wait
+from distributed import Client, wait
 
 import cudf
 
