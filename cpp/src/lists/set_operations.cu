@@ -260,7 +260,7 @@ std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::list_overlap(lhs, rhs, nulls_equal, nans_equal, rmm::cuda_stream_default, mr);
+  return detail::list_overlap(lhs, rhs, nulls_equal, nans_equal, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
@@ -270,7 +270,7 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::set_intersect(lhs, rhs, nulls_equal, nans_equal, rmm::cuda_stream_default, mr);
+  return detail::set_intersect(lhs, rhs, nulls_equal, nans_equal, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> set_union(lists_column_view const& lhs,
@@ -280,7 +280,7 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::set_union(lhs, rhs, nulls_equal, nans_equal, rmm::cuda_stream_default, mr);
+  return detail::set_union(lhs, rhs, nulls_equal, nans_equal, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> set_difference(lists_column_view const& lhs,
@@ -290,7 +290,7 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::set_difference(lhs, rhs, nulls_equal, nans_equal, rmm::cuda_stream_default, mr);
+  return detail::set_difference(lhs, rhs, nulls_equal, nans_equal, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf::lists
