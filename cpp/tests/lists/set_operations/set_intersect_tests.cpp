@@ -23,6 +23,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/lists/sorting.hpp>
+#include <cudf/lists/stream_compaction.hpp>
 
 using float_type = double;
 using namespace cudf::test::iterators;
@@ -93,6 +94,24 @@ TEST_F(SetIntersectTest, TrivialTest)
 
   auto const results_sorted = set_op_sorted(lhs, rhs);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results_sorted);
+}
+
+TEST_F(SetIntersectTest, TrivialIdentityTest)
+{
+  auto const input =
+    floats_lists{{floats_lists{{NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 0.0}, null_at(6)},
+                  floats_lists{{NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 1.0}, null_at(6)},
+                  {} /*NULL*/,
+                  floats_lists{{NaN, 5.0, 0.0, 0.0, 0.0, 0.0, null, 1.0}, null_at(6)}},
+                 null_at(2)};
+
+  // `set_intersect(input, input) <==> lists::distinct(input)`.
+  auto const input_distinct        = cudf::lists::distinct(lists_cv{input});
+  auto const input_distinct_sorted = cudf::lists::sort_lists(
+    lists_cv{*input_distinct}, cudf::order::ASCENDING, cudf::null_order::BEFORE);
+
+  auto const results_sorted = set_op_sorted(input, input);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*input_distinct_sorted, *results_sorted);
 }
 
 TEST_F(SetIntersectTest, FloatingPointTestsWithSignedZero)
