@@ -229,7 +229,7 @@ public final class MemoryCleaner {
       // priority. The priority parameter will guarantee the execution order.
       //
       // Here also use `Hadoop ShutdownHookManager` to add a lower priority hook.
-      // 20 priority is small enough, will run after Spark hooks
+      // 20 priority is small enough, will run after Spark hooks.
       // Note: `ShutdownHookManager.get()` is a singleton, Spark and JNI both use the same singleton
       org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(hook, 20);
     }
