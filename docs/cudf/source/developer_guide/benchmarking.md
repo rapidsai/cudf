@@ -45,6 +45,35 @@ Broadly speaking, they should be grouped into benchmark files containing similar
 For example, I/O benchmarks can all live in `bench_io.py`.
 For now those groupings are left to the discretion of developers.
 
+## Running benchmarks
+
+The main distinction between tests and benchmarks is configured prefix.
+Bench files and functions are prefixed with `bench_` rather than `test_`.
+`pytest` is automatically configured to find benchmarks this way, though,
+so running benchmarks is as simple as installing `pytest-benchmark` and then running `pytest`.
+
+When benchmarks are run, the default behavior is to output the results in a table to the terminal.
+A common requirement is to then compare the performance of benchmarks before and after a change.
+We can generate these comparisons by saving the output using the `--benchmark-autosave` option to pytest.
+When using this option, after the benchmarks are run the output will contain a line:
+```
+Saved benchmark data in: /path/to/XXXX_*.json
+```
+
+The `XXXX` is a four-digit number identifying the benchmark.
+If preferred, a user may also use the `--benchmark-save=NAME` option,
+which allows more control over the resulting filename.
+Given two benchmark runs `XXXX` and `YYYY`, benchmarks can then be compared using
+```
+pytest-benchmark compare XXXX YYYY
+```
+Note that the comparison uses the `pytest-benchmark` command rather than the `pytest` command.
+`pytest-benchmark` has a number of additional options that can be used to customize the output.
+The next line contains one useful example, but developers should experiment to find a useful output
+```
+pytest-benchmark compare XXXX YYYY --sort="name" --columns=Mean --name=short --group-by=param
+```
+
 ## Benchmark contents
 
 ### Benchmark configuration
