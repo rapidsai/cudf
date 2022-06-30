@@ -118,19 +118,6 @@ def bench_nsmallest(benchmark, dataframe, num_cols_to_sort, n):
     benchmark(dataframe.nsmallest, n, by)
 
 
-@benchmark_with_object(cls="dataframe", dtype="int", nulls=False)
-def where_case_1(dataframe):
-    return dataframe, dataframe % 2 == 0, 0
-
-
-@benchmark_with_object(cls="dataframe", dtype="int", nulls=False)
-def where_case_2(dataframe):
-    cond = dataframe[dataframe.columns[0]] % 2 == 0
-    return dataframe, cond, 0
-
-
-@pytest_cases.parametrize_with_cases(
-    "dataframe, cond, other", cases=".", prefix="where"
-)
+@pytest_cases.parametrize_with_cases("dataframe, cond, other", prefix="where")
 def bench_where(benchmark, dataframe, cond, other):
     benchmark(dataframe.where, cond, other)
