@@ -82,7 +82,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
  * @endcode
  *
  * @param haystack The table containing the search space
- * @param needles A table of rows to check for their existence in the search space
+ * @param needles A table of rows whose existence to check in the search space
  * @param compare_nulls Control whether nulls should be compared as equal or not
  * @param compare_nans Control whether floating-point NaNs values should be compared as equal or not
  * @param stream CUDA stream used for device memory operations and kernel launches

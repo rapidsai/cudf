@@ -68,8 +68,8 @@ bool is_trivial_join(table_view const& left, table_view const& right, join_kind 
 /**
  * @brief The function to accumulate all nullable columns at all nested levels from a given table.
  *
- * This is to avoid expensive materializing the column bitmask into a real column when calling to
- * `structs::detail::flatten_nested_columns`.
+ * This is to avoid the expensive materialization of the column bitmask into a real column when
+ * calling to `structs::detail::flatten_nested_columns`.
  *
  * @param table The input table
  * @return A vector containing all nullable columns
