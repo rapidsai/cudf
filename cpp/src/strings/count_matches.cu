@@ -42,11 +42,11 @@ struct count_fn {
     int32_t count     = 0;
 
     size_type begin = 0;
-    size_type end   = nchars;
-    while ((begin < end) && (prog.find(thread_idx, d_str, begin, end) > 0)) {
+    size_type end   = -1;
+    while ((begin <= nchars) && (prog.find(thread_idx, d_str, begin, end) > 0)) {
       ++count;
       begin = end + (begin == end);
-      end   = nchars;
+      end   = -1;
     }
     return count;
   }
