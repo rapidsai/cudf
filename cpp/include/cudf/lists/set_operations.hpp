@@ -41,9 +41,8 @@ namespace cudf::lists {
  *
  * Example:
  * @code{.pseudo}
- * lhs = { {0, 1, 2}, {1, 2, 3}, null,         {4, null, 5} }
- * rhs = { {1, 2, 3}, {4, 5},    {null, 7, 8}, {null, null} }
- *
+ * lhs    = { {0, 1, 2}, {1, 2, 3}, null,         {4, null, 5} }
+ * rhs    = { {1, 2, 3}, {4, 5},    {null, 7, 8}, {null, null} }
  * result = { true, false, null, true }
  * @endcode
  *
@@ -76,9 +75,8 @@ std::unique_ptr<column> list_overlap(
  *
  * Example:
  * @code{.pseudo}
- * lhs = { {2, 1, 2}, {1, 2, 3}, null,         {4, null, 5} }
- * rhs = { {1, 2, 3}, {4, 5},    {null, 7, 8}, {null, null} }
- *
+ * lhs    = { {2, 1, 2}, {1, 2, 3}, null,         {4, null, 5} }
+ * rhs    = { {1, 2, 3}, {4, 5},    {null, 7, 8}, {null, null} }
  * result = { {1, 2}, {}, null, {null} }
  * @endcode
  *
@@ -113,9 +111,8 @@ std::unique_ptr<column> set_intersect(
  *
  * Example:
  * @code{.pseudo}
- * lhs = { {2, 1, 2}, {1, 2, 3}, null,         {4, null, 5} }
- * rhs = { {1, 2, 3}, {4, 5},    {null, 7, 8}, {null, null} }
- *
+ * lhs    = { {2, 1, 2}, {1, 2, 3}, null,         {4, null, 5} }
+ * rhs    = { {1, 2, 3}, {4, 5},    {null, 7, 8}, {null, null} }
  * result = { {1, 2, 3}, {1, 2, 3, 4, 5}, null, {4, null, 5} }
  * @endcode
  *
@@ -148,9 +145,8 @@ std::unique_ptr<column> set_union(
  *
  * Example:
  * @code{.pseudo}
- * lhs = { {2, 1, 2}, {1, 2, 3}, null,         {4, null, 5} }
- * rhs = { {1, 2, 3}, {4, 5},    {null, 7, 8}, {null, null} }
- *
+ * lhs    = { {2, 1, 2}, {1, 2, 3}, null,         {4, null, 5} }
+ * rhs    = { {1, 2, 3}, {4, 5},    {null, 7, 8}, {null, null} }
  * result = { {}, {1, 2, 3}, null, {4, 5} }
  * @endcode
  *

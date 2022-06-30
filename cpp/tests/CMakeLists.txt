@@ -471,7 +471,6 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 # * lists tests ----------------------------------------------------------------------------------
 ConfigureTest(
   LISTS_TEST
-  lists/apply_boolean_mask_test.cpp
   lists/combine/concatenate_list_elements_tests.cpp
   lists/combine/concatenate_rows_tests.cpp
   lists/contains_tests.cpp
@@ -480,12 +479,13 @@ ConfigureTest(
   lists/explode_tests.cpp
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
-  lists/set_operations/common.cpp
-  lists/set_operations/list_overlap.cpp
-  lists/set_operations/set_difference.cpp
-  lists/set_operations/set_intersect.cpp
-  lists/set_operations/set_union.cpp
+  lists/set_operations/list_overlap_tests.cpp
+  lists/set_operations/set_difference_tests.cpp
+  lists/set_operations/set_intersect_tests.cpp
+  lists/set_operations/set_union_tests.cpp
   lists/sort_lists_tests.cpp
+  lists/stream_compaction/apply_boolean_mask_tests.cpp
+  lists/stream_compaction/distinct_tests.cpp
 )
 
 # ##################################################################################################

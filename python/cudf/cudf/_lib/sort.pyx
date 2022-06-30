@@ -233,7 +233,7 @@ def rank_columns(list source_columns, object method, str na_option,
         if na_option == 'keep'
         else null_policy.INCLUDE
     )
-    cdef bool percentage = True if pct else False
+    cdef bool percentage = pct
 
     cdef vector[unique_ptr[column]] c_results
     cdef column_view c_view

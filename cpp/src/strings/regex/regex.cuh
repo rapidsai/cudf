@@ -51,7 +51,7 @@ constexpr int32_t MINIMUM_THREADS     = 256;  // Minimum threads for computing w
 struct alignas(16) reclass_device {
   int32_t builtins{};
   int32_t count{};
-  char32_t const* literals{};
+  reclass_range const* literals{};
 
   __device__ inline bool is_match(char32_t const ch, uint8_t const* flags) const;
 };
