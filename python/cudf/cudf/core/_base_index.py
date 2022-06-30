@@ -711,7 +711,7 @@ class BaseIndex(Serializable):
             other.names = self.names
             difference = cudf.core.index._index_from_data(
                 cudf.DataFrame._from_data(self._data)
-                ._merge(
+                .merge(
                     cudf.DataFrame._from_data(other._data),
                     how="leftanti",
                     on=self.name,
@@ -1004,7 +1004,7 @@ class BaseIndex(Serializable):
         other_unique.names = self.names
         intersection_result = cudf.core.index._index_from_data(
             cudf.DataFrame._from_data(self.unique()._data)
-            ._merge(
+            .merge(
                 cudf.DataFrame._from_data(other_unique._data),
                 how="inner",
                 on=self.name,
@@ -1209,7 +1209,7 @@ class BaseIndex(Serializable):
         lhs = lhs.to_frame()
         rhs = rhs.to_frame()
 
-        output = lhs._merge(rhs, how=how, on=on, sort=sort)
+        output = lhs.merge(rhs, how=how, on=on, sort=sort)
 
         # If both inputs were MultiIndexes, the output is a MultiIndex.
         # Otherwise, the output is only a MultiIndex if there are multiple
