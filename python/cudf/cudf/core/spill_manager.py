@@ -223,6 +223,7 @@ def get_columns(obj: object) -> List[Column]:
                 found.append(obj)
         elif isinstance(obj, Frame):
             _get_columns(obj._data)
+            _get_columns(obj._index)
         elif isinstance(obj, ColumnAccessor):
             for o in obj.columns:
                 _get_columns(o)
