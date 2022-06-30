@@ -6,18 +6,16 @@ import time
 
 import dask
 import dask.dataframe
+import dask_cuda
 from distributed import Client, LocalCluster, wait
 
 import cudf
 
-NROWS = 130_000_000
+NROWS = 100_000_000
 
 
 def main(args):
     os.environ["CUDF_SPILL"] = "on" if args.spill == "cudf" else "off"
-    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
-        str(i) for i in reversed(range(args.n_workers))
-    )
 
     device_memory_limit = None
     if args.spill == "dask":
@@ -25,24 +23,13 @@ def main(args):
     elif args.spill == "jit":
         device_memory_limit = 0.8
 
-    if args.spill == "cudf":
-        cluster = LocalCluster(
-            protocol="tcp",
-            n_workers=args.n_workers,
-            threads_per_worker=1,
-            memory_limit=None,
-        )
-    else:
-        import dask_cuda
-
-        cluster = dask_cuda.LocalCUDACluster(
-            protocol="tcp",
-            n_workers=args.n_workers,
-            device_memory_limit=device_memory_limit,
-            memory_limit="auto",
-            jit_unspill=args.spill == "jit",
-            CUDA_VISIBLE_DEVICES=os.environ["CUDA_VISIBLE_DEVICES"],
-        )
+    cluster = dask_cuda.LocalCUDACluster(
+        protocol="tcp",
+        n_workers=args.n_workers,
+        device_memory_limit=device_memory_limit,
+        memory_limit=None,
+        jit_unspill=args.spill == "jit",
+    )
 
     with Client(cluster):
         t1 = time.monotonic()
@@ -52,6 +39,8 @@ def main(args):
             range(args.npartitions),
             meta=meta,
         )
+        df = df.persist()
+        wait(df)
         res = df.shuffle(on="x")
         print(res)
         res = res.persist()
@@ -66,8 +55,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "-s",
         "--spill",
-        choices=["none", "dask", "jit", "cudf"],
-        default="none",
+        choices=["dask", "jit", "cudf"],
+        default="cudf",
         type=str,
         help="The spilling backend",
     )
