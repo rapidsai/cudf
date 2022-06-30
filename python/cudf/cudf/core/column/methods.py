@@ -73,9 +73,7 @@ class ColumnMethods:
             )
             return None
         else:
-            if expand or isinstance(
-                self._parent, (cudf.DataFrame, cudf.MultiIndex)
-            ):
+            if expand:
                 # This branch indicates the passed as new_col
                 # is a Table
                 table = new_col
