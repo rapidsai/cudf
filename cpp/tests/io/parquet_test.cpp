@@ -237,6 +237,12 @@ struct ParquetWriterNumericTypeTest : public ParquetWriterTest {
   auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
+// Typed test fixture for comparable type tests
+template <typename T>
+struct ParquetWriterComparableTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
 // Typed test fixture for timestamp type tests
 template <typename T>
 struct ParquetWriterChronoTypeTest : public ParquetWriterTest {
@@ -256,9 +262,11 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 };
 
 // Declare typed test cases
-// TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
-using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
+using SupportedTypes = cudf::test::NumericTypes;
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
+using ComparableAndFixedTypes =
+  cudf::test::Concat<cudf::test::ComparableTypes, cudf::test::FixedPointTypes>;
+TYPED_TEST_SUITE(ParquetWriterComparableTypeTest, ComparableAndFixedTypes);
 TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, cudf::test::ChronoTypes);
 using SupportedTimestampTypes =
   cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us, cudf::timestamp_ns>;
@@ -3372,6 +3380,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
       .max_page_size_rows(page_rows);
   cudf_io::write_parquet(out_opts);
 
+  // fix for https://github.com/rapidsai/cudf/issues/11038
   // check first page header and make sure it has only 5000 values
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
@@ -3390,6 +3399,743 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   EXPECT_TRUE(cp.read(&ph));
 
   EXPECT_EQ(ph.data_page_header.num_values, page_rows);
+}
+
+// =============================================================================
+// ---- test data --------------------------------------------------------------
+// need at least 3 pages, and min page count is 5000, so need at least 15000 values
+
+namespace {
+namespace testdata {
+// ----- most numerics
+
+template <typename T>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+                 cudf::test::fixed_width_column_wrapper<T>>
+ascending()
+{
+  int start = std::is_signed_v<T> ? -10000 : 0;
+  auto elements =
+    cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i / 100; });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+                 cudf::test::fixed_width_column_wrapper<T>>
+descending()
+{
+  if (std::is_signed_v<T>) {
+    auto elements =
+      cudf::detail::make_counting_transform_iterator(-10000, [](auto i) { return -i / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+  } else {
+    auto elements =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (20000 - i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+  }
+}
+
+template <typename T>
+std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+                 cudf::test::fixed_width_column_wrapper<T>>
+unordered()
+{
+  if (std::is_signed_v<T>) {
+    auto elements = cudf::detail::make_counting_transform_iterator(
+      -10000, [](auto i) { return (i % 2 ? i : -i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+  } else {
+    auto elements = cudf::detail::make_counting_transform_iterator(
+      0, [](auto i) { return (i % 2 ? i : 20000 - i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+  }
+}
+
+// ----- bool
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> ascending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i < 10000 ? false : true; });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> descending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i < 10000 ? true : false; });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> unordered()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    switch (i / 5000) {
+      case 0: return true;
+      case 1: return false;
+      case 2: return true;
+      default: return false;
+    }
+  });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + 20000);
+}
+
+// ----- fixed point types
+
+template <typename T>
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    -10000, [](auto i) { return T(i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    -10000, [](auto i) { return T(-i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    -10000, [](auto i) { return T(i % 2 ? i : -i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+// ----- chrono types
+// ----- timstamp
+
+template <typename T>
+std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return T(typename T::duration(i)); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return T(typename T::duration(20000 - i)); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return T(typename T::duration(i % 2 ? i : 20000 - i)); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+// ----- duration
+
+template <typename T>
+std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return T(i); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
+{
+  auto elements =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return T(20000 - i); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
+{
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return T(i % 2 ? i : 20000 - i); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+}
+
+// ----- string_view
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
+ascending()
+{
+  char buf[10];
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
+    sprintf(buf, "%09d", i);
+    return std::string(buf);
+  });
+  return cudf::test::strings_column_wrapper(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
+descending()
+{
+  char buf[10];
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
+    sprintf(buf, "%09d", 20000 - i);
+    return std::string(buf);
+  });
+  return cudf::test::strings_column_wrapper(elements, elements + 20000);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same_v<T, cudf::string_view>, cudf::test::strings_column_wrapper>
+unordered()
+{
+  char buf[10];
+  auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
+    sprintf(buf, "%09d", (i % 2 == 0) ? i : (20000 - i));
+    return std::string(buf);
+  });
+  return cudf::test::strings_column_wrapper(elements, elements + 20000);
+}
+
+}  // namespace testdata
+}  // anonymous namespace
+
+// for debugging tests
+// TODO remove when done with testing
+void printHex(const uint8_t* v, size_t len)
+{
+  for (size_t j = 0; j < len; j += 16) {
+    for (size_t k = 0; k < 16 && k + j < len; k++)
+      printf(" %02x", v[j + k]);
+    printf("\n");
+  }
+}
+
+TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
+{
+  using T = TypeParam;
+
+  auto col1 = testdata::ascending<T>();
+  auto col2 = testdata::descending<T>();
+  auto col3 = testdata::unordered<T>();
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto filepath = temp_env->get_temp_filepath("ThreeColumnSorted.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .max_page_size_rows(5000)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  EXPECT_EQ(read_footer(source, &fmd), 0);
+  EXPECT_GT(fmd.row_groups.size(), 0);
+  EXPECT_EQ(fmd.row_groups[0].columns.size(), 3);
+
+  // now check that the boundary order for chunk 1 is ascending,
+  // chunk 2 is descending, and chunk 3 is unordered
+  cudf_io::parquet::BoundaryOrder expected_orders[] = {cudf_io::parquet::BoundaryOrder::ASCENDING,
+                                                       cudf_io::parquet::BoundaryOrder::DESCENDING,
+                                                       cudf_io::parquet::BoundaryOrder::UNORDERED};
+
+  for (int i = 0; i < 3; i++) {
+    auto& chunk = fmd.row_groups[0].columns[i];
+    EXPECT_GT(chunk.column_index_offset, 0);
+    EXPECT_GT(chunk.column_index_length, 0);
+
+    cudf_io::parquet::ColumnIndex ci;
+    const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
+    cudf_io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
+#if 0
+    // TODO remove when done testing
+    printf("%d %d\n", fmd.schema[i + 1].type, fmd.schema[i + 1].converted_type);
+    printHex(ci_buf->data(), ci_buf->size());
+    // if (std::is_same_v<T, numeric::decimal128>) ((int*)0)[12] = 10; // segfault
+#endif
+    EXPECT_TRUE(cp.read(&ci));
+
+    EXPECT_EQ(ci.boundary_order, expected_orders[i]);
+  }
+}
+
+template <typename T>
+int32_t compare(T& v1, T& v2)
+{
+  return (v1 > v2) - (v1 < v2);
+}
+
+int32_t compare_binary(std::vector<uint8_t>& v1,
+                       std::vector<uint8_t>& v2,
+                       int8_t ptype,
+                       int8_t ctype)
+{
+  switch (ptype) {
+    case cudf_io::parquet::INT32:
+      switch (ctype) {
+        case cudf_io::parquet::UINT_8:
+        case cudf_io::parquet::UINT_16:
+        case cudf_io::parquet::UINT_32:
+          return compare(*(reinterpret_cast<uint32_t*>(v1.data())),
+                         *(reinterpret_cast<uint32_t*>(v2.data())));
+        default:
+          return compare(*(reinterpret_cast<int32_t*>(v1.data())),
+                         *(reinterpret_cast<int32_t*>(v2.data())));
+      }
+
+    case cudf_io::parquet::INT64:
+      if (ctype == cudf_io::parquet::UINT_64)
+        return compare(*(reinterpret_cast<uint64_t*>(v1.data())),
+                       *(reinterpret_cast<uint64_t*>(v2.data())));
+      else
+        return compare(*(reinterpret_cast<int64_t*>(v1.data())),
+                       *(reinterpret_cast<int64_t*>(v2.data())));
+
+    case cudf_io::parquet::FLOAT:
+      return compare(*(reinterpret_cast<float*>(v1.data())),
+                     *(reinterpret_cast<float*>(v2.data())));
+
+    case cudf_io::parquet::DOUBLE:
+      return compare(*(reinterpret_cast<double*>(v1.data())),
+                     *(reinterpret_cast<double*>(v2.data())));
+
+    case cudf_io::parquet::BYTE_ARRAY: {
+      int32_t v1sz = v1.size();
+      int32_t v2sz = v2.size();
+      int32_t ret  = memcmp(v1.data(), v2.data(), std::min(v1sz, v2sz));
+      if (ret != 0 or v1sz == v2sz)
+        return ret;
+      else
+        return v1sz - v2sz;
+    }
+  }
+
+  return 0;
+}
+
+TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
+{
+  constexpr auto num_rows = 100000;
+
+  // fixed length strings
+  auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%012d", i);
+    return std::string(buf);
+  });
+  auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
+
+  auto col1_data = random_values<int8_t>(num_rows);
+  auto col2_data = random_values<int16_t>(num_rows);
+  auto col3_data = random_values<int32_t>(num_rows);
+  auto col4_data = random_values<uint64_t>(num_rows);
+  auto col5_data = random_values<float>(num_rows);
+  auto col6_data = random_values<double>(num_rows);
+
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  auto col1 =
+    cudf::test::fixed_width_column_wrapper<int8_t>(col1_data.begin(), col1_data.end(), valids);
+  auto col2 =
+    cudf::test::fixed_width_column_wrapper<int16_t>(col2_data.begin(), col2_data.end(), valids);
+  auto col3 =
+    cudf::test::fixed_width_column_wrapper<int32_t>(col3_data.begin(), col3_data.end(), valids);
+  auto col4 =
+    cudf::test::fixed_width_column_wrapper<uint64_t>(col4_data.begin(), col4_data.end(), valids);
+  auto col5 =
+    cudf::test::fixed_width_column_wrapper<float>(col5_data.begin(), col5_data.end(), valids);
+  auto col6 =
+    cudf::test::fixed_width_column_wrapper<double>(col6_data.begin(), col6_data.end(), valids);
+
+  // mixed length strings
+  auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%d", i);
+    return std::string(buf);
+  });
+  auto col7 = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows, valids);
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  cols.push_back(col4.release());
+  cols.push_back(col5.release());
+  cols.push_back(col6.release());
+  cols.push_back(col7.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexNulls.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(20000);
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  EXPECT_EQ(read_footer(source, &fmd), 0);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      // read in offset index
+      auto& chunk = rg.columns[c];
+
+      cudf_io::parquet::OffsetIndex oi;
+      const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
+      cudf_io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
+      EXPECT_TRUE(cp.read(&oi));
+
+      // loop over offsets, read page header, make sure it's a data page
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        cudf_io::parquet::PageHeader ph;
+        auto& page_loc      = oi.page_locations[o];
+        const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
+        cp.init(page_buf->data(), page_buf->size());
+        EXPECT_TRUE(cp.read(&ph));
+        EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+
+      // check column index
+      cudf_io::parquet::ColumnIndex ci;
+      const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
+      // printHex(ci_buf->data(), ci_buf->size());
+      cp.init(ci_buf->data(), ci_buf->size());
+      EXPECT_TRUE(cp.read(&ci));
+      auto& chunk_meta = chunk.meta_data;
+
+      // decode min and max from statistics blob
+      cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      cudf_io::parquet::Statistics stats;
+      EXPECT_TRUE(cp.read(&stats));
+
+      // loop over page stats.  stats.min <= page.min && stats.max >= page.max
+      int8_t ptype = fmd.schema[c + 1].type;
+      int8_t ctype = fmd.schema[c + 1].converted_type;
+      // printHex(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      for (size_t p = 0; p < ci.min_values.size(); p++) {
+        EXPECT_FALSE(ci.null_pages[p]);
+        if (c > 0)  // first column has no nulls
+          EXPECT_GT(ci.null_counts[p], 0);
+        else
+          EXPECT_EQ(ci.null_counts[p], 0);
+        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+      }
+      for (size_t p = 0; p < ci.max_values.size(); p++)
+        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+    }
+  }
+}
+
+TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
+{
+  constexpr auto num_rows = 100000;
+
+  // fixed length strings
+  auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%012d", i);
+    return std::string(buf);
+  });
+  auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
+
+  auto col1_data = random_values<int8_t>(num_rows);
+  auto col2_data = random_values<int16_t>(num_rows);
+  auto col3_data = random_values<int32_t>(num_rows);
+  auto col4_data = random_values<uint64_t>(num_rows);
+  auto col5_data = random_values<float>(num_rows);
+  auto col6_data = random_values<double>(num_rows);
+
+  auto col1 = cudf::test::fixed_width_column_wrapper<int8_t>(col1_data.begin(), col1_data.end());
+  auto col2 = cudf::test::fixed_width_column_wrapper<int16_t>(col2_data.begin(), col2_data.end());
+  auto col3 = cudf::test::fixed_width_column_wrapper<int32_t>(col3_data.begin(), col3_data.end());
+  auto col4 = cudf::test::fixed_width_column_wrapper<uint64_t>(col4_data.begin(), col4_data.end());
+  auto col5 = cudf::test::fixed_width_column_wrapper<float>(col5_data.begin(), col5_data.end());
+  auto col6 = cudf::test::fixed_width_column_wrapper<double>(col6_data.begin(), col6_data.end());
+
+  // mixed length strings
+  auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%d", i);
+    return std::string(buf);
+  });
+  auto col7          = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  cols.push_back(col4.release());
+  cols.push_back(col5.release());
+  cols.push_back(col6.release());
+  cols.push_back(col7.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndex.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(20000);
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  EXPECT_EQ(read_footer(source, &fmd), 0);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      // read in offset index
+      auto& chunk = rg.columns[c];
+
+      cudf_io::parquet::OffsetIndex oi;
+      const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
+      cudf_io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
+      EXPECT_TRUE(cp.read(&oi));
+
+      // loop over offsets, read page header, make sure it's a data page
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        cudf_io::parquet::PageHeader ph;
+        auto& page_loc      = oi.page_locations[o];
+        const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
+        cp.init(page_buf->data(), page_buf->size());
+        EXPECT_TRUE(cp.read(&ph));
+        EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+
+      // check column index
+      cudf_io::parquet::ColumnIndex ci;
+      const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
+      cp.init(ci_buf->data(), ci_buf->size());
+      EXPECT_TRUE(cp.read(&ci));
+      auto& chunk_meta = chunk.meta_data;
+
+      // decode min and max from statistics blob
+      cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      cudf_io::parquet::Statistics stats;
+      EXPECT_TRUE(cp.read(&stats));
+
+      // loop over page stats.  stats.min <= page.min && stats.max >= page.max
+      int8_t ptype = fmd.schema[c + 1].type;
+      int8_t ctype = fmd.schema[c + 1].converted_type;
+      // printHex(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      for (size_t p = 0; p < ci.min_values.size(); p++) {
+        EXPECT_FALSE(ci.null_pages[p]);
+        EXPECT_EQ(ci.null_counts[p], 0);
+        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+      }
+      for (size_t p = 0; p < ci.max_values.size(); p++)
+        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+    }
+  }
+}
+
+TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
+{
+  constexpr auto num_rows = 100000;
+
+  // fixed length strings
+  auto str1_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%012d", i);
+    return std::string(buf);
+  });
+  auto col0          = cudf::test::strings_column_wrapper(str1_elements, str1_elements + num_rows);
+
+  auto col1_data = random_values<int32_t>(num_rows);
+  auto col2_data = random_values<int32_t>(num_rows);
+
+  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
+  auto col1 =
+    cudf::test::fixed_width_column_wrapper<int32_t>(col1_data.begin(), col1_data.end(), valids);
+  auto col2 = cudf::test::fixed_width_column_wrapper<int32_t>(col2_data.begin(), col2_data.end());
+
+  // mixed length strings
+  auto str2_elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+    char buf[30];
+    sprintf(buf, "%d", i);
+    return std::string(buf);
+  });
+  auto col3          = cudf::test::strings_column_wrapper(str2_elements, str2_elements + num_rows);
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexNullColumn.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(20000);
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  EXPECT_EQ(read_footer(source, &fmd), 0);
+
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      // read in offset index
+      auto& chunk = rg.columns[c];
+
+      cudf_io::parquet::OffsetIndex oi;
+      const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
+      cudf_io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
+      EXPECT_TRUE(cp.read(&oi));
+
+      // loop over offsets, read page header, make sure it's a data page
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        cudf_io::parquet::PageHeader ph;
+        auto& page_loc      = oi.page_locations[o];
+        const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
+        cp.init(page_buf->data(), page_buf->size());
+        EXPECT_TRUE(cp.read(&ph));
+        EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
+        EXPECT_EQ(page_loc.first_row_index, num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+
+      // check column index
+      cudf_io::parquet::ColumnIndex ci;
+      const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
+      cp.init(ci_buf->data(), ci_buf->size());
+      EXPECT_TRUE(cp.read(&ci));
+      auto& chunk_meta = chunk.meta_data;
+
+      // decode min and max from statistics blob
+      cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      cudf_io::parquet::Statistics stats;
+      EXPECT_TRUE(cp.read(&stats));
+
+      // loop over page stats.  stats.min <= page.min && stats.max >= page.max
+      int8_t ptype = fmd.schema[c + 1].type;
+      int8_t ctype = fmd.schema[c + 1].converted_type;
+      // printHex(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      for (size_t p = 0; p < ci.min_values.size(); p++) {
+        if (not ci.null_pages[p]) {
+          EXPECT_EQ(ci.null_counts[p], 0);
+          EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+        }
+      }
+      for (size_t p = 0; p < ci.max_values.size(); p++) {
+        if (not ci.null_pages[p]) {
+          EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+        }
+      }
+    }
+  }
+}
+
+TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
+{
+  auto c0  = testdata::ascending<uint32_t>();
+  auto sc0 = testdata::ascending<cudf::string_view>();
+  auto sc1 = testdata::descending<int32_t>();
+  auto sc2 = testdata::unordered<int64_t>();
+
+  auto listgen = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? i / 2 : 20000 - (i / 2); });
+  auto list    = cudf::test::fixed_width_column_wrapper<int32_t>(listgen, listgen + 40000);
+  auto offgen  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>(offgen, offgen + 20001);
+
+  auto c2 = cudf::make_lists_column(20000, offsets.release(), list.release(), 0, {});
+
+  std::vector<std::unique_ptr<cudf::column>> struct_children;
+  struct_children.push_back(sc0.release());
+  struct_children.push_back(sc1.release());
+  struct_children.push_back(sc2.release());
+  cudf::test::structs_column_wrapper c1(std::move(struct_children));
+
+  table_view expected({c0, c1, *c2});
+
+  auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexStruct.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(5000);
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  EXPECT_EQ(read_footer(source, &fmd), 0);
+
+  size_t colidxs[] = {1, 3, 4, 5, 8};
+  for (size_t r = 0; r < fmd.row_groups.size(); r++) {
+    auto& rg = fmd.row_groups[r];
+    for (size_t c = 0; c < rg.columns.size(); c++) {
+      size_t colidx = colidxs[c];
+      auto& chunk   = rg.columns[c];
+      cudf_io::parquet::CompactProtocolReader cp;
+
+      cudf_io::parquet::OffsetIndex oi;
+      const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
+      cp.init(oi_buf->data(), oi_buf->size());
+      EXPECT_TRUE(cp.read(&oi));
+
+      // loop over offsets, read page header, make sure it's a data page
+      int64_t num_vals = 0;
+      for (size_t o = 0; o < oi.page_locations.size(); o++) {
+        cudf_io::parquet::PageHeader ph;
+        auto& page_loc      = oi.page_locations[o];
+        const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
+        cp.init(page_buf->data(), page_buf->size());
+        EXPECT_TRUE(cp.read(&ph));
+        EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
+        // last column has 2 values per row
+        EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
+        num_vals += ph.data_page_header.num_values;
+      }
+
+      // check column index.
+      cudf_io::parquet::ColumnIndex ci;
+      const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
+      cp.init(ci_buf->data(), ci_buf->size());
+      EXPECT_TRUE(cp.read(&ci));
+      auto& chunk_meta = chunk.meta_data;
+
+      // decode min and max from statistics blob
+      cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
+      cudf_io::parquet::Statistics stats;
+      EXPECT_TRUE(cp.read(&stats));
+
+      // loop over page stats.  stats.min <= page.min && stats.max >= page.max
+      int8_t ptype = fmd.schema[colidx].type;
+      int8_t ctype = fmd.schema[colidx].converted_type;
+      for (size_t p = 0; p < ci.min_values.size(); p++)
+        EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
+      for (size_t p = 0; p < ci.max_values.size(); p++)
+        EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
+    }
+  }
 }
 
 TEST_F(ParquetReaderTest, EmptyColumnsParam)
