@@ -1399,8 +1399,8 @@ __global__ void __launch_bounds__(128)
       // Optionally encode page-level statistics
       if (not page_stats.empty()) {
         encoder.field_struct_begin(5);
-        encoder.set_ptr(EncodeStatistics(
-          encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, fp_scratch));
+        encoder.set_ptr(
+          EncodeStatistics(encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, scratch));
         encoder.field_struct_end(5);
       }
       encoder.field_struct_end(5);
