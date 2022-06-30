@@ -3238,6 +3238,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new Table(extractRe(this.getNativeView(), pattern));
   }
 
+  public final ColumnVector extractAllRecord(String pattern, int idx) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert idx >= 0 : "group index must be at least 0";
+    assert idx == 0 : "group index > 0 is not supported";
+
+    return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
+  }
+
+
   /**
    * Converts all character sequences starting with '%' into character code-points
    * interpreting the 2 following characters as hex values to create the code-point.
@@ -3925,6 +3934,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method for extracting results from an regular expressions.  Returns a table handle.
    */
   private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
+
+  private static native long extractAllRecord(long nativeHandle, String pattern, int idx);
 
   private static native long urlDecode(long cudfViewHandle);
 
