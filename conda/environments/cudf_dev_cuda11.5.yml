@@ -80,7 +80,6 @@ dependencies:
   - pip:
       - git+https://github.com/python-streamz/streamz.git@master
       - pyorc
-      - git+https://github.com/rjzamora/dask.git@rewrite-sorted_division_locations
   - ptxcompiler  # [linux64]
   - gcc_linux-64=9.* # [linux64]
   - sysroot_linux-64==2.17 # [linux64]
