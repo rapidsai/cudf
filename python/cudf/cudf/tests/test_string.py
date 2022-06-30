@@ -3128,6 +3128,104 @@ def test_string_get_json_object_invalid_JSONPath(json_path):
     with pytest.raises(ValueError):
         gs.str.get_json_object(json_path)
 
+def test_string_get_json_object_allow_single_quotes():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            'author':"Nigel Rees",
+                            "title":'Sayings of the Century',
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            'title':"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object("$.store.book[0].author", allow_single_quotes=True),
+        cudf.Series(["Nigel Rees"], dtype="object"),
+    )
+    assert_eq(
+        gs.str.get_json_object("$.store.book[*].title", allow_single_quotes=True),
+        cudf.Series(["['Sayings of the Century',\"Sword of Honour\"]"], dtype="object"),
+    )
+
+def test_string_get_json_object_strip_quotes_from_single_strings():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object("$.store.book[0].author", strip_quotes_from_single_strings=False),
+        cudf.Series(["\"Nigel Rees\""], dtype="object"),
+    )
+    assert_eq(
+        gs.str.get_json_object("$.store.book[*].title", strip_quotes_from_single_strings=False),
+        cudf.Series(["[\"Sayings of the Century\",\"Sword of Honour\"]"], dtype="object"),
+    )
+
+def test_string_get_json_object_missing_fields_as_nulls():
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+    assert_eq(
+        gs.str.get_json_object("$.store.book[0].category", missing_fields_as_nulls=True),
+        cudf.Series(["null"], dtype="object"),
+    )
+    assert_eq(
+        gs.str.get_json_object("$.store.book[*].category", missing_fields_as_nulls=True),
+        cudf.Series(["[null,\"fiction\"]"], dtype="object"),
+    )
 
 def test_str_join_lists_error():
     sr = cudf.Series([["a", "a"], ["b"], ["c"]])

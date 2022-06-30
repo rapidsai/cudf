@@ -2,17 +2,18 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from libcpp cimport bool
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
-from cudf._lib.cpp.strings.json cimport get_json_object as cpp_get_json_object
+from cudf._lib.cpp.strings.json cimport (get_json_object as cpp_get_json_object, get_json_object_options)
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
 
-def get_json_object(Column col, object py_json_path, allow_single_quotes=False, strip_quotes_from_single_strings=False, missing_fields_as_nulls=False):
+def get_json_object(Column col, object py_json_path, bool allow_single_quotes=False, bool strip_quotes_from_single_strings=True, bool missing_fields_as_nulls=False):
     """
     Apply a JSONPath string to all rows in an input column
     of json strings.

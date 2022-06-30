@@ -2,6 +2,7 @@
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp cimport bool
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -13,8 +14,8 @@ cdef extern from "cudf/strings/json.hpp" namespace "cudf::strings" nogil:
         get_json_object_options() except +
         # getters
         bool get_allow_single_quotes() except +
-        bool get_strip_quotes_from_single_strings except +
-        bool get_missing_fields_as_nulls except +
+        bool get_strip_quotes_from_single_strings() except +
+        bool get_missing_fields_as_nulls() except +
         #setters
         void set_allow_single_quotes(bool val) except +
         void set_strip_quotes_from_single_strings(bool val) except +
@@ -23,4 +24,5 @@ cdef extern from "cudf/strings/json.hpp" namespace "cudf::strings" nogil:
     cdef unique_ptr[column] get_json_object(
         column_view col,
         string_scalar json_path,
+        get_json_object_options options,
     ) except +
