@@ -156,7 +156,7 @@ class Buffer(Serializable):
         self._spill_manager = None
         if global_manager.enabled:
             self._spill_manager = global_manager.get()
-            if data is not None:
+            if self._view_desc is None and data is not None:
                 base = None
                 if self._ptr:
                     base = self._spill_manager.lookup_address_range(
