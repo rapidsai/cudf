@@ -581,8 +581,8 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
   // This has been broken up for us in the tile_info struct, so we don't have
   // any calculation to do here, but it is important to note.
 
-  auto group = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
+  auto const group = cooperative_groups::this_thread_block();
+  auto const warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
   extern __shared__ int8_t shared_data[];
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
@@ -721,8 +721,8 @@ copy_validity_to_rows(const size_type num_rows, const size_type num_columns,
   // each thread of warp reads a single int32 of validity - so we read 128 bytes
   // then ballot_sync the bits and write the result to shmem
   // after we fill shared mem memcpy it out in a blob.
-  auto group = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
+  auto const group = cooperative_groups::this_thread_block();
+  auto const warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
   // Initialize cuda barriers for each tile.
@@ -910,8 +910,8 @@ __global__ void copy_from_rows(const size_type num_rows, const size_type num_col
   // to speed up some of the random access memory we do, we copy col_sizes and col_offsets
   // to shared memory for each of the tiles that we work on
 
-  auto group = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
+  auto const group = cooperative_groups::this_thread_block();
+  auto const warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
   extern __shared__ int8_t shared[];
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
@@ -1028,8 +1028,8 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
   // then ballot_sync the bits and write the result to shmem
   // after we fill shared mem memcpy it out in a blob.
   // probably need knobs for number of rows vs columns to balance read/write
-  auto group = cooperative_groups::this_thread_block();
-  auto warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
+  auto const group = cooperative_groups::this_thread_block();
+  auto const warp = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
 
 #ifdef ASYNC_MEMCPY_SUPPORTED
   // Initialize cuda barriers for each tile.
