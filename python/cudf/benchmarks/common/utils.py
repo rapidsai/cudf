@@ -144,9 +144,6 @@ def benchmark_with_object(
         # to benchmark_with_object.
         parameters = inspect.signature(bm).parameters
 
-        # Note: This logic assumes that any benchmark using this fixture has at
-        # least two parameters since they must be using both the
-        # pytest-benchmark `benchmark` fixture and the cudf object.
         params_str = ", ".join(f"{p}" for p in parameters if p != cls)
         arg_str = ", ".join(f"{p}={p}" for p in parameters if p != cls)
 
