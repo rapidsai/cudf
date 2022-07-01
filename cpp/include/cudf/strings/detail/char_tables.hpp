@@ -35,7 +35,7 @@ using character_flags_table_type = std::uint8_t;
  */
 const character_flags_table_type* get_character_flags_table();
 
-// utilities to dissect a char-table flag
+// utilities to dissect a character-table flag
 constexpr uint8_t IS_DECIMAL(uint8_t x) { return ((x) & (1 << 0)); }
 constexpr uint8_t IS_NUMERIC(uint8_t x) { return ((x) & (1 << 1)); }
 constexpr uint8_t IS_DIGIT(uint8_t x) { return ((x) & (1 << 2)); }
