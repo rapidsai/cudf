@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
+#include <cudf/strings/string.cuh>
 #include <cudf/utilities/span.hpp>
 #include <io/utilities/trie.cuh>
 
@@ -129,6 +130,131 @@ constexpr uint8_t decode_digit(char c, bool* valid_flag)
 
   *valid_flag = false;
   return 0;
+}
+
+/**
+ * @brief This function converts the given string into a floating point double value.
+ *
+ * This will also map strings containing "NaN", "Inf", etc. to the appropriate float values.
+ *
+ * This function will also handle scientific notation format.
+ * @tparam is_check_validity If true, the function return `error_result` if the input string is
+ * not a valid floating point number
+ * @param begin Beginning of the string to convert
+ * @param end End of the string to convert
+ * @param error_result Value to return if the input string is not a valid floating point number
+ * @param decimal_char The decimal point character
+ * @param thousands_char The thousands separator character
+ * @return double Floating point value of the string
+ */
+template <bool is_check_validity>
+constexpr inline double stod(const char* begin,
+                             const char* end,
+                             double error_result = {},
+                             char decimal_char   = '.',
+                             char thousands_char = ',')
+{
+  bool all_digits_valid = true;
+  if (end == begin) return 0.0;
+  int8_t sign{1};
+  if (*begin == '-' || *begin == '+') {
+    sign = (*begin == '-' ? -1 : 1);
+    ++begin;
+  }
+
+  // special strings: NaN, Inf
+  if ((begin < end) && *begin > '9') {
+    auto const size = static_cast<size_type>(thrust::distance(begin, end));
+    if (strings::is_nan_str(begin, size)) return std::numeric_limits<double>::quiet_NaN();
+    if (strings::is_inf_str(begin, size)) return sign * std::numeric_limits<double>::infinity();
+  }
+
+  // Parse and store the mantissa as much as we can,
+  // until we are about to exceed the limit of uint64_t
+  constexpr uint64_t max_holding = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
+  uint64_t digits                = 0;
+  int exp_off                    = 0;
+  bool decimal                   = false;
+  while (begin < end) {
+    char ch = *begin;
+    if (ch == decimal_char) {
+      decimal = true;
+      ++begin;
+      continue;
+    } else if (ch == thousands_char || ch == '+') {
+      ++begin;
+      continue;
+    }
+    // if (ch < '0' || ch > '9') break;
+    if (ch == 'e' || ch == 'E') break;
+    if (digits > max_holding)
+      exp_off += (int)!decimal;
+    else {
+      if (ch < '0' || ch > '9') all_digits_valid = false;
+      if (!all_digits_valid) break;
+      digits = (digits * 10L) + (ch - '0');
+      if (digits > max_holding) {
+        digits = digits / 10L;
+        exp_off += (int)!decimal;
+      } else
+        exp_off -= (int)decimal;
+    }
+    ++begin;
+  }
+  if constexpr (is_check_validity)
+    if (!all_digits_valid) return error_result;
+  if (digits == 0) return sign * static_cast<double>(0);
+
+  // check for exponent char
+  int exp_ten  = 0;
+  int exp_sign = 1;
+  if (begin < end) {
+    char ch = *begin++;
+    if (ch == 'e' || ch == 'E') {
+      if (begin < end) {
+        ch = *begin;
+        if (ch == '-' || ch == '+') {
+          exp_sign = (ch == '-' ? -1 : 1);
+          ++begin;
+        }
+        while (begin < end) {
+          ch = *begin++;
+          if (ch < '0' || ch > '9') all_digits_valid = false;  // if invalid break
+          if (!all_digits_valid) break;
+          exp_ten = (exp_ten * 10) + (ch - '0');
+        }
+      }
+    }
+  }
+  if constexpr (is_check_validity)
+    if (!all_digits_valid) return error_result;
+
+  int const num_digits = static_cast<int>(log10(digits)) + 1;
+  exp_ten *= exp_sign;
+  exp_ten += exp_off;
+  exp_ten += num_digits - 1;
+  if (exp_ten > std::numeric_limits<double>::max_exponent10) {
+    return sign > 0 ? std::numeric_limits<double>::infinity()
+                    : -std::numeric_limits<double>::infinity();
+  }
+
+  double base = sign * static_cast<double>(digits);
+
+  exp_ten += 1 - num_digits;
+  // If 10^exp_ten would result in a subnormal value, the base and
+  // exponent should be adjusted so that 10^exp_ten is a normal value
+  auto const subnormal_shift = std::numeric_limits<double>::min_exponent10 - exp_ten;
+  if (subnormal_shift > 0) {
+    // Handle subnormal values. Ensure that both base and exponent are
+    // normal values before computing their product.
+    base = base / exp10(static_cast<double>(num_digits - 1 + subnormal_shift));
+    exp_ten += num_digits - 1;  // adjust exponent
+    auto const exponent = exp10(static_cast<double>(exp_ten + subnormal_shift));
+    return base * exponent;
+  }
+
+  double const exponent = exp10(static_cast<double>(std::abs(exp_ten)));
+  return exp_ten < 0 ? base / exponent : base * exponent;
 }
 
 // Converts character to lowercase.
