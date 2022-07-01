@@ -83,7 +83,7 @@ std::unique_ptr<column> concatenate(
  *
  * @param tables_to_concat host_span of table views to be concatenated into a single table
  * @param mr Device memory resource used to allocate the returned table's device memory
- * @return std::unique_ptr<table> single table having all the rows from the elements of
+ * @return A single table having all the rows from the elements of
  * `tables_to_concat` respectively in the same order.
  */
 std::unique_ptr<table> concatenate(
