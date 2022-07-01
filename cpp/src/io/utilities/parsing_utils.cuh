@@ -358,6 +358,26 @@ constexpr T parse_numeric(const char* begin,
   return value * sign;
 }
 
+// Specialization for float
+template <>
+constexpr float parse_numeric<float, 10>(const char* begin,
+                                         const char* end,
+                                         parse_options_view const& opts,
+                                         float error_result)
+{
+  return stod<true>(begin, end, error_result, opts.decimal, opts.thousands);
+}
+
+// Specialization for double
+template <>
+constexpr double parse_numeric<double, 10>(const char* begin,
+                                           const char* end,
+                                           parse_options_view const& opts,
+                                           double error_result)
+{
+  return stod<true>(begin, end, error_result, opts.decimal, opts.thousands);
+}
+
 namespace gpu {
 /**
  * @brief CUDA kernel iterates over the data until the end of the current field
