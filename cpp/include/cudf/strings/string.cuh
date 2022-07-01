@@ -54,6 +54,13 @@ inline __device__ bool is_integer(string_view const& d_str)
            thrust::seq, begin, end, [] __device__(auto chr) { return chr >= '0' && chr <= '9'; });
 }
 
+// @cond
+inline constexpr bool is_nan_str(const char* ptr, size_type size)
+{
+  return (size == 3) && (ptr[0] == 'N' || ptr[0] == 'n') && (ptr[1] == 'A' || ptr[1] == 'a') &&
+         (ptr[2] == 'N' || ptr[2] == 'n');
+}
+// @endcond
 /**
  * @brief Returns true if input contains the not-a-number string.
  *
@@ -63,23 +70,12 @@ inline __device__ bool is_integer(string_view const& d_str)
  */
 inline __device__ bool is_nan_str(string_view const& d_str)
 {
-  auto const ptr = d_str.data();
-  return (d_str.size_bytes() == 3) && (ptr[0] == 'N' || ptr[0] == 'n') &&
-         (ptr[1] == 'A' || ptr[1] == 'a') && (ptr[2] == 'N' || ptr[2] == 'n');
+  return is_nan_str(d_str.data(), d_str.size_bytes());
 }
 
-/**
- * @brief Returns true if input contains the infinity string.
- *
- * The following are valid for this function: "INF", "INFINITY", and "Inf"
- * @param d_str input string
- * @return true if input is as valid Inf string.
- */
-inline __device__ bool is_inf_str(string_view const& d_str)
+// @cond
+inline constexpr bool is_inf_str(const char* ptr, size_type size)
 {
-  auto const ptr  = d_str.data();
-  auto const size = d_str.size_bytes();
-
   if (size != 3 && size != 8) return false;
 
   auto const prefix_valid = (ptr[0] == 'I' || ptr[0] == 'i') && (ptr[1] == 'N' || ptr[1] == 'n') &&
@@ -90,7 +86,61 @@ inline __device__ bool is_inf_str(string_view const& d_str)
                           (ptr[5] == 'I' || ptr[5] == 'i') && (ptr[6] == 'T' || ptr[6] == 't') &&
                           (ptr[7] == 'Y' || ptr[7] == 'y')));
 }
+// @endcond
+/**
+ * @brief Returns true if input contains the infinity string.
+ *
+ * The following are valid for this function: "INF", "INFINITY", and "Inf"
+ * @param d_str input string
+ * @return true if input is as valid Inf string.
+ */
+inline __device__ bool is_inf_str(string_view const& d_str)
+{
+  return is_inf_str(d_str.data(), d_str.size_bytes());
+}
 
+// @cond
+constexpr inline bool is_float(const char* data,
+                               size_type bytes,
+                               char decimal_char   = '.',
+                               char thousands_char = ',')
+{
+  if (bytes == 0) return false;
+  bool decimal_found  = false;
+  bool exponent_found = false;
+  // sign character allowed at the beginning of the string
+  size_type ch_idx = (*data == '-' || *data == '+') ? 1 : 0;
+
+  bool result = ch_idx < bytes;
+  // check for nan and infinity strings
+  if (result && data[ch_idx] > '9') {
+    auto const [inf_begin, inf_size] = std::pair{data + ch_idx, bytes - ch_idx};
+    if (is_nan_str(inf_begin, inf_size) || is_inf_str(inf_begin, inf_size)) return true;
+  }
+
+  // check for float chars [0-9] and a single decimal '.'
+  // and scientific notation [eE][+-][0-9]
+  for (; ch_idx < bytes; ++ch_idx) {
+    auto chr = data[ch_idx];
+    if (chr >= '0' && chr <= '9') continue;
+    if (!decimal_found && chr == decimal_char) {
+      decimal_found = true;  // no more decimals
+      continue;
+    } else if (chr == thousands_char) {
+      continue;
+    }
+    if (!exponent_found && (chr == 'e' || chr == 'E')) {
+      if (ch_idx + 1 < bytes) chr = data[ch_idx + 1];
+      if (chr == '-' || chr == '+') ++ch_idx;
+      decimal_found  = true;  // no decimal allowed in exponent
+      exponent_found = true;  // no more exponents
+      continue;
+    }
+    return false;
+  }
+  return result;
+}
+// @endcond
 /**
  * @brief Returns `true` if all characters in the string
  * are valid for conversion to a float type.
@@ -112,40 +162,7 @@ inline __device__ bool is_inf_str(string_view const& d_str)
  */
 inline __device__ bool is_float(string_view const& d_str)
 {
-  if (d_str.empty()) return false;
-  bool decimal_found  = false;
-  bool exponent_found = false;
-  size_type bytes     = d_str.size_bytes();
-  const char* data    = d_str.data();
-  // sign character allowed at the beginning of the string
-  size_type ch_idx = (*data == '-' || *data == '+') ? 1 : 0;
-
-  bool result = ch_idx < bytes;
-  // check for nan and infinity strings
-  if (result && data[ch_idx] > '9') {
-    auto const inf_nan = string_view(data + ch_idx, bytes - ch_idx);
-    if (is_nan_str(inf_nan) || is_inf_str(inf_nan)) return true;
-  }
-
-  // check for float chars [0-9] and a single decimal '.'
-  // and scientific notation [eE][+-][0-9]
-  for (; ch_idx < bytes; ++ch_idx) {
-    auto chr = data[ch_idx];
-    if (chr >= '0' && chr <= '9') continue;
-    if (!decimal_found && chr == '.') {
-      decimal_found = true;  // no more decimals
-      continue;
-    }
-    if (!exponent_found && (chr == 'e' || chr == 'E')) {
-      if (ch_idx + 1 < bytes) chr = data[ch_idx + 1];
-      if (chr == '-' || chr == '+') ++ch_idx;
-      decimal_found  = true;  // no decimal allowed in exponent
-      exponent_found = true;  // no more exponents
-      continue;
-    }
-    return false;
-  }
-  return result;
+  return is_float(d_str.data(), d_str.size_bytes());
 }
 
 /** @} */  // end of group
