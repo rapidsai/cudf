@@ -3372,7 +3372,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
       .max_page_size_rows(page_rows);
   cudf_io::write_parquet(out_opts);
 
-  // check first page header and make sure it has only 5000 values
+  // check first page header and make sure it has only page_rows values
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
 
