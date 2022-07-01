@@ -160,6 +160,7 @@ class Frame(BinaryOperand, Scannable):
                 if col in result._data:
                     if weakref.getweakrefcount(self._data[col]) > 0:
                         self._data[col] = self._data[col].custom_deep_copy()
+                        self._weak_ref[col] = weakref.ref(self._data[col])
 
                     self._data[col]._mimic_inplace(
                         result._data[col], inplace=True

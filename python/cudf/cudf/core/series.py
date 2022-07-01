@@ -149,6 +149,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
             self._frame._column[key] = value
         else:
             self._frame._column = self._frame._column.custom_deep_copy()
+            self._frame._data._weak_ref[self._frame.name] = weakref.ref(self._frame._column)
             self._frame._column[key] = value
 
 
