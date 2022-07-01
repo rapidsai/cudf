@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2022, NVIDIA CORPORATION.
 
 import inspect
 import textwrap
