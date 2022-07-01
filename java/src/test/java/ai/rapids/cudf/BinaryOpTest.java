@@ -91,12 +91,16 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   public static ColumnVector forEach(DType retType, ColumnVector lhs, ColumnVector rhs, CpuOpVV op) {
+    return forEach(retType, lhs, rhs, op, false);
+  }
+
+  public static ColumnVector forEach(DType retType, ColumnVector lhs, ColumnVector rhs, CpuOpVV op, boolean evalNulls) {
     int len = (int)lhs.getRowCount();
     try (HostColumnVector hostLHS  = lhs.copyToHost();
          HostColumnVector hostRHS = rhs.copyToHost();
          Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (hostLHS.isNull(i) || hostRHS.isNull(i)) {
+        if (!evalNulls && (hostLHS.isNull(i) || hostRHS.isNull(i))) {
           builder.appendNull();
         } else {
           op.computeNullSafe(builder, hostLHS, hostRHS, i);
@@ -107,11 +111,15 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   public static <S> ColumnVector forEachS(DType retType, ColumnVector lhs, S rhs, CpuOpVS<S> op) {
+    return forEachS(retType, lhs, rhs, op, false);
+  }
+
+  public static <S> ColumnVector forEachS(DType retType, ColumnVector lhs, S rhs, CpuOpVS<S> op, boolean evalNulls) {
     int len = (int)lhs.getRowCount();
     try (HostColumnVector hostLHS = lhs.copyToHost();
          Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (hostLHS.isNull(i) || rhs == null) {
+        if (!evalNulls && (hostLHS.isNull(i) || rhs == null)) {
           builder.appendNull();
         } else {
           op.computeNullSafe(builder, hostLHS, rhs, i);
@@ -122,49 +130,19 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   public static <S> ColumnVector forEachS(DType retType, S lhs, ColumnVector rhs, CpuOpSV<S> op) {
+    return forEachS(retType, lhs, rhs, op, false);
+  }
+
+  public static <S> ColumnVector forEachS(DType retType, S lhs, ColumnVector rhs, CpuOpSV<S> op, boolean evalNulls) {
     int len = (int)rhs.getRowCount();
     try (HostColumnVector hostRHS = rhs.copyToHost();
         Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (hostRHS.isNull(i) || lhs == null) {
+        if (!evalNulls && (hostRHS.isNull(i) || lhs == null)) {
           builder.appendNull();
         } else {
           op.computeNullSafe(builder, lhs, hostRHS, i);
         }
-      }
-      return builder.buildAndPutOnDevice();
-    }
-  }
-
-  public static ColumnVector forEachEvalNulls(DType retType, ColumnVector lhs, ColumnVector rhs, CpuOpVV op) {
-    int len = (int)lhs.getRowCount();
-    try (HostColumnVector hostLHS  = lhs.copyToHost();
-         HostColumnVector hostRHS = rhs.copyToHost();
-         Builder builder = HostColumnVector.builder(retType, len)) {
-      for (int i = 0; i < len; i++) {
-        op.computeNullSafe(builder, hostLHS, hostRHS, i);
-      }
-      return builder.buildAndPutOnDevice();
-    }
-  }
-
-  public static <S> ColumnVector forEachSEvalNulls(DType retType, ColumnVector lhs, S rhs, CpuOpVS<S> op) {
-    int len = (int)lhs.getRowCount();
-    try (HostColumnVector hostLHS = lhs.copyToHost();
-         Builder builder = HostColumnVector.builder(retType, len)) {
-      for (int i = 0; i < len; i++) {
-        op.computeNullSafe(builder, hostLHS, rhs, i);
-      }
-      return builder.buildAndPutOnDevice();
-    }
-  }
-
-  public static <S> ColumnVector forEachSEvalNulls(DType retType, S lhs, ColumnVector rhs, CpuOpSV<S> op) {
-    int len = (int)rhs.getRowCount();
-    try (HostColumnVector hostRHS = rhs.copyToHost();
-         Builder builder = HostColumnVector.builder(retType, len)) {
-      for (int i = 0; i < len; i++) {
-        op.computeNullSafe(builder, lhs, hostRHS, i);
       }
       return builder.buildAndPutOnDevice();
     }
@@ -950,24 +928,22 @@ public class BinaryOpTest extends CudfTestBase {
       try (ColumnVector intscalar = ColumnVector.fromInts(4);
            Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answersv = s.notEqualTo(structcv1);
-           ColumnVector expectedsv = forEachSEvalNulls(DType.BOOL8, 4, icv1,
-           (b, l, r, i) -> b.append(r.isNull(i) ? true : l != r.getInt(i)))) {
+           ColumnVector expectedsv = forEachS(DType.BOOL8, 4, icv1,
+           (b, l, r, i) -> b.append(r.isNull(i) ? true : l != r.getInt(i)), true)) {
         assertColumnsAreEqual(expectedsv, answersv, "scalar struct int32 != struct int32");
       }
 
       try (ColumnVector intscalar = ColumnVector.fromInts(4);
            Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answervs = structcv1.notEqualTo(s);
-           ColumnVector expectedvs = forEachSEvalNulls(DType.BOOL8, icv1, 4,
-           (b, l, r, i) -> b.append(l.isNull(i) ? true : l.getInt(i) != r))) {
+           ColumnVector expectedvs = forEachS(DType.BOOL8, icv1, 4,
+           (b, l, r, i) -> b.append(l.isNull(i) ? true : l.getInt(i) != r), true)) {
         assertColumnsAreEqual(expectedvs, answervs, "struct int32 != scalar struct int32");
       }
 
-      try (ColumnVector intscalar = ColumnVector.fromInts(4);
-           Scalar s = Scalar.structFromColumnViews(intscalar);
-           ColumnVector answervv = structcv1.notEqualTo(structcv2);
-           ColumnVector expectedvv = forEachEvalNulls(DType.BOOL8, icv1, icv2,
-           (b, l, r, i) -> b.append(l.isNull(i) ? !r.isNull(i) : r.isNull(i) || l.getInt(i) != r.getInt(i)))) {
+      try (ColumnVector answervv = structcv1.notEqualTo(structcv2);
+           ColumnVector expectedvv = forEach(DType.BOOL8, icv1, icv2,
+           (b, l, r, i) -> b.append(l.isNull(i) ? !r.isNull(i) : r.isNull(i) || l.getInt(i) != r.getInt(i)), true)) {
         assertColumnsAreEqual(expectedvv, answervv, "struct int32 != struct int32");
       }
     }
@@ -1136,24 +1112,22 @@ public class BinaryOpTest extends CudfTestBase {
       try (ColumnVector intscalar = ColumnVector.fromInts(4);
            Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answersv = s.greaterThan(structcv1);
-           ColumnVector expectedsv = forEachSEvalNulls(DType.BOOL8, 4, icv1,
-           (b, l, r, i) -> b.append(r.isNull(i) ? true : l > r.getInt(i)))) {
+           ColumnVector expectedsv = forEachS(DType.BOOL8, 4, icv1,
+           (b, l, r, i) -> b.append(r.isNull(i) ? true : l > r.getInt(i)), true)) {
         assertColumnsAreEqual(expectedsv, answersv, "scalar struct int32 > struct int32");
       }
 
       try (ColumnVector intscalar = ColumnVector.fromInts(4);
            Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answervs = structcv1.greaterThan(s);
-           ColumnVector expectedvs = forEachSEvalNulls(DType.BOOL8, icv1, 4,
-           (b, l, r, i) -> b.append(l.isNull(i) ? false : l.getInt(i) > r))) {
+           ColumnVector expectedvs = forEachS(DType.BOOL8, icv1, 4,
+           (b, l, r, i) -> b.append(l.isNull(i) ? false : l.getInt(i) > r), true)) {
         assertColumnsAreEqual(expectedvs, answervs, "struct int32 > scalar struct int32");
       }
 
-      try (ColumnVector intscalar = ColumnVector.fromInts(4);
-           Scalar s = Scalar.structFromColumnViews(intscalar);
-           ColumnVector answervv = structcv1.greaterThan(structcv2);
-           ColumnVector expectedvv = forEachEvalNulls(DType.BOOL8, icv1, icv2,
-           (b, l, r, i) -> b.append(l.isNull(i) ? false : r.isNull(i) || l.getInt(i) > r.getInt(i)))) {
+      try (ColumnVector answervv = structcv1.greaterThan(structcv2);
+           ColumnVector expectedvv = forEach(DType.BOOL8, icv1, icv2,
+           (b, l, r, i) -> b.append(l.isNull(i) ? false : r.isNull(i) || l.getInt(i) > r.getInt(i)), true)) {
         assertColumnsAreEqual(expectedvv, answervv, "struct int32 > struct int32");
       }
     }
@@ -1246,24 +1220,22 @@ public class BinaryOpTest extends CudfTestBase {
       try (ColumnVector intscalar = ColumnVector.fromInts(4);
            Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answersv = s.lessOrEqualTo(structcv1);
-           ColumnVector expectedsv = forEachSEvalNulls(DType.BOOL8, 4, icv1,
-           (b, l, r, i) -> b.append(r.isNull(i) ? false : l <= r.getInt(i)))) {
+           ColumnVector expectedsv = forEachS(DType.BOOL8, 4, icv1,
+           (b, l, r, i) -> b.append(r.isNull(i) ? false : l <= r.getInt(i)), true)) {
         assertColumnsAreEqual(expectedsv, answersv, "scalar struct int32 <= struct int32");
       }
 
       try (ColumnVector intscalar = ColumnVector.fromInts(4);
            Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answervs = structcv1.lessOrEqualTo(s);
-           ColumnVector expectedvs = forEachSEvalNulls(DType.BOOL8, icv1, 4,
-           (b, l, r, i) -> b.append(l.isNull(i) ? true : l.getInt(i) <= r))) {
+           ColumnVector expectedvs = forEachS(DType.BOOL8, icv1, 4,
+           (b, l, r, i) -> b.append(l.isNull(i) ? true : l.getInt(i) <= r), true)) {
         assertColumnsAreEqual(expectedvs, answervs, "struct int32 <= scalar struct int32");
       }
 
-      try (ColumnVector intscalar = ColumnVector.fromInts(4);
-           Scalar s = Scalar.structFromColumnViews(intscalar);
-           ColumnVector answervv = structcv1.lessOrEqualTo(structcv2);
-           ColumnVector expectedvv = forEachEvalNulls(DType.BOOL8, icv1, icv2,
-           (b, l, r, i) -> b.append(l.isNull(i) ? true : !r.isNull(i) && l.getInt(i) <= r.getInt(i)))) {
+      try (ColumnVector answervv = structcv1.lessOrEqualTo(structcv2);
+           ColumnVector expectedvv = forEach(DType.BOOL8, icv1, icv2,
+           (b, l, r, i) -> b.append(l.isNull(i) ? true : !r.isNull(i) && l.getInt(i) <= r.getInt(i)), true)) {
         assertColumnsAreEqual(expectedvv, answervv, "struct int32 <= struct int32");
       }
     }
