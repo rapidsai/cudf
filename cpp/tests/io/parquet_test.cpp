@@ -194,9 +194,12 @@ std::unique_ptr<cudf::column> make_parquet_list_col(
                offsets_size, offsets.release(), std::move(child), 0, rmm::device_buffer{});
 }
 
-// function to read parquet file metadata from the footer.
-int read_footer(std::unique_ptr<cudf_io::datasource>& source,
-                cudf_io::parquet::FileMetaData* file_meta_data)
+// given a datasource pointing to a parquet file, read the footer
+// of the file to populate the FileMetaData pointed to by file_meta_data.
+// returns true on success, false if the file is invalid in some way that
+// prevents reading and parsing the footer.
+bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
+                 cudf_io::parquet::FileMetaData* file_meta_data)
 {
   constexpr auto header_len = sizeof(cudf_io::parquet::file_header_s);
   constexpr auto ender_len  = sizeof(cudf_io::parquet::file_ender_s);
@@ -208,15 +211,18 @@ int read_footer(std::unique_ptr<cudf_io::datasource>& source,
   const auto ender_buffer = source->host_read(len - ender_len, ender_len);
   const auto ender = reinterpret_cast<const cudf_io::parquet::file_ender_s*>(ender_buffer->data());
 
-  if (not(header->magic == cudf_io::parquet::parquet_magic)) return -1;
-  if (not(ender->magic == cudf_io::parquet::parquet_magic)) return -1;
+  // a valid parquet file must begin and end with "PAR1"
+  if (not(header->magic == cudf_io::parquet::parquet_magic)) return false;
+  if (not(ender->magic == cudf_io::parquet::parquet_magic)) return false;
 
+  // parquet files end with 4-byte footer_length and 4-byte magic == "PAR1"
+  // seek backwards from the end of the file (footer_length + 8 bytes of ender)
   const auto footer_buffer =
     source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
   cudf_io::parquet::CompactProtocolReader cp(footer_buffer->data(), ender->footer_len);
-  if (not cp.read(file_meta_data)) return -1;
 
-  return 0;
+  // returns true on success
+  return cp.read(file_meta_data);
 }
 
 // Base test fixture for tests
@@ -3376,7 +3382,7 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
 
-  EXPECT_EQ(read_footer(source, &fmd), 0);
+  EXPECT_TRUE(read_footer(source, &fmd));
   EXPECT_GT(fmd.row_groups.size(), 0);
   EXPECT_EQ(fmd.row_groups[0].columns.size(), 1);
   auto& first_chunk = fmd.row_groups[0].columns[0].meta_data;
