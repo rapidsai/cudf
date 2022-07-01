@@ -1,7 +1,6 @@
 # Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import inspect
-import sys
 import textwrap
 
 import numpy as np
@@ -82,7 +81,6 @@ def pandas_comparison_test(*args, assert_func=assert_eq):
 
 @pandas_comparison_test
 def test_init(lib):
-    print(f"test1, {cudf}", file=sys.stderr)
     data = [
         (5, "cats", "jump", np.nan),
         (2, "dogs", "dig", 7.5),
@@ -93,7 +91,6 @@ def test_init(lib):
 
 @pandas_comparison_test()
 def test_init2(lib):
-    print(f"test2, {cudf}", file=sys.stderr)
     data = [
         (5, "cats", "jump", np.nan),
         (2, "dogs", "dig", 7.5),
@@ -113,7 +110,11 @@ def dt():
 
 @pandas_comparison_test
 def test_init4(lib, dt):
-    print(f"test4, {lib}", file=sys.stderr)
+    return lib.DataFrame(dt)
+
+
+@pandas_comparison_test
+def test_init7(dt, lib):
     return lib.DataFrame(dt)
 
 
@@ -129,7 +130,6 @@ def test_init4(lib, dt):
     ],
 )
 def test_init5(lib, data):
-    print(f"test5, {lib}", file=sys.stderr)
     return lib.DataFrame(data)
 
 
@@ -145,7 +145,6 @@ def test_init5(lib, data):
 )
 @pandas_comparison_test
 def test_init6(lib, data):
-    print(f"test6, {lib}", file=sys.stderr)
     return lib.DataFrame(data)
 
 
@@ -163,7 +162,6 @@ def test_init6(lib, data):
 )
 @pandas_comparison_test
 def test_from_pandas(lib, df):
-    print(f"test_from_pandas, {lib}", file=sys.stderr)
     return lib.from_pandas(df) if _is_cudf(lib) else df
 
 
@@ -185,5 +183,4 @@ def custom_assert(expected, got):
 )
 @pandas_comparison_test(assert_func=custom_assert)
 def test_from_pandas_custom_assert(lib, df):
-    print(f"test_from_pandas_custom_assert, {lib}", file=sys.stderr)
     return lib.from_pandas(df) if _is_cudf(lib) else df
