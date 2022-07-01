@@ -1351,7 +1351,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 new_data[name_j] = self._data[name_j]
             elif k == name_j:
                 new_data[name_i] = self._data[name_i]
-        if None in self.names:
+        if [None] * len(self.names) == self.names:
             return MultiIndex._from_data(new_data).set_names(
                 names=[None] * len(self.names)
             )

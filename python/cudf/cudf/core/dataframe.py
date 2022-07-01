@@ -3272,7 +3272,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._n_largest_or_smallest(False, n, columns, keep)
 
     @_cudf_nvtx_annotate
-    def swaplevel(self, i=-2, j=-1, Axis=0):
+    def swaplevel(self, i=-2, j=-1, axis=0):
         """
         Swap level i with level j.
         Calling this method does not change the ordering of the values.
@@ -3326,11 +3326,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # To get axis number
         get_axis_number = {0: 0, "index": 0, "rows": 0, 1: 1, "columns": 1}
         try:
-            axis = get_axis_number[Axis]
+            axis = get_axis_number[axis]
         except KeyError:
-            raise ValueError(f"No axis named {Axis}")
-
-        assert axis in {0, 1}
+            raise ValueError(f"No axis named {axis}")
 
         if axis == 0:
             if not isinstance(result.index, MultiIndex):
