@@ -405,7 +405,7 @@ class ColumnAccessor(abc.MutableMapping):
                 x += nlevels
             if x >= self.nlevels:
                 raise IndexError(
-                    f"Level {x} out of bounds. " f"Index has {nlevels} levels."
+                    f"Level {x} out of bounds. Index has {nlevels} levels."
                 )
             return x
 
