@@ -220,12 +220,14 @@ class NumericalColumn(NumericalBaseColumn):
             if is_bool_dtype(self.dtype) or is_bool_dtype(other):
                 out_dtype = "bool"
 
-        lhs, rhs = (other, self) if reflect else (self, other)
+        if (
+            op == "__pow__"
+            and is_integer_dtype(self.dtype)
+            and (is_integer(other) or is_integer_dtype(other.dtype))
+        ):
+            op = "__int_pow__"
 
-        if op in {"__pow__"} and (
-            (is_integer(lhs) or is_integer_dtype(lhs.dtype)) and 
-            (is_integer(rhs) or is_integer_dtype(rhs.dtype)) ):
-            op = "__intpow__"
+        lhs, rhs = (other, self) if reflect else (self, other)
 
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
