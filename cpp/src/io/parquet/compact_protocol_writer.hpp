@@ -50,6 +50,8 @@ class CompactProtocolWriter {
   size_t write(const KeyValue&);
   size_t write(const ColumnChunk&);
   size_t write(const ColumnChunkMetaData&);
+  size_t write(const PageLocation&);
+  size_t write(const OffsetIndex&);
 
  protected:
   std::vector<uint8_t>& m_buf;
