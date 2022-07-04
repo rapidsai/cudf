@@ -1593,11 +1593,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv *
         *reinterpret_cast<cudf::column_view *>(j_view_handle)};
     cudf::jni::native_jstring pattern(env, pattern_obj);
 
-    return release_as_jlong(cudf::strings::findall(strings_column, pattern.get()));
-
+    return release_as_jlong(cudf::strings::findall_record(strings_column, pattern.get()));
   }    
-  CATCH_STD(env, 0);
-                                           
+  CATCH_STD(env, 0);                        
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_urlDecode(JNIEnv *env, jclass,
