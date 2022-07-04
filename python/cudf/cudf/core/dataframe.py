@@ -3588,8 +3588,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif how in {"leftsemi", "leftanti"}:
             merge_cls = MergeSemi
 
-        # TODO: the two isinstance checks below indicates that `_merge` should
-        # not be defined in `Frame`, but in `IndexedFrame`.
         return merge_cls(
             lhs,
             rhs,
