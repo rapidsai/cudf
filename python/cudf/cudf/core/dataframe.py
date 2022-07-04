@@ -2672,9 +2672,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
                 out[name] = _make_categorical_like(result, self._data[name])
             else:
-                # TODO: Can we reuse masks here? All columns will be of the
-                # same length, but unsure if there are any cases where the
-                # reference semantics will become problematic later on.
                 out_mask = cudf._lib.null_mask.create_null_mask(
                     len(col),
                     state=cudf._lib.null_mask.MaskState.ALL_NULL,
