@@ -48,6 +48,7 @@ from cudf.utils.utils import _array_ufunc, _cudf_nvtx_annotate
 T = TypeVar("T", bound="Frame")
 
 
+# TODO: It looks like Frame is missing a declaration of `copy`, need to add
 class Frame(BinaryOperand, Scannable):
     """A collection of Column objects with an optional index.
 
@@ -630,11 +631,7 @@ class Frame(BinaryOperand, Scannable):
         4    <NA>
         dtype: int64
         """
-        import cudf.core._internals.where
-
-        return cudf.core._internals.where.where(
-            frame=self, cond=cond, other=other, inplace=inplace
-        )
+        raise NotImplementedError
 
     @_cudf_nvtx_annotate
     def mask(self, cond, other=None, inplace=False):

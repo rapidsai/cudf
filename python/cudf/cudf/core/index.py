@@ -1307,6 +1307,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             Frame._repeat([*self._columns], repeats, axis), self._column_names
         )
 
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        result_col = super().where(cond, other, inplace)
+        return self._mimic_inplace(
+            _index_from_data({self.name: result_col}),
+            inplace=inplace,
+        )
+
 
 class NumericIndex(GenericIndex):
     """Immutable, ordered and sliceable sequence of labels.
