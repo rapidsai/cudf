@@ -2853,6 +2853,30 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         self._data.insert(name, value, loc=loc)
 
+    @property  # type:ignore
+    @_cudf_nvtx_annotate
+    def axes(self):
+        """
+        Return a list representing the axes of the DataFrame.
+
+        DataFrame.axes returns a list of two elements:
+        element zero is the row index and element one is the columns.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> cdf1 = cudf.DataFrame()
+        >>> cdf1["key"] = [0,0,1,1]
+        >>> cdf1["k2"] = [1,2,2,3]
+        >>> cdf1["val"] = [1,2,3,4]
+        >>> cdf1["temp"] = [-1,2,2,3]
+        >>> cdf1.axes
+        [RangeIndex(start=0, stop=4, step=1),
+            Index(['key', 'k2', 'val', 'temp'], dtype='object')]
+
+        """
+        return [self._index, self._data.to_pandas_index()]
+
     def diff(self, periods=1, axis=0):
         """
         First discrete difference of element.
