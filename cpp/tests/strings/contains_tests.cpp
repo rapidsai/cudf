@@ -244,14 +244,20 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
 
 TEST_F(StringsContainsTests, OctalTest)
 {
-  cudf::test::strings_column_wrapper strings({"A3", "B", "CDA3EY", ""});
+  cudf::test::strings_column_wrapper strings({"A3", "B", "CDA3EY", "", "99", "\a\t\r"});
   auto strings_view = cudf::strings_column_view(strings);
-  cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 1, 0});
-  auto results = cudf::strings::contains_re(strings_view, "\\101");
+  auto expected     = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 1, 0, 0, 0});
+  auto results      = cudf::strings::contains_re(strings_view, "\\101");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = cudf::strings::contains_re(strings_view, "\\1013");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   results = cudf::strings::contains_re(strings_view, "D*\\101\\063");
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results  = cudf::strings::contains_re(strings_view, "\\719");
+  expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 1, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results  = cudf::strings::contains_re(strings_view, "[\\7][\\11][\\15]");
+  expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

@@ -204,7 +204,7 @@ class regex_parser {
     auto c       = *_expr_ptr;
     auto digits  = 1;
     while ((c >= '0') && (c <= '7') && (digits < 3)) {
-      out_chr = (out_chr << 3) | (c - '0');
+      out_chr = (out_chr * 8) | (c - '0');
       c       = *(++_expr_ptr);
       ++digits;
     }
