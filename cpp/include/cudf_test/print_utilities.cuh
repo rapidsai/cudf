@@ -25,9 +25,7 @@
 
 #include <type_traits>
 
-namespace cudf {
-namespace test {
-namespace print {
+namespace cudf::test::print {
 
 constexpr int32_t hex_tag = 0;
 
@@ -139,6 +137,4 @@ void print_array(std::size_t count, rmm::cuda_stream_view stream, Ts... args)
   }
 }
 
-}  // namespace print
-}  // namespace test
-}  // namespace cudf
+}  // namespace cudf::test::print
