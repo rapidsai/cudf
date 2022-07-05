@@ -18,6 +18,7 @@ Attributes
 .. autosummary::
    :toctree: api/
 
+   Series.axes
    Series.index
    Series.values
    Series.data
