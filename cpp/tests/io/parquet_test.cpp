@@ -196,8 +196,8 @@ std::unique_ptr<cudf::column> make_parquet_list_col(
 
 // given a datasource pointing to a parquet file, read the footer
 // of the file to populate the FileMetaData pointed to by file_meta_data.
-// returns true on success, false if the file is invalid in some way that
-// prevents reading and parsing the footer.
+// returns true on success, false if the file metadata cannot be parsed.
+// throws cudf::logic_error if the file is invalid.
 bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
                  cudf_io::parquet::FileMetaData* file_meta_data)
 {
@@ -211,9 +211,13 @@ bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
   const auto ender_buffer = source->host_read(len - ender_len, ender_len);
   const auto ender = reinterpret_cast<const cudf_io::parquet::file_ender_s*>(ender_buffer->data());
 
-  // a valid parquet file must begin and end with "PAR1"
-  if (not(header->magic == cudf_io::parquet::parquet_magic)) return false;
-  if (not(ender->magic == cudf_io::parquet::parquet_magic)) return false;
+  // checks for valid header, footer, and file length
+  CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
+  CUDF_EXPECTS(header->magic == cudf_io::parquet::parquet_magic &&
+                 ender->magic == cudf_io::parquet::parquet_magic,
+               "Corrupted header or footer");
+  CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
+               "Incorrect footer length");
 
   // parquet files end with 4-byte footer_length and 4-byte magic == "PAR1"
   // seek backwards from the end of the file (footer_length + 8 bytes of ender)
@@ -3382,18 +3386,18 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
 
-  EXPECT_TRUE(read_footer(source, &fmd));
-  EXPECT_GT(fmd.row_groups.size(), 0);
-  EXPECT_EQ(fmd.row_groups[0].columns.size(), 1);
+  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
+  CUDF_EXPECTS(fmd.row_groups[0].columns.size() == 1, "Invalid number of columns");
   auto& first_chunk = fmd.row_groups[0].columns[0].meta_data;
-  EXPECT_GT(first_chunk.data_page_offset, 0);
+  CUDF_EXPECTS(first_chunk.data_page_offset > 0, "Invalid location for first data page");
 
   // read first data page header.  sizeof(ph) is not exact, but the thrift encoded
   // version should be smaller than size of the struct.
   cudf_io::parquet::PageHeader ph;
   const auto pg_hdr_buf = source->host_read(first_chunk.data_page_offset, sizeof(ph));
   cudf_io::parquet::CompactProtocolReader cp(pg_hdr_buf->data(), pg_hdr_buf->size());
-  EXPECT_TRUE(cp.read(&ph));
+  CUDF_EXPECTS(cp.read(&ph), "Cannot read page header");
 
   EXPECT_EQ(ph.data_page_header.num_values, page_rows);
 }
