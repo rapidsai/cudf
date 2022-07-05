@@ -60,14 +60,14 @@ __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeData(
     uint32_t max_uncompressed_block_size = 0;
     uint32_t num_compressed_blocks       = 0;
     uint32_t num_uncompressed_blocks     = 0;
-    while (cur + BLOCK_HEADER_SIZE < end) {
+    while (cur + block_header_size < end) {
       uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       auto const is_uncompressed = static_cast<bool>(block_len & 1);
       uint32_t uncompressed_size;
       device_span<uint8_t const>* init_in_ctl = nullptr;
       device_span<uint8_t>* init_out_ctl      = nullptr;
       block_len >>= 1;
-      cur += BLOCK_HEADER_SIZE;
+      cur += block_header_size;
       if (block_len > block_size || cur + block_len > end) {
         // Fatal
         num_compressed_blocks       = 0;
@@ -161,12 +161,12 @@ __global__ void __launch_bounds__(128, 8)
     uint32_t num_compressed_blocks  = 0;
     uint32_t max_compressed_blocks  = s->info.num_compressed_blocks;
 
-    while (cur + BLOCK_HEADER_SIZE < end) {
+    while (cur + block_header_size < end) {
       uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       auto const is_uncompressed = static_cast<bool>(block_len & 1);
       uint32_t uncompressed_size_est, uncompressed_size_actual;
       block_len >>= 1;
-      cur += BLOCK_HEADER_SIZE;
+      cur += block_header_size;
       if (cur + block_len > end) { break; }
       if (is_uncompressed) {
         uncompressed_size_est    = block_len;
@@ -383,11 +383,11 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
       for (;;) {
         uint32_t block_len;
 
-        if (cur + BLOCK_HEADER_SIZE > end || cur + BLOCK_HEADER_SIZE >= start + compressed_offset) {
+        if (cur + block_header_size > end || cur + block_header_size >= start + compressed_offset) {
           break;
         }
         block_len = cur[0] | (cur[1] << 8) | (cur[2] << 16);
-        cur += BLOCK_HEADER_SIZE;
+        cur += block_header_size;
         auto const is_uncompressed = static_cast<bool>(block_len & 1);
         block_len >>= 1;
         cur += block_len;

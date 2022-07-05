@@ -3278,6 +3278,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert isSupportedKeyType : "Map lookup by STRUCT and LIST keys is not supported.";
   }
 
+  /**
+   * Given a column of type List<Struct<X, Y>> and a key column of type X, return a column of type Y,
+   * where each row in the output column is the Y value corresponding to the X key.
+   * If the key is not found, the corresponding output value is null.
+   * @param keys the column view with keys to lookup in the column
+   * @return a column of values or nulls based on the lookup result
+   */
+  public final ColumnVector getMapValue(ColumnView keys) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert keys != null : "Lookup key may not be null";
+    return new ColumnVector(mapLookupForKeys(getNativeView(), keys.getNativeView()));
+  }
+
   /** 
    * Given a column of type List<Struct<X, Y>> and a key of type X, return a column of type Y,
    * where each row in the output column is the Y value corresponding to the X key.
@@ -3303,6 +3316,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert key != null : "Lookup key may not be null";
     assertIsSupportedMapKeyType(key.getType());
     return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
+  }
+
+  /** For a column of type List<Struct<_, _>> and a passed in key column, return a boolean
+   * column for all keys in the map. Each output row is true if the key exists in the corresponding map for
+   * that row, false otherwise. It will never return null for a row.
+   * @param keys the keys to lookup in the column
+   * @return a boolean column based on the lookup result
+   */
+  public final ColumnVector getMapKeyExistence(ColumnView keys) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert keys != null : "Lookup key may not be null";
+    assertIsSupportedMapKeyType(keys.getType());
+    return new ColumnVector(mapContainsKeys(getNativeView(), keys.getNativeView()));
   }
 
   /**
@@ -3912,6 +3938,30 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException
    */
   private static native long mapLookup(long columnView, long key) throws CudfException;
+
+  /**
+   * Native method for map lookup over a column of List<Struct<String,String>>
+   * The lookup column must have as many rows as the map column,
+   * and must match the key-type of the map.
+   * A column of values is returned, with the same number of rows as the map column.
+   * If a key is repeated in a map row, the value corresponding to the last matching
+   * key is returned.
+   * If a lookup key is null or not found, the corresponding value is null.
+   * @param columnView the column view handle of the map
+   * @param keys       the column view holding the keys
+   * @return a column of values corresponding the value of the lookup key.
+   * @throws CudfException
+   */
+  private static native long mapLookupForKeys(long columnView, long keys) throws CudfException;
+
+  /**
+   * Native method for check the existence of a key over a column of List<Struct<_, _>>
+   * @param columnView the column view handle of the map
+   * @param key the column view holding the keys
+   * @return boolean column handle of the result
+   * @throws CudfException
+   */
+  private static native long mapContainsKeys(long columnView, long key) throws CudfException;
 
   /**
    * Native method for check the existence of a key over a column of List<Struct<String,String>>

@@ -1590,7 +1590,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 # include different types that are not comparable.
                 names = sorted(names)
             except TypeError:
-                names = list(names)
+                # For pandas compatibility, we also try to handle the case
+                # where some column names are strings and others are ints. Just
+                # assume that everything that isn't a str is numerical, we
+                # can't sort anything else.
+                try:
+                    str_names = sorted(n for n in names if isinstance(n, str))
+                    non_str_names = sorted(
+                        n for n in names if not isinstance(n, str)
+                    )
+                    names = non_str_names + str_names
+                except TypeError:
+                    names = list(names)
         else:
             names = list(names)
 
@@ -1998,6 +2009,91 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if k not in lhs:
                     operands[k] = (left_default, v, reflect, None)
         return operands, index
+
+    @_cudf_nvtx_annotate
+    def scatter_by_map(
+        self, map_index, map_size=None, keep_index=True, **kwargs
+    ):
+        """Scatter to a list of dataframes.
+
+        Uses map_index to determine the destination
+        of each row of the original DataFrame.
+
+        Parameters
+        ----------
+        map_index : Series, str or list-like
+            Scatter assignment for each row
+        map_size : int
+            Length of output list. Must be >= uniques in map_index
+        keep_index : bool
+            Conserve original index values for each row
+
+        Returns
+        -------
+        A list of cudf.DataFrame objects.
+        """
+        # map_index might be a column name or array,
+        # make it a Column
+        if isinstance(map_index, str):
+            map_index = self._data[map_index]
+        elif isinstance(map_index, cudf.Series):
+            map_index = map_index._column
+        else:
+            map_index = as_column(map_index)
+
+        # Convert float to integer
+        if map_index.dtype.kind == "f":
+            map_index = map_index.astype(np.int32)
+
+        # Convert string or categorical to integer
+        if isinstance(map_index, cudf.core.column.StringColumn):
+            map_index = map_index.as_categorical_column(
+                "category"
+            ).as_numerical
+            warnings.warn(
+                "Using StringColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+        elif isinstance(map_index, cudf.core.column.CategoricalColumn):
+            map_index = map_index.as_numerical
+            warnings.warn(
+                "Using CategoricalColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+
+        if kwargs.get("debug", False) == 1 and map_size is not None:
+            count = map_index.distinct_count()
+            if map_size < count:
+                raise ValueError(
+                    f"ERROR: map_size must be >= {count} (got {map_size})."
+                )
+
+        partitioned_columns, output_offsets = libcudf.partitioning.partition(
+            [*(self._index._columns if keep_index else ()), *self._columns],
+            map_index,
+            map_size,
+        )
+        partitioned = self._from_columns_like_self(
+            partitioned_columns,
+            column_names=self._column_names,
+            index_names=self._index_names if keep_index else None,
+        )
+
+        # due to the split limitation mentioned
+        # here: https://github.com/rapidsai/cudf/issues/4607
+        # we need to remove first & last elements in offsets.
+        # TODO: Remove this after the above issue is fixed.
+        output_offsets = output_offsets[1:-1]
+
+        result = partitioned._split(output_offsets, keep_index=keep_index)
+
+        if map_size:
+            result += [
+                self._empty_like(keep_index)
+                for _ in range(map_size - len(result))
+            ]
+
+        return result
 
     @_cudf_nvtx_annotate
     def update(
@@ -2510,6 +2606,82 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.index = idx
         return df if not inplace else None
 
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        from cudf.core._internals.where import (
+            _check_and_cast_columns_with_other,
+            _make_categorical_like,
+        )
+
+        # First process the condition.
+        if isinstance(cond, Series):
+            cond = self._from_data_like_self(
+                {name: cond._column for name in self._column_names},
+            )
+        elif hasattr(cond, "__cuda_array_interface__"):
+            cond = DataFrame(
+                cond, columns=self._column_names, index=self.index
+            )
+        elif (
+            hasattr(cond, "__array_interface__")
+            and cond.__array_interface__["shape"] != self.shape
+        ):
+            raise ValueError("conditional must be same shape as self")
+        elif not isinstance(cond, DataFrame):
+            cond = cudf.DataFrame(cond)
+
+        if set(self._column_names).intersection(set(cond._column_names)):
+            if not self.index.equals(cond.index):
+                cond = cond.reindex(self.index)
+        else:
+            if cond.shape != self.shape:
+                raise ValueError(
+                    "Array conditional must be same shape as self"
+                )
+            # Setting `self` column names to `cond` as it has no column names.
+            cond._set_column_names_like(self)
+
+        # If other was provided, process that next.
+        if isinstance(other, DataFrame):
+            other_cols = [other._data[col] for col in self._column_names]
+        elif cudf.api.types.is_scalar(other):
+            other_cols = [other] * len(self._column_names)
+        elif isinstance(other, cudf.Series):
+            other_cols = other.to_pandas()
+        else:
+            other_cols = other
+
+        if len(self._columns) != len(other_cols):
+            raise ValueError(
+                """Replacement list length or number of data columns
+                should be equal to number of columns of self"""
+            )
+
+        out = {}
+        for (name, col), other_col in zip(self._data.items(), other_cols):
+            col, other_col = _check_and_cast_columns_with_other(
+                source_col=col,
+                other=other_col,
+                inplace=inplace,
+            )
+
+            if cond_col := cond._data.get(name):
+                result = cudf._lib.copying.copy_if_else(
+                    col, other_col, cond_col
+                )
+
+                out[name] = _make_categorical_like(result, self._data[name])
+            else:
+                out_mask = cudf._lib.null_mask.create_null_mask(
+                    len(col),
+                    state=cudf._lib.null_mask.MaskState.ALL_NULL,
+                )
+                out[name] = col.set_mask(out_mask)
+
+        return self._mimic_inplace(
+            self._from_data_like_self(out), inplace=inplace
+        )
+
     @docutils.doc_apply(
         doc_reset_index_template.format(
             klass="DataFrame",
@@ -2960,12 +3132,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
                 out = DataFrame(index=out_index)
             else:
-                out = DataFrame(
-                    index=self.index.replace(
-                        to_replace=list(index.keys()),
-                        value=list(index.values()),
-                    )
-                )
+                to_replace = list(index.keys())
+                vals = list(index.values())
+                is_all_na = vals.count(None) == len(vals)
+
+                try:
+                    index_data = {
+                        name: col.find_and_replace(to_replace, vals, is_all_na)
+                        for name, col in self.index._data.items()
+                    }
+                except OverflowError:
+                    index_data = self.index._data.copy(deep=True)
+
+                out = DataFrame(index=self.index._from_data(index_data))
         else:
             out = DataFrame(index=self.index)
 
@@ -4523,38 +4702,37 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not dataframe.columns.is_unique:
             raise ValueError("Duplicate column names are not allowed")
 
-        df = cls()
         # Set columns
+        data = {}
         for col_name, col_value in dataframe.items():
             # necessary because multi-index can return multiple
             # columns for a single key
             if len(col_value.shape) == 1:
-                df[col_name] = column.as_column(
+                data[col_name] = column.as_column(
                     col_value.array, nan_as_null=nan_as_null
                 )
             else:
                 vals = col_value.values.T
                 if vals.shape[0] == 1:
-                    df[col_name] = column.as_column(
+                    data[col_name] = column.as_column(
                         vals.flatten(), nan_as_null=nan_as_null
                     )
                 else:
                     if isinstance(col_name, tuple):
                         col_name = str(col_name)
                     for idx in range(len(vals.shape)):
-                        df[col_name] = column.as_column(
+                        data[col_name] = column.as_column(
                             vals[idx], nan_as_null=nan_as_null
                         )
+
+        index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
+        df = cls._from_data(data, index)
 
         # Set columns only if it is a MultiIndex
         if isinstance(dataframe.columns, pd.MultiIndex):
             df.columns = dataframe.columns
 
-        # Set index
-        index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
-        result = df.set_index(index)
-
-        return result
+        return df
 
     @classmethod
     @_cudf_nvtx_annotate

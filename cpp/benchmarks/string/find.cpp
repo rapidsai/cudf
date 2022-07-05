@@ -24,6 +24,7 @@
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <limits>
 
@@ -45,7 +46,7 @@ static void BM_find_scalar(benchmark::State& state, FindAPI find_api)
   cudf::test::strings_column_wrapper targets({"+", "-"});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     switch (find_api) {
       case find: cudf::strings::find(input, target); break;
       case find_multi:

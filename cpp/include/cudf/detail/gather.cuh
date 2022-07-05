@@ -32,6 +32,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -651,7 +652,7 @@ std::unique_ptr<table> gather(
   MapIterator gather_map_begin,
   MapIterator gather_map_end,
   out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   std::vector<std::unique_ptr<column>> destination_columns;
