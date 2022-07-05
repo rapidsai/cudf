@@ -774,6 +774,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _binaryop(self, other, op: str):
         return self._as_int64()._binaryop(other, op=op)
 
+    def join(
+        self, other, how="left", level=None, return_indexers=False, sort=False
+    ):
+        # TODO: pandas supports directly merging RangeIndex objects and can
+        # intelligently create RangeIndex outputs depending on the type of
+        # join. We need to implement that for the supported special cases.
+        return self._as_int64().join(other, how, level, return_indexers, sort)
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.
