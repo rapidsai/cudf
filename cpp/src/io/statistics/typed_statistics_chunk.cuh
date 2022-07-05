@@ -133,7 +133,8 @@ struct typed_statistics_chunk<T, true> {
       maximum_value = thrust::max<E>(maximum_value, union_member::get<E>(chunk.max_value));
     }
     if (chunk.has_sum) {
-      aggregate += detail::aggregation_type<A>::convert(union_member::get<A>(chunk.sum));
+      // aggregate += detail::aggregation_type<A>::convert(union_member::get<A>(chunk.sum));
+      aggregate += union_member::get<A>(chunk.sum);
     }
     non_nulls += chunk.non_nulls;
     null_count += chunk.null_count;
