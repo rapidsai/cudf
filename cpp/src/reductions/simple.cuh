@@ -57,7 +57,7 @@ namespace detail {
  */
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> simple_reduction(column_view const& col,
-                                         std::optional<std::reference_wrapper<const scalar>> init,
+                                         std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
@@ -109,7 +109,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 template <typename DecimalXX, typename Op>
 std::unique_ptr<scalar> fixed_point_reduction(
   column_view const& col,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -176,7 +176,7 @@ std::unique_ptr<scalar> fixed_point_reduction(
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> dictionary_reduction(
   column_view const& col,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -270,7 +270,7 @@ template <typename Op>
 struct bool_result_element_dispatcher {
   template <typename ElementType, std::enable_if_t<std::is_arithmetic_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -280,7 +280,7 @@ struct bool_result_element_dispatcher {
   template <typename ElementType,
             std::enable_if_t<not std::is_arithmetic_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
-                                     std::optional<std::reference_wrapper<const scalar>>,
+                                     std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -329,7 +329,7 @@ struct same_element_type_dispatcher {
                              (std::is_same_v<Op, cudf::reduction::op::min> ||
                               std::is_same_v<Op, cudf::reduction::op::max>)>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -353,7 +353,7 @@ struct same_element_type_dispatcher {
             std::enable_if_t<is_supported<ElementType>() && !cudf::is_fixed_point<ElementType>() &&
                              !std::is_same_v<ElementType, cudf::struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -370,7 +370,7 @@ struct same_element_type_dispatcher {
 
   template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -379,7 +379,7 @@ struct same_element_type_dispatcher {
 
   template <typename ElementType, std::enable_if_t<not is_supported<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
-                                     std::optional<std::reference_wrapper<const scalar>>,
+                                     std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -405,7 +405,7 @@ struct element_type_dispatcher {
             std::enable_if_t<std::is_floating_point_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
                                          data_type const output_type,
-                                         std::optional<std::reference_wrapper<const scalar>> init,
+                                         std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
@@ -428,7 +428,7 @@ struct element_type_dispatcher {
   template <typename ElementType, std::enable_if_t<std::is_integral_v<ElementType>>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
                                          data_type const output_type,
-                                         std::optional<std::reference_wrapper<const scalar>> init,
+                                         std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
@@ -458,7 +458,7 @@ struct element_type_dispatcher {
   template <typename ElementType, std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_type,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -476,7 +476,7 @@ struct element_type_dispatcher {
   template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_type,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -490,7 +490,7 @@ struct element_type_dispatcher {
                              not cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      data_type const,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {

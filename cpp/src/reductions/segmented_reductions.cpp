@@ -32,7 +32,7 @@ struct segmented_reduce_dispatch_functor {
   device_span<size_type const> offsets;
   data_type output_dtype;
   null_policy null_handling;
-  std::optional<std::reference_wrapper<const scalar>> init;
+  std::optional<std::reference_wrapper<scalar const>> init;
   rmm::cuda_stream_view stream;
   rmm::mr::device_memory_resource* mr;
 
@@ -40,7 +40,7 @@ struct segmented_reduce_dispatch_functor {
                                     device_span<size_type const> offsets,
                                     data_type output_dtype,
                                     null_policy null_handling,
-                                    std::optional<std::reference_wrapper<const scalar>> init,
+                                    std::optional<std::reference_wrapper<scalar const>> init,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
     : col(segmented_values),
@@ -98,7 +98,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          segmented_reduce_aggregation const& agg,
                                          data_type output_dtype,
                                          null_policy null_handling,
-                                         std::optional<std::reference_wrapper<const scalar>> init,
+                                         std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {

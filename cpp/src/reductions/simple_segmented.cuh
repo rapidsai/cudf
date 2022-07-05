@@ -55,9 +55,9 @@ namespace detail {
 
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
- * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
- * the reduced value is valid if any element in the segment is valid.
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
+ *                      reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is
+ *                      valid if any element in the segment is valid.
  * @param init Optional initial value of the reduction
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -68,7 +68,7 @@ std::unique_ptr<column> simple_segmented_reduction(
   column_view const& col,
   device_span<size_type const> offsets,
   null_policy null_handling,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -141,9 +141,9 @@ std::unique_ptr<column> simple_segmented_reduction(
 
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
- * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
- * the reduced value is valid if any element in the segment is valid.
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
+ *                      reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is
+ *                      valid if any element in the segment is valid.
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -244,9 +244,9 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
 
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
- * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
- * the reduced value is valid if any element in the segment is valid.
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
+ *                      reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is
+ *                      valid if any element in the segment is valid.
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -260,7 +260,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
   column_view const& col,
   device_span<size_type const> offsets,
   null_policy null_handling,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -277,7 +277,7 @@ std::unique_ptr<column> fixed_point_segmented_reduction(
   column_view const& col,
   device_span<size_type const> offsets,
   null_policy null_handling,
-  std::optional<std::reference_wrapper<const scalar>>,
+  std::optional<std::reference_wrapper<scalar const>>,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -297,7 +297,7 @@ struct bool_result_column_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -309,7 +309,7 @@ struct bool_result_column_dispatcher {
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,
-                                     std::optional<std::reference_wrapper<const scalar>>,
+                                     std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -342,7 +342,7 @@ struct same_column_type_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -355,7 +355,7 @@ struct same_column_type_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -369,7 +369,7 @@ struct same_column_type_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -381,7 +381,7 @@ struct same_column_type_dispatcher {
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,
-                                     std::optional<std::reference_wrapper<const scalar>>,
+                                     std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -409,7 +409,7 @@ struct column_type_dispatcher {
                                          device_span<size_type const> offsets,
                                          data_type const output_type,
                                          null_policy null_handling,
-                                         std::optional<std::reference_wrapper<const scalar>> init,
+                                         std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
@@ -429,7 +429,7 @@ struct column_type_dispatcher {
                                          device_span<size_type const> offsets,
                                          data_type const output_type,
                                          null_policy null_handling,
-                                         std::optional<std::reference_wrapper<const scalar>> init,
+                                         std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
@@ -448,9 +448,9 @@ struct column_type_dispatcher {
    * @param col Input column (must be numeric)
    * @param offsets Indices to segment boundaries
    * @param output_type Requested type of the scalar result
-   * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
-   * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
-   * the reduced value is valid if any element in the segment is valid.
+   * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
+   *                      reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is
+   *                      valid if any element in the segment is valid.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
@@ -460,7 +460,7 @@ struct column_type_dispatcher {
                                      device_span<size_type const> offsets,
                                      data_type const output_type,
                                      null_policy null_handling,
-                                     std::optional<std::reference_wrapper<const scalar>> init,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -478,7 +478,7 @@ struct column_type_dispatcher {
                                      device_span<size_type const>,
                                      data_type const,
                                      null_policy,
-                                     std::optional<std::reference_wrapper<const scalar>>,
+                                     std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {

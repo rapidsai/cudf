@@ -43,7 +43,7 @@ namespace reduction {
 std::unique_ptr<scalar> sum(
   column_view const& col,
   data_type const output_dtype,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -64,7 +64,7 @@ std::unique_ptr<scalar> sum(
 std::unique_ptr<scalar> min(
   column_view const& col,
   data_type const output_dtype,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -85,7 +85,7 @@ std::unique_ptr<scalar> min(
 std::unique_ptr<scalar> max(
   column_view const& col,
   data_type const output_dtype,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -107,7 +107,7 @@ std::unique_ptr<scalar> max(
 std::unique_ptr<scalar> any(
   column_view const& col,
   data_type const output_dtype,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -129,7 +129,7 @@ std::unique_ptr<scalar> any(
 std::unique_ptr<scalar> all(
   column_view const& col,
   data_type const output_dtype,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -151,7 +151,7 @@ std::unique_ptr<scalar> all(
 std::unique_ptr<scalar> product(
   column_view const& col,
   data_type const output_dtype,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -206,7 +206,7 @@ std::unique_ptr<scalar> mean(
  * @param col input column to compute variance
  * @param output_dtype data type of return type and typecast elements of input column
  * @param ddof Delta degrees of freedom. The divisor used is N - ddof, where N represents the number
- * of elements.
+ *             of elements.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Variance as scalar of type `output_dtype`
@@ -229,7 +229,7 @@ std::unique_ptr<scalar> variance(
  * @param col input column to compute standard deviation
  * @param output_dtype data type of return type and typecast elements of input column
  * @param ddof Delta degrees of freedom. The divisor used is N - ddof, where N represents the number
- * of elements.
+ *             of elements.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Standard deviation as scalar of type `output_dtype`
@@ -347,9 +347,9 @@ std::unique_ptr<scalar> merge_sets(
  * @param col Input column to compute sum
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
- * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
- * any element in the segment is valid, otherwise null.
+ * @param null_handling If `INCLUDE`, the reduction is valid if all elements in a segment are valid,
+ *                      otherwise null. If `EXCLUDE`, the reduction is valid if any element in the
+ *                      segment is valid, otherwise null.
  * @param init Initial value of each sum
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -360,7 +360,7 @@ std::unique_ptr<column> segmented_sum(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -375,9 +375,9 @@ std::unique_ptr<column> segmented_sum(
  * @param col Input column to compute product
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype data type of return type and typecast elements of input column
- * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
- * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
- * any element in the segment is valid, otherwise null.
+ * @param null_handling If `INCLUDE`, the reduction is valid if all elements in a segment are valid,
+ *                      otherwise null. If `EXCLUDE`, the reduction is valid if any element in the
+ *                      segment is valid, otherwise null.
  * @param init Initial value of each product
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
@@ -388,7 +388,7 @@ std::unique_ptr<column> segmented_product(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -402,9 +402,9 @@ std::unique_ptr<column> segmented_product(
  * @param col Input column to compute minimum
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
- * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
- * any element in the segment is valid, otherwise null.
+ * @param null_handling If `INCLUDE`, the reduction is valid if all elements in a segment are valid,
+ *                      otherwise null. If `EXCLUDE`, the reduction is valid if any element in the
+ *                      segment is valid, otherwise null.
  * @param init Initial value of each minimum
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
@@ -415,7 +415,7 @@ std::unique_ptr<column> segmented_min(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -429,9 +429,9 @@ std::unique_ptr<column> segmented_min(
  * @param col Input column to compute maximum
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
- * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
- * any element in the segment is valid, otherwise null.
+ * @param null_handling If `INCLUDE`, the reduction is valid if all elements in a segment are valid,
+ *                      otherwise null. If `EXCLUDE`, the reduction is valid if any element in the
+ *                      segment is valid, otherwise null.
  * @param init Initial value of each maximum
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
@@ -442,7 +442,7 @@ std::unique_ptr<column> segmented_max(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -457,9 +457,9 @@ std::unique_ptr<column> segmented_max(
  * @param col Input column to compute any
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
- * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
- * any element in the segment is valid, otherwise null.
+ * @param null_handling If `INCLUDE`, the reduction is valid if all elements in a segment are valid,
+ *                      otherwise null. If `EXCLUDE`, the reduction is valid if any element in the
+ *                      segment is valid, otherwise null.
  * @param init Initial value of each any
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
@@ -470,7 +470,7 @@ std::unique_ptr<column> segmented_any(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -485,9 +485,9 @@ std::unique_ptr<column> segmented_any(
  * @param col Input column to compute all
  * @param offsets Indices to identify segment boundaries
  * @param output_dtype Data type of return type and typecast elements of input column
- * @param null_handling If `INCLUDE`, the reduction is valid if all elements in
- * a segment are valid, otherwise null. If `EXCLUDE`, the reduction is valid if
- * any element in the segment is valid, otherwise null.
+ * @param null_handling If `INCLUDE`, the reduction is valid if all elements in a segment are valid,
+ *                      otherwise null. If `EXCLUDE`, the reduction is valid if any element in the
+ *                      segment is valid, otherwise null.
  * @param init Initial value of each all
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
@@ -498,7 +498,7 @@ std::unique_ptr<column> segmented_all(
   device_span<size_type const> offsets,
   data_type const output_dtype,
   null_policy null_handling,
-  std::optional<std::reference_wrapper<const scalar>> init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

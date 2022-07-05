@@ -23,7 +23,7 @@ namespace reduction {
 
 std::unique_ptr<cudf::scalar> min(column_view const& col,
                                   data_type const output_dtype,
-                                  std::optional<std::reference_wrapper<const scalar>> init,
+                                  std::optional<std::reference_wrapper<scalar const>> init,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
