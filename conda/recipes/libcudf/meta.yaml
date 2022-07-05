@@ -205,6 +205,7 @@ outputs:
         - test -f $PREFIX/include/cudf/strings/case.hpp
         - test -f $PREFIX/include/cudf/strings/char_types/char_cases.hpp
         - test -f $PREFIX/include/cudf/strings/char_types/char_types.hpp
+        - test -f $PREFIX/include/cudf/strings/char_types/char_types_enum.hpp
         - test -f $PREFIX/include/cudf/strings/combine.hpp
         - test -f $PREFIX/include/cudf/strings/contains.hpp
         - test -f $PREFIX/include/cudf/strings/convert/convert_booleans.hpp
@@ -216,6 +217,7 @@ outputs:
         - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
         - test -f $PREFIX/include/cudf/strings/convert/convert_lists.hpp
         - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
+        - test -f $PREFIX/include/cudf/strings/detail/char_tables.hpp
         - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
         - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
         - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
