@@ -3244,9 +3244,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * 
    * For supported regex patterns refer to:
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
-   * @param pattern the regex pattern
-   * @param idx the regex group index
-   * @return a new column vector of extracted matches
+   
+   * @param pattern The regex pattern
+   * @param idx The regex group index
+   * @return A new column vector of extracted matches
    */
   public final ColumnVector extractAllRecord(String pattern, int idx) {
     assert type.equals(DType.STRING) : "column type must be a String";
@@ -3947,10 +3948,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Native method for extracting all results corresponding to group idx from a regular expression.
-   * @param nativeHandle native handle of the cudf::column_view being operated on.
-   * @param pattern string regex pattern.
-   * @param idx regex group index. An idx of 0 means matching the entire regex.
-   * @return native handle of a string column of the result.
+   *
+   * @param nativeHandle Native handle of the cudf::column_view being operated on.
+   * @param pattern String regex pattern.
+   * @param idx Regex group index. A 0 value means matching the entire regex.
+   * @return Native handle of a string column of the result.
    */
   private static native long extractAllRecord(long nativeHandle, String pattern, int idx);
 
