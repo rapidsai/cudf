@@ -3612,17 +3612,6 @@ unordered()
 }  // namespace testdata
 }  // anonymous namespace
 
-// for debugging tests
-// TODO remove when done with testing
-void printHex(const uint8_t* v, size_t len)
-{
-  for (size_t j = 0; j < len; j += 16) {
-    for (size_t k = 0; k < 16 && k + j < len; k++)
-      printf(" %02x", v[j + k]);
-    printf("\n");
-  }
-}
-
 TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 {
   using T = TypeParam;
@@ -3647,9 +3636,10 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
 
-  EXPECT_EQ(read_footer(source, &fmd), 0);
-  EXPECT_GT(fmd.row_groups.size(), 0);
-  EXPECT_EQ(fmd.row_groups[0].columns.size(), 3);
+
+  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+  CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
+  CUDF_EXPECTS(fmd.row_groups[0].columns.size() == 3, "Invalid number of columns");
 
   // now check that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
@@ -3659,19 +3649,13 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   for (int i = 0; i < 3; i++) {
     auto& chunk = fmd.row_groups[0].columns[i];
-    EXPECT_GT(chunk.column_index_offset, 0);
-    EXPECT_GT(chunk.column_index_length, 0);
+    CUDF_EXPECTS(chunk.column_index_offset > 0, "Cannot find column index");
+    CUDF_EXPECTS(chunk.column_index_length > 0, "Invalid column index length");
 
     cudf_io::parquet::ColumnIndex ci;
     const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
     cudf_io::parquet::CompactProtocolReader cp(ci_buf->data(), ci_buf->size());
-#if 0
-    // TODO remove when done testing
-    printf("%d %d\n", fmd.schema[i + 1].type, fmd.schema[i + 1].converted_type);
-    printHex(ci_buf->data(), ci_buf->size());
-    // if (std::is_same_v<T, numeric::decimal128>) ((int*)0)[12] = 10; // segfault
-#endif
-    EXPECT_TRUE(cp.read(&ci));
+    CUDF_EXPECTS(cp.read(&ci), "Cannot parse column index");
 
     EXPECT_EQ(ci.boundary_order, expected_orders[i]);
   }
@@ -3795,7 +3779,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
 
-  EXPECT_EQ(read_footer(source, &fmd), 0);
+  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto& rg = fmd.row_groups[r];
@@ -3806,16 +3790,17 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
       cudf_io::parquet::OffsetIndex oi;
       const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
       cudf_io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
-      EXPECT_TRUE(cp.read(&oi));
+      CUDF_EXPECTS(cp.read(&oi), "Cannot parse offset index");
 
-      // loop over offsets, read page header, make sure it's a data page
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
         auto& page_loc      = oi.page_locations[o];
         const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
         cp.init(page_buf->data(), page_buf->size());
-        EXPECT_TRUE(cp.read(&ph));
+        CUDF_EXPECTS(cp.read(&ph), "Cannot parse page header");
         EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += ph.data_page_header.num_values;
@@ -3824,20 +3809,18 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
       // check column index
       cudf_io::parquet::ColumnIndex ci;
       const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
-      // printHex(ci_buf->data(), ci_buf->size());
       cp.init(ci_buf->data(), ci_buf->size());
-      EXPECT_TRUE(cp.read(&ci));
+      CUDF_EXPECTS(cp.read(&ci), "Cannot parse column index");
       auto& chunk_meta = chunk.meta_data;
 
       // decode min and max from statistics blob
       cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
       cudf_io::parquet::Statistics stats;
-      EXPECT_TRUE(cp.read(&stats));
+      CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
 
       // loop over page stats.  stats.min <= page.min && stats.max >= page.max
       int8_t ptype = fmd.schema[c + 1].type;
       int8_t ctype = fmd.schema[c + 1].converted_type;
-      // printHex(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         EXPECT_FALSE(ci.null_pages[p]);
         if (c > 0)  // first column has no nulls
@@ -3907,7 +3890,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
 
-  EXPECT_EQ(read_footer(source, &fmd), 0);
+  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto& rg = fmd.row_groups[r];
@@ -3918,16 +3901,17 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
       cudf_io::parquet::OffsetIndex oi;
       const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
       cudf_io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
-      EXPECT_TRUE(cp.read(&oi));
+      CUDF_EXPECTS(cp.read(&oi), "Cannot parse offset index");
 
-      // loop over offsets, read page header, make sure it's a data page
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
         auto& page_loc      = oi.page_locations[o];
         const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
         cp.init(page_buf->data(), page_buf->size());
-        EXPECT_TRUE(cp.read(&ph));
+        CUDF_EXPECTS(cp.read(&ph), "Cannot parse page header");
         EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += ph.data_page_header.num_values;
@@ -3937,18 +3921,17 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
       cudf_io::parquet::ColumnIndex ci;
       const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
       cp.init(ci_buf->data(), ci_buf->size());
-      EXPECT_TRUE(cp.read(&ci));
+      CUDF_EXPECTS(cp.read(&ci), "Cannot parse column index");
       auto& chunk_meta = chunk.meta_data;
 
       // decode min and max from statistics blob
       cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
       cudf_io::parquet::Statistics stats;
-      EXPECT_TRUE(cp.read(&stats));
+      CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
 
       // loop over page stats.  stats.min <= page.min && stats.max >= page.max
       int8_t ptype = fmd.schema[c + 1].type;
       int8_t ctype = fmd.schema[c + 1].converted_type;
-      // printHex(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         EXPECT_FALSE(ci.null_pages[p]);
         EXPECT_EQ(ci.null_counts[p], 0);
@@ -4005,7 +3988,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
 
-  EXPECT_EQ(read_footer(source, &fmd), 0);
+  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto& rg = fmd.row_groups[r];
@@ -4016,16 +3999,17 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
       cudf_io::parquet::OffsetIndex oi;
       const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
       cudf_io::parquet::CompactProtocolReader cp(oi_buf->data(), oi_buf->size());
-      EXPECT_TRUE(cp.read(&oi));
+      CUDF_EXPECTS(cp.read(&oi), "Cannot parse offset index");
 
-      // loop over offsets, read page header, make sure it's a data page
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
         auto& page_loc      = oi.page_locations[o];
         const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
         cp.init(page_buf->data(), page_buf->size());
-        EXPECT_TRUE(cp.read(&ph));
+        CUDF_EXPECTS(cp.read(&ph), "Cannot parse page header");
         EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += ph.data_page_header.num_values;
@@ -4035,18 +4019,17 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
       cudf_io::parquet::ColumnIndex ci;
       const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
       cp.init(ci_buf->data(), ci_buf->size());
-      EXPECT_TRUE(cp.read(&ci));
+      CUDF_EXPECTS(cp.read(&ci), "Cannot parse column index");
       auto& chunk_meta = chunk.meta_data;
 
       // decode min and max from statistics blob
       cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
       cudf_io::parquet::Statistics stats;
-      EXPECT_TRUE(cp.read(&stats));
+      CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
 
       // loop over page stats.  stats.min <= page.min && stats.max >= page.max
       int8_t ptype = fmd.schema[c + 1].type;
       int8_t ctype = fmd.schema[c + 1].converted_type;
-      // printHex(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
       for (size_t p = 0; p < ci.min_values.size(); p++) {
         if (not ci.null_pages[p]) {
           EXPECT_EQ(ci.null_counts[p], 0);
@@ -4095,7 +4078,7 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
 
-  EXPECT_EQ(read_footer(source, &fmd), 0);
+  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
   size_t colidxs[] = {1, 3, 4, 5, 8};
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
@@ -4108,16 +4091,17 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
       cudf_io::parquet::OffsetIndex oi;
       const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
       cp.init(oi_buf->data(), oi_buf->size());
-      EXPECT_TRUE(cp.read(&oi));
+      CUDF_EXPECTS(cp.read(&oi), "Cannot parse offset index");
 
-      // loop over offsets, read page header, make sure it's a data page
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
         auto& page_loc      = oi.page_locations[o];
         const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
         cp.init(page_buf->data(), page_buf->size());
-        EXPECT_TRUE(cp.read(&ph));
+        CUDF_EXPECTS(cp.read(&ph), "Cannot parse page header");
         EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
         // last column has 2 values per row
         EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
@@ -4128,13 +4112,13 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
       cudf_io::parquet::ColumnIndex ci;
       const auto ci_buf = source->host_read(chunk.column_index_offset, chunk.column_index_length);
       cp.init(ci_buf->data(), ci_buf->size());
-      EXPECT_TRUE(cp.read(&ci));
+      CUDF_EXPECTS(cp.read(&ci), "Cannot parse column index");
       auto& chunk_meta = chunk.meta_data;
 
       // decode min and max from statistics blob
       cp.init(chunk_meta.statistics_blob.data(), chunk_meta.statistics_blob.size());
       cudf_io::parquet::Statistics stats;
-      EXPECT_TRUE(cp.read(&stats));
+      CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
 
       // loop over page stats.  stats.min <= page.min && stats.max >= page.max
       int8_t ptype = fmd.schema[colidx].type;
