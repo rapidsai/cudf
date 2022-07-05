@@ -542,6 +542,43 @@ class Decimal128Dtype(DecimalDtype):
     ITEMSIZE = 16
 
 
+class Datetime64TZDtype(_BaseDtype):
+    itemsize = 8
+
+    def __init__(self, unit, tz):
+        self.unit = unit
+        self.tz = tz
+
+    def __repr__(self):
+        return self.name
+
+    @property
+    def name(self):
+        return f"{type(self).__name__}({self.unit} {self.tz})"
+
+    def to_arrow(self):
+        return pa.timestamp(self.unit, self.tz)
+
+    @classmethod
+    def from_arrow(cls, ts):
+        return cls(ts.unit, ts.tz)
+
+    @property
+    def type(self):
+        return np.datetime64
+
+    @property
+    def base(self):
+        return np.dtype(f"datetime64[{self.unit}]")
+
+    def __eq__(self, other: Dtype) -> bool:
+        if other is self:
+            return True
+        elif not isinstance(other, self.__class__):
+            return False
+        return self.unit == other.unit and self.unit == other.unit
+
+
 class IntervalDtype(StructDtype):
     """
     subtype: str, np.dtype
@@ -575,7 +612,6 @@ class IntervalDtype(StructDtype):
         return IntervalDtype(typ.subtype.to_pandas_dtype(), typ.closed)
 
     def to_arrow(self):
-
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
         )
@@ -801,6 +837,15 @@ def is_decimal64_dtype(obj):
             and obj == cudf.core.dtypes.Decimal64Dtype.name
         )
         or (hasattr(obj, "dtype") and is_decimal64_dtype(obj.dtype))
+    )
+
+
+def is_datetime64tz_dtype(obj):
+    return (
+        type(obj) is Datetime64TZDtype
+        or obj is Datetime64TZDtype
+        or (isinstance(obj, str) and obj == Datetime64TZDtype.name)
+        or (hasattr(obj, "dtype") and is_datetime64tz_dtype(obj.dtype))
     )
 
 

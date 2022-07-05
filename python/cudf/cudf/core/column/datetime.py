@@ -21,7 +21,12 @@ from cudf._typing import (
     DtypeObj,
     ScalarLike,
 )
-from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
+from cudf.api.types import (
+    is_datetime64_dtype,
+    is_datetime64tz_dtype,
+    is_scalar,
+    is_timedelta64_dtype,
+)
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column, string
@@ -520,6 +525,119 @@ class DatetimeColumn(column.ColumnBase):
             return True
         else:
             return False
+
+    def localize(self, tz):
+        from cudf.core.tz.tz import tz_localize
+
+        dtype = cudf.core.dtypes.Datetime64TZDtype(self._time_unit, tz)
+        # ambiguous_or_nonexistent = tz_localize(self, tz)
+        # mask = libcudf.transform.bools_to_mask(ambiguous_or_nonexistent)
+        # ambiguous_or_nonexistent = ambiguous_or_nonexistent.set_mask(mask)
+        # result_mask = libcudf.null_mask.bitmask_or(
+        #     [self, ambiguous_or_nonexistent]
+        # )
+        # result_mask = result_mask if result_mask.size else None
+        result = TZDatetimeColumn(
+            data=self.base_data,
+            dtype=dtype,
+            mask=None,
+            size=self.base_size,
+            offset=self.offset,
+            null_count=self.null_count,
+        )
+        return result
+        #   return result.set_mask(result_mask)
+
+    def _with_type_metadata(self, dtype):
+        if is_datetime64tz_dtype(dtype):
+            return TZDatetimeColumn(
+                data=self.base_data,
+                dtype=dtype,
+                mask=self.base_mask,
+                size=self.base_size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
+        return self
+
+
+class TZDatetimeColumn(DatetimeColumn):
+    def __init__(
+        self,
+        data: Buffer,
+        dtype: DtypeObj,
+        mask: Buffer = None,
+        size: int = None,  # TODO: make non-optional
+        offset: int = 0,
+        null_count: int = None,
+    ):
+        super().__init__(
+            data=data,
+            dtype=dtype.base,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
+        if not is_datetime64tz_dtype(dtype):
+            breakpoint()
+
+        self._dtype = dtype
+
+    def __contains__(self, item: ScalarLike) -> bool:
+        try:
+            item_as_dt64 = np.datetime64(item, self._time_unit)
+        except ValueError:
+            # If item cannot be converted to datetime type
+            # np.datetime64 raises ValueError, hence `item`
+            # cannot exist in `self`.
+            return False
+        return item_as_dt64.astype("int64") in self.as_numerical
+
+    def to_pandas(
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
+    ) -> "cudf.Series":
+        # Workaround until following issue is fixed:
+        # https://issues.apache.org/jira/browse/ARROW-9772
+
+        # Pandas supports only `datetime64[ns]`, hence the cast.
+        return (
+            super()
+            .to_pandas(index=index, nullable=nullable, **kwargs)
+            .dt.tz_localize(self.dtype.tz)
+        )
+
+    def to_arrow(self):
+        return super().to_arrow().cast(self.dtype.to_arrow())
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the DateTimeColumn.
+        """
+        raise NotImplementedError(
+            "DateTime Arrays is not yet implemented in cudf"
+        )
+
+    @property
+    def _local_time(self):
+        from cudf.core.tz.tz import from_gmt
+
+        return from_gmt(self, self.dtype.tz)
+
+    def get_dt_field(self, field: str) -> ColumnBase:
+        return libcudf.datetime.extract_datetime_component(
+            self._local_time, field
+        )
+
+    def ceil(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.ceil_datetime(self, freq)
+
+    def floor(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.floor_datetime(self, freq)
+
+    def round(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.round_datetime(self, freq)
 
 
 def infer_format(element: str, **kwargs) -> str:

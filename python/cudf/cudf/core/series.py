@@ -4435,6 +4435,14 @@ class DatetimeProperties:
             data=str_col, index=self.series._index, name=self.series.name
         )
 
+    @_cudf_nvtx_annotate
+    def localize(self, tz):
+        localized = self.series._column.localize(tz)
+        breakpoint()
+        return self.series._from_data_like_self(
+            {self.series._data.names[0]: localized}
+        )
+
 
 class TimedeltaProperties:
     """

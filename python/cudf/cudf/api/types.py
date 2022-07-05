@@ -19,6 +19,7 @@ from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     dtype,
     is_categorical_dtype,
+    is_datetime64tz_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
     is_decimal128_dtype,
@@ -243,7 +244,6 @@ is_datetime_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
 is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
 is_datetime64_dtype = pd_types.is_datetime64_dtype
 is_datetime64_ns_dtype = pd_types.is_datetime64_ns_dtype
-is_datetime64tz_dtype = pd_types.is_datetime64tz_dtype
 is_extension_type = pd_types.is_extension_type
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_float_dtype = _wrap_pandas_is_dtype_api(pd_types.is_float_dtype)

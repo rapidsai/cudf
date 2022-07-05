@@ -48,6 +48,7 @@ from cudf.api.types import (
     infer_dtype,
     is_bool_dtype,
     is_categorical_dtype,
+    is_datetime64tz_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
     is_decimal128_dtype,
@@ -1348,6 +1349,17 @@ def build_column(
             offset=offset,
             null_count=null_count,
             children=children,
+        )
+    elif is_datetime64tz_dtype(dtype):
+        if data is None:
+            raise TypeError("Must specify data buffer")
+        return cudf.core.column.datetime.TZDatetimeColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
         )
     elif dtype.type is np.datetime64:
         if data is None:

@@ -232,6 +232,8 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
         tid = libcudf_types.type_id.DECIMAL64
     elif cudf.api.types.is_decimal32_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL32
+    elif cudf.api.types.is_datetime64tz_dtype(dtype):
+        return dtype_to_data_type(dtype.base)
     else:
         tid = <libcudf_types.type_id> (
             <underlying_type_t_type_id> (
