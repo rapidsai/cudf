@@ -3502,6 +3502,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(listSortRows(getNativeView(), isDescending, isNullSmallest));
   }
 
+  /**
+   * For each pair of lists from the input lists columns, check if they have any common non-null
+   * elements.
+   *
+   * A null input row in any of the input columns will result in a null output row. During checking
+   * for common elements, nulls within each list are considered as different values while
+   * floating-point NaN values are considered as equal.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A column of type BOOL8 containing the check result
+   */
   public static ColumnVector listOverlap(ColumnView lhs, ColumnView rhs) {
     assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
         "Input columns type must be of type LIST";
@@ -3509,6 +3523,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(listOverlap(lhs.getNativeView(), rhs.getNativeView()));
   }
 
+  /**
+   * Find the intersection without duplicate between lists at each row of the given lists columns.
+   *
+   * A null input row in any of the input lists columns will result in a null output row. During
+   * finding list intersection, nulls and floating-point NaN values within each list are
+   * considered as equal values.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A lists column containing the intersection result
+   */
   public static ColumnVector setIntersect(ColumnView lhs, ColumnView rhs) {
     assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
         "Input columns type must be of type LIST";
@@ -3516,6 +3543,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(setIntersect(lhs.getNativeView(), rhs.getNativeView()));
   }
 
+  /**
+   * Find the union without duplicate between lists at each row of the given lists columns.
+   *
+   * A null input row in any of the input lists columns will result in a null output row. During
+   * finding list union, nulls and floating-point NaN values within each list are considered as
+   * equal values.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A lists column containing the union result
+   */
   public static ColumnVector setUnion(ColumnView lhs, ColumnView rhs) {
     assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
         "Input columns type must be of type LIST";
@@ -3523,6 +3563,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(setUnion(lhs.getNativeView(), rhs.getNativeView()));
   }
 
+  /**
+   * Find the difference of lists of the left column against lists of the right column.
+   * Specifically, find the elements (without duplicates) from each list of the left column that
+   * do not exist in the corresponding list of the right column.
+   *
+   * A null input row in any of the input lists columns will result in a null output row. During
+   * finding, nulls and floating-point NaN values within each list are considered as equal values.
+   *
+   * The input lists columns must have the same size and same data type.
+   *
+   * @param lhs The input lists column for one side
+   * @param rhs The input lists column for the other side
+   * @return A lists column containing the difference result
+   */
   public static ColumnVector setDifference(ColumnView lhs, ColumnView rhs) {
     assert lhs.getType().equals(DType.LIST) && rhs.getType().equals(DType.LIST) :
         "Input columns type must be of type LIST";
