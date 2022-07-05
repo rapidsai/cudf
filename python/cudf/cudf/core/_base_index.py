@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pickle
-import warnings
 from functools import cached_property
 from typing import Any, Set, TypeVar
 
@@ -717,7 +716,7 @@ class BaseIndex(Serializable):
             other.names = self.names
             difference = cudf.core.index._index_from_data(
                 cudf.DataFrame._from_data(self._data)
-                ._merge(
+                .merge(
                     cudf.DataFrame._from_data(other._data),
                     how="leftanti",
                     on=self.name,
@@ -1010,7 +1009,7 @@ class BaseIndex(Serializable):
         other_unique.names = self.names
         intersection_result = cudf.core.index._index_from_data(
             cudf.DataFrame._from_data(self.unique()._data)
-            ._merge(
+            .merge(
                 cudf.DataFrame._from_data(other_unique._data),
                 how="inner",
                 on=self.name,
@@ -1168,21 +1167,18 @@ class BaseIndex(Serializable):
                     (1, 2)],
                    names=['a', 'b'])
         """
-        warnings.warn(
-            "Index.join is deprecated and will be removed", FutureWarning
-        )
+        self_is_multi = isinstance(self, cudf.MultiIndex)
+        other_is_multi = isinstance(other, cudf.MultiIndex)
+        if level is not None:
+            if self_is_multi and other_is_multi:
+                raise TypeError(
+                    "Join on level between two MultiIndex objects is ambiguous"
+                )
 
-        if isinstance(self, cudf.MultiIndex) and isinstance(
-            other, cudf.MultiIndex
-        ):
-            raise TypeError(
-                "Join on level between two MultiIndex objects is ambiguous"
-            )
+            if not is_scalar(level):
+                raise ValueError("level should be an int or a label only")
 
-        if level is not None and not is_scalar(level):
-            raise ValueError("level should be an int or a label only")
-
-        if isinstance(other, cudf.MultiIndex):
+        if other_is_multi:
             if how == "left":
                 how = "right"
             elif how == "right":
@@ -1193,34 +1189,40 @@ class BaseIndex(Serializable):
             lhs = self.copy(deep=False)
             rhs = other.copy(deep=False)
 
-        on = level
-        # In case of MultiIndex, it will be None as
-        # we don't need to update name
-        left_names = lhs.names
-        right_names = rhs.names
         # There should be no `None` values in Joined indices,
         # so essentially it would be `left/right` or 'inner'
         # in case of MultiIndex
         if isinstance(lhs, cudf.MultiIndex):
-            if level is not None and isinstance(level, int):
-                on = lhs._data.select_by_index(level).names[0]
-            right_names = (on,) if on is not None else right_names
-            on = right_names[0]
+            on = (
+                lhs._data.select_by_index(level).names[0]
+                if isinstance(level, int)
+                else level
+            )
+
+            if on is not None:
+                rhs.names = (on,)
+            on = rhs.names[0]
             if how == "outer":
                 how = "left"
             elif how == "right":
                 how = "inner"
         else:
             # Both are normal indices
-            right_names = left_names
-            on = right_names[0]
+            on = rhs.names[0]
+            rhs.names = lhs.names
 
-        lhs.names = left_names
-        rhs.names = right_names
+        lhs = lhs.to_frame()
+        rhs = rhs.to_frame()
 
-        output = lhs._merge(rhs, how=how, on=on, sort=sort)
+        output = lhs.merge(rhs, how=how, on=on, sort=sort)
 
-        return output
+        # If both inputs were MultiIndexes, the output is a MultiIndex.
+        # Otherwise, the output is only a MultiIndex if there are multiple
+        # columns
+        if self_is_multi and other_is_multi:
+            return cudf.MultiIndex._from_data(output._data)
+        else:
+            return cudf.core.index._index_from_data(output._data)
 
     def rename(self, name, inplace=False):
         """
