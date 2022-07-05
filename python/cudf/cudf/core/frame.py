@@ -17,7 +17,6 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
-    cast,
 )
 
 import cupy
@@ -27,7 +26,7 @@ import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
+from cudf._typing import Dtype
 from cudf.api.types import is_dtype_equal, is_scalar
 from cudf.core.column import (
     ColumnBase,
@@ -48,6 +47,7 @@ from cudf.utils.utils import _array_ufunc, _cudf_nvtx_annotate
 T = TypeVar("T", bound="Frame")
 
 
+# TODO: It looks like Frame is missing a declaration of `copy`, need to add
 class Frame(BinaryOperand, Scannable):
     """A collection of Column objects with an optional index.
 
@@ -630,11 +630,7 @@ class Frame(BinaryOperand, Scannable):
         4    <NA>
         dtype: int64
         """
-        import cudf.core._internals.where
-
-        return cudf.core._internals.where.where(
-            frame=self, cond=cond, other=other, inplace=inplace
-        )
+        raise NotImplementedError
 
     @_cudf_nvtx_annotate
     def mask(self, cond, other=None, inplace=False):
@@ -1159,9 +1155,7 @@ class Frame(BinaryOperand, Scannable):
             if name in set(column_names)
         ]
 
-    def _copy_type_metadata(
-        self, other: Frame, include_index: bool = True
-    ) -> Frame:
+    def _copy_type_metadata(self: T, other: T) -> T:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
@@ -1174,31 +1168,6 @@ class Frame(BinaryOperand, Scannable):
                 name, col._with_type_metadata(other_col.dtype), validate=False
             )
 
-        if include_index:
-            if self._index is not None and other._index is not None:
-                self._index._copy_type_metadata(other._index)  # type: ignore
-                # When other._index is a CategoricalIndex, the current index
-                # will be a NumericalIndex with an underlying CategoricalColumn
-                # (the above _copy_type_metadata call will have converted the
-                # column). Calling cudf.Index on that column generates the
-                # appropriate index.
-                if isinstance(
-                    other._index, cudf.core.index.CategoricalIndex
-                ) and not isinstance(
-                    self._index, cudf.core.index.CategoricalIndex
-                ):
-                    self._index = cudf.Index(
-                        cast(
-                            cudf.core.index.NumericIndex, self._index
-                        )._column,
-                        name=self._index.name,
-                    )
-                elif isinstance(
-                    other._index, cudf.MultiIndex
-                ) and not isinstance(self._index, cudf.MultiIndex):
-                    self._index = cudf.MultiIndex._from_data(
-                        self._index._data, name=self._index.name
-                    )
         return self
 
     @_cudf_nvtx_annotate
@@ -2890,87 +2859,6 @@ class Frame(BinaryOperand, Scannable):
             repeats = as_column(repeats)
 
         return libcudf.filling.repeat(columns, repeats)
-
-
-@_cudf_nvtx_annotate
-def _drop_rows_by_labels(
-    obj: DataFrameOrSeries,
-    labels: Union[ColumnLike, abc.Iterable, str],
-    level: Union[int, str],
-    errors: str,
-) -> DataFrameOrSeries:
-    """Remove rows specified by `labels`. If `errors=True`, an error is raised
-    if some items in `labels` do not exist in `obj._index`.
-
-    Will raise if level(int) is greater or equal to index nlevels
-    """
-    if isinstance(level, int) and level >= obj.index.nlevels:
-        raise ValueError("Param level out of bounds.")
-
-    if not isinstance(labels, cudf.core.single_column_frame.SingleColumnFrame):
-        labels = as_column(labels)
-
-    if isinstance(obj._index, cudf.MultiIndex):
-        if level is None:
-            level = 0
-
-        levels_index = obj.index.get_level_values(level)
-        if errors == "raise" and not labels.isin(levels_index).all():
-            raise KeyError("One or more values not found in axis")
-
-        if isinstance(level, int):
-            ilevel = level
-        else:
-            ilevel = obj._index.names.index(level)
-
-        # 1. Merge Index df and data df along column axis:
-        # | id | ._index df | data column(s) |
-        idx_nlv = obj._index.nlevels
-        working_df = obj._index.to_frame(index=False)
-        working_df.columns = [i for i in range(idx_nlv)]
-        for i, col in enumerate(obj._data):
-            working_df[idx_nlv + i] = obj._data[col]
-        # 2. Set `level` as common index:
-        # | level | ._index df w/o level | data column(s) |
-        working_df = working_df.set_index(level)
-
-        # 3. Use "leftanti" join to drop
-        # TODO: use internal API with "leftanti" and specify left and right
-        # join keys to bypass logic check
-        to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
-        join_res = working_df.join(to_join, how="leftanti")
-
-        # 4. Reconstruct original layout, and rename
-        join_res._insert(
-            ilevel, name=join_res._index.name, value=join_res._index
-        )
-
-        midx = cudf.MultiIndex.from_frame(
-            join_res.iloc[:, 0:idx_nlv], names=obj._index.names
-        )
-
-        if isinstance(obj, cudf.Series):
-            return obj.__class__._from_data(
-                join_res.iloc[:, idx_nlv:]._data, index=midx, name=obj.name
-            )
-        else:
-            return obj.__class__._from_data(
-                join_res.iloc[:, idx_nlv:]._data,
-                index=midx,
-                columns=obj._data.to_pandas_index(),
-            )
-
-    else:
-        if errors == "raise" and not labels.isin(obj.index).all():
-            raise KeyError("One or more values not found in axis")
-
-        key_df = cudf.DataFrame(index=labels)
-        if isinstance(obj, cudf.DataFrame):
-            return obj.join(key_df, how="leftanti")
-        else:
-            res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
-            res.name = obj.name
-            return res
 
 
 def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
