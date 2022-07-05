@@ -43,12 +43,13 @@ namespace cudf::lists {
  * @code{.pseudo}
  * lhs    = { {0, 1, 2}, {1, 2, 3}, null,         {4, null, 5} }
  * rhs    = { {1, 2, 3}, {4, 5},    {null, 7, 8}, {null, null} }
- * result = { true, false, null, true }
+ * result = { true, false, null, false }
  * @endcode
  *
  * @param lhs The input lists column for one side
  * @param rhs The input lists column for the other side
- * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal, default
+ *        to be `UNEQUAL` which means only non-null elements are checked for overlapping
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
  * @return A column of type BOOL containing the check result
@@ -56,7 +57,7 @@ namespace cudf::lists {
 std::unique_ptr<column> list_overlap(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
-  null_equality nulls_equal           = null_equality::EQUAL,
+  null_equality nulls_equal           = null_equality::UNEQUAL,
   nan_equality nans_equal             = nan_equality::ALL_EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
