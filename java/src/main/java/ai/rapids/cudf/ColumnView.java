@@ -3246,7 +3246,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
    
    * @param pattern The regex pattern
-   * @param idx The regex group index
+   * @param idx The regex group index (only 0 is supported currently). 
    * @return A new column vector of extracted matches
    */
   public final ColumnVector extractAllRecord(String pattern, int idx) {
