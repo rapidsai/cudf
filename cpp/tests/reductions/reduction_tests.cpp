@@ -859,7 +859,8 @@ TEST_F(ReductionDtypeTest, different_precision)
                                                    cudf::data_type(cudf::type_id::INT64));
 }
 
-struct ReductionErrorTest : public cudf::test::BaseFixture {};
+struct ReductionErrorTest : public cudf::test::BaseFixture {
+};
 
 // test case for empty input cases
 TEST_F(ReductionErrorTest, empty_column)
@@ -894,7 +895,8 @@ TEST_F(ReductionErrorTest, empty_column)
 // ----------------------------------------------------------------------------
 
 struct ReductionParamTest : public ReductionTest<double>,
-                            public ::testing::WithParamInterface<cudf::size_type> {};
+                            public ::testing::WithParamInterface<cudf::size_type> {
+};
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
 
@@ -1832,7 +1834,8 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
   }
 }
 
-struct Decimal128Only : public cudf::test::BaseFixture {};
+struct Decimal128Only : public cudf::test::BaseFixture {
+};
 
 TEST_F(Decimal128Only, Decimal128ProductReduction)
 {
@@ -1995,7 +1998,8 @@ TYPED_TEST(ReductionTest, NthElement)
   }
 }
 
-struct DictionaryStringReductionTest : public StringReductionTest {};
+struct DictionaryStringReductionTest : public StringReductionTest {
+};
 
 std::vector<std::string> data_list[] = {
   {"nine", "two", "five", "three", "five", "six", "two", "eight", "nine"},
