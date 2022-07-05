@@ -1,4 +1,4 @@
-# Benchmarking cuDF
+# Testing cuDF
 
 ## Tooling
 Tests in cuDF are written using [`pytest`](https://docs.pytest.org/en/latest/).
