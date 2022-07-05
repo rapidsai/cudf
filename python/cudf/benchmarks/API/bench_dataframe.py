@@ -6,6 +6,7 @@ import string
 
 import numpy
 import pytest
+import pytest_cases
 from config import cudf, cupy
 from utils import benchmark_with_object
 
@@ -115,3 +116,8 @@ def bench_sort_values(benchmark, dataframe, num_cols_to_sort):
 def bench_nsmallest(benchmark, dataframe, num_cols_to_sort, n):
     by = list(dataframe.columns[:num_cols_to_sort])
     benchmark(dataframe.nsmallest, n, by)
+
+
+@pytest_cases.parametrize_with_cases("dataframe, cond, other", prefix="where")
+def bench_where(benchmark, dataframe, cond, other):
+    benchmark(dataframe.where, cond, other)
