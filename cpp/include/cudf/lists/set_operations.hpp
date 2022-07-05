@@ -36,8 +36,8 @@ namespace cudf::lists {
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
- * @throw cudf::logic_error if the input lists column have different sizes.
- * @throw cudf::logic_error if children of the input lists column have different data types.
+ * @throw cudf::logic_error if the input lists columns have different sizes.
+ * @throw cudf::logic_error if children of the input lists columns have different data types.
  *
  * Example:
  * @code{.pseudo}
@@ -71,8 +71,8 @@ std::unique_ptr<column> list_overlap(
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
- * @throw cudf::logic_error if the input lists column have different sizes.
- * @throw cudf::logic_error if children of the input lists column have different data types.
+ * @throw cudf::logic_error if the input lists columns have different sizes.
+ * @throw cudf::logic_error if children of the input lists columns have different data types.
  *
  * Example:
  * @code{.pseudo}
@@ -107,8 +107,8 @@ std::unique_ptr<column> set_intersect(
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
- * @throw cudf::logic_error if the input lists column have different sizes.
- * @throw cudf::logic_error if children of the input lists column have different data types.
+ * @throw cudf::logic_error if the input lists columns have different sizes.
+ * @throw cudf::logic_error if children of the input lists columns have different data types.
  *
  * Example:
  * @code{.pseudo}
@@ -141,8 +141,8 @@ std::unique_ptr<column> set_union(
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
- * @throw cudf::logic_error if the input lists column have different sizes.
- * @throw cudf::logic_error if children of the input lists column have different data types.
+ * @throw cudf::logic_error if the input lists columns have different sizes.
+ * @throw cudf::logic_error if children of the input lists columns have different data types.
  *
  * Example:
  * @code{.pseudo}
