@@ -1577,7 +1577,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *en
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv *env, jclass, 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv *env, jclass,
                                                                         jlong j_view_handle,
                                                                         jstring pattern_obj,
                                                                         jint idx) {
@@ -1594,8 +1594,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv *
     cudf::jni::native_jstring pattern(env, pattern_obj);
 
     return release_as_jlong(cudf::strings::findall_record(strings_column, pattern.get()));
-  }    
-  CATCH_STD(env, 0);                        
+  }
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_urlDecode(JNIEnv *env, jclass,
