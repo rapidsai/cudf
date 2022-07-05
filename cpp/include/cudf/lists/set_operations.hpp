@@ -36,8 +36,8 @@ namespace cudf::lists {
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
- * @throw cudf::logic_error if the input lists column have different sizes.
- * @throw cudf::logic_error if children of the input lists column have different data types.
+ * @throw cudf::logic_error if the input lists columns have different sizes.
+ * @throw cudf::logic_error if children of the input lists columns have different data types.
  *
  * Example:
  * @code{.pseudo}
@@ -71,8 +71,8 @@ std::unique_ptr<column> list_overlap(
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
- * @throw cudf::logic_error if the input lists column have different sizes.
- * @throw cudf::logic_error if children of the input lists column have different data types.
+ * @throw cudf::logic_error if the input lists columns have different sizes.
+ * @throw cudf::logic_error if children of the input lists columns have different data types.
  *
  * Example:
  * @code{.pseudo}
@@ -86,7 +86,7 @@ std::unique_ptr<column> list_overlap(
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
- * @return A column of type BOOL containing the check result
+ * @return A lists column containing the intersection result
  */
 std::unique_ptr<column> set_intersect(
   lists_column_view const& lhs,
@@ -107,8 +107,8 @@ std::unique_ptr<column> set_intersect(
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
- * @throw cudf::logic_error if the input lists column have different sizes.
- * @throw cudf::logic_error if children of the input lists column have different data types.
+ * @throw cudf::logic_error if the input lists columns have different sizes.
+ * @throw cudf::logic_error if children of the input lists columns have different data types.
  *
  * Example:
  * @code{.pseudo}
@@ -122,7 +122,7 @@ std::unique_ptr<column> set_intersect(
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
- * @return A column of type BOOL containing the check result
+ * @return A lists column containing the union result
  */
 std::unique_ptr<column> set_union(
   lists_column_view const& lhs,
@@ -135,14 +135,15 @@ std::unique_ptr<column> set_union(
  * @brief Find the elements (without duplicates) from each list of the left column that do not exist
  *        in the corresponding list of the right column.
  *
- * Given two input lists columns, an output lists column is created by finding the elements (without
- * duplicates) in each list of the left column such that they do not exist in the corresponding list
- * of the right column.
+ * Given two input lists columns, an output lists column is created by finding the difference of
+ * lists of the left column against lists of the right column. Specifically, find the elements
+ * (without duplicates) in each list of the left column such that they do not exist in the
+ * corresponding list of the right column.
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
- * @throw cudf::logic_error if the input lists column have different sizes.
- * @throw cudf::logic_error if children of the input lists column have different data types.
+ * @throw cudf::logic_error if the input lists columns have different sizes.
+ * @throw cudf::logic_error if children of the input lists columns have different data types.
  *
  * Example:
  * @code{.pseudo}
@@ -156,7 +157,7 @@ std::unique_ptr<column> set_union(
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
- * @return A column of type BOOL containing the check result
+ * @return A lists column containing the difference result
  */
 std::unique_ptr<column> set_difference(
   lists_column_view const& lhs,
