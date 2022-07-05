@@ -2606,6 +2606,82 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.index = idx
         return df if not inplace else None
 
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        from cudf.core._internals.where import (
+            _check_and_cast_columns_with_other,
+            _make_categorical_like,
+        )
+
+        # First process the condition.
+        if isinstance(cond, Series):
+            cond = self._from_data_like_self(
+                {name: cond._column for name in self._column_names},
+            )
+        elif hasattr(cond, "__cuda_array_interface__"):
+            cond = DataFrame(
+                cond, columns=self._column_names, index=self.index
+            )
+        elif (
+            hasattr(cond, "__array_interface__")
+            and cond.__array_interface__["shape"] != self.shape
+        ):
+            raise ValueError("conditional must be same shape as self")
+        elif not isinstance(cond, DataFrame):
+            cond = cudf.DataFrame(cond)
+
+        if set(self._column_names).intersection(set(cond._column_names)):
+            if not self.index.equals(cond.index):
+                cond = cond.reindex(self.index)
+        else:
+            if cond.shape != self.shape:
+                raise ValueError(
+                    "Array conditional must be same shape as self"
+                )
+            # Setting `self` column names to `cond` as it has no column names.
+            cond._set_column_names_like(self)
+
+        # If other was provided, process that next.
+        if isinstance(other, DataFrame):
+            other_cols = [other._data[col] for col in self._column_names]
+        elif cudf.api.types.is_scalar(other):
+            other_cols = [other] * len(self._column_names)
+        elif isinstance(other, cudf.Series):
+            other_cols = other.to_pandas()
+        else:
+            other_cols = other
+
+        if len(self._columns) != len(other_cols):
+            raise ValueError(
+                """Replacement list length or number of data columns
+                should be equal to number of columns of self"""
+            )
+
+        out = {}
+        for (name, col), other_col in zip(self._data.items(), other_cols):
+            col, other_col = _check_and_cast_columns_with_other(
+                source_col=col,
+                other=other_col,
+                inplace=inplace,
+            )
+
+            if cond_col := cond._data.get(name):
+                result = cudf._lib.copying.copy_if_else(
+                    col, other_col, cond_col
+                )
+
+                out[name] = _make_categorical_like(result, self._data[name])
+            else:
+                out_mask = cudf._lib.null_mask.create_null_mask(
+                    len(col),
+                    state=cudf._lib.null_mask.MaskState.ALL_NULL,
+                )
+                out[name] = col.set_mask(out_mask)
+
+        return self._mimic_inplace(
+            self._from_data_like_self(out), inplace=inplace
+        )
+
     @docutils.doc_apply(
         doc_reset_index_template.format(
             klass="DataFrame",
