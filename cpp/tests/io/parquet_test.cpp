@@ -3636,7 +3636,6 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   auto source = cudf_io::datasource::create(filepath);
   cudf_io::parquet::FileMetaData fmd;
 
-
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
   CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
   CUDF_EXPECTS(fmd.row_groups[0].columns.size() == 3, "Invalid number of columns");
@@ -3669,7 +3668,7 @@ int32_t compare(T& v1, T& v2)
 
 // compare two binary statistics blobs based on their physical
 // and converted types. returns -1 if v1 < v2, 0 if v1 == v2, and
-// 1 if v1 > v2. 
+// 1 if v1 > v2.
 int32_t compare_binary(std::vector<uint8_t>& v1,
                        std::vector<uint8_t>& v2,
                        int8_t ptype,
