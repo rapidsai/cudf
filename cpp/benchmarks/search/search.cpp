@@ -34,7 +34,7 @@ std::unique_ptr<cudf::table> create_table_data(cudf::size_type n_rows,
   profile.set_cardinality(0);
   profile.set_null_frequency(has_nulls ? 0.1 : 0.0);
   profile.set_distribution_params<Type>(
-    cudf::type_to_id<Type>(), distribution_id::UNIFORM, Type{0}, Type{100});
+    cudf::type_to_id<Type>(), distribution_id::UNIFORM, Type{0}, Type{1000});
 
   // Deterministic benchmark, using the same starting seed value for each benchmark execution.
   static unsigned seed = 0;
@@ -145,14 +145,40 @@ void BM_contains_scalar(benchmark::State& state, bool nulls)
   }
 }
 
-#define CONTAINS_SEARCH_BENCHMARK_DEFINE(name, nulls) \
-  BENCHMARK_DEFINE_F(Contains, name)                  \
-  (::benchmark::State & st) { BM_column(st, nulls); } \
-  BENCHMARK_REGISTER_F(Contains, name)                \
-    ->RangeMultiplier(8)                              \
-    ->Ranges({{1 << 10, 1 << 26}})                    \
-    ->UseManualTime()                                 \
+#define CONTAINS_SCALAR_BENCHMARK_DEFINE(name, nulls)          \
+  BENCHMARK_DEFINE_F(Contains, name)                           \
+  (::benchmark::State & st) { BM_contains_scalar(st, nulls); } \
+  BENCHMARK_REGISTER_F(Contains, name)                         \
+    ->RangeMultiplier(8)                                       \
+    ->Ranges({{1 << 10, 1 << 28}})                             \
+    ->UseManualTime()                                          \
     ->Unit(benchmark::kMillisecond);
 
-CONTAINS_SEARCH_BENCHMARK_DEFINE(SearchScalar_AllValid, false)
-CONTAINS_SEARCH_BENCHMARK_DEFINE(SearchScalar_Nulls, true)
+CONTAINS_SCALAR_BENCHMARK_DEFINE(SearchScalar_AllValid, false)
+CONTAINS_SCALAR_BENCHMARK_DEFINE(SearchScalar_Nulls, true)
+
+// -------------------------------------------------------------------------------------------------
+void BM_contains_column(benchmark::State& state, bool nulls)
+{
+  auto const column_size{static_cast<cudf::size_type>(state.range(0))};
+
+  auto const table_data = create_table_data<float>(column_size, 2, nulls);
+
+  for ([[maybe_unused]] auto _ : state) {
+    [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
+    [[maybe_unused]] auto const result =
+      cudf::contains(table_data->get_column(0).view(), table_data->get_column(1).view());
+  }
+}
+
+#define CONTAINS_COLUMN_BENCHMARK_DEFINE(name, nulls)          \
+  BENCHMARK_DEFINE_F(Contains, name)                           \
+  (::benchmark::State & st) { BM_contains_column(st, nulls); } \
+  BENCHMARK_REGISTER_F(Contains, name)                         \
+    ->RangeMultiplier(8)                                       \
+    ->Ranges({{1 << 10, 1 << 26}})                             \
+    ->UseManualTime()                                          \
+    ->Unit(benchmark::kMillisecond);
+
+CONTAINS_COLUMN_BENCHMARK_DEFINE(SearchColumn_AllValid, false)
+CONTAINS_COLUMN_BENCHMARK_DEFINE(SearchColumn_Nulls, true)
