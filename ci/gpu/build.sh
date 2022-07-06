@@ -95,9 +95,6 @@ function install_dask {
         gpuci_logger "gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall"
         gpuci_mamba_retry install conda-forge::dask>=2022.05.2 conda-forge::distributed>=2022.05.2 conda-forge::dask-core>=2022.05.2 --force-reinstall
     fi
-    # Install development branch of dask
-    gpuci_logger "Install development branch of dask"
-    pip install "git+https://github.com/rjzamora/dask.git@rewrite-sorted_division_locations" --upgrade --no-deps
     # Install the main version of streamz
     gpuci_logger "Install the main version of streamz"
     # Need to uninstall streamz that is already in the env.
