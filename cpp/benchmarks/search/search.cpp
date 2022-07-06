@@ -86,7 +86,7 @@ void BM_column(benchmark::State& state, bool nulls)
   BENCHMARK_REGISTER_F(BinarySearch, name)            \
     ->UseManualTime()                                 \
     ->Unit(benchmark::kMillisecond)                   \
-    ->Arg(100000000);
+    ->Ranges({{100000, 100000000}});
 
 BINARY_SEARCH_BENCHMARK_DEFINE(Column_AllValid, false)
 BINARY_SEARCH_BENCHMARK_DEFINE(Column_HasNulls, true)
@@ -119,7 +119,7 @@ BENCHMARK_DEFINE_F(BinarySearch, Table)(::benchmark::State& state) { BM_table(st
 static void CustomArguments(benchmark::internal::Benchmark* b)
 {
   for (int num_cols = 1; num_cols <= 10; num_cols *= 2)
-    for (int col_size = 1000; col_size <= 100000000; col_size *= 10)
+    for (int col_size = 100000; col_size <= 100000000; col_size *= 10)
       b->Args({num_cols, col_size});
 }
 
@@ -150,7 +150,7 @@ void BM_contains_scalar(benchmark::State& state, bool nulls)
   (::benchmark::State & st) { BM_contains_scalar(st, nulls); } \
   BENCHMARK_REGISTER_F(Contains, name)                         \
     ->RangeMultiplier(8)                                       \
-    ->Ranges({{1 << 10, 1 << 28}})                             \
+    ->Ranges({{1 << 15, 1 << 28}})                             \
     ->UseManualTime()                                          \
     ->Unit(benchmark::kMillisecond);
 
@@ -176,7 +176,7 @@ void BM_contains_column(benchmark::State& state, bool nulls)
   (::benchmark::State & st) { BM_contains_column(st, nulls); } \
   BENCHMARK_REGISTER_F(Contains, name)                         \
     ->RangeMultiplier(8)                                       \
-    ->Ranges({{1 << 10, 1 << 26}})                             \
+    ->Ranges({{1 << 15, 1 << 26}})                             \
     ->UseManualTime()                                          \
     ->Unit(benchmark::kMillisecond);
 
