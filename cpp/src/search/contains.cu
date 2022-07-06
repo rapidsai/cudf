@@ -61,16 +61,17 @@ struct contains_scalar_dispatch {
                               begin,
                               end,
                               [needle_pair = thrust::make_pair(s->value(stream), true)] __device__(
-                                auto const val_pair) { return val_pair == needle_pair; });
+                                auto const val_pair) { return val_pair == needle_pair; }) > 0;
     } else {
       auto const begin = d_haystack->begin<DType>();
       auto const end   = d_haystack->end<DType>();
 
-      return thrust::count_if(
-        rmm::exec_policy(stream),
-        begin,
-        end,
-        [needle = s->value(stream)] __device__(auto const val) { return val == needle; });
+      return thrust::count_if(rmm::exec_policy(stream),
+                              begin,
+                              end,
+                              [needle = s->value(stream)] __device__(auto const val) {
+                                return val == needle;
+                              }) > 0;
     }
   }
 };
