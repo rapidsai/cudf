@@ -20,14 +20,14 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <strings/utf8.cuh>
-#include <strings/utilities.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -189,21 +189,6 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 
 }  // namespace detail
 
-string_character_types operator|(string_character_types lhs, string_character_types rhs)
-{
-  return static_cast<string_character_types>(
-    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
-    static_cast<std::underlying_type_t<string_character_types>>(rhs));
-}
-
-string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
-{
-  lhs = static_cast<string_character_types>(
-    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
-    static_cast<std::underlying_type_t<string_character_types>>(rhs));
-  return lhs;
-}
-
 // external API
 
 std::unique_ptr<column> all_characters_of_type(strings_column_view const& strings,
@@ -212,7 +197,8 @@ std::unique_ptr<column> all_characters_of_type(strings_column_view const& string
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_characters_of_type(strings, types, verify_types, rmm::cuda_stream_default, mr);
+  return detail::all_characters_of_type(
+    strings, types, verify_types, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
@@ -223,7 +209,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters_of_type(
-    strings, types_to_remove, replacement, types_to_keep, rmm::cuda_stream_default, mr);
+    strings, types_to_remove, replacement, types_to_keep, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

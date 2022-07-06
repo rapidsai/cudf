@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -68,7 +69,7 @@ TYPED_TEST(TypedScatterListsTest, SlicedInputLists)
   auto src_list_column =
     lists_column_wrapper<T, int32_t>{{0, 0, 0, 0}, {9, 9, 9, 9}, {8, 8, 8}, {7, 7, 7}}.release();
   auto src_sliced =
-    cudf::detail::slice(src_list_column->view(), {1, 3}, rmm::cuda_stream_default).front();
+    cudf::detail::slice(src_list_column->view(), {1, 3}, cudf::default_stream_value).front();
 
   auto target_list_column =
     lists_column_wrapper<T, int32_t>{{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}}
@@ -85,7 +86,7 @@ TYPED_TEST(TypedScatterListsTest, SlicedInputLists)
       {8, 8, 8}, {1, 1}, {9, 9, 9, 9}, {3, 3}, {4, 4}, {5, 5}, {6, 6}});
 
   auto target_sliced =
-    cudf::detail::slice(target_list_column->view(), {1, 6}, rmm::cuda_stream_default);
+    cudf::detail::slice(target_list_column->view(), {1, 6}, cudf::default_stream_value);
 
   auto ret_2 =
     cudf::scatter(cudf::table_view({src_sliced}), scatter_map, cudf::table_view({target_sliced}));

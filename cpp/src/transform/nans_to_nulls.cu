@@ -21,6 +21,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -94,7 +95,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
   column_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::nans_to_nulls(input, rmm::cuda_stream_default, mr);
+  return detail::nans_to_nulls(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf
