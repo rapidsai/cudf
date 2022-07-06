@@ -33,10 +33,6 @@ def bench_min(benchmark, rangeindex):
     benchmark(rangeindex.min)
 
 
-def bench_replace(benchmark, rangeindex):
-    benchmark(rangeindex.replace, 0, 2)
-
-
 def bench_where(benchmark, rangeindex):
     cond = rangeindex % 2 == 0
     benchmark(rangeindex.where, cond, 0)

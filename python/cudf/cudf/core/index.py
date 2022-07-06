@@ -809,9 +809,6 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def to_numpy(self):
         return self.values_host
 
-    def replace(self, to_replace, value):
-        return self._as_int64().replace(to_replace=to_replace, value=value)
-
     def to_arrow(self):
         return pa.array(self._range, type=pa.from_numpy_dtype(self.dtype))
 
