@@ -18,6 +18,7 @@ Attributes and underlying data
 .. autosummary::
    :toctree: api/
 
+   DataFrame.axes
    DataFrame.index
    DataFrame.columns
 
