@@ -51,7 +51,8 @@ std::unique_ptr<cudf::column> create_column_data(cudf::size_type n_rows, bool ha
 
 }  // namespace
 
-class Search : public cudf::benchmark {
+// -------------------------------------------------------------------------------------------------
+class BinarySearch : public cudf::benchmark {
 };
 
 void BM_column(benchmark::State& state, bool nulls)
@@ -79,19 +80,18 @@ void BM_column(benchmark::State& state, bool nulls)
   }
 }
 
-BENCHMARK_DEFINE_F(Search, Column_AllValid)(::benchmark::State& state) { BM_column(state, false); }
-BENCHMARK_DEFINE_F(Search, Column_Nulls)(::benchmark::State& state) { BM_column(state, true); }
+#define BINARY_SEARCH_BENCHMARK_DEFINE(name, nulls)   \
+  BENCHMARK_DEFINE_F(BinarySearch, name)              \
+  (::benchmark::State & st) { BM_column(st, nulls); } \
+  BENCHMARK_REGISTER_F(BinarySearch, name)            \
+    ->UseManualTime()                                 \
+    ->Unit(benchmark::kMillisecond)                   \
+    ->Arg(100000000);
 
-BENCHMARK_REGISTER_F(Search, Column_AllValid)
-  ->UseManualTime()
-  ->Unit(benchmark::kMillisecond)
-  ->Arg(100000000);
+BINARY_SEARCH_BENCHMARK_DEFINE(Column_AllValid, false)
+BINARY_SEARCH_BENCHMARK_DEFINE(Column_HasNulls, true)
 
-BENCHMARK_REGISTER_F(Search, Column_Nulls)
-  ->UseManualTime()
-  ->Unit(benchmark::kMillisecond)
-  ->Arg(100000000);
-
+// -------------------------------------------------------------------------------------------------
 void BM_table(benchmark::State& state)
 {
   using Type = float;
@@ -114,7 +114,7 @@ void BM_table(benchmark::State& state)
   }
 }
 
-BENCHMARK_DEFINE_F(Search, Table)(::benchmark::State& state) { BM_table(state); }
+BENCHMARK_DEFINE_F(BinarySearch, Table)(::benchmark::State& state) { BM_table(state); }
 
 static void CustomArguments(benchmark::internal::Benchmark* b)
 {
@@ -123,10 +123,14 @@ static void CustomArguments(benchmark::internal::Benchmark* b)
       b->Args({num_cols, col_size});
 }
 
-BENCHMARK_REGISTER_F(Search, Table)
+BENCHMARK_REGISTER_F(BinarySearch, Table)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
   ->Apply(CustomArguments);
+
+// -------------------------------------------------------------------------------------------------
+class Contains : public cudf::benchmark {
+};
 
 void BM_contains_scalar(benchmark::State& state, bool nulls)
 {
@@ -141,23 +145,14 @@ void BM_contains_scalar(benchmark::State& state, bool nulls)
   }
 }
 
-BENCHMARK_DEFINE_F(Search, ColumnContains_AllValid)(::benchmark::State& state)
-{
-  BM_contains_scalar(state, false);
-}
-BENCHMARK_DEFINE_F(Search, ColumnContains_Nulls)(::benchmark::State& state)
-{
-  BM_contains_scalar(state, true);
-}
+#define CONTAINS_SEARCH_BENCHMARK_DEFINE(name, nulls) \
+  BENCHMARK_DEFINE_F(Contains, name)                  \
+  (::benchmark::State & st) { BM_column(st, nulls); } \
+  BENCHMARK_REGISTER_F(Contains, name)                \
+    ->RangeMultiplier(8)                              \
+    ->Ranges({{1 << 10, 1 << 26}})                    \
+    ->UseManualTime()                                 \
+    ->Unit(benchmark::kMillisecond);
 
-BENCHMARK_REGISTER_F(Search, ColumnContains_AllValid)
-  ->RangeMultiplier(8)
-  ->Ranges({{1 << 10, 1 << 26}})
-  ->UseManualTime()
-  ->Unit(benchmark::kMillisecond);
-
-BENCHMARK_REGISTER_F(Search, ColumnContains_Nulls)
-  ->RangeMultiplier(8)
-  ->Ranges({{1 << 10, 1 << 26}})
-  ->UseManualTime()
-  ->Unit(benchmark::kMillisecond);
+CONTAINS_SEARCH_BENCHMARK_DEFINE(SearchScalar_AllValid, false)
+CONTAINS_SEARCH_BENCHMARK_DEFINE(SearchScalar_Nulls, true)
