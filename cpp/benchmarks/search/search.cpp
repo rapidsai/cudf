@@ -72,11 +72,11 @@ void BM_column(benchmark::State& state, bool nulls)
   auto const data_table = cudf::table_view({*column});
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
-    [[maybe_unused]] auto const col   = cudf::upper_bound(data_table,
-                                                        cudf::table_view({*values}),
-                                                        {cudf::order::ASCENDING},
-                                                        {cudf::null_order::BEFORE});
+    auto const timer = cuda_event_timer(state, true);
+    auto const col   = cudf::upper_bound(data_table,
+                                       cudf::table_view({*values}),
+                                       {cudf::order::ASCENDING},
+                                       {cudf::null_order::BEFORE});
   }
 }
 
@@ -108,9 +108,8 @@ void BM_table(benchmark::State& state)
   auto const sorted      = cudf::sort(*data_table);
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
-    [[maybe_unused]] auto const col =
-      cudf::lower_bound(sorted->view(), *values_table, orders, null_orders);
+    auto const timer = cuda_event_timer(state, true);
+    auto const col   = cudf::lower_bound(sorted->view(), *values_table, orders, null_orders);
   }
 }
 
@@ -140,8 +139,8 @@ void BM_contains_scalar(benchmark::State& state, bool nulls)
   auto const value  = cudf::make_fixed_width_scalar<cudf::size_type>(column_size / 2);
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] auto const timer  = cuda_event_timer(state, true);
-    [[maybe_unused]] auto const result = cudf::contains(*column, *value);
+    auto const timer  = cuda_event_timer(state, true);
+    auto const result = cudf::contains(*column, *value);
   }
 }
 
@@ -165,8 +164,8 @@ void BM_contains_column(benchmark::State& state, bool nulls)
   auto const table_data = create_table_data<cudf::size_type>(column_size, 2, nulls);
 
   for ([[maybe_unused]] auto _ : state) {
-    [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
-    [[maybe_unused]] auto const result =
+    auto const timer = cuda_event_timer(state, true);
+    auto const result =
       cudf::contains(table_data->get_column(0).view(), table_data->get_column(1).view());
   }
 }
