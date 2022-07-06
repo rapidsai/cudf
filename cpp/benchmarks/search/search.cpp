@@ -46,7 +46,7 @@ void BM_column(benchmark::State& state, bool nulls)
 
   auto data_table = cudf::sort(cudf::table_view({*column}));
 
-  for (auto _ : state) {
+  for ([[maybe_unused]] auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::upper_bound(data_table->view(),
                                  cudf::table_view({*values}),
@@ -89,7 +89,7 @@ void BM_table(benchmark::State& state)
   std::vector<cudf::null_order> null_orders(num_columns, cudf::null_order::BEFORE);
   auto sorted = cudf::sort(*data_table);
 
-  for (auto _ : state) {
+  for ([[maybe_unused]] auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::lower_bound(sorted->view(), *values_table, orders, null_orders);
   }
@@ -126,7 +126,7 @@ void BM_contains(benchmark::State& state, bool nulls)
     values->set_null_mask(std::move(values_null_mask), values_null_count);
   }
 
-  for (auto _ : state) {
+  for ([[maybe_unused]] auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::contains(*column, *values);
   }
