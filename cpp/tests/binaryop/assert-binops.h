@@ -91,10 +91,12 @@ void ASSERT_BINOP(column_view const& out,
   auto out_data = out_h.first;
 
   ASSERT_EQ(out_data.size(), rhs_data.size());
-  for (size_t i = 0; i < out_data.size(); ++i) {
-    auto lhs = out_data[i];
-    auto rhs = (TypeOut)(op(lhs_h, rhs_data[i]));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
+  if(lhs.is_valid()) {
+    for (size_t i = 0; i < out_data.size(); ++i) {
+      auto lhs = out_data[i];
+      auto rhs = (TypeOut)(op(lhs_h, rhs_data[i]));
+      ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
+    }
   }
 
   if (rhs.nullable()) {
@@ -138,10 +140,12 @@ void ASSERT_BINOP(column_view const& out,
   auto out_data = out_h.first;
 
   ASSERT_EQ(out_data.size(), lhs_data.size());
-  for (size_t i = 0; i < out_data.size(); ++i) {
-    auto lhs = out_data[i];
-    auto rhs = (TypeOut)(op(lhs_data[i], rhs_h));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
+  if(rhs.is_valid()) {
+    for (size_t i = 0; i < out_data.size(); ++i) {
+      auto lhs = out_data[i];
+      auto rhs = (TypeOut)(op(lhs_data[i], rhs_h));
+      ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
+    }
   }
 
   if (lhs.nullable()) {
