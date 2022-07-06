@@ -713,9 +713,9 @@ endif()
 if(CUDF_BUILD_BENCHMARKS)
   # Find or install GoogleBench
   rapids_cpm_find(
-    benchmark 1.5.2
+    benchmark 1.6.1
     GIT_REPOSITORY https://github.com/google/benchmark.git
-    GIT_TAG v1.5.2
+    GIT_TAG v1.6.1
     GIT_SHALLOW TRUE
     OPTIONS "BENCHMARK_ENABLE_TESTING OFF" "BENCHMARK_ENABLE_INSTALL OFF"
   )
