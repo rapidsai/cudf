@@ -3324,11 +3324,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result = self.copy()
 
         # To get axis number
-        get_axis_number = {0: 0, "index": 0, "rows": 0, 1: 1, "columns": 1}
-        try:
-            axis = get_axis_number[axis]
-        except KeyError:
-            raise ValueError(f"No axis named {axis}")
+        axis = self._get_axis_from_axis_arg(axis)
 
         if axis == 0:
             if not isinstance(result.index, MultiIndex):

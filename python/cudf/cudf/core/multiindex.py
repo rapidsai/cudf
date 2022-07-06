@@ -1320,7 +1320,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         MultiIndex
             A new MultiIndex.
 
-
         Examples
         --------
         >>> import cudf
@@ -1339,10 +1338,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ('aa', 'b')],
            )
         """
-        i = self._level_index_from_level(i)
-        j = self._level_index_from_level(j)
-        name_i = self._data.names[i]
-        name_j = self._data.names[j]
+        name_i = self._data.names[i] if isinstance(i, int) else i
+        name_j = self._data.names[j] if isinstance(j, int) else j
         new_data = {}
         for k, v in self._data.items():
             if k not in (name_i, name_j):
@@ -1351,12 +1348,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 new_data[name_j] = self._data[name_j]
             elif k == name_j:
                 new_data[name_i] = self._data[name_i]
-        if [None] * len(self.names) == self.names:
-            return MultiIndex._from_data(new_data).set_names(
-                names=[None] * len(self.names)
-            )
-        else:
-            return MultiIndex._from_data(new_data, None)
+        midx = MultiIndex._from_data(new_data)
+        if all(n is None for n in self.names):
+            midx = midx.set_names(self.names)
+        return midx
 
     @_cudf_nvtx_annotate
     def droplevel(self, level=-1):
