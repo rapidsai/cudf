@@ -1,6 +1,9 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+import pytest
 
+
+@pytest.mark.pandas_incompatible
 def bench_values_host(benchmark, rangeindex):
     benchmark(lambda: rangeindex.values_host)
 
