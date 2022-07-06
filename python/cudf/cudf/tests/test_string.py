@@ -3128,6 +3128,7 @@ def test_string_get_json_object_invalid_JSONPath(json_path):
     with pytest.raises(ValueError):
         gs.str.get_json_object(json_path)
 
+
 def test_string_get_json_object_allow_single_quotes():
     gs = cudf.Series(
         [
@@ -3153,13 +3154,31 @@ def test_string_get_json_object_allow_single_quotes():
         ]
     )
     assert_eq(
-        gs.str.get_json_object("$.store.book[0].author", allow_single_quotes=True),
-        cudf.Series(["Nigel Rees"], dtype="object"),
+        gs.str.get_json_object(
+            "$.store.book[0].author", allow_single_quotes=True
+        ),
+        cudf.Series(["Nigel Rees"]),
     )
     assert_eq(
-        gs.str.get_json_object("$.store.book[*].title", allow_single_quotes=True),
-        cudf.Series(["['Sayings of the Century',\"Sword of Honour\"]"], dtype="object"),
+        gs.str.get_json_object(
+            "$.store.book[*].title", allow_single_quotes=True
+        ),
+        cudf.Series(["['Sayings of the Century',\"Sword of Honour\"]"]),
     )
+
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", allow_single_quotes=False
+        ),
+        cudf.Series([None]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", allow_single_quotes=False
+        ),
+        cudf.Series([None]),
+    )
+
 
 def test_string_get_json_object_strip_quotes_from_single_strings():
     gs = cudf.Series(
@@ -3186,13 +3205,30 @@ def test_string_get_json_object_strip_quotes_from_single_strings():
         ]
     )
     assert_eq(
-        gs.str.get_json_object("$.store.book[0].author", strip_quotes_from_single_strings=False),
-        cudf.Series(["\"Nigel Rees\""], dtype="object"),
+        gs.str.get_json_object(
+            "$.store.book[0].author", strip_quotes_from_single_strings=True
+        ),
+        cudf.Series(["Nigel Rees"]),
     )
     assert_eq(
-        gs.str.get_json_object("$.store.book[*].title", strip_quotes_from_single_strings=False),
-        cudf.Series(["[\"Sayings of the Century\",\"Sword of Honour\"]"], dtype="object"),
+        gs.str.get_json_object(
+            "$.store.book[*].title", strip_quotes_from_single_strings=True
+        ),
+        cudf.Series(['["Sayings of the Century","Sword of Honour"]']),
     )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].author", strip_quotes_from_single_strings=False
+        ),
+        cudf.Series(['"Nigel Rees"']),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].title", strip_quotes_from_single_strings=False
+        ),
+        cudf.Series(['["Sayings of the Century","Sword of Honour"]']),
+    )
+
 
 def test_string_get_json_object_missing_fields_as_nulls():
     gs = cudf.Series(
@@ -3219,13 +3255,30 @@ def test_string_get_json_object_missing_fields_as_nulls():
         ]
     )
     assert_eq(
-        gs.str.get_json_object("$.store.book[0].category", missing_fields_as_nulls=True),
-        cudf.Series(["null"], dtype="object"),
+        gs.str.get_json_object(
+            "$.store.book[0].category", missing_fields_as_nulls=True
+        ),
+        cudf.Series(["null"]),
     )
     assert_eq(
-        gs.str.get_json_object("$.store.book[*].category", missing_fields_as_nulls=True),
-        cudf.Series(["[null,\"fiction\"]"], dtype="object"),
+        gs.str.get_json_object(
+            "$.store.book[*].category", missing_fields_as_nulls=True
+        ),
+        cudf.Series(['[null,"fiction"]']),
     )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[0].category", missing_fields_as_nulls=False
+        ),
+        cudf.Series([None]),
+    )
+    assert_eq(
+        gs.str.get_json_object(
+            "$.store.book[*].category", missing_fields_as_nulls=False
+        ),
+        cudf.Series(['["fiction"]']),
+    )
+
 
 def test_str_join_lists_error():
     sr = cudf.Series([["a", "a"], ["b"], ["c"]])
