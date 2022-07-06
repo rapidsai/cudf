@@ -36,11 +36,9 @@ std::unique_ptr<cudf::table> create_table_data(cudf::size_type n_rows,
   profile.set_distribution_params<Type>(
     cudf::type_to_id<Type>(), distribution_id::UNIFORM, Type{0}, Type{1000});
 
-  // Deterministic benchmark, using the same starting seed value for each benchmark execution.
-  static unsigned seed = 0;
-
+  auto const seed = static_cast<uint32_t>(time(nullptr));
   return create_random_table(
-    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile, seed++);
+    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile, seed);
 }
 
 template <typename Type>
@@ -136,8 +134,8 @@ void BM_contains_scalar(benchmark::State& state, bool nulls)
   auto const value  = cudf::make_fixed_width_scalar<cudf::size_type>(column_size / 2);
 
   for ([[maybe_unused]] auto _ : state) {
-    auto const timer  = cuda_event_timer(state, true);
-    auto const result = cudf::contains(*column, *value);
+    auto const timer                   = cuda_event_timer(state, true);
+    [[maybe_unused]] auto const result = cudf::contains(*column, *value);
   }
 }
 
