@@ -888,6 +888,7 @@ public class BinaryOpTest extends CudfTestBase {
          ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2);
          ColumnVector structcv1 = ColumnVector.makeStruct(icv1);
          ColumnVector structcv2 = ColumnVector.makeStruct(icv2);
+         ColumnVector intscalar = ColumnVector.fromInts(4);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector dec32cv_1 = ColumnVector.decimalFromInts(-dec32Scale_1, DECIMAL32_1);
          ColumnVector dec32cv_2 = ColumnVector.decimalFromInts(-dec32Scale_2, DECIMAL32_2)) {
@@ -925,16 +926,14 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "scalar short != int32");
       }
 
-      try (ColumnVector intscalar = ColumnVector.fromInts(4);
-           Scalar s = Scalar.structFromColumnViews(intscalar);
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answersv = s.notEqualTo(structcv1);
            ColumnVector expectedsv = forEachS(DType.BOOL8, 4, icv1,
            (b, l, r, i) -> b.append(r.isNull(i) ? true : l != r.getInt(i)), true)) {
         assertColumnsAreEqual(expectedsv, answersv, "scalar struct int32 != struct int32");
       }
 
-      try (ColumnVector intscalar = ColumnVector.fromInts(4);
-           Scalar s = Scalar.structFromColumnViews(intscalar);
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answervs = structcv1.notEqualTo(s);
            ColumnVector expectedvs = forEachS(DType.BOOL8, icv1, 4,
            (b, l, r, i) -> b.append(l.isNull(i) ? true : l.getInt(i) != r), true)) {
@@ -1080,6 +1079,7 @@ public class BinaryOpTest extends CudfTestBase {
          ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2);
          ColumnVector structcv1 = ColumnVector.makeStruct(icv1);
          ColumnVector structcv2 = ColumnVector.makeStruct(icv2);
+         ColumnVector intscalar = ColumnVector.fromInts(4);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector dec32cv1 = ColumnVector.fromDecimals(BIGDECIMAL32_1);
          ColumnVector dec32cv2 = ColumnVector.fromDecimals(BIGDECIMAL32_2)) {
@@ -1109,16 +1109,14 @@ public class BinaryOpTest extends CudfTestBase {
         assertColumnsAreEqual(expected, answer, "scalar short > int32");
       }
 
-      try (ColumnVector intscalar = ColumnVector.fromInts(4);
-           Scalar s = Scalar.structFromColumnViews(intscalar);
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answersv = s.greaterThan(structcv1);
            ColumnVector expectedsv = forEachS(DType.BOOL8, 4, icv1,
            (b, l, r, i) -> b.append(r.isNull(i) ? true : l > r.getInt(i)), true)) {
         assertColumnsAreEqual(expectedsv, answersv, "scalar struct int32 > struct int32");
       }
 
-      try (ColumnVector intscalar = ColumnVector.fromInts(4);
-           Scalar s = Scalar.structFromColumnViews(intscalar);
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answervs = structcv1.greaterThan(s);
            ColumnVector expectedvs = forEachS(DType.BOOL8, icv1, 4,
            (b, l, r, i) -> b.append(l.isNull(i) ? false : l.getInt(i) > r), true)) {
@@ -1187,6 +1185,7 @@ public class BinaryOpTest extends CudfTestBase {
          ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2);
          ColumnVector structcv1 = ColumnVector.makeStruct(icv1);
          ColumnVector structcv2 = ColumnVector.makeStruct(icv2);
+         ColumnVector intscalar = ColumnVector.fromInts(4);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector dec32cv = ColumnVector.decimalFromInts(-dec32Scale_2, DECIMAL32_2)) {
       try (ColumnVector answer = icv1.lessOrEqualTo(dcv);
@@ -1217,16 +1216,14 @@ public class BinaryOpTest extends CudfTestBase {
         }
       }
 
-      try (ColumnVector intscalar = ColumnVector.fromInts(4);
-           Scalar s = Scalar.structFromColumnViews(intscalar);
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answersv = s.lessOrEqualTo(structcv1);
            ColumnVector expectedsv = forEachS(DType.BOOL8, 4, icv1,
            (b, l, r, i) -> b.append(r.isNull(i) ? false : l <= r.getInt(i)), true)) {
         assertColumnsAreEqual(expectedsv, answersv, "scalar struct int32 <= struct int32");
       }
 
-      try (ColumnVector intscalar = ColumnVector.fromInts(4);
-           Scalar s = Scalar.structFromColumnViews(intscalar);
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
            ColumnVector answervs = structcv1.lessOrEqualTo(s);
            ColumnVector expectedvs = forEachS(DType.BOOL8, icv1, 4,
            (b, l, r, i) -> b.append(l.isNull(i) ? true : l.getInt(i) <= r), true)) {

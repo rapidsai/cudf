@@ -503,7 +503,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclas
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
 
     if ((lhs->type().id() == cudf::type_id::STRUCT)) {
-      auto new_mask = cudf::binops::scalar_col_valid_mask_and(*rhs, *lhs);
+      auto new_mask = cudf::binops::scalar_col_bitmask_and(*rhs, *lhs);
       auto out = make_fixed_width_column(n_data_type, rhs->size(), std::move(new_mask),
                                          cudf::UNKNOWN_NULL_COUNT);
       auto lhs_col = cudf::make_column_from_scalar(*lhs, 1);

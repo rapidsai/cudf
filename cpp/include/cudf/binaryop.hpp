@@ -225,7 +225,7 @@ namespace binops {
  * @param mr      Device memory resource used to allocate the returned valid mask
  * @return        Computed validity mask
  */
-rmm::device_buffer scalar_col_valid_mask_and(
+rmm::device_buffer scalar_col_bitmask_and(
   column_view const& col,
   scalar const& s,
   rmm::cuda_stream_view stream        = cudf::default_stream_value,
