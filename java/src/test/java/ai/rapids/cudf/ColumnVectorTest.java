@@ -4795,15 +4795,15 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Double> rhsList3 = Arrays.asList(2.0, 1.0, null, 0.0, 0.0, null);
     List<Double> rhsList4 = null;
 
-    // List intersection result:
+    // Set intersection result:
     List<Double> expectedIntersectionList1 = Arrays.asList(null, 0.0, Double.NaN);
     List<Double> expectedIntersectionList2 = Arrays.asList(null, 0.0, 1.0);
 
-    // List union result:
+    // Set union result:
     List<Double> expectedUnionList1 = Arrays.asList(null, 0.0, 0.5, 1.0, 5.0, Double.NaN);
     List<Double> expectedUnionList2 = Arrays.asList(null, 0.0, 1.0, 2.0, 5.0, Double.NaN);
 
-    // List difference result:
+    // Set difference result:
     List<Double> expectedDifferenceList1 = Arrays.asList(5.0);
     List<Double> expectedDifferenceList2 = Arrays.asList(5.0, Double.NaN);
 
