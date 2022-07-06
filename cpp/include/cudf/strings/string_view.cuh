@@ -30,6 +30,8 @@
 #include <thrust/execution_policy.h>
 #endif
 
+#include <algorithm>
+
 // This file should only include device code logic.
 // Host-only or host/device code should be defined in the string_view.hpp header file.
 
