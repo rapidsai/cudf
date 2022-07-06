@@ -36,7 +36,6 @@ from cudf.core.column import (
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.join import Merge, MergeSemi
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
@@ -1557,68 +1556,6 @@ class Frame(BinaryOperand, Scannable):
         dtype: float64
         """
         return self._unaryop("abs")
-
-    @_cudf_nvtx_annotate
-    def _merge(
-        self,
-        right,
-        on=None,
-        left_on=None,
-        right_on=None,
-        left_index=False,
-        right_index=False,
-        how="inner",
-        sort=False,
-        indicator=False,
-        suffixes=("_x", "_y"),
-        lsuffix=None,
-        rsuffix=None,
-    ):
-        if indicator:
-            raise NotImplementedError(
-                "Only indicator=False is currently supported"
-            )
-
-        if lsuffix or rsuffix:
-            raise ValueError(
-                "The lsuffix and rsuffix keywords have been replaced with the "
-                "``suffixes=`` keyword.  "
-                "Please provide the following instead: \n\n"
-                "    suffixes=('%s', '%s')"
-                % (lsuffix or "_x", rsuffix or "_y")
-            )
-        else:
-            lsuffix, rsuffix = suffixes
-
-        lhs, rhs = self, right
-        merge_cls = Merge
-        if how == "right":
-            # Merge doesn't support right, so just swap
-            how = "left"
-            lhs, rhs = right, self
-            left_on, right_on = right_on, left_on
-            left_index, right_index = right_index, left_index
-            suffixes = (suffixes[1], suffixes[0])
-        elif how in {"leftsemi", "leftanti"}:
-            merge_cls = MergeSemi
-
-        # TODO: the two isinstance checks below indicates that `_merge` should
-        # not be defined in `Frame`, but in `IndexedFrame`.
-        return merge_cls(
-            lhs,
-            rhs,
-            on=on,
-            left_on=left_on,
-            right_on=right_on,
-            left_index=left_index,
-            right_index=right_index,
-            lhs_is_index=isinstance(lhs, cudf.core._base_index.BaseIndex),
-            rhs_is_index=isinstance(rhs, cudf.core._base_index.BaseIndex),
-            how=how,
-            sort=sort,
-            indicator=indicator,
-            suffixes=suffixes,
-        ).perform_merge()
 
     @_cudf_nvtx_annotate
     def _is_sorted(self, ascending=None, null_position=None):
