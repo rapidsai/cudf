@@ -246,6 +246,48 @@ def test_append_index(a, b):
     assert_eq(expected.index, actual.index)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2]},
+        {"a": [1, 2, 3], "b": [3, 4, 5]},
+        {"a": [1, 2, 3, 4], "b": [3, 4, 5, 6], "c": [1, 3, 5, 7]},
+        {"a": [np.nan, 2, 3, 4], "b": [3, 4, np.nan, 6], "c": [1, 3, 5, 7]},
+        {1: [1, 2, 3], 2: [3, 4, 5]},
+        {"a": [1, None, None], "b": [3, np.nan, np.nan]},
+        {1: ["a", "b", "c"], 2: ["q", "w", "u"]},
+        {1: ["a", np.nan, "c"], 2: ["q", None, "u"]},
+        pytest.param(
+            {},
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/11080"
+            ),
+        ),
+        pytest.param(
+            {1: [], 2: [], 3: []},
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/11080"
+            ),
+        ),
+        pytest.param(
+            [1, 2, 3],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/11080"
+            ),
+        ),
+    ],
+)
+def test_axes(data):
+    csr = cudf.DataFrame(data)
+    psr = pd.DataFrame(data)
+
+    expected = psr.axes
+    actual = csr.axes
+
+    for e, a in zip(expected, actual):
+        assert_eq(e, a)
+
+
 def test_series_init_none():
 
     # test for creating empty series
