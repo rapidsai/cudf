@@ -51,7 +51,6 @@ std::unique_ptr<cudf::column> create_column_data(cudf::size_type n_rows, bool ha
 
 }  // namespace
 
-// -------------------------------------------------------------------------------------------------
 class BinarySearch : public cudf::benchmark {
 };
 
@@ -91,7 +90,6 @@ void BM_column(benchmark::State& state, bool nulls)
 BINARY_SEARCH_BENCHMARK_DEFINE(Column_AllValid, false)
 BINARY_SEARCH_BENCHMARK_DEFINE(Column_HasNulls, true)
 
-// -------------------------------------------------------------------------------------------------
 void BM_table(benchmark::State& state)
 {
   using Type = float;
@@ -127,7 +125,6 @@ BENCHMARK_REGISTER_F(BinarySearch, Table)
   ->Unit(benchmark::kMillisecond)
   ->Apply(CustomArguments);
 
-// -------------------------------------------------------------------------------------------------
 class Contains : public cudf::benchmark {
 };
 
@@ -156,7 +153,6 @@ void BM_contains_scalar(benchmark::State& state, bool nulls)
 CONTAINS_SCALAR_BENCHMARK_DEFINE(SearchScalar_AllValid, false)
 CONTAINS_SCALAR_BENCHMARK_DEFINE(SearchScalar_Nulls, true)
 
-// -------------------------------------------------------------------------------------------------
 void BM_contains_column(benchmark::State& state, bool nulls)
 {
   auto const column_size{static_cast<cudf::size_type>(state.range(0))};
