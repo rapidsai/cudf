@@ -113,6 +113,7 @@ class ColumnAccessor(abc.MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
+            self._weak_ref = data._weak_ref
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.

@@ -367,7 +367,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         copies the references of the data and mask.
         """
         if deep:
-            import pdb;pdb.set_trace()
             result = libcudf.copying.copy_column(self)
             return cast(T, result._with_type_metadata(self.dtype))
         else:
