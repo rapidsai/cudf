@@ -68,7 +68,7 @@ struct contains_scalar_dispatch {
     using ScalarType      = cudf::scalar_type_t<Type>;
     auto const d_haystack = column_device_view::create(haystack, stream);
 
-    // `get_scalar_device_view` only accept non-const reference so we need to strip const.
+    // `get_scalar_device_view` only accepts non-const reference so we need to strip const.
     auto const s        = static_cast<ScalarType const*>(&needle);
     auto const d_needle = get_scalar_device_view(const_cast<ScalarType&>(*s));
 
