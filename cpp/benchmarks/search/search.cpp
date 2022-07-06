@@ -136,8 +136,8 @@ void BM_contains_scalar(benchmark::State& state, bool nulls)
 {
   auto const column_size{static_cast<cudf::size_type>(state.range(0))};
 
-  auto const column = create_column_data<float>(column_size, nulls);
-  auto const value  = cudf::make_fixed_width_scalar<float>(static_cast<float>(column_size / 2));
+  auto const column = create_column_data<cudf::size_type>(column_size, nulls);
+  auto const value  = cudf::make_fixed_width_scalar<cudf::size_type>(column_size / 2);
 
   for ([[maybe_unused]] auto _ : state) {
     [[maybe_unused]] auto const timer  = cuda_event_timer(state, true);
@@ -162,7 +162,7 @@ void BM_contains_column(benchmark::State& state, bool nulls)
 {
   auto const column_size{static_cast<cudf::size_type>(state.range(0))};
 
-  auto const table_data = create_table_data<float>(column_size, 2, nulls);
+  auto const table_data = create_table_data<cudf::size_type>(column_size, 2, nulls);
 
   for ([[maybe_unused]] auto _ : state) {
     [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
