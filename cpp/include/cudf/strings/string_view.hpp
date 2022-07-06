@@ -371,7 +371,7 @@ class string_view {
   /**
    * @brief The string length is initialized to this value as a place-holder
    *
-   * The number of characters in a string computed on-demand.
+   * The number of characters in a string is computed on-demand.
    */
   static inline cudf::size_type const UNKNOWN_STRING_LENGTH{-1};
 
@@ -392,7 +392,7 @@ class string_view {
    * @param bytes Number of bytes in str
    * @param pos Character position to start search within this string
    * @param count Number of characters from pos to include in the search
-   * @return npos if arg string is not found in this string
+   * @return npos if str is not found in this string
    */
   template <bool forward>
   __device__ inline size_type find_impl(const char* str,
