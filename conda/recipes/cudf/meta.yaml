@@ -57,7 +57,7 @@ requirements:
     - packaging
     - cachetools
     - ptxcompiler  # [linux64]  # CUDA enhanced compatibility. See https://github.com/rapidsai/ptxcompiler
-    - cuda-python >=11.5,<12.0
+    - cuda-python >=11.5,<11.7.1
 test:                                   # [linux64]
   requires:                             # [linux64]
     - cudatoolkit {{ cuda_version }}.*  # [linux64]
