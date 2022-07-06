@@ -24,6 +24,22 @@
 #include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
 
+namespace {
+template <typename Type>
+auto create_table_data(cudf::size_type n_rows, cudf::size_type n_cols)
+{
+  data_profile profile;
+  profile.set_cardinality(0);
+  profile.set_null_frequency(0.1);
+  profile.set_distribution_params<Type>(
+    cudf::type_to_id<Type>(), distribution_id::UNIFORM, Type{0}, Type{100});
+
+  return create_random_table(
+    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile);
+}
+
+}  // namespace
+
 class Search : public cudf::benchmark {
 };
 
@@ -76,14 +92,8 @@ void BM_table(benchmark::State& state)
   auto const column_size{static_cast<cudf::size_type>(state.range(1))};
   auto const values_size = column_size;
 
-  data_profile profile;
-  profile.set_cardinality(0);
-  profile.set_null_frequency(0.1);
-  profile.set_distribution_params<Type>(cudf::type_to_id<Type>(), distribution_id::UNIFORM, 0, 100);
-  auto data_table = create_random_table(
-    cycle_dtypes({cudf::type_to_id<Type>()}, num_columns), row_count{column_size}, profile);
-  auto values_table = create_random_table(
-    cycle_dtypes({cudf::type_to_id<Type>()}, num_columns), row_count{values_size}, profile);
+  auto data_table   = create_table_data<Type>(column_size, num_columns);
+  auto values_table = create_table_data<Type>(values_size, num_columns);
 
   std::vector<cudf::order> orders(num_columns, cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_orders(num_columns, cudf::null_order::BEFORE);
