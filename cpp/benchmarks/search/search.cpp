@@ -26,16 +26,27 @@
 
 namespace {
 template <typename Type>
-auto create_table_data(cudf::size_type n_rows, cudf::size_type n_cols)
+std::unique_ptr<cudf::table> create_table_data(cudf::size_type n_rows,
+                                               cudf::size_type n_cols,
+                                               bool has_nulls = false)
 {
   data_profile profile;
   profile.set_cardinality(0);
-  profile.set_null_frequency(0.1);
+  profile.set_null_frequency(has_nulls ? 0.1 : 0.0);
   profile.set_distribution_params<Type>(
     cudf::type_to_id<Type>(), distribution_id::UNIFORM, Type{0}, Type{100});
 
+  // Deterministic benchmark, using the same starting seed value for each benchmark execution.
+  static unsigned seed = 0;
+
   return create_random_table(
-    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile);
+    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile, seed++);
+}
+
+template <typename Type>
+std::unique_ptr<cudf::column> create_column_data(cudf::size_type n_rows, bool has_nulls = false)
+{
+  return std::move(create_table_data<Type>(n_rows, 1, has_nulls)->release().front());
 }
 
 }  // namespace
@@ -48,26 +59,23 @@ void BM_column(benchmark::State& state, bool nulls)
   auto const column_size{static_cast<cudf::size_type>(state.range(0))};
   auto const values_size = column_size;
 
-  auto init_data  = cudf::make_fixed_width_scalar<float>(static_cast<float>(0));
-  auto init_value = cudf::make_fixed_width_scalar<float>(static_cast<float>(values_size));
-  auto step       = cudf::make_fixed_width_scalar<float>(static_cast<float>(-1));
-  auto column     = cudf::sequence(column_size, *init_data);
-  auto values     = cudf::sequence(values_size, *init_value, *step);
+  auto const init_data = cudf::make_fixed_width_scalar<float>(static_cast<float>(0));
+  auto const column    = cudf::sequence(column_size, *init_data);
   if (nulls) {
     auto [column_null_mask, column_null_count] = create_random_null_mask(column->size(), 0.1, 1);
     column->set_null_mask(std::move(column_null_mask), column_null_count);
-    auto [values_null_mask, values_null_count] = create_random_null_mask(values->size(), 0.1, 2);
-    values->set_null_mask(std::move(values_null_mask), values_null_count);
   }
+  auto const values = create_column_data<float>(values_size, nulls);
 
-  auto data_table = cudf::sort(cudf::table_view({*column}));
+  // column is already sorted.
+  auto const data_table = cudf::table_view({*column});
 
   for ([[maybe_unused]] auto _ : state) {
-    cuda_event_timer timer(state, true);
-    auto col = cudf::upper_bound(data_table->view(),
-                                 cudf::table_view({*values}),
-                                 {cudf::order::ASCENDING},
-                                 {cudf::null_order::BEFORE});
+    [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
+    [[maybe_unused]] auto const col   = cudf::upper_bound(data_table,
+                                                        cudf::table_view({*values}),
+                                                        {cudf::order::ASCENDING},
+                                                        {cudf::null_order::BEFORE});
   }
 }
 
@@ -92,16 +100,17 @@ void BM_table(benchmark::State& state)
   auto const column_size{static_cast<cudf::size_type>(state.range(1))};
   auto const values_size = column_size;
 
-  auto data_table   = create_table_data<Type>(column_size, num_columns);
-  auto values_table = create_table_data<Type>(values_size, num_columns);
+  auto const data_table   = create_table_data<Type>(column_size, num_columns, true);
+  auto const values_table = create_table_data<Type>(values_size, num_columns, true);
 
-  std::vector<cudf::order> orders(num_columns, cudf::order::ASCENDING);
-  std::vector<cudf::null_order> null_orders(num_columns, cudf::null_order::BEFORE);
-  auto sorted = cudf::sort(*data_table);
+  auto const orders      = std::vector<cudf::order>(num_columns, cudf::order::ASCENDING);
+  auto const null_orders = std::vector<cudf::null_order>(num_columns, cudf::null_order::BEFORE);
+  auto const sorted      = cudf::sort(*data_table);
 
   for ([[maybe_unused]] auto _ : state) {
-    cuda_event_timer timer(state, true);
-    auto col = cudf::lower_bound(sorted->view(), *values_table, orders, null_orders);
+    [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
+    [[maybe_unused]] auto const col =
+      cudf::lower_bound(sorted->view(), *values_table, orders, null_orders);
   }
 }
 
@@ -119,36 +128,26 @@ BENCHMARK_REGISTER_F(Search, Table)
   ->Unit(benchmark::kMillisecond)
   ->Apply(CustomArguments);
 
-void BM_contains(benchmark::State& state, bool nulls)
+void BM_contains_scalar(benchmark::State& state, bool nulls)
 {
   auto const column_size{static_cast<cudf::size_type>(state.range(0))};
-  auto const values_size = column_size;
 
-  auto init_data  = cudf::make_fixed_width_scalar<float>(static_cast<float>(0));
-  auto init_value = cudf::make_fixed_width_scalar<float>(static_cast<float>(values_size));
-  auto step       = cudf::make_fixed_width_scalar<float>(static_cast<float>(-1));
-  auto column     = cudf::sequence(column_size, *init_data);
-  auto values     = cudf::sequence(values_size, *init_value, *step);
-  if (nulls) {
-    auto [column_null_mask, column_null_count] = create_random_null_mask(column->size(), 0.1, 1);
-    column->set_null_mask(std::move(column_null_mask), column_null_count);
-    auto [values_null_mask, values_null_count] = create_random_null_mask(values->size(), 0.1, 2);
-    values->set_null_mask(std::move(values_null_mask), values_null_count);
-  }
+  auto const column = create_column_data<float>(column_size, nulls);
+  auto const value  = cudf::make_fixed_width_scalar<float>(static_cast<float>(column_size / 2));
 
   for ([[maybe_unused]] auto _ : state) {
-    cuda_event_timer timer(state, true);
-    auto col = cudf::contains(*column, *values);
+    [[maybe_unused]] auto const timer  = cuda_event_timer(state, true);
+    [[maybe_unused]] auto const result = cudf::contains(*column, *value);
   }
 }
 
 BENCHMARK_DEFINE_F(Search, ColumnContains_AllValid)(::benchmark::State& state)
 {
-  BM_contains(state, false);
+  BM_contains_scalar(state, false);
 }
 BENCHMARK_DEFINE_F(Search, ColumnContains_Nulls)(::benchmark::State& state)
 {
-  BM_contains(state, true);
+  BM_contains_scalar(state, true);
 }
 
 BENCHMARK_REGISTER_F(Search, ColumnContains_AllValid)
