@@ -56,7 +56,8 @@ import java.util.stream.StreamSupport;
  * later the Cleaner itself will be released.
  */
 public final class MemoryCleaner {
-  private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
+  public static final String REF_COUNT_DEBUG_KEY = "ai.rapids.refcount.debug";
+  private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean(REF_COUNT_DEBUG_KEY);
   private static final Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
   private static final AtomicLong idGen = new AtomicLong(0);
 
@@ -197,42 +198,44 @@ public final class MemoryCleaner {
     }
   }, "Cleaner Thread");
 
+  /**
+   * Runnable used to be added to Java default shutdown hook.
+   * It checks the leaks at shutdown time.
+   * If you want to register the Runnable in a custom shutdown hook manager instead of Java default shutdown hook,
+   * should first remove it and then add it.
+   */
+  public static final Runnable DEFAULT_SHUTDOWN_RUNNABLE = () -> {
+    // If we are debugging things do a best effort to check for leaks at the end
+
+    System.gc();
+    // Avoid issues on shutdown with the cleaner thread.
+    t.interrupt();
+    try {
+      t.join(1000);
+    } catch (InterruptedException e) {
+      // Ignored
+    }
+    if (defaultGpu >= 0) {
+      Cuda.setDevice(defaultGpu);
+    }
+
+    for (CleanerWeakReference cwr : all) {
+      cwr.clean();
+    }
+  };
+
+  private static final Thread DEFAULT_SHUTDOWN_THREAD = new Thread(DEFAULT_SHUTDOWN_RUNNABLE);
+
   static {
     t.setDaemon(true);
     t.start();
     if (REF_COUNT_DEBUG) {
-      // If we are debugging things do a best effort to check for leaks at the end
-      Runnable hook = () -> {
-        System.gc();
-        // Avoid issues on shutdown with the cleaner thread.
-        t.interrupt();
-        try {
-          t.join(1000);
-        } catch (InterruptedException e) {
-          // Ignored
-        }
-        if (defaultGpu >= 0) {
-          Cuda.setDevice(defaultGpu);
-        }
-
-        for (CleanerWeakReference cwr : all) {
-          cwr.clean();
-        }
-      };
-
-      // Shutdown hooks are executed concurrently in JVM, and there is no execution order guarantee.
-      // See the doc of `Runtime.addShutdownHook`.
-      // Some resources are closed in other Spark hooks.
-      // Here we should wait other Spark hooks to be done, or a false leak will be detected.
-      //
-      // `Spark ShutdownHookManager` leverages `Hadoop ShutdownHookManager` to manage hooks with
-      // priority. The priority parameter will guarantee the execution order.
-      //
-      // Here also use `Hadoop ShutdownHookManager` to add a lower priority hook.
-      // 20 priority is small enough, will run after Spark hooks.
-      // Note: `ShutdownHookManager.get()` is a singleton, Spark and JNI both use the same singleton
-      org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(hook, 20);
+      Runtime.getRuntime().addShutdownHook(DEFAULT_SHUTDOWN_THREAD);
     }
+  }
+
+  public static void removeDefaultShutdownHook() {
+    Runtime.getRuntime().removeShutdownHook(DEFAULT_SHUTDOWN_THREAD);
   }
 
   static void register(ColumnVector vec, Cleaner cleaner) {
