@@ -99,7 +99,6 @@ def benchmark_with_object(
         "dataframe",
         "indexedframe",
         "frame_or_index",
-        "rangeindex",
     )
     assert cls in supported_classes, (
         f"cls {cls} is invalid, choose from " f"{', '.join(supported_classes)}"
