@@ -66,7 +66,6 @@ from cudf.core.column import (
     concat_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexed_frame import (
@@ -1649,7 +1648,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if 1 == first_data_column_position:
                 table_index = cudf.core.index.as_index(cols[0])
             elif first_data_column_position > 1:
-                table_index = Frame(
+                table_index = DataFrame._from_data(
                     data=dict(
                         zip(
                             indices[:first_data_column_position],
@@ -1658,7 +1657,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     )
                 )
             tables.append(
-                Frame(
+                DataFrame._from_data(
                     data=dict(
                         zip(
                             indices[first_data_column_position:],
