@@ -400,8 +400,8 @@ class ColumnAccessor(abc.MutableMapping):
         ColumnAccessor
         """
 
-        i = _get_level(i, self.nlevels)
-        j = _get_level(j, self.nlevels)
+        i = _get_level(i, self.nlevels, self.level_names)
+        j = _get_level(j, self.nlevels, self.level_names)
 
         new_keys = [list(row) for row in self.keys()]
         new_dict = {}
@@ -647,10 +647,11 @@ def _remove_key_level(key: Any, level: int) -> Any:
     return result
 
 
-def _get_level(x, nlevels):
+def _get_level(x, nlevels, level_names):
     """
     A helper function to validate the level and also converts the
-    negative levels.
+    negative levels. To support swapping based on level names, this
+    function also provides index number corresponding to level_name.
 
     Parameters
     ----------
@@ -658,10 +659,14 @@ def _get_level(x, nlevels):
     nlevels : total available levels in multiindex
 
     """
-    if x < 0:
-        x += nlevels
-    if x >= nlevels:
-        raise IndexError(
-            f"Level {x} out of bounds. Index has {nlevels} levels."
-        )
-    return x
+    if isinstance(x, int):
+        if x < 0:
+            x += nlevels
+        if x >= nlevels:
+            raise IndexError(
+                f"Level {x} out of bounds. Index has {nlevels} levels."
+            )
+        return x
+    else:
+        x = level_names.index(x)
+        return x
