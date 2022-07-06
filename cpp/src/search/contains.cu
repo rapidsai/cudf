@@ -23,6 +23,7 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -40,6 +41,21 @@ namespace detail {
 
 namespace {
 
+/**
+ * @brief Get the underlying value of a scalar through a scalar device view.
+ *
+ * @param d_scalar The input scalar device view
+ */
+template <typename Type, typename ScalarDView>
+__device__ auto inline get_scalar_value(ScalarDView d_scalar)
+{
+  if constexpr (cudf::is_fixed_point<Type>()) {
+    return d_scalar.rep();
+  } else {
+    return d_scalar.value();
+  }
+}
+
 struct contains_scalar_dispatch {
   template <typename Type>
   bool operator()(column_view const& haystack,
@@ -51,27 +67,28 @@ struct contains_scalar_dispatch {
     using DType           = device_storage_type_t<Type>;
     using ScalarType      = cudf::scalar_type_t<Type>;
     auto const d_haystack = column_device_view::create(haystack, stream);
-    auto const s          = static_cast<ScalarType const*>(&needle);
+
+    // `get_scalar_device_view` only accept non-const reference so we need to strip const.
+    auto const s        = static_cast<ScalarType const*>(&needle);
+    auto const d_needle = get_scalar_device_view(const_cast<ScalarType&>(*s));
 
     if (haystack.has_nulls()) {
       auto const begin = d_haystack->pair_begin<DType, true>();
       auto const end   = d_haystack->pair_end<DType, true>();
 
-      return thrust::count_if(rmm::exec_policy(stream),
-                              begin,
-                              end,
-                              [needle_pair = thrust::make_pair(s->value(stream), true)] __device__(
-                                auto const val_pair) { return val_pair == needle_pair; }) > 0;
+      return thrust::count_if(
+               rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val_pair) {
+                 auto const needle_pair = thrust::make_pair(get_scalar_value<Type>(d_needle), true);
+                 return val_pair == needle_pair;
+               }) > 0;
     } else {
       auto const begin = d_haystack->begin<DType>();
       auto const end   = d_haystack->end<DType>();
 
-      return thrust::count_if(rmm::exec_policy(stream),
-                              begin,
-                              end,
-                              [needle = s->value(stream)] __device__(auto const val) {
-                                return val == needle;
-                              }) > 0;
+      return thrust::count_if(
+               rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val) {
+                 return val == get_scalar_value<Type>(d_needle);
+               }) > 0;
     }
   }
 };
