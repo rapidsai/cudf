@@ -406,17 +406,21 @@ class ColumnAccessor(abc.MutableMapping):
         new_keys = [list(row) for row in self.keys()]
         new_dict = {}
 
-        # Swap old keys for i and j
+        # swap old keys for i and j
         for n, row in enumerate(self.names):
             new_keys[n][i], new_keys[n][j] = row[j], row[i]
             new_dict.update({row: tuple(new_keys[n])})
 
         new_data = {new_dict[k]: v.copy(deep=True) for k, v in self.items()}
 
+        # swap level_names for i and j
+        new_names = list(self.level_names)
+        new_names[i], new_names[j] = new_names[j], new_names[i]
+
         return self.__class__(
             new_data,
             multiindex=True,
-            level_names=self.level_names,
+            level_names=new_names,
         )
 
     def set_by_label(self, key: Any, value: Any, validate: bool = True):
