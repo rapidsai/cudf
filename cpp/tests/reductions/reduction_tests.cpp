@@ -124,11 +124,11 @@ template <typename T>
 struct MinMaxReductionTest : public ReductionTest<T> {
 };
 
-using MinMaxTypes = cudf::test::AllTypes;
+using MinMaxTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(MinMaxReductionTest, MinMaxTypes);
 
 // ------------------------------------------------------------------------
-TYPED_TEST(MinMaxReductionTest, MinMax)
+TYPED_TEST(MinMaxReductionTest, MinMaxTypes)
 {
   using T = TypeParam;
   std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
@@ -253,7 +253,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
 template <typename T>
 struct SumReductionTest : public ReductionTest<T> {
 };
-TYPED_TEST_SUITE(SumReductionTest, cudf::test::NumericTypes);
+using SumTypes = cudf::test::Types<int16_t, int32_t, float, double>;
+TYPED_TEST_SUITE(SumReductionTest, SumTypes);
 
 TYPED_TEST(SumReductionTest, Sum)
 {
@@ -294,6 +295,7 @@ TYPED_TEST(SumReductionTest, Sum)
                  .second);
 }
 
+using ReductionTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
@@ -384,8 +386,8 @@ TYPED_TEST(ReductionTest, SumOfSquare)
 template <typename T>
 struct ReductionAnyAllTest : public ReductionTest<bool> {
 };
-
-TYPED_TEST_SUITE(ReductionAnyAllTest, cudf::test::NumericTypes);
+using AnyAllTypes = cudf::test::Types<int32_t, float, bool>;
+TYPED_TEST_SUITE(ReductionAnyAllTest, AnyAllTypes);
 
 TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
 {
@@ -518,8 +520,7 @@ TYPED_TEST(ReductionAnyAllTest, AnyAllFalseFalse)
 template <typename T>
 struct MultiStepReductionTest : public ReductionTest<T> {
 };
-
-using MultiStepReductionTypes = cudf::test::NumericTypes;
+using MultiStepReductionTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(MultiStepReductionTest, MultiStepReductionTypes);
 
 TYPED_TEST(MultiStepReductionTest, Mean)
@@ -859,8 +860,7 @@ TEST_F(ReductionDtypeTest, different_precision)
                                                    cudf::data_type(cudf::type_id::INT64));
 }
 
-struct ReductionErrorTest : public cudf::test::BaseFixture {
-};
+struct ReductionErrorTest : public cudf::test::BaseFixture {};
 
 // test case for empty input cases
 TEST_F(ReductionErrorTest, empty_column)
@@ -895,8 +895,7 @@ TEST_F(ReductionErrorTest, empty_column)
 // ----------------------------------------------------------------------------
 
 struct ReductionParamTest : public ReductionTest<double>,
-                            public ::testing::WithParamInterface<cudf::size_type> {
-};
+                            public ::testing::WithParamInterface<cudf::size_type> {};
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
 
@@ -1834,8 +1833,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
   }
 }
 
-struct Decimal128Only : public cudf::test::BaseFixture {
-};
+struct Decimal128Only : public cudf::test::BaseFixture {};
 
 TEST_F(Decimal128Only, Decimal128ProductReduction)
 {
@@ -1998,8 +1996,7 @@ TYPED_TEST(ReductionTest, NthElement)
   }
 }
 
-struct DictionaryStringReductionTest : public StringReductionTest {
-};
+struct DictionaryStringReductionTest : public StringReductionTest {};
 
 std::vector<std::string> data_list[] = {
   {"nine", "two", "five", "three", "five", "six", "two", "eight", "nine"},
@@ -2043,7 +2040,7 @@ TEST_P(DictionaryStringReductionTest, MinMax)
 template <typename T>
 struct DictionaryAnyAllTest : public ReductionTest<bool> {
 };
-
+using DictionaryAnyAllTypes = cudf::test::Types<int16_t, int32_t, float, double, bool>;
 TYPED_TEST_SUITE(DictionaryAnyAllTest, cudf::test::NumericTypes);
 TYPED_TEST(DictionaryAnyAllTest, AnyAll)
 {
@@ -2145,7 +2142,7 @@ template <typename T>
 struct DictionaryReductionTest : public ReductionTest<T> {
 };
 
-using DictionaryTypes = cudf::test::Types<int16_t, uint32_t, float, double>;
+using DictionaryTypes = cudf::test::Types<int16_t, int32_t, float, double>;
 TYPED_TEST_SUITE(DictionaryReductionTest, DictionaryTypes);
 TYPED_TEST(DictionaryReductionTest, Sum)
 {
