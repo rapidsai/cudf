@@ -29,7 +29,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/find.h>
+#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
@@ -56,15 +56,21 @@ struct contains_scalar_dispatch {
     if (haystack.has_nulls()) {
       auto const begin = d_haystack->pair_begin<DType, true>();
       auto const end   = d_haystack->pair_end<DType, true>();
-      auto const val   = thrust::make_pair(s->value(stream), true);
 
-      return thrust::find(rmm::exec_policy(stream), begin, end, val) != end;
+      return thrust::count_if(rmm::exec_policy(stream),
+                              begin,
+                              end,
+                              [needle_pair = thrust::make_pair(s->value(stream), true)] __device__(
+                                auto const val_pair) { return val_pair == needle_pair; });
     } else {
       auto const begin = d_haystack->begin<DType>();
       auto const end   = d_haystack->end<DType>();
-      auto const val   = s->value(stream);
 
-      return thrust::find(rmm::exec_policy(stream), begin, end, val) != end;
+      return thrust::count_if(
+        rmm::exec_policy(stream),
+        begin,
+        end,
+        [needle = s->value(stream)] __device__(auto const val) { return val == needle; });
     }
   }
 };
