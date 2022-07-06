@@ -44,6 +44,8 @@ namespace {
 /**
  * @brief Get the underlying value of a scalar through a scalar device view.
  *
+ * @tparam Type The scalar's value type
+ * @tparam ScalarDView Type of the input scalar device view
  * @param d_scalar The input scalar device view
  */
 template <typename Type, typename ScalarDView>
