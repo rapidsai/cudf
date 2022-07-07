@@ -84,7 +84,7 @@ def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
     val_col = as_column(value, dtype=to_type)
     old_col = col.astype(to_type)
 
-    col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
+    col._temp_mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
 
 
 class _SeriesIlocIndexer(_FrameIndexer):
@@ -141,15 +141,16 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     value.dtype, self._frame._column.dtype
                 )
                 value = value.astype(to_dtype)
-                self._frame._column._mimic_inplace(
+                self._frame._column._temp_mimic_inplace(
                     self._frame._column.astype(to_dtype), inplace=True
                 )
 
         if weakref.getweakrefcount(self._frame._column) == 0:
             self._frame._column[key] = value
         else:
+            prev_col = self._frame._column
             self._frame._column = self._frame._column.custom_deep_copy()
-            self._frame._data._weak_ref[self._frame.name] = weakref.ref(self._frame._column)
+            self._frame._column._weak_ref = weakref.ref(prev_col)
             self._frame._column[key] = value
 
 

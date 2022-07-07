@@ -11,6 +11,7 @@ import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import Buffer
 
+import weakref
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp cimport bool
@@ -70,7 +71,8 @@ cdef class Column:
         object mask=None,
         int offset=0,
         object null_count=None,
-        object children=()
+        object children=(),
+        object weak_ref=None,
     ):
 
         self._size = size
@@ -81,6 +83,7 @@ cdef class Column:
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
+        self._weak_ref = weak_ref
 
     @property
     def base_size(self):
@@ -319,7 +322,7 @@ cdef class Column:
         self._children = None
         self._base_children = value
 
-    def _mimic_inplace(self, other_col, inplace=False):
+    def _temp_mimic_inplace(self, other_col, inplace=False):
         """
         Given another column, update the attributes of this column to mimic an
         inplace operation. This does not modify the memory of Buffers, but
@@ -327,12 +330,17 @@ cdef class Column:
         object with the Buffers and attributes from the other column.
         """
         if inplace:
-            self._offset = other_col.offset
-            self._size = other_col.size
-            self._dtype = other_col._dtype
-            self.set_base_data(other_col.base_data)
-            self.set_base_children(other_col.base_children)
-            self.set_base_mask(other_col.base_mask)
+            if weakref.getweakrefcount(other_col) > 0:
+                new_col = other_col.custom_deep_copy()
+            else:
+                new_col = other_col
+
+            self._offset = new_col.offset
+            self._size = new_col.size
+            self._dtype = new_col._dtype
+            self.set_base_data(new_col.base_data)
+            self.set_base_children(new_col.base_children)
+            self.set_base_mask(new_col.base_mask)
         else:
             return other_col
 

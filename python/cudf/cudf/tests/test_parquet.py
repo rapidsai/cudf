@@ -438,7 +438,7 @@ def test_parquet_read_metadata(tmpdir, pdf):
     fname = tmpdir.join("metadata.parquet")
     row_group_size = 5
     pdf.to_parquet(fname, compression="snappy", row_group_size=row_group_size)
-
+    import pdb;pdb.set_trace()
     num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
     assert num_rows == len(pdf.index)

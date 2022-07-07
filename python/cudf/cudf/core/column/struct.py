@@ -105,6 +105,7 @@ class StructColumn(ColumnBase):
             offset=self.offset,
             null_count=self.null_count,
             children=self.base_children,
+            weak_ref=self._weak_ref,
         )
 
     @property

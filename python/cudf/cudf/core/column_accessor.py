@@ -113,7 +113,7 @@ class ColumnAccessor(abc.MutableMapping):
             self._data = data._data
             self.multiindex = multiindex
             self._level_names = level_names
-            self._weak_ref = data._weak_ref
+            # self._weak_ref = data._weak_ref
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
@@ -134,7 +134,7 @@ class ColumnAccessor(abc.MutableMapping):
 
             self.multiindex = multiindex
             self._level_names = level_names
-            self._weak_ref = {}
+            # self._weak_ref = {}
 
     @classmethod
     def _create_unsafe(
@@ -312,10 +312,10 @@ class ColumnAccessor(abc.MutableMapping):
         """
         if deep:
             # import pdb;pdb.set_trace()
-            self._weak_ref = {k: weakref.ref(v) for k, v in self._data.items()}
+            # self._weaks_ref = {k: weakref.ref(v) for k, v in self._data.items()}
             return self.__class__(
-                # {k: v.copy(deep=True) for k, v in self._data.items()},
-                self._data.copy(),
+                {k: v.copy(deep=True) for k, v in self._data.items()},
+                # self._data.copy(),
                 multiindex=self.multiindex,
                 level_names=self.level_names,
             )

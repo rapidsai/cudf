@@ -329,7 +329,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return libcudf.filling.fill(self, begin, end, slr.device_value)
 
         if is_string_dtype(self.dtype):
-            return self._mimic_inplace(
+            return self._temp_mimic_inplace(
                 libcudf.filling.fill(self, begin, end, slr.device_value),
                 inplace=True,
             )
@@ -367,8 +367,21 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         copies the references of the data and mask.
         """
         if deep:
-            result = libcudf.copying.copy_column(self)
-            return cast(T, result._with_type_metadata(self.dtype))
+            copied_col = cast(
+                T,
+                build_column(
+                    self.base_data,
+                    self.dtype,
+                    mask=self.base_mask,
+                    size=self.size,
+                    offset=self.offset,
+                    children=self.base_children,
+                ),
+            )
+            # result = libcudf.copying.copy_column(self)
+            # return cast(T, result._with_type_metadata(self.dtype))
+            copied_col._weak_ref = weakref.ref(self)
+            return copied_col
         else:
             return cast(
                 T,
@@ -503,7 +516,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             out = self._scatter_by_column(key, value_normalized)
 
         if out:
-            self._mimic_inplace(out, inplace=True)
+            self._temp_mimic_inplace(out, inplace=True)
 
     def _wrap_binop_normalization(self, other):
         if other is NA or other is None:
