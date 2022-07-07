@@ -3239,6 +3239,26 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Extracts all strings that match the given regular expression and corresponds to the 
+   * regular expression group index. Any null inputs also result in null output entries.
+   * 
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   
+   * @param pattern The regex pattern
+   * @param idx The regex group index (only 0 is supported currently). 
+   * @return A new column vector of extracted matches
+   */
+  public final ColumnVector extractAllRecord(String pattern, int idx) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert idx >= 0 : "group index must be at least 0";
+    assert idx == 0 : "group index > 0 is not supported yet";
+
+    return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
+  }
+
+
+  /**
    * Converts all character sequences starting with '%' into character code-points
    * interpreting the 2 following characters as hex values to create the code-point.
    * For example, the sequence '%20' is converted into byte (0x20) which is a single
@@ -3925,6 +3945,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method for extracting results from an regular expressions.  Returns a table handle.
    */
   private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
+
+  /**
+   * Native method for extracting all results corresponding to group idx from a regular expression.
+   *
+   * @param nativeHandle Native handle of the cudf::column_view being operated on.
+   * @param pattern String regex pattern.
+   * @param idx Regex group index. A 0 value means matching the entire regex.
+   * @return Native handle of a string column of the result.
+   */
+  private static native long extractAllRecord(long nativeHandle, String pattern, int idx);
 
   private static native long urlDecode(long cudfViewHandle);
 
