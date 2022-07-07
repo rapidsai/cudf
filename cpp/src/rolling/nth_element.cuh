@@ -18,7 +18,7 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/utilities/bit.hpp>
 
@@ -155,13 +155,13 @@ std::unique_ptr<column> nth_element(size_type n,
     rmm::exec_policy(stream), gather_iter, gather_iter + input.size(), gather_map.begin());
 
   auto gathered = cudf::detail::gather(table_view{{input}},
-                                       gather_map.begin(),
-                                       gather_map.end(),
+                                       gather_map,
                                        cudf::out_of_bounds_policy::NULLIFY,
+                                       negative_index_policy::NOT_ALLOWED,
                                        stream,
                                        mr)
                     ->release();
-  return std::move(gathered[0]);
+  return std::move(gathered.front());
 }
 
 }  // namespace cudf::detail::rolling
