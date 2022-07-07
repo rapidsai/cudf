@@ -23,7 +23,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -36,20 +35,14 @@ inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value
 template <class BinaryOperator,
           typename PhysicalElementComparator =
             cudf::experimental::row::lexicographic::sorting_physical_element_comparator>
-void apply_struct_binary_op(PhysicalElementComparator comparator,
-                            mutable_column_view& out,
+void apply_struct_binary_op(mutable_column_view& out,
                             column_view const& lhs,
                             column_view const& rhs,
                             bool is_lhs_scalar,
                             bool is_rhs_scalar,
-                            rmm::cuda_stream_view stream = cudf::default_stream_value)
+                            PhysicalElementComparator comparator = {},
+                            rmm::cuda_stream_view stream         = cudf::default_stream_value)
 {
-  CUDF_EXPECTS(lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT,
-               "Both columns must be struct columns");
-  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(lhs) and
-                 !cudf::structs::detail::is_or_has_nested_lists(rhs),
-               "Lists not supported");
-
   auto compare_orders   = std::vector<order>(lhs.size(),
                                            is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
                                                ? order::DESCENDING
@@ -95,22 +88,17 @@ void apply_struct_binary_op(PhysicalElementComparator comparator,
 
 template <typename PhysicalEqualityComparator =
             cudf::experimental::row::equality::physical_equality_comparator>
-void apply_struct_equality_op(binary_operator op,
-                              PhysicalEqualityComparator c,
-                              mutable_column_view& out,
+void apply_struct_equality_op(mutable_column_view& out,
                               column_view const& lhs,
                               column_view const& rhs,
                               bool is_lhs_scalar,
                               bool is_rhs_scalar,
+                              binary_operator op,
+                              PhysicalEqualityComparator c = {},
                               rmm::cuda_stream_view stream = cudf::default_stream_value)
 {
   CUDF_EXPECTS(op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL,
                "Unsupported operator for these types");
-  CUDF_EXPECTS(lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT,
-               "Both columns must be struct columns");
-  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(lhs) and
-                 !cudf::structs::detail::is_or_has_nested_lists(rhs),
-               "Lists not supported");
 
   auto tlhs = table_view{{lhs}};
   auto trhs = table_view{{rhs}};
