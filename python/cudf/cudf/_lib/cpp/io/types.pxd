@@ -6,6 +6,7 @@ from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.pair cimport pair
 from libcpp.string cimport string
+from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
 from pyarrow.includes.libarrow cimport CRandomAccessFile
 
@@ -57,6 +58,7 @@ cdef extern from "cudf/io/types.hpp" \
 
         vector[string] column_names
         map[string, string] user_data
+        vector[unordered_map[string, string]] per_file_user_data
         vector[column_name_info] schema_info
 
     cdef cppclass table_with_metadata:

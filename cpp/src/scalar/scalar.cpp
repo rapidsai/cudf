@@ -20,6 +20,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -108,7 +109,7 @@ size_type string_scalar::size() const { return _data.size(); }
 
 const char* string_scalar::data() const { return static_cast<const char*>(_data.data()); }
 
-string_scalar::operator std::string() const { return this->to_string(rmm::cuda_stream_default); }
+string_scalar::operator std::string() const { return this->to_string(cudf::default_stream_value); }
 
 std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 {
@@ -185,7 +186,7 @@ T fixed_point_scalar<T>::fixed_point_value(rmm::cuda_stream_view stream) const
 template <typename T>
 fixed_point_scalar<T>::operator value_type() const
 {
-  return this->fixed_point_value(rmm::cuda_stream_default);
+  return this->fixed_point_value(cudf::default_stream_value);
 }
 
 template <typename T>
@@ -268,7 +269,7 @@ T const* fixed_width_scalar<T>::data() const
 template <typename T>
 fixed_width_scalar<T>::operator value_type() const
 {
-  return this->value(rmm::cuda_stream_default);
+  return this->value(cudf::default_stream_value);
 }
 
 /**

@@ -375,6 +375,23 @@ class string_view {
    * @return The character position for the specified byte.
    */
   __device__ [[nodiscard]] inline size_type character_offset(size_type bytepos) const;
+
+  /**
+   * @brief Common internal implementation for string_view::find and string_view::rfind.
+   *
+   * @tparam forward True for find and false for rfind
+   *
+   * @param str Target string to search with this string
+   * @param bytes Number of bytes in str
+   * @param pos Character position to start search within this string
+   * @param count Number of characters from pos to include in the search
+   * @return -1 if arg string is not found in this string
+   */
+  template <bool forward>
+  __device__ inline size_type find_impl(const char* str,
+                                        size_type bytes,
+                                        size_type pos,
+                                        size_type count) const;
 };
 
 }  // namespace cudf

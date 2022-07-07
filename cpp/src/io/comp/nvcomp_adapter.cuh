@@ -25,6 +25,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <optional>
+
 namespace cudf::io::nvcomp {
 
 struct batched_args {

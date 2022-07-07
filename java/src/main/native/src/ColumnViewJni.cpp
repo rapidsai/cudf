@@ -57,6 +57,7 @@
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/findall.hpp>
 #include <cudf/strings/json.hpp>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/repeat_strings.hpp>
@@ -72,6 +73,7 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -480,7 +482,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
 
     // Extract list offsets and a column of struct<keys, values> from the input lists column.
     auto const lists_keys_vals = cudf::lists_column_view(*input_cv);
-    auto const keys_vals = lists_keys_vals.get_sliced_child(rmm::cuda_stream_default);
+    auto const keys_vals = lists_keys_vals.get_sliced_child(cudf::default_stream_value);
     CUDF_EXPECTS(keys_vals.type().id() == cudf::type_id::STRUCT,
                  "Input column has child that is not a structs column.");
     CUDF_EXPECTS(keys_vals.num_children() == 2,
@@ -1421,6 +1423,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookup(JNIEnv *env, jc
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapContainsKeys(JNIEnv *env, jclass,
+                                                                       jlong map_column_view,
+                                                                       jlong lookup_keys) {
+  JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_keys, "lookup key is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    auto const *column_key = reinterpret_cast<cudf::column_view *>(lookup_keys);
+    auto const maps_view = cudf::jni::maps_column_view{*cv};
+    return release_as_jlong(maps_view.contains(*column_key));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapContains(JNIEnv *env, jclass,
                                                                    jlong map_column_view,
                                                                    jlong lookup_key) {
@@ -1556,6 +1573,27 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *en
 
     return cudf::jni::convert_table_for_return(
         env, cudf::strings::extract(strings_column, pattern.get()));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv *env, jclass,
+                                                                        jlong j_view_handle,
+                                                                        jstring pattern_obj,
+                                                                        jint idx) {
+  JNI_NULL_CHECK(env, j_view_handle, "column is null", 0);
+
+  if (idx > 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "group index > 0 is not supported", 0);
+  }
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::strings_column_view const strings_column{
+        *reinterpret_cast<cudf::column_view *>(j_view_handle)};
+    cudf::jni::native_jstring pattern(env, pattern_obj);
+
+    return release_as_jlong(cudf::strings::findall_record(strings_column, pattern.get()));
   }
   CATCH_STD(env, 0);
 }
