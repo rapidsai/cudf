@@ -2308,13 +2308,11 @@ class StringMethods(ColumnMethods):
         """
 
         try:
-            options = libstrings.GetJsonObjectOptions()
-            options.set_allow_single_quotes(allow_single_quotes)
-            options.set_strip_quotes_from_single_strings(
-                strip_quotes_from_single_strings
+            options = libstrings.GetJsonObjectOptions(
+                allow_single_quotes,
+                strip_quotes_from_single_strings,
+                missing_fields_as_nulls,
             )
-            options.set_missing_fields_as_nulls(missing_fields_as_nulls)
-
             res = self._return_or_inplace(
                 libstrings.get_json_object(
                     self._column, cudf.Scalar(json_path, "str"), options

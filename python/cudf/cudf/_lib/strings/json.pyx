@@ -44,20 +44,38 @@ def get_json_object(
 cdef class GetJsonObjectOptions:
     cdef get_json_object_options options
 
-    def get_allow_single_quotes(self):
+    def __init__(
+        self,
+        allow_single_quotes=False,
+        strip_quotes_from_single_strings=True,
+        missing_fields_as_nulls=False
+    ):
+        self.options.set_allow_single_quotes(allow_single_quotes)
+        self.options.set_strip_quotes_from_single_strings(
+            strip_quotes_from_single_strings
+        )
+        self.options.set_missing_fields_as_nulls(missing_fields_as_nulls)
+
+    @property
+    def allow_single_quotes(self):
         return self.options.get_allow_single_quotes()
 
-    def get_strip_quotes_from_single_strings(self):
+    @property
+    def strip_quotes_from_single_strings(self):
         return self.options.get_strip_quotes_from_single_strings()
 
-    def get_missing_fields_as_nulls(self):
+    @property
+    def missing_fields_as_nulls(self):
         return self.options.get_missing_fields_as_nulls()
 
-    def set_allow_single_quotes(self, val):
+    @allow_single_quotes.setter
+    def allow_single_quotes(self, val):
         self.options.set_allow_single_quotes(val)
 
-    def set_strip_quotes_from_single_strings(self, val):
+    @strip_quotes_from_single_strings.setter
+    def strip_quotes_from_single_strings(self, val):
         self.options.set_strip_quotes_from_single_strings(val)
 
-    def set_missing_fields_as_nulls(self, val):
+    @missing_fields_as_nulls.setter
+    def missing_fields_as_nulls(self, val):
         self.options.set_missing_fields_as_nulls(val)
