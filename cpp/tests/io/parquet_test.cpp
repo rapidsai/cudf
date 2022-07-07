@@ -253,6 +253,18 @@ bool read_offset_index(std::unique_ptr<cudf_io::datasource>& source,
   return cp.read(offidx);
 }
 
+bool read_page_header(std::unique_ptr<cudf_io::datasource>& source,
+                      const cudf_io::parquet::PageLocation& page_loc,
+                      cudf_io::parquet::PageHeader* page_hdr)
+{
+  CUDF_EXPECTS(page_loc.offset > 0, "Cannot find page header");
+  CUDF_EXPECTS(page_loc.compressed_page_size > 0, "Invalid page header length");
+
+  const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
+  cudf_io::parquet::CompactProtocolReader cp(page_buf->data(), page_buf->size());
+  return cp.read(page_hdr);
+}
+
 // Base test fixture for tests
 struct ParquetWriterTest : public cudf::test::BaseFixture {
 };
@@ -3672,7 +3684,8 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   for (int i = 0; i < 3; i++) {
     cudf_io::parquet::ColumnIndex ci;
-    CUDF_EXPECTS(read_column_index(source, fmd.row_groups[0].columns[i], &ci), "Cannot parse column index");
+    CUDF_EXPECTS(read_column_index(source, fmd.row_groups[0].columns[i], &ci),
+                 "Cannot parse column index");
     EXPECT_EQ(ci.boundary_order, expected_orders[i]);
   }
 }
@@ -3807,10 +3820,8 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
-        auto& page_loc      = oi.page_locations[o];
-        const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
-        cp.init(page_buf->data(), page_buf->size());
-        CUDF_EXPECTS(cp.read(&ph), "Cannot parse page header");
+        auto& page_loc = oi.page_locations[o];
+        CUDF_EXPECTS(read_page_header(source, page_loc, &ph), "Cannot parse page header");
         EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += ph.data_page_header.num_values;
@@ -3926,10 +3937,8 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
-        auto& page_loc      = oi.page_locations[o];
-        const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
-        cp.init(page_buf->data(), page_buf->size());
-        CUDF_EXPECTS(cp.read(&ph), "Cannot parse page header");
+        auto& page_loc = oi.page_locations[o];
+        CUDF_EXPECTS(read_page_header(source, page_loc, &ph), "Cannot parse page header");
         EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += ph.data_page_header.num_values;
@@ -4027,10 +4036,8 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
-        auto& page_loc      = oi.page_locations[o];
-        const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
-        cp.init(page_buf->data(), page_buf->size());
-        CUDF_EXPECTS(cp.read(&ph), "Cannot parse page header");
+        auto& page_loc = oi.page_locations[o];
+        CUDF_EXPECTS(read_page_header(source, page_loc, &ph), "Cannot parse page header");
         EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
         EXPECT_EQ(page_loc.first_row_index, num_vals);
         num_vals += ph.data_page_header.num_values;
@@ -4116,10 +4123,8 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
-        auto& page_loc      = oi.page_locations[o];
-        const auto page_buf = source->host_read(page_loc.offset, page_loc.compressed_page_size);
-        cp.init(page_buf->data(), page_buf->size());
-        CUDF_EXPECTS(cp.read(&ph), "Cannot parse page header");
+        auto& page_loc = oi.page_locations[o];
+        CUDF_EXPECTS(read_page_header(source, page_loc, &ph), "Cannot parse page header");
         EXPECT_EQ(ph.type, cudf_io::parquet::PageType::DATA_PAGE);
         // last column has 2 values per row
         EXPECT_EQ(page_loc.first_row_index * (c == rg.columns.size() - 1 ? 2 : 1), num_vals);
