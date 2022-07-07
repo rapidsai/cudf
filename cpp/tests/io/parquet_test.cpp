@@ -229,6 +229,10 @@ bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
   return cp.read(file_meta_data);
 }
 
+// read column index from datasource at location indicated by chunk,
+// parse and poplulate passed in ColumnIndex.
+// returns true on success, false if the column index cannot be parsed.
+// throws cudf::logic_error if the chunk data is invalid.
 bool read_column_index(std::unique_ptr<cudf_io::datasource>& source,
                        const cudf_io::parquet::ColumnChunk& chunk,
                        cudf_io::parquet::ColumnIndex* colidx)
@@ -241,6 +245,10 @@ bool read_column_index(std::unique_ptr<cudf_io::datasource>& source,
   return cp.read(colidx);
 }
 
+// read offset index from datasource at location indicated by chunk,
+// parse and poplulate passed in OffsetIndex.
+// returns true on success, false if the offset index cannot be parsed.
+// throws cudf::logic_error if the chunk data is invalid.
 bool read_offset_index(std::unique_ptr<cudf_io::datasource>& source,
                        const cudf_io::parquet::ColumnChunk& chunk,
                        cudf_io::parquet::OffsetIndex* offidx)
@@ -253,6 +261,9 @@ bool read_offset_index(std::unique_ptr<cudf_io::datasource>& source,
   return cp.read(offidx);
 }
 
+// parse the statistics_blob on chunk and populate the passed in Statistics struct.
+// returns true on success, false if the statistics cannot be parsed.
+// throws cudf::logic_error if the chunk statistics_blob is invalid.
 bool parse_statistics(const cudf_io::parquet::ColumnChunk& chunk,
                       cudf_io::parquet::Statistics* stats)
 {
@@ -263,6 +274,10 @@ bool parse_statistics(const cudf_io::parquet::ColumnChunk& chunk,
   return cp.read(stats);
 }
 
+// read page header from datasource at location indicated by page_loc,
+// parse and poplulate passed in PageHeader.
+// returns true on success, false if the page header cannot be parsed.
+// throws cudf::logic_error if the page_loc data is invalid.
 bool read_page_header(std::unique_ptr<cudf_io::datasource>& source,
                       const cudf_io::parquet::PageLocation& page_loc,
                       cudf_io::parquet::PageHeader* page_hdr)
@@ -318,7 +333,8 @@ struct ParquetWriterSchemaTest : public ParquetWriterTest {
 };
 
 // Declare typed test cases
-using SupportedTypes = cudf::test::NumericTypes;
+// TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
+using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
 TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
 using ComparableAndFixedTypes =
   cudf::test::Concat<cudf::test::ComparableTypes, cudf::test::FixedPointTypes>;
@@ -3458,7 +3474,10 @@ TEST_F(ParquetWriterTest, CheckPageRows)
 
 // =============================================================================
 // ---- test data for stats sort order tests
-// need at least 3 pages, and min page count is 5000, so need at least 15000 values
+// need at least 3 pages, and min page count is 5000, so need at least 15000 values.
+// use 20000 to be safe.
+static constexpr int num_ordered_rows            = 20000;
+static constexpr int page_size_for_ordered_tests = 5000;
 
 namespace {
 namespace testdata {
@@ -3469,10 +3488,10 @@ std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
                  cudf::test::fixed_width_column_wrapper<T>>
 ascending()
 {
-  int start = std::is_signed_v<T> ? -10000 : 0;
+  int start = std::is_signed_v<T> ? -num_ordered_rows / 2 : 0;
   auto elements =
     cudf::detail::make_counting_transform_iterator(start, [](auto i) { return i / 100; });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
@@ -3481,13 +3500,13 @@ std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
 descending()
 {
   if (std::is_signed_v<T>) {
-    auto elements =
-      cudf::detail::make_counting_transform_iterator(-10000, [](auto i) { return -i / 100; });
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+    auto elements = cudf::detail::make_counting_transform_iterator(-num_ordered_rows / 2,
+                                                                   [](auto i) { return -i / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
   } else {
-    auto elements =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (20000 - i) / 100; });
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+    auto elements = cudf::detail::make_counting_transform_iterator(
+      0, [](auto i) { return (num_ordered_rows - i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
   }
 }
 
@@ -3498,12 +3517,12 @@ unordered()
 {
   if (std::is_signed_v<T>) {
     auto elements = cudf::detail::make_counting_transform_iterator(
-      -10000, [](auto i) { return (i % 2 ? i : -i) / 100; });
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+      -num_ordered_rows / 2, [](auto i) { return (i % 2 ? i : -i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
   } else {
     auto elements = cudf::detail::make_counting_transform_iterator(
-      0, [](auto i) { return (i % 2 ? i : 20000 - i) / 100; });
-    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+      0, [](auto i) { return (i % 2 ? i : num_ordered_rows - i) / 100; });
+    return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
   }
 }
 
@@ -3513,30 +3532,30 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> ascending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i < 10000 ? false : true; });
-  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + 20000);
+    0, [](auto i) { return i < num_ordered_rows / 2 ? false : true; });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> descending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i < 10000 ? true : false; });
-  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + 20000);
+    0, [](auto i) { return i < num_ordered_rows / 2 ? true : false; });
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, cudf::test::fixed_width_column_wrapper<bool>> unordered()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-    switch (i / 5000) {
+    switch (i / page_size_for_ordered_tests) {
       case 0: return true;
       case 1: return false;
       case 2: return true;
       default: return false;
     }
   });
-  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + 20000);
+  return cudf::test::fixed_width_column_wrapper<bool>(elements, elements + num_ordered_rows);
 }
 
 // ----- fixed point types
@@ -3545,24 +3564,24 @@ template <typename T>
 std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    -10000, [](auto i) { return T(i, numeric::scale_type{0}); });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+    -num_ordered_rows / 2, [](auto i) { return T(i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    -10000, [](auto i) { return T(-i, numeric::scale_type{0}); });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+    -num_ordered_rows / 2, [](auto i) { return T(-i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_fixed_point<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    -10000, [](auto i) { return T(i % 2 ? i : -i, numeric::scale_type{0}); });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+    -num_ordered_rows / 2, [](auto i) { return T(i % 2 ? i : -i, numeric::scale_type{0}); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
 // ----- chrono types
@@ -3573,23 +3592,23 @@ std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return T(typename T::duration(i)); });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return T(typename T::duration(20000 - i)); });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+    0, [](auto i) { return T(typename T::duration(num_ordered_rows - i)); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_timestamp<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return T(typename T::duration(i % 2 ? i : 20000 - i)); });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+    0, [](auto i) { return T(typename T::duration(i % 2 ? i : num_ordered_rows - i)); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
 // ----- duration
@@ -3598,23 +3617,23 @@ template <typename T>
 std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> ascending()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return T(i); });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> descending()
 {
-  auto elements =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return T(20000 - i); });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return T(num_ordered_rows - i); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
 std::enable_if_t<cudf::is_duration<T>(), cudf::test::fixed_width_column_wrapper<T>> unordered()
 {
   auto elements = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return T(i % 2 ? i : 20000 - i); });
-  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + 20000);
+    0, [](auto i) { return T(i % 2 ? i : num_ordered_rows - i); });
+  return cudf::test::fixed_width_column_wrapper<T>(elements, elements + num_ordered_rows);
 }
 
 // ----- string_view
@@ -3628,7 +3647,7 @@ ascending()
     sprintf(buf, "%09d", i);
     return std::string(buf);
   });
-  return cudf::test::strings_column_wrapper(elements, elements + 20000);
+  return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
@@ -3637,10 +3656,10 @@ descending()
 {
   char buf[10];
   auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf, "%09d", 20000 - i);
+    sprintf(buf, "%09d", num_ordered_rows - i);
     return std::string(buf);
   });
-  return cudf::test::strings_column_wrapper(elements, elements + 20000);
+  return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
 
 template <typename T>
@@ -3649,10 +3668,10 @@ unordered()
 {
   char buf[10];
   auto elements = cudf::detail::make_counting_transform_iterator(0, [&buf](auto i) {
-    sprintf(buf, "%09d", (i % 2 == 0) ? i : (20000 - i));
+    sprintf(buf, "%09d", (i % 2 == 0) ? i : (num_ordered_rows - i));
     return std::string(buf);
   });
-  return cudf::test::strings_column_wrapper(elements, elements + 20000);
+  return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
 }
 
 }  // namespace testdata
@@ -3675,7 +3694,7 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
   auto filepath = temp_env->get_temp_filepath("ThreeColumnSorted.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
-      .max_page_size_rows(5000)
+      .max_page_size_rows(page_size_for_ordered_tests)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
   cudf_io::write_parquet(out_opts);
 
@@ -3684,7 +3703,10 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
   CUDF_EXPECTS(fmd.row_groups.size() > 0, "No row groups found");
-  CUDF_EXPECTS(fmd.row_groups[0].columns.size() == 3, "Invalid number of columns");
+
+  auto& columns = fmd.row_groups[0].columns;
+  CUDF_EXPECTS(columns.size() == static_cast<size_t>(expected->num_columns()),
+               "Invalid number of columns");
 
   // now check that the boundary order for chunk 1 is ascending,
   // chunk 2 is descending, and chunk 3 is unordered
@@ -3692,14 +3714,17 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
                                                        cudf_io::parquet::BoundaryOrder::DESCENDING,
                                                        cudf_io::parquet::BoundaryOrder::UNORDERED};
 
-  for (int i = 0; i < 3; i++) {
+  for (std::size_t i = 0; i < columns.size(); i++) {
     cudf_io::parquet::ColumnIndex ci;
-    CUDF_EXPECTS(read_column_index(source, fmd.row_groups[0].columns[i], &ci),
-                 "Cannot parse column index");
+    CUDF_EXPECTS(read_column_index(source, columns[i], &ci), "Cannot parse column index");
     EXPECT_EQ(ci.boundary_order, expected_orders[i]);
   }
 }
 
+// utility functions for column index tests
+
+// compare two values.  return -1 if v1 < v2,
+// 0 if v1 == v2, and 1 if v1 > v2.
 template <typename T>
 int32_t compare(T& v1, T& v2)
 {
@@ -3817,15 +3842,14 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
-      // read in offset index
       auto& chunk = rg.columns[c];
 
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
       cudf_io::parquet::OffsetIndex oi;
       const auto oi_buf = source->host_read(chunk.offset_index_offset, chunk.offset_index_length);
       CUDF_EXPECTS(read_offset_index(source, chunk, &oi), "Cannot parse offset index");
 
-      // loop over offsets, read each page header, make sure it's a data page and that
-      // the first row index is correct
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
@@ -3836,15 +3860,14 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
         num_vals += ph.data_page_header.num_values;
       }
 
-      // check column index
+      // loop over page stats from the column index. check that stats.min <= page.min
+      // and stats.max >= page.max for each page.
       cudf_io::parquet::ColumnIndex ci;
       CUDF_EXPECTS(read_column_index(source, chunk, &ci), "Cannot parse column index");
-
-      // decode min and max from statistics blob
       cudf_io::parquet::Statistics stats;
       CUDF_EXPECTS(parse_statistics(chunk, &stats), "Cannot parse column statistics");
 
-      // loop over page stats.  stats.min <= page.min && stats.max >= page.max
+      // schema indexing starts at 1
       int8_t ptype = fmd.schema[c + 1].type;
       int8_t ctype = fmd.schema[c + 1].converted_type;
       for (size_t p = 0; p < ci.min_values.size(); p++) {
@@ -3852,10 +3875,8 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndex)
         EXPECT_FALSE(ci.null_pages[p]);
         // null_counts should always be 0
         EXPECT_EQ(ci.null_counts[p], 0);
-        // chunk min should be <= all page mins
         EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
       }
-      // chunk max should be >= all page maxs
       for (size_t p = 0; p < ci.max_values.size(); p++)
         EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
     }
@@ -3932,14 +3953,13 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
-      // read in offset index
       auto& chunk = rg.columns[c];
-
-      cudf_io::parquet::OffsetIndex oi;
-      CUDF_EXPECTS(read_offset_index(source, chunk, &oi), "Cannot parse offset index");
 
       // loop over offsets, read each page header, make sure it's a data page and that
       // the first row index is correct
+      cudf_io::parquet::OffsetIndex oi;
+      CUDF_EXPECTS(read_offset_index(source, chunk, &oi), "Cannot parse offset index");
+
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
@@ -3950,15 +3970,14 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
         num_vals += ph.data_page_header.num_values;
       }
 
-      // check column index
+      // loop over page stats from the column index. check that stats.min <= page.min
+      // and stats.max >= page.max for each page.
       cudf_io::parquet::ColumnIndex ci;
       CUDF_EXPECTS(read_column_index(source, chunk, &ci), "Cannot parse column index");
-
-      // decode min and max from statistics blob
       cudf_io::parquet::Statistics stats;
       CUDF_EXPECTS(parse_statistics(chunk, &stats), "Cannot parse column statistics");
 
-      // loop over page stats.  stats.min <= page.min && stats.max >= page.max
+      // schema indexing starts at 1
       int8_t ptype = fmd.schema[c + 1].type;
       int8_t ctype = fmd.schema[c + 1].converted_type;
       for (size_t p = 0; p < ci.min_values.size(); p++) {
@@ -3967,10 +3986,8 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNulls)
           EXPECT_GT(ci.null_counts[p], 0);
         else
           EXPECT_EQ(ci.null_counts[p], 0);
-        // chunk min should be <= all page mins
         EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
       }
-      // chunk max should be >= all page maxs
       for (size_t p = 0; p < ci.max_values.size(); p++)
         EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
     }
@@ -4028,14 +4045,13 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto& rg = fmd.row_groups[r];
     for (size_t c = 0; c < rg.columns.size(); c++) {
-      // read in offset index
       auto& chunk = rg.columns[c];
-
-      cudf_io::parquet::OffsetIndex oi;
-      CUDF_EXPECTS(read_offset_index(source, chunk, &oi), "Cannot parse offset index");
 
       // loop over offsets, read each page header, make sure it's a data page and that
       // the first row index is correct
+      cudf_io::parquet::OffsetIndex oi;
+      CUDF_EXPECTS(read_offset_index(source, chunk, &oi), "Cannot parse offset index");
+
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
@@ -4046,19 +4062,22 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
         num_vals += ph.data_page_header.num_values;
       }
 
-      // check column index
+      // loop over page stats from the column index. check that stats.min <= page.min
+      // and stats.max >= page.max for each non-empty page.
       cudf_io::parquet::ColumnIndex ci;
       CUDF_EXPECTS(read_column_index(source, chunk, &ci), "Cannot parse column index");
-
-      // decode min and max from statistics blob
       cudf_io::parquet::Statistics stats;
       CUDF_EXPECTS(parse_statistics(chunk, &stats), "Cannot parse column statistics");
 
-      // loop over page stats.  stats.min <= page.min && stats.max >= page.max
+      // schema indexing starts at 1
       int8_t ptype = fmd.schema[c + 1].type;
       int8_t ctype = fmd.schema[c + 1].converted_type;
       for (size_t p = 0; p < ci.min_values.size(); p++) {
-        // null_pages will be true for column 1
+        // check tnat null_pages is true for column 1
+        if (c == 1) {
+          EXPECT_TRUE(ci.null_pages[p]);
+          EXPECT_GT(ci.null_counts[p], 0);
+        }
         if (not ci.null_pages[p]) {
           EXPECT_EQ(ci.null_counts[p], 0);
           EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
@@ -4075,18 +4094,11 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexNullColumn)
 
 TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
 {
-  auto c0  = testdata::ascending<uint32_t>();
+  auto c0 = testdata::ascending<uint32_t>();
+
   auto sc0 = testdata::ascending<cudf::string_view>();
   auto sc1 = testdata::descending<int32_t>();
   auto sc2 = testdata::unordered<int64_t>();
-
-  auto listgen = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? i / 2 : 20000 - (i / 2); });
-  auto list    = cudf::test::fixed_width_column_wrapper<int32_t>(listgen, listgen + 40000);
-  auto offgen  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
-  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>(offgen, offgen + 20001);
-
-  auto c2 = cudf::make_lists_column(20000, offsets.release(), list.release(), 0, {});
 
   std::vector<std::unique_ptr<cudf::column>> struct_children;
   struct_children.push_back(sc0.release());
@@ -4094,13 +4106,23 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
   struct_children.push_back(sc2.release());
   cudf::test::structs_column_wrapper c1(std::move(struct_children));
 
+  auto listgen = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return i % 2 == 0 ? i / 2 : num_ordered_rows - (i / 2); });
+  auto list =
+    cudf::test::fixed_width_column_wrapper<int32_t>(listgen, listgen + 2 * num_ordered_rows);
+  auto offgen = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+  auto offsets =
+    cudf::test::fixed_width_column_wrapper<int32_t>(offgen, offgen + num_ordered_rows + 1);
+
+  auto c2 = cudf::make_lists_column(num_ordered_rows, offsets.release(), list.release(), 0, {});
+
   table_view expected({c0, c1, *c2});
 
   auto filepath = temp_env->get_temp_filepath("CheckColumnOffsetIndexStruct.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-      .max_page_size_rows(5000);
+      .max_page_size_rows(page_size_for_ordered_tests);
   cudf_io::write_parquet(out_opts);
 
   auto source = cudf_io::datasource::create(filepath);
@@ -4108,6 +4130,8 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
+  // hard coded schema indices.
+  // TODO find a way to do this without magic
   size_t colidxs[] = {1, 3, 4, 5, 8};
   for (size_t r = 0; r < fmd.row_groups.size(); r++) {
     auto& rg = fmd.row_groups[r];
@@ -4115,11 +4139,11 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
       size_t colidx = colidxs[c];
       auto& chunk   = rg.columns[c];
 
+      // loop over offsets, read each page header, make sure it's a data page and that
+      // the first row index is correct
       cudf_io::parquet::OffsetIndex oi;
       CUDF_EXPECTS(read_offset_index(source, chunk, &oi), "Cannot parse offset index");
 
-      // loop over offsets, read each page header, make sure it's a data page and that
-      // the first row index is correct
       int64_t num_vals = 0;
       for (size_t o = 0; o < oi.page_locations.size(); o++) {
         cudf_io::parquet::PageHeader ph;
@@ -4131,21 +4155,17 @@ TEST_F(ParquetWriterTest, CheckColumnOffsetIndexStruct)
         num_vals += ph.data_page_header.num_values;
       }
 
-      // check column index.
+      // loop over page stats from the column index. check that stats.min <= page.min
+      // and stats.max >= page.max for each page.
       cudf_io::parquet::ColumnIndex ci;
       CUDF_EXPECTS(read_column_index(source, chunk, &ci), "Cannot parse column index");
-
-      // decode min and max from statistics blob
       cudf_io::parquet::Statistics stats;
       CUDF_EXPECTS(parse_statistics(chunk, &stats), "Cannot parse column statistics");
 
-      // loop over page stats.  stats.min <= page.min && stats.max >= page.max
       int8_t ptype = fmd.schema[colidx].type;
       int8_t ctype = fmd.schema[colidx].converted_type;
-      // chunk min should be <= all page mins
       for (size_t p = 0; p < ci.min_values.size(); p++)
         EXPECT_TRUE(compare_binary(stats.min_value, ci.min_values[p], ptype, ctype) <= 0);
-      // chunk max should be >= all page maxs
       for (size_t p = 0; p < ci.max_values.size(); p++)
         EXPECT_TRUE(compare_binary(stats.max_value, ci.max_values[p], ptype, ctype) >= 0);
     }
