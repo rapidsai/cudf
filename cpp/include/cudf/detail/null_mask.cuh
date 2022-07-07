@@ -107,7 +107,7 @@ __global__ void offset_bitmask_binop(Binop op,
 }
 
 /**
- * @copydoc bitmask_binop(Binop op, host_span<bitmask_type const * const>, host_span<size_type>
+ * @copydoc bitmask_binop(Binop op, host_span<bitmask_type const* const>, host_span<size_type>
  * const, size_type, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches

@@ -227,7 +227,7 @@ rmm::device_buffer copy_bitmask(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc bitmask_and(host_span<bitmask_type const * const>, host_span<size_type> const,
+ * @copydoc bitmask_and(host_span<bitmask_type const* const>, host_span<size_type> const,
  * size_type, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
