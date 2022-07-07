@@ -773,7 +773,7 @@ TEST_F(SparkMurmurHash3Test, ListValues)
   23 items
   validity: i != 13, i != 19
 
-  parent validity: i != 0 && i != 15
+  nested validity: i != 0 && i != 15
   offsets: 0, 0, 1, 3, 6, 8, 9, 10, 12, 13, 16, 18, 19, 20, 22, 23
   16 items
 
@@ -785,35 +785,33 @@ TEST_F(SparkMurmurHash3Test, ListValues)
   auto const null = -1;
   auto child_validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
-  auto parent_validity =
+  auto nested_validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0 && i != 15; });
-  auto row_validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
-  auto list1 = cudf::test::lists_column_wrapper<int>({{},
-                                                      {1},
-                                                      {1, 2},
-                                                      {1, 2, 3},
-                                                      {1, 2},
-                                                      {3},
-                                                      {1},
-                                                      {2, 3},
-                                                      {1},
-                                                      {{null, 2, 3}, inner_validity},
-                                                      {1, 2},
-                                                      {3},
-                                                      {{null}, inner_validity},
-                                                      {1, 2},
-                                                      {},
-                                                      {3}},
-                                                     parent_validity);
+  auto nested_list = cudf::test::lists_column_wrapper<int>({{},
+                                                            {1},
+                                                            {1, 2},
+                                                            {1, 2, 3},
+                                                            {1, 2},
+                                                            {3},
+                                                            {1},
+                                                            {2, 3},
+                                                            {1},
+                                                            {{null, 2, 3}, child_validity},
+                                                            {1, 2},
+                                                            {3},
+                                                            {{null}, child_validity},
+                                                            {1, 2},
+                                                            {},
+                                                            {3}},
+                                                           nested_validity);
   auto offsets =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 0, 1, 2, 3, 4, 6, 8, 10, 13, 16};
-  auto list_validity = std::vector<bool>{0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  auto list_validity_buffer =
-    cudf::test::detail::make_null_mask(list_validity.begin(), list_validity.end());
-  auto list_column = cudf::make_lists_column(11,
+  auto list_validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+  auto list_validity_buffer = cudf::test::detail::make_null_mask(list_validity, list_validity + 11);
+  auto list_column          = cudf::make_lists_column(11,
                                              offsets.release(),
-                                             list1.release(),
+                                             nested_list.release(),
                                              cudf::UNKNOWN_NULL_COUNT,
                                              std::move(list_validity_buffer));
 
@@ -829,7 +827,7 @@ TEST_F(SparkMurmurHash3Test, ListValues)
                                                                  -912918097,
                                                                  -912918097};
 
-  auto output = cudf::hash(cudf::table_view({*list_column}));
+  auto output = cudf::hash(cudf::table_view({*list_column}), cudf::hash_id::HASH_SPARK_MURMUR3);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect, output->view(), verbosity);
 }
 
