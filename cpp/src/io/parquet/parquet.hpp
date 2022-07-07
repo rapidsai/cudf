@@ -207,6 +207,18 @@ struct SchemaElement {
 };
 
 /**
+ * @brief Thrift-derived struct describing column chunk statistics
+ */
+struct Statistics {
+  std::vector<uint8_t> max;        // deprecated max value in signed comparison order
+  std::vector<uint8_t> min;        // deprecated min value in signed comparison order
+  int64_t null_count     = -1;     // count of null values in the column
+  int64_t distinct_count = -1;     // count of distinct values occurring
+  std::vector<uint8_t> max_value;  // max value for column determined by ColumnOrder
+  std::vector<uint8_t> min_value;  // min value for column determined by ColumnOrder
+};
+
+/**
  * @brief Thrift-derived struct describing a column chunk
  */
 struct ColumnChunkMetaData {
@@ -318,6 +330,36 @@ struct PageHeader {
   int32_t compressed_page_size   = 0;  // Compressed page size in bytes (not including the header)
   DataPageHeader data_page_header;
   DictionaryPageHeader dictionary_page_header;
+};
+
+/**
+ * @brief Thrift-derived struct describing page location information stored
+ * in the offsets index.
+ */
+struct PageLocation {
+  int64_t offset;                // Offset of the page in the file
+  int32_t compressed_page_size;  // Compressed page size in bytes plus the heeader length
+  int64_t first_row_index;  // Index within the column chunk of the first row of the page. reset to
+                            // 0 at the beginning of each column chunk
+};
+
+/**
+ * @brief Thrift-derived struct describing the offset index.
+ */
+struct OffsetIndex {
+  std::vector<PageLocation> page_locations;
+};
+
+/**
+ * @brief Thrift-derived struct describing the column index.
+ */
+struct ColumnIndex {
+  std::vector<bool> null_pages;  // Boolean used to determine if a page contains only null values
+  std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
+  std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
+  BoundaryOrder boundary_order =
+    BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
+  std::vector<int64_t> null_counts;  // Optional count of null values per page
 };
 
 /**

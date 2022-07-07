@@ -205,6 +205,22 @@ size_t CompactProtocolWriter::write(const ColumnChunkMetaData& s)
   return c.value();
 }
 
+size_t CompactProtocolWriter::write(const PageLocation& s)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_int(1, s.offset);
+  c.field_int(2, s.compressed_page_size);
+  c.field_int(3, s.first_row_index);
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(const OffsetIndex& s)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_struct_list(1, s.page_locations);
+  return c.value();
+}
+
 void CompactProtocolFieldWriter::put_byte(uint8_t v) { writer.m_buf.push_back(v); }
 
 void CompactProtocolFieldWriter::put_byte(const uint8_t* raw, uint32_t len)

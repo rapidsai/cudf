@@ -20,6 +20,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    cast,
 )
 from uuid import uuid4
 
@@ -29,7 +30,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
-from cudf._typing import ColumnLike
+from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_bool_dtype,
@@ -44,7 +45,7 @@ from cudf.api.types import (
 from cudf.core._base_index import BaseIndex
 from cudf.core.column import ColumnBase, as_column, full
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, _drop_rows_by_labels
+from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
@@ -247,7 +248,12 @@ class IndexedFrame(Frame):
     }
 
     def __init__(self, data=None, index=None):
-        super().__init__(data=data, index=index)
+        super().__init__(data=data)
+        # TODO: Right now it is possible to initialize an IndexedFrame without
+        # an index. The code's correctness relies on the subclass constructors
+        # assigning the attribute after the fact. We should restructure those
+        # to ensure that this constructor is always invoked with an index.
+        self._index = index
 
     def to_dict(self, *args, **kwargs):  # noqa: D102
         raise TypeError(
@@ -260,6 +266,10 @@ class IndexedFrame(Frame):
     def _num_rows(self) -> int:
         # Important to use the index because the data may be empty.
         return len(self._index)
+
+    @property
+    def _index_names(self) -> Tuple[Any, ...]:  # TODO: Tuple[str]?
+        return self._index._data.names
 
     @classmethod
     def _from_data(
@@ -885,6 +895,43 @@ class IndexedFrame(Frame):
         output = self._from_data(data, self._index)
         output._copy_type_metadata(self, include_index=False)
         return self._mimic_inplace(output, inplace=inplace)
+
+    def _copy_type_metadata(
+        self: T, other: T, include_index: bool = True
+    ) -> T:
+        """
+        Copy type metadata from each column of `other` to the corresponding
+        column of `self`.
+        See `ColumnBase._with_type_metadata` for more information.
+        """
+        super()._copy_type_metadata(other)
+
+        if include_index:
+            if self._index is not None and other._index is not None:
+                self._index._copy_type_metadata(other._index)
+                # When other._index is a CategoricalIndex, the current index
+                # will be a NumericalIndex with an underlying CategoricalColumn
+                # (the above _copy_type_metadata call will have converted the
+                # column). Calling cudf.Index on that column generates the
+                # appropriate index.
+                if isinstance(
+                    other._index, cudf.core.index.CategoricalIndex
+                ) and not isinstance(
+                    self._index, cudf.core.index.CategoricalIndex
+                ):
+                    self._index = cudf.Index(
+                        cast(
+                            cudf.core.index.NumericIndex, self._index
+                        )._column,
+                        name=self._index.name,
+                    )
+                elif isinstance(
+                    other._index, cudf.MultiIndex
+                ) and not isinstance(self._index, cudf.MultiIndex):
+                    self._index = cudf.MultiIndex._from_data(
+                        self._index._data, name=self._index.name
+                    )
+        return self
 
     @_cudf_nvtx_annotate
     def interpolate(
@@ -1575,6 +1622,44 @@ class IndexedFrame(Frame):
         else:
             ret._index = old_index
         return ret
+
+    @_cudf_nvtx_annotate
+    def bfill(self, value=None, axis=None, inplace=None, limit=None):
+        """
+        Synonym for :meth:`Series.fillna` with ``method='bfill'``.
+
+        Returns
+        -------
+            Object with missing values filled or None if ``inplace=True``.
+        """
+        return self.fillna(
+            method="bfill",
+            value=value,
+            axis=axis,
+            inplace=inplace,
+            limit=limit,
+        )
+
+    backfill = bfill
+
+    @_cudf_nvtx_annotate
+    def ffill(self, value=None, axis=None, inplace=None, limit=None):
+        """
+        Synonym for :meth:`Series.fillna` with ``method='ffill'``.
+
+        Returns
+        -------
+            Object with missing values filled or None if ``inplace=True``.
+        """
+        return self.fillna(
+            method="ffill",
+            value=value,
+            axis=axis,
+            inplace=inplace,
+            limit=limit,
+        )
+
+    pad = ffill
 
     def add_prefix(self, prefix):
         """
@@ -4553,3 +4638,84 @@ def _is_series(obj):
     instead of checking for isinstance(obj, cudf.Series)
     """
     return isinstance(obj, Frame) and obj.ndim == 1 and obj._index is not None
+
+
+@_cudf_nvtx_annotate
+def _drop_rows_by_labels(
+    obj: DataFrameOrSeries,
+    labels: Union[ColumnLike, abc.Iterable, str],
+    level: Union[int, str],
+    errors: str,
+) -> DataFrameOrSeries:
+    """Remove rows specified by `labels`. If `errors="raise"`, an error is raised
+    if some items in `labels` do not exist in `obj._index`.
+
+    Will raise if level(int) is greater or equal to index nlevels
+    """
+    if isinstance(level, int) and level >= obj.index.nlevels:
+        raise ValueError("Param level out of bounds.")
+
+    if not isinstance(labels, cudf.core.single_column_frame.SingleColumnFrame):
+        labels = as_column(labels)
+
+    if isinstance(obj._index, cudf.MultiIndex):
+        if level is None:
+            level = 0
+
+        levels_index = obj.index.get_level_values(level)
+        if errors == "raise" and not labels.isin(levels_index).all():
+            raise KeyError("One or more values not found in axis")
+
+        if isinstance(level, int):
+            ilevel = level
+        else:
+            ilevel = obj._index.names.index(level)
+
+        # 1. Merge Index df and data df along column axis:
+        # | id | ._index df | data column(s) |
+        idx_nlv = obj._index.nlevels
+        working_df = obj._index.to_frame(index=False)
+        working_df.columns = list(range(idx_nlv))
+        for i, col in enumerate(obj._data):
+            working_df[idx_nlv + i] = obj._data[col]
+        # 2. Set `level` as common index:
+        # | level | ._index df w/o level | data column(s) |
+        working_df = working_df.set_index(level)
+
+        # 3. Use "leftanti" join to drop
+        # TODO: use internal API with "leftanti" and specify left and right
+        # join keys to bypass logic check
+        to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
+        join_res = working_df.join(to_join, how="leftanti")
+
+        # 4. Reconstruct original layout, and rename
+        join_res._insert(
+            ilevel, name=join_res._index.name, value=join_res._index
+        )
+
+        midx = cudf.MultiIndex.from_frame(
+            join_res.iloc[:, 0:idx_nlv], names=obj._index.names
+        )
+
+        if isinstance(obj, cudf.Series):
+            return obj.__class__._from_data(
+                join_res.iloc[:, idx_nlv:]._data, index=midx, name=obj.name
+            )
+        else:
+            return obj.__class__._from_data(
+                join_res.iloc[:, idx_nlv:]._data,
+                index=midx,
+                columns=obj._data.to_pandas_index(),
+            )
+
+    else:
+        if errors == "raise" and not labels.isin(obj.index).all():
+            raise KeyError("One or more values not found in axis")
+
+        key_df = cudf.DataFrame(index=labels)
+        if isinstance(obj, cudf.DataFrame):
+            return obj.join(key_df, how="leftanti")
+        else:
+            res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
+            res.name = obj.name
+            return res
