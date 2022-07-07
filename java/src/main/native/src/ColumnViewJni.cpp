@@ -647,9 +647,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listOverlap(JNIEnv *env, 
     cudf::jni::auto_set_device(env);
     auto const lhs = reinterpret_cast<cudf::column_view const *>(lhs_handle);
     auto const rhs = reinterpret_cast<cudf::column_view const *>(rhs_handle);
-    return release_as_jlong(
+    auto overlap_result =
         cudf::lists::list_overlap(cudf::lists_column_view{*lhs}, cudf::lists_column_view{*rhs},
-                                  cudf::null_equality::UNEQUAL, cudf::nan_equality::ALL_EQUAL));
+                                  cudf::null_equality::UNEQUAL, cudf::nan_equality::ALL_EQUAL);
+    cudf::jni::post_process_list_overlap(*lhs, *rhs, overlap_result);
+    return release_as_jlong(overlap_result);
   }
   CATCH_STD(env, 0);
 }
