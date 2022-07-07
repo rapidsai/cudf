@@ -101,6 +101,10 @@ __device__ bool list_has_nulls(list_device_view list) {
 void post_process_list_overlap(cudf::column_view const &lhs, cudf::column_view const &rhs,
                                std::unique_ptr<cudf::column> const &overlap_result,
                                rmm::cuda_stream_view stream) {
+  // If both of the input columns do not have nulls, we don't need to do anything here.
+  if (!lists_column_view{lhs}.child().has_nulls() && !lists_column_view{rhs}.child().has_nulls()) {
+    return;
+  }
 
   auto const overlap_cv = overlap_result->view();
   auto const lhs_cdv_ptr = column_device_view::create(lhs, stream);
