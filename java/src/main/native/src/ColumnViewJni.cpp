@@ -1589,7 +1589,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv *
         *reinterpret_cast<cudf::column_view *>(j_view_handle)};
     cudf::jni::native_jstring pattern(env, pattern_obj);
 
-    auto result = idx == 0 ? 
+    auto result = (idx == 0) ? 
                   cudf::strings::findall_record(strings_column, pattern.get()) :
                   cudf::strings::extract_all_record(strings_column, pattern.get());
 
