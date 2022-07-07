@@ -52,7 +52,6 @@ struct gather_index_calculator {
   FollowingIter following;
   size_type min_periods;
   rmm::cuda_stream_view stream;
-  rmm::mr::device_memory_resource* mr;
 
   static size_type constexpr NULL_INDEX =
     std::numeric_limits<size_type>::min();  // For nullifying with gather.
@@ -62,16 +61,14 @@ struct gather_index_calculator {
                           PrecedingIter preceding,
                           FollowingIter following,
                           size_type min_periods,
-                          rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr)
+                          rmm::cuda_stream_view stream)
     : n{n},
       input_nullmask{input.null_mask()},
       exclude_nulls{null_handling == null_policy::EXCLUDE and input.has_nulls()},
       preceding{preceding},
       following{following},
       min_periods{min_periods},
-      stream{stream},
-      mr{mr}
+      stream{stream}
   {
   }
 
@@ -151,7 +148,7 @@ std::unique_ptr<column> nth_element(size_type n,
   auto const gather_iter = cudf::detail::make_counting_transform_iterator(
     0,
     gather_index_calculator<null_handling, PrecedingIter, FollowingIter>{
-      n, input, preceding, following, min_periods, stream, mr});
+      n, input, preceding, following, min_periods, stream});
 
   auto gather_map = rmm::device_uvector<offset_type>(input.size(), stream);
   thrust::copy(
