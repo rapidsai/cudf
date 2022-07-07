@@ -16,6 +16,7 @@ from cudf._lib.column import Column
 from cudf.core.buffer import Buffer, format_bytes
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
+from cudf.core.indexed_frame import IndexedFrame
 
 
 class SpillManager:
@@ -221,9 +222,11 @@ def get_columns(obj: object) -> List[Column]:
             if id(obj) not in found_ids:
                 found_ids.add(id(obj))
                 found.append(obj)
-        elif isinstance(obj, Frame):
+        elif isinstance(obj, IndexedFrame):
             _get_columns(obj._data)
             _get_columns(obj._index)
+        elif isinstance(obj, Frame):
+            _get_columns(obj._data)
         elif isinstance(obj, ColumnAccessor):
             for o in obj.columns:
                 _get_columns(o)
