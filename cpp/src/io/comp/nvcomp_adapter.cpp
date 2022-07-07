@@ -123,7 +123,7 @@ size_t batched_decompress_temp_size(compression_type compression,
     try {
       return batched_decompress_get_temp_size_ex(
         compression, num_chunks, max_uncomp_chunk_size, &temp_size, max_total_uncomp_size);
-    } catch (...) {
+    } catch (cudf::logic_error const& err) {
       return batched_decompress_get_temp_size(
         compression, num_chunks, max_uncomp_chunk_size, &temp_size);
     }
