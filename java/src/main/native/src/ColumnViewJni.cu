@@ -132,6 +132,7 @@ void post_process_list_overlap(cudf::column_view const &lhs, cudf::column_view c
                        return true;
                      }
 
+                     // Only proceed if at least one list has nulls.
                      if (!list_has_nulls(lhs_list) && !list_has_nulls(rhs_list)) {
                        return true;
                      }
