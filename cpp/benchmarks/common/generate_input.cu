@@ -406,7 +406,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     data      = value_dist(engine, num_rows);
     null_mask = valid_dist(engine, num_rows);
   } else {
-    auto const cardinality = [profile_cardinality = profile.get_cardinality(), num_rows]() {
+    auto const cardinality = [profile_cardinality = profile.get_cardinality(), num_rows] {
       return (profile_cardinality == 0 or profile_cardinality > num_rows) ? num_rows
                                                                           : profile_cardinality;
     }();
