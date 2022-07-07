@@ -403,7 +403,7 @@ class ColumnAccessor(abc.MutableMapping):
         i = _get_level(i, self.nlevels, self.level_names)
         j = _get_level(j, self.nlevels, self.level_names)
 
-        new_keys = [list(row) for row in self.keys()]
+        new_keys = [list(row) for row in self]
         new_dict = {}
 
         # swap old keys for i and j
