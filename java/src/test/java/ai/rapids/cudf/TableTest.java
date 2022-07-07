@@ -5319,9 +5319,9 @@ public class TableTest extends CudfTestBase {
   void testWindowingNthElement() {
     final Integer X = null;
     try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
-        .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
-        .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
-        .column( 7, 5, 3, 7, 7, 9, X, 4, X, 0, 4, X) // Agg Column
+        .column(  3,  3, 3, 3, 2, 2, 2, 2, 1, 1,  1,  1) // GBY Key
+        .column( 11, 10, 9, 8, 7, 6, 5, 4, 3, 2,  1,  0) // OBY Key
+        .column(  X,  4, 0, X, 4, X, 9, 7, 7, 3,  5,  7) // Agg Column
         .build()) {
       try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
            ColumnVector expectedSortedAggCol = ColumnVector.fromBoxedInts(7, 5, 3, 7, 7, 9, X, 4, X, 0, 4, X)) {
