@@ -65,32 +65,34 @@ pipeline {
       }
     }
 
-    stage("Java Test Stage") {
-      agent {
-        label 'gpu'
-      }
-      when { environment name: 'BUILD_TYPE', value: 'pull-request' }
-      steps {
-        script {
-            docker.image("gpuci/rapidsai:22.08-cuda11.5-devel-centos7-py3.8").inside("""
-            --runtime=nvidia
-            --pull=always
-            -e NVIDIA_VISIBLE_DEVICES=$EXECUTOR_NUMBER
-            -e CUDA=11.5
-            -e PY_VER=3.8
-            """) {
-              withCredentials([[
-                $class: 'AmazonWebServicesCredentialsBinding',
-                credentialsId: "aws-s3-gpuci",
-                accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-              ]]) {
-                sh "./ci/java.sh"
-              }
-            }
-        }
-      }
-    }
+    // https://github.com/rapidsai/ops/issues/2243#issuecomment-1177729931
+
+    // stage("Java Test Stage") {
+    //   agent {
+    //     label 'gpu'
+    //   }
+    //   when { environment name: 'BUILD_TYPE', value: 'pull-request' }
+    //   steps {
+    //     script {
+    //         docker.image("gpuci/rapidsai:22.08-cuda11.5-devel-centos7-py3.8").inside("""
+    //         --runtime=nvidia
+    //         --pull=always
+    //         -e NVIDIA_VISIBLE_DEVICES=$EXECUTOR_NUMBER
+    //         -e CUDA=11.5
+    //         -e PY_VER=3.8
+    //         """) {
+    //           withCredentials([[
+    //             $class: 'AmazonWebServicesCredentialsBinding',
+    //             credentialsId: "aws-s3-gpuci",
+    //             accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+    //             secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+    //           ]]) {
+    //             sh "./ci/java.sh"
+    //           }
+    //         }
+    //     }
+    //   }
+    // }
 
     stage("PR Test Stage") {
       when { environment name: 'BUILD_TYPE', value: 'pull-request' }
