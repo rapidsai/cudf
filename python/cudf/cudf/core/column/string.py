@@ -630,11 +630,11 @@ class StringMethods(ColumnMethods):
                 "unsupported value for `flags` parameter"
             )
 
-        data, index = libstrings.extract(self._column, pat, flags)
+        data, _ = libstrings.extract(self._column, pat, flags)
         if len(data) == 1 and expand is False:
             data = next(iter(data.values()))
         else:
-            data = cudf.core.frame.Frame(data, index)
+            data = data
         return self._return_or_inplace(data, expand=expand)
 
     def contains(
@@ -2448,18 +2448,18 @@ class StringMethods(ColumnMethods):
 
         if expand:
             if self._column.null_count == len(self._column):
-                result_table = cudf.core.frame.Frame({0: self._column.copy()})
+                result_table = {0: self._column.copy()}
             else:
                 if regex is True:
-                    data, index = libstrings.split_re(self._column, pat, n)
+                    data, _ = libstrings.split_re(self._column, pat, n)
                 else:
-                    data, index = libstrings.split(
+                    data, _ = libstrings.split(
                         self._column, cudf.Scalar(pat, "str"), n
                     )
                 if len(data) == 1 and data[0].null_count == len(self._column):
-                    result_table = cudf.core.frame.Frame({})
+                    result_table = {}
                 else:
-                    result_table = cudf.core.frame.Frame(data, index)
+                    result_table = data
         else:
             if regex is True:
                 result_table = libstrings.split_record_re(self._column, pat, n)
@@ -2621,18 +2621,18 @@ class StringMethods(ColumnMethods):
 
         if expand:
             if self._column.null_count == len(self._column):
-                result_table = cudf.core.frame.Frame({0: self._column.copy()})
+                result_table = {0: self._column.copy()}
             else:
                 if regex is True:
-                    data, index = libstrings.rsplit_re(self._column, pat, n)
+                    data, _ = libstrings.rsplit_re(self._column, pat, n)
                 else:
-                    data, index = libstrings.rsplit(
+                    data, _ = libstrings.rsplit(
                         self._column, cudf.Scalar(pat, "str"), n
                     )
                 if len(data) == 1 and data[0].null_count == len(self._column):
-                    result_table = cudf.core.frame.Frame({})
+                    result_table = {}
                 else:
-                    result_table = cudf.core.frame.Frame(data, index)
+                    result_table = data
         else:
             if regex is True:
                 result_table = libstrings.rsplit_record_re(
@@ -2722,9 +2722,7 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            cudf.core.frame.Frame(
-                *libstrings.partition(self._column, cudf.Scalar(sep, "str"))
-            ),
+            libstrings.partition(self._column, cudf.Scalar(sep, "str"))[0],
             expand=expand,
         )
 
@@ -2789,9 +2787,7 @@ class StringMethods(ColumnMethods):
             sep = " "
 
         return self._return_or_inplace(
-            cudf.core.frame.Frame(
-                *libstrings.rpartition(self._column, cudf.Scalar(sep, "str"))
-            ),
+            libstrings.rpartition(self._column, cudf.Scalar(sep, "str"))[0],
             expand=expand,
         )
 
@@ -3540,10 +3536,8 @@ class StringMethods(ColumnMethods):
                 "future version. Set expand=False to match future behavior.",
                 FutureWarning,
             )
-            data, index = libstrings.findall(self._column, pat, flags)
-            return self._return_or_inplace(
-                cudf.core.frame.Frame(data, index), expand=expand
-            )
+            data, _ = libstrings.findall(self._column, pat, flags)
+            return self._return_or_inplace(data, expand=expand)
         else:
             data = libstrings.findall_record(self._column, pat, flags)
             return self._return_or_inplace(data, expand=expand)

@@ -57,6 +57,7 @@
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/findall.hpp>
 #include <cudf/strings/json.hpp>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/repeat_strings.hpp>
@@ -1572,6 +1573,27 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *en
 
     return cudf::jni::convert_table_for_return(
         env, cudf::strings::extract(strings_column, pattern.get()));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv *env, jclass,
+                                                                        jlong j_view_handle,
+                                                                        jstring pattern_obj,
+                                                                        jint idx) {
+  JNI_NULL_CHECK(env, j_view_handle, "column is null", 0);
+
+  if (idx > 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "group index > 0 is not supported", 0);
+  }
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::strings_column_view const strings_column{
+        *reinterpret_cast<cudf::column_view *>(j_view_handle)};
+    cudf::jni::native_jstring pattern(env, pattern_obj);
+
+    return release_as_jlong(cudf::strings::findall_record(strings_column, pattern.get()));
   }
   CATCH_STD(env, 0);
 }
