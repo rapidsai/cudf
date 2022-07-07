@@ -40,8 +40,8 @@ void apply_struct_binary_op(mutable_column_view& out,
                             column_view const& rhs,
                             bool is_lhs_scalar,
                             bool is_rhs_scalar,
-                            PhysicalElementComparator c  = {},
-                            rmm::cuda_stream_view stream = cudf::default_stream_value)
+                            PhysicalElementComparator comparator = {},
+                            rmm::cuda_stream_view stream         = cudf::default_stream_value)
 {
   auto compare_orders   = std::vector<order>(lhs.size(),
                                            is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
@@ -57,7 +57,8 @@ void apply_struct_binary_op(mutable_column_view& out,
 
   if (is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>) {
     auto device_comparator = table_comparator.less_equivalent(
-      nullate::DYNAMIC{nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)}}, c);
+      nullate::DYNAMIC{nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)}},
+      comparator);
     thrust::tabulate(
       rmm::exec_policy(stream),
       out.begin<bool>(),
@@ -70,7 +71,8 @@ void apply_struct_binary_op(mutable_column_view& out,
 
   } else {
     auto device_comparator = table_comparator.less(
-      nullate::DYNAMIC{nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)}}, c);
+      nullate::DYNAMIC{nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)}},
+      comparator);
     thrust::tabulate(
       rmm::exec_policy(stream),
       out.begin<bool>(),

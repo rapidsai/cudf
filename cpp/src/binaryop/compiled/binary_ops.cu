@@ -54,15 +54,7 @@ struct scalar_as_column_view {
       column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
     return std::pair{col_v, std::unique_ptr<column>(nullptr)};
   }
-  template <typename T, CUDF_ENABLE_IF(is_struct<T>())>
-  return_type operator()(scalar const& s,
-                         rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr)
-  {
-    auto col = make_column_from_scalar(s, 1, stream, mr);
-    return std::pair{col->view(), std::move(col)};
-  }
-  template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>() and !is_struct<T>())>
+  template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>
   return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("Unsupported type");
@@ -93,6 +85,14 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
                            0,
                            {offsets_column->view(), chars_column_v});
   return std::pair{col_v, std::move(offsets_column)};
+}
+// specializing for struct column
+template <>
+scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::struct_view>(
+  scalar const& s, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+{
+  auto col = make_column_from_scalar(s, 1, stream, mr);
+  return std::pair{col->view(), std::move(col)};
 }
 
 /**
