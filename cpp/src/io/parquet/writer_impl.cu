@@ -883,7 +883,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   auto h_chunks = chunks.host_view().flat_view();
 
   std::vector<rmm::device_uvector<size_type>> dict_data;
-  std::vector<rmm::device_uvector<uint16_t>> dict_index;
+  std::vector<rmm::device_uvector<size_type>> dict_index;
 
   if (h_chunks.size() == 0) { return std::pair(std::move(dict_data), std::move(dict_index)); }
 
@@ -895,7 +895,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;
-      auto& inserted_map   = hash_maps_storage.emplace_back(chunk.num_values, stream);
+      auto& inserted_map   = hash_maps_storage.emplace_back(chunk.num_values * 1.7, stream);
       chunk.dict_map_slots = inserted_map.data();
       chunk.dict_map_size  = inserted_map.size();
     }
@@ -919,14 +919,14 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
       auto max_dict_index = (ck.num_dict_entries > 0) ? ck.num_dict_entries - 1 : 0;
       auto nbits          = CompactProtocolReader::NumRequiredBits(max_dict_index);
 
-      // We don't use dictionary if the indices are > 16 bits because that's the maximum bitpacking
+      // We don't use dictionary if the indices are > 24 bits because that's the maximum bitpacking
       // bitsize we efficiently support
-      if (nbits > 16) { return std::pair(false, 0); }
+      if (nbits > 24) { return std::pair(false, 0); }
 
       // Only these bit sizes are allowed for RLE encoding because it's compute optimized
-      constexpr auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
+      constexpr auto allowed_bitsizes = std::array<size_type, 7>{1, 2, 4, 8, 12, 16, 24};
 
-      // ceil to (1/2/4/8/12/16)
+      // ceil to (1/2/4/8/12/16/24)
       auto rle_bits = *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
 
