@@ -123,8 +123,8 @@ struct ops_wrapper {
         // To suppress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
       }();
-      if constexpr (is_bool_result<BinaryOperator, TypeCommon, TypeCommon>())
-        out.element<decltype(result)>(i) = result;
+      if constexpr (is_bool_result<BinaryOperator, TypeCommon, TypeCommon>()){}
+      //   out.element<decltype(result)>(i) = result;
       else
         type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
     }

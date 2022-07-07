@@ -36,71 +36,71 @@ namespace binops {
 namespace compiled {
 
 namespace {
-/**
- * @brief Converts scalar to column_view with single element.
- *
- * @return pair with column_view and column containing any auxiliary data to create column_view from
- * scalar
- */
-struct scalar_as_column_view {
-  using return_type = typename std::pair<column_view, std::unique_ptr<column>>;
-  template <typename T, std::enable_if_t<(is_fixed_width<T>())>* = nullptr>
-  return_type operator()(scalar const& s, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
-  {
-    auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
-    auto col_v =
-      column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
-    return std::pair{col_v, std::unique_ptr<column>(nullptr)};
-  }
-  template <typename T, std::enable_if_t<(!is_fixed_width<T>())>* = nullptr>
-  return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
-  {
-    CUDF_FAIL("Unsupported type");
-  }
-};
-// specialization for cudf::string_view
-template <>
-scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::string_view>(
-  scalar const& s, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
-{
-  using T                  = cudf::string_view;
-  auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
+// /**
+//  * @brief Converts scalar to column_view with single element.
+//  *
+//  * @return pair with column_view and column containing any auxiliary data to create column_view from
+//  * scalar
+//  */
+// struct scalar_as_column_view {
+//   using return_type = typename std::pair<column_view, std::unique_ptr<column>>;
+//   template <typename T, std::enable_if_t<(is_fixed_width<T>())>* = nullptr>
+//   return_type operator()(scalar const& s, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+//   {
+//     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
+//     auto col_v =
+//       column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
+//     return std::pair{col_v, std::unique_ptr<column>(nullptr)};
+//   }
+//   template <typename T, std::enable_if_t<(!is_fixed_width<T>())>* = nullptr>
+//   return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+//   {
+//     CUDF_FAIL("Unsupported type");
+//   }
+// };
+// // specialization for cudf::string_view
+// template <>
+// scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::string_view>(
+//   scalar const& s, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+// {
+//   using T                  = cudf::string_view;
+//   auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
 
-  // build offsets column from the string size
-  auto offsets_transformer_itr =
-    thrust::make_constant_iterator<size_type>(h_scalar_type_view.size());
-  auto offsets_column = strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + 1, stream, mr);
+//   // build offsets column from the string size
+//   auto offsets_transformer_itr =
+//     thrust::make_constant_iterator<size_type>(h_scalar_type_view.size());
+//   auto offsets_column = strings::detail::make_offsets_child_column(
+//     offsets_transformer_itr, offsets_transformer_itr + 1, stream, mr);
 
-  auto chars_column_v =
-    column_view(data_type{type_id::INT8}, h_scalar_type_view.size(), h_scalar_type_view.data());
-  // Construct string column_view
-  auto col_v = column_view(s.type(),
-                           1,
-                           nullptr,
-                           (bitmask_type const*)s.validity_data(),
-                           cudf::UNKNOWN_NULL_COUNT,
-                           0,
-                           {offsets_column->view(), chars_column_v});
-  return std::pair{col_v, std::move(offsets_column)};
-}
+//   auto chars_column_v =
+//     column_view(data_type{type_id::INT8}, h_scalar_type_view.size(), h_scalar_type_view.data());
+//   // Construct string column_view
+//   auto col_v = column_view(s.type(),
+//                            1,
+//                            nullptr,
+//                            (bitmask_type const*)s.validity_data(),
+//                            cudf::UNKNOWN_NULL_COUNT,
+//                            0,
+//                            {offsets_column->view(), chars_column_v});
+//   return std::pair{col_v, std::move(offsets_column)};
+// }
 
-/**
- * @brief Converts scalar to column_view with single element.
- *
- * @param scal    scalar to convert
- * @param stream  CUDA stream used for device memory operations and kernel launches.
- * @param mr      Device memory resource used to allocate the returned column's device memory
- * @return        pair with column_view and column containing any auxiliary data to create
- * column_view from scalar
- */
-auto scalar_to_column_view(
-  scalar const& scal,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
-}
+// /**
+//  * @brief Converts scalar to column_view with single element.
+//  *
+//  * @param scal    scalar to convert
+//  * @param stream  CUDA stream used for device memory operations and kernel launches.
+//  * @param mr      Device memory resource used to allocate the returned column's device memory
+//  * @return        pair with column_view and column containing any auxiliary data to create
+//  * column_view from scalar
+//  */
+// auto scalar_to_column_view(
+//   scalar const& scal,
+//   rmm::cuda_stream_view stream,
+//   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+// {
+//   return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
+// }
 
 // This functor does the actual comparison between string column value and a scalar string
 // or between two string column values using a comparator
@@ -314,14 +314,14 @@ case binary_operator::FLOOR_DIV:            apply_binary_op<ops::FloorDiv>(out, 
 case binary_operator::MOD:                  apply_binary_op<ops::Mod>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::PYMOD:                apply_binary_op<ops::PyMod>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::POW:                  apply_binary_op<ops::Pow>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
-// case binary_operator::EQUAL:
-// case binary_operator::NOT_EQUAL:
-// if(out.type().id() != type_id::BOOL8) CUDF_FAIL("Output type of Comparison operator should be bool type");
-// dispatch_equality_op(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, op, stream); break;
-// case binary_operator::LESS:                 apply_binary_op<ops::Less>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
-// case binary_operator::GREATER:              apply_binary_op<ops::Greater>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
-// case binary_operator::LESS_EQUAL:           apply_binary_op<ops::LessEqual>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
-// case binary_operator::GREATER_EQUAL:        apply_binary_op<ops::GreaterEqual>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
+case binary_operator::EQUAL:
+case binary_operator::NOT_EQUAL:
+if(out.type().id() != type_id::BOOL8) CUDF_FAIL("Output type of Comparison operator should be bool type");
+dispatch_equality_op(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, op, stream); break;
+case binary_operator::LESS:                 apply_binary_op<ops::Less>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
+case binary_operator::GREATER:              apply_binary_op<ops::Greater>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
+case binary_operator::LESS_EQUAL:           apply_binary_op<ops::LessEqual>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
+case binary_operator::GREATER_EQUAL:        apply_binary_op<ops::GreaterEqual>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::BITWISE_AND:          apply_binary_op<ops::BitwiseAnd>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::BITWISE_OR:           apply_binary_op<ops::BitwiseOr>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
 case binary_operator::BITWISE_XOR:          apply_binary_op<ops::BitwiseXor>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;

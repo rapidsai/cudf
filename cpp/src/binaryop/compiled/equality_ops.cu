@@ -33,6 +33,9 @@ void dispatch_equality_op(mutable_column_view& out,
   auto rhsd         = column_device_view::create(rhs, stream);
   if (common_dtype) {
     if (op == binary_operator::EQUAL) {
+      // cudf::test::print(out);
+      // cudf::test::print(lhs);
+      // cudf::test::print(rhs);
       for_each(stream,
                out.size(),
                binary_op_device_dispatcher<ops::Equal>{
