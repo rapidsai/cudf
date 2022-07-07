@@ -439,7 +439,7 @@ def test_parquet_read_metadata(tmpdir, pdf):
     row_group_size = 5
     pdf.to_parquet(fname, compression="snappy", row_group_size=row_group_size)
 
-    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names, _ = cudf.io.read_parquet_metadata(fname)
 
     assert num_rows == len(pdf.index)
     assert row_groups == num_row_groups(num_rows, row_group_size)
@@ -573,7 +573,7 @@ def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
-    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names, _ = cudf.io.read_parquet_metadata(fname)
 
     gdf = [cudf.read_parquet(fname, row_groups=[i]) for i in range(row_groups)]
     gdf = cudf.concat(gdf)
@@ -597,8 +597,7 @@ def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
 
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
-
-    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names, _ = cudf.io.read_parquet_metadata(fname)
 
     # alternate rows between the two sources
     gdf = cudf.read_parquet(
@@ -626,7 +625,7 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="None", row_group_size=row_group_size)
 
-    total_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+    total_rows, row_groups, col_names, _ = cudf.io.read_parquet_metadata(fname)
 
     num_rows = total_rows // 4
     skiprows = (total_rows - num_rows) // 2
@@ -1638,7 +1637,9 @@ def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
         writer.write_table(gdf)
 
     # Simple check for multiple row-groups
-    nrows, nrow_groups, columns = cudf.io.parquet.read_parquet_metadata(fname)
+    nrows, nrow_groups, columns, _ = cudf.io.parquet.read_parquet_metadata(
+        fname
+    )
     assert nrows == size
     assert nrow_groups > 1
     assert columns == ["a", "b"]
@@ -2516,7 +2517,14 @@ def test_to_parquet_row_group_size(
         fname, row_group_size_bytes=size_bytes, row_group_size_rows=size_rows
     )
 
-    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+    (
+        num_rows,
+        row_groups,
+        col_names,
+        row_group_metadata,
+    ) = cudf.io.read_parquet_metadata(fname)
+    assert len(row_group_metadata) == row_groups
+    assert num_rows == sum(meta.num_rows for meta in row_group_metadata)
     # 8 bytes per row, as the column is int64
     expected_num_rows = max(
         math.ceil(num_rows / size_rows), math.ceil(8 * num_rows / size_bytes)

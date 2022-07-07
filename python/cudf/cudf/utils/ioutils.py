@@ -95,11 +95,12 @@ Returns
 Total number of rows
 Number of row groups
 List of column names
+List of metadata of each row-group
 
 Examples
 --------
 >>> import cudf
->>> num_rows, num_row_groups, names = cudf.io.read_parquet_metadata(filename)
+>>> num_rows, num_row_groups, names, row_group_metadatas = cudf.io.read_parquet_metadata(filename)
 >>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
 >>> df = cudf.concat(df)
 >>> df
@@ -111,7 +112,7 @@ Examples
 See Also
 --------
 cudf.read_parquet
-"""
+"""  # noqa: E501
 doc_read_parquet_metadata = docfmt_partial(
     docstring=_docstring_read_parquet_metadata
 )

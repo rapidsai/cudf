@@ -198,11 +198,17 @@ def read_parquet_metadata(path):
 
     pq_file = pq.ParquetFile(path)
 
-    num_rows = pq_file.metadata.num_rows
+    metadata = pq_file.metadata
+    num_rows = metadata.num_rows
     num_row_groups = pq_file.num_row_groups
     col_names = pq_file.schema.names
 
-    return num_rows, num_row_groups, col_names
+    return (
+        num_rows,
+        num_row_groups,
+        col_names,
+        [metadata.row_group(i) for i in range(num_row_groups)],
+    )
 
 
 @_cudf_nvtx_annotate
