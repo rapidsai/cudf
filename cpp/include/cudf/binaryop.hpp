@@ -245,13 +245,9 @@ namespace detail {
  * @param op binary operator identifier
  * @param stream CUDA stream used for device memory operations
  */
-void apply_sorting_struct_binary_op(mutable_column_view& out,
-                                    column_view const& lhs,
-                                    column_view const& rhs,
-                                    bool is_lhs_scalar,
-                                    bool is_rhs_scalar,
-                                    binary_operator op,
-                                    rmm::cuda_stream_view stream = cudf::default_stream_value);
+template <typename... Ts>
+void apply_sorting_struct_binary_op(binary_operator op, Ts&&... args);
+
 }  // namespace detail
 }  // namespace compiled
 }  // namespace binops

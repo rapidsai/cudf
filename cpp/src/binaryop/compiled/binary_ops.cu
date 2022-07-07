@@ -387,72 +387,30 @@ void binary_operation(mutable_column_view& out,
 }
 
 namespace detail {
-void apply_sorting_struct_binary_op(mutable_column_view& out,
-                                    column_view const& lhs,
-                                    column_view const& rhs,
-                                    bool is_lhs_scalar,
-                                    bool is_rhs_scalar,
-                                    binary_operator op,
-                                    rmm::cuda_stream_view stream)
+template <typename... Ts>
+void apply_sorting_struct_binary_op(binary_operator op, Ts&&... args)
 {
-  CUDF_EXPECTS(lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT,
-               "Both columns must be struct columns");
-  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(lhs) and
-                 !cudf::structs::detail::is_or_has_nested_lists(rhs),
-               "Lists not supported");
-  // Struct child column type and structure mismatches are caught within the two_table_comparator
+  auto lex_comparator =
+    cudf::experimental::row::lexicographic::sorting_physical_element_comparator{};
   switch (op) {
     case binary_operator::EQUAL: [[fallthrough]];
     case binary_operator::NOT_EQUAL:
       detail::apply_struct_equality_op(
-        out,
-        lhs,
-        rhs,
-        is_lhs_scalar,
-        is_rhs_scalar,
         op,
         cudf::experimental::row::equality::nan_equal_physical_equality_comparator{},
-        stream);
+        std::forward<Ts>(args)...);
       break;
     case binary_operator::LESS:
-      detail::apply_struct_binary_op<ops::Less>(
-        out,
-        lhs,
-        rhs,
-        is_lhs_scalar,
-        is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
-        stream);
+      detail::apply_struct_binary_op<ops::Less>(lex_comparator, std::forward<Ts>(args)...);
       break;
     case binary_operator::GREATER:
-      detail::apply_struct_binary_op<ops::Greater>(
-        out,
-        lhs,
-        rhs,
-        is_lhs_scalar,
-        is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
-        stream);
+      detail::apply_struct_binary_op<ops::Greater>(lex_comparator, std::forward<Ts>(args)...);
       break;
     case binary_operator::LESS_EQUAL:
-      detail::apply_struct_binary_op<ops::LessEqual>(
-        out,
-        lhs,
-        rhs,
-        is_lhs_scalar,
-        is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
-        stream);
+      detail::apply_struct_binary_op<ops::LessEqual>(lex_comparator, std::forward<Ts>(args)...);
       break;
     case binary_operator::GREATER_EQUAL:
-      detail::apply_struct_binary_op<ops::GreaterEqual>(
-        out,
-        lhs,
-        rhs,
-        is_lhs_scalar,
-        is_rhs_scalar,
-        cudf::experimental::row::lexicographic::sorting_physical_element_comparator{},
-        stream);
+      detail::apply_struct_binary_op<ops::GreaterEqual>(lex_comparator, std::forward<Ts>(args)...);
       break;
     default: CUDF_FAIL("Unsupported operator for structs");
   }
