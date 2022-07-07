@@ -27,21 +27,24 @@
 
 namespace cudf::detail::rolling {
 
-/// Functor to construct gather-map indices for NTH_ELEMENT rolling aggregation.
-/// By definition, the `N`th element is deemed null (i.e. the gather index is set to "nullify")
-/// for the following cases:
-///   1. The window has fewer elements than `min_periods`.
-///   2. N falls outside the window, i.e. N ∉ [-window_size, window_size).
-///   3. `null_handling == EXCLUDE`, and the window has fewer than `N` non-null elements.
-///
-/// If none of the above holds true, the result is non-null. How the value is determined
-/// depends on `null_handling`:
-///   1. `null_handling == INCLUDE`: The required value is the `N`th value from the window's start.
-///       i.e. the gather index is window_start + N (adjusted for negative N).
-///   2. `null_handling == EXCLUDE`: The required value is the `N`th non-null value from the
-//        window's start. i.e. Return index of the `N`th non-null value.
+/**
+ * @brief Functor to construct gather-map indices for NTH_ELEMENT rolling aggregation.
+ *
+ * By definition, the `N`th element is deemed null (i.e. the gather index is set to "nullify")
+ * for the following cases:
+ *   1. The window has fewer elements than `min_periods`.
+ *   2. N falls outside the window, i.e. N ∉ [-window_size, window_size).
+ *   3. `null_handling == EXCLUDE`, and the window has fewer than `N` non-null elements.
+ *
+ * If none of the above holds true, the result is non-null. How the value is determined
+ * depends on `null_handling`:
+ *   1. `null_handling == INCLUDE`: The required value is the `N`th value from the window's start.
+ *       i.e. the gather index is window_start + N (adjusted for negative N).
+ *   2. `null_handling == EXCLUDE`: The required value is the `N`th non-null value from the
+ *       window's start. i.e. Return index of the `N`th non-null value.
+ */
 template <null_policy null_handling, typename PrecedingIter, typename FollowingIter>
-struct gather_map_constructor {
+struct gather_index_calculator {
   size_type n;
   bitmask_type const* input_nullmask;
   bool exclude_nulls;
@@ -54,13 +57,13 @@ struct gather_map_constructor {
   static size_type constexpr NULL_INDEX =
     std::numeric_limits<size_type>::min();  // For nullifying with gather.
 
-  gather_map_constructor(size_type n,
-                         column_view input,
-                         PrecedingIter preceding,
-                         FollowingIter following,
-                         size_type min_periods,
-                         rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr)
+  gather_index_calculator(size_type n,
+                          column_view input,
+                          PrecedingIter preceding,
+                          FollowingIter following,
+                          size_type min_periods,
+                          rmm::cuda_stream_view stream,
+                          rmm::mr::device_memory_resource* mr)
     : n{n},
       input_nullmask{input.null_mask()},
       exclude_nulls{null_handling == null_policy::EXCLUDE and input.has_nulls()},
@@ -147,11 +150,16 @@ std::unique_ptr<column> nth_element(size_type n,
 {
   auto const gather_iter = cudf::detail::make_counting_transform_iterator(
     0,
-    gather_map_constructor<null_handling, PrecedingIter, FollowingIter>{
+    gather_index_calculator<null_handling, PrecedingIter, FollowingIter>{
       n, input, preceding, following, min_periods, stream, mr});
+
+  auto gather_map = rmm::device_uvector<offset_type>(input.size(), stream);
+  thrust::copy(
+    rmm::exec_policy(stream), gather_iter, gather_iter + input.size(), gather_map.begin());
+
   auto gathered = cudf::detail::gather(table_view{{input}},
-                                       gather_iter,
-                                       gather_iter + input.size(),
+                                       gather_map.begin(),
+                                       gather_map.end(),
                                        cudf::out_of_bounds_policy::NULLIFY,
                                        stream,
                                        mr)

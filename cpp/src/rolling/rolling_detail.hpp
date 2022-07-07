@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef ROLLING_DETAIL_HPP
-#define ROLLING_DETAIL_HPP
+#pragma once
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
@@ -98,5 +97,3 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 }  // namespace detail
 
 }  // namespace cudf
-
-#endif
