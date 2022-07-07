@@ -41,7 +41,7 @@ def main(args):
         )
         df = df.persist()
         wait(df)
-        res = df.shuffle(on="x")
+        res = df.shuffle(on="x", shuffle="tasks")
         print(res)
         res = res.persist()
         wait(res)
