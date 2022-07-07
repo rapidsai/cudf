@@ -35,9 +35,8 @@ std::unique_ptr<cudf::table> create_table_data(cudf::size_type n_rows,
   profile.set_distribution_params<Type>(
     cudf::type_to_id<Type>(), distribution_id::UNIFORM, Type{0}, Type{1000});
 
-  auto const seed = static_cast<uint32_t>(time(nullptr));
   return create_random_table(
-    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile, seed);
+    cycle_dtypes({cudf::type_to_id<Type>()}, n_cols), row_count{n_rows}, profile);
 }
 
 template <typename Type>
