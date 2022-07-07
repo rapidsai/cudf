@@ -656,9 +656,12 @@ def _get_level(x, nlevels, level_names):
 
     Parameters
     ----------
-    x       : the value of level to be validated
-    nlevels : total available levels in multiindex
-
+    x
+        The level number to validate
+    nlevels
+        The total available levels in multiindex
+    level_names
+        The names of the levels.
     """
     if isinstance(x, int):
         if x < 0:
