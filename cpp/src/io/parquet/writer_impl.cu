@@ -1485,7 +1485,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         comp_rowgroup_size += ck->compressed_size;
         max_chunk_bfr_size =
           std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
-        column_index_bfr_size += column_index_buffer_size(ck);
+        if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
+          column_index_bfr_size += column_index_buffer_size(ck);
+        }
       }
     }
     // TBD: We may want to also shorten the batch if we have enough pages (not just based on size)
@@ -1532,7 +1534,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
         ck.column_index_blob    = bfr_i;
         bfr += ck.bfr_size;
         bfr_c += ck.compressed_size;
-        bfr_i += column_index_buffer_size(&ck);
+        if (stats_granularity_ == statistics_freq::STATISTICS_COLUMN) {
+          bfr_i += column_index_buffer_size(&ck);
+        }
       }
     }
   }
