@@ -56,10 +56,18 @@ import java.util.stream.StreamSupport;
  * later the Cleaner itself will be released.
  */
 public final class MemoryCleaner {
-  public static final String REF_COUNT_DEBUG_KEY = "ai.rapids.refcount.debug";
-  private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean(REF_COUNT_DEBUG_KEY);
+  private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
   private static final Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
   private static final AtomicLong idGen = new AtomicLong(0);
+
+  /**
+   * Check if configured the shutdown hook which checks leaks at shutdown time.
+   *
+   * @return true if configured, false otherwise.
+   */
+  public static boolean configuredDefaultShutdownHook() {
+    return REF_COUNT_DEBUG;
+  }
 
   /**
    * API that can be used to clean up the resources for a vector, even if there was a leak
@@ -199,12 +207,10 @@ public final class MemoryCleaner {
   }, "Cleaner Thread");
 
   /**
-   * Runnable used to be added to Java default shutdown hook.
+   * Default shutdown runnable used to be added to Java default shutdown hook.
    * It checks the leaks at shutdown time.
-   * If you want to register the Runnable in a custom shutdown hook manager instead of Java default shutdown hook,
-   * should first remove it and then add it.
    */
-  public static final Runnable DEFAULT_SHUTDOWN_RUNNABLE = () -> {
+  private static final Runnable DEFAULT_SHUTDOWN_RUNNABLE = () -> {
     // If we are debugging things do a best effort to check for leaks at the end
 
     System.gc();
@@ -234,8 +240,17 @@ public final class MemoryCleaner {
     }
   }
 
-  public static void removeDefaultShutdownHook() {
+  /**
+   * De-register the default shutdown hook from Java default Runtime, then return the corresponding
+   * shutdown runnable.
+   * If you want to register the default shutdown runnable in a custom shutdown hook manager
+   * instead of Java default Runtime, should first remove it using this method and then add it
+   *
+   * @return the default shutdown runnable
+   */
+  public static Runnable removeDefaultShutdownHook() {
     Runtime.getRuntime().removeShutdownHook(DEFAULT_SHUTDOWN_THREAD);
+    return DEFAULT_SHUTDOWN_RUNNABLE;
   }
 
   static void register(ColumnVector vec, Cleaner cleaner) {
