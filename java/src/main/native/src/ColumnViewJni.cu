@@ -128,20 +128,34 @@ void post_process_list_overlap(cudf::column_view const &lhs, cudf::column_view c
                        return true;
                      }
 
-                     if (list_has_nulls(lhs_list) || list_has_nulls(rhs_list)) {
-                       return false;
+                     if (!list_has_nulls(lhs_list) && !list_has_nulls(rhs_list)) {
+                       return true;
                      }
+
+                     // Here, the input lists satisfy all the conditions below so we output a null:
+                     //  - Both of the the input lists have no non-null common element, and
+                     //  - They are both non-empty, and
+                     //  - Either of them contains null elements.
+                     return false;
                    });
 
-  auto const [null_mask, null_count] =
+  // Create a new nullmask from the validity data.
+  auto [new_null_mask, new_null_count] =
       cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{});
 
-  if (null_count > 0) {
-    auto null_masks = std::vector<bitmask_type const *>{
-        overlap_cv.null_mask(), static_cast<bitmask_type const *>(null_mask.data())};
-    auto [new_null_mask, new_null_count] = cudf::detail::bitmask_and(
-        null_masks, std::vector<cudf::size_type>{0, 0}, overlap_cv.size(), stream);
-    overlap_result->set_null_mask(std::move(new_null_mask), new_null_count);
+  if (new_null_count > 0) {
+    // If the `overlap_result` column is nullable, perform `bitmask_and` of its nullmask and the new
+    // nullmask.
+    if (overlap_cv.nullable()) {
+      auto null_masks = std::vector<bitmask_type const *>{
+          overlap_cv.null_mask(), static_cast<bitmask_type const *>(new_null_mask.data())};
+      auto [null_mask, null_count] = cudf::detail::bitmask_and(
+          null_masks, std::vector<cudf::size_type>{0, 0}, overlap_cv.size(), stream);
+      overlap_result->set_null_mask(std::move(null_mask), null_count);
+    } else {
+      // Just set the output nullmask as the new nullmask.
+      overlap_result->set_null_mask(std::move(new_null_mask), new_null_count);
+    }
   }
 }
 
