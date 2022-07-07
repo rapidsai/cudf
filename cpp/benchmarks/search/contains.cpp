@@ -31,7 +31,7 @@ std::unique_ptr<cudf::table> create_table_data(cudf::size_type n_rows,
 {
   data_profile profile;
   profile.set_cardinality(0);
-  profile.set_null_frequency(has_nulls ? 0.1 : 0.0);
+  profile.set_null_frequency(has_nulls ? std::optional{0.1} : std::nullopt);
   profile.set_distribution_params<Type>(
     cudf::type_to_id<Type>(), distribution_id::UNIFORM, Type{0}, Type{1000});
 
