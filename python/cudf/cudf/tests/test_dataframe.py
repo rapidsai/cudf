@@ -528,7 +528,7 @@ def test_dataframe_drop_error():
     )
 
 
-def test_dataframe_swaplevel():
+def test_dataframe_swaplevel_axis_0():
     midx = cudf.MultiIndex(
         levels=[
             ["Work"],
@@ -537,6 +537,7 @@ def test_dataframe_swaplevel():
             ["January", "February", "March", "April"],
         ],
         codes=[[0, 0, 0, 0], [0, 0, 1, 1], [0, 1, 0, 1], [0, 1, 2, 3]],
+        names=["a", "b", "c", "d"],
     )
     cdf = cudf.DataFrame(
         {
@@ -547,73 +548,46 @@ def test_dataframe_swaplevel():
     )
     pdf = cdf.to_pandas()
 
-    midx1 = cudf.MultiIndex(
-        levels=[
-            ["lama", "cow", "falcon"],
-            ["speed", "weight", "length"],
-            ["first", "second"],
-        ],
-        codes=[
-            [0, 0, 0, 1, 1, 1, 2, 2, 2],
-            [0, 1, 2, 0, 1, 2, 0, 1, 2],
-            [0, 0, 0, 0, 0, 0, 1, 1, 1],
-        ],
-        names=["Col1", "Col2", "Col3"],
-    )
-    cdf1 = cudf.DataFrame(
-        index=midx1,
-        columns=["big", "small"],
-        data=[
-            [45, 30],
-            [200, 100],
-            [1.5, 1],
-            [30, 20],
-            [250, 150],
-            [1.5, 0.8],
-            [320, 250],
-            [1, 0.8],
-            [0.3, 0.2],
-        ],
-    )
-    pdf1 = cdf1.to_pandas()
+    assert_eq(pdf.swaplevel(), cdf.swaplevel())
+    assert_eq(pdf.swaplevel(), cdf.swaplevel(-2, -1, 0))
+    assert_eq(pdf.swaplevel(1, 2), cdf.swaplevel(1, 2))
+    assert_eq(cdf.swaplevel(2, 1), cdf.swaplevel(1, 2))
+    assert_eq(pdf.swaplevel(-1, -3), cdf.swaplevel(-1, -3))
+    assert_eq(pdf.swaplevel("a", "b", 0), cdf.swaplevel("a", "b", 0))
+    assert_eq(cdf.swaplevel("a", "b"), cdf.swaplevel("b", "a"))
 
-    cdf2 = cudf.DataFrame(
+
+def test_dataframe_swaplevel_TypeError():
+    cdf = cudf.DataFrame(
         {"a": [1, 2, 3], "c": [10, 20, 30]}, index=["x", "y", "z"]
     )
 
-    midx3 = [
-        np.array(["bar", "bar", "baz", "baz", "foo", "foo", "qux", "qux"]),
-        np.array(["one", "two", "one", "two", "one", "two", "one", "two"]),
-        np.array(
-            ["tone", "ttwo", "tone", "ttwo", "tone", "ttwo", "tone", "ttwo"]
-        ),
-    ]
-
-    pdf3 = pd.DataFrame(
-        np.random.randn(3, 8), index=["A", "B", "C"], columns=midx3
-    )
-    cdf3 = cudf.DataFrame.from_pandas(pdf3)
-
-    assert_eq(pdf.swaplevel(1, 2), cdf.swaplevel(1, 2))
-    assert_eq(pdf.swaplevel(2, 1), cdf.swaplevel(2, 1))
-    assert_eq(cdf.swaplevel(2, 1), cdf.swaplevel(1, 2))
-    assert_eq(pdf.swaplevel(0, 2), cdf.swaplevel(0, 2))
-    assert_eq(pdf.swaplevel(2, 0), cdf.swaplevel(2, 0))
-    assert_eq(cdf.swaplevel(1, 1), cdf.swaplevel(1, 1))
-
-    assert_eq(pdf1.swaplevel(1, 2), cdf1.swaplevel(1, 2))
-    assert_eq(pdf1.swaplevel(2, 1), cdf1.swaplevel(2, 1))
-    assert_eq(cdf1.swaplevel(2, 1), cdf1.swaplevel(1, 2))
-
     with pytest.raises(TypeError):
-        cdf2.swaplevel()
+        cdf.swaplevel()
 
-    assert_eq(pdf3.swaplevel(1, 2, 1), cdf3.swaplevel(1, 2, 1))
-    assert_eq(pdf3.swaplevel(2, 1, 1), cdf3.swaplevel(2, 1, 1))
-    assert_eq(cdf3.swaplevel(2, 1, 1), cdf3.swaplevel(1, 2, 1))
-    assert_eq(pdf3.swaplevel(0, 2, 1), cdf3.swaplevel(0, 2, 1))
-    assert_eq(pdf3.swaplevel(2, 0, 1), cdf3.swaplevel(2, 0, 1))
-    assert_eq(cdf3.swaplevel(1, 1, 1), cdf3.swaplevel(1, 1, 1))
+
+def test_dataframe_swaplevel_axis_1():
+    midx = cudf.MultiIndex(
+        levels=[
+            ["b", "a"],
+            ["bb", "aa"],
+            ["bbb", "aaa"],
+        ],
+        codes=[[0, 0, 1, 1], [0, 1, 0, 1], [0, 1, 0, 1]],
+        names=[None, "a", "b"],
+    )
+    cdf = cudf.DataFrame(
+        data=[[45, 30, 100, 90], [200, 100, 50, 80]],
+        columns=midx,
+    )
+    pdf = cdf.to_pandas()
+
+    assert_eq(pdf.swaplevel(1, 2, 1), cdf.swaplevel(1, 2, 1))
+    assert_eq(pdf.swaplevel("a", "b", 1), cdf.swaplevel("a", "b", 1))
+    assert_eq(cdf.swaplevel(2, 1, 1), cdf.swaplevel(1, 2, 1))
+    assert_eq(pdf.swaplevel(0, 2, 1), cdf.swaplevel(0, 2, 1))
+    assert_eq(pdf.swaplevel(2, 0, 1), cdf.swaplevel(2, 0, 1))
+    assert_eq(cdf.swaplevel("a", "a", 1), cdf.swaplevel("b", "b", 1))
 
 
 def test_dataframe_drop_raises():

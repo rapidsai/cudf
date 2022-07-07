@@ -649,7 +649,7 @@ def _remove_key_level(key: Any, level: int) -> Any:
 
 def _get_level(x, nlevels, level_names):
     """Get the level index from a level number or name.
-    
+
     If given an integer, this function will handle wraparound for
     negative values. If given a string (the level name), this function
     will extract the index of that level from `level_names`.
