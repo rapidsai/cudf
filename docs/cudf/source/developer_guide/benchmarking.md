@@ -212,13 +212,13 @@ However, we cannot simply run benchmarks in CI.
 Doing so would consume too many resources, and it would significantly slow down the development cycle
 
 To balance these issues, our benchmarks also support running in "testing" mode.
-To do so, developers can set the `CUDF_BENCHMARKS_TEST_ONLY` environment variable.
+To do so, developers can set the `CUDF_BENCHMARKS_DEBUG_ONLY` environment variable.
 When benchmarks are run with this variable, all data sizes are set to a minimum and the number of sizes are reduced.
 Our CI testing takes advantage of this to ensure that benchmarks remain valid code.
 
 ```{note}
 The objects provided by `benchmark_with_object` respect the `NUM_ROWS` and `NUM_COLS` defined in `common/config.py`.
-`CUDF_BENCHMARKS_TEST_ONLY` works by conditionally redefining these values.
+`CUDF_BENCHMARKS_DEBUG_ONLY` works by conditionally redefining these values.
 This is why it is crucial for developers to use these variables when defining custom fixtures or cases.
 ```
 
