@@ -15,8 +15,8 @@ from cudf._lib.cpp.lists.combine cimport (
 from cudf._lib.cpp.lists.count_elements cimport (
     count_elements as cpp_count_elements,
 )
-from cudf._lib.cpp.lists.drop_list_duplicates cimport (
-    drop_list_duplicates as cpp_drop_list_duplicates,
+from cudf._lib.cpp.lists.distinct cimport (
+    distinct as cpp_distinct,
 )
 from cudf._lib.cpp.lists.explode cimport explode_outer as cpp_explode_outer
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
@@ -96,9 +96,9 @@ def drop_list_duplicates(Column col, bool nulls_equal, bool nans_all_equal):
 
     with nogil:
         c_result = move(
-            cpp_drop_list_duplicates(list_view.get()[0],
-                                     c_nulls_equal,
-                                     c_nans_equal)
+            cpp_distinct(list_view.get()[0],
+                         c_nulls_equal,
+                         c_nans_equal)
         )
     return Column.from_unique_ptr(move(c_result))
 
