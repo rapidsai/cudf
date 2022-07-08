@@ -3472,6 +3472,45 @@ TEST_F(ParquetWriterTest, CheckPageRows)
   EXPECT_EQ(ph.data_page_header.num_values, page_rows);
 }
 
+TEST_F(ParquetWriterTest, Decimal128Stats)
+{
+  // check that decimal128 min and max statistics are written in network byte order
+  std::vector<uint8_t> expected0{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6};
+  std::vector<uint8_t> expected1{0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+  __int128_t val0 = 0xa1b2c3d4e5f6ULL;
+  __int128_t val1 = val0 << 80;
+  column_wrapper<numeric::decimal128> col0{{numeric::decimal128(val0, numeric::scale_type{0})}};
+  column_wrapper<numeric::decimal128> col1{{numeric::decimal128(val1, numeric::scale_type{0})}};
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col0.release());
+  cols.push_back(col1.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto filepath = temp_env->get_temp_filepath("Decimal128Stats.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
+  cudf_io::write_parquet(out_opts);
+
+  auto source = cudf_io::datasource::create(filepath);
+  cudf_io::parquet::FileMetaData fmd;
+
+  CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
+
+  cudf_io::parquet::Statistics stats0;
+  cudf_io::parquet::Statistics stats1;
+  auto& rg0 = fmd.row_groups[0];
+  CUDF_EXPECTS(parse_statistics(rg0.columns[0], &stats0), "Cannot parse column statistics");
+  CUDF_EXPECTS(parse_statistics(rg0.columns[1], &stats1), "Cannot parse column statistics");
+
+  EXPECT_EQ(expected0, stats0.min_value);
+  EXPECT_EQ(expected0, stats0.max_value);
+  EXPECT_EQ(expected1, stats1.min_value);
+  EXPECT_EQ(expected1, stats1.max_value);
+}
+
 // =============================================================================
 // ---- test data for stats sort order tests
 // need at least 3 pages, and min page count is 5000, so need at least 15000 values.
