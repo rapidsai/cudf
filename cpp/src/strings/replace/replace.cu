@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.hpp>
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -89,7 +88,7 @@ struct replace_row_parallel_fn {
     auto position = d_str.find(d_target);
 
     size_type last_pos = 0;
-    while ((position >= 0) && (max_n > 0)) {
+    while ((position != string_view::npos) && (max_n > 0)) {
       if (out_ptr) {
         auto const curr_pos = d_str.byte_offset(position);
         out_ptr = copy_and_increment(out_ptr, in_ptr + last_pos, curr_pos - last_pos);  // copy left

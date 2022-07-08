@@ -377,7 +377,7 @@ std::unique_ptr<column> contains(
 
   // benchmark measurements showed this to be faster for smaller strings
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    return d_string.find(d_target) >= 0;
+    return d_string.find(d_target) != string_view::npos;
   };
   return contains_fn(input, target, pfn, stream, mr);
 }
@@ -389,7 +389,7 @@ std::unique_ptr<column> contains(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
-    return d_string.find(d_target) >= 0;
+    return d_string.find(d_target) != string_view::npos;
   };
   return contains_fn(strings, targets, pfn, stream, mr);
 }

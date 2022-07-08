@@ -16,14 +16,14 @@
 
 #include <strings/char_types/char_cases.h>
 #include <strings/char_types/is_flags.h>
-#include <strings/utf8.cuh>
-#include <strings/utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/capitalize.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -160,7 +160,7 @@ struct capitalize_fn : base_fn<capitalize_fn> {
 
   __device__ bool capitalize_next(char_utf8 const chr, character_flags_table_type const)
   {
-    return !d_delimiters.empty() && (d_delimiters.find(chr) >= 0);
+    return !d_delimiters.empty() && (d_delimiters.find(chr) != string_view::npos);
   }
 };
 
