@@ -154,7 +154,6 @@ These pages do not conform to any specific style or set of use cases.
 However, if you develop any sufficiently complex new features,
 consider whether users would benefit from a more complete demonstration of them.
 
-
 ## Building documentation
 
 ### Requirements
@@ -188,3 +187,13 @@ you can view the docs by replacing `localhost` with the IP address of the host m
 Alternatively, you may also forward the port using e.g. 
 `ssh -N -f -L localhost:$LOCAL_PORT:localhost:$REMOTE_PORT $REMOTE_IP`.
 That will make `$REMOTE_IP:$REMOTE_PORT` visible at `localhost:$LOCAL_PORT`.
+
+## Documenting cuDF internals
+
+Unlike public APIs, the documentation of internal code (functions, classes, etc) is not linted.
+Documenting internals is strongly encouraged, but not enforced in any particular way.
+Regarding style, either full numpy-style docstrings or regular `#` comments are acceptable.
+The former can be useful for complex or widely used functionality,
+while the latter is fine for small one-off functions.
+In general, the degree of documentation required for internals is determined by PR review.
+Use your best judgment when writing such functions, then expect to iterate as needed during review.
