@@ -86,6 +86,7 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
                            {offsets_column->view(), chars_column_v});
   return std::pair{col_v, std::move(offsets_column)};
 }
+
 // specializing for struct column
 template <>
 scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::struct_view>(
@@ -399,7 +400,7 @@ void apply_sorting_struct_binary_op(mutable_column_view& out,
                "Both columns must be struct columns");
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(lhs) and
                  !cudf::structs::detail::is_or_has_nested_lists(rhs),
-               "Lists not supported");
+               "List type is not supported");
   // Struct child column type and structure mismatches are caught within the two_table_comparator
   switch (op) {
     case binary_operator::EQUAL: [[fallthrough]];

@@ -68,18 +68,18 @@ void apply_struct_binary_op(mutable_column_view& out,
                             PhysicalElementComparator comparator = {},
                             rmm::cuda_stream_view stream         = cudf::default_stream_value)
 {
-  auto compare_orders   = std::vector<order>(lhs.size(),
+  auto const compare_orders   = std::vector<order>(lhs.size(),
                                            is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
                                                ? order::DESCENDING
                                                : order::ASCENDING);
-  auto tlhs             = table_view{{lhs}};
-  auto trhs             = table_view{{rhs}};
-  auto table_comparator = cudf::experimental::row::lexicographic::two_table_comparator{
+  auto const tlhs             = table_view{{lhs}};
+  auto const trhs             = table_view{{rhs}};
+  auto const table_comparator = cudf::experimental::row::lexicographic::two_table_comparator{
     tlhs, trhs, compare_orders, {}, stream};
   auto outd = column_device_view::create(out, stream);
   auto optional_iter =
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
-  auto nullate = nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)};
+  auto const comparator_nulls = nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)};
 
   auto tabulate_device_operator = [&](auto device_comparator) {
     thrust::tabulate(
