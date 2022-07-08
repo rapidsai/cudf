@@ -358,7 +358,6 @@ TYPED_TEST(BinaryOperationCompiledTest_FloatOps, Pow_Vector_Vector_SpecialCase)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, POW(), NearEqualComparator<TypeOut>{2});
 }
 
-
 // LOG_BASE
 //     n      t     d
 // n log(n, n)

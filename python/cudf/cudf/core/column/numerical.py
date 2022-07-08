@@ -31,8 +31,8 @@ from cudf._typing import (
 from cudf.api.types import (
     is_bool_dtype,
     is_float_dtype,
-    is_integer_dtype,
     is_integer,
+    is_integer_dtype,
     is_number,
 )
 from cudf.core.buffer import Buffer
