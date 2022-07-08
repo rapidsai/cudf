@@ -232,6 +232,7 @@ struct IntPow {
     TypeLhs extra = 1;
     while (y > 1) {
       if (y & 1) {
+        // The exponent is odd, so multiply by one factor of x.
         extra *= x;
         y -= 1;
       }
