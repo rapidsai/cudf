@@ -225,7 +225,7 @@ class NumericalColumn(NumericalBaseColumn):
             and is_integer_dtype(self.dtype)
             and (is_integer(other) or is_integer_dtype(other.dtype))
         ):
-            op = "__int_pow__"
+            op = "INT_POW"
 
         lhs, rhs = (other, self) if reflect else (self, other)
 
