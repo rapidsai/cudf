@@ -19,6 +19,7 @@ def transpose(list source_columns):
 
     with nogil:
         c_result = move(cpp_transpose(c_input))
+
     result_owner = Column.from_unique_ptr(move(c_result.first))
     return columns_from_table_view(
         c_result.second,

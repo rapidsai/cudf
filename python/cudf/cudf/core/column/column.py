@@ -499,6 +499,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         If ``value`` and ``self`` are of different types, ``value`` is coerced
         to ``self.dtype``. Assumes ``self`` and ``value`` are index-aligned.
         """
+
         # Normalize value to scalar/column
         value_normalized = (
             cudf.Scalar(value, dtype=self.dtype)
@@ -537,17 +538,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         num_keys = (stop - start) // step
 
         self._check_scatter_key_length(num_keys, value)
-        # import pdb;pdb.set_trace()
+
         if step == 1:
             if isinstance(value, cudf.core.scalar.Scalar):
                 return self._fill(value, start, stop, inplace=True)
             else:
-                # import pdb;pdb.set_trace()
-                # if weakref.getweakrefcount(self) == 0:
-                #     pass
-                # else:
-                #     true_deep_copied_col = self.custom_deep_copy()
-                #     self._temp_mimic_inplace(true_deep_copied_col, inplace=True)
                 return libcudf.copying.copy_range(
                     value, self, 0, num_keys, start, stop, False
                 )

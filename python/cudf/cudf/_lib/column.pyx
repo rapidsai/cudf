@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+import weakref
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -11,7 +13,6 @@ import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_list_dtype, is_struct_dtype
 from cudf.core.buffer import Buffer
 
-import weakref
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
 from libcpp cimport bool
@@ -533,7 +534,6 @@ cdef class Column:
             )
 
         mask_ptr = <uintptr_t>(cv.null_mask())
-
         mask = None
         if mask_ptr:
             if column_owner:

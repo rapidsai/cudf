@@ -3136,7 +3136,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         columns = (
             mapper if columns is None and axis in (1, "columns") else columns
         )
-        # import pdb;pdb.set_trace()
+
         if index:
             if (
                 any(type(item) == str for item in index.values())
@@ -3154,9 +3154,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     value=list(index.values()),
                     inplace=True,
                 )
-                # for t_col in out_index_frame._data.names:
-                #     out_index._data[t_col] = out_index_frame._data[t_col]
-                # out_index._data[level] = out_index_frame._data[level]
                 out = DataFrame(index=out_index)
             else:
                 to_replace = list(index.keys())
@@ -3488,7 +3485,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # No column from index is transposed with libcudf.
         source_columns = [*self._columns]
-        # import pdb;pdb.set_trace()
+
         source_dtype = source_columns[0].dtype
         if is_categorical_dtype(source_dtype):
             if any(not is_categorical_dtype(c.dtype) for c in source_columns):
@@ -3502,7 +3499,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if any(c.dtype != source_columns[0].dtype for c in source_columns):
             raise ValueError("Columns must all have the same dtype")
-        # import pdb;pdb.set_trace()
+
         result_columns = libcudf.transpose.transpose(source_columns)
 
         if is_categorical_dtype(source_dtype):
@@ -6130,7 +6127,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         field_names = [str(name) for name in self._data.names]
 
         col = cudf.core.column.build_struct_column(
-            names=field_names, children=tuple([col.custom_deep_copy() for col in self._data.columns]), size=len(self)
+            names=field_names,
+            children=tuple(
+                [col.custom_deep_copy() for col in self._data.columns]
+            ),
+            size=len(self),
         )
         return cudf.Series._from_data(
             cudf.core.column_accessor.ColumnAccessor(

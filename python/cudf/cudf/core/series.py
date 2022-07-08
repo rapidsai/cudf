@@ -6,7 +6,6 @@ import functools
 import inspect
 import pickle
 import warnings
-import weakref
 from collections import abc
 from shutil import get_terminal_size
 from typing import Any, Dict, MutableMapping, Optional, Set, Tuple, Type, Union
@@ -145,14 +144,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     self._frame._column.astype(to_dtype), inplace=True
                 )
 
-        # if weakref.getweakrefcount(self._frame._column) == 0:
-        # import pdb;pdb.set_trace()
         self._frame._column[key] = value
-        # else:
-        #     prev_col = self._frame._column
-        #     self._frame._column = self._frame._column.custom_deep_copy()
-        #     self._frame._column._weak_ref = weakref.ref(prev_col)
-        #     self._frame._column[key] = value
 
 
 class _SeriesLocIndexer(_FrameIndexer):
