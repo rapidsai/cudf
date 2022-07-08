@@ -431,6 +431,8 @@ add_library(
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
   src/rolling/rolling_collect_list.cu
+  src/rolling/rolling_detail_fixed_window.cu
+  src/rolling/rolling_detail_variable_window.cu
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp

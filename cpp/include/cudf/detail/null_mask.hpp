@@ -227,13 +227,13 @@ rmm::device_buffer copy_bitmask(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc bitmask_and(host_span<bitmask_type const *> const, host_span<size_type> const,
+ * @copydoc bitmask_and(host_span<bitmask_type const* const>, host_span<size_type> const,
  * size_type, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 std::pair<rmm::device_buffer, size_type> bitmask_and(
-  host_span<bitmask_type const*> masks,
+  host_span<bitmask_type const* const> masks,
   host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
   rmm::cuda_stream_view stream,
@@ -271,7 +271,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
  * @return Count of set bits
  */
 cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
-                                    host_span<bitmask_type const*> masks,
+                                    host_span<bitmask_type const* const> masks,
                                     host_span<size_type const> masks_begin_bits,
                                     size_type mask_size_bits,
                                     rmm::cuda_stream_view stream);
