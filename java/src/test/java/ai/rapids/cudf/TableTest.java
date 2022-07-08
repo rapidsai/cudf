@@ -5347,11 +5347,11 @@ public class TableTest extends CudfTestBase {
                ColumnVector expect_first = ColumnVector.fromBoxedInts(7, 7, 5, 3, 7, 7, 9, X, X, X, 0, 4);
                ColumnVector expect_last = ColumnVector.fromBoxedInts(5, 3, 7, 7, 9, X, 4, 4, 0, 4, X, X);
                ColumnVector expect_1th  = ColumnVector.fromBoxedInts(5, 5, 3, 7, 9, 9, X, 4, 0, 0, 4, X);
-               ColumnVector expect_first_skip_null  = 
+               ColumnVector expect_first_skip_null  =
                  ColumnVector.fromBoxedInts(7, 7, 5, 3, 7, 7, 9, 4, 0, 0, 0, 4);
-               ColumnVector expect_last_skip_null  = 
+               ColumnVector expect_last_skip_null  =
                  ColumnVector.fromBoxedInts(5, 3, 7, 7, 9, 9, 4, 4, 0, 4, 4, 4);
-               ColumnVector expect_1th_skip_null  = 
+               ColumnVector expect_1th_skip_null  =
                  ColumnVector.fromBoxedInts(5, 5, 3, 7, 9, 9, 4, X, X, 4, 4, X)) {
             assertColumnsAreEqual(expect_first, windowAggResults.getColumn(0));
             assertColumnsAreEqual(expect_last, windowAggResults.getColumn(1));
@@ -7510,19 +7510,21 @@ public class TableTest extends CudfTestBase {
          Table input = new Table(col1, col2)) {
 
       // Keep the first duplicate element.
-      try (Table result = input.dropDuplicates(keyColumns, true, true, true);
+      try (Table result = input.dropDuplicates(keyColumns, Table.DuplicateKeepOption.KEEP_FIRST, true);
+           Table resultSorted = result.orderBy(OrderByArg.asc(1, true));
            ColumnVector expectedCol1 = ColumnVector.fromBoxedInts(null, 5, 5, 8);
            ColumnVector expectedCol2 = ColumnVector.fromBoxedInts(null, 19, 20, 21);
            Table expected = new Table(expectedCol1, expectedCol2)) {
-        assertTablesAreEqual(expected, result);
+        assertTablesAreEqual(expected, resultSorted);
       }
 
       // Keep the last duplicate element.
-      try (Table result = input.dropDuplicates(keyColumns, false, true, true);
+      try (Table result = input.dropDuplicates(keyColumns, Table.DuplicateKeepOption.KEEP_LAST, true);
+           Table resultSorted = result.orderBy(OrderByArg.asc(1, true));
            ColumnVector expectedCol1 = ColumnVector.fromBoxedInts(3, 1, 5, 8);
            ColumnVector expectedCol2 = ColumnVector.fromBoxedInts(null, 19, 20, 21);
            Table expected = new Table(expectedCol1, expectedCol2)) {
-        assertTablesAreEqual(expected, result);
+        assertTablesAreEqual(expected, resultSorted);
       }
     }
   }
