@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,38 +14,51 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/discard_iterator.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
+#include <thrust/iterator/discard_iterator.h>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/reduce.h>
+#include <thrust/scan.h>
+#include <thrust/scatter.h>
+#include <thrust/transform.h>
+#include <thrust/uninitialized_fill.h>
 
 namespace cudf {
 namespace groupby {
 namespace detail {
-std::unique_ptr<column> group_nth_element(column_view const &values,
-                                          column_view const &group_sizes,
+std::unique_ptr<column> group_nth_element(column_view const& values,
+                                          column_view const& group_sizes,
                                           cudf::device_span<size_type const> group_labels,
                                           cudf::device_span<size_type const> group_offsets,
                                           size_type num_groups,
                                           size_type n,
                                           null_policy null_handling,
                                           rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource *mr)
+                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 
   if (num_groups == 0) { return empty_like(values); }
 
-  auto nth_index = rmm::device_vector<size_type>(num_groups, values.size());
+  auto nth_index = rmm::device_uvector<size_type>(num_groups, stream);
+  // TODO: replace with async version
+  thrust::uninitialized_fill_n(
+    rmm::exec_policy(stream), nth_index.begin(), num_groups, values.size());
 
   // nulls_policy::INCLUDE (equivalent to pandas nth(dropna=None) but return nulls for n
   if (null_handling == null_policy::INCLUDE || !values.has_nulls()) {
@@ -65,11 +78,11 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
       });
   } else {  // skip nulls (equivalent to pandas nth(dropna='any'))
     // Returns index of nth value.
-    auto values_view = column_device_view::create(values);
+    auto values_view = column_device_view::create(values, stream);
     auto bitmask_iterator =
       thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
-    rmm::device_vector<size_type> intra_group_index(values.size());
+    rmm::device_uvector<size_type> intra_group_index(values.size(), stream);
     // intra group index for valids only.
     thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                   group_labels.begin(),
@@ -77,9 +90,9 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                                   bitmask_iterator,
                                   intra_group_index.begin());
     // group_size to recalculate n if n<0
-    rmm::device_vector<size_type> group_count = [&] {
+    rmm::device_uvector<size_type> group_count = [&] {
       if (n < 0) {
-        rmm::device_vector<size_type> group_count(num_groups);
+        rmm::device_uvector<size_type> group_count(num_groups, stream);
         thrust::reduce_by_key(rmm::exec_policy(stream),
                               group_labels.begin(),
                               group_labels.end(),
@@ -88,7 +101,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                               group_count.begin());
         return group_count;
       } else {
-        return rmm::device_vector<size_type>();
+        return rmm::device_uvector<size_type>(0, stream);
       }
     }();
     // gather the valid index == n
@@ -107,10 +120,11 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                          return (bitmask_iterator[i] && intra_group_index[i] == nth);
                        });
   }
+
   auto output_table = cudf::detail::gather(table_view{{values}},
-                                           nth_index.begin(),
-                                           nth_index.end(),
+                                           nth_index,
                                            out_of_bounds_policy::NULLIFY,
+                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);

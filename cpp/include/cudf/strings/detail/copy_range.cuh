@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -26,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/device_ptr.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -92,8 +94,8 @@ namespace detail {
  * @param target_begin The starting index of the target range (inclusive)
  * @param target_end The index of the last element in the target range
  * (exclusive)
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return std::unique_ptr<column> The result target column
  */
 template <typename SourceValueIterator, typename SourceValidityIterator>
@@ -180,10 +182,9 @@ std::unique_ptr<column> copy_range(
 
     auto p_offsets =
       thrust::device_pointer_cast(p_offsets_column->view().template data<size_type>());
-    auto chars_bytes = p_offsets[target.size()];
-
-    auto p_chars_column = strings::detail::create_chars_child_column(
-      target.size(), null_count, chars_bytes, stream, mr);
+    auto const chars_bytes =
+      cudf::detail::get_value<int32_t>(p_offsets_column->view(), target.size(), stream);
+    auto p_chars_column = strings::detail::create_chars_child_column(chars_bytes, stream, mr);
 
     // copy to the chars column
 
@@ -210,9 +211,7 @@ std::unique_ptr<column> copy_range(
                                std::move(p_offsets_column),
                                std::move(p_chars_column),
                                null_count,
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 }
 

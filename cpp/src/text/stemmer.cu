@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.cuh>
-
 #include <nvtext/stemmer.hpp>
 
 #include <cudf/column/column.hpp>
@@ -24,14 +22,18 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 namespace nvtext {
 namespace detail {
@@ -56,11 +58,11 @@ __device__ bool is_consonant(cudf::string_view::const_iterator string_iterator)
 {
   auto ch = *string_iterator;
   cudf::string_view const d_vowels("aeiou", 5);
-  if (d_vowels.find(ch) >= 0) return false;
+  if (d_vowels.find(ch) != cudf::string_view::npos) return false;
   if ((ch != 'y') || (string_iterator.position() == 0)) return true;
   // for 'y' case, check previous character is a consonant
   --string_iterator;
-  return d_vowels.find(*string_iterator) >= 0;
+  return d_vowels.find(*string_iterator) != cudf::string_view::npos;
 }
 
 /**
@@ -139,7 +141,7 @@ struct dispatch_is_letter_fn {
   }
 
   template <typename T, typename... Args, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(Args&&... args) const
+  std::unique_ptr<cudf::column> operator()(Args&&...) const
   {
     CUDF_FAIL("The is_letter indices parameter must be an integer type.");
   }
@@ -250,7 +252,7 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
   return detail::is_letter(strings,
                            ltype,
                            thrust::make_constant_iterator<cudf::size_type>(character_index),
-                           rmm::cuda_stream_default,
+                           cudf::default_stream_value,
                            mr);
 }
 
@@ -260,7 +262,7 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_letter(strings, ltype, indices, rmm::cuda_stream_default, mr);
+  return detail::is_letter(strings, ltype, indices, cudf::default_stream_value, mr);
 }
 
 /**
@@ -270,7 +272,7 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
                                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::porter_stemmer_measure(strings, rmm::cuda_stream_default, mr);
+  return detail::porter_stemmer_measure(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace nvtext

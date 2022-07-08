@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 import numpy as np
 
 from . import (
@@ -8,6 +8,7 @@ from . import (
     copying,
     csv,
     datetime,
+    expressions,
     filling,
     gpuarrow,
     groupby,
@@ -15,6 +16,7 @@ from . import (
     interop,
     join,
     json,
+    labeling,
     merge,
     null_mask,
     nvtext,
@@ -32,9 +34,9 @@ from . import (
     stream_compaction,
     string_casting,
     strings,
-    table,
     transpose,
     unary,
+    text,
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max

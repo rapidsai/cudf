@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,12 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <thrust/binary_search.h>
+#include <thrust/execution_policy.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/optional.h>
+#include <thrust/pair.h>
 
 namespace cudf {
 namespace detail {
@@ -29,7 +34,7 @@ namespace detail {
 /**
  * @brief The base class for the input or output index normalizing iterator.
  *
- * This implementation uses CTRP to define the `input_indexalator` and the
+ * This implementation uses CRTP to define the `input_indexalator` and the
  * `output_indexalator` classes. This is so this class can manipulate the
  * uniquely typed subclass member variable `p_` directly without requiring
  * virtual functions since iterator instances will be copied to device memory.
@@ -55,7 +60,7 @@ struct base_indexalator {
   /**
    * @brief Prefix increment operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T& operator++()
+  CUDF_HOST_DEVICE inline T& operator++()
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ += width_;
@@ -65,7 +70,7 @@ struct base_indexalator {
   /**
    * @brief Postfix increment operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T operator++(int)
+  CUDF_HOST_DEVICE inline T operator++(int)
   {
     T tmp{static_cast<T&>(*this)};
     operator++();
@@ -75,7 +80,7 @@ struct base_indexalator {
   /**
    * @brief Prefix decrement operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T& operator--()
+  CUDF_HOST_DEVICE inline T& operator--()
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ -= width_;
@@ -85,7 +90,7 @@ struct base_indexalator {
   /**
    * @brief Postfix decrement operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T operator--(int)
+  CUDF_HOST_DEVICE inline T operator--(int)
   {
     T tmp{static_cast<T&>(*this)};
     operator--();
@@ -95,7 +100,7 @@ struct base_indexalator {
   /**
    * @brief Compound assignment by sum operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T& operator+=(difference_type offset)
+  CUDF_HOST_DEVICE inline T& operator+=(difference_type offset)
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ += offset * width_;
@@ -105,7 +110,7 @@ struct base_indexalator {
   /**
    * @brief Increment by offset operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T operator+(difference_type offset) const
+  CUDF_HOST_DEVICE inline T operator+(difference_type offset) const
   {
     auto tmp = T{static_cast<T const&>(*this)};
     tmp.p_ += (offset * width_);
@@ -115,7 +120,7 @@ struct base_indexalator {
   /**
    * @brief Addition assignment operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE friend T operator+(difference_type offset, T const& rhs)
+  CUDF_HOST_DEVICE inline friend T operator+(difference_type offset, T const& rhs)
   {
     T tmp{rhs};
     tmp.p_ += (offset * rhs.width_);
@@ -125,7 +130,7 @@ struct base_indexalator {
   /**
    * @brief Compound assignment by difference operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T& operator-=(difference_type offset)
+  CUDF_HOST_DEVICE inline T& operator-=(difference_type offset)
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ -= offset * width_;
@@ -135,7 +140,7 @@ struct base_indexalator {
   /**
    * @brief Decrement by offset operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T operator-(difference_type offset) const
+  CUDF_HOST_DEVICE inline T operator-(difference_type offset) const
   {
     auto tmp = T{static_cast<T const&>(*this)};
     tmp.p_ -= (offset * width_);
@@ -145,7 +150,7 @@ struct base_indexalator {
   /**
    * @brief Subtraction assignment operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE friend T operator-(difference_type offset, T const& rhs)
+  CUDF_HOST_DEVICE inline friend T operator-(difference_type offset, T const& rhs)
   {
     T tmp{rhs};
     tmp.p_ -= (offset * rhs.width_);
@@ -155,51 +160,50 @@ struct base_indexalator {
   /**
    * @brief Compute offset from iterator difference operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE difference_type operator-(T const& rhs) const
+  CUDF_HOST_DEVICE inline difference_type operator-(T const& rhs) const
   {
-    auto derived = static_cast<T const&>(*this);
-    return (derived.p_ - rhs.p_) / width_;
+    return (static_cast<T const&>(*this).p_ - rhs.p_) / width_;
   }
 
   /**
    * @brief Equals to operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator==(T const& rhs) const
+  CUDF_HOST_DEVICE inline bool operator==(T const& rhs) const
   {
     return rhs.p_ == static_cast<T const&>(*this).p_;
   }
   /**
    * @brief Not equals to operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator!=(T const& rhs) const
+  CUDF_HOST_DEVICE inline bool operator!=(T const& rhs) const
   {
     return rhs.p_ != static_cast<T const&>(*this).p_;
   }
   /**
    * @brief Less than operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator<(T const& rhs) const
+  CUDF_HOST_DEVICE inline bool operator<(T const& rhs) const
   {
     return static_cast<T const&>(*this).p_ < rhs.p_;
   }
   /**
    * @brief Greater than operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator>(T const& rhs) const
+  CUDF_HOST_DEVICE inline bool operator>(T const& rhs) const
   {
     return static_cast<T const&>(*this).p_ > rhs.p_;
   }
   /**
    * @brief Less than or equals to operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator<=(T const& rhs) const
+  CUDF_HOST_DEVICE inline bool operator<=(T const& rhs) const
   {
     return static_cast<T const&>(*this).p_ <= rhs.p_;
   }
   /**
    * @brief Greater than or equals to operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator>=(T const& rhs) const
+  CUDF_HOST_DEVICE inline bool operator>=(T const& rhs) const
   {
     return static_cast<T const&>(*this).p_ >= rhs.p_;
   }
@@ -241,7 +245,7 @@ struct base_indexalator {
  */
 struct input_indexalator : base_indexalator<input_indexalator> {
   friend struct indexalator_factory;
-  friend struct base_indexalator<input_indexalator>;  // for CTRP
+  friend struct base_indexalator<input_indexalator>;  // for CRTP
 
   using reference = size_type const;  // this keeps STL and thrust happy
 
@@ -254,7 +258,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
   /**
    * @brief Indirection operator returns the value at the current iterator position.
    */
-  CUDA_DEVICE_CALLABLE size_type operator*() const { return operator[](0); }
+  __device__ inline size_type operator*() const { return operator[](0); }
 
   /**
    * @brief Dispatch functor for resolving a size_type value from any index type.
@@ -268,15 +272,14 @@ struct input_indexalator : base_indexalator<input_indexalator> {
     template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
     __device__ size_type operator()(void const* tp)
     {
-      cudf_assert(false and "only index types are supported");
-      return 0;
+      CUDF_UNREACHABLE("only index types are supported");
     }
   };
   /**
    * @brief Array subscript operator returns a value at the input
    * `idx` position as a `size_type` value.
    */
-  CUDA_DEVICE_CALLABLE size_type operator[](size_type idx) const
+  __device__ inline size_type operator[](size_type idx) const
   {
     void const* tp = p_ + (idx * width_);
     return type_dispatcher(dtype_, index_as_size_type{}, tp);
@@ -326,7 +329,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
  */
 struct output_indexalator : base_indexalator<output_indexalator> {
   friend struct indexalator_factory;
-  friend struct base_indexalator<output_indexalator>;  // for CTRP
+  friend struct base_indexalator<output_indexalator>;  // for CRTP
 
   using reference = output_indexalator const&;  // required for output iterators
 
@@ -340,14 +343,14 @@ struct output_indexalator : base_indexalator<output_indexalator> {
    * @brief Indirection operator returns this iterator instance in order
    * to capture the `operator=(size_type)` calls.
    */
-  CUDA_DEVICE_CALLABLE output_indexalator const& operator*() const { return *this; }
+  __device__ inline output_indexalator const& operator*() const { return *this; }
 
   /**
    * @brief Array subscript operator returns an iterator instance at the specified `idx` position.
    *
    * This allows capturing the subsequent `operator=(size_type)` call in this class.
    */
-  CUDA_DEVICE_CALLABLE output_indexalator const operator[](size_type idx) const
+  __device__ inline output_indexalator const operator[](size_type idx) const
   {
     output_indexalator tmp{*this};
     tmp.p_ += (idx * width_);
@@ -366,14 +369,14 @@ struct output_indexalator : base_indexalator<output_indexalator> {
     template <typename T, std::enable_if_t<not is_index_type<T>()>* = nullptr>
     __device__ void operator()(void* tp, size_type const value)
     {
-      cudf_assert(false and "only index types are supported");
+      CUDF_UNREACHABLE("only index types are supported");
     }
   };
 
   /**
    * @brief Assign a size_type value to the current iterator position.
    */
-  CUDA_DEVICE_CALLABLE output_indexalator const& operator=(size_type const value) const
+  __device__ inline output_indexalator const& operator=(size_type const value) const
   {
     void* tp = p_;
     type_dispatcher(dtype_, size_type_to_index{}, tp, value);
@@ -503,17 +506,32 @@ struct indexalator_factory {
       iter = make_input_iterator(col);
     }
 
+    __device__ thrust::pair<size_type, bool> operator()(size_type i) const
+    {
+      return {iter[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
+    }
+  };
+
+  /**
+   * @brief An index accessor that returns a validity flag along with the index value.
+   *
+   * This is suitable as a `pair_iterator`.
+   */
+  struct scalar_nullable_index_accessor {
+    input_indexalator iter;
+    bool const is_null;
+
     /**
      * @brief Create an accessor from a scalar.
      */
-    nullable_index_accessor(scalar const& input) : has_nulls{!input.is_valid()}
+    scalar_nullable_index_accessor(scalar const& input) : is_null{!input.is_valid()}
     {
       iter = indexalator_factory::make_input_iterator(input);
     }
 
-    __device__ thrust::pair<size_type, bool> operator()(size_type i) const
+    __device__ thrust::pair<size_type, bool> operator()(size_type) const
     {
-      return {iter[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
+      return {*iter, is_null};
     }
   };
 
@@ -531,7 +549,75 @@ struct indexalator_factory {
   static auto make_input_pair_iterator(scalar const& input)
   {
     return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
-                                           nullable_index_accessor{input});
+                                           scalar_nullable_index_accessor{input});
+  }
+
+  /**
+   * @brief An index accessor that returns an index value if corresponding validity flag is true.
+   *
+   * This is suitable as an `optional_iterator`.
+   */
+  struct optional_index_accessor {
+    input_indexalator iter;
+    bitmask_type const* null_mask{};
+    size_type const offset{};
+    bool const has_nulls{};
+
+    /**
+     * @brief Create an accessor from a column_view.
+     */
+    optional_index_accessor(column_view const& col, bool has_nulls = false)
+      : null_mask{col.null_mask()}, offset{col.offset()}, has_nulls{has_nulls}
+    {
+      if (has_nulls) { CUDF_EXPECTS(col.nullable(), "Unexpected non-nullable column."); }
+      iter = make_input_iterator(col);
+    }
+
+    __device__ thrust::optional<size_type> operator()(size_type i) const
+    {
+      return has_nulls && !bit_is_set(null_mask, i + offset) ? thrust::nullopt
+                                                             : thrust::make_optional(iter[i]);
+    }
+  };
+
+  /**
+   * @brief An index accessor that returns an index value if corresponding validity flag is true.
+   *
+   * This is suitable as an `optional_iterator`.
+   */
+  struct scalar_optional_index_accessor {
+    input_indexalator iter;
+    bool const is_null;
+
+    /**
+     * @brief Create an accessor from a scalar.
+     */
+    scalar_optional_index_accessor(scalar const& input) : is_null{!input.is_valid()}
+    {
+      iter = indexalator_factory::make_input_iterator(input);
+    }
+
+    __device__ thrust::optional<size_type> operator()(size_type) const
+    {
+      return is_null ? thrust::nullopt : thrust::make_optional(*iter);
+    }
+  };
+
+  /**
+   * @brief Create an index iterator with a nullable index accessor.
+   */
+  static auto make_input_optional_iterator(column_view const& col)
+  {
+    return make_counting_transform_iterator(0, optional_index_accessor{col, col.has_nulls()});
+  }
+
+  /**
+   * @brief Create an index iterator with a nullable index accessor for a scalar.
+   */
+  static auto make_input_optional_iterator(scalar const& input)
+  {
+    return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
+                                           scalar_optional_index_accessor{input});
   }
 };
 

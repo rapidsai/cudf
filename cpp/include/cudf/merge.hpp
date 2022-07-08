@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,8 +65,8 @@ namespace cudf {
  *  (0,'b', GREEN), (1,'a', NULL), (1,'c', RED)
  *
  *  (third column, the "color", just "goes along for the ride";
- *   meaning is permutted according to the data movements dictated
- *   by lexicographic ordering of columns 0 and 1);
+ *   meaning it is permuted according to the data movements dictated
+ *   by lexicographic ordering of columns 0 and 1)
  *
  *   with result columns:
  *
@@ -90,6 +90,7 @@ namespace cudf {
  * @param[in] column_order Sort order types of columns indexed by key_cols
  * @param[in] null_precedence Array indicating the order of nulls with respect
  * to non-nulls for the indexing columns (key_cols)
+ * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @returns A table containing sorted data from all input tables
  */

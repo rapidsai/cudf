@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,18 +21,22 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/convert/utilities.cuh>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -51,7 +55,7 @@ struct string_to_integer_check_fn {
     if (!p.second || p.first.empty()) { return false; }
 
     auto const d_str = p.first.data();
-    if (d_str[0] == '-' && std::is_unsigned<IntegerType>::value) { return false; }
+    if (d_str[0] == '-' && std::is_unsigned_v<IntegerType>) { return false; }
 
     auto iter           = d_str + static_cast<int>((d_str[0] == '-' || d_str[0] == '+'));
     auto const iter_end = d_str + p.first.size_bytes();
@@ -82,7 +86,7 @@ struct string_to_integer_check_fn {
  * @brief The dispatch functions for checking if strings are valid integers.
  */
 struct dispatch_is_integer_fn {
-  template <typename T, std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(strings_column_view const& strings,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -116,7 +120,7 @@ struct dispatch_is_integer_fn {
     return results;
   }
 
-  template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(strings_column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
@@ -147,14 +151,13 @@ std::unique_ptr<column> is_integer(
       d_column->pair_begin<string_view, true>(),
       d_column->pair_end<string_view, true>(),
       d_results,
-      [] __device__(auto const& p) { return p.second ? string::is_integer(p.first) : false; });
+      [] __device__(auto const& p) { return p.second ? strings::is_integer(p.first) : false; });
   } else {
-    thrust::transform(
-      rmm::exec_policy(stream),
-      d_column->pair_begin<string_view, false>(),
-      d_column->pair_end<string_view, false>(),
-      d_results,
-      [] __device__(auto const& p) { return p.second ? string::is_integer(p.first) : false; });
+    thrust::transform(rmm::exec_policy(stream),
+                      d_column->pair_begin<string_view, false>(),
+                      d_column->pair_end<string_view, false>(),
+                      d_results,
+                      [] __device__(auto const& p) { return strings::is_integer(p.first); });
   }
 
   // Calling mutable_view() on a column invalidates it's null count so we need to set it back
@@ -169,7 +172,7 @@ std::unique_ptr<column> is_integer(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) { return cudf::make_empty_column(data_type{type_id::BOOL8}); }
+  if (strings.is_empty()) { return cudf::make_empty_column(type_id::BOOL8); }
   return type_dispatcher(int_type, dispatch_is_integer_fn{}, strings, stream, mr);
 }
 
@@ -180,7 +183,7 @@ std::unique_ptr<column> is_integer(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, rmm::cuda_stream_default, mr);
+  return detail::is_integer(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> is_integer(strings_column_view const& strings,
@@ -188,7 +191,7 @@ std::unique_ptr<column> is_integer(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, int_type, rmm::cuda_stream_default, mr);
+  return detail::is_integer(strings, int_type, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -217,7 +220,7 @@ struct string_to_integer_fn {
  * The output_column is expected to be one of the integer types only.
  */
 struct dispatch_to_integers_fn {
-  template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
+  template <typename IntegerType, std::enable_if_t<std::is_integral_v<IntegerType>>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
@@ -229,7 +232,7 @@ struct dispatch_to_integers_fn {
                       string_to_integer_fn<IntegerType>{strings_column});
   }
   // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
   void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Output for to_integers must be an integral type.");
@@ -281,7 +284,7 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_integers(strings, output_type, rmm::cuda_stream_default, mr);
+  return detail::to_integers(strings, output_type, cudf::default_stream_value, mr);
 }
 
 namespace detail {
@@ -329,7 +332,7 @@ struct integer_to_string_fn {
  * The template function declaration ensures only integer types are used.
  */
 struct dispatch_from_integers_fn {
-  template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
+  template <typename IntegerType, std::enable_if_t<std::is_integral_v<IntegerType>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& integers,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
@@ -349,11 +352,10 @@ struct dispatch_from_integers_fn {
     auto d_new_offsets = offsets_view.template data<int32_t>();
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-    auto chars_column =
-      detail::create_chars_child_column(strings_count, integers.null_count(), bytes, stream, mr);
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars    = chars_view.template data<char>();
+    auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+    auto chars_column = detail::create_chars_child_column(bytes, stream, mr);
+    auto chars_view   = chars_column->mutable_view();
+    auto d_chars      = chars_view.template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
@@ -363,13 +365,11 @@ struct dispatch_from_integers_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                integers.null_count(),
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 
   // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
+  template <typename T, std::enable_if_t<not std::is_integral_v<T>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
@@ -393,7 +393,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = integers.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(integers.type(), dispatch_from_integers_fn{}, integers, stream, mr);
 }
@@ -405,7 +405,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_integers(integers, rmm::cuda_stream_default, mr);
+  return detail::from_integers(integers, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

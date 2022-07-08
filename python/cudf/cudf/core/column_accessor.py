@@ -1,9 +1,10 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
 import itertools
-from collections.abc import MutableMapping
+from collections import abc
+from functools import cached_property, reduce
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -19,13 +20,78 @@ import pandas as pd
 
 import cudf
 from cudf.core import column
-from cudf.utils.utils import cached_property, to_flat_dict, to_nested_dict
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
 
 
-class ColumnAccessor(MutableMapping):
+class _NestedGetItemDict(dict):
+    """A dictionary whose __getitem__ method accesses nested dicts.
+
+    This class directly subclasses dict for performance, so there are a number
+    of gotchas: 1) the only safe accessor for nested elements is
+    `__getitem__` (all other accessors will fail to perform nested lookups), 2)
+    nested mappings will not exhibit the same behavior (they will be raw
+    dictionaries unless explicitly created to be of this class), and 3) to
+    construct this class you _must_ use `from_zip` to get appropriate treatment
+    of tuple keys.
+    """
+
+    @classmethod
+    def from_zip(cls, data):
+        """Create from zip, specialized factory for nesting."""
+        obj = cls()
+        for key, value in data:
+            d = obj
+            for k in key[:-1]:
+                d = d.setdefault(k, {})
+            d[key[-1]] = value
+        return obj
+
+    def __getitem__(self, key):
+        """Recursively apply dict.__getitem__ for nested elements."""
+        # As described in the pandas docs
+        # https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#advanced-indexing-with-hierarchical-index  # noqa: E501
+        # accessing nested elements of a multiindex must be done using a tuple.
+        # Lists and other sequences are treated as accessing multiple elements
+        # at the top level of the index.
+        if isinstance(key, tuple):
+            return reduce(dict.__getitem__, key, self)
+        return super().__getitem__(key)
+
+
+def _to_flat_dict_inner(d, parents=()):
+    for k, v in d.items():
+        if not isinstance(v, d.__class__):
+            if parents:
+                k = parents + (k,)
+            yield (k, v)
+        else:
+            yield from _to_flat_dict_inner(d=v, parents=parents + (k,))
+
+
+def _to_flat_dict(d):
+    """
+    Convert the given nested dictionary to a flat dictionary
+    with tuple keys.
+    """
+    return {k: v for k, v in _to_flat_dict_inner(d)}
+
+
+class ColumnAccessor(abc.MutableMapping):
+    """
+    Parameters
+    ----------
+    data : mapping
+        Mapping of keys to column values.
+    multiindex : bool, optional
+        Whether tuple keys represent a hierarchical
+        index with multiple "levels" (default=False).
+    level_names : tuple, optional
+        Tuple containing names for each of the levels.
+        For a non-hierarchical index, a tuple of size 1
+        may be passe.
+    """
 
     _data: "Dict[Any, ColumnBase]"
     multiindex: bool
@@ -33,23 +99,10 @@ class ColumnAccessor(MutableMapping):
 
     def __init__(
         self,
-        data: Union[MutableMapping, ColumnAccessor] = None,
+        data: Union[abc.MutableMapping, ColumnAccessor] = None,
         multiindex: bool = False,
         level_names=None,
     ):
-        """
-        Parameters
-        ----------
-        data : mapping
-            Mapping of keys to column values.
-        multiindex : bool, optional
-            Whether tuple keys represent a hierarchical
-            index with multiple "levels" (default=False).
-        level_names : tuple, optional
-            Tuple containing names for each of the levels.
-            For a non-hierarchical index, a tuple of size 1
-            may be passe.
-        """
         if data is None:
             data = {}
         # TODO: we should validate the keys of `data`
@@ -96,7 +149,7 @@ class ColumnAccessor(MutableMapping):
         return obj
 
     def __iter__(self):
-        return self._data.__iter__()
+        return iter(self._data)
 
     def __getitem__(self, key: Any) -> ColumnBase:
         return self._data[key]
@@ -105,7 +158,7 @@ class ColumnAccessor(MutableMapping):
         self.set_by_label(key, value)
 
     def __delitem__(self, key: Any):
-        self._data.__delitem__(key)
+        del self._data[key]
         self._clear_cache()
 
     def __len__(self) -> int:
@@ -160,13 +213,13 @@ class ColumnAccessor(MutableMapping):
         return tuple(self.values())
 
     @cached_property
-    def _grouped_data(self) -> MutableMapping:
+    def _grouped_data(self) -> abc.MutableMapping:
         """
         If self.multiindex is True,
         return the underlying mapping as a nested mapping.
         """
         if self.multiindex:
-            return to_nested_dict(dict(zip(self.names, self.columns)))
+            return _NestedGetItemDict.from_zip(zip(self.names, self.columns))
         else:
             return self._data
 
@@ -190,9 +243,7 @@ class ColumnAccessor(MutableMapping):
             del self._column_length
 
     def to_pandas_index(self) -> pd.Index:
-        """"
-        Convert the keys of the ColumnAccessor to a Pandas Index object.
-        """
+        """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
             # Using `from_frame()` instead of `from_tuples`
             # prevents coercion of values to a different type
@@ -291,6 +342,26 @@ class ColumnAccessor(MutableMapping):
                     return self._select_by_label_with_wildcard(key)
             return self._select_by_label_grouped(key)
 
+    def get_labels_by_index(self, index: Any) -> tuple:
+        """Get the labels corresponding to the provided column indices.
+
+        Parameters
+        ----------
+        index : integer, integer slice, or list-like of integers
+            The column indexes.
+
+        Returns
+        -------
+        tuple
+        """
+        if isinstance(index, slice):
+            start, stop, step = index.indices(len(self._data))
+            return self.names[start:stop:step]
+        elif pd.api.types.is_integer(index):
+            return (self.names[index],)
+        else:
+            return tuple(self.names[i] for i in index)
+
     def select_by_index(self, index: Any) -> ColumnAccessor:
         """
         Return a ColumnAccessor composed of the columns
@@ -304,16 +375,12 @@ class ColumnAccessor(MutableMapping):
         -------
         ColumnAccessor
         """
-        if isinstance(index, slice):
-            start, stop, step = index.indices(len(self._data))
-            keys = self.names[start:stop:step]
-        elif pd.api.types.is_integer(index):
-            keys = self.names[index : index + 1]
-        else:
-            keys = (self.names[i] for i in index)
+        keys = self.get_labels_by_index(index)
         data = {k: self._data[k] for k in keys}
         return self.__class__(
-            data, multiindex=self.multiindex, level_names=self.level_names,
+            data,
+            multiindex=self.multiindex,
+            level_names=self.level_names,
         )
 
     def set_by_label(self, key: Any, value: Any, validate: bool = True):
@@ -343,8 +410,11 @@ class ColumnAccessor(MutableMapping):
         self._clear_cache()
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
+        data = {k: self._grouped_data[k] for k in key}
+        if self.multiindex:
+            data = _to_flat_dict(data)
         return self.__class__(
-            to_flat_dict({k: self._grouped_data[k] for k in key}),
+            data,
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
@@ -354,7 +424,8 @@ class ColumnAccessor(MutableMapping):
         if isinstance(result, cudf.core.column.ColumnBase):
             return self.__class__({key: result})
         else:
-            result = to_flat_dict(result)
+            if self.multiindex:
+                result = _to_flat_dict(result)
             if not isinstance(key, tuple):
                 key = (key,)
             return self.__class__(
@@ -469,19 +540,42 @@ class ColumnAccessor(MutableMapping):
                 raise IndexError(
                     f"Too many levels: Index has only 1 level, not {level+1}"
                 )
+
             if isinstance(mapper, Mapping):
-                new_names = (
+                new_col_names = [
                     mapper.get(col_name, col_name) for col_name in self.keys()
-                )
+                ]
             else:
-                new_names = (mapper(col_name) for col_name in self.keys())
+                new_col_names = [mapper(col_name) for col_name in self.keys()]
+
+            if len(new_col_names) != len(set(new_col_names)):
+                raise ValueError("Duplicate column names are not allowed")
+
             ca = ColumnAccessor(
-                dict(zip(new_names, self.values())),
+                dict(zip(new_col_names, self.values())),
                 level_names=self.level_names,
                 multiindex=self.multiindex,
             )
 
         return self.__class__(ca)
+
+    def droplevel(self, level):
+        # drop the nth level
+        if level < 0:
+            level += self.nlevels
+
+        self._data = {
+            _remove_key_level(key, level): value
+            for key, value in self._data.items()
+        }
+        self._level_names = (
+            self._level_names[:level] + self._level_names[level + 1 :]
+        )
+
+        if (
+            len(self._level_names) == 1
+        ):  # can't use nlevels, as it depends on multiindex
+            self.multiindex = False
 
 
 def _compare_keys(target: Any, key: Any) -> bool:
@@ -500,3 +594,14 @@ def _compare_keys(target: Any, key: Any) -> bool:
         if k1 != k2:
             return False
     return True
+
+
+def _remove_key_level(key: Any, level: int) -> Any:
+    """
+    Remove a level from key. If detupleize is True, and if only a
+    single level remains, convert the tuple to a scalar.
+    """
+    result = key[:level] + key[level + 1 :]
+    if len(result) == 1:
+        return result[0]
+    return result

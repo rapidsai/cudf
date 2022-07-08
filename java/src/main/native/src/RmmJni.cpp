@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,11 @@
 #include <iostream>
 #include <limits>
 
+#include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/limiting_resource_adaptor.hpp>
 #include <rmm/mr/device/logging_resource_adaptor.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -207,17 +210,6 @@ private:
   }
 
   bool on_alloc_fail(std::size_t num_bytes) {
-    cudaError_t err = cudaPeekAtLastError();
-    if (err != cudaSuccess) {
-      // workaround for RMM pooled mode (CNMEM backend) leaving a CUDA error pending
-      if (err == cudaErrorMemoryAllocation) {
-        cudaGetLastError();
-      } else {
-        // let this allocation fail so the application can see the CUDA error
-        return false;
-      }
-    }
-
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
     jboolean result =
         env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes));
@@ -253,7 +245,7 @@ private:
         total_before = get_total_bytes_allocated();
         result = resource->allocate(num_bytes, stream);
         break;
-      } catch (std::bad_alloc const &e) {
+      } catch (rmm::out_of_memory const &e) {
         if (!on_alloc_fail(num_bytes)) {
           throw;
         }
@@ -325,14 +317,14 @@ void set_java_device_memory_resource(JNIEnv *env, jobject handler_obj, jlongArra
 // Need to keep both separate so we can shut them down appropriately
 std::unique_ptr<logging_resource_adaptor<base_tracking_resource_adaptor>> Logging_memory_resource{};
 std::shared_ptr<device_memory_resource> Initialized_resource{};
+std::unique_ptr<rmm::mr::cuda_memory_resource> Cuda_memory_resource{};
 } // anonymous namespace
 
 extern "C" {
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, jclass clazz,
                                                                   jint allocation_mode, jint log_to,
-                                                                  jstring jpath, jlong pool_size,
-                                                                  jlong max_pool_size) {
+                                                                  jstring jpath, jlong pool_size) {
   try {
     // make sure the CUDA device is setup in the context
     cudaError_t cuda_status = cudaFree(0);
@@ -344,44 +336,39 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
     bool use_arena_alloc = allocation_mode & 4;
+    bool use_cuda_async_alloc = allocation_mode & 8;
     if (use_pool_alloc) {
-      auto pool_limit = (max_pool_size > 0) ?
-                            thrust::optional<std::size_t>{static_cast<std::size_t>(max_pool_size)} :
-                            thrust::nullopt;
       if (use_managed_mem) {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_limit);
-        auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
-        Tracking_memory_resource.reset(wrapped);
+            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_size);
       } else {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
-        auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
-        Tracking_memory_resource.reset(wrapped);
+            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_size);
       }
     } else if (use_arena_alloc) {
-      std::size_t pool_limit = (max_pool_size > 0) ? static_cast<std::size_t>(max_pool_size) :
-                                                     std::numeric_limits<std::size_t>::max();
       if (use_managed_mem) {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
-            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_limit);
-        auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
-        Tracking_memory_resource.reset(wrapped);
+            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size);
       } else {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
-            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
-        auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
-        Tracking_memory_resource.reset(wrapped);
+            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size);
       }
+    } else if (use_cuda_async_alloc) {
+      // Use `limiting_resource_adaptor` to set a hard limit on the max pool size since
+      // `cuda_async_memory_resource` only has a release threshold.
+      auto const alignment = 512; // Async allocator aligns to 512.
+      Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::limiting_resource_adaptor>(
+          std::make_shared<rmm::mr::cuda_async_memory_resource>(pool_size, pool_size), pool_size,
+          alignment);
     } else if (use_managed_mem) {
       Initialized_resource = std::make_shared<rmm::mr::managed_memory_resource>();
-      auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
-      Tracking_memory_resource.reset(wrapped);
     } else {
       Initialized_resource = std::make_shared<rmm::mr::cuda_memory_resource>();
-      auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
-      Tracking_memory_resource.reset(wrapped);
     }
+
+    auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
+    Tracking_memory_resource.reset(wrapped);
+
     auto resource = Tracking_memory_resource.get();
     rmm::mr::set_current_device_resource(resource);
 
@@ -418,6 +405,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
       }
     }
 
+    Cuda_memory_resource = std::make_unique<rmm::mr::cuda_memory_resource>();
+
     // Now that RMM has successfully initialized, setup all threads calling
     // cudf to use the same device RMM is using.
     cudf::jni::set_cudf_device(device_id);
@@ -437,6 +426,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jcl
     rmm::mr::set_current_device_resource(Initialized_resource.get());
     Logging_memory_resource.reset(nullptr);
     Tracking_memory_resource.reset(nullptr);
+    Cuda_memory_resource.reset(nullptr);
     cudf::jni::set_cudf_device(cudaInvalidDeviceId);
   }
   CATCH_STD(env, )
@@ -485,6 +475,28 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setEventHandlerInternal(
     jlongArray jdealloc_thresholds) {
   try {
     set_java_device_memory_resource(env, handler_obj, jalloc_thresholds, jdealloc_thresholds);
+  }
+  CATCH_STD(env, )
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocCudaInternal(JNIEnv *env, jclass clazz,
+                                                                  jlong size, jlong stream) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
+    void *ret = Cuda_memory_resource->allocate(size, c_stream);
+    return reinterpret_cast<jlong>(ret);
+  }
+  CATCH_STD(env, 0)
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeCuda(JNIEnv *env, jclass clazz, jlong ptr,
+                                                        jlong size, jlong stream) {
+  try {
+    cudf::jni::auto_set_device(env);
+    void *cptr = reinterpret_cast<void *>(ptr);
+    auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
+    Cuda_memory_resource->deallocate(cptr, size, c_stream);
   }
   CATCH_STD(env, )
 }

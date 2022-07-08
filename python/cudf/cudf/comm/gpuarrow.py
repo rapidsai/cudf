@@ -1,15 +1,15 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
-from collections import OrderedDict
-from collections.abc import Sequence
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+from collections import OrderedDict, abc
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+from cudf import Series
 from cudf._lib.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
-from cudf.core import Series, column
+from cudf.core import column
 from cudf.utils.utils import mask_bitsize, mask_dtype
 
 
@@ -31,7 +31,7 @@ class CudaRecordBatchStreamReader(_CudaRecordBatchStreamReader):
         self._open(source, schema)
 
 
-class GpuArrowReader(Sequence):
+class GpuArrowReader(abc.Sequence):
     def __init__(self, schema, dev_ary):
         self._table = CudaRecordBatchStreamReader(dev_ary, schema).read_all()
 
@@ -57,7 +57,7 @@ class GpuArrowReader(Sequence):
         return dc
 
 
-class GpuArrowNodeReader(object):
+class GpuArrowNodeReader:
     def __init__(self, table, index):
         self._table = table
         self._field = table.schema[index]
@@ -119,22 +119,20 @@ class GpuArrowNodeReader(object):
 
     @property
     def data_raw(self):
-        "Accessor for the data buffer as a device array"
+        """Accessor for the data buffer as a device array"""
         return self._series._column.data_array_view
 
     @property
     def null_raw(self):
-        "Accessor for the null buffer as a device array"
+        """Accessor for the null buffer as a device array"""
         return self._series._column.mask_array_view
 
     def make_series(self):
-        """Make a Series object out of this node
-        """
+        """Make a Series object out of this node"""
         return self._series.copy(deep=False)
 
     def _make_dictionary_series(self):
-        """Make a dictionary-encoded series from this node
-        """
+        """Make a dictionary-encoded series from this node"""
         assert self.is_dictionary
         return self._series.copy(deep=False)
 

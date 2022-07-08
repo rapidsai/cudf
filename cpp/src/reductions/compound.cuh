@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,25 +22,26 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <thrust/iterator/transform_iterator.h>
+
 namespace cudf {
 namespace reduction {
 namespace compound {
+namespace detail {
 /**
- * @brief Multi-step reduction for operations such as mean and variance, and
- * standard deviation.
+ * @brief Multi-step reduction for operations such as mean, variance, and standard deviation.
  *
- * @param[in] col    input column view
- * @param[in] ddof   `Delta Degrees of Freedom` used for `std`, `var`.
- *                   The divisor used in calculations is N - ddof, where N
- *                   represents the number of elements.
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @param[in] mr     Device memory resource used to allocate the returned scalar's device memory
- * @return    Output scalar in device memory
+ * @tparam ElementType  the input column data-type
+ * @tparam ResultType   the output data-type
+ * @tparam Op           the compound operator derived from `cudf::reduction::op::compound_op`
  *
- * @tparam ElementType  the input column cudf dtype
- * @tparam ResultType   the output cudf dtype
- * @tparam Op           the compound operator derived from
- * `cudf::reduction::op::compound_op`
+ * @param col input column view
+ * @param output_dtype data type of return type and typecast elements of input column.
+ * @param ddof Delta degrees of freedom used for standard deviation and variance. The divisor used
+ * is N - ddof, where N represents the number of elements.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Output scalar in device memory
  */
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
@@ -61,24 +62,24 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
       auto it = thrust::make_transform_iterator(
         dcol->pair_begin<ElementType, true>(),
         compound_op.template get_null_replacing_element_transformer<ResultType>());
-      result = detail::reduce<Op, decltype(it), ResultType>(
+      result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     } else {
       auto it = thrust::make_transform_iterator(
         dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
-      result = detail::reduce<Op, decltype(it), ResultType>(
+      result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     }
   } else {
     auto it = thrust::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls()),
       compound_op.template get_null_replacing_element_transformer<ResultType>());
-    result = detail::reduce<Op, decltype(it), ResultType>(
+    result = cudf::reduction::detail::reduce<Op, decltype(it), ResultType>(
       it, col.size(), compound_op, valid_count, ddof, stream, mr);
   }
 
   // set scalar is valid
-  result->set_valid(col.null_count() < col.size(), stream);
+  result->set_valid_async(col.null_count() < col.size(), stream);
   return result;
 };
 
@@ -91,7 +92,7 @@ struct result_type_dispatcher {
   {
     // the operator `mean`, `var`, `std` only accepts
     // floating points as output dtype
-    return std::is_floating_point<ResultType>::value;
+    return std::is_floating_point_v<ResultType>;
   }
 
  public:
@@ -124,7 +125,7 @@ struct element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported_v()
   {
-    return std::is_arithmetic<ElementType>::value;
+    return std::is_arithmetic_v<ElementType>;
   }
 
  public:
@@ -152,6 +153,7 @@ struct element_type_dispatcher {
   }
 };
 
+}  // namespace detail
 }  // namespace compound
 }  // namespace reduction
 }  // namespace cudf

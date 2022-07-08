@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@
 
 package ai.rapids.cudf;
 
-public class ORCWriterOptions extends CompressedMetadataWriterOptions {
-
-  public static ORCWriterOptions DEFAULT = new ORCWriterOptions(new Builder());
+/**
+ * This class represents settings for writing ORC files. It includes meta data information
+ * that will be used by the ORC writer to write the file.
+ */
+public class ORCWriterOptions extends CompressionMetadataWriterOptions {
 
   private ORCWriterOptions(Builder builder) {
     super(builder);
@@ -30,7 +32,9 @@ public class ORCWriterOptions extends CompressedMetadataWriterOptions {
     return new Builder();
   }
 
-  public static class Builder extends CMWriterBuilder<Builder> {
+  public static class Builder extends CompressionMetadataWriterOptions.Builder
+          <Builder, ORCWriterOptions> {
+
     public ORCWriterOptions build() {
       return new ORCWriterOptions(this);
     }

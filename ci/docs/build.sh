@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 #################################
 # cuDF Docs build script for CI #
 #################################
@@ -10,12 +10,11 @@ if [ -z "$PROJECT_WORKSPACE" ]; then
     exit 1
 fi
 
-export DOCS_WORKSPACE=$WORKSPACE/docs
+export DOCS_WORKSPACE="$WORKSPACE/docs"
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
-export HOME=$WORKSPACE
+export HOME="$WORKSPACE"
 export PROJECT_WORKSPACE=/rapids/cudf
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
-export NIGHTLY_VERSION=$(echo $BRANCH_VERSION | awk -F. '{print $2}')
 export PROJECTS=(cudf libcudf)
 
 gpuci_logger "Check environment..."
@@ -30,8 +29,7 @@ conda activate rapids
 
 gpuci_logger "Check versions..."
 python --version
-$CC --version
-$CXX --version
+
 conda info
 conda config --show-sources
 conda list --show-channel-urls

@@ -1,22 +1,34 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from libcpp.string cimport string
-from cudf._lib.cpp.io.types cimport source_info, io_type, host_buffer
-from cudf._lib.cpp.io.types cimport sink_info, data_sink, datasource
+from libcpp.utility cimport move
+from libcpp.vector cimport vector
+
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.io.types cimport (
+    column_name_info,
+    data_sink,
+    datasource,
+    host_buffer,
+    io_type,
+    sink_info,
+    source_info,
+)
 from cudf._lib.io.datasource cimport Datasource
 
 import codecs
 import errno
 import io
 import os
+
 import cudf
+from cudf.api.types import is_struct_dtype
+
 
 # Converts the Python source input to libcudf++ IO source_info
 # with the appropriate type and source values
@@ -67,25 +79,52 @@ cdef source_info make_source_info(list src) except*:
     return source_info(c_host_buffers)
 
 # Converts the Python sink input to libcudf++ IO sink_info.
-cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
-    if isinstance(src, io.StringIO):
-        sink.reset(new iobase_data_sink(src))
-        return sink_info(sink.get())
-    elif isinstance(src, io.TextIOBase):
-        # Files opened in text mode expect writes to be str rather than bytes,
-        # which requires conversion from utf-8. If the underlying buffer is
-        # utf-8, we can bypass this conversion by writing directly to it.
-        if codecs.lookup(src.encoding).name not in {"utf-8", "ascii"}:
-            raise NotImplementedError(f"Unsupported encoding {src.encoding}")
-        sink.reset(new iobase_data_sink(src.buffer))
-        return sink_info(sink.get())
-    elif isinstance(src, io.IOBase):
-        sink.reset(new iobase_data_sink(src))
-        return sink_info(sink.get())
-    elif isinstance(src, (basestring, os.PathLike)):
-        return sink_info(<string> os.path.expanduser(src).encode())
+cdef sink_info make_sinks_info(
+    list src, vector[unique_ptr[data_sink]] & sink
+) except*:
+    cdef vector[data_sink *] data_sinks
+    cdef vector[string] paths
+    if isinstance(src[0], io.StringIO):
+        data_sinks.reserve(len(src))
+        for s in src:
+            sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
+            data_sinks.push_back(sink.back().get())
+        return sink_info(data_sinks)
+    elif isinstance(src[0], io.TextIOBase):
+        data_sinks.reserve(len(src))
+        for s in src:
+            # Files opened in text mode expect writes to be str rather than
+            # bytes, which requires conversion from utf-8. If the underlying
+            # buffer is utf-8, we can bypass this conversion by writing
+            # directly to it.
+            if codecs.lookup(s.encoding).name not in {"utf-8", "ascii"}:
+                raise NotImplementedError(f"Unsupported encoding {s.encoding}")
+            sink.push_back(
+                unique_ptr[data_sink](new iobase_data_sink(s.buffer))
+            )
+            data_sinks.push_back(sink.back().get())
+        return sink_info(data_sinks)
+    elif isinstance(src[0], io.IOBase):
+        data_sinks.reserve(len(src))
+        for s in src:
+            sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
+            data_sinks.push_back(sink.back().get())
+        return sink_info(data_sinks)
+    elif isinstance(src[0], (basestring, os.PathLike)):
+        paths.reserve(len(src))
+        for s in src:
+            paths.push_back(<string> os.path.expanduser(s).encode())
+        return sink_info(move(paths))
     else:
         raise TypeError("Unrecognized input type: {}".format(type(src)))
+
+
+cdef sink_info make_sink_info(src, unique_ptr[data_sink] & sink) except*:
+    cdef vector[unique_ptr[data_sink]] datasinks
+    cdef sink_info info = make_sinks_info([src], datasinks)
+    if not datasinks.empty():
+        sink.swap(datasinks[0])
+    return info
 
 
 # Adapts a python io.IOBase object as a libcudf++ IO data_sink. This lets you
@@ -108,3 +147,39 @@ cdef cppclass iobase_data_sink(data_sink):
 
     size_t bytes_written() with gil:
         return buf.tell()
+
+
+cdef update_struct_field_names(
+    table,
+    vector[column_name_info]& schema_info
+):
+    for i, (name, col) in enumerate(table._data.items()):
+        table._data[name] = update_column_struct_field_names(
+            col, schema_info[i]
+        )
+
+
+cdef Column update_column_struct_field_names(
+    Column col,
+    column_name_info& info
+):
+    cdef vector[string] field_names
+
+    if col.children:
+        children = list(col.children)
+        for i, child in enumerate(children):
+            children[i] = update_column_struct_field_names(
+                child,
+                info.children[i]
+            )
+        col.set_base_children(tuple(children))
+
+    if is_struct_dtype(col):
+        field_names.reserve(len(col.base_children))
+        for i in range(info.children.size()):
+            field_names.push_back(info.children[i].name)
+        col = col._rename_fields(
+            field_names
+        )
+
+    return col

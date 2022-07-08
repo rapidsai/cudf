@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,13 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+#include "./utilities.h"
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include "./utilities.h"
+
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
 
@@ -333,30 +336,6 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
       h_expected.begin(),
       h_expected.end(),
       thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
-}
-
-TEST_F(StringsReplaceTest, ReplaceNulls)
-{
-  std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
-
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  auto strings_view = cudf::strings_column_view(strings);
-
-  {
-    auto results = cudf::strings::replace_nulls(strings_view, cudf::string_scalar("___"));
-    std::vector<const char*> h_expected{"Héllo", "thesé", "___", "ARE THE", "tést strings", ""};
-    cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
-  {
-    auto results = cudf::strings::replace_nulls(strings_view);
-    std::vector<const char*> h_expected{"Héllo", "thesé", "", "ARE THE", "tést strings", ""};
-    cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }

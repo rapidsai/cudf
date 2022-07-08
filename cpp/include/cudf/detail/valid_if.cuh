@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,12 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 
-#include <thrust/device_vector.h>
 #include <thrust/distance.h>
 
 namespace cudf {
@@ -49,7 +49,8 @@ __global__ void valid_if_kernel(
 {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
-  size_type i = threadIdx.x + blockIdx.x * blockDim.x;
+  thread_index_type i            = threadIdx.x + blockIdx.x * blockDim.x;
+  thread_index_type const stride = blockDim.x * gridDim.x;
   size_type warp_valid_count{0};
 
   auto active_mask = __ballot_sync(0xFFFF'FFFF, i < size);
@@ -59,13 +60,13 @@ __global__ void valid_if_kernel(
       output[cudf::word_index(i)] = ballot;
       warp_valid_count += __popc(ballot);
     }
-    i += blockDim.x * gridDim.x;
+    i += stride;
     active_mask = __ballot_sync(active_mask, i < size);
   }
 
   size_type block_count = single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
   if (threadIdx.x == 0) { atomicAdd(valid_count, block_count); }
-}  // namespace detail
+}
 
 /**
  * @brief Generate a bitmask where every bit is set for which a predicate is
@@ -89,7 +90,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
   InputIterator begin,
   InputIterator end,
   Predicate p,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
@@ -110,7 +111,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 
     null_count = size - valid_count.value(stream);
   }
-  return std::make_pair(std::move(null_mask), null_count);
+  return std::pair(std::move(null_mask), null_count);
 }
 
 /**
@@ -118,7 +119,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
 *         input ranges.
 
  * Given a set of bitmasks, `masks`, the state of bit `j` in mask `i` is
- * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predivate evaluates
+ * determined by `p( *(begin1 + i), *(begin2 + j))`. If the predicate evaluates
  * to true, the the bit is set to `1`. If false, set to `0`.
  *
  * Example Arguments:

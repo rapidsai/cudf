@@ -18,20 +18,26 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/hashing.hpp>
+#include <cudf/types.hpp>
 
 #include <unordered_map>
 
 namespace cudf {
 namespace detail {
-struct aggregation_equality {
-  bool operator()(aggregation const& lhs, aggregation const& rhs) const
+struct pair_column_aggregation_equal_to {
+  bool operator()(std::pair<column_view, aggregation const&> const& lhs,
+                  std::pair<column_view, aggregation const&> const& rhs) const
   {
-    return lhs.is_equal(rhs);
+    return is_shallow_equivalent(lhs.first, rhs.first) and lhs.second.is_equal(rhs.second);
   }
 };
 
-struct aggregation_hash {
-  size_t operator()(aggregation const& key) const noexcept { return key.do_hash(); }
+struct pair_column_aggregation_hash {
+  size_t operator()(std::pair<column_view, aggregation const&> const& key) const
+  {
+    return hash_combine(shallow_hash(key.first), key.second.do_hash());
+  }
 };
 
 class result_cache {
@@ -43,19 +49,19 @@ class result_cache {
 
   result_cache(size_t num_columns) : _cache(num_columns) {}
 
-  bool has_result(size_t col_idx, aggregation const& agg) const;
+  [[nodiscard]] bool has_result(column_view const& input, aggregation const& agg) const;
 
-  void add_result(size_t col_idx, aggregation const& agg, std::unique_ptr<column>&& col);
+  void add_result(column_view const& input, aggregation const& agg, std::unique_ptr<column>&& col);
 
-  column_view get_result(size_t col_idx, aggregation const& agg) const;
+  [[nodiscard]] column_view get_result(column_view const& input, aggregation const& agg) const;
 
-  std::unique_ptr<column> release_result(size_t col_idx, aggregation const& agg);
+  std::unique_ptr<column> release_result(column_view const& input, aggregation const& agg);
 
  private:
-  std::vector<std::unordered_map<std::reference_wrapper<aggregation const>,
-                                 std::pair<std::unique_ptr<aggregation>, std::unique_ptr<column>>,
-                                 aggregation_hash,
-                                 aggregation_equality>>
+  std::unordered_map<std::pair<column_view, std::reference_wrapper<aggregation const>>,
+                     std::pair<std::unique_ptr<aggregation>, std::unique_ptr<column>>,
+                     pair_column_aggregation_hash,
+                     pair_column_aggregation_equal_to>
     _cache;
 };
 

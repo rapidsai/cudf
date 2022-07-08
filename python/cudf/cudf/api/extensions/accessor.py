@@ -1,11 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf.utils.docutils import docfmt_partial
 import warnings
 
-import cudf
 from pandas.core.accessor import CachedAccessor
 
+import cudf
+from cudf.utils.docutils import docfmt_partial
 
 _docstring_register_accessor = """
     Extends `cudf.{klass}` with custom defined accessor
@@ -152,7 +152,7 @@ def register_dataframe_accessor(name):
 @doc_register_index_accessor()
 def register_index_accessor(name):
     """{docstring}"""
-    return _register_accessor(name, cudf.Index)
+    return _register_accessor(name, cudf.BaseIndex)
 
 
 @doc_register_series_accessor()

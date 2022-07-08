@@ -1,3 +1,5 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+
 from itertools import product
 
 import numpy as np
@@ -5,7 +7,13 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq, gen_rand
+from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
+from cudf.testing._utils import (
+    INTEGER_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    gen_rand,
+)
 
 params_sizes = [0, 1, 2, 5]
 
@@ -32,7 +40,7 @@ def test_cumsum(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cumsum().to_array(), ps.cumsum(), decimal=decimal
+        gs.cumsum().to_numpy(), ps.cumsum(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -41,7 +49,7 @@ def test_cumsum(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cumsum().to_array(), pdf.a.cumsum(), decimal=decimal
+        gdf.a.cumsum().to_numpy(), pdf.a.cumsum(), decimal=decimal
     )
 
 
@@ -61,6 +69,27 @@ def test_cumsum_masked():
         assert_eq(got, expected)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(10, 5),
+        Decimal64Dtype(12, 7),
+        Decimal32Dtype(8, 5),
+        Decimal128Dtype(13, 6),
+    ],
+)
+def test_cumsum_decimal(dtype):
+    data = ["243.32", "48.245", "-7234.298", np.nan, "-467.2"]
+    gser = cudf.Series(data).astype(dtype)
+    pser = pd.Series(data, dtype="float64")
+
+    got = gser.cumsum()
+    expected = cudf.Series.from_pandas(pser.cumsum()).astype(dtype)
+
+    assert_eq(got, expected)
+
+
 @pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
 def test_cummin(dtype, nelem):
     if dtype == np.int8:
@@ -75,7 +104,7 @@ def test_cummin(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cummin().to_array(), ps.cummin(), decimal=decimal
+        gs.cummin().to_numpy(), ps.cummin(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -84,7 +113,7 @@ def test_cummin(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cummin().to_array(), pdf.a.cummin(), decimal=decimal
+        gdf.a.cummin().to_numpy(), pdf.a.cummin(), decimal=decimal
     )
 
 
@@ -103,6 +132,27 @@ def test_cummin_masked():
         assert_eq(gs.cummin(), expected)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(11, 6),
+        Decimal64Dtype(14, 7),
+        Decimal32Dtype(8, 4),
+        Decimal128Dtype(11, 6),
+    ],
+)
+def test_cummin_decimal(dtype):
+    data = ["8394.294", np.nan, "-9940.444", np.nan, "-23.928"]
+    gser = cudf.Series(data).astype(dtype)
+    pser = pd.Series(data, dtype="float64")
+
+    got = gser.cummin()
+    expected = cudf.Series.from_pandas(pser.cummin()).astype(dtype)
+
+    assert_eq(got, expected)
+
+
 @pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
 def test_cummax(dtype, nelem):
     if dtype == np.int8:
@@ -117,7 +167,7 @@ def test_cummax(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cummax().to_array(), ps.cummax(), decimal=decimal
+        gs.cummax().to_numpy(), ps.cummax(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -126,7 +176,7 @@ def test_cummax(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cummax().to_array(), pdf.a.cummax(), decimal=decimal
+        gdf.a.cummax().to_numpy(), pdf.a.cummax(), decimal=decimal
     )
 
 
@@ -145,6 +195,27 @@ def test_cummax_masked():
         assert_eq(gs.cummax(), expected)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        Decimal64Dtype(8, 4),
+        Decimal64Dtype(11, 6),
+        Decimal64Dtype(14, 7),
+        Decimal32Dtype(8, 4),
+        Decimal128Dtype(11, 6),
+    ],
+)
+def test_cummax_decimal(dtype):
+    data = [np.nan, "54.203", "8.222", "644.32", "-562.272"]
+    gser = cudf.Series(data).astype(dtype)
+    pser = pd.Series(data, dtype="float64")
+
+    got = gser.cummax()
+    expected = cudf.Series.from_pandas(pser.cummax()).astype(dtype)
+
+    assert_eq(got, expected)
+
+
 @pytest.mark.parametrize("dtype,nelem", list(_gen_params()))
 def test_cumprod(dtype, nelem):
     if dtype == np.int8:
@@ -159,7 +230,7 @@ def test_cumprod(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cumprod().to_array(), ps.cumprod(), decimal=decimal
+        gs.cumprod().to_numpy(), ps.cumprod(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -168,7 +239,7 @@ def test_cumprod(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cumprod().to_array(), pdf.a.cumprod(), decimal=decimal
+        gdf.a.cumprod().to_numpy(), pdf.a.cumprod(), decimal=decimal
     )
 
 

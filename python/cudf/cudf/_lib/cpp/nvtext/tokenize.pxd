@@ -6,6 +6,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 
+
 cdef extern from "nvtext/tokenize.hpp" namespace "nvtext" nogil:
 
     cdef unique_ptr[column] tokenize(

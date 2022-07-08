@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -30,52 +31,29 @@ namespace strings {
  */
 
 /**
- * @brief Row-wise concatenates the given list of strings columns and
- * returns a single strings column result.
- *
- * Each new string is created by concatenating the strings from the same
- * row delimited by the separator provided.
- *
- * Any row with a null entry will result in the corresponding output
- * row to be null entry unless a narep string is specified to be used
- * in its place.
- *
- * The number of strings in the columns provided must be the same.
- *
- * @code{.pseudo}
- * Example:
- * s1 = ['aa', null, '', 'aa']
- * s2 = ['', 'bb', 'bb', null]
- * r1 = concatenate([s1,s2])
- * r1 is ['aa', null, 'bb', null]
- * r2 = concatenate([s1,s2],':','_')
- * r2 is ['aa:', '_:bb', ':bb', 'aa:_']
- * @endcode
- *
- * @throw cudf::logic_error if input columns are not all strings columns.
- * @throw cudf::logic_error if separator is not valid.
- *
- * @param strings_columns List of string columns to concatenate.
- * @param separator String that should inserted between each string from each row.
- *        Default is an empty string.
- * @param narep String that should be used in place of any null strings
- *        found in any column. Default of invalid-scalar means any null entry in any column will
- *        produces a null result for that row.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column with concatenated results.
+ * @brief Setting for specifying how separators are added with
+ * null strings elements.
  */
-std::unique_ptr<column> concatenate(
-  table_view const& strings_columns,
-  string_scalar const& separator      = string_scalar(""),
-  string_scalar const& narep          = string_scalar("", false),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+enum class separator_on_nulls {
+  YES,  ///< Always add separators between elements
+  NO    ///< Do not add separators if an element is null
+};
+
+/**
+ * @brief Setting for specifying what will be output from `join_list_elements` when an input list
+ * is empty.
+ */
+enum class output_if_empty_list {
+  EMPTY_STRING,  ///< Empty list will result in empty string
+  NULL_ELEMENT   ///< Empty list will result in a null
+};
 
 /**
  * @brief Concatenates all strings in the column into one new string delimited
  * by an optional separator string.
  *
  * This returns a column with one string. Any null entries are ignored unless
- * the narep parameter specifies a replacement string.
+ * the @p narep parameter specifies a replacement string.
  *
  * @code{.pseudo}
  * Example:
@@ -110,11 +88,9 @@ std::unique_ptr<column> join_strings(
  *
  * - If row separator for a given row is null, output column for that row is null, unless
  *   there is a valid @p separator_narep
- * - If all column values for a given row is null, output column for that row is null, unless
- *   there is a valid @p col_narep
- * - null column values for a given row are skipped, if the column replacement isn't valid
- * - The separator is only applied between two valid column values
- * - If valid @p separator_narep and @p col_narep are provided, the output column is always
+ * - The separator is applied between two output row values if the @p separate_nulls
+ *   is `YES` or only between valid rows if @p separate_nulls is `NO`.
+ * - If @p separator_narep and @p col_narep are both valid, the output column is always
  *   non nullable
  *
  * @code{.pseudo}
@@ -123,16 +99,25 @@ std::unique_ptr<column> join_strings(
  * c1   = [null, 'cc', 'dd', null, null, 'gg']
  * c2   = ['bb', '',   null, null, null, 'hh']
  * sep  = ['::', '%%', '^^', '!',  '*',  null]
- * out0 = concatenate([c0, c1, c2], sep)
- * out0 is ['aa::bb', 'cc%%', '^^dd', 'ee', null, null]
+ * out = concatenate({c0, c1, c2}, sep)
+ * // all rows have at least one null or sep[i]==null
+ * out is [null, null, null, null, null, null]
  *
  * sep_rep = '+'
- * out1    = concatenate([c0, c1, c2], sep, sep_rep)
- * out1 is ['aa::bb', 'cc%%', '^^dd', 'ee', null, 'ff+gg+hh']
+ * out = concatenate({c0, c1, c2}, sep, sep_rep)
+ * // all rows with at least one null output as null
+ * out is [null, null, null, null, null, 'ff+gg+hh']
  *
- * col_rep = '-'
- * out2    = concatenate([c0, c1, c2], sep, invalid_sep_rep, col_rep)
- * out2 is ['aa::-::bb', '-%%cc%%', '^^dd^^-', 'ee!-!-', '-*-*-', null]
+ * col_narep = '-'
+ * sep_na = non-valid scalar
+ * out = concatenate({c0, c1, c2}, sep, sep_na, col_narep)
+ * // only the null entry in the sep column produces a null row
+ * out is ['aa::-::bb', '-%%cc%%', '^^dd^^-', 'ee!-!-', '-*-*-', null]
+ *
+ * col_narep = ''
+ * out = concatenate({c0, c1, c2}, sep, sep_rep, col_narep, separator_on_nulls:NO)
+ * // parameter suppresses separator for null rows
+ * out is ['aa::bb', 'cc%%', '^^dd', 'ee', '', 'ff+gg+hh']
  * @endcode
  *
  * @throw cudf::logic_error if no input columns are specified - table view is empty
@@ -148,6 +133,8 @@ std::unique_ptr<column> join_strings(
  * @param col_narep String that should be used in place of any null strings
  *        found in any column. Default of invalid-scalar means no null column value replacements.
  *        Default is an invalid string.
+ * @param separate_nulls If YES, then the separator is included for null rows
+ *        if `col_narep` is valid.
  * @param mr Resource for allocating device memory.
  * @return New column with concatenated results.
  */
@@ -156,7 +143,183 @@ std::unique_ptr<column> concatenate(
   strings_column_view const& separators,
   string_scalar const& separator_narep = string_scalar("", false),
   string_scalar const& col_narep       = string_scalar("", false),
+  separator_on_nulls separate_nulls    = separator_on_nulls::YES,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Row-wise concatenates the given list of strings columns and
+ * returns a single strings column result.
+ *
+ * Each new string is created by concatenating the strings from the same
+ * row delimited by the separator provided.
+ *
+ * Any row with a null entry will result in the corresponding output
+ * row to be null entry unless a narep string is specified to be used
+ * in its place.
+ *
+ * If @p separate_nulls is set to `NO` and @p narep is valid then
+ * separators are not added to the output between null elements.
+ * Otherwise, separators are always added if @p narep is valid.
+ *
+ * More than one column must be specified in the input @p strings_columns
+ * table.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s1 = ['aa', null, '', 'dd']
+ * s2 = ['', 'bb', 'cc', null]
+ * out = concatenate({s1, s2})
+ * out is ['aa', null, 'cc', null]
+ *
+ * out = concatenate({s1, s2}, ':', '_')
+ * out is ['aa:', '_:bb', ':cc', 'dd:_']
+ *
+ * out = concatenate({s1, s2}, ':', '', separator_on_nulls::NO)
+ * out is ['aa:', 'bb', ':cc', 'dd']
+ * @endcode
+ *
+ * @throw cudf::logic_error if input columns are not all strings columns.
+ * @throw cudf::logic_error if separator is not valid.
+ * @throw cudf::logic_error if only one column is specified
+ *
+ * @param strings_columns List of string columns to concatenate.
+ * @param separator String that should inserted between each string from each row.
+ *        Default is an empty string.
+ * @param narep String that should be used in place of any null strings
+ *        found in any column. Default of invalid-scalar means any null entry in any column will
+ *        produces a null result for that row.
+ * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New column with concatenated results.
+ */
+std::unique_ptr<column> concatenate(
+  table_view const& strings_columns,
+  string_scalar const& separator      = string_scalar(""),
+  string_scalar const& narep          = string_scalar("", false),
+  separator_on_nulls separate_nulls   = separator_on_nulls::YES,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Given a lists column of strings (each row is a list of strings), concatenates the strings
+ * within each row and returns a single strings column result.
+ *
+ * Each new string is created by concatenating the strings from the same row (same list element)
+ * delimited by the row separator provided in the @p separators strings column.
+ *
+ * A null list row will always result in a null string in the output row. Any non-null list row
+ * having a null element will result in the corresponding output row to be null unless a valid
+ * @p string_narep scalar is provided to be used in its place. Any null row in the @p separators
+ * column will also result in a null output row unless a valid @p separator_narep scalar is provided
+ * to be used in place of the null separators.
+ *
+ * If @p separate_nulls is set to `NO` and @p string_narep is valid then separators are not added to
+ * the output between null elements. Otherwise, separators are always added if @p string_narep is
+ * valid.
+ *
+ * If @p empty_list_policy is set to `EMPTY_STRING`, any row that is an empty list will result in
+ * an empty output string. Otherwise, the output will be a null.
+ *
+ * In the special case when the input list row contains all null elements, the output will be the
+ * same as in case of empty input list regardless of @p string_narep and @p separate_nulls values.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = [ ['aa', 'bb', 'cc'], null, ['', 'dd'], ['ee', null], ['ff', 'gg'] ]
+ * sep  = ['::', '%%',  '!',  '*',  null]
+ *
+ * out = join_list_elements(s, sep)
+ * out is ['aa::bb::cc', null, '!dd', null, null]
+ *
+ * out = join_list_elements(s, sep, ':', '_')
+ * out is ['aa::bb::cc', null,  '!dd', 'ee*_', 'ff:gg']
+ *
+ * out = join_list_elements(s, sep, ':', '', separator_on_nulls::NO)
+ * out is ['aa::bb::cc', null,  '!dd', 'ee', 'ff:gg']
+ * @endcode
+ *
+ * @throw cudf::logic_error if input column is not lists of strings column.
+ * @throw cudf::logic_error if the number of rows from `separators` and `lists_strings_column` do
+ *        not match
+ *
+ * @param lists_strings_column Column containing lists of strings to concatenate.
+ * @param separators Strings column that provides separators for concatenation.
+ * @param separator_narep String that should be used to replace null separator, default is an
+ *        invalid-scalar denoting that rows containing null separator will result in null string in
+ *        the corresponding output rows.
+ * @param string_narep String that should be used to replace null strings in any non-null list row,
+ *        default is an invalid-scalar denoting that list rows containing null strings will result
+ *        in null string in the corresponding output rows.
+ * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
+ * @param empty_list_policy if set to EMPTY_STRING, any input row that is an empty list will
+ *        result in an empty string. Otherwise, it will result in a null.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings column with concatenated results.
+ */
+std::unique_ptr<column> join_list_elements(
+  const lists_column_view& lists_strings_column,
+  const strings_column_view& separators,
+  string_scalar const& separator_narep   = string_scalar("", false),
+  string_scalar const& string_narep      = string_scalar("", false),
+  separator_on_nulls separate_nulls      = separator_on_nulls::YES,
+  output_if_empty_list empty_list_policy = output_if_empty_list::EMPTY_STRING,
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Given a lists column of strings (each row is a list of strings), concatenates the strings
+ * within each row and returns a single strings column result.
+ *
+ * Each new string is created by concatenating the strings from the same row (same list element)
+ * delimited by the @p separator provided.
+ *
+ * A null list row will always result in a null string in the output row. Any non-null list row
+ * having a null element will result in the corresponding output row to be null unless a
+ * @p narep string is specified to be used in its place.
+ *
+ * If @p separate_nulls is set to `NO` and @p narep is valid then separators are not added to the
+ * output between null elements. Otherwise, separators are always added if @p narep is valid.
+ *
+ * If @p empty_list_policy is set to `EMPTY_STRING`, any row that is an empty list will result in
+ * an empty output string. Otherwise, the output will be a null.
+ *
+ * In the special case when the input list row contains all null elements, the output will be the
+ * same as in case of empty input list regardless of @p narep and @p separate_nulls values.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = [ ['aa', 'bb', 'cc'], null, ['', 'dd'], ['ee', null], ['ff'] ]
+ *
+ * out = join_list_elements(s)
+ * out is ['aabbcc', null, 'dd', null, 'ff']
+ *
+ * out = join_list_elements(s, ':', '_')
+ * out is ['aa:bb:cc', null,  ':dd', 'ee:_', 'ff']
+ *
+ * out = join_list_elements(s, ':', '', separator_on_nulls::NO)
+ * out is ['aa:bb:cc', null,  ':dd', 'ee', 'ff']
+ * @endcode
+ *
+ * @throw cudf::logic_error if input column is not lists of strings column.
+ * @throw cudf::logic_error if separator is not valid.
+ *
+ * @param lists_strings_column Column containing lists of strings to concatenate.
+ * @param separator String that should inserted between strings of each list row, default is an
+ *        empty string.
+ * @param narep String that should be used to replace null strings in any non-null list row, default
+ *        is an invalid-scalar denoting that list rows containing null strings will result in null
+ *        string in the corresponding output rows.
+ * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
+ * @param empty_list_policy if set to EMPTY_STRING, any input row that is an empty list will result
+ *        in an empty string. Otherwise, it will result in a null.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings column with concatenated results.
+ */
+std::unique_ptr<column> join_list_elements(
+  const lists_column_view& lists_strings_column,
+  string_scalar const& separator         = string_scalar(""),
+  string_scalar const& narep             = string_scalar("", false),
+  separator_on_nulls separate_nulls      = separator_on_nulls::YES,
+  output_if_empty_list empty_list_policy = output_if_empty_list::EMPTY_STRING,
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

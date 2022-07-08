@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <memory>
 #include <string>
@@ -48,26 +49,17 @@ class reader {
 
  public:
   /**
-   * @brief Constructor from an array of file paths
-   *
-   * @param filepaths Paths to the files containing the input dataset
-   * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit reader(std::vector<std::string> const& filepaths,
-                  orc_reader_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-  /**
    * @brief Constructor from an array of datasources
    *
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   orc_reader_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
@@ -83,7 +75,7 @@ class reader {
    * @return The set of columns along with table metadata
    */
   table_with_metadata read(orc_reader_options const& options,
-                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                           rmm::cuda_stream_view stream = cudf::default_stream_value);
 };
 
 /**
@@ -101,14 +93,14 @@ class writer {
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   orc_writer_options const& options,
-                  SingleWriteMode mode                = SingleWriteMode::NO,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
+                  SingleWriteMode mode,
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -116,14 +108,14 @@ class writer {
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   chunked_orc_writer_options const& options,
-                  SingleWriteMode mode                = SingleWriteMode::YES,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
+                  SingleWriteMode mode,
+                  rmm::cuda_stream_view stream,
+                  rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor explicitly declared to avoid inlining in header

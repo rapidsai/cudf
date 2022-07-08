@@ -2,9 +2,9 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cpp.types cimport order, null_order
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
+from cudf._lib.cpp.types cimport null_order, order
 
 
 cdef extern from "cudf/lists/sorting.hpp" namespace "cudf::lists" nogil:

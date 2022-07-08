@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
@@ -22,6 +23,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
@@ -63,9 +67,7 @@ TEST_F(HashPartition, ZeroPartitions)
   auto columns_to_hash = std::vector<cudf::size_type>({2});
 
   cudf::size_type const num_partitions = 0;
-  std::unique_ptr<cudf::table> output;
-  std::vector<cudf::size_type> offsets;
-  std::tie(output, offsets) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto [output, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
@@ -83,9 +85,7 @@ TEST_F(HashPartition, ZeroRows)
   auto columns_to_hash = std::vector<cudf::size_type>({2});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::table> output;
-  std::vector<cudf::size_type> offsets;
-  std::tie(output, offsets) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto [output, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
@@ -100,9 +100,7 @@ TEST_F(HashPartition, ZeroColumns)
   auto columns_to_hash = std::vector<cudf::size_type>({});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::table> output;
-  std::vector<cudf::size_type> offsets;
-  std::tie(output, offsets) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto [output, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect empty table with same number of columns and zero partitions
   EXPECT_EQ(input.num_columns(), output->num_columns());
@@ -120,10 +118,8 @@ TEST_F(HashPartition, MixedColumnTypes)
   auto columns_to_hash = std::vector<cudf::size_type>({0, 2});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::table> output1, output2;
-  std::vector<cudf::size_type> offsets1, offsets2;
-  std::tie(output1, offsets1) = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  std::tie(output2, offsets2) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto [output1, offsets1] = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto [output2, offsets2] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect output to have size num_partitions
   EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
@@ -144,9 +140,7 @@ TEST_F(HashPartition, NullableStrings)
   std::vector<cudf::size_type> const columns_to_hash({0});
   cudf::size_type const num_partitions = 3;
 
-  std::unique_ptr<cudf::table> result;
-  std::vector<cudf::size_type> offsets;
-  std::tie(result, offsets) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto [result, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   auto const& col = result->get_column(0);
   EXPECT_EQ(0, col.null_count());
@@ -163,11 +157,9 @@ TEST_F(HashPartition, ColumnsToHash)
   auto columns_to_hash = std::vector<cudf::size_type>({0});
 
   cudf::size_type const num_partitions = 3;
-  std::unique_ptr<cudf::table> first_result, second_result;
-  std::vector<cudf::size_type> first_offsets, second_offsets;
-  std::tie(first_result, first_offsets) =
+  auto [first_result, first_offsets] =
     cudf::hash_partition(first_input, columns_to_hash, num_partitions);
-  std::tie(second_result, second_offsets) =
+  auto [second_result, second_offsets] =
     cudf::hash_partition(second_input, columns_to_hash, num_partitions);
 
   // Expect offsets to be equal and num_partitions in length
@@ -214,11 +206,37 @@ TEST_F(HashPartition, UnsupportedHashFunction)
     cudf::logic_error);
 }
 
+TEST_F(HashPartition, CustomSeedValue)
+{
+  fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  fixed_width_column_wrapper<int16_t> integers({1, 2, 3, 4, 5, 6, 7, 8});
+  strings_column_wrapper strings({"a", "bb", "ccc", "d", "ee", "fff", "gg", "h"});
+  auto input = cudf::table_view({floats, integers, strings});
+
+  auto columns_to_hash = std::vector<cudf::size_type>({0, 2});
+
+  cudf::size_type const num_partitions = 3;
+  auto [output1, offsets1]             = cudf::hash_partition(
+    input, columns_to_hash, num_partitions, cudf::hash_id::HASH_MURMUR3, 12345);
+  auto [output2, offsets2] = cudf::hash_partition(
+    input, columns_to_hash, num_partitions, cudf::hash_id::HASH_MURMUR3, 12345);
+
+  // Expect output to have size num_partitions
+  EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
+  EXPECT_EQ(offsets1.size(), offsets2.size());
+
+  // Expect output to have same shape as input
+  CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(input, output1->view());
+
+  // Expect deterministic result from hashing the same input
+  CUDF_TEST_EXPECT_TABLES_EQUAL(output1->view(), output2->view());
+}
+
 template <typename T>
 class HashPartitionFixedWidth : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(HashPartitionFixedWidth, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(HashPartitionFixedWidth, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(HashPartitionFixedWidth, NullableFixedWidth)
 {
@@ -228,9 +246,7 @@ TYPED_TEST(HashPartitionFixedWidth, NullableFixedWidth)
   std::vector<cudf::size_type> const columns_to_hash({0});
   cudf::size_type const num_partitions = 3;
 
-  std::unique_ptr<cudf::table> result;
-  std::vector<cudf::size_type> offsets;
-  std::tie(result, offsets) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto [result, offsets] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   auto const& col = result->get_column(0);
   EXPECT_EQ(0, col.null_count());
@@ -262,10 +278,8 @@ void run_fixed_width_test(size_t cols,
   auto columns_to_hash = std::vector<cudf::size_type>(cols);
   std::iota(columns_to_hash.begin(), columns_to_hash.end(), 0);
 
-  std::unique_ptr<cudf::table> output1, output2;
-  std::vector<cudf::size_type> offsets1, offsets2;
-  std::tie(output1, offsets1) = cudf::hash_partition(input, columns_to_hash, num_partitions);
-  std::tie(output2, offsets2) = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto [output1, offsets1] = cudf::hash_partition(input, columns_to_hash, num_partitions);
+  auto [output2, offsets2] = cudf::hash_partition(input, columns_to_hash, num_partitions);
 
   // Expect output to have size num_partitions
   EXPECT_EQ(static_cast<size_t>(num_partitions), offsets1.size());
@@ -282,15 +296,15 @@ void run_fixed_width_test(size_t cols,
 
   // Compute the partition number for each row
   cudf::size_type partition = 0;
-  thrust::host_vector<cudf::size_type> partitions;
+  std::vector<cudf::size_type> partitions;
   std::for_each(offsets1.begin() + 1, offsets1.end(), [&](cudf::size_type const& count) {
     std::fill_n(std::back_inserter(partitions), count, partition++);
   });
 
   // Make a table view of the partition numbers
   constexpr cudf::data_type dtype{cudf::type_id::INT32};
-  rmm::device_vector<cudf::size_type> d_partitions(partitions);
-  cudf::column_view partitions_col(dtype, rows, d_partitions.data().get());
+  auto d_partitions = cudf::detail::make_device_uvector_sync(partitions);
+  cudf::column_view partitions_col(dtype, rows, d_partitions.data());
   cudf::table_view partitions_table({partitions_col});
 
   // Sort partition numbers by the corresponding row hashes of each output
@@ -335,9 +349,7 @@ TEST_F(HashPartition, FixedPointColumnsToHash)
   auto columns_to_hash = std::vector<cudf::size_type>({0});
 
   cudf::size_type const num_partitions = 1;
-  std::unique_ptr<cudf::table> first_result;
-  std::vector<cudf::size_type> first_offsets;
-  std::tie(first_result, first_offsets) =
+  auto [first_result, first_offsets] =
     cudf::hash_partition(first_input, columns_to_hash, num_partitions);
 
   // Expect offsets to be equal and num_partitions in length

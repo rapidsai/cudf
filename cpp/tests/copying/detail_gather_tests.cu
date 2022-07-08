@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -30,18 +31,23 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/execution_policy.h>
+#include <thrust/sequence.h>
+
 template <typename T>
 class GatherTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(GatherTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(GatherTest, cudf::test::NumericTypes);
 
 // This test exercises using different iterator types as gather map inputs
-// to cudf::detail::gather -- device_vector and raw pointers.
+// to cudf::detail::gather -- device_uvector and raw pointers.
 TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
 {
   constexpr cudf::size_type source_size{1000};
-  rmm::device_vector<cudf::size_type> gather_map(source_size);
+  rmm::device_uvector<cudf::size_type> gather_map(source_size, cudf::default_stream_value);
   thrust::sequence(thrust::device, gather_map.begin(), gather_map.end());
 
   auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
@@ -63,8 +69,8 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
 
   // test with raw pointers
   {
-    std::unique_ptr<cudf::table> result = cudf::detail::gather(
-      source_table, gather_map.data().get(), gather_map.data().get() + gather_map.size());
+    std::unique_ptr<cudf::table> result =
+      cudf::detail::gather(source_table, gather_map.data(), gather_map.data() + gather_map.size());
 
     for (auto i = 0; i < source_table.num_columns(); ++i) {
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(source_table.column(i), result->view().column(i));

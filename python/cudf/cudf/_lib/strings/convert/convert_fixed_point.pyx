@@ -1,34 +1,37 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 import numpy as np
 
-from cudf._lib.column cimport Column
-from cudf._lib.types import np_to_cudf_types
-from cudf._lib.types cimport underlying_type_t_type_id
-from cudf._lib.cpp.types cimport DECIMAL64
+import cudf
 
-from cudf.core.column.column import as_column
+from cudf._lib.column cimport Column
+
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
+
+from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
+from libcpp.utility cimport move
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.convert.convert_fixed_point cimport (
-    to_fixed_point as cpp_to_fixed_point,
     from_fixed_point as cpp_from_fixed_point,
-    is_fixed_point as cpp_is_fixed_point
+    is_fixed_point as cpp_is_fixed_point,
+    to_fixed_point as cpp_to_fixed_point,
 )
 from cudf._lib.cpp.types cimport (
-    type_id,
+    DECIMAL32,
+    DECIMAL64,
+    DECIMAL128,
     data_type,
+    type_id,
 )
-
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-from libcpp.string cimport string
+from cudf._lib.types cimport underlying_type_t_type_id
 
 
 def from_decimal(Column input_col):
     """
-    Converts a `DecimalColumn` to a `StringColumn`.
+    Converts a `Decimal64Column` to a `StringColumn`.
 
     Parameters
     ----------
@@ -50,7 +53,7 @@ def from_decimal(Column input_col):
 
 def to_decimal(Column input_col, object out_type):
     """
-    Returns a `DecimalColumn` from the provided `StringColumn`
+    Returns a `Decimal64Column` from the provided `StringColumn`
     using the scale in the `out_type`.
 
     Parameters
@@ -65,7 +68,15 @@ def to_decimal(Column input_col, object out_type):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
     cdef int scale = out_type.scale
-    cdef data_type c_out_type = data_type(DECIMAL64, -scale)
+    cdef data_type c_out_type
+    if isinstance(out_type, cudf.Decimal32Dtype):
+        c_out_type = data_type(DECIMAL32, -scale)
+    elif isinstance(out_type, cudf.Decimal64Dtype):
+        c_out_type = data_type(DECIMAL64, -scale)
+    elif isinstance(out_type, cudf.Decimal128Dtype):
+        c_out_type = data_type(DECIMAL128, -scale)
+    else:
+        raise TypeError("should be a decimal dtype")
     with nogil:
         c_result = move(
             cpp_to_fixed_point(

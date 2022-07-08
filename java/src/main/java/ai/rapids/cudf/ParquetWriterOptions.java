@@ -19,9 +19,17 @@
 package ai.rapids.cudf;
 
 /**
- * Settings for writing Parquet files.
+ * This class represents settings for writing Parquet files. It includes meta data information
+ * that will be used by the Parquet writer to write the file
  */
-public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
+public final class ParquetWriterOptions extends CompressionMetadataWriterOptions {
+  private final StatisticsFrequency statsGranularity;
+
+  private ParquetWriterOptions(Builder builder) {
+    super(builder);
+    this.statsGranularity = builder.statsGranularity;
+  }
+
   public enum StatisticsFrequency {
     /** Do not generate statistics */
     NONE(0),
@@ -39,32 +47,24 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
     }
   }
 
-  public static class Builder extends CMWriterBuilder<Builder> {
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public StatisticsFrequency getStatisticsFrequency() {
+    return statsGranularity;
+  }
+
+  public static class Builder extends CompressionMetadataWriterOptions.Builder
+        <Builder, ParquetWriterOptions> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
-    private boolean isTimestampTypeInt96 = false;
-    private int[] precisionValues = null;
+
+    public Builder() {
+      super();
+    }
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
       this.statsGranularity = statsGranularity;
-      return this;
-    }
-
-    /**
-     * Set whether the timestamps should be written in INT96
-     */
-    public Builder withTimestampInt96(boolean int96) {
-      this.isTimestampTypeInt96 = int96;
-      return this;
-    }
-
-    /**
-     * This is a temporary hack to make things work.  This API will go away once we can update the
-     * parquet APIs properly.
-     * @param precisionValues a value for each column, non-decimal columns are ignored.
-     * @return this for chaining.
-     */
-    public Builder withDecimalPrecisions(int ... precisionValues) {
-      this.precisionValues = precisionValues;
       return this;
     }
 
@@ -72,40 +72,4 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
       return new ParquetWriterOptions(this);
     }
   }
-
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  private final StatisticsFrequency statsGranularity;
-
-  private ParquetWriterOptions(Builder builder) {
-    super(builder);
-    this.statsGranularity = builder.statsGranularity;
-    this.isTimestampTypeInt96 = builder.isTimestampTypeInt96;
-    this.precisions = builder.precisionValues;
-  }
-
-  public StatisticsFrequency getStatisticsFrequency() {
-    return statsGranularity;
-  }
-
-  /**
-   * Return the flattened list of precisions if set otherwise empty array will be returned.
-   * For a definition of what `flattened` means please look at {@link Builder#withDecimalPrecisions}
-   */
-  public int[] getPrecisions() {
-    return precisions;
-  }
-
-  /**
-   * Returns true if the writer is expected to write timestamps in INT96
-   */
-  public boolean isTimestampTypeInt96() {
-    return isTimestampTypeInt96;
-  }
-
-  private boolean isTimestampTypeInt96;
-
-  private int[] precisions;
 }

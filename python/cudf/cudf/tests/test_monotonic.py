@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 """
 Tests related to is_unique and is_monotonic attributes
@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import MultiIndex, Series
+from cudf import MultiIndex, Series
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -16,7 +16,7 @@ from cudf.core.index import (
     RangeIndex,
     StringIndex,
 )
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])
@@ -261,7 +261,8 @@ def test_rangeindex_get_slice_bound_basic(bounds, indices, side, kind):
     [(3, 20, 5), (20, 3, -5), (20, 3, 5), (3, 20, -5), (0, 0, 2), (3, 3, 2)],
 )
 @pytest.mark.parametrize(
-    "label", [3, 8, 13, 18, 20, 15, 10, 5, -1, 0, 19, 21, 6, 11, 17],
+    "label",
+    [3, 8, 13, 18, 20, 15, 10, 5, -1, 0, 19, 21, 6, 11, 17],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
 @pytest.mark.parametrize("kind", ["getitem", "loc"])

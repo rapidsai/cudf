@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,22 +20,34 @@
 #include <cudf/lists/explode.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/advance.h>
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/optional.h>
+#include <thrust/scan.h>
+#include <thrust/transform.h>
 
 #include <memory>
 #include <type_traits>
 
 namespace cudf {
 namespace detail {
+
+// explode column gather map uses cudf::out_of_bounds_policy::NULLIFY to
+// fill nulls where there are invalid indices
+constexpr size_type InvalidIndex = -1;
+
 namespace {
 
 std::unique_ptr<table> build_table(
@@ -60,7 +72,7 @@ std::unique_ptr<table> build_table(
                    stream,
                    mr);
 
-  std::vector<std::unique_ptr<column>> columns = gathered_table.release()->release();
+  std::vector<std::unique_ptr<column>> columns = gathered_table->release();
 
   columns.insert(columns.begin() + explode_column_idx,
                  explode_col_gather_map
@@ -75,9 +87,22 @@ std::unique_ptr<table> build_table(
 
   if (position_array) {
     size_type position_size = position_array->size();
+    // build the null mask for position based on invalid entries in gather map
+    auto nullmask = explode_col_gather_map ? valid_if(
+                                               explode_col_gather_map->begin(),
+                                               explode_col_gather_map->end(),
+                                               [] __device__(auto i) { return i != InvalidIndex; },
+                                               stream,
+                                               mr)
+                                           : std::pair<rmm::device_buffer, size_type>{
+                                               rmm::device_buffer(0, stream), size_type{0}};
+
     columns.insert(columns.begin() + explode_column_idx,
-                   std::make_unique<column>(
-                     data_type(type_to_id<size_type>()), position_size, position_array->release()));
+                   std::make_unique<column>(data_type(type_to_id<size_type>()),
+                                            position_size,
+                                            position_array->release(),
+                                            std::move(nullmask.first),
+                                            nullmask.second));
   }
 
   return std::make_unique<table>(std::move(columns));
@@ -233,13 +258,12 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
       }
     }
     if (null_or_empty[idx]) {
-      auto invalid_index = null_or_empty_offset_p[idx] == 0
-                             ? offsets[idx]
-                             : offsets[idx] + null_or_empty_offset_p[idx] - 1;
+      auto invalid_index          = null_or_empty_offset_p[idx] == 0
+                                      ? offsets[idx]
+                                      : offsets[idx] + null_or_empty_offset_p[idx] - 1;
       gather_map_p[invalid_index] = idx;
 
-      // negative one to indicate a null value
-      explode_col_gather_map_p[invalid_index] = -1;
+      explode_col_gather_map_p[invalid_index] = InvalidIndex;
       if (include_position) { position_array[invalid_index] = 0; }
     }
   };
@@ -266,7 +290,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 }  // namespace detail
 
 /**
- * @copydoc cudf::explode(input_table,explode_column_idx,rmm::mr::device_memory_resource)
+ * @copydoc cudf::explode(table_view const&, size_type, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<table> explode(table_view const& input_table,
                                size_type explode_column_idx,
@@ -275,11 +299,11 @@ std::unique_ptr<table> explode(table_view const& input_table,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode(input_table, explode_column_idx, rmm::cuda_stream_default, mr);
+  return detail::explode(input_table, explode_column_idx, cudf::default_stream_value, mr);
 }
 
 /**
- * @copydoc cudf::explode_position(input_table,explode_column_idx,rmm::mr::device_memory_resource)
+ * @copydoc cudf::explode_position(table_view const&, size_type, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<table> explode_position(table_view const& input_table,
                                         size_type explode_column_idx,
@@ -288,11 +312,11 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode_position(input_table, explode_column_idx, rmm::cuda_stream_default, mr);
+  return detail::explode_position(input_table, explode_column_idx, cudf::default_stream_value, mr);
 }
 
 /**
- * @copydoc cudf::explode_outer(input_table,explode_column_idx,rmm::mr::device_memory_resource)
+ * @copydoc cudf::explode_outer(table_view const&, size_type, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<table> explode_outer(table_view const& input_table,
                                      size_type explode_column_idx,
@@ -302,12 +326,12 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
   return detail::explode_outer(
-    input_table, explode_column_idx, false, rmm::cuda_stream_default, mr);
+    input_table, explode_column_idx, false, cudf::default_stream_value, mr);
 }
 
 /**
- * @copydoc
- * cudf::explode_outer_position(input_table,explode_column_idx,rmm::mr::device_memory_resource)
+ * @copydoc cudf::explode_outer_position(table_view const&, size_type,
+ * rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<table> explode_outer_position(table_view const& input_table,
                                               size_type explode_column_idx,
@@ -316,7 +340,8 @@ std::unique_ptr<table> explode_outer_position(table_view const& input_table,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input_table.column(explode_column_idx).type().id() == type_id::LIST,
                "Unsupported non-list column");
-  return detail::explode_outer(input_table, explode_column_idx, true, rmm::cuda_stream_default, mr);
+  return detail::explode_outer(
+    input_table, explode_column_idx, true, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

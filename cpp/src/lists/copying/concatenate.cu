@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/transform.h>
+
 #include <memory>
 
 namespace cudf {
@@ -48,7 +50,7 @@ namespace {
  * @param[in] mr                    Device memory resource used to allocate the
  * returned column's device memory.
  */
-std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& columns,
+std::unique_ptr<column> merge_offsets(host_span<lists_column_view const> columns,
                                       size_type total_list_count,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
@@ -90,7 +92,7 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
  * @copydoc cudf::lists::detail::concatenate
  */
 std::unique_ptr<column> concatenate(
-  std::vector<column_view> const& columns,
+  host_span<column_view const> columns,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -119,7 +121,7 @@ std::unique_ptr<column> concatenate(
 
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =
-    std::any_of(columns.cbegin(), columns.cend(), [](auto const& col) { return col.has_nulls(); });
+    std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
   rmm::device_buffer null_mask = create_null_mask(
     total_list_count, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED);
   if (has_nulls) {

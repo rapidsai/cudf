@@ -1,14 +1,28 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.core.column import ColumnBase
+from cudf._typing import Dtype
+from cudf.api.types import is_struct_dtype
+from cudf.core.column import ColumnBase, build_struct_column
+from cudf.core.column.methods import ColumnMethods
+from cudf.core.dtypes import StructDtype
+from cudf.core.missing import NA
 
 
 class StructColumn(ColumnBase):
-    dtype: cudf.core.dtypes.StructDtype
+    """
+    Column that stores fields of values.
+
+    Every column has n children, where n is
+    the number of fields in the Struct Dtype.
+
+    """
+
+    dtype: StructDtype
 
     @property
     def base_size(self):
@@ -16,31 +30,6 @@ class StructColumn(ColumnBase):
             return 0
         else:
             return len(self.base_children[0])
-
-    @classmethod
-    def from_arrow(self, data):
-        size = len(data)
-        dtype = cudf.core.dtypes.StructDtype.from_arrow(data.type)
-
-        mask = data.buffers()[0]
-        if mask is not None:
-            mask = cudf.utils.utils.pa_mask_buffer_to_mask(mask, len(data))
-
-        offset = data.offset
-        null_count = data.null_count
-        children = tuple(
-            cudf.core.column.as_column(data.field(i))
-            for i in range(data.type.num_fields)
-        )
-        return StructColumn(
-            data=None,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            null_count=null_count,
-            children=children,
-        )
 
     def to_arrow(self):
         children = [
@@ -68,6 +57,32 @@ class StructColumn(ColumnBase):
             pa_type, len(self), buffers, children=children
         )
 
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+        # We cannot go via Arrow's `to_pandas` because of the following issue:
+        # https://issues.apache.org/jira/browse/ARROW-12680
+
+        pd_series = pd.Series(self.to_arrow().tolist(), dtype="object")
+
+        if index is not None:
+            pd_series.index = index
+        return pd_series
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        return {
+            field: value
+            for field, value in zip(self.dtype.fields, result.values())
+        }
+
+    def __setitem__(self, key, value):
+        if isinstance(value, dict):
+            # filling in fields not in dict
+            for field in self.dtype.fields:
+                value[field] = value.get(field, NA)
+
+            value = cudf.Scalar(value, self.dtype)
+        super().__setitem__(key, value)
+
     def copy(self, deep=True):
         result = super().copy(deep=deep)
         if deep:
@@ -84,10 +99,124 @@ class StructColumn(ColumnBase):
         )
         return StructColumn(
             data=None,
-            size=self.base_size,
+            size=self.size,
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,
             children=self.base_children,
+        )
+
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Structs are not yet supported via `__cuda_array_interface__`"
+        )
+
+    def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
+        if isinstance(dtype, StructDtype):
+            return build_struct_column(
+                names=dtype.fields.keys(),
+                children=tuple(
+                    self.base_children[i]._with_type_metadata(dtype.fields[f])
+                    for i, f in enumerate(dtype.fields.keys())
+                ),
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
+
+        return self
+
+
+class StructMethods(ColumnMethods):
+    """
+    Struct methods for Series
+    """
+
+    _column: StructColumn
+
+    def __init__(self, parent=None):
+        if not is_struct_dtype(parent.dtype):
+            raise AttributeError(
+                "Can only use .struct accessor with a 'struct' dtype"
+            )
+        super().__init__(parent=parent)
+
+    def field(self, key):
+        """
+        Extract children of the specified struct column
+        in the Series
+
+        Parameters
+        ----------
+        key: int or str
+            index/position or field name of the respective
+            struct column
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> s = cudf.Series([{'a': 1, 'b': 2}, {'a': 3, 'b': 4}])
+        >>> s.struct.field(0)
+        0    1
+        1    3
+        dtype: int64
+        >>> s.struct.field('a')
+        0    1
+        1    3
+        dtype: int64
+        """
+        fields = list(self._column.dtype.fields.keys())
+        if key in fields:
+            pos = fields.index(key)
+            return self._return_or_inplace(self._column.children[pos])
+        else:
+            if isinstance(key, int):
+                try:
+                    return self._return_or_inplace(self._column.children[key])
+                except IndexError:
+                    raise IndexError(f"Index {key} out of range")
+            else:
+                raise KeyError(
+                    f"Field '{key}' is not found in the set of existing keys."
+                )
+
+    def explode(self):
+        """
+        Return a DataFrame whose columns are the fields of this struct Series.
+
+        Notes
+        -----
+        Note that a copy of the columns is made.
+
+        Examples
+        --------
+        >>> s
+        0    {'a': 1, 'b': 'x'}
+        1    {'a': 2, 'b': 'y'}
+        2    {'a': 3, 'b': 'z'}
+        3    {'a': 4, 'b': 'a'}
+        dtype: struct
+
+        >>> s.struct.explode()
+           a  b
+        0  1  x
+        1  2  y
+        2  3  z
+        3  4  a
+        """
+        return cudf.DataFrame._from_data(
+            cudf.core.column_accessor.ColumnAccessor(
+                {
+                    name: col.copy(deep=True)
+                    for name, col in zip(
+                        self._column.dtype.fields, self._column.children
+                    )
+                }
+            )
         )

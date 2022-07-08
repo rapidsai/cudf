@@ -1,24 +1,66 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+
 import os
+import re
 import shutil
 import subprocess
 import sys
-import sysconfig
 from distutils.spawn import find_executable
-from distutils.sysconfig import get_python_lib
 
-import numpy as np
-import pyarrow as pa
-from Cython.Build import cythonize
-from Cython.Distutils import build_ext
-from setuptools import find_packages, setup
-from setuptools.extension import Extension
+from setuptools import find_packages
+from skbuild import setup
+from skbuild.command.build_ext import build_ext
 
 import versioneer
 
-install_requires = ["numba", "cython"]
+install_requires = [
+    "cachetools",
+    "cuda-python>=11.5,<11.7.1",
+    "fsspec>=0.6.0",
+    "numba>=0.53.1",
+    "numpy",
+    "nvtx>=0.2.1",
+    "packaging",
+    "pandas>=1.0,<1.5.0dev0",
+    "protobuf>=3.20.1,<3.21.0a0",
+    "typing_extensions",
+]
 
-cython_files = ["cudf/**/*.pyx"]
+extras_require = {
+    "test": [
+        "pytest",
+        "pytest-benchmark",
+        "pytest-xdist",
+        "hypothesis",
+        "mimesis",
+        "fastavro>=0.22.9",
+        "python-snappy>=0.6.0",
+        "pyorc",
+        "msgpack",
+        "transformers<=4.10.3",
+    ]
+}
+
+
+def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
+
+    cuda_version = None
+
+    with open(os.path.join(cuda_include_dir, "cuda.h"), encoding="utf-8") as f:
+        for line in f.readlines():
+            if re.search(r"#define CUDA_VERSION ", line) is not None:
+                cuda_version = line
+                break
+
+    if cuda_version is None:
+        raise TypeError("CUDA_VERSION not found in cuda.h")
+    cuda_version = int(cuda_version.split()[2])
+    return "%d%s%d" % (
+        cuda_version // 1000,
+        delimeter,
+        (cuda_version % 1000) // 10,
+    )
+
 
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
@@ -36,26 +78,12 @@ if not os.path.isdir(CUDA_HOME):
     raise OSError(f"Invalid CUDA_HOME: directory does not exist: {CUDA_HOME}")
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
-
-CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
-
-try:
-    nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
-except Exception:
-    nthreads = 0
-
-cmdclass = versioneer.get_cmdclass()
+install_requires.append(
+    "cupy-cuda" + get_cuda_version_from_header(cuda_include_dir)
+)
 
 
 class build_ext_and_proto(build_ext):
-    def build_extensions(self):
-        try:
-            # Silence the '-Wstrict-prototypes' warning
-            self.compiler.compiler_so.remove("-Wstrict-prototypes")
-        except Exception:
-            pass
-        build_ext.build_extensions(self)
-
     def run(self):
         # Get protoc
         protoc = None
@@ -92,38 +120,11 @@ class build_ext_and_proto(build_ext):
                     src.write(new_src_content)
 
         # Run original Cython build_ext command
-        build_ext.run(self)
+        super().run()
 
 
+cmdclass = versioneer.get_cmdclass()
 cmdclass["build_ext"] = build_ext_and_proto
-
-extensions = [
-    Extension(
-        "*",
-        sources=cython_files,
-        include_dirs=[
-            "../../cpp/include/cudf",
-            "../../cpp/include",
-            os.path.join(CUDF_ROOT, "include"),
-            os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
-            os.path.join(
-                os.path.dirname(sysconfig.get_path("include")),
-                "libcudf/libcudacxx",
-            ),
-            os.path.dirname(sysconfig.get_path("include")),
-            np.get_include(),
-            pa.get_include(),
-            cuda_include_dir,
-        ],
-        library_dirs=(
-            pa.get_library_dirs()
-            + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
-        ),
-        libraries=["cudf"] + pa.get_libraries() + ["arrow_cuda"],
-        language="c++",
-        extra_compile_args=["-std=c++14"],
-    )
-]
 
 setup(
     name="cudf",
@@ -138,23 +139,15 @@ setup(
         "Topic :: Scientific/Engineering",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
-    # Include the separately-compiled shared library
-    setup_requires=["cython", "protobuf"],
-    ext_modules=cythonize(
-        extensions,
-        nthreads=nthreads,
-        compiler_directives=dict(
-            profile=False, language_level=3, embedsignature=True
-        ),
-    ),
     packages=find_packages(include=["cudf", "cudf.*"]),
-    package_data=dict.fromkeys(
-        find_packages(include=["cudf._lib*"]), ["*.pxd"],
-    ),
+    package_data={
+        key: ["*.pxd"] for key in find_packages(include=["cudf._lib*"])
+    },
     cmdclass=cmdclass,
     install_requires=install_requires,
+    extras_require=extras_require,
     zip_safe=False,
 )

@@ -1,19 +1,35 @@
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+
 import os
-import shlex
-import subprocess
-import time
+import socket
 from contextlib import contextmanager
 from io import BytesIO
 
 import pandas as pd
+import pyarrow.fs as pa_fs
 import pytest
 
 import dask_cudf
 
-moto = pytest.importorskip("moto", minversion="1.3.14")
+moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
-requests = pytest.importorskip("requests")
 s3fs = pytest.importorskip("s3fs")
+ThreadedMotoServer = pytest.importorskip("moto.server").ThreadedMotoServer
+
+
+@pytest.fixture(scope="session")
+def endpoint_ip():
+    return "127.0.0.1"
+
+
+@pytest.fixture(scope="session")
+def endpoint_port():
+    # Return a free port per worker session.
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
 
 
 @contextmanager
@@ -32,7 +48,7 @@ def ensure_safe_environment_variables():
 
 
 @pytest.fixture(scope="session")
-def s3_base(worker_id):
+def s3_base(endpoint_ip, endpoint_port):
     """
     Fixture to set up moto server in separate process
     """
@@ -41,47 +57,25 @@ def s3_base(worker_id):
         # system aws credentials, https://github.com/spulec/moto/issues/1793
         os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
         os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
+        os.environ.setdefault("S3FS_LOGGING_LEVEL", "DEBUG")
 
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost
 
-        endpoint_port = (
-            5000
-            if worker_id == "master"
-            else 5550 + int(worker_id.lstrip("gw"))
-        )
-        endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
+        endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
 
-        proc = subprocess.Popen(
-            shlex.split(f"moto_server s3 -p {endpoint_port}"),
-        )
-
-        timeout = 5
-        while timeout > 0:
-            try:
-                # OK to go once server is accepting connections
-                r = requests.get(endpoint_uri)
-                if r.ok:
-                    break
-            except Exception:
-                pass
-            timeout -= 0.1
-            time.sleep(0.1)
+        server = ThreadedMotoServer(ip_address=endpoint_ip, port=endpoint_port)
+        server.start()
         yield endpoint_uri
-
-        proc.terminate()
-        proc.wait()
+        server.stop()
 
 
 @pytest.fixture()
-def s3so(worker_id):
+def s3so(endpoint_ip, endpoint_port):
     """
     Returns s3 storage options to pass to fsspec
     """
-    endpoint_port = (
-        5000 if worker_id == "master" else 5550 + int(worker_id.lstrip("gw"))
-    )
-    endpoint_uri = f"http://127.0.0.1:{endpoint_port}/"
+    endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
 
     return {"client_kwargs": {"endpoint_url": endpoint_uri}}
 
@@ -115,7 +109,15 @@ def test_read_csv(s3_base, s3so):
         assert df.a.sum().compute() == 4
 
 
-def test_read_parquet(s3_base, s3so):
+@pytest.mark.parametrize(
+    "open_file_options",
+    [
+        {"precache_options": {"method": None}},
+        {"precache_options": {"method": "parquet"}},
+        {"open_file_func": None},
+    ],
+)
+def test_read_parquet(s3_base, s3so, open_file_options):
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2.1, 2.2, 2.3, 2.4]})
     buffer = BytesIO()
     pdf.to_parquet(path=buffer)
@@ -123,8 +125,15 @@ def test_read_parquet(s3_base, s3so):
     with s3_context(
         s3_base=s3_base, bucket="daskparquet", files={"file.parq": buffer}
     ):
+        if "open_file_func" in open_file_options:
+            fs = pa_fs.S3FileSystem(
+                endpoint_override=s3so["client_kwargs"]["endpoint_url"],
+            )
+            open_file_options["open_file_func"] = fs.open_input_file
         df = dask_cudf.read_parquet(
-            "s3://daskparquet/*.parq", storage_options=s3so
+            "s3://daskparquet/*.parq",
+            storage_options=s3so,
+            open_file_options=open_file_options,
         )
         assert df.a.sum().compute() == 10
         assert df.b.sum().compute() == 9

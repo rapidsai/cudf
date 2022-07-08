@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 
 import types
 from contextlib import ExitStack as does_not_raise
@@ -10,7 +10,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
@@ -170,7 +170,10 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
 
 
 def test_cuda_array_interface_pytorch():
-    torch = pytest.importorskip("torch")
+    torch = pytest.importorskip("torch", minversion="1.6.0")
+    if not torch.cuda.is_available():
+        pytest.skip("need gpu version of pytorch to be installed")
+
     series = cudf.Series([1, -1, 10, -56])
     tensor = torch.tensor(series)
     got = cudf.Series(tensor)
@@ -184,8 +187,10 @@ def test_cuda_array_interface_pytorch():
 
     assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
 
-    with pytest.raises(RuntimeError):
-        torch.tensor(cudf.core.Index())
+    index = cudf.Index([])
+    tensor = torch.tensor(index)
+    got = cudf.Index(tensor)
+    assert_eq(got, index)
 
     index = cudf.core.index.RangeIndex(start=0, stop=100)
     tensor = torch.tensor(index)
@@ -193,11 +198,11 @@ def test_cuda_array_interface_pytorch():
 
     assert_eq(got, cudf.Series(index))
 
-    index = cudf.core.index.GenericIndex([1, 2, 8, 6])
+    index = cudf.Index([1, 2, 8, 6])
     tensor = torch.tensor(index)
-    got = cudf.Series(tensor)
+    got = cudf.Index(tensor)
 
-    assert_eq(got, cudf.Series(index))
+    assert_eq(got, index)
 
     str_series = cudf.Series(["a", "g"])
 

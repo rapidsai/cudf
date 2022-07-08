@@ -21,13 +21,14 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <algorithm>
 #include <memory>
+#include <numeric>
 
 namespace cudf {
 namespace structs {
@@ -36,7 +37,7 @@ namespace detail {
 /**
  * @copydoc cudf::structs::detail::concatenate
  */
-std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
+std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -49,15 +50,19 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   std::transform(ordered_children.begin(),
                  ordered_children.end(),
                  std::back_inserter(children),
-                 [mr, stream](std::vector<column_view> const& cols) {
+                 [mr, stream](host_span<column_view const> cols) {
                    return cudf::detail::concatenate(cols, stream, mr);
                  });
 
-  size_type const total_length = children[0]->size();
+  // get total length from concatenated children; if no child exists, we would compute it
+  auto const acc_size_fn = [](size_type s, column_view const& c) { return s + c.size(); };
+  auto const total_length =
+    !children.empty() ? children[0]->size()
+                      : std::accumulate(columns.begin(), columns.end(), size_type{0}, acc_size_fn);
 
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =
-    std::any_of(columns.cbegin(), columns.cend(), [](auto const& col) { return col.has_nulls(); });
+    std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
   rmm::device_buffer null_mask =
     create_null_mask(total_length, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED);
   if (has_nulls) {

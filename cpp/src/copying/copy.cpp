@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -43,6 +44,70 @@ inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool m
     return mask_state::UNALLOCATED;
   }
 }
+
+/**
+ * @brief Functor to produce an empty column of the same type as the
+ * input scalar.
+ *
+ * In the case of nested types, full column hierarchy is preserved.
+ */
+template <typename T>
+struct scalar_empty_like_functor_impl {
+  std::unique_ptr<column> operator()(scalar const& input)
+  {
+    return cudf::make_empty_column(input.type());
+  }
+};
+
+template <>
+struct scalar_empty_like_functor_impl<cudf::list_view> {
+  std::unique_ptr<column> operator()(scalar const& input)
+  {
+    auto ls = static_cast<list_scalar const*>(&input);
+
+    // TODO:  add a manual constructor for lists_column_view.
+    column_view offsets{cudf::data_type{cudf::type_id::INT32}, 0, nullptr};
+    std::vector<column_view> children;
+    children.push_back(offsets);
+    children.push_back(ls->view());
+    column_view lcv{cudf::data_type{cudf::type_id::LIST}, 0, nullptr, nullptr, 0, 0, children};
+
+    return empty_like(lcv);
+  }
+};
+
+template <>
+struct scalar_empty_like_functor_impl<cudf::struct_view> {
+  std::unique_ptr<column> operator()(scalar const& input)
+  {
+    auto ss = static_cast<struct_scalar const*>(&input);
+
+    // TODO: add a manual constructor for structs_column_view
+    // TODO: add cudf::get_element() support for structs
+    cudf::table_view tbl = ss->view();
+    std::vector<column_view> children(tbl.begin(), tbl.end());
+    column_view scv{cudf::data_type{cudf::type_id::STRUCT}, 0, nullptr, nullptr, 0, 0, children};
+
+    return empty_like(scv);
+  }
+};
+
+template <>
+struct scalar_empty_like_functor_impl<cudf::dictionary32> {
+  std::unique_ptr<column> operator()(scalar const& input)
+  {
+    CUDF_FAIL("Dictionary scalars not supported");
+  }
+};
+
+struct scalar_empty_like_functor {
+  template <typename T>
+  std::unique_ptr<column> operator()(scalar const& input)
+  {
+    scalar_empty_like_functor_impl<T> func;
+    return func(input);
+  }
+};
 
 }  // namespace
 
@@ -92,6 +157,15 @@ std::unique_ptr<column> empty_like(column_view const& input)
 }
 
 /*
+ * Initializes and returns an empty column of the same type as the `input`.
+ */
+std::unique_ptr<column> empty_like(scalar const& input)
+{
+  CUDF_FUNC_RANGE();
+  return type_dispatcher(input.type(), detail::scalar_empty_like_functor{}, input);
+};
+
+/*
  * Creates a table of empty columns with the same types as the `input_table`
  */
 std::unique_ptr<table> empty_like(table_view const& input_table)
@@ -109,7 +183,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::allocate_like(input, input.size(), mask_alloc, rmm::cuda_stream_default, mr);
+  return detail::allocate_like(input, input.size(), mask_alloc, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> allocate_like(column_view const& input,
@@ -118,7 +192,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::allocate_like(input, size, mask_alloc, rmm::cuda_stream_default, mr);
+  return detail::allocate_like(input, size, mask_alloc, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

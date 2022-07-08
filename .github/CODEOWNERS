@@ -7,8 +7,9 @@ notebooks/         @rapidsai/cudf-python-codeowners
 python/dask_cudf/  @rapidsai/cudf-dask-codeowners
 
 #cmake code owners
-**/CMakeLists.txt  @rapidsai/cudf-cmake-codeowners
-**/cmake/          @rapidsai/cudf-cmake-codeowners
+cpp/CMakeLists.txt               @rapidsai/cudf-cmake-codeowners
+cpp/libcudf_kafka/CMakeLists.txt @rapidsai/cudf-cmake-codeowners
+**/cmake/                        @rapidsai/cudf-cmake-codeowners
 
 #java code owners
 java/              @rapidsai/cudf-java-codeowners
@@ -17,6 +18,3 @@ java/              @rapidsai/cudf-java-codeowners
 .github/           @rapidsai/ops-codeowners
 /ci/               @rapidsai/ops-codeowners
 conda/             @rapidsai/ops-codeowners
-/Dockerfile        @rapidsai/ops-codeowners
-/.dockerignore     @rapidsai/ops-codeowners
-/docker/           @rapidsai/ops-codeowners

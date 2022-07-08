@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,11 +25,14 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 
+#include <thrust/host_vector.h>
+
 #include <array>
 #include <tuple>
+#include <type_traits>
 
 /**
- * @filename type_lists.hpp
+ * @file type_lists.hpp
  * @brief Provides centralized type lists for use in Google Test
  * type-parameterized tests.
  *
@@ -56,7 +59,7 @@ constexpr std::array<cudf::type_id, sizeof...(Indices)> types_to_ids_impl(
  * array == {type_id::INT32, type_id::FLOAT};
  * ```
  *
- * @tparam TYPES List of types to conver to `type_id`s
+ * @tparam TYPES List of types to convert to `type_id`s
  * @return `std::array` of `type_id`s corresponding to each type in `TYPES`
  */
 template <typename TYPES>
@@ -69,7 +72,7 @@ constexpr auto types_to_ids()
 }  // namespace detail
 
 /**
- * @brief Convert numeric values type T to numeric vector of type TypeParam.
+ * @brief Convert numeric values of type T to numeric vector of type TypeParam.
  *
  * This will also convert negative values to positive values if the output type is unsigned.
  *
@@ -77,28 +80,49 @@ constexpr auto types_to_ids()
  * @return Vector of TypeParam with the values specified
  */
 template <typename TypeParam, typename T>
-typename std::enable_if<cudf::is_fixed_width<TypeParam>() &&
-                          !cudf::is_timestamp_t<TypeParam>::value,
-                        std::vector<TypeParam>>::type
+std::enable_if_t<cudf::is_fixed_width<TypeParam>() && !cudf::is_timestamp_t<TypeParam>::value,
+                 thrust::host_vector<TypeParam>>
 make_type_param_vector(std::initializer_list<T> const& init_list)
 {
-  std::vector<TypeParam> vec(init_list.size());
+  thrust::host_vector<TypeParam> vec(init_list.size());
   std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
-    if (std::is_unsigned<TypeParam>::value)
-      return static_cast<TypeParam>(std::abs(e));
-    else
-      return static_cast<TypeParam>(e);
+    if constexpr (std::is_unsigned_v<TypeParam>) { return static_cast<TypeParam>(std::abs(e)); }
+    return static_cast<TypeParam>(e);
   });
   return vec;
 }
 
+/**
+ * @brief Convert numeric values of type T to timestamp vector
+ *
+ * @param init_list Values used to create the output vector
+ * @return Vector of TypeParam with the values specified
+ */
 template <typename TypeParam, typename T>
-typename std::enable_if<cudf::is_timestamp_t<TypeParam>::value, std::vector<TypeParam>>::type
+std::enable_if_t<cudf::is_timestamp_t<TypeParam>::value, thrust::host_vector<TypeParam>>
 make_type_param_vector(std::initializer_list<T> const& init_list)
 {
-  std::vector<TypeParam> vec(init_list.size());
+  thrust::host_vector<TypeParam> vec(init_list.size());
   std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
     return TypeParam{typename TypeParam::duration{e}};
+  });
+  return vec;
+}
+
+/**
+ * @brief Convert numeric values of type T to vector of std::string
+ *
+ * @param init_list Values used to create the output vector
+ * @return Vector of TypeParam with the values specified
+ */
+
+template <typename TypeParam, typename T>
+std::enable_if_t<std::is_same_v<TypeParam, std::string>, thrust::host_vector<std::string>>
+make_type_param_vector(std::initializer_list<T> const& init_list)
+{
+  thrust::host_vector<std::string> vec(init_list.size());
+  std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
+    return std::to_string(e);
   });
   return vec;
 }
@@ -122,11 +146,37 @@ make_type_param_scalar(T const init_value)
   return static_cast<TypeParam>(init_value);
 }
 
+/**
+ * @brief Convert the timestamp value of type T to a fixed width type of type TypeParam.
+ *
+ * This function is necessary because some types (such as timestamp types) are not directly
+ * constructible from timestamp types. This function is offered as a convenience to allow
+ * implicitly constructing such objects from timestamp values.
+ *
+ * @param init_value Value used to initialize the fixed width type
+ * @return A fixed width type - TimeStamp of type TypeParam with the
+ *         value specified
+ */
 template <typename TypeParam, typename T>
 std::enable_if_t<cudf::is_timestamp_t<TypeParam>::value, TypeParam> make_type_param_scalar(
   T const init_value)
 {
   return TypeParam{typename TypeParam::duration(init_value)};
+}
+
+/**
+ * @brief Convert the numeric value of type T to a string type.
+ *
+ * This function converts the numeric value of type T to its string representation.
+ *
+ * @param init_value Value to convert to a string
+ * @return string representation of the value
+ */
+template <typename TypeParam, typename T>
+std::enable_if_t<std::is_same_v<TypeParam, std::string>, TypeParam> make_type_param_scalar(
+  T const init_value)
+{
+  return std::to_string(init_value);
 }
 
 /**
@@ -147,7 +197,7 @@ using IntegralTypes = Concat<IntegralTypesNotBool, cudf::test::Types<bool>>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all floating point types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FloatingPointTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::FloatingPointTypes);
  * ```
  */
 using FloatingPointTypes = cudf::test::Types<float, double>;
@@ -159,7 +209,7 @@ using FloatingPointTypes = cudf::test::Types<float, double>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all numeric types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::NumericTypes);
  * ```
  */
 using NumericTypes = Concat<IntegralTypes, FloatingPointTypes>;
@@ -171,7 +221,7 @@ using NumericTypes = Concat<IntegralTypes, FloatingPointTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all timestamp types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::TimestampTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::TimestampTypes);
  * ```
  */
 using TimestampTypes =
@@ -184,7 +234,7 @@ using TimestampTypes =
  * Example:
  * ```
  * // Invokes all typed fixture tests for all duration types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::DurationTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::DurationTypes);
  * ```
  */
 using DurationTypes =
@@ -196,7 +246,7 @@ using DurationTypes =
  * Example:
  * ```
  * // Invokes all typed fixture tests for all chrono types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ChronoTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::ChronoTypes);
  * ```
  */
 using ChronoTypes = Concat<TimestampTypes, DurationTypes>;
@@ -208,7 +258,7 @@ using ChronoTypes = Concat<TimestampTypes, DurationTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all string types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::StringTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::StringTypes);
  * ```
  */
 using StringTypes = cudf::test::Types<string_view>;
@@ -220,7 +270,7 @@ using StringTypes = cudf::test::Types<string_view>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all list types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ListTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::ListTypes);
  * ```
  */
 using ListTypes = cudf::test::Types<list_view>;
@@ -232,10 +282,11 @@ using ListTypes = cudf::test::Types<list_view>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all fixed-width types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedPointTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::FixedPointTypes);
  * ```
  */
-using FixedPointTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
+using FixedPointTypes =
+  cudf::test::Types<numeric::decimal32, numeric::decimal64, numeric::decimal128>;
 
 /**
  * @brief Provides a list of all fixed-width element types for use in GTest
@@ -244,24 +295,38 @@ using FixedPointTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64
  * Example:
  * ```
  * // Invokes all typed fixture tests for all fixed-width types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::FixedWidthTypes);
  * ```
  */
 using FixedWidthTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
 
 /**
  * @brief Provides a list of all fixed-width element types except for the
- * fixed-point types for use in GTest typed tests. Certain tests written for
- * fixed-width types don't work for fixed-point as fixed-point types aren't
- * constructible from other fixed-width types (a scale needs to be specified)
+ * fixed-point types for use in GTest typed tests.
+ *
+ * Certain tests written for fixed-width types don't work for fixed-point as
+ * fixed-point types aren't constructible from other fixed-width types
+ * because a scale needs to be specified.
  *
  * Example:
  * ```
  * // Invokes all typed fixture tests for all fixed-width types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
  * ```
  */
 using FixedWidthTypesWithoutFixedPoint = Concat<NumericTypes, ChronoTypes>;
+
+/**
+ * @brief Provides a list of all fixed-width element types except for the
+ * chrono types for use in GTest typed tests.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all fixed-width types in libcudf
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::FixedWidthTypesWithoutChrono);
+ * ```
+ */
+using FixedWidthTypesWithoutChrono = Concat<NumericTypes, FixedPointTypes>;
 
 /**
  * @brief Provides a list of sortable types for use in GTest typed tests.
@@ -269,10 +334,22 @@ using FixedWidthTypesWithoutFixedPoint = Concat<NumericTypes, ChronoTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all sortable types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ComparableTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::ComparableTypes);
  * ```
  */
 using ComparableTypes = Concat<NumericTypes, ChronoTypes, StringTypes>;
+
+/**
+ * @brief Provides a list of all compound types for use in GTest typed tests.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all compound types in libcudf
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::CompoundTypes);
+ * ```
+ */
+using CompoundTypes =
+  cudf::test::Types<cudf::string_view, cudf::dictionary32, cudf::list_view, cudf::struct_view>;
 
 /**
  * @brief Provides a list of all types supported in libcudf for use in a GTest
@@ -284,10 +361,10 @@ using ComparableTypes = Concat<NumericTypes, ChronoTypes, StringTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all types supported by libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::AllTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::AllTypes);
  * ```
  */
-using AllTypes = Concat<NumericTypes, ChronoTypes>;
+using AllTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
 
 /**
  * @brief `std::array` of all `cudf::type_id`s

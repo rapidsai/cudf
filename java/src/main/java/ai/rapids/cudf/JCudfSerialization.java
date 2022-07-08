@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Serialize and deserialize CUDF tables and columns using a custom format.  The goal of this is
@@ -106,7 +108,7 @@ public class JCudfSerialization {
     }
 
     /** Constructor for a row-count only table (no columns) */
-    SerializedTableHeader(int numRows) {
+    public SerializedTableHeader(int numRows) {
       this(new SerializedColumnHeader[0], numRows, 0);
     }
 
@@ -1660,6 +1662,60 @@ public class JCudfSerialization {
   // COLUMN AND TABLE READ
   /////////////////////////////////////////////
 
+  private static HostColumnVectorCore buildHostColumn(SerializedColumnHeader column,
+                                                      ArrayDeque<ColumnOffsets> columnOffsets,
+                                                      HostMemoryBuffer buffer,
+                                                      boolean isRootColumn) {
+    ColumnOffsets offsetsInfo = columnOffsets.remove();
+    SerializedColumnHeader[] children = column.getChildren();
+    int numChildren = children != null ? children.length : 0;
+    List<HostColumnVectorCore> childColumns = new ArrayList<>(numChildren);
+    try {
+      if (children != null) {
+        for (SerializedColumnHeader child : children) {
+          childColumns.add(buildHostColumn(child, columnOffsets, buffer, false));
+        }
+      }
+      DType dtype = column.getType();
+      long rowCount = column.getRowCount();
+      long nullCount = column.getNullCount();
+      HostMemoryBuffer dataBuffer = null;
+      HostMemoryBuffer validityBuffer = null;
+      HostMemoryBuffer offsetsBuffer = null;
+      if (!dtype.isNestedType()) {
+        dataBuffer = buffer.slice(offsetsInfo.data, offsetsInfo.dataLen);
+      }
+      if (nullCount > 0) {
+        long validitySize = BitVectorHelper.getValidityLengthInBytes(rowCount);
+        validityBuffer = buffer.slice(offsetsInfo.validity, validitySize);
+      }
+      if (dtype.hasOffsets()) {
+        // one 32-bit integer offset per row plus one additional offset at the end
+        long offsetsSize = rowCount > 0 ? (rowCount + 1) * Integer.BYTES : 0;
+        offsetsBuffer = buffer.slice(offsetsInfo.offsets, offsetsSize);
+      }
+      HostColumnVectorCore result;
+      // Only creates HostColumnVector for root columns, since child columns are managed by their parents.
+      if (isRootColumn) {
+        result = new HostColumnVector(dtype, column.getRowCount(),
+            Optional.of(column.getNullCount()), dataBuffer, validityBuffer, offsetsBuffer,
+            childColumns);
+      } else {
+        result = new HostColumnVectorCore(dtype, column.getRowCount(),
+            Optional.of(column.getNullCount()), dataBuffer, validityBuffer, offsetsBuffer,
+            childColumns);
+      }
+      childColumns = null;
+      return result;
+    } finally {
+      if (childColumns != null) {
+        for (HostColumnVectorCore c : childColumns) {
+          c.close();
+        }
+      }
+    }
+  }
+
   private static long buildColumnView(SerializedColumnHeader column,
                                       ArrayDeque<ColumnOffsets> columnOffsets,
                                       DeviceMemoryBuffer combinedBuffer) {
@@ -1767,6 +1823,38 @@ public class JCudfSerialization {
     } finally {
       closeAll(providersPerColumn);
     }
+  }
+
+  /**
+   * Deserialize a serialized contiguous table into an array of host columns.
+   *
+   * @param header     serialized table header
+   * @param hostBuffer buffer containing the data for all columns in the serialized table
+   * @return array of host columns representing the data from the serialized table
+   */
+  public static HostColumnVector[] unpackHostColumnVectors(SerializedTableHeader header,
+                                                           HostMemoryBuffer hostBuffer) {
+    ArrayDeque<ColumnOffsets> columnOffsets = buildIndex(header, hostBuffer);
+    int numColumns = header.getNumColumns();
+    HostColumnVector[] columns = new HostColumnVector[numColumns];
+    boolean succeeded = false;
+    try {
+      for (int i = 0; i < numColumns; i++) {
+        SerializedColumnHeader column = header.getColumnHeader(i);
+        columns[i] = (HostColumnVector) buildHostColumn(column, columnOffsets, hostBuffer, true);
+      }
+      assert columnOffsets.isEmpty();
+      succeeded = true;
+    } finally {
+      if (!succeeded) {
+        for (HostColumnVector c : columns) {
+          if (c != null) {
+            c.close();
+          }
+        }
+      }
+    }
+    return columns;
   }
 
   /**

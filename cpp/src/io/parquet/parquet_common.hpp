@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,13 @@
 
 #include <cstdint>
 
-#include <string>
-#include <vector>
-
 namespace cudf {
 namespace io {
 namespace parquet {
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
  */
-enum Type {
+enum Type : int8_t {
   UNDEFINED_TYPE       = -1,  // Undefined for non-leaf nodes
   BOOLEAN              = 0,
   INT32                = 1,
@@ -121,6 +118,16 @@ enum class PageType : uint8_t {
   INDEX_PAGE      = 1,
   DICTIONARY_PAGE = 2,
   DATA_PAGE_V2    = 3,
+};
+
+/**
+ * @brief Enum to annotate whether lists of min/max elements inside ColumnIndex
+ * are ordered and if so, in which direction.
+ */
+enum BoundaryOrder {
+  UNORDERED  = 0,
+  ASCENDING  = 1,
+  DESCENDING = 2,
 };
 
 /**

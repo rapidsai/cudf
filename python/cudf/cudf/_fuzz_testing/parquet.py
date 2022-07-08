@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import logging
 import random
@@ -12,7 +12,7 @@ from cudf._fuzz_testing.utils import (
     _generate_rand_meta,
     pyarrow_to_pandas,
 )
-from cudf.tests import dataset_generator as dg
+from cudf.testing import dataset_generator as dg
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -57,13 +57,14 @@ class ParquetReader(IOFuzz):
                 # TODO: Remove uint32 below after this bug is fixed
                 # https://github.com/pandas-dev/pandas/issues/37327
                 - {"uint32"}
+                | {"list", "decimal64"}
             )
-            dtypes_list.extend(["list"])
+
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
             self._current_params["dtypes_meta"] = dtypes_meta
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_cols"] = num_cols
@@ -80,6 +81,7 @@ class ParquetReader(IOFuzz):
         # https://issues.apache.org/jira/browse/ARROW-10123
 
         # file = io.BytesIO()
+
         df.to_parquet("temp_file")
         # file.seek(0)
         # self._current_buffer = copy.copy(file.read())
@@ -137,7 +139,7 @@ class ParquetWriter(IOFuzz):
                 seed,
             ) = self.get_next_regression_params()
         else:
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             random.seed(seed)
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
@@ -145,8 +147,8 @@ class ParquetWriter(IOFuzz):
                 # TODO: Remove uint32 below after this bug is fixed
                 # https://github.com/pandas-dev/pandas/issues/37327
                 - {"uint32"}
+                | {"list", "decimal64"}
             )
-            dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )

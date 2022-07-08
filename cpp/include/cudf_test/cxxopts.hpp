@@ -20,6 +20,8 @@ THE SOFTWARE.
 #ifndef CXXOPTS_HPP_INCLUDED
 #define CXXOPTS_HPP_INCLUDED
 
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
+
 #include <cctype>
 #include <cstring>
 #include <exception>
@@ -89,7 +91,9 @@ inline String& stringAppend(String& s, String a) { return s.append(std::move(a))
 
 inline String& stringAppend(String& s, int n, UChar32 c)
 {
-  for (int i = 0; i != n; ++i) { s.append(c); }
+  for (int i = 0; i != n; ++i) {
+    s.append(c);
+  }
 
   return s;
 }
@@ -582,7 +586,7 @@ class abstract_value : public Value {
 
   std::string get_implicit_value() const { return m_implicit_value; }
 
-  bool is_boolean() const { return std::is_same<T, bool>::value; }
+  bool is_boolean() const { return std::is_same_v<T, bool>; }
 
   const T& get() const
   {
@@ -1449,7 +1453,9 @@ inline void Options::generate_all_groups_help(String& result) const
   std::vector<std::string> all_groups;
   all_groups.reserve(m_help.size());
 
-  for (auto& group : m_help) { all_groups.push_back(group.first); }
+  for (auto& group : m_help) {
+    all_groups.push_back(group.first);
+  }
 
   generate_group_help(result, all_groups);
 }
@@ -1494,4 +1500,5 @@ inline const HelpGroupDetails& Options::group_help(const std::string& group) con
 
 }  // namespace cxxopts
 
+#endif  // DOXYGEN_SHOULD_SKIP_THIS
 #endif  // CXXOPTS_HPP_INCLUDED

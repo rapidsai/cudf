@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,20 +23,25 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>  // upper_bound()
-#include <thrust/copy.h>           // copy_if()
-#include <thrust/count.h>          // count_if()
-#include <thrust/reduce.h>         // maximum()
-#include <thrust/transform.h>      // transform()
+#include <thrust/binary_search.h>
+#include <thrust/copy.h>
+#include <thrust/count.h>
+#include <thrust/fill.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/pair.h>
+#include <thrust/reduce.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -125,7 +130,6 @@ struct split_tokenizer_fn : base_split_tokenizer {
    * for string at `string_index`.
    *
    * @param idx Index of the delimiter in the chars column
-   * @param column_count Number of output columns
    * @param d_token_counts Token counts for each string
    * @param d_positions The beginning byte position of each delimiter
    * @param positions_count Number of delimiters
@@ -133,7 +137,6 @@ struct split_tokenizer_fn : base_split_tokenizer {
    * @param d_all_tokens All output tokens for the strings column
    */
   __device__ void process_tokens(size_type idx,
-                                 size_type column_count,
                                  size_type const* d_token_counts,
                                  size_type const* d_positions,
                                  size_type positions_count,
@@ -157,10 +160,10 @@ struct split_tokenizer_fn : base_split_tokenizer {
       auto next_delim = ((idx + col) < positions_count)  // boundary check for delims in last string
                           ? (base_ptr + d_positions[idx + col])  // start of next delimiter
                           : str_end_ptr;                         // or end of this string
-      auto eptr = (next_delim < str_end_ptr)      // make sure delimiter is inside this string
+      auto eptr       = (next_delim < str_end_ptr)      // make sure delimiter is inside this string
                       && (col + 1 < token_count)  // and this is not the last token
-                    ? next_delim
-                    : str_end_ptr;
+                          ? next_delim
+                          : str_end_ptr;
       // store the token into the output vector
       d_tokens[col * d_strings.size()] =
         string_index_pair{str_ptr, static_cast<size_type>(eptr - str_ptr)};
@@ -254,7 +257,6 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
    * for string at `string_index`.
    *
    * @param idx Index of the delimiter in the chars column
-   * @param column_count Number of output columns
    * @param d_token_counts Token counts for each string
    * @param d_positions The ending byte position of each delimiter
    * @param positions_count Number of delimiters
@@ -262,7 +264,6 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
    * @param d_all_tokens All output tokens for the strings column
    */
   __device__ void process_tokens(size_type idx,                    // delimiter position index
-                                 size_type column_count,           // number of output columns
                                  size_type const* d_token_counts,  // token counts for each string
                                  size_type const* d_positions,     // end of each delimiter
                                  size_type positions_count,        // total number of delimiters
@@ -286,10 +287,10 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
       auto prev_delim = (idx >= col)  // boundary check for delims in first string
                           ? (base_ptr + d_positions[idx - col] + 1)  // end of prev delimiter
                           : str_begin_ptr;                           // or the start of this string
-      auto sptr = (prev_delim > str_begin_ptr)    // make sure delimiter is inside the string
+      auto sptr       = (prev_delim > str_begin_ptr)    // make sure delimiter is inside the string
                       && (col + 1 < token_count)  // and this is not the last token
-                    ? prev_delim
-                    : str_begin_ptr;
+                          ? prev_delim
+                          : str_begin_ptr;
       // store the token into the output -- building the array backwards
       d_tokens[d_strings.size() * (token_count - 1 - col)] =
         string_index_pair{sptr, static_cast<size_type>(str_ptr - sptr)};
@@ -302,10 +303,9 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
    *
    * @param idx Index of a byte in the chars column.
    * @param d_offsets Offsets values to locate the chars ranges.
-   * @param chars_bytes Total number of characters to process.
    * @return true if delimiter is found ending at position `idx`
    */
-  __device__ bool is_delimiter(size_type idx, int32_t const* d_offsets, size_type chars_bytes) const
+  __device__ bool is_delimiter(size_type idx, int32_t const* d_offsets, size_type) const
   {
     auto delim_length = d_delimiter.size_bytes();
     if (idx < delim_length - 1) return false;
@@ -432,12 +432,11 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   std::vector<std::unique_ptr<column>> results;
   auto const strings_count = strings_column.size();
   if (strings_count == 0) {
-    results.push_back(make_empty_strings_column(stream, mr));
+    results.push_back(make_empty_column(type_id::STRING));
     return std::make_unique<table>(std::move(results));
   }
 
-  auto d_offsets = strings_column.offsets().data<int32_t>();
-  d_offsets += strings_column.offset();  // nvbug-2808421 : do not combine with the previous line
+  auto d_offsets = strings_column.offsets_begin();
   auto const chars_bytes =
     cudf::detail::get_value<int32_t>(
       strings_column.offsets(), strings_column.offset() + strings_count, stream) -
@@ -497,11 +496,8 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
     });
 
   // the columns_count is the maximum number of tokens for any string
-  auto const columns_count = thrust::reduce(rmm::exec_policy(stream),
-                                            token_counts.begin(),
-                                            token_counts.end(),
-                                            0,
-                                            thrust::maximum<size_type>{});
+  auto const columns_count = thrust::reduce(
+    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, thrust::maximum{});
   // boundary case: if no columns, return one null column (custrings issue #119)
   if (columns_count == 0) {
     results.push_back(std::make_unique<column>(
@@ -525,24 +521,19 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
                      });
 
   // get the positions for every token using the delimiter positions
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     delimiter_count,
-                     [tokenizer,
-                      columns_count,
-                      d_token_counts,
-                      d_positions,
-                      delimiter_count,
-                      d_string_indices,
-                      d_tokens] __device__(size_type idx) {
-                       tokenizer.process_tokens(idx,
-                                                columns_count,
-                                                d_token_counts,
-                                                d_positions,
-                                                delimiter_count,
-                                                d_string_indices,
-                                                d_tokens);
-                     });
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    delimiter_count,
+    [tokenizer,
+     d_token_counts,
+     d_positions,
+     delimiter_count,
+     d_string_indices,
+     d_tokens] __device__(size_type idx) {
+      tokenizer.process_tokens(
+        idx, d_token_counts, d_positions, delimiter_count, d_string_indices, d_tokens);
+    });
 
   // Create each column.
   // - Each pair points to the strings for that column for each row.
@@ -562,7 +553,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
  */
 struct base_whitespace_split_tokenizer {
   // count the tokens only between non-whitespace characters
-  __device__ size_type count_tokens(size_type idx) const
+  [[nodiscard]] __device__ size_type count_tokens(size_type idx) const
   {
     if (d_strings.is_null(idx)) return 0;
     const string_view d_str = d_strings.element<string_view>(idx);
@@ -610,12 +601,10 @@ struct whitespace_split_tokenizer_fn : base_whitespace_split_tokenizer {
    * for string at `string_index`.
    *
    * @param idx Index of the string to process
-   * @param column_count Number of output columns
    * @param d_token_counts Token counts for each string
    * @param d_all_tokens All output tokens for the strings column
    */
   __device__ void process_tokens(size_type idx,
-                                 size_type column_count,
                                  size_type const* d_token_counts,
                                  string_index_pair* d_all_tokens) const
   {
@@ -661,12 +650,10 @@ struct whitespace_rsplit_tokenizer_fn : base_whitespace_split_tokenizer {
    * for string at `string_index`.
    *
    * @param idx Index of the string to process
-   * @param column_count Number of output columns
    * @param d_token_counts Token counts for each string
    * @param d_all_tokens All output tokens for the strings column
    */
   __device__ void process_tokens(size_type idx,  // string position index
-                                 size_type column_count,
                                  size_type const* d_token_counts,
                                  string_index_pair* d_all_tokens) const
   {
@@ -764,11 +751,8 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
                     [tokenizer] __device__(size_type idx) { return tokenizer.count_tokens(idx); });
 
   // column count is the maximum number of tokens for any string
-  size_type const columns_count = thrust::reduce(rmm::exec_policy(stream),
-                                                 token_counts.begin(),
-                                                 token_counts.end(),
-                                                 0,
-                                                 thrust::maximum<size_type>{});
+  size_type const columns_count = thrust::reduce(
+    rmm::exec_policy(stream), token_counts.begin(), token_counts.end(), 0, thrust::maximum{});
 
   std::vector<std::unique_ptr<column>> results;
   // boundary case: if no columns, return one null column (issue #119)
@@ -788,13 +772,12 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
                d_tokens,
                d_tokens + (columns_count * strings_count),
                string_index_pair{nullptr, 0});
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    strings_count,
-    [tokenizer, columns_count, d_token_counts, d_tokens] __device__(size_type idx) {
-      tokenizer.process_tokens(idx, columns_count, d_token_counts, d_tokens);
-    });
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     strings_count,
+                     [tokenizer, d_token_counts, d_tokens] __device__(size_type idx) {
+                       tokenizer.process_tokens(idx, d_token_counts, d_tokens);
+                     });
 
   // Create each column.
   // - Each pair points to a string for that column for each row.
@@ -813,10 +796,10 @@ std::unique_ptr<table> split(
   strings_column_view const& strings_column,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   size_type max_tokens = 0;
   if (maxsplit > 0) max_tokens = maxsplit + 1;  // makes consistent with Pandas
@@ -838,10 +821,10 @@ std::unique_ptr<table> rsplit(
   strings_column_view const& strings_column,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   size_type max_tokens = 0;
   if (maxsplit > 0) max_tokens = maxsplit + 1;  // makes consistent with Pandas
@@ -869,7 +852,7 @@ std::unique_ptr<table> split(strings_column_view const& strings_column,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(strings_column, delimiter, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::split(strings_column, delimiter, maxsplit, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
@@ -878,7 +861,7 @@ std::unique_ptr<table> rsplit(strings_column_view const& strings_column,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rsplit(strings_column, delimiter, maxsplit, rmm::cuda_stream_default, mr);
+  return detail::rsplit(strings_column, delimiter, maxsplit, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,18 @@
 
 #include <cudf_test/base_fixture.hpp>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
-
-#include <thrust/device_vector.h>
-#include <thrust/transform.h>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 struct valid_bit_functor {
   cudf::bitmask_type const* _null_mask;
@@ -34,19 +41,26 @@ struct valid_bit_functor {
 
 std::ostream& operator<<(std::ostream& stream, thrust::host_vector<bool> const& bits)
 {
-  for (auto _bit : bits) stream << int(_bit);
+  for (auto _bit : bits)
+    stream << int(_bit);
   return stream;
 }
 
 struct SetBitmaskTest : public cudf::test::BaseFixture {
   void expect_bitmask_equal(cudf::bitmask_type const* bitmask,  // Device Ptr
                             cudf::size_type start_bit,
-                            thrust::host_vector<bool> const& expect)
+                            thrust::host_vector<bool> const& expect,
+                            rmm::cuda_stream_view stream = cudf::default_stream_value)
   {
-    auto itb_dev = thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>{0},
-                                                   valid_bit_functor{bitmask});
-    thrust::device_vector<bool> result(itb_dev + start_bit, itb_dev + start_bit + expect.size());
-    thrust::host_vector<bool> host_result(result);
+    rmm::device_uvector<bool> result(expect.size(), stream);
+    auto counting_iter = thrust::counting_iterator<cudf::size_type>{0};
+    thrust::transform(rmm::exec_policy(stream),
+                      counting_iter + start_bit,
+                      counting_iter + start_bit + expect.size(),
+                      result.begin(),
+                      valid_bit_functor{bitmask});
+
+    auto host_result = cudf::detail::make_host_vector_sync(result, stream);
     EXPECT_THAT(host_result, testing::ElementsAreArray(expect));
   }
 

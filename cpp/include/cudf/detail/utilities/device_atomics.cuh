@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,9 +42,6 @@
 
 namespace cudf {
 namespace detail {
-// TODO: remove this if C++17 is supported.
-// `static_assert` requires a string literal at C++14.
-#define errmsg_cast "`long long int` has different size to `int64_t`"
 
 template <typename T_output, typename T_input>
 __forceinline__ __device__ T_output type_reinterpret(T_input value)
@@ -65,8 +62,8 @@ struct genericAtomicOperationImpl<T, Op, 1> {
   {
     using T_int = unsigned int;
 
-    T_int* address_uint32 = reinterpret_cast<T_int*>(addr - (reinterpret_cast<size_t>(addr) & 3));
-    T_int shift           = ((reinterpret_cast<size_t>(addr) & 3) * 8);
+    auto* address_uint32 = reinterpret_cast<T_int*>(addr - (reinterpret_cast<size_t>(addr) & 3));
+    T_int shift          = ((reinterpret_cast<size_t>(addr) & 3) * 8);
 
     T_int old = *address_uint32;
     T_int assumed;
@@ -90,7 +87,7 @@ struct genericAtomicOperationImpl<T, Op, 2> {
   {
     using T_int      = unsigned int;
     bool is_32_align = (reinterpret_cast<size_t>(addr) & 2) ? false : true;
-    T_int* address_uint32 =
+    auto* address_uint32 =
       reinterpret_cast<T_int*>(reinterpret_cast<size_t>(addr) - (is_32_align ? 0 : 2));
 
     T_int old = *address_uint32;
@@ -98,12 +95,12 @@ struct genericAtomicOperationImpl<T, Op, 2> {
 
     do {
       assumed                 = old;
-      T target_value          = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
+      T const target_value    = (is_32_align) ? T(old & 0xffff) : T(old >> 16);
       uint16_t updating_value = type_reinterpret<uint16_t, T>(op(target_value, update_value));
 
-      T_int new_value = (is_32_align) ? (old & 0xffff0000) | updating_value
-                                      : (old & 0xffff) | (T_int(updating_value) << 16);
-      old = atomicCAS(address_uint32, assumed, new_value);
+      T_int const new_value = (is_32_align) ? (old & 0xffff0000) | updating_value
+                                            : (old & 0xffff) | (T_int(updating_value) << 16);
+      old                   = atomicCAS(address_uint32, assumed, new_value);
     } while (assumed != old);
 
     return (is_32_align) ? T(old & 0xffff) : T(old >> 16);
@@ -142,7 +139,7 @@ struct genericAtomicOperationImpl<T, Op, 8> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, Op op)
   {
     using T_int = unsigned long long int;
-    static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+    static_assert(sizeof(T) == sizeof(T_int));
 
     T old_value = *addr;
     T assumed{old_value};
@@ -164,7 +161,7 @@ struct genericAtomicOperationImpl<T, Op, 8> {
 
 // -----------------------------------------------------------------------
 // specialized functions for operators
-// `atomicAdd` supports int32, float, double (signed int64 is not supproted.)
+// `atomicAdd` supports int32, float, double (signed int64 is not supported.)
 // `atomicMin`, `atomicMax` support int32_t, int64_t
 // `atomicAnd`, `atomicOr`, `atomicXor` support int32_t, int64_t
 template <>
@@ -210,7 +207,7 @@ struct genericAtomicOperationImpl<int64_t, DeviceSum, 8> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceSum op)
   {
     using T_int = unsigned long long int;
-    static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+    static_assert(sizeof(T) == sizeof(T_int));
     T ret = atomicAdd(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
     return ret;
   }
@@ -240,7 +237,7 @@ struct genericAtomicOperationImpl<int64_t, DeviceMin, 8> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceMin op)
   {
     using T_int = long long int;
-    static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+    static_assert(sizeof(T) == sizeof(T_int));
     T ret = atomicMin(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
     return ret;
   }
@@ -252,7 +249,7 @@ struct genericAtomicOperationImpl<int64_t, DeviceMax, 8> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceMax op)
   {
     using T_int = long long int;
-    static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+    static_assert(sizeof(T) == sizeof(T_int));
     T ret = atomicMax(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
     return ret;
   }
@@ -271,7 +268,7 @@ struct genericAtomicOperationImpl<T, DeviceAnd, 8> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceAnd op)
   {
     using T_int = long long int;
-    static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+    static_assert(sizeof(T) == sizeof(T_int));
     T ret = atomicAnd(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
     return ret;
   }
@@ -290,7 +287,7 @@ struct genericAtomicOperationImpl<T, DeviceOr, 8> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceOr op)
   {
     using T_int = long long int;
-    static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+    static_assert(sizeof(T) == sizeof(T_int));
     T ret = atomicOr(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
     return ret;
   }
@@ -309,7 +306,7 @@ struct genericAtomicOperationImpl<T, DeviceXor, 8> {
   __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceXor op)
   {
     using T_int = long long int;
-    static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+    static_assert(sizeof(T) == sizeof(T_int));
     T ret = atomicXor(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
     return ret;
   }
@@ -325,8 +322,8 @@ struct typesAtomicCASImpl<T, 1> {
   {
     using T_int = unsigned int;
 
-    T_int shift           = ((reinterpret_cast<size_t>(addr) & 3) * 8);
-    T_int* address_uint32 = reinterpret_cast<T_int*>(addr - (reinterpret_cast<size_t>(addr) & 3));
+    T_int shift          = ((reinterpret_cast<size_t>(addr) & 3) * 8);
+    auto* address_uint32 = reinterpret_cast<T_int*>(addr - (reinterpret_cast<size_t>(addr) & 3));
 
     // the 'target_value' in `old` can be different from `compare`
     // because other thread may update the value
@@ -358,7 +355,7 @@ struct typesAtomicCASImpl<T, 2> {
     using T_int = unsigned int;
 
     bool is_32_align = (reinterpret_cast<size_t>(addr) & 2) ? false : true;
-    T_int* address_uint32 =
+    auto* address_uint32 =
       reinterpret_cast<T_int*>(reinterpret_cast<size_t>(addr) - (is_32_align ? 0 : 2));
 
     T_int old = *address_uint32;
@@ -400,7 +397,7 @@ struct typesAtomicCASImpl<T, 8> {
   __forceinline__ __device__ T operator()(T* addr, T const& compare, T const& update_value)
   {
     using T_int = unsigned long long int;
-    static_assert(sizeof(T) == sizeof(T_int), errmsg_cast);
+    static_assert(sizeof(T) == sizeof(T_int));
 
     T_int ret = atomicCAS(reinterpret_cast<T_int*>(addr),
                           type_reinterpret<T_int, T>(compare),
@@ -429,7 +426,7 @@ struct typesAtomicCASImpl<T, 8> {
  * @returns The old value at `address`
  */
 template <typename T, typename BinaryOp>
-typename std::enable_if_t<cudf::is_numeric<T>(), T> __forceinline__ __device__
+std::enable_if_t<cudf::is_numeric<T>(), T> __forceinline__ __device__
 genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 {
   auto fun = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{};
@@ -438,7 +435,7 @@ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 
 // specialization for cudf::detail::timestamp types
 template <typename T, typename BinaryOp>
-typename std::enable_if_t<cudf::is_timestamp<T>(), T> __forceinline__ __device__
+std::enable_if_t<cudf::is_timestamp<T>(), T> __forceinline__ __device__
 genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 {
   using R = typename T::rep;
@@ -451,7 +448,7 @@ genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 
 // specialization for cudf::detail::duration types
 template <typename T, typename BinaryOp>
-typename std::enable_if_t<cudf::is_duration<T>(), T> __forceinline__ __device__
+std::enable_if_t<cudf::is_duration<T>(), T> __forceinline__ __device__
 genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
 {
   using R = typename T::rep;
@@ -501,6 +498,28 @@ template <typename T>
 __forceinline__ __device__ T atomicAdd(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
+}
+
+/**
+ * @brief Overloads for `atomicMul`
+ * reads the `old` located at the `address` in global or shared memory,
+ * computes (old * val), and stores the result back to memory at the same
+ * address. These three operations are performed in one atomic transaction.
+ *
+ * The supported cudf types for `atomicMul` are:
+ * int8_t, int16_t, int32_t, int64_t, float, double, and bool
+ *
+ * All types are implemented by `atomicCAS`.
+ *
+ * @param[in] address The address of old value in global or shared memory
+ * @param[in] val The value to be multiplied
+ *
+ * @returns The old value at `address`
+ */
+template <typename T>
+__forceinline__ __device__ T atomicMul(T* address, T val)
+{
+  return cudf::genericAtomicOperation(address, val, cudf::DeviceProduct{});
 }
 
 /**
@@ -597,7 +616,7 @@ __forceinline__ __device__ T atomicCAS(T* address, T compare, T val)
  *
  * @returns The old value at `address`
  */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
 __forceinline__ __device__ T atomicAnd(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
@@ -618,7 +637,7 @@ __forceinline__ __device__ T atomicAnd(T* address, T val)
  *
  * @returns The old value at `address`
  */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
 __forceinline__ __device__ T atomicOr(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
@@ -639,7 +658,7 @@ __forceinline__ __device__ T atomicOr(T* address, T val)
  *
  * @returns The old value at `address`
  */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>, T>* = nullptr>
 __forceinline__ __device__ T atomicXor(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});

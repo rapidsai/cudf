@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <cudf/strings/detail/copy_range.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -70,22 +71,19 @@ struct in_place_copy_range_dispatch {
   cudf::column_view const& source;
   cudf::mutable_column_view& target;
 
-  template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), void> operator()(cudf::size_type source_begin,
-                                                               cudf::size_type source_end,
-                                                               cudf::size_type target_begin,
-                                                               rmm::cuda_stream_view stream)
+  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
+  void operator()(cudf::size_type source_begin,
+                  cudf::size_type source_end,
+                  cudf::size_type target_begin,
+                  rmm::cuda_stream_view stream)
   {
     in_place_copy_range<T>(source, target, source_begin, source_end, target_begin, stream);
   }
 
-  template <typename T>
-  std::enable_if_t<not cudf::is_fixed_width<T>(), void> operator()(cudf::size_type source_begin,
-                                                                   cudf::size_type source_end,
-                                                                   cudf::size_type target_begin,
-                                                                   rmm::cuda_stream_view stream)
+  template <typename T, typename... Args>
+  void operator()(Args&&...)
   {
-    CUDF_FAIL("in-place copy does not work for variable width types.");
+    CUDF_FAIL("Unsupported type for in-place copy.");
   }
 };
 
@@ -93,7 +91,7 @@ struct out_of_place_copy_range_dispatch {
   cudf::column_view const& source;
   cudf::column_view const& target;
 
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
   std::unique_ptr<cudf::column> operator()(
     cudf::size_type source_begin,
     cudf::size_type source_end,
@@ -113,6 +111,13 @@ struct out_of_place_copy_range_dispatch {
     }
 
     return p_ret;
+  }
+
+  template <typename T, typename... Args>
+  std::enable_if_t<not cudf::is_rep_layout_compatible<T>(), std::unique_ptr<cudf::column>>
+  operator()(Args...)
+  {
+    CUDF_FAIL("Unsupported type for out of place copy.");
   }
 };
 
@@ -204,17 +209,6 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
                                 null_count);
 }
 
-template <>
-std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf::list_view>(
-  cudf::size_type source_begin,
-  cudf::size_type source_end,
-  cudf::size_type target_begin,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("list_view type not supported");
-}
-
 }  // namespace
 
 namespace cudf {
@@ -237,12 +231,12 @@ void copy_range_in_place(column_view const& source,
                "target should be nullable if source has null values.");
 
   if (source_end != source_begin) {  // otherwise no-op
-    cudf::type_dispatcher(target.type(),
-                          in_place_copy_range_dispatch{source, target},
-                          source_begin,
-                          source_end,
-                          target_begin,
-                          stream);
+    cudf::type_dispatcher<dispatch_storage_type>(target.type(),
+                                                 in_place_copy_range_dispatch{source, target},
+                                                 source_begin,
+                                                 source_end,
+                                                 target_begin,
+                                                 stream);
   }
 }
 
@@ -280,7 +274,7 @@ void copy_range_in_place(column_view const& source,
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range_in_place(
-    source, target, source_begin, source_end, target_begin, rmm::cuda_stream_default);
+    source, target, source_begin, source_end, target_begin, cudf::default_stream_value);
 }
 
 std::unique_ptr<column> copy_range(column_view const& source,
@@ -292,7 +286,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range(
-    source, target, source_begin, source_end, target_begin, rmm::cuda_stream_default, mr);
+    source, target, source_begin, source_end, target_begin, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

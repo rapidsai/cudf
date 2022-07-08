@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,9 @@
 #include <text/subword/detail/cp_data.h>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
-#include <stdint.h>
+#include <cstdint>
 
 namespace nvtext {
 namespace detail {
@@ -57,22 +58,16 @@ struct update_strings_lengths_fn {
 /**
  * @brief Retrieve the code point metadata table.
  *
- * This is a singleton instance that copies a large table of integers into
- * device memory on the very first call.
- *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-codepoint_metadata_type const* get_codepoint_metadata(rmm::cuda_stream_view stream);
+rmm::device_uvector<codepoint_metadata_type> get_codepoint_metadata(rmm::cuda_stream_view stream);
 
 /**
- * @brief Retrieve the aux code point metadata table.
- *
- * This is a singleton instance that copies a large table of integers into
- * device memory on the very first call.
+ * @brief Retrieve the auxiliary code point metadata table.
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-aux_codepoint_data_type const* get_aux_codepoint_data(rmm::cuda_stream_view stream);
+rmm::device_uvector<aux_codepoint_data_type> get_aux_codepoint_data(rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace nvtext

@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import pickle
 
@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests import utils
-from cudf.tests.utils import assert_eq
+from cudf.testing import _utils as utils
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -23,6 +23,23 @@ from cudf.tests.utils import assert_eq
         lambda: cudf.Series([1, 2, 3])[:2]._column,
         lambda: cudf.Series(["a", "bb", "ccc"]),
         lambda: cudf.Series(["a", None, "ccc"]),
+        lambda: cudf.Series(
+            [
+                {"a": ({"b": [1, 2, 3], "c": [4, 5, 6]}, {"d": [2, 4, 6]})},
+                {"e": ({"b": [0, 2, 4], "c": [-1, -2, -3]}, {"d": [1, 1, 1]})},
+            ]
+        ),
+        lambda: cudf.Series(
+            [
+                14.12302,
+                97938.2,
+                np.nan,
+                0.0,
+                -8.302014,
+                np.nan,
+                -112.2314,
+            ]
+        ).astype(cudf.Decimal64Dtype(7, 2)),
         lambda: cudf.DataFrame({"x": [1, 2, 3]}),
         lambda: cudf.DataFrame({"x": [1, 2, 3], "y": [1.0, None, 3.0]}),
         lambda: cudf.DataFrame(
@@ -35,16 +52,52 @@ from cudf.tests.utils import assert_eq
             {"x": ["a", "bb", "ccc"], "y": [1.0, None, 3.0]},
             index=[1, None, 3],
         ),
-        pd._testing.makeTimeDataFrame,
+        pd._testing.makeBoolIndex,
+        pd._testing.makeCategoricalIndex,
+        lambda: pd._testing.makeCustomDataframe(3, 4),
+        lambda: pd._testing.makeCustomIndex(2, 5),
+        pd._testing.makeDataFrame,
+        pd._testing.makeDateIndex,
+        pd._testing.makeFloatIndex,
+        pd._testing.makeFloatSeries,
+        pd._testing.makeIntIndex,
+        pd._testing.makeIntervalIndex,
+        pd._testing.makeMissingDataframe,
         pd._testing.makeMixedDataFrame,
+        pd._testing.makeMultiIndex,
+        lambda: pd._testing.makeNumericIndex(dtype=np.float64),
+        pd._testing.makeObjectSeries,
+        pytest.param(
+            pd._testing.makePeriodFrame,
+            marks=pytest.mark.xfail(
+                reason="Periods not supported in cudf", raises=RuntimeError
+            ),
+        ),
+        pytest.param(
+            pd._testing.makePeriodIndex,
+            marks=pytest.mark.xfail(
+                reason="Periods not supported in cudf", raises=RuntimeError
+            ),
+        ),
+        pytest.param(
+            pd._testing.makePeriodSeries,
+            marks=pytest.mark.xfail(
+                reason="Periods not supported in cudf", raises=RuntimeError
+            ),
+        ),
+        pd._testing.makeRangeIndex,
+        pd._testing.makeStringIndex,
+        pd._testing.makeStringSeries,
         pd._testing.makeTimeDataFrame,
-        # pd._testing.makeMissingDataframe, # Problem in distributed
-        # pd._testing.makeMultiIndex, # Indices not serialized on device
+        pd._testing.makeTimeSeries,
+        pd._testing.makeTimedeltaIndex,
+        pd._testing.makeUIntIndex,
+        pd._testing.makeUnicodeIndex,
     ],
 )
 @pytest.mark.parametrize("to_host", [True, False])
 def test_serialize(df, to_host):
-    """ This should hopefully replace all functions below """
+    """This should hopefully replace all functions below"""
     a = df()
     if "cudf" not in type(a).__module__:
         a = cudf.from_pandas(a)
@@ -64,11 +117,23 @@ def test_serialize(df, to_host):
     elif hasattr(df, "_cols"):
         assert ndevice >= len(df._data)
     else:
-        assert ndevice > 0
+        # If there are frames, something should be on the device
+        assert ndevice > 0 or not frames
 
     typ = type(a)
     b = typ.deserialize(header, frames)
     assert_eq(a, b)
+
+
+def test_serialize_dtype_error_checking():
+    dtype = cudf.IntervalDtype("float", "right")
+    header, frames = dtype.serialize()
+    with pytest.raises(AssertionError):
+        # Invalid number of frames
+        type(dtype).deserialize(header, [None] * (header["frame_count"] + 1))
+    with pytest.raises(AssertionError):
+        # mismatching class
+        cudf.StructDtype.deserialize(header, frames)
 
 
 def test_serialize_dataframe():
@@ -269,26 +334,6 @@ def test_serialize_string_check_buffer_sizes():
     assert expect == got
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
-        {"a": [[]]},
-        {"a": [[1, 2, None, 4]]},
-        {"a": [["cat", None, "dog"]]},
-        {
-            "a": [[1, 2, 3, None], [4, None, 5]],
-            "b": [None, ["fish", "bird"]],
-            "c": [[], []],
-        },
-        {"a": [[1, 2, 3, None], [4, None, 5], None, [6, 7]]},
-    ],
-)
-def test_serialize_list_columns(data):
-    df = cudf.DataFrame(data)
-    recreated = df.__class__.deserialize(*df.serialize())
-    assert_eq(recreated, df)
-
-
 def test_deserialize_cudf_0_16(datadir):
     fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_0.16.pkl"
 
@@ -296,3 +341,24 @@ def test_deserialize_cudf_0_16(datadir):
     actual = pickle.load(open(fname, "rb"))
 
     assert_eq(expected, actual)
+
+
+def test_serialize_sliced_string():
+    # https://github.com/rapidsai/cudf/issues/7735
+    data = ["hi", "hello", None]
+    pd_series = pd.Series(data, dtype=pd.StringDtype())
+    gd_series = cudf.Series(data, dtype="str")
+    sliced = gd_series[0:3]
+    serialized_gd_series = gd_series.serialize()
+    serialized_sliced = sliced.serialize()
+
+    # validate frames are equal or not
+    # because both should be identical
+    for i in range(3):
+        assert_eq(
+            serialized_gd_series[1][i].to_host_array(),
+            serialized_sliced[1][i].to_host_array(),
+        )
+
+    recreated = cudf.Series.deserialize(*sliced.serialize())
+    assert_eq(recreated.to_pandas(nullable=True), pd_series)

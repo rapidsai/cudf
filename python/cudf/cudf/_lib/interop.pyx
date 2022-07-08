@@ -1,33 +1,31 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import cudf
 
-from cudf._lib.table cimport Table
-from libcpp.vector cimport vector
-from libcpp.string cimport string
-from libcpp cimport bool
-
-from libcpp.memory cimport unique_ptr, shared_ptr
-from libcpp.utility cimport move
-
 from cpython cimport pycapsule
+from libcpp cimport bool
+from libcpp.memory cimport shared_ptr, unique_ptr
+from libcpp.string cimport string
+from libcpp.utility cimport move
+from libcpp.vector cimport vector
+from pyarrow.lib cimport CTable, pyarrow_unwrap_table, pyarrow_wrap_table
 
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from pyarrow.lib cimport CTable, pyarrow_wrap_table, pyarrow_unwrap_table
 from cudf._lib.cpp.interop cimport (
-    to_arrow as cpp_to_arrow,
+    DLManagedTensor,
+    column_metadata,
     from_arrow as cpp_from_arrow,
     from_dlpack as cpp_from_dlpack,
+    to_arrow as cpp_to_arrow,
     to_dlpack as cpp_to_dlpack,
-    column_metadata,
-    DLManagedTensor
 )
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 
 def from_dlpack(dlpack_capsule):
     """
-    Converts a DLPack Tensor PyCapsule into a cudf Table object.
+    Converts a DLPack Tensor PyCapsule into a list of columns.
 
     DLPack Tensor PyCapsule is expected to have the name "dltensor".
     """
@@ -42,29 +40,25 @@ def from_dlpack(dlpack_capsule):
             cpp_from_dlpack(dlpack_tensor)
         )
 
-    res = Table.from_unique_ptr(
-        move(c_result),
-        column_names=range(0, c_result.get()[0].num_columns())
-    )
+    res = columns_from_unique_ptr(move(c_result))
     dlpack_tensor.deleter(dlpack_tensor)
     return res
 
 
-def to_dlpack(Table source_table):
+def to_dlpack(list source_columns):
     """
-    Converts a Table cudf object into a DLPack Tensor PyCapsule.
+    Converts a list of columns into a DLPack Tensor PyCapsule.
 
     DLPack Tensor PyCapsule will have the name "dltensor".
     """
-    for column in source_table._columns:
-        if column.null_count:
-            raise ValueError(
-                "Cannot create a DLPack tensor with null values. \
-                    Input is required to have null count as zero."
-            )
+    if any(column.null_count for column in source_columns):
+        raise ValueError(
+            "Cannot create a DLPack tensor with null values. \
+                Input is required to have null count as zero."
+        )
 
     cdef DLManagedTensor *dlpack_tensor
-    cdef table_view source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_columns(source_columns)
 
     with nogil:
         dlpack_tensor = cpp_to_dlpack(
@@ -110,17 +104,14 @@ cdef vector[column_metadata] gather_metadata(object metadata) except *:
         raise ValueError("Malformed metadata has been encountered")
 
 
-def to_arrow(Table input_table,
-             object metadata,
-             bool keep_index=True):
-    """Convert from cudf Table to PyArrow Table.
+def to_arrow(list source_columns, object metadata):
+    """Convert a list of columns from
+    cudf Frame to a PyArrow Table.
 
     Parameters
     ----------
-    input_table : cudf table
-    column_names : names for the pyarrow arrays
-    field_names : field names for nested type arrays
-    keep_index : whether index needs to be part of arrow table
+    source_columns : a list of columns to convert
+    metadata : a list of metadata, see `gather_metadata` for layout
 
     Returns
     -------
@@ -128,9 +119,7 @@ def to_arrow(Table input_table,
     """
 
     cdef vector[column_metadata] cpp_metadata = gather_metadata(metadata)
-    cdef table_view input_table_view = (
-        input_table.view() if keep_index else input_table.data_view()
-    )
+    cdef table_view input_table_view = table_view_from_columns(source_columns)
 
     cdef shared_ptr[CTable] cpp_arrow_table
     with nogil:
@@ -141,22 +130,16 @@ def to_arrow(Table input_table,
     return pyarrow_wrap_table(cpp_arrow_table)
 
 
-def from_arrow(
-    object input_table,
-    object column_names=None,
-    object index_names=None
-):
-    """Convert from PyArrow Table to cudf Table.
+def from_arrow(object input_table):
+    """Convert from PyArrow Table to a list of columns.
 
     Parameters
     ----------
     input_table : PyArrow table
-    column_names : names for the cudf table data columns
-    index_names : names for the cudf table index columns
 
     Returns
     -------
-    cudf Table
+    A list of columns to construct Frame object
     """
     cdef shared_ptr[CTable] cpp_arrow_table = (
         pyarrow_unwrap_table(input_table)
@@ -166,10 +149,4 @@ def from_arrow(
     with nogil:
         c_result = move(cpp_from_arrow(cpp_arrow_table.get()[0]))
 
-    out_table = Table.from_unique_ptr(
-        move(c_result),
-        column_names=column_names,
-        index_names=index_names
-    )
-
-    return out_table
+    return columns_from_unique_ptr(move(c_result))

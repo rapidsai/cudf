@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/detail/merge.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -24,6 +25,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace dictionary {
@@ -52,18 +55,19 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
                     row_order.end(),
                     output_iter,
                     [lcol_iter, rcol_iter] __device__(auto const& index_pair) {
-                      auto index = thrust::get<1>(index_pair);
-                      return (thrust::get<0>(index_pair) == cudf::detail::side::LEFT
-                                ? lcol_iter[index]
-                                : rcol_iter[index]);
+                      auto const [side, index] = index_pair;
+                      return side == cudf::detail::side::LEFT ? lcol_iter[index] : rcol_iter[index];
                     });
 
   // build dictionary; the validity mask is updated by the caller
   return make_dictionary_column(
     std::make_unique<column>(lcol.keys(), stream, mr),
     std::move(indices_column),
-    rmm::device_buffer{
-      lcol.has_nulls() || rcol.has_nulls() ? static_cast<size_t>(merged_size) : 0, stream, mr},
+    cudf::detail::create_null_mask(
+      lcol.has_nulls() || rcol.has_nulls() ? static_cast<size_t>(merged_size) : 0,
+      mask_state::UNINITIALIZED,
+      stream,
+      mr),
     lcol.null_count() + rcol.null_count());
 }
 

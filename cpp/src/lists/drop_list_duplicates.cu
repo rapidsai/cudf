@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,77 +14,417 @@
  * limitations under the License.
  */
 
+#include <stream_compaction/stream_compaction_common.cuh>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/lists/detail/sorting.hpp>
+#include <cudf/detail/replace.hpp>
+#include <cudf/detail/sorting.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/structs/struct_view.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
-#include <thrust/transform.h>
+#include <thrust/count.h>
+#include <thrust/distance.h>
+#include <thrust/equal.h>
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
 
-namespace cudf {
-namespace lists {
+#include <optional>
+
+namespace cudf::lists {
 namespace detail {
+
 namespace {
-using offset_type = lists_column_view::offset_type;
+template <typename Type>
+struct has_negative_nans_fn {
+  column_device_view const d_view;
+
+  has_negative_nans_fn(column_device_view const& d_view) : d_view(d_view) {}
+
+  __device__ Type operator()(size_type idx) const noexcept
+  {
+    if (d_view.is_null(idx)) { return false; }
+
+    auto const val = d_view.element<Type>(idx);
+    return std::isnan(val) && std::signbit(val);  // std::signbit(x) == true if x is negative
+  }
+};
+
 /**
- * @brief Copy list entries and entry list offsets ignoring duplicates
+ * @brief A structure to be used along with type_dispatcher to check if a column has any
+ * negative NaN value.
  *
- * Given an array of all entries flattened from a list column and an array that maps each entry to
- * the offset of the list containing that entry, those entries and list offsets are copied into
- * new arrays such that the duplicated entries within each list will be ignored.
- *
- * @param all_lists_entries    The input array containing all list entries
- * @param entries_list_offsets A map from list entries to their corresponding list offsets
- * @param nulls_equal          Flag to specify whether null entries should be considered equal
- * @param stream               CUDA stream used for device memory operations and kernel launches
- * @param mr                   Device resource used to allocate memory
- *
- * @return A pair of columns, the first one contains unique list entries and the second one
- * contains their corresponding list offsets
+ * This functor is necessary because when calling to segmented sort on the list entries, the
+ * negative NaN and positive NaN values (if both exist) are separated to the two ends of the output
+ * lists. We want to move all NaN values close together in order to call unique_copy later on.
  */
-template <bool has_nulls>
-std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
-  column_view const& all_lists_entries,
-  column_view const& entries_list_offsets,
+struct has_negative_nans_dispatch {
+  template <typename Type, std::enable_if_t<cuda::std::is_floating_point_v<Type>>* = nullptr>
+  bool operator()(column_view const& input, rmm::cuda_stream_view stream) const noexcept
+  {
+    auto const d_entries_ptr = column_device_view::create(input, stream);
+    return thrust::count_if(rmm::exec_policy(stream),
+                            thrust::make_counting_iterator(0),
+                            thrust::make_counting_iterator(input.size()),
+                            has_negative_nans_fn<Type>{*d_entries_ptr});
+  }
+
+  template <typename Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
+  bool operator()(column_view const& input, rmm::cuda_stream_view stream) const
+  {
+    // Recursively check negative NaN on the children columns.
+    return std::any_of(thrust::make_counting_iterator(0),
+                       thrust::make_counting_iterator(input.num_children()),
+                       [structs_view = structs_column_view{input}, stream](auto const child_idx) {
+                         auto const col = structs_view.get_sliced_child(child_idx);
+                         return type_dispatcher(
+                           col.type(), has_negative_nans_dispatch{}, col, stream);
+                       });
+  }
+
+  template <typename Type,
+            std::enable_if_t<!cuda::std::is_floating_point_v<Type> &&
+                             !std::is_same_v<Type, cudf::struct_view>>* = nullptr>
+  bool operator()(column_view const&, rmm::cuda_stream_view) const
+  {
+    // Non-nested columns of non floating-point data do not contain NaN.
+    // Nested columns (not STRUCT) are not supported and should not reach this point.
+    return false;
+  }
+};
+
+/**
+ * @brief A structure to be used along with type_dispatcher to replace -NaN by NaN for a
+ * floating-point data column.
+ *
+ * Replacing -NaN by NaN is necessary before calling to segmented sort for lists because the sorting
+ * API may separate -NaN and NaN to the two ends of each result list while we want to group all NaN
+ * together.
+ */
+struct replace_negative_nans_dispatch {
+  template <typename Type, std::enable_if_t<!std::is_same_v<Type, cudf::struct_view>>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     rmm::cuda_stream_view stream) const noexcept
+  {
+    return cuda::std::is_floating_point_v<Type>
+             ? cudf::detail::normalize_nans_and_zeros(input, stream)
+             : std::make_unique<column>(input, stream);
+  }
+
+  template <typename Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     rmm::cuda_stream_view stream) const noexcept
+  {
+    std::vector<std::unique_ptr<cudf::column>> output_struct_members;
+    std::transform(thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(input.num_children()),
+                   std::back_inserter(output_struct_members),
+                   [structs_view = structs_column_view{input}, stream](auto const child_idx) {
+                     auto const col = structs_view.get_sliced_child(child_idx);
+                     return type_dispatcher(
+                       col.type(), replace_negative_nans_dispatch{}, col, stream);
+                   });
+
+    return cudf::make_structs_column(input.size(),
+                                     std::move(output_struct_members),
+                                     input.null_count(),
+                                     cudf::detail::copy_bitmask(input, stream),
+                                     stream);
+  }
+};
+
+/**
+ * @brief Perform an equality comparison between two entries in a lists column, specialized from
+ * `cudf::element_equality_comparator` to take into account both parameters `nulls_equal` and
+ * `nans_equal` when comparing floating-point numbers.
+ *
+ * For the two entries that are NOT in the same list, they will always be considered as different.
+ *
+ * If they are from the same list and their type is not floating point, this functor will return the
+ * same comparison result as `cudf::element_equality_comparator`.
+ *
+ * For floating-point types, entries holding NaN value can be considered as different or the same
+ * value depending on the `nans_equal` parameter.
+ */
+template <class Type>
+struct column_row_comparator_fn {
+  size_type const* const list_indices;
+  column_device_view const lhs;
+  column_device_view const rhs;
+  null_equality const nulls_equal;
+  bool const has_nulls;
+  bool const nans_equal;
+
+  __host__ __device__ column_row_comparator_fn(size_type const* const list_indices,
+                                               column_device_view const& lhs,
+                                               column_device_view const& rhs,
+                                               null_equality const nulls_equal,
+                                               bool const has_nulls,
+                                               bool const nans_equal)
+    : list_indices(list_indices),
+      lhs(lhs),
+      rhs(rhs),
+      nulls_equal(nulls_equal),
+      has_nulls(has_nulls),
+      nans_equal(nans_equal)
+  {
+  }
+
+  template <typename T = Type, std::enable_if_t<!cuda::std::is_floating_point_v<T>>* = nullptr>
+  bool __device__ compare(T const& lhs_val, T const& rhs_val) const noexcept
+  {
+    return lhs_val == rhs_val;
+  }
+
+  template <typename T = Type, std::enable_if_t<cuda::std::is_floating_point_v<T>>* = nullptr>
+  bool __device__ compare(T const& lhs_val, T const& rhs_val) const noexcept
+  {
+    // If both element(i) and element(j) are NaNs and NaNs are considered as equal value then this
+    // comparison will return `true`. This is the desired behavior in Pandas.
+    if (nans_equal && std::isnan(lhs_val) && std::isnan(rhs_val)) { return true; }
+
+    // If NaNs are considered as NOT equal, even both element(i) and element(j) are NaNs this
+    // comparison will still return `false`. This is the desired behavior in Apache Spark.
+    return lhs_val == rhs_val;
+  }
+
+  bool __device__ operator()(size_type i, size_type j) const noexcept
+  {
+    // Two entries are not considered for equality if they belong to different lists.
+    if (list_indices[i] != list_indices[j]) { return false; }
+
+    if (has_nulls) {
+      bool const lhs_is_null{lhs.nullable() && lhs.is_null_nocheck(i)};
+      bool const rhs_is_null{rhs.nullable() && rhs.is_null_nocheck(j)};
+      if (lhs_is_null && rhs_is_null) {
+        return nulls_equal == null_equality::EQUAL;
+      } else if (lhs_is_null != rhs_is_null) {
+        return false;
+      }
+    }
+
+    return compare(lhs.element<Type>(i), lhs.element<Type>(j));
+  }
+};
+
+/**
+ * @brief Struct used in type_dispatcher for comparing two entries in a lists column.
+ */
+struct column_row_comparator_dispatch {
+  size_type const* const list_indices;
+  column_device_view const lhs;
+  column_device_view const rhs;
+  null_equality const nulls_equal;
+  bool const has_nulls;
+  bool const nans_equal;
+
+  __device__ column_row_comparator_dispatch(size_type const* const list_indices,
+                                            column_device_view const& lhs,
+                                            column_device_view const& rhs,
+                                            null_equality const nulls_equal,
+                                            bool const has_nulls,
+                                            bool const nans_equal)
+    : list_indices(list_indices),
+      lhs(lhs),
+      rhs(rhs),
+      nulls_equal(nulls_equal),
+      has_nulls(has_nulls),
+      nans_equal(nans_equal)
+  {
+  }
+
+  template <class Type, std::enable_if_t<cudf::is_equality_comparable<Type, Type>()>* = nullptr>
+  bool __device__ operator()(size_type i, size_type j) const noexcept
+  {
+    return column_row_comparator_fn<Type>{
+      list_indices, lhs, rhs, nulls_equal, has_nulls, nans_equal}(i, j);
+  }
+
+  template <class Type, std::enable_if_t<!cudf::is_equality_comparable<Type, Type>()>* = nullptr>
+  bool operator()(size_type, size_type) const
+  {
+    CUDF_FAIL(
+      "column_row_comparator_dispatch cannot operate on types that are not equally comparable.");
+  }
+};
+
+/**
+ * @brief Performs an equality comparison between rows of two tables using
+ * `column_row_comparator_fn` functor to compare rows of their corresponding columns.
+ */
+struct table_row_comparator_fn {
+  size_type const* const list_indices;
+  table_device_view const lhs;
+  table_device_view const rhs;
+  null_equality const nulls_equal;
+  bool const has_nulls;
+  bool const nans_equal;
+
+  table_row_comparator_fn(size_type const* const list_indices,
+                          table_device_view const& lhs,
+                          table_device_view const& rhs,
+                          null_equality const nulls_equal,
+                          bool const has_nulls,
+                          bool const nans_equal)
+    : list_indices(list_indices),
+      lhs(lhs),
+      rhs(rhs),
+      nulls_equal(nulls_equal),
+      has_nulls(has_nulls),
+      nans_equal(nans_equal)
+  {
+  }
+
+  bool __device__ operator()(size_type i, size_type j) const
+  {
+    auto column_comp = [=](column_device_view const& lhs, column_device_view const& rhs) {
+      return type_dispatcher(
+        lhs.type(),
+        column_row_comparator_dispatch{list_indices, lhs, rhs, nulls_equal, has_nulls, nans_equal},
+        i,
+        j);
+    };
+
+    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), column_comp);
+  }
+};
+
+/**
+ *  @brief Struct used in type_dispatcher for copying indices of the list entries ignoring duplicate
+ * list entries.
+ */
+struct get_indices_of_unique_entries_dispatch {
+  template <class Type,
+            std::enable_if_t<!cudf::is_equality_comparable<Type, Type>() &&
+                             !std::is_same_v<Type, cudf::struct_view>>* = nullptr>
+  size_type* operator()(size_type const*,
+                        column_view const&,
+                        size_type,
+                        size_type*,
+                        null_equality,
+                        nan_equality,
+                        duplicate_keep_option,
+                        rmm::cuda_stream_view) const
+  {
+    CUDF_FAIL(
+      "get_indices_of_unique_entries_dispatch cannot operate on types that are not equally "
+      "comparable or not STRUCT type.");
+  }
+
+  template <class Type, std::enable_if_t<cudf::is_equality_comparable<Type, Type>()>* = nullptr>
+  size_type* operator()(size_type const* list_indices,
+                        column_view const& all_lists_entries,
+                        size_type num_entries,
+                        size_type* output_begin,
+                        null_equality nulls_equal,
+                        nan_equality nans_equal,
+                        duplicate_keep_option keep_option,
+                        rmm::cuda_stream_view stream) const noexcept
+  {
+    auto const d_view = column_device_view::create(all_lists_entries, stream);
+    auto const comp   = column_row_comparator_fn<Type>{list_indices,
+                                                     *d_view,
+                                                     *d_view,
+                                                     nulls_equal,
+                                                     all_lists_entries.has_nulls(),
+                                                     nans_equal == nan_equality::ALL_EQUAL};
+    return cudf::detail::unique_copy(thrust::make_counting_iterator(0),
+                                     thrust::make_counting_iterator(num_entries),
+                                     output_begin,
+                                     comp,
+                                     keep_option,
+                                     stream);
+  }
+
+  template <class Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
+  size_type* operator()(size_type const* list_indices,
+                        column_view const& all_lists_entries,
+                        size_type num_entries,
+                        size_type* output_begin,
+                        null_equality nulls_equal,
+                        nan_equality nans_equal,
+                        duplicate_keep_option keep_option,
+                        rmm::cuda_stream_view stream) const noexcept
+  {
+    auto const flattened_entries = cudf::structs::detail::flatten_nested_columns(
+      table_view{{all_lists_entries}}, {order::ASCENDING}, {null_order::AFTER}, {});
+    auto const dview_ptr = table_device_view::create(flattened_entries, stream);
+    // Search through children of all levels for nulls.
+    auto const nested_has_nulls = has_nulls(flattened_entries.flattened_columns());
+
+    auto const comp = table_row_comparator_fn{list_indices,
+                                              *dview_ptr,
+                                              *dview_ptr,
+                                              nulls_equal,
+                                              nested_has_nulls,
+                                              nans_equal == nan_equality::ALL_EQUAL};
+    return cudf::detail::unique_copy(thrust::make_counting_iterator(0),
+                                     thrust::make_counting_iterator(num_entries),
+                                     output_begin,
+                                     comp,
+                                     keep_option,
+                                     stream);
+  }
+};
+
+/**
+ * @brief Extract list entries and their corresponding (1-based) list indices ignoring duplicate
+ * entries.
+ */
+std::vector<std::unique_ptr<column>> get_unique_entries_and_list_indices(
+  column_view const& keys_entries,
+  std::optional<column_view> const& values_entries,
+  device_span<size_type const> entries_list_indices,
   null_equality nulls_equal,
+  nan_equality nans_equal,
+  duplicate_keep_option keep_option,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  // Create an intermediate table, since the comparator only work on tables
-  auto const device_input_table =
-    cudf::table_device_view::create(table_view{{all_lists_entries}}, stream);
-  auto const comp = row_equality_comparator<has_nulls>(
-    *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
+  auto const num_entries = keys_entries.size();
 
-  auto const num_entries = all_lists_entries.size();
-  // Allocate memory to store the indices of the unique entries
-  auto const unique_indices = cudf::make_numeric_column(
-    entries_list_offsets.type(), num_entries, mask_state::UNALLOCATED, stream);
-  auto const unique_indices_begin = unique_indices->mutable_view().begin<offset_type>();
+  // Allocate memory to store the indices of the unique key entries.
+  // These indices will be used as a gather map to collect keys and values.
+  auto unique_indices     = rmm::device_uvector<size_type>(num_entries, stream);
+  auto const output_begin = unique_indices.begin();
+  auto const output_end   = type_dispatcher(keys_entries.type(),
+                                          get_indices_of_unique_entries_dispatch{},
+                                          entries_list_indices.begin(),
+                                          keys_entries,
+                                          num_entries,
+                                          output_begin,
+                                          nulls_equal,
+                                          nans_equal,
+                                          keep_option,
+                                          stream);
 
-  auto const copy_end = thrust::unique_copy(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_entries),
-    unique_indices_begin,
-    [list_offsets = entries_list_offsets.begin<offset_type>(), comp] __device__(auto i, auto j) {
-      return list_offsets[i] == list_offsets[j] && comp(i, j);
-    });
+  auto const list_indices_view = column_view(data_type{type_to_id<size_type>()},
+                                             static_cast<size_type>(entries_list_indices.size()),
+                                             entries_list_indices.data());
+  auto const input_table       = values_entries
+                                   ? table_view{{keys_entries, values_entries.value(), list_indices_view}}
+                                   : table_view{{keys_entries, list_indices_view}};
 
-  // Collect unique entries and entry list offsets
-  auto const indices = cudf::detail::slice(
-    unique_indices->view(), 0, thrust::distance(unique_indices_begin, copy_end));
-  return cudf::detail::gather(table_view{{all_lists_entries, entries_list_offsets}},
-                              indices,
+  // Collect unique entries and entry list indices.
+  // The new null_count and bitmask of the unique entries will also be generated by the gather
+  // function.
+  return cudf::detail::gather(input_table,
+                              device_span<size_type const>(
+                                unique_indices.data(), thrust::distance(output_begin, output_end)),
                               cudf::out_of_bounds_policy::DONT_CHECK,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,
                               stream,
@@ -93,203 +433,206 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
 }
 
 /**
- * @brief Generate a 0-based offset column for a lists column
- *
- * Given a lists_column_view, which may have a non-zero offset, generate a new column containing
- * 0-based list offsets. This is done by subtracting each of the input list offset by the first
- * offset.
- *
- * @code{.pseudo}
- * Given a list column having offsets = { 3, 7, 9, 13 },
- * then output_offsets = { 0, 4, 6, 10 }
- * @endcode
- *
- * @param lists_column The input lists column
- * @param stream       CUDA stream used for device memory operations and kernel launches
- * @param mr           Device resource used to allocate memory
- *
- * @return A column containing 0-based list offsets
+ * @brief Common execution code called by all public `drop_list_duplicates` APIs.
  */
-std::unique_ptr<column> generate_clean_offsets(lists_column_view const& lists_column,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates_common(
+  lists_column_view const& keys,
+  std::optional<lists_column_view> const& values,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  duplicate_keep_option keep_option,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
-  auto output_offsets = make_numeric_column(data_type{type_to_id<offset_type>()},
-                                            lists_column.size() + 1,
-                                            mask_state::UNALLOCATED,
-                                            stream,
-                                            mr);
-  thrust::transform(
-    rmm::exec_policy(stream),
-    lists_column.offsets_begin(),
-    lists_column.offsets_end(),
-    output_offsets->mutable_view().begin<offset_type>(),
-    [first = lists_column.offsets_begin()] __device__(auto offset) { return offset - *first; });
-  return output_offsets;
+  if (auto const child_type = keys.child().type();
+      cudf::is_nested(child_type) && child_type.id() != type_id::STRUCT) {
+    CUDF_FAIL(
+      "Keys of nested types other than STRUCT are not supported in `drop_list_duplicates`.");
+  }
+
+  CUDF_EXPECTS(!values || keys.size() == values.value().size(),
+               "Keys and values columns must have the same size.");
+
+  if (keys.is_empty()) {
+    return std::pair{cudf::empty_like(keys.parent()),
+                     values ? cudf::empty_like(values.value().parent()) : nullptr};
+  }
+
+  // The child column containing list entries.
+  auto const keys_child = keys.get_sliced_child(stream);
+
+  // Generate a mapping from list entries to their list indices for the keys column.
+  auto const entries_list_indices = [&] {
+    auto labels = rmm::device_uvector<size_type>(keys_child.size(), stream);
+    cudf::detail::label_segments(
+      keys.offsets_begin(), keys.offsets_end(), labels.begin(), labels.end(), stream);
+    return labels;
+  }();
+
+  // Generate segmented sorted order for key entries.
+  // The keys column will be sorted (gathered) using this order.
+  auto const sorted_order = [&]() {
+    auto const list_indices_view = column_view(data_type{type_to_id<size_type>()},
+                                               static_cast<size_type>(entries_list_indices.size()),
+                                               entries_list_indices.data());
+
+    // If nans_equal == ALL_EQUAL and the keys column contains floating-point data type,
+    // we need to replace `-NaN` by `NaN` before sorting.
+    auto const replace_negative_nan =
+      nans_equal == nan_equality::ALL_EQUAL &&
+      type_dispatcher(keys_child.type(), has_negative_nans_dispatch{}, keys_child, stream);
+
+    if (replace_negative_nan) {
+      auto const replaced_nan_keys_child =
+        type_dispatcher(keys_child.type(), replace_negative_nans_dispatch{}, keys_child, stream);
+      return cudf::detail::stable_sorted_order(
+        table_view{{list_indices_view, replaced_nan_keys_child->view()}},
+        {order::ASCENDING, order::ASCENDING},
+        {null_order::AFTER, null_order::AFTER},
+        stream);
+    } else {
+      return cudf::detail::stable_sorted_order(table_view{{list_indices_view, keys_child}},
+                                               {order::ASCENDING, order::ASCENDING},
+                                               {null_order::AFTER, null_order::AFTER},
+                                               stream);
+    }
+  }();
+
+  auto const sorting_table = values
+                               ? table_view{{keys_child, values.value().get_sliced_child(stream)}}
+                               : table_view{{keys_child}};
+  auto const sorted_table  = cudf::detail::gather(sorting_table,
+                                                 sorted_order->view(),
+                                                 out_of_bounds_policy::DONT_CHECK,
+                                                 cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                                 stream);
+
+  // Extract the segmented sorted key entries.
+  auto const sorted_keys_entries = sorted_table->get_column(0).view();
+  auto const sorted_values_entries =
+    values ? std::optional<column_view>(sorted_table->get_column(1).view()) : std::nullopt;
+
+  // Generate child columns containing unique entries (along with their list indices).
+  // null_count and bitmask of these columns will also be generated in this function.
+  auto unique_entries_and_list_indices = get_unique_entries_and_list_indices(sorted_keys_entries,
+                                                                             sorted_values_entries,
+                                                                             entries_list_indices,
+                                                                             nulls_equal,
+                                                                             nans_equal,
+                                                                             keep_option,
+                                                                             stream,
+                                                                             mr);
+
+  // Generate offsets for the output lists column(s).
+  auto output_offsets = [&] {
+    auto out_offsets = make_numeric_column(
+      data_type{type_to_id<offset_type>()}, keys.size() + 1, mask_state::UNALLOCATED, stream, mr);
+    auto const offsets = out_offsets->mutable_view();
+    auto const labels =
+      unique_entries_and_list_indices.back()->view();  // unique entries' list indices
+    cudf::detail::labels_to_offsets(labels.template begin<size_type>(),
+                                    labels.template end<size_type>(),
+                                    offsets.template begin<size_type>(),
+                                    offsets.template end<size_type>(),
+                                    stream);
+    return out_offsets;
+  }();
+
+  // If the values lists column is not given, its corresponding output will be nullptr.
+  auto out_values =
+    values ? make_lists_column(keys.size(),
+                               std::make_unique<column>(output_offsets->view(), stream, mr),
+                               std::move(unique_entries_and_list_indices[1]),
+                               values.value().null_count(),
+                               cudf::detail::copy_bitmask(values.value().parent(), stream, mr),
+                               stream,
+                               mr)
+           : nullptr;
+
+  auto out_keys = make_lists_column(keys.size(),
+                                    std::move(output_offsets),
+                                    std::move(unique_entries_and_list_indices[0]),
+                                    keys.null_count(),
+                                    cudf::detail::copy_bitmask(keys.parent(), stream, mr),
+                                    stream,
+                                    mr);
+
+  return std::pair{std::move(out_keys), std::move(out_values)};
 }
 
-/**
- * @brief Populate list offsets for all list entries
- *
- * Given an `offsets` column_view containing offsets of a lists column and a number of all list
- * entries in the column, generate an array that maps from each list entry to the offset of the list
- * containing that entry.
- *
- * @code{.pseudo}
- * num_entries = 10, offsets = { 0, 4, 6, 10 }
- * output = { 1, 1, 1, 1, 2, 2, 3, 3, 3, 3 }
- * @endcode
- *
- * @param num_entries The number of list entries
- * @param offsets     Column view to the list offsets
- * @param stream      CUDA stream used for device memory operations and kernel launches
- * @param mr          Device resource used to allocate memory
- *
- * @return A column containing entry list offsets
- */
-std::unique_ptr<column> generate_entry_list_offsets(size_type num_entries,
-                                                    column_view const& offsets,
-                                                    rmm::cuda_stream_view stream)
-{
-  auto entry_list_offsets = make_numeric_column(offsets.type(),
-                                                num_entries,
-                                                mask_state::UNALLOCATED,
-                                                stream,
-                                                rmm::mr::get_current_device_resource());
-  thrust::upper_bound(rmm::exec_policy(stream),
-                      offsets.begin<offset_type>(),
-                      offsets.end<offset_type>(),
-                      thrust::make_counting_iterator<offset_type>(0),
-                      thrust::make_counting_iterator<offset_type>(num_entries),
-                      entry_list_offsets->mutable_view().begin<offset_type>());
-  return entry_list_offsets;
-}
-
-/**
- * @brief Generate list offsets from entry offsets
- *
- * Generate an array of list offsets for the final result lists column. The list
- * offsets of the original lists column are also taken into account to make sure the result lists
- * column will have the same empty list rows (if any) as in the original lists column.
- *
- * @param[in] num_entries          The number of unique entries after removing duplicates
- * @param[in] entries_list_offsets The mapping from list entries to their list offsets
- * @param[out] original_offsets    The list offsets of the original lists column, which
- * will also be used to store the new list offsets
- * @param[in] stream               CUDA stream used for device memory operations and kernel launches
- * @param[in] mr                   Device resource used to allocate memory
- */
-void generate_offsets(size_type num_entries,
-                      column_view const& entries_list_offsets,
-                      mutable_column_view const& original_offsets,
-                      rmm::cuda_stream_view stream)
-{
-  // Firstly, generate temporary list offsets for the unique entries, ignoring empty lists (if any)
-  // If entries_list_offsets = {1, 1, 1, 1, 2, 3, 3, 3, 4, 4 }, num_entries = 10,
-  // then new_offsets = { 0, 4, 5, 8, 10 }
-  auto const new_offsets = allocate_like(
-    original_offsets, mask_allocation_policy::NEVER, rmm::mr::get_current_device_resource());
-  thrust::copy_if(rmm::exec_policy(stream),
-                  thrust::make_counting_iterator<offset_type>(0),
-                  thrust::make_counting_iterator<offset_type>(num_entries + 1),
-                  new_offsets->mutable_view().begin<offset_type>(),
-                  [num_entries, offsets_ptr = entries_list_offsets.begin<offset_type>()] __device__(
-                    auto i) -> bool {
-                    return i == 0 || i == num_entries || offsets_ptr[i] != offsets_ptr[i - 1];
-                  });
-
-  // Generate a prefix sum of number of empty lists, storing inplace to the original lists
-  // offsets
-  // If the original list offsets is { 0, 0, 5, 5, 6, 6 } (there are 2 empty lists),
-  // and new_offsets = { 0, 4, 6 },
-  // then output = { 0, 1, 1, 2, 2, 3}
-  auto const iter_trans_begin = cudf::detail::make_counting_transform_iterator(
-    0, [offsets = original_offsets.begin<offset_type>()] __device__(auto i) {
-      return (i > 0 && offsets[i] == offsets[i - 1]) ? 1 : 0;
-    });
-  thrust::inclusive_scan(rmm::exec_policy(stream),
-                         iter_trans_begin,
-                         iter_trans_begin + original_offsets.size(),
-                         original_offsets.begin<offset_type>());
-
-  // Generate the final list offsets
-  // If the original list offsets are { 0, 0, 5, 5, 6, 6 }, the new offsets are { 0, 4, 6 },
-  //  and the prefix sums of empty lists are { 0, 1, 1, 2, 2, 3 },
-  //  then output = { 0, 0, 4, 4, 5, 5 }
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<offset_type>(0),
-                    thrust::make_counting_iterator<offset_type>(original_offsets.size()),
-                    original_offsets.begin<offset_type>(),
-                    [prefix_sum_empty_lists = original_offsets.begin<offset_type>(),
-                     offsets = new_offsets->view().begin<offset_type>()] __device__(auto i) {
-                      return offsets[i - prefix_sum_empty_lists[i]];
-                    });
-}
 }  // anonymous namespace
 
-/**
- * @copydoc cudf::lists::drop_list_duplicates
- *
- * @param stream CUDA stream used for device memory operations and kernel launches
- */
-std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_column,
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates(
+  lists_column_view const& keys,
+  lists_column_view const& values,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  duplicate_keep_option keep_option,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  return drop_list_duplicates_common(keys,
+                                     std::optional<lists_column_view>(values),
+                                     nulls_equal,
+                                     nans_equal,
+                                     keep_option,
+                                     stream,
+                                     mr);
+}
+
+std::unique_ptr<column> drop_list_duplicates(lists_column_view const& input,
                                              null_equality nulls_equal,
+                                             nan_equality nans_equal,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  if (lists_column.is_empty()) return cudf::empty_like(lists_column.parent());
-  if (cudf::is_nested(lists_column.child().type())) {
-    CUDF_FAIL("Nested types are not supported in drop_list_duplicates.");
-  }
-
-  // Call segmented sort on the list elements and store them in a temporary column sorted_list
-  auto const sorted_lists =
-    detail::sort_lists(lists_column, order::ASCENDING, null_order::AFTER, stream);
-
-  // Flatten all entries (depth = 1) of the lists column
-  auto const all_lists_entries = lists_column_view(sorted_lists->view()).get_sliced_child(stream);
-
-  // Generate a 0-based offset column
-  auto lists_offsets = detail::generate_clean_offsets(lists_column, stream, mr);
-
-  // Generate a mapping from list entries to offsets of the lists containing those entries
-  auto const entries_list_offsets =
-    detail::generate_entry_list_offsets(all_lists_entries.size(), lists_offsets->view(), stream);
-
-  // Copy non-duplicated entries (along with their list offsets) to new arrays
-  auto unique_entries_and_list_offsets =
-    all_lists_entries.has_nulls()
-      ? detail::get_unique_entries_and_list_offsets<true>(
-          all_lists_entries, entries_list_offsets->view(), nulls_equal, stream, mr)
-      : detail::get_unique_entries_and_list_offsets<false>(
-          all_lists_entries, entries_list_offsets->view(), nulls_equal, stream, mr);
-
-  // Generate offsets for the new lists column
-  detail::generate_offsets(unique_entries_and_list_offsets.front()->size(),
-                           unique_entries_and_list_offsets.back()->view(),
-                           lists_offsets->mutable_view(),
-                           stream);
-
-  // Construct a new lists column without duplicated entries
-  return make_lists_column(lists_column.size(),
-                           std::move(lists_offsets),
-                           std::move(unique_entries_and_list_offsets.front()),
-                           lists_column.null_count(),
-                           cudf::detail::copy_bitmask(lists_column.parent(), stream, mr));
+  return drop_list_duplicates_common(input,
+                                     std::nullopt,
+                                     nulls_equal,
+                                     nans_equal,
+                                     duplicate_keep_option::KEEP_FIRST,
+                                     stream,
+                                     mr)
+    .first;
 }
 
 }  // namespace detail
 
 /**
- * @copydoc cudf::lists::drop_list_duplicates
+ * @copydoc cudf::lists::drop_list_duplicates(lists_column_view const&,
+ *                                            lists_column_view const&,
+ *                                            duplicate_keep_option,
+ *                                            null_equality,
+ *                                            nan_equality,
+ *                                            rmm::mr::device_memory_resource*)
  */
-std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_column,
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates(
+  lists_column_view const& keys,
+  lists_column_view const& values,
+  duplicate_keep_option keep_option,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::drop_list_duplicates(
+    keys, values, nulls_equal, nans_equal, keep_option, cudf::default_stream_value, mr);
+}
+
+/**
+ * @copydoc cudf::lists::drop_list_duplicates(lists_column_view const&,
+ *                                            null_equality,
+ *                                            nan_equality,
+ *                                            rmm::mr::device_memory_resource*)
+ */
+std::unique_ptr<column> drop_list_duplicates(lists_column_view const& input,
                                              null_equality nulls_equal,
+                                             nan_equality nans_equal,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_list_duplicates(lists_column, nulls_equal, rmm::cuda_stream_default, mr);
+  return detail::drop_list_duplicates(
+    input, nulls_equal, nans_equal, cudf::default_stream_value, mr);
 }
 
-}  // namespace lists
-}  // namespace cudf
+}  // namespace cudf::lists

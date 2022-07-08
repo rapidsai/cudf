@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,11 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -43,9 +46,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
 
   if (neg_indices == negative_index_policy::ALLOWED) {
     cudf::size_type n_rows = source_table.num_rows();
-    auto idx_converter     = [n_rows] __device__(size_type in) {
-      return ((in % n_rows) + n_rows) % n_rows;
-    };
+    auto idx_converter = [n_rows] __device__(size_type in) { return in < 0 ? in + n_rows : in; };
     return gather(source_table,
                   thrust::make_transform_iterator(map_begin, idx_converter),
                   thrust::make_transform_iterator(map_end, idx_converter),
@@ -54,6 +55,21 @@ std::unique_ptr<table> gather(table_view const& source_table,
                   mr);
   }
   return gather(source_table, map_begin, map_end, bounds_policy, stream, mr);
+}
+
+std::unique_ptr<table> gather(table_view const& source_table,
+                              device_span<size_type const> const gather_map,
+                              out_of_bounds_policy bounds_policy,
+                              negative_index_policy neg_indices,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(gather_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+               "invalid gather map size");
+  auto map_col = column_view(data_type{type_to_id<size_type>()},
+                             static_cast<size_type>(gather_map.size()),
+                             gather_map.data());
+  return gather(source_table, map_col, bounds_policy, neg_indices, stream, mr);
 }
 
 }  // namespace detail
@@ -69,7 +85,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                      : detail::negative_index_policy::ALLOWED;
 
   return detail::gather(
-    source_table, gather_map, bounds_policy, index_policy, rmm::cuda_stream_default, mr);
+    source_table, gather_map, bounds_policy, index_policy, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "cudf_jni_apis.hpp"
 #include "jni_utils.hpp"
 
 namespace {
@@ -97,7 +98,7 @@ public:
    * @param device_pointer Pointer to the device buffer.
    * @param size The size of the allocated device buffer.
    * @param register_buffer Whether to register the buffer with cuFile. This should only be set to
-   * true if this buffer is being reused to fill a larger buffer.
+   * true if this buffer is being reused and is 4KiB aligned.
    */
   cufile_buffer(void *device_pointer, std::size_t size, bool register_buffer = false)
       : device_pointer_{device_pointer}, size_{size}, register_buffer_{register_buffer} {
@@ -226,11 +227,11 @@ public:
    * @brief Write a device buffer to the file.
    *
    * @param buffer The device buffer to write.
-   * @param file_offset Starting offset from which to write the file.
+   * @param size The number of bytes to write.
+   * @param file_offset Starting offset from which to write the buffer.
    */
-  void write(cufile_buffer const &buffer, std::size_t file_offset) {
-    auto const status =
-        cuFileWrite(cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
+  void write(cufile_buffer const &buffer, std::size_t size, std::size_t file_offset) {
+    auto const status = cuFileWrite(cufile_handle_, buffer.device_pointer(), size, file_offset, 0);
 
     if (status < 0) {
       if (IS_CUFILE_ERR(status)) {
@@ -240,17 +241,18 @@ public:
       }
     }
 
-    CUDF_EXPECTS(static_cast<std::size_t>(status) == buffer.size(),
-                 "Size of bytes written is different from buffer size");
+    CUDF_EXPECTS(static_cast<std::size_t>(status) == size,
+                 "Size of bytes written is different from the specified size");
   }
 
   /**
    * @brief Append a device buffer to the file.
    *
-   * @param buffer The device buffer to write.
+   * @param buffer The device buffer to append.
+   * @param size The number of bytes to append.
    * @return The file offset from which the buffer was appended.
    */
-  std::size_t append(cufile_buffer const &buffer) {
+  std::size_t append(cufile_buffer const &buffer, std::size_t size) {
     struct stat stat_buffer;
     auto const status = fstat(file_descriptor_, &stat_buffer);
     if (status < 0) {
@@ -258,7 +260,7 @@ public:
     }
 
     auto const file_offset = static_cast<std::size_t>(stat_buffer.st_size);
-    write(buffer, file_offset);
+    write(buffer, size, file_offset);
     return file_offset;
   }
 
@@ -279,8 +281,9 @@ extern "C" {
  * @param env The JNI environment.
  * @return Pointer address to the new driver wrapper instance.
  */
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_createDriver(JNIEnv *env, jclass) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileDriver_create(JNIEnv *env, jclass) {
   try {
+    cudf::jni::auto_set_device(env);
     return reinterpret_cast<jlong>(new cufile_driver());
   }
   CATCH_STD(env, 0);
@@ -292,13 +295,159 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_createDriver(JNIEnv *env, jcl
  * @param env The JNI environment.
  * @param pointer Pointer address to the driver wrapper instance.
  */
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_destroyDriver(JNIEnv *env, jclass,
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileDriver_destroy(JNIEnv *env, jclass,
                                                                 jlong pointer) {
   try {
-    if (pointer != 0) {
-      auto *driver = reinterpret_cast<cufile_driver *>(pointer);
-      delete driver;
-    }
+    cudf::jni::auto_set_device(env);
+    delete reinterpret_cast<cufile_driver *>(pointer);
+  }
+  CATCH_STD(env, );
+}
+
+/**
+ * @brief Create a new cuFile buffer wrapper.
+ *
+ * @param env The JNI environment.
+ * @param device_pointer Pointer address to the device buffer.
+ * @param size The size of the device buffer.
+ * @param register_buffer If true, register the cuFile buffer.
+ * @return Pointer address to the new buffer wrapper instance.
+ */
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileBuffer_create(JNIEnv *env, jclass,
+                                                                jlong device_pointer, jlong size,
+                                                                jboolean register_buffer) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto *buffer =
+        new cufile_buffer(reinterpret_cast<void *>(device_pointer), size, register_buffer);
+    return reinterpret_cast<jlong>(buffer);
+  }
+  CATCH_STD(env, 0);
+}
+
+/**
+ * @brief Destroy the given cuFile buffer wrapper.
+ *
+ * @param env The JNI environment.
+ * @param pointer Pointer address to the buffer wrapper instance.
+ */
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileBuffer_destroy(JNIEnv *env, jclass,
+                                                                jlong pointer) {
+  try {
+    cudf::jni::auto_set_device(env);
+    delete reinterpret_cast<cufile_buffer *>(pointer);
+  }
+  CATCH_STD(env, );
+}
+
+/**
+ * @brief Create a new cuFile file handle wrapper for reading.
+ *
+ * @param env The JNI environment.
+ * @param path The file path to read from.
+ * @return Pointer address to the new file handle wrapper instance.
+ */
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileReadHandle_create(JNIEnv *env, jclass,
+                                                                    jstring path) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto file = cufile_file::make_reader(env->GetStringUTFChars(path, nullptr));
+    return reinterpret_cast<jlong>(file.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+/**
+ * @brief Read the content into the specified buffer.
+ *
+ * @param env The JNI environment.
+ * @param file Pointer to the cuFile file object.
+ * @param file_offset The file offset from which to read.
+ * @param buffer Pointer to the cuFile buffer object.
+ */
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileReadHandle_readIntoBuffer(JNIEnv *env, jclass,
+                                                                           jlong file,
+                                                                           jlong file_offset,
+                                                                           jlong buffer) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto *file_ptr = reinterpret_cast<cufile_file *>(file);
+    auto *buffer_ptr = reinterpret_cast<cufile_buffer *>(buffer);
+    file_ptr->read(*buffer_ptr, file_offset);
+  }
+  CATCH_STD(env, );
+}
+
+/**
+ * @brief Create a new cuFile file handle wrapper for writing.
+ *
+ * @param env The JNI environment.
+ * @param path The file path to write to.
+ * @return Pointer address to the new file handle wrapper instance.
+ */
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFileWriteHandle_create(JNIEnv *env, jclass,
+                                                                     jstring path) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto file = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
+    return reinterpret_cast<jlong>(file.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+/**
+ * @brief Write the content of the specified buffer into the file.
+ *
+ * @param env The JNI environment.
+ * @param file Pointer to the cuFile file object.
+ * @param file_offset The file offset from which to write.
+ * @param buffer Pointer to the cuFile buffer object.
+ * @param size Number of bytes to write.
+ */
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileWriteHandle_writeFromBuffer(
+    JNIEnv *env, jclass, jlong file, jlong file_offset, jlong buffer, jlong size) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto *file_ptr = reinterpret_cast<cufile_file *>(file);
+    auto *buffer_ptr = reinterpret_cast<cufile_buffer *>(buffer);
+    file_ptr->write(*buffer_ptr, size, file_offset);
+  }
+  CATCH_STD(env, );
+}
+
+/**
+ * @brief Append the content of the specified buffer into the file.
+ *
+ * @param env The JNI environment.
+ * @param file Pointer to the cuFile file object.
+ * @param buffer Pointer to the cuFile buffer object.
+ * @param size Number of bytes to append
+ * @return The file offset from which the buffer was appended.
+ */
+JNIEXPORT long JNICALL Java_ai_rapids_cudf_CuFileWriteHandle_appendFromBuffer(JNIEnv *env, jclass,
+                                                                              jlong file,
+                                                                              jlong buffer,
+                                                                              jlong size) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto *file_ptr = reinterpret_cast<cufile_file *>(file);
+    auto *buffer_ptr = reinterpret_cast<cufile_buffer *>(buffer);
+    return file_ptr->append(*buffer_ptr, size);
+  }
+  CATCH_STD(env, -1);
+}
+
+/**
+ * @brief Destroy the given cuFile file handle wrapper.
+ *
+ * @param env The JNI environment.
+ * @param pointer Pointer address to the file handle wrapper instance.
+ */
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFileHandle_destroy(JNIEnv *env, jclass,
+                                                                jlong pointer) {
+  try {
+    cudf::jni::auto_set_device(env);
+    delete reinterpret_cast<cufile_file *>(pointer);
   }
   CATCH_STD(env, );
 }
@@ -310,15 +459,16 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_destroyDriver(JNIEnv *env, jcl
  * @param path Absolute path of the file to copy the buffer to.
  * @param file_offset The file offset from which the buffer was written.
  * @param device_pointer Pointer address to the device buffer.
- * @param size The size of the device buffer.
+ * @param size Number of bytes to write.
  */
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_writeToFile(JNIEnv *env, jclass, jstring path,
                                                               jlong file_offset,
                                                               jlong device_pointer, jlong size) {
   try {
+    cudf::jni::auto_set_device(env);
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
     auto writer = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
-    writer->write(buffer, file_offset);
+    writer->write(buffer, size, file_offset);
   }
   CATCH_STD(env, );
 }
@@ -329,14 +479,16 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_writeToFile(JNIEnv *env, jclas
  * @param env The JNI environment.
  * @param path Absolute path of the file to copy the buffer to.
  * @param device_pointer Pointer address to the device buffer.
- * @param size The size of the device buffer.
+ * @param size Number of bytes to append.
+ * @return The file offset from which the buffer was appended.
  */
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_appendToFile(JNIEnv *env, jclass, jstring path,
                                                                 jlong device_pointer, jlong size) {
   try {
+    cudf::jni::auto_set_device(env);
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
     auto writer = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
-    return writer->append(buffer);
+    return writer->append(buffer, size);
   }
   CATCH_STD(env, -1);
 }
@@ -354,6 +506,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_readFromFile(JNIEnv *env, jcla
                                                                jlong device_pointer, jlong size,
                                                                jstring path, jlong file_offset) {
   try {
+    cudf::jni::auto_set_device(env);
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
     auto const reader = cufile_file::make_reader(env->GetStringUTFChars(path, nullptr));
     reader->read(buffer, file_offset);

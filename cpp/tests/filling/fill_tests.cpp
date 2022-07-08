@@ -68,7 +68,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     }
     using ScalarType = cudf::scalar_type_t<T>;
     static_cast<ScalarType*>(p_val.get())->set_value(value);
-    static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
+    static_cast<ScalarType*>(p_val.get())->set_valid_async(value_is_valid);
 
     auto expected_elements =
       cudf::detail::make_counting_transform_iterator(0, [begin, end, value](auto i) {
@@ -95,7 +95,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(FillTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(FillTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FillTypedTestFixture, SetSingle)
 {
@@ -189,7 +189,7 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
 
     auto p_val       = cudf::make_string_scalar(value);
     using ScalarType = cudf::scalar_type_t<cudf::string_view>;
-    static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
+    static_cast<ScalarType*>(p_val.get())->set_valid_async(value_is_valid);
 
     auto p_chars   = value.c_str();
     auto num_chars = value.length();
@@ -285,7 +285,7 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall)
   using T_int      = cudf::id_to_type<cudf::type_id::INT32>;
   using ScalarType = cudf::scalar_type_t<T_int>;
   static_cast<ScalarType*>(p_val_int.get())->set_value(5);
-  static_cast<ScalarType*>(p_val_int.get())->set_valid(false);
+  static_cast<ScalarType*>(p_val_int.get())->set_valid_async(false);
 
   auto destination = cudf::test::fixed_width_column_wrapper<int32_t>(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);
@@ -361,6 +361,49 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 
   EXPECT_THROW(cudf::fill_in_place(destination_view, 0, 10, *p_val), cudf::logic_error);
   EXPECT_THROW(auto p_ret = cudf::fill(destination, 0, 10, *p_val), cudf::logic_error);
+}
+
+template <typename T>
+class FixedPointAllReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_SUITE(FixedPointAllReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointAllReps, OutOfPlaceFill)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{4104, 42, 1729, 55}, scale};
+    auto const expected = fp_wrapper{{42, 42, 42, 42}, scale};
+    auto const scalar   = cudf::make_fixed_point_scalar<decimalXX>(42, scale);
+
+    auto const result = cudf::fill(column, 0, 4, *scalar);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
+  }
+}
+
+TYPED_TEST(FixedPointAllReps, InPlaceFill)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{i};
+    auto column         = fp_wrapper{{4104, 42, 1729, 55}, scale};
+    auto const expected = fp_wrapper{{42, 42, 42, 42}, scale};
+    auto const scalar   = cudf::make_fixed_point_scalar<decimalXX>(42, scale);
+
+    auto mut_column = cudf::mutable_column_view{column};
+    cudf::fill_in_place(mut_column, 0, 4, *scalar);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(column, expected);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

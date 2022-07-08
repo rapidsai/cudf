@@ -147,7 +147,7 @@ template <typename T>
 struct ExceptionCasesBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {
 };
 
-TYPED_TEST_CASE(ExceptionCasesBinTestFixture, NumericTypesNotBool);
+TYPED_TEST_SUITE(ExceptionCasesBinTestFixture, NumericTypesNotBool);
 
 // Empty input must return an empty output.
 TYPED_TEST(ExceptionCasesBinTestFixture, TestEmptyInput)
@@ -179,7 +179,7 @@ template <typename T>
 struct NaNBinTestFixture : public GenericExceptionCasesBinTestFixture<T> {
 };
 
-TYPED_TEST_CASE(NaNBinTestFixture, FloatingPointTypes);
+TYPED_TEST_SUITE(NaNBinTestFixture, FloatingPointTypes);
 
 TYPED_TEST(NaNBinTestFixture, TestNaN)
 {
@@ -208,7 +208,7 @@ struct BoundaryExclusionBinTestFixture : public BinTestFixture {
   }
 };
 
-TYPED_TEST_CASE(BoundaryExclusionBinTestFixture, NumericTypesNotBool);
+TYPED_TEST_SUITE(BoundaryExclusionBinTestFixture, NumericTypesNotBool);
 
 // Boundary points when both bounds are excluded should be labeled null.
 TYPED_TEST(BoundaryExclusionBinTestFixture, TestNoIncludes)
@@ -301,7 +301,7 @@ struct RealDataBinTestFixture : public BinTestFixture {
   }
 };
 
-TYPED_TEST_CASE(RealDataBinTestFixture, NumericTypesNotBool);
+TYPED_TEST_SUITE(RealDataBinTestFixture, NumericTypesNotBool);
 
 TYPED_TEST(RealDataBinTestFixture, TestRealData256) { this->test(256); };
 TYPED_TEST(RealDataBinTestFixture, TestRealData512) { this->test(512); };
@@ -317,7 +317,7 @@ struct NegativeNumbersBinTestFixture : public RealDataBinTestFixture<T> {
   }
 };
 
-TYPED_TEST_CASE(NegativeNumbersBinTestFixture, SignedNumericTypesNotBool);
+TYPED_TEST_SUITE(NegativeNumbersBinTestFixture, SignedNumericTypesNotBool);
 
 TYPED_TEST(NegativeNumbersBinTestFixture, TestNegativeNumbers256) { this->test(256); };
 TYPED_TEST(NegativeNumbersBinTestFixture, TestNegativeNumbers512) { this->test(512); };
@@ -331,7 +331,7 @@ template <typename T>
 struct FixedPointBinTestFixture : public BinTestFixture {
 };
 
-TYPED_TEST_CASE(FixedPointBinTestFixture, FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointBinTestFixture, FixedPointTypes);
 
 TYPED_TEST(FixedPointBinTestFixture, TestFixedPointData)
 {

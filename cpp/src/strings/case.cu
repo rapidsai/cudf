@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <strings/char_types/char_cases.h>
 #include <strings/char_types/is_flags.h>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,13 +24,13 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/case.hpp>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/utf8.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <strings/utilities.cuh>
-#include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -125,7 +126,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return detail::make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -138,16 +139,13 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
                          get_special_case_mapping_table()};
 
   // this utility calls the functor to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
-    functor, strings.size(), strings.null_count(), stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(functor, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),
                              std::move(children.second),
                              strings.null_count(),
-                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 }  // namespace
@@ -190,21 +188,21 @@ std::unique_ptr<column> to_lower(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_lower(strings, rmm::cuda_stream_default, mr);
+  return detail::to_lower(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> to_upper(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_upper(strings, rmm::cuda_stream_default, mr);
+  return detail::to_upper(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> swapcase(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::swapcase(strings, rmm::cuda_stream_default, mr);
+  return detail::swapcase(strings, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 import os
 import shutil
 import sysconfig
@@ -12,6 +12,8 @@ from setuptools.extension import Extension
 import versioneer
 
 install_requires = ["cudf", "cython"]
+
+extras_require = {"test": ["pytest", "pytest-xdist"]}
 
 cython_files = ["cudf_kafka/_lib/*.pyx"]
 
@@ -32,7 +34,14 @@ if not os.path.isdir(CUDA_HOME):
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
 
-CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
+CUDF_ROOT = os.environ.get(
+    "CUDF_ROOT",
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "../../cpp/build/"
+        )
+    ),
+)
 CUDF_KAFKA_ROOT = os.environ.get(
     "CUDF_KAFKA_ROOT", "../../libcudf_kafka/build"
 )
@@ -47,14 +56,16 @@ extensions = [
         "*",
         sources=cython_files,
         include_dirs=[
-            "../../cpp/include/cudf",
-            "../../cpp/include",
-            "../../cpp/libcudf_kafka/include/cudf_kafka",
+            os.path.abspath(os.path.join(CUDF_ROOT, "../include/cudf")),
+            os.path.abspath(os.path.join(CUDF_ROOT, "../include")),
+            os.path.abspath(
+                os.path.join(CUDF_ROOT, "../libcudf_kafka/include/cudf_kafka")
+            ),
             os.path.join(CUDF_ROOT, "include"),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
             os.path.join(
                 os.path.dirname(sysconfig.get_path("include")),
-                "libcudf/libcudacxx",
+                "rapids/libcudacxx",
             ),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
@@ -63,7 +74,7 @@ extensions = [
         library_dirs=([get_python_lib(), os.path.join(os.sys.prefix, "lib")]),
         libraries=["cudf", "cudf_kafka"],
         language="c++",
-        extra_compile_args=["-std=c++14"],
+        extra_compile_args=["-std=c++17"],
     )
 ]
 
@@ -81,11 +92,10 @@ setup(
         "Topic :: Apache Kafka",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     # Include the separately-compiled shared library
-    setup_requires=["cython"],
     ext_modules=cythonize(
         extensions,
         nthreads=nthreads,
@@ -95,9 +105,11 @@ setup(
     ),
     packages=find_packages(include=["cudf_kafka", "cudf_kafka.*"]),
     package_data=dict.fromkeys(
-        find_packages(include=["cudf_kafka._lib*"]), ["*.pxd"],
+        find_packages(include=["cudf_kafka._lib*"]),
+        ["*.pxd"],
     ),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
+    extras_require=extras_require,
     zip_safe=False,
 )

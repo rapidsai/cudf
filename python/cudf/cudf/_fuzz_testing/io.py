@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import copy
 import json
@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 
 
-class IOFuzz(object):
+class IOFuzz:
     def __init__(
         self,
         dirs=None,
@@ -25,6 +25,9 @@ class IOFuzz(object):
         max_string_length=None,
         max_lists_length=None,
         max_lists_nesting_depth=None,
+        max_structs_nesting_depth=None,
+        max_struct_null_frequency=None,
+        max_struct_types_at_each_level=None,
     ):
         dirs = [] if dirs is None else dirs
         self._inputs = []
@@ -33,6 +36,9 @@ class IOFuzz(object):
         self._max_string_length = max_string_length
         self._max_lists_length = max_lists_length
         self._max_lists_nesting_depth = max_lists_nesting_depth
+        self._max_structs_nesting_depth = max_structs_nesting_depth
+        self._max_struct_null_frequency = max_struct_null_frequency
+        self._max_struct_types_at_each_level = max_struct_types_at_each_level
 
         for i, path in enumerate(dirs):
             if i == 0 and not os.path.exists(path):
@@ -47,13 +53,13 @@ class IOFuzz(object):
                         "_crash.json"
                     ):
                         self._load_params(file_name)
-        self._regression = True if self._inputs else False
+        self._regression = bool(self._inputs)
         self._idx = 0
         self._current_params = {}
         self._current_buffer = None
 
     def _load_params(self, path):
-        with open(path, "r") as f:
+        with open(path) as f:
             params = json.load(f)
         self._inputs.append(params)
 

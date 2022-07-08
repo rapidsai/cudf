@@ -1,15 +1,15 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 from itertools import product
 from math import floor
 
 import numpy as np
-import cudf
 import pandas as pd
 import pytest
 
+import cudf
 from cudf import Series
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
 def test_series_map_basic():
@@ -37,8 +37,8 @@ def test_series_map_callable_numeric_basic():
     gd2 = cudf.Series([1, 2, 3, 4, np.nan])
     pdf2 = gd2.to_pandas()
 
-    expected_function = pdf2.map(lambda x: x ** 2)
-    actual_function = gd2.map(lambda x: x ** 2)
+    expected_function = pdf2.map(lambda x: x**2)
+    actual_function = gd2.map(lambda x: x**2)
 
     assert_eq(expected_function, actual_function)
 

@@ -23,6 +23,8 @@
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
 
+#include <tests/binaryop/util/runtime_support.h>
+
 namespace cudf {
 namespace test {
 namespace binop {
@@ -52,6 +54,12 @@ struct BinaryOperationNullTest : public BinaryOperationTest {
       default: CUDF_FAIL("Unknown mask state " + std::to_string(static_cast<int64_t>(state)));
     }
   }
+
+ protected:
+  void SetUp() override
+  {
+    if (!can_do_runtime_jit()) { GTEST_SKIP() << "Skipping tests that require 11.5 runtime"; }
+  }
 };  // namespace binop
 
 TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_Valid)
@@ -63,7 +71,7 @@ TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_Valid)
   using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
-  lhs.set_valid(false);
+  lhs.set_valid_async(false);
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::ALL_VALID);
 
   auto out =
@@ -98,7 +106,7 @@ TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_NonNullable)
   using ADD = cudf::library::operation::Add<TypeOut, TypeLhs, TypeRhs>;
 
   auto lhs = make_random_wrapped_scalar<TypeLhs>();
-  lhs.set_valid(false);
+  lhs.set_valid_async(false);
   auto rhs = make_random_wrapped_column<TypeRhs>(100, mask_state::UNALLOCATED);
 
   auto out =

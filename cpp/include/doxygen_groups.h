@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,11 +122,13 @@
  *   @defgroup strings_combine Combining
  *   @defgroup strings_contains Searching
  *   @defgroup strings_convert Converting
+ *   @defgroup strings_copy Copying
  *   @defgroup strings_substring Substring
  *   @defgroup strings_find Finding
  *   @defgroup strings_modify Modifying
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
+ *   @defgroup strings_json JSON
  * @}
  * @defgroup dictionary_apis Dictionary
  * @{
@@ -142,7 +144,9 @@
  * @}
  * @defgroup lists_apis Lists
  * @{
+ *   @defgroup lists_combine Combining
  *   @defgroup lists_extract Extracting
+ *   @defgroup lists_filling Filling
  *   @defgroup lists_contains Searching
  *   @defgroup lists_gather Gathering
  *   @defgroup lists_elements Counting

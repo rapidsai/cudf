@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
 
 #include <memory>
@@ -40,7 +41,7 @@ namespace cudf {
  *
  * @param input         An immutable view of the input column to transform
  * @param unary_udf     The PTX/CUDA string of the unary function to apply
- * @param outout_type   The output type that is compatible with the output type in the UDF
+ * @param output_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              The column resulting from applying the unary function to
@@ -60,12 +61,30 @@ std::unique_ptr<column> transform(
  * @throws cudf::logic_error if `input.type()` is a non-floating type
  *
  * @param input         An immutable view of the input column of floating-point type
- * @param mr            Device memory resource used to allocate the returned bitmask.
+ * @param mr            Device memory resource used to allocate the returned bitmask
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count obtained by replacing `NaN` in `input` with null.
  */
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
   column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Compute a new column by evaluating an expression tree on a table.
+ *
+ * This evaluates an expression over a table to produce a new column. Also called an n-ary
+ * transform.
+ *
+ * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
+ *
+ * @param table The table used for expression evaluation
+ * @param expr The root of the expression tree
+ * @param mr Device memory resource
+ * @return std::unique_ptr<column> Output column
+ */
+std::unique_ptr<column> compute_column(
+  table_view const& table,
+  ast::expression const& expr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -77,8 +96,8 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  *
  * @throws cudf::logic_error if `input.type()` is a non-boolean type
  *
- * @param input        Boolean elements to convert to a bitmask.
- * @param mr           Device memory resource used to allocate the returned bitmask.
+ * @param input        Boolean elements to convert to a bitmask
+ * @param mr           Device memory resource used to allocate the returned bitmask
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count obtained from input considering `true` represent `valid`/`1` and
  * `false` represent `invalid`/`0`.
@@ -116,6 +135,38 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Encodes `input` by generating a new column for each value in `categories` indicating the
+ * presence of that value in `input`.
+ *
+ * The resulting per-category columns are returned concatenated as a single column viewed by a
+ * `table_view`.
+ *
+ * The `i`th row of the `j`th column in the output table equals 1
+ * if `input[i] == categories[j]`, and 0 otherwise.
+ *
+ * The `i`th row of the `j`th column in the output table equals 1
+ * if input[i] == categories[j], and 0 otherwise.
+ *
+ * Examples:
+ * @code{.pseudo}
+ * input: [{'a', 'c', null, 'c', 'b'}]
+ * categories: ['c', null]
+ * output: [{0, 1, 0, 1, 0}, {0, 0, 1, 0, 0}]
+ * @endcode
+ *
+ * @throws cudf::logic_error if input and categories are of different types.
+ *
+ * @param input Column containing values to be encoded
+ * @param categories Column containing categories
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return A pair containing the owner to all encoded data and a table view into the data
+ */
+std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
+  column_view const& input,
+  column_view const& categories,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Creates a boolean column from given bitmask.
  *
  * Returns a `bool` for each bit in `[begin_bit, end_bit)`. If bit `i` in least-significant bit
@@ -133,13 +184,42 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
  * @param bitmask A device pointer to the bitmask which needs to be converted
  * @param begin_bit position of the bit from which the conversion should start
  * @param end_bit position of the bit before which the conversion should stop
- * @param mr Device memory resource used to allocate the returned columns's device memory
- * @return A boolean column representing the given mask from [begin_bit, end_bit).
+ * @param mr Device memory resource used to allocate the returned columns' device memory
+ * @return A boolean column representing the given mask from [begin_bit, end_bit)
  */
 std::unique_ptr<column> mask_to_bools(
   bitmask_type const* bitmask,
   size_type begin_bit,
   size_type end_bit,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns an approximate cumulative size in bits of all columns in the `table_view` for
+ * each row.
+ *
+ * This function counts bits instead of bytes to account for the null mask which only has one
+ * bit per row.
+ *
+ * Each row in the returned column is the sum of the per-row size for each column in
+ * the table.
+ *
+ * In some cases, this is an inexact approximation. Specifically, columns of lists and strings
+ * require N+1 offsets to represent N rows. It is up to the caller to calculate the small
+ * additional overhead of the terminating offset for any group of rows being considered.
+ *
+ * This function returns the per-row sizes as the columns are currently formed. This can
+ * end up being larger than the number you would get by gathering the rows. Specifically,
+ * the push-down of struct column validity masks can nullify rows that contain data for
+ * string or list columns. In these cases, the size returned is conservative:
+ *
+ * row_bit_count(column(x)) >= row_bit_count(gather(column(x)))
+ *
+ * @param t The table view to perform the computation on
+ * @param mr Device memory resource used to allocate the returned columns' device memory
+ * @return A 32-bit integer column containing the per-row bit counts
+ */
+std::unique_ptr<column> row_bit_count(
+  table_view const& t,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
