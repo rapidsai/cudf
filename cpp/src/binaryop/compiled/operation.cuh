@@ -221,7 +221,7 @@ struct IntPow {
     typename TypeLhs,
     typename TypeRhs,
     std::enable_if_t<(std::is_integral_v<TypeLhs> and std::is_integral_v<TypeRhs>)>* = nullptr>
-  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> int
+  __device__ inline auto operator()(TypeLhs x, TypeRhs y) -> TypeLhs
   {
     if (y < 0) {
       // Integer exponentiation with negative exponent is not possible.
