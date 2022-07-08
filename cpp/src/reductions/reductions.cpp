@@ -192,7 +192,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
 std::unique_ptr<scalar> reduce(column_view const& col,
                                std::unique_ptr<reduce_aggregation> const& agg,
                                data_type output_dtype,
-                               scalar const& init,
+                               std::optional<std::reference_wrapper<scalar const>> init,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();

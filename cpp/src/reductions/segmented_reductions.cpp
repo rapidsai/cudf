@@ -142,7 +142,7 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          segmented_reduce_aggregation const& agg,
                                          data_type output_dtype,
                                          null_policy null_handling,
-                                         scalar const& init,
+                                         std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();

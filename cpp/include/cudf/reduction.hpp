@@ -87,7 +87,7 @@ std::unique_ptr<scalar> reduce(
   column_view const& col,
   std::unique_ptr<reduce_aggregation> const& agg,
   data_type output_dtype,
-  scalar const& init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -161,7 +161,7 @@ std::unique_ptr<column> segmented_reduce(
   segmented_reduce_aggregation const& agg,
   data_type output_dtype,
   null_policy null_handling,
-  scalar const& init,
+  std::optional<std::reference_wrapper<scalar const>> init,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
