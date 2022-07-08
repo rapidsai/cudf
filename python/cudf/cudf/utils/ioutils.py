@@ -93,15 +93,14 @@ path : string or path object
 Returns
 -------
 Total number of rows
-Number of row groups
 List of column names
 List of metadata of each row-group
 
 Examples
 --------
 >>> import cudf
->>> num_rows, num_row_groups, names, row_group_metadatas = cudf.io.read_parquet_metadata(filename)
->>> df = [cudf.read_parquet(fname, row_group=i) for i in range(row_groups)]
+>>> num_rows, names, row_group_metadatas = cudf.io.read_parquet_metadata(filename)
+>>> df = [cudf.read_parquet(fname, row_group=i) for i in range(len(row_group_metadatas))]
 >>> df = cudf.concat(df)
 >>> df
   num1                datetime text
