@@ -79,7 +79,6 @@
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 #include "jni_utils.hpp"
-#include "map_lookup.hpp"
 #include "maps_column_view.hpp"
 
 using cudf::jni::ptr_as_jlong;
