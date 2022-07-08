@@ -34,6 +34,8 @@ inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value
 
 template <typename OptionalIterator, typename DeviceComparator>
 struct device_comparison_functor {
+  // Explicit constructor definition required to avoid a "no instance of constructor" compilation
+  // error
   device_comparison_functor(OptionalIterator const optional_iter,
                             bool const is_lhs_scalar,
                             bool const is_rhs_scalar,
@@ -41,7 +43,9 @@ struct device_comparison_functor {
     : _optional_iter(optional_iter),
       _is_lhs_scalar(is_lhs_scalar),
       _is_rhs_scalar(is_rhs_scalar),
-      _comparator(comparator){};
+      _comparator(comparator)
+  {
+  }
 
   bool __device__ operator()(size_type i)
   {
