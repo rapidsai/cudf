@@ -62,7 +62,7 @@ dependencies:
   - sphinx-autobuild
   - myst-nb
   - scipy
-  - dask-cuda
+  - dask-cuda=22.08.*
   - mimesis<4.1
   - packaging
   - protobuf>=3.20.1,<3.21.0a0
