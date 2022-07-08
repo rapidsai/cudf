@@ -4097,17 +4097,34 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
-    @Test
-    void testExtractRe() {
-        try (ColumnVector input = ColumnVector.fromStrings("a1", "b2", "c3", null);
-             Table expected = new Table.TestBuilder()
-                     .column("a", "b", null, null)
-                     .column("1", "2", null, null)
-                     .build();
-             Table found = input.extractRe("([ab])(\\d)")) {
-            assertTablesAreEqual(expected, found);
-        }
+  @Test
+  void testExtractRe() {
+      try (ColumnVector input = ColumnVector.fromStrings("a1", "b2", "c3", null);
+            Table expected = new Table.TestBuilder()
+                    .column("a", "b", null, null)
+                    .column("1", "2", null, null)
+                    .build();
+            Table found = input.extractRe("([ab])(\\d)")) {
+          assertTablesAreEqual(expected, found);
+      }
+  }
+
+  @Test
+  void testExtractAllRecord() {
+    try (ColumnVector v = ColumnVector.fromStrings("a1", "b2", "c3", null, "a1b1c3a2");
+          ColumnVector expectedIdx0 = ColumnVector.fromLists(
+            new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.STRING)),
+            Arrays.asList("a1"),
+            Arrays.asList("b2"),
+            Arrays.asList(),
+            null,
+            Arrays.asList("a1", "b1", "a2"));
+          ColumnVector resultIdx0 = v.extractAllRecord("([ab])(\\d)", 0)
+    ) {
+      assertColumnsAreEqual(expectedIdx0, resultIdx0);
     }
+  }
 
   @Test
   void testMatchesRe() {

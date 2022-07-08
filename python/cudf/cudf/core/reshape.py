@@ -872,7 +872,7 @@ def _pivot(df, index, columns):
         if num_elements > 0:
             col = df._data[v]
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
-            target = cudf.core.frame.Frame(
+            target = cudf.DataFrame._from_data(
                 {
                     None: cudf.core.column.column_empty_like(
                         col, masked=True, newsize=nrows * ncols

@@ -1573,6 +1573,28 @@ def test_series_nunique_index(data):
     "data",
     [
         [],
+        [1, 2, 3, 4],
+        ["a", "b", "c"],
+        [1.2, 2.2, 4.5],
+        [np.nan, np.nan],
+        [None, None, None],
+    ],
+)
+def test_axes(data):
+    csr = cudf.Series(data)
+    psr = csr.to_pandas()
+
+    expected = psr.axes
+    actual = csr.axes
+
+    for e, a in zip(expected, actual):
+        assert_eq(e, a)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
         [0, 12, 14],
         [0, 14, 12, 12, 3, 10, 12, 14],
         np.random.randint(-100, 100, 200),
