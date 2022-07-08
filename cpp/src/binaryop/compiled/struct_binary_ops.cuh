@@ -32,10 +32,9 @@ namespace cudf::binops::compiled::detail {
 template <class T, class... Ts>
 inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value;
 
-template <typename DeviceComparator, class AdaptableUnaryFunction, class Iterator>
+template <typename OptionalIterator, typename DeviceComparator>
 struct device_comparison_functor {
-  using optional_iterator = thrust::transform_iterator<AdaptableUnaryFunction, Iterator>;
-  device_comparison_functor(optional_iterator const& optional_iter,
+  device_comparison_functor(OptionalIterator const optional_iter,
                             bool const is_lhs_scalar,
                             bool const is_rhs_scalar,
                             DeviceComparator const& comparator)
@@ -51,7 +50,7 @@ struct device_comparison_functor {
                        cudf::experimental::row::rhs_index_type{_is_rhs_scalar ? 0 : i});
   }
 
-  optional_iterator const _optional_iter;
+  OptionalIterator const _optional_iter;
   bool const _is_lhs_scalar;
   bool const _is_rhs_scalar;
   DeviceComparator const _comparator;
@@ -68,10 +67,10 @@ void apply_struct_binary_op(mutable_column_view& out,
                             PhysicalElementComparator comparator = {},
                             rmm::cuda_stream_view stream         = cudf::default_stream_value)
 {
-  auto const compare_orders   = std::vector<order>(lhs.size(),
-                                           is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual>
-                                               ? order::DESCENDING
-                                               : order::ASCENDING);
+  auto const compare_orders = std::vector<order>(
+    lhs.size(),
+    is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual> ? order::DESCENDING
+                                                              : order::ASCENDING);
   auto const tlhs             = table_view{{lhs}};
   auto const trhs             = table_view{{rhs}};
   auto const table_comparator = cudf::experimental::row::lexicographic::two_table_comparator{
@@ -89,8 +88,8 @@ void apply_struct_binary_op(mutable_column_view& out,
       device_comparison_functor{optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator});
   };
   is_any_v<BinaryOperator, ops::LessEqual, ops::GreaterEqual>
-    ? tabulate_device_operator(table_comparator.less_equivalent(nullate, comparator))
-    : tabulate_device_operator(table_comparator.less(nullate, comparator));
+    ? tabulate_device_operator(table_comparator.less_equivalent(comparator_nulls, comparator))
+    : tabulate_device_operator(table_comparator.less(comparator_nulls, comparator));
 }
 
 template <typename PhysicalEqualityComparator =
