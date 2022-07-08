@@ -19,6 +19,7 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/sorting.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 template <bool stable>
 class Sort : public cudf::benchmark {
@@ -41,7 +42,7 @@ static void BM_sort(benchmark::State& state, bool nulls)
   cudf::table_view input{*input_table};
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
 
     auto result = (stable) ? cudf::stable_sorted_order(input) : cudf::sorted_order(input);
   }

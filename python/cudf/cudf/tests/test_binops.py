@@ -593,6 +593,14 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     cd_frame["y"] = cd_frame["y"].astype(np.float64)
     utils.assert_eq(cd_frame, pd_frame)
 
+    pdf1 = pd.DataFrame({"x": [1, 1]}, index=["a", "a"])
+    pdf2 = pd.DataFrame({"x": [2]}, index=["a"])
+    gdf1 = cudf.DataFrame.from_pandas(pdf1)
+    gdf2 = cudf.DataFrame.from_pandas(pdf2)
+    pd_frame = binop(pdf1, pdf2)
+    cd_frame = binop(gdf1, gdf2)
+    utils.assert_eq(pd_frame, cd_frame)
+
 
 @pytest.mark.parametrize(
     "df2",
@@ -2961,4 +2969,15 @@ def test_binops_dot(df, other):
     expected = pdf @ host_other
     got = df @ other
 
+    utils.assert_eq(expected, got)
+
+
+def test_binop_series_with_repeated_index():
+    # GH: #11094
+    psr1 = pd.Series([1, 1], index=["a", "a"])
+    psr2 = pd.Series([1], index=["a"])
+    gsr1 = cudf.from_pandas(psr1)
+    gsr2 = cudf.from_pandas(psr2)
+    expected = psr1 - psr2
+    got = gsr1 - gsr2
     utils.assert_eq(expected, got)

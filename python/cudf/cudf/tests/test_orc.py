@@ -1729,3 +1729,32 @@ def test_orc_reader_zstd_compression(list_struct_buff):
         assert_eq(expected, got)
     except RuntimeError:
         pytest.mark.xfail(reason="zstd support is not enabled")
+
+
+def test_writer_protobuf_large_rowindexentry():
+    s = [
+        "Length of the two strings needs to add up to at least ~120",
+        "So that the encoded statistics are larger than 128 bytes",
+    ] * 5001  # generate more than 10K rows to have two row groups
+    df = cudf.DataFrame({"s1": s})
+
+    buff = BytesIO()
+    df.to_orc(buff)
+
+    got = cudf.read_orc(buff)
+    assert_frame_equal(df, got)
+
+
+def test_orc_writer_zlib_compression(list_struct_buff):
+    expected = cudf.read_orc(list_struct_buff)
+    try:
+        # save with ZLIB compression
+        buff = BytesIO()
+        expected.to_orc(buff, compression="ZLIB")
+        got = cudf.read_orc(buff)
+        assert_eq(expected, got)
+    except RuntimeError as e:
+        if "Unsupported compression type" in str(e):
+            pytest.mark.xfail(reason="nvcomp build doesn't have deflate")
+        else:
+            raise e

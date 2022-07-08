@@ -14,7 +14,7 @@ LANG=C.UTF-8
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
-FORMAT_FILE_URL=https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.06/cmake-format-rapids-cmake.json
+FORMAT_FILE_URL=https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-22.08/cmake-format-rapids-cmake.json
 export RAPIDS_CMAKE_FORMAT_FILE=/tmp/rapids_cmake_ci/cmake-formats-rapids-cmake.json
 mkdir -p $(dirname ${RAPIDS_CMAKE_FORMAT_FILE})
 wget -O ${RAPIDS_CMAKE_FORMAT_FILE} ${FORMAT_FILE_URL}
@@ -55,7 +55,7 @@ HEADER_META_RETVAL=$?
 echo -e "$HEADER_META"
 
 RETVALS=(
-  $CR_RETVAL $PRE_COMMIT_RETVAL $CLANG_FORMAT_RETVAL
+  $CR_RETVAL $PRE_COMMIT_RETVAL $CLANG_FORMAT_RETVAL $HEADER_META_RETVAL
 )
 IFS=$'\n'
 RETVAL=`echo "${RETVALS[*]}" | sort -nr | head -n1`

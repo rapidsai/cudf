@@ -198,7 +198,7 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
 
-  return detail::json::read_json(datasources, options, rmm::cuda_stream_default, mr);
+  return detail::json::read_json(datasources, options, cudf::default_stream_value, mr);
 }
 
 table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
@@ -216,7 +216,7 @@ table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_
   return cudf::io::detail::csv::read_csv(  //
     std::move(datasources[0]),
     options,
-    rmm::cuda_stream_default,
+    cudf::default_stream_value,
     mr);
 }
 
@@ -233,7 +233,7 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
     options.get_table(),
     options.get_metadata(),
     options,
-    rmm::cuda_stream_default,
+    cudf::default_stream_value,
     mr);
 }
 
@@ -241,7 +241,7 @@ namespace detail_orc = cudf::io::detail::orc;
 
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
-  auto stream = rmm::cuda_stream_default;
+  auto stream = cudf::default_stream_value;
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
   if (src_info.type() == io_type::FILEPATH) {

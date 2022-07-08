@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 22.06.00
+  VERSION 22.08.00
   LANGUAGES C CXX CUDA
 )
 
@@ -54,8 +54,6 @@ option(
          stream to external libraries."
   OFF
 )
-option(PER_THREAD_DEFAULT_STREAM "[DEPRECATED] Build with per-thread default stream" OFF)
-mark_as_advanced(FORCE, PER_THREAD_DEFAULT_STREAM)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
@@ -65,16 +63,6 @@ option(CUDA_ENABLE_LINEINFO
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
-# PER_THREAD_DEFAULT_STREAM will be replaced with CUDF_USE_PER_THREAD_DEFAULT_STREAM
-if(PER_THREAD_DEFAULT_STREAM)
-  set(CUDF_USE_PER_THREAD_DEFAULT_STREAM ON)
-  message(
-    DEPRECATION
-      "CUDF: PER_THREAD_DEFAULT_STREAM is deprecated, and will be removed in a future release,
-        please use CUDF_USE_PER_THREAD_DEFAULT_STREAM instead."
-  )
-endif()
-
 message(VERBOSE "CUDF: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE "CUDF: Configure CMake to build (google & nvbench) benchmarks: ${BUILD_BENCHMARKS}")
@@ -82,7 +70,7 @@ message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
 message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
-message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_PER_THREAD_DEFAULT_STREAM}")
+message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
@@ -164,7 +152,8 @@ include(cmake/thirdparty/get_arrow.cmake)
 # find dlpack
 include(cmake/thirdparty/get_dlpack.cmake)
 # find libcu++
-include(cmake/thirdparty/get_libcudacxx.cmake)
+include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
+rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
 # find cuCollections Should come after including thrust and libcudacxx
 include(cmake/thirdparty/get_cucollections.cmake)
 # find or install GoogleTest
@@ -180,7 +169,7 @@ include(cmake/thirdparty/get_kvikio.cmake)
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies cuco KvikIO ZLIB nvcomp)
+  list(APPEND dependencies KvikIO ZLIB nvcomp)
   if(TARGET cufile::cuFile_interface)
     list(APPEND dependencies cuFile)
   endif()
@@ -443,10 +432,13 @@ add_library(
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
   src/rolling/rolling_collect_list.cu
+  src/rolling/rolling_detail_fixed_window.cu
+  src/rolling/rolling_detail_variable_window.cu
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
   src/search/contains.cu
+  src/search/contains_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
   src/sort/rank.cu
@@ -458,6 +450,7 @@ add_library(
   src/stream_compaction/apply_boolean_mask.cu
   src/stream_compaction/distinct.cu
   src/stream_compaction/distinct_count.cu
+  src/stream_compaction/distinct_reduce.cu
   src/stream_compaction/drop_nans.cu
   src/stream_compaction/drop_nulls.cu
   src/stream_compaction/unique.cu
@@ -515,7 +508,6 @@ add_library(
   src/strings/utilities.cu
   src/strings/wrap.cu
   src/structs/copying/concatenate.cu
-  src/structs/search/contains.cu
   src/structs/structs_column_factories.cu
   src/structs/structs_column_view.cpp
   src/structs/utilities.cpp
@@ -753,7 +745,7 @@ install(
 )
 
 install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+                  ${CUDF_SOURCE_DIR}/include/nvtext DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 install(

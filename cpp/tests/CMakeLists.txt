@@ -310,6 +310,7 @@ ConfigureTest(TRANSPOSE_TEST transpose/transpose_test.cpp)
 # * table tests -----------------------------------------------------------------------------------
 ConfigureTest(
   TABLE_TEST table/table_tests.cpp table/table_view_tests.cu table/row_operators_tests.cpp
+  table/experimental_row_operator_tests.cu
 )
 
 # ##################################################################################################
@@ -339,6 +340,7 @@ ConfigureTest(
   rolling/empty_input_test.cpp
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
+  rolling/nth_element_test.cpp
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
   rolling/rolling_test.cpp

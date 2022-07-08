@@ -21,6 +21,7 @@
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <nvtext/normalize.hpp>
 
@@ -38,7 +39,7 @@ static void BM_normalize(benchmark::State& state)
   cudf::strings_column_view input(table->view().column(0));
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+    cuda_event_timer raii(state, true, cudf::default_stream_value);
     nvtext::normalize_spaces(input);
   }
 
