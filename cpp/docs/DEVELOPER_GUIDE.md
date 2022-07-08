@@ -177,7 +177,7 @@ and produce `unique_ptr`s to owning objects as output. For example,
 std::unique_ptr<table> sort(table_view const& input);
 ```
 
-## `rmm::device_memory_resource`<a name="memory_resource"></a>
+## `rmm::device_memory_resource`
 
 libcudf allocates all device memory via RMM memory resources (MR). See the
 [RMM documentation](https://github.com/rapidsai/rmm/blob/main/README.md) for details.
