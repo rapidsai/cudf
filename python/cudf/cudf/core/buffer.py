@@ -78,7 +78,7 @@ class Buffer(Serializable):
     """
 
     _lock: RLock
-    _ptr: Optional[int]  # Guarded by `_lock`
+    _ptr: int  # Guarded by `_lock`
     _ptr_desc: dict  # Guarded by `_lock`
     _ptr_exposed: bool  # Guarded by `_lock`
     _size: int  # read-only
@@ -118,7 +118,7 @@ class Buffer(Serializable):
                     self._view_desc = {"base": data, "offset": 0}
                 else:
                     self._view_desc = data._view_desc.copy()
-                self._ptr = None
+                self._ptr = 0
                 self._owner = None
         elif isinstance(data, rmm.DeviceBuffer):
             self._ptr = data.ptr
@@ -134,7 +134,7 @@ class Buffer(Serializable):
             else:
                 # Create an already spilled Buffer
                 self._ptr_desc = {"type": "cpu", "memoryview": data}
-                self._ptr = None
+                self._ptr = 0
                 self._size = data.nbytes
                 self._owner = None
         elif isinstance(data, int):
@@ -228,7 +228,7 @@ class Buffer(Serializable):
                 host_mem = memoryview(bytearray(self.size))
                 rmm._lib.device_buffer.copy_ptr_to_host(self._ptr, host_mem)
                 self._ptr_desc["memoryview"] = host_mem
-                self._ptr = None
+                self._ptr = 0
                 self._owner = None
             elif (ptr_type, target) == ("cpu", "gpu"):
                 dev_mem = rmm.DeviceBuffer.to_device(
@@ -259,7 +259,6 @@ class Buffer(Serializable):
             self.move_inplace(target="gpu")
             self._ptr_exposed = True
             self._last_accessed = time.monotonic()
-            assert self._ptr is not None
             return self._ptr
 
     @property
@@ -370,7 +369,6 @@ class Buffer(Serializable):
                 ]
             else:
                 assert base._ptr_desc["type"] == "gpu"
-                assert base._ptr is not None
                 ret = memoryview(bytearray(self.size))
                 rmm._lib.device_buffer.copy_ptr_to_host(
                     base._ptr + offset, ret
@@ -394,7 +392,7 @@ class Buffer(Serializable):
 
     def __repr__(self) -> str:
         if self._view_desc is None:
-            if self._ptr is None:
+            if self._ptr_desc["type"] != "gpu":
                 ptr_info = str(self._ptr_desc)
             else:
                 ptr_info = str(hex(self._ptr))
