@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/char_types/char_types_enum.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {
@@ -26,46 +27,6 @@ namespace strings {
  * @{
  * @file
  */
-
-/**
- * @brief Character type values.
- * These types can be or'd to check for any combination of types.
- *
- * This cannot be turned into an enum class because or'd entries can
- * result in values that are not in the class. For example,
- * combining NUMERIC|SPACE is a valid, reasonable combination but
- * does not match to any explicitly named enumerator.
- */
-enum string_character_types : uint32_t {
-  DECIMAL    = 1 << 0,                             ///< all decimal characters
-  NUMERIC    = 1 << 1,                             ///< all numeric characters
-  DIGIT      = 1 << 2,                             ///< all digit characters
-  ALPHA      = 1 << 3,                             ///< all alphabetic characters
-  SPACE      = 1 << 4,                             ///< all space characters
-  UPPER      = 1 << 5,                             ///< all upper case characters
-  LOWER      = 1 << 6,                             ///< all lower case characters
-  ALPHANUM   = DECIMAL | NUMERIC | DIGIT | ALPHA,  ///< all alphanumeric characters
-  CASE_TYPES = UPPER | LOWER,                      ///< all case-able characters
-  ALL_TYPES  = ALPHANUM | CASE_TYPES | SPACE       ///< all character types
-};
-
-/**
- * @brief OR operator for combining string_character_types
- *
- * @param lhs left-hand side of OR operation
- * @param rhs right-hand side of OR operation
- * @return combined string_character_types
- */
-string_character_types operator|(string_character_types lhs, string_character_types rhs);
-
-/**
- * @brief Compound assignment OR operator for combining string_character_types
- *
- * @param lhs left-hand side of OR operation
- * @param rhs right-hand side of OR operation
- * @return Reference to `lhs` after combining `lhs` and `rhs`
- */
-string_character_types& operator|=(string_character_types& lhs, string_character_types rhs);
 
 /**
  * @brief Returns a boolean column identifying strings entries in which all
