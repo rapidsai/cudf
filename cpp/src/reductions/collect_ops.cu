@@ -18,7 +18,7 @@
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
-#include <cudf/lists/drop_list_duplicates.hpp>
+#include <cudf/lists/detail/stream_compaction.hpp>
 #include <cudf/lists/lists_column_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -35,7 +35,7 @@ std::unique_ptr<scalar> drop_duplicates(list_scalar const& scalar,
 {
   auto list_wrapper   = lists::detail::make_lists_column_from_scalar(scalar, 1, stream, mr);
   auto lcw            = lists_column_view(list_wrapper->view());
-  auto no_dup_wrapper = lists::drop_list_duplicates(lcw, nulls_equal, nans_equal, mr);
+  auto no_dup_wrapper = lists::detail::distinct(lcw, nulls_equal, nans_equal, stream, mr);
   auto no_dup         = lists_column_view(no_dup_wrapper->view()).get_sliced_child(stream);
   return make_list_scalar(no_dup, stream, mr);
 }
