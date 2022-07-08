@@ -55,4 +55,29 @@ std::unique_ptr<column> apply_boolean_mask(
   lists_column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Create a new list column without duplicate elements in each list.
+ *
+ * Given a lists column `input`, distinct elements of each list are copied to the corresponding
+ * output list. The order of lists is preserved while the order of elements within each list is not
+ * guaranteed.
+ *
+ * Example:
+ * @code{.pseudo}
+ * input  = { {0, 1, 2, 3, 2}, {3, 1, 2}, null, {4, null, null, 5} }
+ * result = { {0, 1, 2, 3}, {3, 1, 2}, null, {4, null, 5} }
+ * @endcode
+ *
+ * @param input The input lists column
+ * @param nulls_equal Flag to specify whether null elements should be considered as equal
+ * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
+ * @param mr Device memory resource used to allocate the returned object
+ * @return The resulting lists column containing lists without duplicates
+ */
+std::unique_ptr<column> distinct(
+  lists_column_view const& input,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace cudf::lists
