@@ -659,7 +659,7 @@ def _get_level(x, nlevels, level_names):
     x
         The level number to validate
     nlevels
-        The total available levels in multiindex
+        The total available levels in the MultiIndex
     level_names
         The names of the levels.
     """
