@@ -67,12 +67,9 @@ struct contains_scalar_dispatch {
     CUDF_EXPECTS(haystack.type() == needle.type(), "scalar and column types must match");
 
     using DType           = device_storage_type_t<Type>;
-    using ScalarType      = cudf::scalar_type_t<Type>;
     auto const d_haystack = column_device_view::create(haystack, stream);
-
-    // `get_scalar_device_view` only accepts non-const reference so we need to strip const.
-    auto const s        = static_cast<ScalarType const*>(&needle);
-    auto const d_needle = get_scalar_device_view(const_cast<ScalarType&>(*s));
+    auto const d_needle =
+      get_scalar_device_view(static_cast<cudf::scalar_type_t<Type>&>(const_cast<scalar&>(needle)));
 
     if (haystack.has_nulls()) {
       auto const begin = d_haystack->pair_begin<DType, true>();
