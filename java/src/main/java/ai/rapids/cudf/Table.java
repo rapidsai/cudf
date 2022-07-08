@@ -2049,6 +2049,8 @@ public final class Table implements AutoCloseable {
    * are ignored (i.e., only one row from the duplicate ones will be copied). These keys columns are
    * a subset of the current table columns and their indices are specified by an input array.
    *
+   * The order of rows in the output table is not specified.
+   *
    * @param keyColumns Array of indices representing key columns from the current table.
    * @param keep Option specifying to keep any, first, last, or none of the found duplicates.
    * @param nullsEqual Flag to denote whether nulls are treated as equal when comparing rows of the
