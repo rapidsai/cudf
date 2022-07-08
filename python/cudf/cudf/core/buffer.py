@@ -100,7 +100,7 @@ class Buffer(Serializable):
 
         self._lock = RLock()
         self._access_counter = AccessCounter()
-        self._ptr_exposed = ptr_exposed
+        self._ptr_exposed = ptr_exposed if global_manager.enabled else True
         self._ptr_desc = {"type": "gpu"}
         self._last_accessed = time.monotonic()
         self._view_desc = (
@@ -109,7 +109,7 @@ class Buffer(Serializable):
 
         if isinstance(data, Buffer):
             self._size = data.size
-            if ptr_exposed or owner:
+            if self._ptr_exposed or owner:
                 self._ptr = data.ptr  # Exposing `data`
                 self._owner = owner or data._owner
             else:
@@ -129,7 +129,7 @@ class Buffer(Serializable):
         ):
             self._init_from_array_like(data, owner)
         elif isinstance(data, memoryview):
-            if ptr_exposed:
+            if self._ptr_exposed:
                 self._init_from_array_like(np.asarray(data), owner)
             else:
                 # Create an already spilled Buffer
