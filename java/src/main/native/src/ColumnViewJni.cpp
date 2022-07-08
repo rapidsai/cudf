@@ -466,7 +466,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicates(JNIEnv
     cudf::jni::auto_set_device(env);
     cudf::column_view const *cv = reinterpret_cast<cudf::column_view const *>(column_view);
     cudf::lists_column_view lcv(*cv);
-    return release_as_jlong(cudf::lists::drop_list_duplicates(lcv));
+    return release_as_jlong(cudf::lists::distinct(lcv));
   }
   CATCH_STD(env, 0);
 }
