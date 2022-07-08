@@ -132,7 +132,7 @@ def drop_duplicates(list columns,
     if keep == 'any':
         cpp_keep_option = duplicate_keep_option.KEEP_ANY
     elif keep == 'first':
-        cpp_keep_option = duplicate_keep_option.KEEP_FIRST   
+        cpp_keep_option = duplicate_keep_option.KEEP_FIRST
     elif keep == 'last':
         cpp_keep_option = duplicate_keep_option.KEEP_LAST
     elif keep is False:
