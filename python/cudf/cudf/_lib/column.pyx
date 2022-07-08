@@ -215,6 +215,7 @@ cdef class Column:
             # `self.memory_usage` was never called before, So ignore.
             pass
         self._null_count = None
+        self._weak_ref = None
 
     def set_mask(self, value):
         """
