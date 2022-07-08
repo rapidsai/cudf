@@ -3433,7 +3433,8 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
 
   auto filepath = temp_env->get_temp_filepath("Decimal128Stats.parquet");
   cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
   cudf_io::write_parquet(out_opts);
 
   auto source = cudf_io::datasource::create(filepath);
