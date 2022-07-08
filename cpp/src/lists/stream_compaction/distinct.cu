@@ -17,6 +17,7 @@
 #include <lists/utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
@@ -42,6 +43,8 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
   // - Generate labels for the child elements.
   // - Get distinct rows of the table {labels, child} using `stable_distinct`.
   // - Build the output lists column from the output distinct rows above.
+
+  if (input.is_empty()) { return empty_like(input.parent()); }
 
   auto const child  = input.get_sliced_child(stream);
   auto const labels = generate_labels(input, child.size(), stream);
