@@ -9,22 +9,19 @@ from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.sorting cimport stable_sort_by_key as cpp_stable_sort_by_key
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
+    distinct as cpp_distinct,
     distinct_count as cpp_distinct_count,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
-    unique as cpp_unique,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport (
     nan_policy,
     null_equality,
-    null_order,
     null_policy,
-    order,
     size_type,
 )
 from cudf._lib.utils cimport (
@@ -132,14 +129,16 @@ def drop_duplicates(list columns,
     )
     cdef duplicate_keep_option cpp_keep_option
 
-    if keep == 'first':
-        cpp_keep_option = duplicate_keep_option.KEEP_FIRST
+    if keep == 'any':
+        cpp_keep_option = duplicate_keep_option.KEEP_ANY
+    elif keep == 'first':
+        cpp_keep_option = duplicate_keep_option.KEEP_FIRST   
     elif keep == 'last':
         cpp_keep_option = duplicate_keep_option.KEEP_LAST
     elif keep is False:
         cpp_keep_option = duplicate_keep_option.KEEP_NONE
     else:
-        raise ValueError('keep must be either "first", "last" or False')
+        raise ValueError('keep must be either "any", "first", "last" or False')
 
     # shifting the index number by number of index columns
     cdef null_equality cpp_nulls_equal = (
@@ -148,40 +147,13 @@ def drop_duplicates(list columns,
         else null_equality.UNEQUAL
     )
 
-    cdef vector[order] column_order = (
-        vector[order](
-            cpp_keys.size(),
-            order.ASCENDING
-        )
-    )
-    cdef vector[null_order] null_precedence = (
-        vector[null_order](
-            cpp_keys.size(),
-            null_order.BEFORE
-        )
-    )
-
     cdef table_view source_table_view = table_view_from_columns(columns)
-    cdef table_view keys_view = source_table_view.select(cpp_keys)
-    cdef unique_ptr[table] sorted_source_table
     cdef unique_ptr[table] c_result
 
     with nogil:
-        # cudf::unique keeps unique rows in each consecutive group of
-        # equivalent rows. To match the behavior of pandas.DataFrame.
-        # drop_duplicates, users need to stable sort the input first
-        # and then invoke cudf::unique.
-        sorted_source_table = move(
-            cpp_stable_sort_by_key(
-                source_table_view,
-                keys_view,
-                column_order,
-                null_precedence
-            )
-        )
         c_result = move(
-            cpp_unique(
-                sorted_source_table.get().view(),
+            cpp_distinct(
+                source_table_view,
                 cpp_keys,
                 cpp_keep_option,
                 cpp_nulls_equal
