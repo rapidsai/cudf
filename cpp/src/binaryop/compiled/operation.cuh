@@ -236,7 +236,8 @@ struct IntPow {
         extra *= x;
         y -= 1;
       }
-      y >>= 1;
+      // The exponent is even, so square x and divide the exponent y by 2.
+      y /= 2;
       x *= x;
     }
     return x * extra;
