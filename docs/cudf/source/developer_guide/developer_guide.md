@@ -29,7 +29,7 @@ The rest of this document focuses on a higher-level overview of best practices i
 ## Directory structure and file naming
 
 cuDF generally presents the same importable modules and subpackages as pandas.
-All Cython code is contained in `python/cudf/cudf/_lib.
+All Cython code is contained in `python/cudf/cudf/_lib`.
 
 **Open question**: Should we start enforcing a stricter file/directory layout? Any suggestions?
 
