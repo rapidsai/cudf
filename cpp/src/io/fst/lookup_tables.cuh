@@ -26,10 +26,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace fst {
-namespace detail {
+namespace cudf::io::fst::detail {
 
 /**
  * @brief Class template that can be plugged into the finite-state machine to look up the symbol
@@ -528,7 +525,4 @@ class Dfa {
   hostdevice_vector<TranslationTableInitT> translation_table_init{};
 };
 
-}  // namespace detail
-}  // namespace fst
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::fst::detail

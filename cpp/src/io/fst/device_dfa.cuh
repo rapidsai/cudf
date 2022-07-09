@@ -21,9 +21,7 @@
 
 #include <cstdint>
 
-namespace cudf {
-namespace io {
-namespace fst {
+namespace cudf::io::fst {
 
 /**
  * @brief Uses a deterministic finite automaton to transduce a sequence of symbols from an input
@@ -93,6 +91,4 @@ cudaError_t DeviceTransduce(void* d_temp_storage,
                                 stream);
 }
 
-}  // namespace fst
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::fst

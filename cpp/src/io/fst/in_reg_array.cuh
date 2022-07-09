@@ -21,10 +21,7 @@
 
 #include <cstdint>
 
-namespace cudf {
-namespace io {
-namespace fst {
-namespace detail {
+namespace cudf::io::fst::detail {
 
 /**
  * @brief A bit-packed array of items that can be backed by registers yet allows to be dynamically
@@ -61,9 +58,7 @@ class MultiFragmentInRegArray {
   //------------------------------------------------------------------------------
   // HELPER FUNCTIONS
   //------------------------------------------------------------------------------
-  CUDF_HOST_DEVICE uint32_t bfe(const uint32_t& data,
-                                                   uint32_t bit_start,
-                                                   uint32_t num_bits) const
+  CUDF_HOST_DEVICE uint32_t bfe(const uint32_t& data, uint32_t bit_start, uint32_t num_bits) const
   {
 #if CUB_PTX_ARCH > 0
     return cub::BFE(data, bit_start, num_bits);
@@ -74,9 +69,9 @@ class MultiFragmentInRegArray {
   }
 
   CUDF_HOST_DEVICE void bfi(uint32_t& data,
-                                               uint32_t bits,
-                                               uint32_t bit_start,
-                                               uint32_t num_bits) const
+                            uint32_t bits,
+                            uint32_t bit_start,
+                            uint32_t num_bits) const
   {
 #if CUB_PTX_ARCH > 0
     cub::BFI(data, data, bits, bit_start, num_bits);
@@ -132,7 +127,4 @@ class MultiFragmentInRegArray {
   }
 };
 
-}  // namespace detail
-}  // namespace fst
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::fst::detail

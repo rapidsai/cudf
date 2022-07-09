@@ -19,10 +19,7 @@
 
 #include <cub/cub.cuh>
 
-namespace cudf {
-namespace io {
-namespace fst {
-namespace detail {
+namespace cudf::io::fst::detail {
 
 //-----------------------------------------------------------------------------
 // STATE VECTOR
@@ -715,7 +712,4 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
   }
 }
 
-}  // namespace detail
-}  // namespace fst
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::fst::detail
