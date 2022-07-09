@@ -1072,12 +1072,12 @@ copy_validity_from_rows(const size_type num_rows, const size_type num_columns,
 
     if (absolute_row < num_rows) {
       auto const my_byte = input_data[row_offsets(absolute_row, row_batch_start) + validity_offset +
-                                      absolute_col / cols_per_read];
+                                      (absolute_col / cols_per_read)];
 
       // so every thread that is participating in the warp has a byte, but it's row-based
       // data and we need it in column-based. So we shuffle the bits around to make
       // the bytes we actually write.
-      for (int i = 0, byte_mask = 0x1; i < cols_per_read && relative_col + i < num_columns;
+      for (int i = 0, byte_mask = 0x1; (i < cols_per_read) && ((relative_col + i) < num_columns);
            ++i, byte_mask <<= 1) {
         auto const validity_data = __ballot_sync(participation_mask, my_byte & byte_mask);
         // lead thread in each warp writes data
