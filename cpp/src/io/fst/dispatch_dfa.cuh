@@ -22,10 +22,7 @@
 
 #include <cstdint>
 
-namespace cudf {
-namespace io {
-namespace fst {
-namespace detail {
+namespace cudf::io::fst::detail {
 
 /**
  * @brief The tuning policy comprising all the architecture-specific compile-time tuning parameters.
@@ -456,7 +453,4 @@ struct DispatchFSM : DeviceFSMPolicy {
       sm_count, stv_tile_state, fst_offset_tile_state, seed_state, d_thread_state_transition);
   }
 };
-}  // namespace detail
-}  // namespace fst
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::fst::detail
