@@ -118,21 +118,20 @@ static std::pair<OutputItT, IndexOutputItT> fst_baseline(InputItT begin,
 //------------------------------------------------------------------------------
 // TEST FST SPECIFICATIONS
 //------------------------------------------------------------------------------
-// FST to check for brackets and braces outside of pairs of quotes
-// The state being active while being outside of a string. When encountering an opening bracket
-// or curly brace, we push it onto the stack. When encountering a closing bracket or brace, we
-// pop it from the stack.
-constexpr uint32_t TT_OOS = 0U;
-
-// The state being active while being within a string (e.g., field name or a string value). We do
-// not push or pop from the stack while being in this state.
-constexpr uint32_t TT_STR = 1U;
-
-// The state being active after encountering an escape symbol (e.g., '\') while being in the TT_STR
-// state. constexpr uint32_t TT_ESC = 2U; // cmt to avoid 'unused' warning
-
-// Total number of states
-constexpr uint32_t TT_NUM_STATES = 3U;
+enum DFA_STATES : char {
+  // The state being active while being outside of a string. When encountering an opening bracket or
+  // curly brace, we push it onto the stack. When encountering a closing bracket or brace, we pop it
+  // from the stack.
+  TT_OOS = 0U,
+  // The state being active while being within a string (e.g., field name or a string value). We do
+  // not push or pop from the stack while being in this state.
+  TT_STR,
+  // The state being active after encountering an escape symbol (e.g., '\') while being in the
+  // TT_STR state.
+  TT_ESC [[maybe_unused]],
+  // Total number of states
+  TT_NUM_STATES
+};
 
 // Definition of the symbol groups
 enum PDA_SG_ID {
@@ -147,7 +146,7 @@ enum PDA_SG_ID {
 };
 
 // Transition table
-const std::vector<std::vector<int32_t>> pda_state_tt = {
+const std::vector<std::vector<char>> pda_state_tt = {
   /* IN_STATE         {       [       }       ]       "       \    OTHER */
   /* TT_OOS    */ {TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS},
   /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_STR, TT_STR},
