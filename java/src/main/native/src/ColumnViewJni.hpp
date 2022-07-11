@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
@@ -51,5 +52,12 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
 std::unique_ptr<cudf::column>
 generate_list_offsets(cudf::column_view const &list_length,
                       rmm::cuda_stream_view stream = cudf::default_stream_value);
+
+/**
+ * @brief lists_distinct_by_key
+ * @return
+ */
+std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view const &input,
+                                                    rmm::cuda_stream_view stream);
 
 } // namespace cudf::jni
