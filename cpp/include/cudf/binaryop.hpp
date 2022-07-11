@@ -214,5 +214,47 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
                                                          cudf::data_type const& lhs,
                                                          cudf::data_type const& rhs);
 
+namespace binops {
+
+/**
+ * @brief Computes output valid mask for op between a column and a scalar
+ *
+ * @param col     Column to compute the valid mask from
+ * @param s       Scalar to compute the valid mask from
+ * @param stream  CUDA stream used for device memory operations and kernel launches
+ * @param mr      Device memory resource used to allocate the returned valid mask
+ * @return        Computed validity mask
+ */
+std::pair<rmm::device_buffer, size_type> scalar_col_valid_mask_and(
+  column_view const& col,
+  scalar const& s,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+namespace compiled {
+namespace detail {
+
+/**
+ * @brief struct binary operation using `NaN` aware sorting physical element comparators
+ *
+ * @param out mutable view of output column
+ * @param lhs view of left operand column
+ * @param rhs view of right operand column
+ * @param is_lhs_scalar true if @p lhs is a single element column representing a scalar
+ * @param is_rhs_scalar true if @p rhs is a single element column representing a scalar
+ * @param op binary operator identifier
+ * @param stream CUDA stream used for device memory operations
+ */
+void apply_sorting_struct_binary_op(mutable_column_view& out,
+                                    column_view const& lhs,
+                                    column_view const& rhs,
+                                    bool is_lhs_scalar,
+                                    bool is_rhs_scalar,
+                                    binary_operator op,
+                                    rmm::cuda_stream_view stream = cudf::default_stream_value);
+}  // namespace detail
+}  // namespace compiled
+}  // namespace binops
+
 /** @} */  // end of group
 }  // namespace cudf
