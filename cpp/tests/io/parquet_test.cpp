@@ -233,10 +233,10 @@ bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
 // throws cudf::logic_error if the chunk statistics_blob is invalid.
 cudf_io::parquet::Statistics parse_statistics(const cudf_io::parquet::ColumnChunk& chunk)
 {
-  cudf_io::parquet::Statistics stats;
   auto& stats_blob = chunk.meta_data.statistics_blob;
   CUDF_EXPECTS(stats_blob.size() > 0, "Invalid statistics length");
 
+  cudf_io::parquet::Statistics stats;
   cudf_io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
   CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
   return stats;
@@ -3443,7 +3443,7 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
-  cudf_io::parquet::Statistics stats = parse_statistics(fmd.row_groups[0].columns[0]);
+  auto const stats = parse_statistics(fmd.row_groups[0].columns[0]);
 
   EXPECT_EQ(expected_min, stats.min_value);
   EXPECT_EQ(expected_max, stats.max_value);
