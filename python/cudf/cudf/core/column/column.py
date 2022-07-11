@@ -336,12 +336,11 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                 inplace=True,
             )
 
+        self.detach_refs()
         if not slr.is_valid() and not self.nullable:
             mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
             self.set_base_mask(mask)
 
-        # import pdb;pdb.set_trace()
-        self.detach_refs()
         libcudf.filling.fill_in_place(self, begin, end, slr.device_value)
 
         return self
@@ -365,6 +364,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         # print("CUSTOM COPYING")
         result = libcudf.copying.copy_column(self)
         return cast(T, result._with_type_metadata(self.dtype))
+    
+    def get_weakref(self):
+        return weakref.ref(self.base_data, custom_weakref_callback)
 
     def copy(self: T, deep: bool = True) -> T:
         """Columns are immutable, so a deep copy produces a copy of the
@@ -387,15 +389,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # return cast(T, result._with_type_metadata(self.dtype))
             # copied_col._weak_ref = weakref.ref(self.base_data, custom_weakref_callback)
             if self._weak_ref is None:
-                self._weak_ref = weakref.ref(copied_col.base_data, custom_weakref_callback)
-                copied_col._weak_ref = weakref.ref(self.base_data, custom_weakref_callback)
+                self._weak_ref = copied_col.get_weakref()
+                copied_col._weak_ref = self.get_weakref()
             else:
                 if self.has_a_weakref():
                     copied_col._weak_ref = self._weak_ref
-                    self._weak_ref = weakref.ref(copied_col.base_data, custom_weakref_callback)
+                    self._weak_ref = copied_col.get_weakref()
                 else:
-                    self._weak_ref = weakref.ref(copied_col.base_data, custom_weakref_callback)
-                    copied_col._weak_ref = weakref.ref(self.base_data, custom_weakref_callback)
+                    self._weak_ref = copied_col.get_weakref()
+                    copied_col._weak_ref = self.get_weakref()
             return copied_col
         else:
             return cast(

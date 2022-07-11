@@ -15,6 +15,7 @@ from typing import (
     cast,
     overload,
 )
+import weakref
 
 import cupy
 import numpy as np
@@ -5097,6 +5098,49 @@ class StringColumn(column.ColumnBase):
 
         self._start_offset = None
         self._end_offset = None
+
+    def get_weakref(self):
+        return weakref.ref(self, column.custom_weakref_callback)
+
+    def has_a_weakref(self):
+        weakref_count = weakref.getweakrefcount(self)
+        #print("weakref_count", weakref_count)
+        if weakref_count == 0:
+            #print("330")
+            return False
+        elif weakref_count == 1:
+            #print("333", weakref.getweakrefs(self.base_data)[0]() is self.base_data)
+            return not (weakref.getweakrefs(self)[0]() is self)
+            #return True
+        else:
+            #print("336")
+            return True
+
+    def copy(self, deep: bool = True):
+        """Columns are immutable, so a deep copy produces a copy of the
+        underlying data and mask and a shallow copy creates a new column and
+        copies the references of the data and mask.
+        """
+        if deep:
+            copied_col = column.build_column(
+                    self.base_data,
+                    self.dtype,
+                    mask=self.base_mask,
+                    size=self.size,
+                    offset=self.offset,
+                    children=self.base_children,
+                )
+            return copied_col
+        else:
+            return column.build_column(
+                    self.base_data,
+                    self.dtype,
+                    mask=self.base_mask,
+                    size=self.size,
+                    offset=self.offset,
+                    children=self.base_children,
+                )
+
 
     @property
     def start_offset(self) -> int:
