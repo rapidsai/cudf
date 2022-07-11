@@ -2309,9 +2309,11 @@ class StringMethods(ColumnMethods):
 
         try:
             options = libstrings.GetJsonObjectOptions(
-                allow_single_quotes,
-                strip_quotes_from_single_strings,
-                missing_fields_as_nulls,
+                allow_single_quotes=allow_single_quotes,
+                strip_quotes_from_single_strings=(
+                    strip_quotes_from_single_strings
+                ),
+                missing_fields_as_nulls=missing_fields_as_nulls,
             )
             res = self._return_or_inplace(
                 libstrings.get_json_object(

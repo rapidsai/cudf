@@ -46,6 +46,7 @@ cdef class GetJsonObjectOptions:
 
     def __init__(
         self,
+        *,
         allow_single_quotes=False,
         strip_quotes_from_single_strings=True,
         missing_fields_as_nulls=False
