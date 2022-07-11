@@ -62,7 +62,7 @@ from cudf._lib.strings.find import (
     startswith_multiple,
 )
 from cudf._lib.strings.findall import findall, findall_record
-from cudf._lib.strings.json import get_json_object
+from cudf._lib.strings.json import get_json_object, GetJsonObjectOptions
 from cudf._lib.strings.padding import PadSide, center, ljust, pad, rjust, zfill
 from cudf._lib.strings.repeat import repeat_scalar, repeat_sequence
 from cudf._lib.strings.replace import (
