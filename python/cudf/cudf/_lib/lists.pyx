@@ -15,7 +15,7 @@ from cudf._lib.cpp.lists.combine cimport (
 from cudf._lib.cpp.lists.count_elements cimport (
     count_elements as cpp_count_elements,
 )
-from cudf._lib.cpp.lists.distinct cimport distinct as cpp_distinct
+from cudf._lib.cpp.lists.stream_compaction cimport distinct as cpp_distinct
 from cudf._lib.cpp.lists.explode cimport explode_outer as cpp_explode_outer
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.lists.sorting cimport sort_lists as cpp_sort_lists
