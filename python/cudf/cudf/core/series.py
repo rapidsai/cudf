@@ -140,9 +140,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
                     value.dtype, self._frame._column.dtype
                 )
                 value = value.astype(to_dtype)
-                self._frame._column._temp_mimic_inplace(
-                    self._frame._column.astype(to_dtype), inplace=True
-                )
+                if self._frame._column.dtype != to_dtype:
+                    self._frame._column._temp_mimic_inplace(
+                        self._frame._column.astype(to_dtype), inplace=True
+                    )
 
         self._frame._column[key] = value
 

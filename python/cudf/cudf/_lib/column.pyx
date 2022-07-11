@@ -323,6 +323,41 @@ cdef class Column:
 
         self._children = None
         self._base_children = value
+    
+    def has_a_weakref(self):
+        weakref_count = weakref.getweakrefcount(self.base_data)
+        #print("weakref_count", weakref_count)
+        if weakref_count == 0:
+            #print("330")
+            return False
+        elif weakref_count == 1:
+            #print("333", weakref.getweakrefs(self.base_data)[0]() is self.base_data)
+            return not (weakref.getweakrefs(self.base_data)[0]() is self.base_data)
+            #return True
+        else:
+            #print("336")
+            return True
+
+    def detach_refs(self):
+        """
+        Given another column, update the attributes of this column to mimic an
+        inplace operation. This does not modify the memory of Buffers, but
+        instead replaces the Buffers and other attributes underneath the column
+        object with the Buffers and attributes from the other column.
+        """
+        #print("334")
+        if self.has_a_weakref():
+            #print("335")
+            new_col = self.custom_deep_copy()
+
+            self._offset = new_col.offset
+            self._size = new_col.size
+            self._dtype = new_col._dtype
+            self.set_base_data(new_col.base_data)
+            self.set_base_children(new_col.base_children)
+            self.set_base_mask(new_col.base_mask)
+            self._weak_ref = None
+
 
     def _temp_mimic_inplace(self, other_col, inplace=False):
         """
@@ -331,10 +366,13 @@ cdef class Column:
         instead replaces the Buffers and other attributes underneath the column
         object with the Buffers and attributes from the other column.
         """
+        #print("369")
         if inplace:
-            if weakref.getweakrefcount(other_col) > 0:
+            if other_col.has_a_weakref():
+                #print("355")
                 new_col = other_col.custom_deep_copy()
             else:
+                #print("358")
                 new_col = other_col
 
             self._offset = new_col.offset
@@ -343,6 +381,7 @@ cdef class Column:
             self.set_base_data(new_col.base_data)
             self.set_base_children(new_col.base_children)
             self.set_base_mask(new_col.base_mask)
+            self._weak_ref = other_col._weak_ref
         else:
             return other_col
 

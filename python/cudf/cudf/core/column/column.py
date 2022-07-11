@@ -86,6 +86,8 @@ T = TypeVar("T", bound="ColumnBase")
 # method in ColumnBase.
 Slice = TypeVar("Slice", bound=slice)
 
+def custom_weakref_callback(ref):
+    pass
 
 class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     _VALID_REDUCTIONS = {
@@ -338,6 +340,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
             self.set_base_mask(mask)
 
+        # import pdb;pdb.set_trace()
+        self.detach_refs()
         libcudf.filling.fill_in_place(self, begin, end, slr.device_value)
 
         return self
@@ -358,6 +362,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         return self.mask_array_view
 
     def custom_deep_copy(self: T) -> T:
+        # print("CUSTOM COPYING")
         result = libcudf.copying.copy_column(self)
         return cast(T, result._with_type_metadata(self.dtype))
 
@@ -380,7 +385,17 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             )
             # result = libcudf.copying.copy_column(self)
             # return cast(T, result._with_type_metadata(self.dtype))
-            copied_col._weak_ref = weakref.ref(self)
+            # copied_col._weak_ref = weakref.ref(self.base_data, custom_weakref_callback)
+            if self._weak_ref is None:
+                self._weak_ref = weakref.ref(copied_col.base_data, custom_weakref_callback)
+                copied_col._weak_ref = weakref.ref(self.base_data, custom_weakref_callback)
+            else:
+                if self.has_a_weakref():
+                    copied_col._weak_ref = self._weak_ref
+                    self._weak_ref = weakref.ref(copied_col.base_data, custom_weakref_callback)
+                else:
+                    self._weak_ref = weakref.ref(copied_col.base_data, custom_weakref_callback)
+                    copied_col._weak_ref = weakref.ref(self.base_data, custom_weakref_callback)
             return copied_col
         else:
             return cast(
