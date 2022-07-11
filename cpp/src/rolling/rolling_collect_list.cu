@@ -136,18 +136,17 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   auto new_sizes = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, input.size(), mask_state::UNALLOCATED, stream);
 
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(input.size()),
-                    new_sizes->mutable_view().template begin<size_type>(),
-                    [d_gather_map  = gather_map.template begin<size_type>(),
-                     d_old_offsets = offsets.template begin<size_type>(),
-                     input_row_not_null] __device__(auto i) {
-                      return thrust::count_if(thrust::seq,
-                                              d_gather_map + d_old_offsets[i],
-                                              d_gather_map + d_old_offsets[i + 1],
-                                              input_row_not_null);
-                    });
+  thrust::tabulate(rmm::exec_policy(stream),
+                   new_sizes->mutable_view().template begin<size_type>(),
+                   new_sizes->mutable_view().template end<size_type>(),
+                   [d_gather_map  = gather_map.template begin<offset_type>(),
+                    d_old_offsets = offsets.template begin<offset_type>(),
+                    input_row_not_null] __device__(auto i) {
+                     return thrust::count_if(thrust::seq,
+                                             d_gather_map + d_old_offsets[i],
+                                             d_gather_map + d_old_offsets[i + 1],
+                                             input_row_not_null);
+                   });
 
   auto new_offsets =
     strings::detail::make_offsets_child_column(new_sizes->view().template begin<size_type>(),

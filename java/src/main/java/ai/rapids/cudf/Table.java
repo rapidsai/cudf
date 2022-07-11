@@ -708,8 +708,7 @@ public final class Table implements AutoCloseable {
   private static native long[] filter(long input, long mask);
 
   private static native long[] dropDuplicates(long nativeHandle, int[] keyColumns,
-                                              boolean keepFirst, boolean nullsEqual,
-                                              boolean nullsBefore) throws CudfException;
+                                              int keepValue, boolean nullsEqual) throws CudfException;
 
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
@@ -2030,27 +2029,38 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Enum to specify which of duplicate rows/elements will be copied to the output.
+   */
+  public enum DuplicateKeepOption {
+    KEEP_ANY(0),
+    KEEP_FIRST(1),
+    KEEP_LAST(2),
+    KEEP_NONE(3);
+
+    final int keepValue;
+
+    DuplicateKeepOption(int keepValue) {
+      this.keepValue = keepValue;
+    }
+  }
+
+  /**
    * Copy rows of the current table to an output table such that duplicate rows in the key columns
    * are ignored (i.e., only one row from the duplicate ones will be copied). These keys columns are
    * a subset of the current table columns and their indices are specified by an input array.
    *
-   * Currently, the output table is sorted by key columns, using stable sort. However, this is not
-   * guaranteed in the future.
+   * The order of rows in the output table is not specified.
    *
    * @param keyColumns Array of indices representing key columns from the current table.
-   * @param keepFirst If it is true, the first row with a duplicated key will be copied. Otherwise,
-   *                  copy the last row with a duplicated key.
+   * @param keep Option specifying to keep any, first, last, or none of the found duplicates.
    * @param nullsEqual Flag to denote whether nulls are treated as equal when comparing rows of the
    *                   key columns to check for uniqueness.
-   * @param nullsBefore Flag to specify whether nulls in the key columns will appear before or
-   *                    after non-null elements when sorting the table.
    *
    * @return Table with unique keys.
    */
-  public Table dropDuplicates(int[] keyColumns, boolean keepFirst, boolean nullsEqual,
-                              boolean nullsBefore) {
+  public Table dropDuplicates(int[] keyColumns, DuplicateKeepOption keep, boolean nullsEqual) {
     assert keyColumns.length >= 1 : "Input keyColumns must contain indices of at least one column";
-    return new Table(dropDuplicates(nativeHandle, keyColumns, keepFirst, nullsEqual, nullsBefore));
+    return new Table(dropDuplicates(nativeHandle, keyColumns, keep.keepValue, nullsEqual));
   }
 
   /**

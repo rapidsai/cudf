@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,16 @@
  */
 
 #include <cudf/binaryop.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/repeat_strings.hpp>
+#include <cudf/types.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
+
+using cudf::jni::release_as_jlong;
 
 extern "C" {
 
@@ -496,10 +500,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclas
     cudf::scalar *lhs = reinterpret_cast<cudf::scalar *>(lhs_ptr);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
     cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
-
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
-    std::unique_ptr<cudf::column> result = cudf::binary_operation(*lhs, *rhs, op, n_data_type);
-    return reinterpret_cast<jlong>(result.release());
+
+    if (lhs->type().id() == cudf::type_id::STRUCT) {
+      auto [new_mask, new_null_count] = cudf::binops::scalar_col_valid_mask_and(*rhs, *lhs);
+      auto out =
+          make_fixed_width_column(n_data_type, rhs->size(), std::move(new_mask), new_null_count);
+      auto lhs_col = cudf::make_column_from_scalar(*lhs, 1);
+      auto out_view = out->mutable_view();
+      cudf::binops::compiled::detail::apply_sorting_struct_binary_op(out_view, lhs_col->view(),
+                                                                     *rhs, true, false, op);
+      return release_as_jlong(out);
+    }
+
+    return release_as_jlong(cudf::binary_operation(*lhs, *rhs, op, n_data_type));
   }
   CATCH_STD(env, 0);
 }

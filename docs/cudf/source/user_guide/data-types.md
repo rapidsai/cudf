@@ -133,8 +133,7 @@ dtype: struct
 StructDtype({'a': dtype('int64'), 'b': dtype('int64')})
 ```
 
-Or by reading them from disk, using a [file format that supports
-nested data](io).
+Or by reading them from disk, using a [file format that supports nested data](io).
 
 ```python
 >>> pdf = pd.DataFrame({"a": [[1, 2], [3, 4, 5], [6, 7, 8]]})
