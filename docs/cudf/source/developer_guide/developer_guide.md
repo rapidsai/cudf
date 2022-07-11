@@ -40,7 +40,6 @@ cuDF employs a number of linters to ensure consistent style across the code base
 
 - [`flake8`](https://github.com/pycqa/flake8) checks for general code formatting compliance. 
 - [`black`](https://github.com/psf/black) is an automatic code formatter.
-  Code formatted with `black` is largely `flake8`-compliant, although there are a few minor issues that it cannot fix automatically.
 - [`isort`](https://pycqa.github.io/isort/) ensures imports are sorted consistently.
 - [`mypy`](http://mypy-lang.org/) performs static type checking.
   In conjunction with [type hints](https://docs.python.org/3/library/typing.html),
@@ -49,31 +48,31 @@ cuDF employs a number of linters to ensure consistent style across the code base
 
 Configuration information for these tools is contained in a number of files.
 The primary source of truth is the `.pre-commit-config.yaml` file at the root of the repo.
-As described in 
+As described in the
 [overall contributing guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md),
 we recommend using [`pre-commit`](https://pre-commit.com/) to manage all linters.
 
 ## Deprecating and removing code
 
 cuDF generally follows the policy of deprecating code for one release prior to removal.
-For example, if we want to remove an API after the 22.06 release, it will be marked as deprecated in the 22.08 release.
-The code may then be removed in the 22.10 release.
-All usage of deprecated APIs within cuDF should be removed when the API is deprecated.
-This prevents us from surfacing unexpected warnings to users of other APIs.
+For example, if we decide to remove an API during the 22.08 release cycle,
+it will be marked as deprecated in the 22.08 release and removed in the 22.10 release.
+All internal usage of deprecated APIs in cuDF should be removed when the API is deprecated.
+This prevents users from encountering unexpected deprecation warnings when using other (non-deprecated) APIs.
 The documentation for the API should also be updated to reflect its deprecation.
 
-When deprecating an API, developers should open a corresponding Github issue to track the API's removal.
-The GitHub issue should be labeled “deprecation” and added to the next release’s project board.
+When deprecating an API, developers should open a corresponding GitHub issue to track the API removal.
+The GitHub issue should be labeled "deprecation" and added to the next release’s project board.
 If necessary, the removal timeline can be discussed on this issue.
 Upon removal this issue may be closed.
 Additionally, when removing an API, make sure to remove all tests and documentation.
 
 Deprecation messages should follow these guidelines:
-- Throw a FutureWarning.
+- Emit a FutureWarning.
 - Use a single line (no newline characters)
 - Indicate a replacement API, if any exists.
   Deprecations are an opportunity to show users better ways to do things.
-- Don’t specify a version when removal will occur.
+- Don't specify a version when removal will occur.
   This gives us more flexibility.
 
 For example:
@@ -87,7 +86,7 @@ warnings.warn(
 
 ```{warning}
 Deprecations should be signaled using a `FutureWarning` **not a `DeprecationWarning`**!
-`DeprecationWarning` is intended for Python's internal deprecations, not for application or library developers
+`DeprecationWarning` is hidden by default except in code run in the `__main__` module.
 ```
 
 ## `pandas` compatibility
