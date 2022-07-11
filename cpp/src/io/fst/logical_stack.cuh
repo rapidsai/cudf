@@ -216,35 +216,6 @@ struct RemapEmptyStack {
   StackOpT empty_stack_symbol;
 };
 
-/**
- * @brief Function object to return only the stack_level part from a StackOp instance.
- */
-struct StackOpToStackLevel {
-  template <typename StackLevelT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE StackLevelT operator()(StackOp<StackLevelT, ValueT> const& kv_op) const
-  {
-    return kv_op.stack_level;
-  }
-};
-
-/**
- * @brief Retrieves an iterator that returns only the `stack_level` part from a StackOp iterator.
- */
-template <typename StackOpItT>
-auto make_stack_level_iterator(StackOpItT it)
-{
-  return thrust::make_transform_iterator(it, StackOpToStackLevel{});
-}
-
-/**
- * @brief Retrieves an iterator that returns only the `value` part from a StackOp iterator.
- */
-template <typename StackOpItT>
-auto make_value_iterator(StackOpItT it)
-{
-  return thrust::make_transform_iterator(it, StackOpToStackSymbol{});
-}
-
 }  // namespace detail
 
 /**
