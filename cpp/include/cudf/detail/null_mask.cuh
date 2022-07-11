@@ -60,7 +60,7 @@ namespace detail {
 template <int block_size, typename Binop>
 __global__ void offset_bitmask_binop(Binop op,
                                      device_span<bitmask_type> destination,
-                                     device_span<bitmask_type const*> source,
+                                     device_span<bitmask_type const* const> source,
                                      device_span<size_type const> source_begin_bits,
                                      size_type source_size_bits,
                                      size_type* count_ptr)
@@ -107,7 +107,7 @@ __global__ void offset_bitmask_binop(Binop op,
 }
 
 /**
- * @copydoc bitmask_binop(Binop op, host_span<bitmask_type const *> const, host_span<size_type>
+ * @copydoc bitmask_binop(Binop op, host_span<bitmask_type const* const>, host_span<size_type>
  * const, size_type, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -115,7 +115,7 @@ __global__ void offset_bitmask_binop(Binop op,
 template <typename Binop>
 std::pair<rmm::device_buffer, size_type> bitmask_binop(
   Binop op,
-  host_span<bitmask_type const*> masks,
+  host_span<bitmask_type const* const> masks,
   host_span<size_type const> masks_begin_bits,
   size_type mask_size_bits,
   rmm::cuda_stream_view stream,
@@ -150,7 +150,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
 template <typename Binop>
 size_type inplace_bitmask_binop(Binop op,
                                 device_span<bitmask_type> dest_mask,
-                                host_span<bitmask_type const*> masks,
+                                host_span<bitmask_type const* const> masks,
                                 host_span<size_type const> masks_begin_bits,
                                 size_type mask_size_bits,
                                 rmm::cuda_stream_view stream)

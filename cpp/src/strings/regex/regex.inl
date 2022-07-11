@@ -15,9 +15,9 @@
  */
 
 #include <strings/char_types/is_flags.h>
-#include <strings/utf8.cuh>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 
 namespace cudf {
@@ -141,7 +141,8 @@ __device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
                                                          uint8_t const* codepoint_flags) const
 {
   for (int i = 0; i < count; ++i) {
-    if ((ch >= literals[i * 2]) && (ch <= literals[(i * 2) + 1])) { return true; }
+    auto const literal = literals[i];
+    if ((ch >= literal.first) && (ch <= literal.last)) { return true; }
   }
 
   if (!builtins) return false;
@@ -204,11 +205,11 @@ __device__ __forceinline__ void reprog_device::store(void* buffer) const
   auto classes     = reinterpret_cast<reclass_device*>(ptr);
   result->_classes = classes;
   // fill in each class
-  auto d_ptr = reinterpret_cast<char32_t*>(classes + _classes_count);
+  auto d_ptr = reinterpret_cast<reclass_range*>(classes + _classes_count);
   for (int idx = 0; idx < _classes_count; ++idx) {
     classes[idx]          = _classes[idx];
     classes[idx].literals = d_ptr;
-    for (int jdx = 0; jdx < _classes[idx].count * 2; ++jdx)
+    for (int jdx = 0; jdx < _classes[idx].count; ++jdx)
       *d_ptr++ = _classes[idx].literals[jdx];
   }
 }
@@ -261,7 +262,7 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
           startchar = static_cast<char_utf8>('\n');
         case CHAR: {
           auto const fidx = dstr.find(startchar, pos);
-          if (fidx < 0) { return match; }
+          if (fidx == string_view::npos) { return match; }
           pos = fidx + (jnk.starttype == BOL);
           break;
         }
@@ -322,15 +323,11 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
             break;
           case BOW:
           case NBOW: {
-            auto const codept      = utf8_to_codepoint(c);
-            auto const last_c      = pos > 0 ? dstr[pos - 1] : 0;
-            auto const last_codept = utf8_to_codepoint(last_c);
-
-            bool const cur_alphaNumeric =
-              (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
-            bool const last_alphaNumeric =
-              (last_codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[last_codept]);
-            if ((cur_alphaNumeric == last_alphaNumeric) != (inst.type == BOW)) {
+            auto const prev_c       = pos > 0 ? dstr[pos - 1] : 0;
+            auto const word_class   = reclass_device{CCLASS_W};
+            bool const curr_is_word = word_class.is_match(c, _codepoint_flags);
+            bool const prev_is_word = word_class.is_match(prev_c, _codepoint_flags);
+            if ((curr_is_word == prev_is_word) != (inst.type == BOW)) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }

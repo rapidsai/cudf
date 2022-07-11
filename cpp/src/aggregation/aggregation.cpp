@@ -610,6 +610,8 @@ template std::unique_ptr<groupby_aggregation> make_nth_element_aggregation<group
   size_type n, null_policy null_handling);
 template std::unique_ptr<reduce_aggregation> make_nth_element_aggregation<reduce_aggregation>(
   size_type n, null_policy null_handling);
+template std::unique_ptr<rolling_aggregation> make_nth_element_aggregation<rolling_aggregation>(
+  size_type n, null_policy null_handling);
 
 /// Factory to create a ROW_NUMBER aggregation
 template <typename Base>
