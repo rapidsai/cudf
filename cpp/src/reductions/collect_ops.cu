@@ -18,27 +18,13 @@
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
-#include <cudf/lists/detail/stream_compaction.hpp>
-#include <cudf/lists/lists_column_factories.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
 namespace cudf {
 namespace reduction {
-
-std::unique_ptr<scalar> drop_duplicates(list_scalar const& scalar,
-                                        null_equality nulls_equal,
-                                        nan_equality nans_equal,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
-{
-  auto list_wrapper   = lists::detail::make_lists_column_from_scalar(scalar, 1, stream, mr);
-  auto lcw            = lists_column_view(list_wrapper->view());
-  auto no_dup_wrapper = lists::detail::distinct(lcw, nulls_equal, nans_equal, stream, mr);
-  auto no_dup         = lists_column_view(no_dup_wrapper->view()).get_sliced_child(stream);
-  return make_list_scalar(no_dup, stream, mr);
-}
 
 std::unique_ptr<scalar> collect_list(column_view const& col,
                                      null_policy null_handling,
@@ -72,9 +58,16 @@ std::unique_ptr<scalar> collect_set(column_view const& col,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  auto scalar = collect_list(col, null_handling, stream, mr);
-  auto ls     = dynamic_cast<list_scalar*>(scalar.get());
-  return drop_duplicates(*ls, nulls_equal, nans_equal, stream, mr);
+  auto scalar         = collect_list(col, null_handling, stream, mr);
+  auto ls             = dynamic_cast<list_scalar*>(scalar.get());
+  auto distinct_table = detail::distinct(table_view{{ls->view()}},
+                                         std::vector<size_type>{0},
+                                         duplicate_keep_option::KEEP_ANY,
+                                         nulls_equal,
+                                         nans_equal,
+                                         stream,
+                                         mr);
+  return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, mr);
 }
 
 std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
@@ -83,9 +76,15 @@ std::unique_ptr<scalar> merge_sets(lists_column_view const& col,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  auto flatten_col = col.get_sliced_child(stream);
-  auto scalar      = std::make_unique<list_scalar>(flatten_col, true, stream, mr);
-  return drop_duplicates(*scalar, nulls_equal, nans_equal, stream, mr);
+  auto flatten_col    = col.get_sliced_child(stream);
+  auto distinct_table = detail::distinct(table_view{{flatten_col}},
+                                         std::vector<size_type>{0},
+                                         duplicate_keep_option::KEEP_ANY,
+                                         nulls_equal,
+                                         nans_equal,
+                                         stream,
+                                         mr);
+  return std::make_unique<list_scalar>(std::move(distinct_table->get_column(0)), true, stream, mr);
 }
 
 }  // namespace reduction
