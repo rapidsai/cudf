@@ -146,16 +146,6 @@ class writer::impl {
                                   device_2dspan<gpu::PageFragment const> frag,
                                   device_span<gpu::parquet_column_device_view const> col_desc,
                                   uint32_t num_fragments);
-  /**
-   * @brief Build per-chunk dictionaries and count data pages
-   *
-   * @param chunks column chunk array
-   * @param col_desc column description array
-   * @param num_columns Total number of columns
-   */
-  void init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                       device_span<gpu::parquet_column_device_view const> col_desc,
-                       uint32_t num_columns);
 
   /**
    * @brief Initialize encoder pages
@@ -173,9 +163,9 @@ class writer::impl {
   void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                           device_span<gpu::parquet_column_device_view const> col_desc,
                           device_span<gpu::EncPage> pages,
+                          hostdevice_vector<size_type>& comp_page_sizes,
                           statistics_chunk* page_stats,
                           statistics_chunk* frag_stats,
-                          size_t max_page_comp_data_size,
                           uint32_t num_columns,
                           uint32_t num_pages,
                           uint32_t num_stats_bfr);
