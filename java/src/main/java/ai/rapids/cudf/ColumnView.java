@@ -3246,13 +3246,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
    
    * @param pattern The regex pattern
-   * @param idx The regex group index (only 0 is supported currently). 
+   * @param idx The regex group index
    * @return A new column vector of extracted matches
    */
   public final ColumnVector extractAllRecord(String pattern, int idx) {
     assert type.equals(DType.STRING) : "column type must be a String";
     assert idx >= 0 : "group index must be at least 0";
-    assert idx == 0 : "group index > 0 is not supported yet";
 
     return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
   }

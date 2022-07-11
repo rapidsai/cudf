@@ -79,7 +79,6 @@
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 #include "jni_utils.hpp"
-#include "map_lookup.hpp"
 #include "maps_column_view.hpp"
 
 using cudf::jni::ptr_as_jlong;
@@ -1604,17 +1603,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv *
                                                                         jint idx) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", 0);
 
-  if (idx > 0) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "group index > 0 is not supported", 0);
-  }
-
   try {
     cudf::jni::auto_set_device(env);
     cudf::strings_column_view const strings_column{
         *reinterpret_cast<cudf::column_view *>(j_view_handle)};
     cudf::jni::native_jstring pattern(env, pattern_obj);
 
-    return release_as_jlong(cudf::strings::findall_record(strings_column, pattern.get()));
+    auto result = (idx == 0) ? cudf::strings::findall_record(strings_column, pattern.get()) :
+                               cudf::strings::extract_all_record(strings_column, pattern.get());
+
+    return release_as_jlong(result);
   }
   CATCH_STD(env, 0);
 }

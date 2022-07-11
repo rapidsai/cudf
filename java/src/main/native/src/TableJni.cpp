@@ -3053,9 +3053,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_filter(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
-    JNIEnv *env, jclass, jlong input_jtable, jintArray key_columns, jboolean keep_first,
-    jboolean nulls_equal, jboolean nulls_before) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(JNIEnv *env, jclass,
+                                                                      jlong input_jtable,
+                                                                      jintArray key_columns,
+                                                                      jint keep,
+                                                                      jboolean nulls_equal) {
   JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
   JNI_NULL_CHECK(env, key_columns, "input key_columns is null", 0);
   try {
@@ -3066,22 +3068,22 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
     auto const native_keys_indices = cudf::jni::native_jintArray(env, key_columns);
     auto const keys_indices =
         std::vector<cudf::size_type>(native_keys_indices.begin(), native_keys_indices.end());
-
-    // cudf::unique keeps unique rows in each consecutive group of equivalent rows. To match the
-    // behavior of pandas.DataFrame.drop_duplicates, users need to stable sort the input first and
-    // then invoke cudf::unique.
-    std::vector<cudf::order> order(keys_indices.size(), cudf::order::ASCENDING);
-    std::vector<cudf::null_order> null_precedence(
-        keys_indices.size(), nulls_before ? cudf::null_order::BEFORE : cudf::null_order::AFTER);
-    auto const sorted_input =
-        cudf::stable_sort_by_key(*input, input->select(keys_indices), order, null_precedence);
+    auto const keep_option = [&] {
+      switch (keep) {
+        case 0: return cudf::duplicate_keep_option::KEEP_ANY;
+        case 1: return cudf::duplicate_keep_option::KEEP_FIRST;
+        case 2: return cudf::duplicate_keep_option::KEEP_LAST;
+        case 3: return cudf::duplicate_keep_option::KEEP_NONE;
+        default:
+          JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid `keep` option",
+                        cudf::duplicate_keep_option::KEEP_ANY);
+      }
+    }();
 
     auto result =
-        cudf::unique(sorted_input->view(), keys_indices,
-                     keep_first ? cudf::duplicate_keep_option::KEEP_FIRST :
-                                  cudf::duplicate_keep_option::KEEP_LAST,
-                     nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL,
-                     rmm::mr::get_current_device_resource());
+        cudf::distinct(*input, keys_indices, keep_option,
+                       nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL,
+                       cudf::nan_equality::ALL_EQUAL, rmm::mr::get_current_device_resource());
     return convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);
