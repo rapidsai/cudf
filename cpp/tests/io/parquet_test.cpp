@@ -229,16 +229,17 @@ bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
   return cp.read(file_meta_data);
 }
 
-// parse the statistics_blob on chunk and populate the passed in Statistics struct.
+// parse the statistics_blob on chunk and return as a Statistics struct.
 // throws cudf::logic_error if the chunk statistics_blob is invalid.
-void parse_statistics(const cudf_io::parquet::ColumnChunk& chunk,
-                      cudf_io::parquet::Statistics* stats)
+cudf_io::parquet::Statistics parse_statistics(const cudf_io::parquet::ColumnChunk& chunk)
 {
+  cudf_io::parquet::Statistics stats;
   auto& stats_blob = chunk.meta_data.statistics_blob;
   CUDF_EXPECTS(stats_blob.size() > 0, "Invalid statistics length");
 
   cudf_io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
-  CUDF_EXPECTS(cp.read(stats), "Cannot parse column statistics");
+  CUDF_EXPECTS(cp.read(&stats), "Cannot parse column statistics");
+  return stats;
 }
 
 // Base test fixture for tests
@@ -3417,8 +3418,11 @@ TEST_F(ParquetWriterTest, CheckPageRows)
 TEST_F(ParquetWriterTest, Decimal128Stats)
 {
   // check that decimal128 min and max statistics are written in network byte order
-  std::vector<uint8_t> expected0{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6};
-  std::vector<uint8_t> expected1{0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  // this is negative, so should be the min
+  std::vector<uint8_t> expected_min{
+    0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  std::vector<uint8_t> expected_max{
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6};
 
   __int128_t val0 = 0xa1b2c3d4e5f6ULL;
   __int128_t val1 = val0 << 80;
@@ -3439,12 +3443,10 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
 
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
-  cudf_io::parquet::Statistics stats0;
-  parse_statistics(fmd.row_groups[0].columns[0], &stats0);
+  cudf_io::parquet::Statistics stats = parse_statistics(fmd.row_groups[0].columns[0]);
 
-  // expected1 is negative, so should be the min
-  EXPECT_EQ(expected1, stats0.min_value);
-  EXPECT_EQ(expected0, stats0.max_value);
+  EXPECT_EQ(expected_min, stats.min_value);
+  EXPECT_EQ(expected_max, stats.max_value);
 }
 
 TEST_F(ParquetReaderTest, EmptyColumnsParam)
