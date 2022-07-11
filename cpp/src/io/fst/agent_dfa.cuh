@@ -24,9 +24,6 @@ namespace cudf::io::fst::detail {
 /// Type used to enumerate (and index) into the states defined by a DFA
 using StateIndexT = uint32_t;
 
-//-----------------------------------------------------------------------------
-// DFA-SIMULATION STATE COMPOSITION FUNCTORS
-//-----------------------------------------------------------------------------
 /**
  * @brief Implements an associative composition operation for state transition vectors and
  * offset-to-overap vectors to be used with a prefix scan.
@@ -55,9 +52,18 @@ struct VectorCompositeOp {
   }
 };
 
-//-----------------------------------------------------------------------------
-// DFA-SIMULATION CALLBACK WRAPPERS/HELPERS
-//-----------------------------------------------------------------------------
+/**
+ * @brief A class whose ReadSymbol member function is invoked for each symbol being read from the
+ * input tape. The wrapper class looks up whether a state transition caused by a symbol is supposed
+ * to emit any output symbol (the "transduced" output) and, if so, keeps track of how many symbols
+ * it intends to write out and writing out such symbols to the given output iterators.
+ *
+ * @tparam TransducerTableT The type implementing a transducer table that can be used for looking up
+ * the symbols that are supposed to be emitted on a given state transition.
+ * @tparam TransducedOutItT A Random-access output iterator type to which symbols returned by the
+ * transducer table are assignable.
+ * @tparam TransducedIndexOutItT A Random-access output iterator type to which indexes are written.
+ */
 template <typename TransducerTableT, typename TransducedOutItT, typename TransducedIndexOutItT>
 class DFASimulationCallbackWrapper {
  public:
@@ -101,9 +107,14 @@ class DFASimulationCallbackWrapper {
   bool write;
 };
 
-//-----------------------------------------------------------------------------
-// STATE-TRANSITION CALLBACKS
-//-----------------------------------------------------------------------------
+/**
+ * @brief Helper class that transitions the state of multiple DFA instances simultaneously whenever
+ * a symbol is read.
+ *
+ * @tparam NUM_INSTANCES The number of DFA instances to keep track of
+ * @tparam TransitionTableT The transition table type used for looking up the new state for a
+ * current_state and a read_symbol.
+ */
 template <int32_t NUM_INSTANCES, typename TransitionTableT>
 class StateVectorTransitionOp {
  public:
