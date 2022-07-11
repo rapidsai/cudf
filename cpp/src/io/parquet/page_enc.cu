@@ -1267,7 +1267,7 @@ class header_encoder {
 static __device__ void swap128(__int128_t v, void* dst)
 {
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
-  auto const d_char_ptr       = static_cast<unsigned char*>(dst);
+  auto const d_char_ptr = static_cast<unsigned char*>(dst);
   thrust::copy(thrust::seq,
                thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
                thrust::make_reverse_iterator(v_char_ptr),
@@ -1310,10 +1310,10 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
       lmin = lmax = dtype_len;
       if (dtype == dtype_float32) {  // Convert from double to float32
         auto const fp_scratch = static_cast<float*>(scratch);
-        fp_scratch[0]     = s->min_value.fp_val;
-        fp_scratch[1]     = s->max_value.fp_val;
-        vmin              = &fp_scratch[0];
-        vmax              = &fp_scratch[1];
+        fp_scratch[0]         = s->min_value.fp_val;
+        fp_scratch[1]         = s->max_value.fp_val;
+        vmin                  = &fp_scratch[0];
+        vmax                  = &fp_scratch[1];
       } else if (dtype == dtype_decimal128) {
         auto const d128_scratch = static_cast<uint8_t*>(scratch);
         swap128(s->min_value.d128_val, d128_scratch);
