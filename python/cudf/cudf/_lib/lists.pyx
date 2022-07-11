@@ -74,10 +74,11 @@ def explode_outer(
 
 
 def distinct(Column col, bool nulls_equal, bool nans_all_equal):
-    """    
-    nulls_equal == True indicates that libcudf should treat any two nulls as equal, and as unequal otherwise.
-    nans_all_equal == True indicates that libcudf should treat any two elements from {-nan, +nan} as equal, 
-    and as unequal otherwise.
+    """
+    nulls_equal == True indicates that libcudf should treat any two nulls as
+    equal, and as unequal otherwise.
+    nans_all_equal == True indicates that libcudf should treat any two
+    elements from {-nan, +nan} as equal, and as unequal otherwise.
     """
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
