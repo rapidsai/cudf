@@ -230,16 +230,15 @@ bool read_footer(std::unique_ptr<cudf_io::datasource>& source,
 }
 
 // parse the statistics_blob on chunk and populate the passed in Statistics struct.
-// returns true on success, false if the statistics cannot be parsed.
 // throws cudf::logic_error if the chunk statistics_blob is invalid.
-bool parse_statistics(const cudf_io::parquet::ColumnChunk& chunk,
+void parse_statistics(const cudf_io::parquet::ColumnChunk& chunk,
                       cudf_io::parquet::Statistics* stats)
 {
   auto& stats_blob = chunk.meta_data.statistics_blob;
   CUDF_EXPECTS(stats_blob.size() > 0, "Invalid statistics length");
 
   cudf_io::parquet::CompactProtocolReader cp(stats_blob.data(), stats_blob.size());
-  return cp.read(stats);
+  CUDF_EXPECTS(cp.read(stats), "Cannot parse column statistics");
 }
 
 // Base test fixture for tests
@@ -3423,18 +3422,16 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
 
   __int128_t val0 = 0xa1b2c3d4e5f6ULL;
   __int128_t val1 = val0 << 80;
-  column_wrapper<numeric::decimal128> col0{{numeric::decimal128(val0, numeric::scale_type{0})}};
-  column_wrapper<numeric::decimal128> col1{{numeric::decimal128(val1, numeric::scale_type{0})}};
+  column_wrapper<numeric::decimal128> col0{{numeric::decimal128(val0, numeric::scale_type{0}),
+                                            numeric::decimal128(val1, numeric::scale_type{0})}};
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col0.release());
-  cols.push_back(col1.release());
   auto expected = std::make_unique<table>(std::move(cols));
 
   auto filepath = temp_env->get_temp_filepath("Decimal128Stats.parquet");
   cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
-      .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP);
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
   cudf_io::write_parquet(out_opts);
 
   auto source = cudf_io::datasource::create(filepath);
@@ -3443,15 +3440,11 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
   CUDF_EXPECTS(read_footer(source, &fmd), "Cannot parse metadata");
 
   cudf_io::parquet::Statistics stats0;
-  cudf_io::parquet::Statistics stats1;
-  auto& rg0 = fmd.row_groups[0];
-  CUDF_EXPECTS(parse_statistics(rg0.columns[0], &stats0), "Cannot parse column statistics");
-  CUDF_EXPECTS(parse_statistics(rg0.columns[1], &stats1), "Cannot parse column statistics");
+  parse_statistics(fmd.row_groups[0].columns[0], &stats0);
 
-  EXPECT_EQ(expected0, stats0.min_value);
+  // expected1 is negative, so should be the min
+  EXPECT_EQ(expected1, stats0.min_value);
   EXPECT_EQ(expected0, stats0.max_value);
-  EXPECT_EQ(expected1, stats1.min_value);
-  EXPECT_EQ(expected1, stats1.max_value);
 }
 
 TEST_F(ParquetReaderTest, EmptyColumnsParam)
