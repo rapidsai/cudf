@@ -23,6 +23,8 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/lists/sorting.hpp>
+#include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 
 using namespace cudf::test::iterators;
@@ -45,9 +47,17 @@ auto merge_sets(vcol_views const& keys_cols, vcol_views const& values_cols)
   requests[0].aggregations.emplace_back(
     cudf::make_merge_sets_aggregation<cudf::groupby_aggregation>());
 
-  auto gb_obj = cudf::groupby::groupby(cudf::table_view({*keys}));
-  auto result = gb_obj.aggregate(requests);
-  return std::pair(std::move(result.first->release()[0]), std::move(result.second[0].results[0]));
+  auto const result     = cudf::groupby::groupby(cudf::table_view({*keys})).aggregate(requests);
+  auto const sort_order = cudf::sorted_order(result.first->view(), {}, {cudf::null_order::AFTER});
+  auto const sorted_vals =
+    std::move(cudf::gather(cudf::table_view{{result.second[0].results[0]->view()}}, *sort_order)
+                ->release()
+                .front());
+
+  auto result_keys = std::move(cudf::gather(result.first->view(), *sort_order)->release().front());
+  auto result_vals = cudf::lists::sort_lists(
+    cudf::lists_column_view{sorted_vals->view()}, cudf::order::ASCENDING, cudf::null_order::AFTER);
+  return std::pair(std::move(result_keys), std::move(result_vals));
 }
 
 }  // namespace
