@@ -217,4 +217,14 @@ public final class RollingAggregation {
   public static RollingAggregation collectSet(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
     return new RollingAggregation(Aggregation.collectSet(nullPolicy, nullEquality, nanEquality));
   }
+
+  /**
+   * Select the nth element from a specified window.
+   * 
+   * @param n          Indicates the index of the element to be selected from the window
+   * @param nullPolicy Indicates whether null elements are to be skipped, or not
+   */
+  public static RollingAggregation nth(int n, NullPolicy nullPolicy) {
+    return new RollingAggregation(Aggregation.nth(n, nullPolicy));
+  }
 }
