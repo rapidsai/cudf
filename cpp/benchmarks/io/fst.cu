@@ -101,6 +101,7 @@ void BM_FST_JSON(nvbench::state& state)
   // Run algorithm
   DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
 
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
     parser.Transduce(d_input.data(),
@@ -136,6 +137,7 @@ void BM_FST_JSON_no_outidx(nvbench::state& state)
   // Run algorithm
   DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
 
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
     parser.Transduce(d_input.data(),
@@ -169,6 +171,7 @@ void BM_FST_JSON_no_out(nvbench::state& state)
   // Run algorithm
   DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
 
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
     parser.Transduce(d_input.data(),
@@ -203,6 +206,7 @@ void BM_FST_JSON_no_str(nvbench::state& state)
   // Run algorithm
   DfaFstT parser{pda_sgs, pda_state_tt, pda_out_tt, stream.value()};
 
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // Allocate device-side temporary storage & run algorithm
     parser.Transduce(d_input.data(),
