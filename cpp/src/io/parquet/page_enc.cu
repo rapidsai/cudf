@@ -1263,8 +1263,9 @@ class header_encoder {
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
-// byteswap 128 bit integer into char array in network byte order
-static __device__ void swap128(__int128_t v, void* dst)
+// byteswap 128 bit integer, placing result in dst in network byte order.
+// dst must point to at least 16 bytes of memory.
+static __device__ void byte_reverse128(__int128_t v, void* dst)
 {
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
   auto const d_char_ptr = static_cast<unsigned char*>(dst);
@@ -1316,8 +1317,8 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
         vmax                  = &fp_scratch[1];
       } else if (dtype == dtype_decimal128) {
         auto const d128_scratch = static_cast<uint8_t*>(scratch);
-        swap128(s->min_value.d128_val, d128_scratch);
-        swap128(s->max_value.d128_val, &d128_scratch[16]);
+        byte_reverse128(s->min_value.d128_val, d128_scratch);
+        byte_reverse128(s->max_value.d128_val, &d128_scratch[16]);
         vmin = &d128_scratch[0];
         vmax = &d128_scratch[16];
       } else {
