@@ -16,7 +16,7 @@ raise [`NotImplementedError`](https://docs.python.org/3/library/exceptions.html#
 ## Handling libcudf Exceptions
 
 Currently libcudf raises `cudf::logic_error` and `cudf::cuda_error`.
-By default these error types is mapped to `RuntimeError` in python.
+By default these error types are mapped to `RuntimeError` in python.
 The `what()` message should be ignored in python level and not used to determine the error type raised from libcudf. 
 
 The projected roadmap for libcudf is to diversify the exceptions types on different invalid inputs.
