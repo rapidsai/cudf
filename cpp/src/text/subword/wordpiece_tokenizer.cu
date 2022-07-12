@@ -173,7 +173,7 @@ struct mark_special_tokens {
     });
     // search the special tokens array for the str_token
     cudf::string_view tokens(special_tokens, sizeof(special_tokens));
-    return tokens.find(str_token, size) >= 0;
+    return tokens.find(str_token, size) != cudf::string_view::npos;
   }
 
   /**

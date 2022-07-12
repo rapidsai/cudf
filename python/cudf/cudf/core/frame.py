@@ -59,18 +59,13 @@ class Frame(BinaryOperand, Scannable):
     """
 
     _data: "ColumnAccessor"
-    # TODO: Once all dependence on Frame having an index is removed, this
-    # attribute should be moved to IndexedFrame.
-    _index: Optional[cudf.core.index.BaseIndex]
-    _names: Optional[List]
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
-    def __init__(self, data=None, index=None):
+    def __init__(self, data=None):
         if data is None:
             data = {}
         self._data = cudf.core.column_accessor.ColumnAccessor(data)
-        self._index = index
 
     @property
     def _num_columns(self) -> int:
@@ -83,16 +78,6 @@ class Frame(BinaryOperand, Scannable):
     @property
     def _column_names(self) -> Tuple[Any, ...]:  # TODO: Tuple[str]?
         return tuple(self._data.names)
-
-    @property
-    def _index_names(self) -> Optional[Tuple[Any, ...]]:  # TODO: Tuple[str]?
-        # TODO: Temporarily suppressing mypy warnings to avoid introducing bugs
-        # by returning an empty list where one is not expected.
-        return (
-            None  # type: ignore
-            if self._index is None
-            else tuple(self._index._data.names)
-        )
 
     @property
     def _columns(self) -> Tuple[Any, ...]:  # TODO: Tuple[Column]?
