@@ -26,8 +26,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <src/rolling/range_window_bounds_detail.hpp>
-#include <src/rolling/rolling_detail.hpp>
+#include <src/rolling/detail/range_window_bounds.hpp>
+#include <src/rolling/detail/rolling.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>

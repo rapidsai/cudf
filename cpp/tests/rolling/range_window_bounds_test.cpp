@@ -28,7 +28,7 @@
 #include <vector>
 
 #include <cudf/rolling/range_window_bounds.hpp>
-#include <src/rolling/range_window_bounds_detail.hpp>
+#include <src/rolling/detail/range_window_bounds.hpp>
 
 namespace cudf {
 namespace test {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "range_window_bounds_detail.hpp"
+#include "detail/range_window_bounds.hpp"
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
