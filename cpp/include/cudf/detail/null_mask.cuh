@@ -509,19 +509,19 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
  *
  * @tparam OffsetIterator Random-access input iterator type.
  * @param bitmask Null mask residing in device memory whose segments will be reduced into a new
- *                mask.
+ * mask.
  * @param first_bit_indices_begin Random-access input iterator to the beginning of a sequence of
- *                                indices of the first bit in each segment (inclusive).
+ * indices of the first bit in each segment (inclusive).
  * @param first_bit_indices_end Random-access input iterator to the end of a sequence of indices of
- *                              the first bit in each segment (inclusive).
+ * the first bit in each segment (inclusive).
  * @param last_bit_indices_begin Random-access input iterator to the beginning of a sequence of
- *                               indices of the last bit in each segment (exclusive).
+ * indices of the last bit in each segment (exclusive).
  * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- *                      reduced value to be valid. If `null_policy::EXCLUDE`, the reduction is valid
- *                      if any element in the segment is valid.
+ * reduced value to be valid. If `null_policy::EXCLUDE`, the reduction is valid if any element in
+ * the segment is valid.
  * @param valid_initial_value Indicates whether a valid initial value was provided to the reduction.
- *                            True indicates a valid initial value, false indicates a null initial
- *                            value, and null indicates no initial value was provided.
+ * True indicates a valid initial value, false indicates a null initial value, and null indicates no
+ * initial value was provided.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned buffer's device memory.
  * @return A pair containing the reduced null mask and number of nulls.

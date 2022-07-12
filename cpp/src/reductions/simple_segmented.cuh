@@ -56,8 +56,8 @@ namespace detail {
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
  * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- *                      reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is
- *                      valid if any element in the segment is valid.
+ * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+ * in the segment is valid.
  * @param init Optional initial value of the reduction
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -142,8 +142,8 @@ std::unique_ptr<column> simple_segmented_reduction(
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
  * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- *                      reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is
- *                      valid if any element in the segment is valid.
+ * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+ * in the segment is valid.
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -245,8 +245,8 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
  * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
- *                      reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is
- *                      valid if any element in the segment is valid.
+ * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+ * in the segment is valid.
  * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -449,8 +449,8 @@ struct column_type_dispatcher {
    * @param offsets Indices to segment boundaries
    * @param output_type Requested type of the scalar result
    * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
-   *                      reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is
-   *                      valid if any element in the segment is valid.
+   * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+   * in the segment is valid.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */

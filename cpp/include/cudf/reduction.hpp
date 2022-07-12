@@ -122,12 +122,12 @@ std::unique_ptr<scalar> reduce(
  *
  * @param segmented_values Column view of segmented inputs
  * @param offsets Each segment's offset of @p segmented_values. A list of offsets with size
- *                `num_segments + 1`. The size of `i`th segment is `offsets[i+1] - offsets[i]`.
+ * `num_segments + 1`. The size of `i`th segment is `offsets[i+1] - offsets[i]`.
  * @param agg Aggregation operator applied by the reduction
  * @param output_dtype  The output precision
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in a segment are valid,
- *                      otherwise null. If `EXCLUDE`, the reduction is valid if any element in the
- *                      segment is valid, otherwise null.
+ * otherwise null. If `EXCLUDE`, the reduction is valid if any element in the segment is valid,
+ * otherwise null.
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @returns Output column with results of segmented reduction
  */
@@ -145,12 +145,12 @@ std::unique_ptr<column> segmented_reduce(
  *
  * @param segmented_values Column view of segmented inputs
  * @param offsets Each segment's offset of @p segmented_values. A list of offsets with size
- *                `num_segments + 1`. The size of `i`th segment is `offsets[i+1] - offsets[i]`.
+ * `num_segments + 1`. The size of `i`th segment is `offsets[i+1] - offsets[i]`.
  * @param agg Aggregation operator applied by the reduction
  * @param output_dtype  The output precision
  * @param null_handling If `INCLUDE`, the reduction is valid if all elements in a segment are valid,
- *                      otherwise null. If `EXCLUDE`, the reduction is valid if any element in the
- *                      segment is valid, otherwise null.
+ * otherwise null. If `EXCLUDE`, the reduction is valid if any element in the segment is valid,
+ * otherwise null.
  * @param init The initial value of the reduction
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @returns Output column with results of segmented reduction.
@@ -175,10 +175,9 @@ std::unique_ptr<column> segmented_reduce(
  * @param[in] input The input column view for the scan
  * @param[in] agg unique_ptr to aggregation operator applied by the scan
  * @param[in] inclusive The flag for applying an inclusive scan if scan_type::INCLUSIVE, an
- *                      exclusive scan if scan_type::EXCLUSIVE.
+ * exclusive scan if scan_type::EXCLUSIVE.
  * @param[in] null_handling Exclude null values when computing the result if null_policy::EXCLUDE.
- *                          Include nulls if null_policy::INCLUDE. Any operation with a null results
- *                          in a null.
+ * Include nulls if null_policy::INCLUDE. Any operation with a null results in a null.
  * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
  * @returns Scanned output column
  */
@@ -195,8 +194,8 @@ std::unique_ptr<column> scan(
  *
  * @param col column to compute minmax
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return A std::pair of scalars with the first scalar being the minimum value
- *         and the second scalar being the maximum value of the input column.
+ * @return A std::pair of scalars with the first scalar being the minimum value and the second
+ * scalar being the maximum value of the input column.
  */
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   column_view const& col,
