@@ -6,9 +6,9 @@ This document discusses what to raise given invalid user inputs and how to handl
 
 cuDF uses [builtin error types](https://docs.python.org/3/library/exceptions.html) to indicate user error.
 If an API shares an argument with pandas,
-cuDf should raise the same error type given a specific invalid input for that argument.
-Developer of the API should include sufficient information in the exception message to helper user locate the source of the error,
-but it is not required to match pandas API's exception message.
+cuDF should raise the same error type given a specific invalid input for that argument.
+Developers of the API should include sufficient information in the exception message to help user locate the source of the error,
+but it is not required to match the corresponding pandas API's exception message.
 
 For parameters that are not yet supported,
 raise [`NotImplementedError`](https://docs.python.org/3/library/exceptions.html#NotImplementedError).
