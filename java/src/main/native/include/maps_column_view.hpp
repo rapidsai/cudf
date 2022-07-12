@@ -141,7 +141,7 @@ public:
    */
 
   std::unique_ptr<column>
-  contains(column_view const &key, rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+  contains(column_view const &key, rmm::cuda_stream_view stream = cudf::default_stream_value,
            rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource()) const;
 
 private:

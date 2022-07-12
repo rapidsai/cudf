@@ -29,13 +29,6 @@ namespace cudf {
 using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 
 /**
- * @brief The string length is initialized to this value as a place-holder
- *
- * The number of characters in a string computed on-demand.
- */
-constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
-
-/**
  * @brief A non-owning, immutable view of device data that is a variable length
  * char array representing a UTF-8 string.
  *
@@ -225,7 +218,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if str is not found in this string.
+   * @return npos if str is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type find(const string_view& str,
                                                  size_type pos   = 0,
@@ -239,7 +232,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if arg string is not found in this string.
+   * @return npos if arg string is not found in this string.
    */
   __device__ inline size_type find(const char* str,
                                    size_type bytes,
@@ -253,7 +246,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if arg string is not found in this string.
+   * @return npos if arg string is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type find(char_utf8 character,
                                                  size_type pos   = 0,
@@ -266,7 +259,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if arg string is not found in this string.
+   * @return npos if arg string is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type rfind(const string_view& str,
                                                   size_type pos   = 0,
@@ -280,7 +273,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if arg string is not found in this string.
+   * @return npos if arg string is not found in this string.
    */
   __device__ inline size_type rfind(const char* str,
                                     size_type bytes,
@@ -294,7 +287,7 @@ class string_view {
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
    *              Specify -1 to indicate to the end of the string.
-   * @return -1 if arg string is not found in this string.
+   * @return npos if arg string is not found in this string.
    */
   __device__ [[nodiscard]] inline size_type rfind(char_utf8 character,
                                                   size_type pos   = 0,
@@ -363,10 +356,24 @@ class string_view {
    */
   string_view& operator=(string_view&&) = default;
 
+  /**
+   * @brief No-position value.
+   *
+   * Used when specifying or returning an invalid or unknown character position value.
+   */
+  static inline cudf::size_type const npos{-1};
+
  private:
   const char* _data{};          ///< Pointer to device memory contain char array for this string
   size_type _bytes{};           ///< Number of bytes in _data for this string
   mutable size_type _length{};  ///< Number of characters in this string (computed)
+
+  /**
+   * @brief The string length is initialized to this value as a place-holder
+   *
+   * The number of characters in a string is computed on-demand.
+   */
+  static inline cudf::size_type const UNKNOWN_STRING_LENGTH{-1};
 
   /**
    * @brief Return the character position of the given byte offset.
@@ -385,7 +392,7 @@ class string_view {
    * @param bytes Number of bytes in str
    * @param pos Character position to start search within this string
    * @param count Number of characters from pos to include in the search
-   * @return -1 if arg string is not found in this string
+   * @return npos if str is not found in this string
    */
   template <bool forward>
   __device__ inline size_type find_impl(const char* str,
