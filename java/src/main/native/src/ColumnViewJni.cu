@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -83,6 +83,10 @@ std::unique_ptr<cudf::column> generate_list_offsets(cudf::column_view const &lis
 
 std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view const &input,
                                                     rmm::cuda_stream_view stream) {
+  if (input.is_empty()) {
+    return empty_like(input.parent());
+  }
+
   auto const child = input.get_sliced_child(stream);
 
   // Genereate labels for the input list elements.
