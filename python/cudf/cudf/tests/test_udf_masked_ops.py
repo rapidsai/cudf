@@ -786,6 +786,34 @@ def test_string_udf_rfind(data, substr):
 
     run_masked_udf_test(func, data, check_dtype=False)
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "AI",
+                "gpu",
+                "2022",
+                "cuDF",
+                "again_gpu",
+            ]
+        }
+    ],
+)
+@pytest.mark.parametrize("substr", ["a", "cu", "", "12"])
+def test_string_udf_contains(data, substr):
+    # tests the boolean operation `substr in str`
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return substr in st
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+
 @pytest.mark.parametrize('data', [
     {
         'str_col': ["abc", "ABC", "aBc", "123", ""]

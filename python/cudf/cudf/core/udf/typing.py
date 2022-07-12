@@ -380,6 +380,19 @@ class MaskedStringViewLength(AbstractTemplate):
         ):
             return nb_signature(MaskedType(types.int32), args[0])
 
+@cuda_decl_registry.register_global(operator.contains)
+class MaskedStringViewContains(AbstractTemplate):
+    """
+    return a boolean indicating if a substring is found in a string
+    """
+
+    def generic(self, args, kws):
+        if (isinstance(args[0], MaskedType) and isinstance(
+            args[0].value_type, StringView
+        ) or isinstance(args[0], types.StringLiteral)) and (isinstance(args[1], MaskedType) and isinstance(
+            args[1].value_type, StringView
+        ) or isinstance(args[1], types.StringLiteral)):
+            return nb_signature(MaskedType(types.boolean), MaskedType(string_view), MaskedType(string_view))
 
 @cuda_decl_registry.register_global(len)
 class StringLiteralLength(AbstractTemplate):
@@ -408,6 +421,22 @@ class MaskedStringViewEndsWith(AbstractTemplate):
             MaskedType(types.boolean), MaskedType(string_view), recvr=self.this
         )
 
+class MaskedStringViewFind(AbstractTemplate):
+    key = "MaskedType.find"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.int32), MaskedType(string_view), recvr=self.this
+        )
+
+class MaskedStringViewRFind(AbstractTemplate):
+    key = "MaskedType.rfind"
+
+    def generic(self, args, kws):
+        return nb_signature(
+            MaskedType(types.int32), MaskedType(string_view), recvr=self.this
+        )
+
 @cuda_decl_registry.register_attr
 class MaskedStringViewAttrs(AttributeTemplate):
     key = MaskedType(string_view)
@@ -420,6 +449,16 @@ class MaskedStringViewAttrs(AttributeTemplate):
     def resolve_endswith(self, mod):
         return types.BoundFunction(
             MaskedStringViewEndsWith, MaskedType(string_view)
+        )
+
+    def resolve_find(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewFind, MaskedType(string_view)
+        )
+
+    def resolve_rfind(self, mod):
+        return types.BoundFunction(
+            MaskedStringViewRFind, MaskedType(string_view)
         )
 
     def resolve_value(self, mod):
