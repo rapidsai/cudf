@@ -338,7 +338,7 @@ __device__ inline size_type string_view::find_impl(const char* str,
                                                    size_type pos,
                                                    size_type count) const
 {
-  if (!str || pos < 0) return -1;
+  if (!str || pos < 0) return npos;
   auto const nchars = length();
   if (count < 0) count = nchars;
   auto const spos = byte_offset(pos);
@@ -355,7 +355,7 @@ __device__ inline size_type string_view::find_impl(const char* str,
     if (match) { return character_offset(forward ? (idx + spos) : (epos - bytes - idx)); }
     forward ? ++ptr : --ptr;
   }
-  return -1;
+  return npos;
 }
 
 __device__ inline size_type string_view::find(const char* str,

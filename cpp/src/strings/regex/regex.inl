@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/is_flags.h>
-
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 
@@ -262,7 +261,7 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
           startchar = static_cast<char_utf8>('\n');
         case CHAR: {
           auto const fidx = dstr.find(startchar, pos);
-          if (fidx < 0) { return match; }
+          if (fidx == string_view::npos) { return match; }
           pos = fidx + (jnk.starttype == BOL);
           break;
         }
