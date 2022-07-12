@@ -98,3 +98,6 @@ def describe_configs() -> Dict[str, str]:
     return {
         config.name: config.description for config in _CUDF_CONFIG.values()
     }
+
+
+register_config("default_int_bitwidth", 64, "Default bitwidth for integer types", lambda x: x in [32, 64])
