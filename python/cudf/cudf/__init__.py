@@ -82,6 +82,14 @@ from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
 
+from .config import (
+    register_config,
+    get_config,
+    set_config,
+    describe_config,
+    describe_configs,
+)
+
 try:
     from ptxcompiler.patch import patch_numba_codegen_if_needed
 except ImportError:
