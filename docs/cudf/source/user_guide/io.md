@@ -80,15 +80,15 @@ IO format.
 
 - \[¹\] - Not GPU-accelerated.
 
-## GPUDirect Storage Integration
+## Magnum IO GPUDirect Storage Integration
 
-Many IO APIs can use GPUDirect Storage (GDS) library to optimize IO
-operations.  GDS enables a direct data path for direct memory access
+Many IO APIs can use Magnum IO GPUDirect Storage (GDS) library to optimize
+IO operations.  GDS enables a direct data path for direct memory access
 (DMA) transfers between GPU memory and storage, which avoids a bounce
 buffer through the CPU.  GDS also has a compatibility mode that allows
-the library to fall back to copying through a CPU bounce buffer.  The
+the library to fall back to copying through a CPU bounce buffer. The
 SDK is available for download
-[here](https://developer.nvidia.com/gpudirect-storage).  GDS is also
+[here](https://developer.nvidia.com/gpudirect-storage). GDS is also
 included in CUDA Toolkit 11.4 and higher.
 
 Use of GPUDirect Storage in cuDF is enabled by default, but can be
@@ -161,13 +161,17 @@ If no value is set, behavior will be the same as the "STABLE" option.
 
 ```{eval-rst}
 .. table:: Current policy for nvCOMP use for different types
-    :widths: 20 15 15 15 15 15 15 15 15 15
+    :widths: 20 20 20 20 20 20 20 20 20 20
 
-    +-----------------------+--------+--------+--------+--------+---------+--------+--------+--------+--------+
-    |                       |       CSV       |      Parquet    |       JSON       |       ORC       |  AVRO  |
-    +-----------------------+--------+--------+--------+--------+---------+--------+--------+--------+--------+
-    | Compression Type      | Writer | Reader | Writer | Reader | Writer¹ | Reader | Writer | Reader | Reader |
-    +=======================+========+========+========+========+=========+========+========+========+========+
-    | snappy                | ❌     | ❌     | Stable | Stable | ❌      | ❌     | Stable | Stable | ❌     |
-    +-----------------------+--------+--------+--------+--------+---------+--------+--------+--------+--------+
+    +-----------------------+--------+--------+--------------+--------------+---------+--------+--------------+--------------+--------+
+    |                       |       CSV       |            Parquet          |       JSON       |             ORC             |  AVRO  |
+    +-----------------------+--------+--------+--------------+--------------+---------+--------+--------------+--------------+--------+
+    | Compression Type      | Writer | Reader |    Writer    |    Reader    | Writer¹ | Reader |    Writer    |    Reader    | Reader |
+    +=======================+========+========+==============+==============+=========+========+==============+==============+========+
+    | Snappy                | ❌     | ❌     | Stable       | Stable       | ❌      | ❌     | Stable       | Stable       | ❌     |
+    +-----------------------+--------+--------+--------------+--------------+---------+--------+--------------+--------------+--------+
+    | ZSTD                  | ❌     | ❌     | Experimental | Experimental | ❌      | ❌     | Experimental | Experimental | ❌     |
+    +-----------------------+--------+--------+--------------+--------------+---------+--------+--------------+--------------+--------+
+    | DEFLATE               | ❌     | ❌     | ❌           | ❌           | ❌      | ❌     | Experimental | Experimental | ❌     |
+    +-----------------------+--------+--------+--------------+--------------+---------+--------+--------------+--------------+--------+
 ```

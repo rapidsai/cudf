@@ -233,8 +233,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Get a ColumnView that is the offsets for this list.
+   * Please note that it is the responsibility of the caller to close this view, and the parent
+   * column must out live this view.
    */
-  ColumnView getListOffsetsView() {
+  public ColumnView getListOffsetsView() {
     assert(getType().equals(DType.LIST));
     return new ColumnView(getListOffsetCvPointer(viewHandle));
   }
@@ -1767,22 +1769,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns a new ColumnVector of {@link DType#BOOL8} elements containing true if the corresponding
-   * entry in haystack is contained in needles and false if it is not. The caller will be responsible
-   * for the lifecycle of the new vector.
+   * Returns a new column of {@link DType#BOOL8} elements having the same size as this column,
+   * each row value is true if the corresponding entry in this column is contained in the
+   * given searchSpace column and false if it is not.
+   * The caller will be responsible for the lifecycle of the new vector.
    *
    * example:
    *
-   *   haystack = { 10, 20, 30, 40, 50 }
-   *   needles  = { 20, 40, 60, 80 }
+   *   col         = { 10, 20, 30, 40, 50 }
+   *   searchSpace = { 20, 40, 60, 80 }
    *
    *   result = { false, true, false, true, false }
    *
-   * @param needles
+   * @param searchSpace
    * @return A new ColumnVector of type {@link DType#BOOL8}
    */
-  public final ColumnVector contains(ColumnView needles) {
-    return new ColumnVector(containsVector(getNativeView(), needles.getNativeView()));
+  public final ColumnVector contains(ColumnView searchSpace) {
+    return new ColumnVector(containsVector(getNativeView(), searchSpace.getNativeView()));
   }
 
   /**
@@ -3236,6 +3239,25 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Extracts all strings that match the given regular expression and corresponds to the 
+   * regular expression group index. Any null inputs also result in null output entries.
+   * 
+   * For supported regex patterns refer to:
+   * @link https://docs.rapids.ai/api/libcudf/nightly/md_regex.html
+   
+   * @param pattern The regex pattern
+   * @param idx The regex group index
+   * @return A new column vector of extracted matches
+   */
+  public final ColumnVector extractAllRecord(String pattern, int idx) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert idx >= 0 : "group index must be at least 0";
+
+    return new ColumnVector(extractAllRecord(this.getNativeView(), pattern, idx));
+  }
+
+
+  /**
    * Converts all character sequences starting with '%' into character code-points
    * interpreting the 2 following characters as hex values to create the code-point.
    * For example, the sequence '%20' is converted into byte (0x20) which is a single
@@ -3275,6 +3297,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert isSupportedKeyType : "Map lookup by STRUCT and LIST keys is not supported.";
   }
 
+  /**
+   * Given a column of type List<Struct<X, Y>> and a key column of type X, return a column of type Y,
+   * where each row in the output column is the Y value corresponding to the X key.
+   * If the key is not found, the corresponding output value is null.
+   * @param keys the column view with keys to lookup in the column
+   * @return a column of values or nulls based on the lookup result
+   */
+  public final ColumnVector getMapValue(ColumnView keys) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert keys != null : "Lookup key may not be null";
+    return new ColumnVector(mapLookupForKeys(getNativeView(), keys.getNativeView()));
+  }
+
   /** 
    * Given a column of type List<Struct<X, Y>> and a key of type X, return a column of type Y,
    * where each row in the output column is the Y value corresponding to the X key.
@@ -3300,6 +3335,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert key != null : "Lookup key may not be null";
     assertIsSupportedMapKeyType(key.getType());
     return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
+  }
+
+  /** For a column of type List<Struct<_, _>> and a passed in key column, return a boolean
+   * column for all keys in the map. Each output row is true if the key exists in the corresponding map for
+   * that row, false otherwise. It will never return null for a row.
+   * @param keys the keys to lookup in the column
+   * @return a boolean column based on the lookup result
+   */
+  public final ColumnVector getMapKeyExistence(ColumnView keys) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert keys != null : "Lookup key may not be null";
+    assertIsSupportedMapKeyType(keys.getType());
+    return new ColumnVector(mapContainsKeys(getNativeView(), keys.getNativeView()));
   }
 
   /**
@@ -3494,6 +3542,37 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final Scalar getScalarElement(int index) {
     return new Scalar(getType(), getElement(getNativeView(), index));
+  }
+
+  /**
+   * Filters elements in each row of this LIST column using `booleanMaskView`
+   * LIST of booleans as a mask.
+   * <p>
+   * Given a list-of-bools column, the function produces
+   * a new `LIST` column of the same type as this column, where each element is copied
+   * from the row *only* if the corresponding `boolean_mask` is non-null and `true`.
+   * <p>
+   * E.g.
+   * column       = { {0,1,2}, {3,4}, {5,6,7}, {8,9} };
+   * boolean_mask = { {0,1,1}, {1,0}, {1,1,1}, {0,0} };
+   * results      = { {1,2},   {3},   {5,6,7}, {} };
+   * <p>
+   * This column and `boolean_mask` must have the same number of rows.
+   * The output column has the same number of rows as this column.
+   * An element is copied to an output row *only*
+   * if the corresponding boolean_mask element is `true`.
+   * An output row is invalid only if the row is invalid.
+   *
+   * @param booleanMaskView A nullable list of bools column used to filter elements in this column
+   * @return List column of the same type as this column, containing filtered list rows
+   * @throws CudfException if `boolean_mask` is not a "lists of bools" column
+   * @throws CudfException if this column and `boolean_mask` have different number of rows
+   */
+  public final ColumnVector applyBooleanMask(ColumnView booleanMaskView) {
+    assert (getType().equals(DType.LIST));
+    assert (booleanMaskView.getType().equals(DType.LIST));
+    assert (getRowCount() == booleanMaskView.getRowCount());
+    return new ColumnVector(applyBooleanMask(getNativeView(), booleanMaskView.getNativeView()));
   }
 
   /**
@@ -3866,6 +3945,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
 
+  /**
+   * Native method for extracting all results corresponding to group idx from a regular expression.
+   *
+   * @param nativeHandle Native handle of the cudf::column_view being operated on.
+   * @param pattern String regex pattern.
+   * @param idx Regex group index. A 0 value means matching the entire regex.
+   * @return Native handle of a string column of the result.
+   */
+  private static native long extractAllRecord(long nativeHandle, String pattern, int idx);
+
   private static native long urlDecode(long cudfViewHandle);
 
   private static native long urlEncode(long cudfViewHandle);
@@ -3878,6 +3967,30 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException
    */
   private static native long mapLookup(long columnView, long key) throws CudfException;
+
+  /**
+   * Native method for map lookup over a column of List<Struct<String,String>>
+   * The lookup column must have as many rows as the map column,
+   * and must match the key-type of the map.
+   * A column of values is returned, with the same number of rows as the map column.
+   * If a key is repeated in a map row, the value corresponding to the last matching
+   * key is returned.
+   * If a lookup key is null or not found, the corresponding value is null.
+   * @param columnView the column view handle of the map
+   * @param keys       the column view holding the keys
+   * @return a column of values corresponding the value of the lookup key.
+   * @throws CudfException
+   */
+  private static native long mapLookupForKeys(long columnView, long keys) throws CudfException;
+
+  /**
+   * Native method for check the existence of a key over a column of List<Struct<_, _>>
+   * @param columnView the column view handle of the map
+   * @param key the column view holding the keys
+   * @return boolean column handle of the result
+   * @throws CudfException
+   */
+  private static native long mapContainsKeys(long columnView, long key) throws CudfException;
 
   /**
    * Native method for check the existence of a key over a column of List<Struct<String,String>>
@@ -4078,7 +4191,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
-  private static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
+  private static native long containsVector(long valuesHandle, long searchSpaceHandle) throws CudfException;
 
   private static native long transform(long viewHandle, String udf, boolean isPtx);
 
@@ -4173,6 +4286,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
 
   static native long generateListOffsets(long handle) throws CudfException;
+
+  static native long applyBooleanMask(long arrayColumnView, long booleanMaskHandle) throws CudfException;
 
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when

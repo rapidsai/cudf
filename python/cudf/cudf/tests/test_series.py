@@ -12,7 +12,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
+from cudf.core._compat import PANDAS_GE_120, PANDAS_LT_140
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
@@ -596,7 +596,7 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
 
 
 @pytest.mark.parametrize(
-    "df",
+    "gs",
     [
         cudf.Series([1, 2, 3]),
         cudf.Series([None]),
@@ -648,11 +648,11 @@ def test_series_value_counts_optional_arguments(ascending, dropna, normalize):
     ],
 )
 @pytest.mark.parametrize("dropna", [True, False])
-def test_series_mode(df, dropna):
-    pdf = df.to_pandas()
+def test_series_mode(gs, dropna):
+    ps = gs.to_pandas()
 
-    expected = pdf.mode(dropna=dropna)
-    actual = df.mode(dropna=dropna)
+    expected = ps.mode(dropna=dropna)
+    actual = gs.mode(dropna=dropna)
 
     assert_eq(expected, actual, check_dtype=False)
 
@@ -1248,7 +1248,8 @@ def test_series_upcast_float16(data):
             pd.RangeIndex(4, -1, -2),
             marks=[
                 pytest.mark.xfail(
-                    reason="https://github.com/pandas-dev/pandas/issues/43591"
+                    condition=PANDAS_LT_140,
+                    reason="https://github.com/pandas-dev/pandas/issues/43591",
                 )
             ],
         ),
@@ -1572,6 +1573,28 @@ def test_series_nunique_index(data):
     "data",
     [
         [],
+        [1, 2, 3, 4],
+        ["a", "b", "c"],
+        [1.2, 2.2, 4.5],
+        [np.nan, np.nan],
+        [None, None, None],
+    ],
+)
+def test_axes(data):
+    csr = cudf.Series(data)
+    psr = csr.to_pandas()
+
+    expected = psr.axes
+    actual = csr.axes
+
+    for e, a in zip(expected, actual):
+        assert_eq(e, a)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
         [0, 12, 14],
         [0, 14, 12, 12, 3, 10, 12, 14],
         np.random.randint(-100, 100, 200),
@@ -1812,3 +1835,54 @@ def test_series_digitize_invalid_bins():
         ValueError, match="`bins` cannot contain null entries."
     ):
         _ = s.digitize(bins)
+
+
+@pytest.mark.parametrize(
+    "data,left,right",
+    [
+        ([0, 1, 2, 3, 4, 5, 10], 0, 5),
+        ([0, 1, 2, 3, 4, 5, 10], 10, 1),
+        ([0, 1, 2, 3, 4, 5], [0, 10, 11] * 2, [1, 2, 5] * 2),
+        (["a", "few", "set", "of", "strings", "xyz", "abc"], "banana", "few"),
+        (["a", "few", "set", "of", "strings", "xyz", "abc"], "phone", "hello"),
+        (
+            ["a", "few", "set", "of", "strings", "xyz", "abc"],
+            ["a", "hello", "rapids", "ai", "world", "chars", "strs"],
+            ["yes", "no", "hi", "bye", "test", "pass", "fail"],
+        ),
+        ([0, 1, 2, np.nan, 4, np.nan, 10], 10, 1),
+    ],
+)
+@pytest.mark.parametrize("inclusive", ["both", "neither", "left", "right"])
+def test_series_between(data, left, right, inclusive):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps, nan_as_null=False)
+
+    expected = ps.between(left, right, inclusive=inclusive)
+    actual = gs.between(left, right, inclusive=inclusive)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data,left,right",
+    [
+        ([0, 1, 2, None, 4, 5, 10], 0, 5),
+        ([0, 1, 2, 3, None, 5, 10], 10, 1),
+        ([None, 1, 2, 3, 4, None], [0, 10, 11] * 2, [1, 2, 5] * 2),
+        (
+            ["a", "few", "set", None, "strings", "xyz", "abc"],
+            ["a", "hello", "rapids", "ai", "world", "chars", "strs"],
+            ["yes", "no", "hi", "bye", "test", "pass", "fail"],
+        ),
+    ],
+)
+@pytest.mark.parametrize("inclusive", ["both", "neither", "left", "right"])
+def test_series_between_with_null(data, left, right, inclusive):
+    gs = cudf.Series(data)
+    ps = gs.to_pandas(nullable=True)
+
+    expected = ps.between(left, right, inclusive=inclusive)
+    actual = gs.between(left, right, inclusive=inclusive)
+
+    assert_eq(expected, actual.to_pandas(nullable=True))

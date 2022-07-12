@@ -24,13 +24,9 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <type_traits>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace fst {
-namespace detail {
+namespace cudf::io::fst::detail {
 
 /**
  * @brief Class template that can be plugged into the finite-state machine to look up the symbol
@@ -159,7 +155,7 @@ template <int32_t MAX_NUM_SYMBOLS, int32_t MAX_NUM_STATES>
 class TransitionTable {
  private:
   // Type used
-  using ItemT = char;  // maximum 256 states.
+  using ItemT = char;
 
   struct _TempStorage {
     ItemT transitions[MAX_NUM_STATES * MAX_NUM_SYMBOLS];
@@ -172,17 +168,19 @@ class TransitionTable {
     ItemT transitions[MAX_NUM_STATES * MAX_NUM_SYMBOLS];
   };
 
-  // defined only for non-narrowing conversion
   template <typename StateIdT, typename = std::void_t<decltype(ItemT{std::declval<StateIdT>()})>>
   static void InitDeviceTransitionTable(hostdevice_vector<KernelParameter>& transition_table_init,
-                                        const std::vector<std::vector<StateIdT>>& trans_table,
+                                        std::vector<std::vector<StateIdT>> const& trans_table,
                                         rmm::cuda_stream_view stream)
   {
     // trans_table[state][symbol] -> new state
     for (std::size_t state = 0; state < trans_table.size(); ++state) {
       for (std::size_t symbol = 0; symbol < trans_table[state].size(); ++symbol) {
+        CUDF_EXPECTS(
+          trans_table[state][symbol] <= std::numeric_limits<ItemT>::max(),
+          "Target state index value exceeds value representable by the transition table's type");
         transition_table_init.host_ptr()->transitions[symbol * MAX_NUM_STATES + state] =
-          ItemT{trans_table[state][symbol]};
+          trans_table[state][symbol];
       }
     }
 
@@ -424,8 +422,8 @@ class TransducerLookupTable {
  * translation table that specifies which state transitions cause which output to be written).
  *
  * @tparam OutSymbolT The symbol type being output by the finite-state transducer
- * @tparam NUM_SYMBOLS The number of symbol groups amongst which to differentiate (one dimension of
- * the transition table)
+ * @tparam NUM_SYMBOLS The number of symbol groups amongst which to differentiate including the
+ * wildcard symbol group (one dimension of the transition table)
  * @tparam NUM_STATES The number of states defined by the DFA (the other dimension of the
  * transition table)
  */
@@ -442,16 +440,16 @@ class Dfa {
   using SymbolGroupIdInitT   = typename SymbolGroupIdLookupT::KernelParameter;
 
   // Transition table
-  using TransitionTableT     = detail::TransitionTable<NUM_SYMBOLS + 1, NUM_STATES>;
+  using TransitionTableT     = detail::TransitionTable<NUM_SYMBOLS, NUM_STATES>;
   using TransitionTableInitT = typename TransitionTableT::KernelParameter;
 
   // Translation lookup table
   using OutSymbolOffsetT      = uint32_t;
   using TranslationTableT     = detail::TransducerLookupTable<OutSymbolT,
                                                           OutSymbolOffsetT,
-                                                          NUM_SYMBOLS + 1,
+                                                          NUM_SYMBOLS,
                                                           NUM_STATES,
-                                                          (NUM_SYMBOLS + 1) * NUM_STATES>;
+                                                          NUM_SYMBOLS * NUM_STATES>;
   using TranslationTableInitT = typename TranslationTableT::KernelParameter;
 
   auto get_device_view()
@@ -531,7 +529,4 @@ class Dfa {
   hostdevice_vector<TranslationTableInitT> translation_table_init{};
 };
 
-}  // namespace detail
-}  // namespace fst
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::fst::detail

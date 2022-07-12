@@ -16,12 +16,14 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf_test/print_utilities.cuh>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
@@ -32,15 +34,14 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <type_traits>
 
-namespace cudf {
-namespace io {
-namespace fst {
+namespace cudf::io::fst {
 
 /**
  * @brief Describes the kind of stack operation.
  */
-enum class stack_op_type : int32_t {
+enum class stack_op_type : int8_t {
   READ = 0,  ///< Operation reading what is currently on top of the stack
   PUSH = 1,  ///< Operation pushing a new item on top of the stack
   POP  = 2   ///< Operation popping the item currently on top of the stack
@@ -62,6 +63,9 @@ namespace detail {
  */
 template <typename StackLevelT, typename ValueT>
 struct StackOp {
+  // Must be signed type as any subsequence of stack operations must be able to be covered.
+  static_assert(std::is_signed_v<StackLevelT>, "StackLevelT has to be a signed type");
+
   StackLevelT stack_level;
   ValueT value;
 };
@@ -212,35 +216,6 @@ struct RemapEmptyStack {
   StackOpT empty_stack_symbol;
 };
 
-/**
- * @brief Function object to return only the stack_level part from a StackOp instance.
- */
-struct StackOpToStackLevel {
-  template <typename StackLevelT, typename ValueT>
-  constexpr CUDF_HOST_DEVICE StackLevelT operator()(StackOp<StackLevelT, ValueT> const& kv_op) const
-  {
-    return kv_op.stack_level;
-  }
-};
-
-/**
- * @brief Retrieves an iterator that returns only the `stack_level` part from a StackOp iterator.
- */
-template <typename StackOpItT>
-auto get_stack_level_iterator(StackOpItT it)
-{
-  return thrust::make_transform_iterator(it, StackOpToStackLevel{});
-}
-
-/**
- * @brief Retrieves an iterator that returns only the `value` part from a StackOp iterator.
- */
-template <typename StackOpItT>
-auto get_value_iterator(StackOpItT it)
-{
-  return thrust::make_transform_iterator(it, StackOpToStackSymbol{});
-}
-
 }  // namespace detail
 
 /**
@@ -261,6 +236,7 @@ auto get_value_iterator(StackOpItT it)
  * value_type)
  * @tparam OffsetT Signed or unsigned integer type large enough to index into both the sparse input
  * sequence and the top-of-stack output sequence
+ *
  * @param[in] d_symbols Sequence of symbols that represent stack operations. Memory may alias with
  * \p d_top_of_stack
  * @param[in,out] d_symbol_positions Sequence of symbol positions (for a sparse representation),
@@ -291,7 +267,7 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                      StackSymbolT const empty_stack_symbol,
                                      StackSymbolT const read_symbol,
                                      std::size_t const num_symbols_out,
-                                     rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                                     rmm::cuda_stream_view stream = cudf::default_stream_value)
 {
   rmm::device_buffer temp_storage{};
 
@@ -425,14 +401,6 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                                num_symbols_in,
                                                stream));
 
-  // Dump info on stack operations: (stack level change + symbol) -> (absolute stack level + symbol)
-  test::print::print_array(num_symbols_in,
-                           stream,
-                           get_stack_level_iterator(stack_symbols_in),
-                           get_value_iterator(stack_symbols_in),
-                           get_stack_level_iterator(d_kv_operations.Current()),
-                           get_value_iterator(d_kv_operations.Current()));
-
   // Stable radix sort, sorting by stack level of the operations
   d_kv_operations_unsigned = cub::DoubleBuffer<StackOpUnsignedT>{
     reinterpret_cast<StackOpUnsignedT*>(d_kv_operations.Current()),
@@ -451,13 +419,6 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                     detail::RemapEmptyStack<StackOpT>{empty_stack}};
   kv_ops_scan_out = reinterpret_cast<StackOpT*>(d_kv_operations_unsigned.Alternate());
 
-  // Dump info on stack operations sorted by their stack level (i.e. stack level after applying
-  // operation)
-  test::print::print_array(num_symbols_in,
-                           stream,
-                           get_stack_level_iterator(kv_ops_scan_in),
-                           get_value_iterator(kv_ops_scan_in));
-
   // Inclusive scan to match pop operations with the latest push operation of that level
   CUDF_CUDA_TRY(cub::DeviceScan::InclusiveScan(
     temp_storage.data(),
@@ -468,17 +429,8 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
     num_symbols_in,
     stream));
 
-  // Dump info on stack operations sorted by their stack level (i.e. stack level after applying
-  // operation)
-  test::print::print_array(num_symbols_in,
-                           stream,
-                           get_stack_level_iterator(kv_ops_scan_in),
-                           get_value_iterator(kv_ops_scan_in),
-                           get_stack_level_iterator(kv_ops_scan_out),
-                           get_value_iterator(kv_ops_scan_out));
-
   // Fill the output tape with read-symbol
-  thrust::fill(thrust::cuda::par.on(stream),
+  thrust::fill(rmm::exec_policy(stream),
                thrust::device_ptr<StackSymbolT>{d_top_of_stack},
                thrust::device_ptr<StackSymbolT>{d_top_of_stack + num_symbols_out},
                read_symbol);
@@ -489,16 +441,11 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
 
   // Scatter the stack symbols to the output tape (spots that are not scattered to have been
   // pre-filled with the read-symbol)
-  thrust::scatter(thrust::cuda::par.on(stream),
+  thrust::scatter(rmm::exec_policy(stream),
                   kv_op_to_stack_sym_it,
                   kv_op_to_stack_sym_it + num_symbols_in,
                   d_symbol_positions_db.Current(),
                   d_top_of_stack);
-
-  // Dump the output tape that has many yet-to-be-filled spots (i.e., all spots that were not given
-  // in the sparse representation)
-  test::print::print_array(
-    std::min(num_symbols_in, static_cast<decltype(num_symbols_in)>(10000)), stream, d_top_of_stack);
 
   // We perform an exclusive scan in order to fill the items at the very left that may
   // be reading the empty stack before there's the first push occurrence in the sequence.
@@ -512,12 +459,6 @@ void sparse_stack_op_to_top_of_stack(StackSymbolItT d_symbols,
                                    empty_stack_symbol,
                                    num_symbols_out,
                                    stream));
-
-  // Dump the final output
-  test::print::print_array(
-    std::min(num_symbols_in, static_cast<decltype(num_symbols_in)>(10000)), stream, d_top_of_stack);
 }
 
-}  // namespace fst
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::fst

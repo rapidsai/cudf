@@ -266,7 +266,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         If both a dict and index sequence are used, the index will
         override the keys found in the dict.
 
-    dtype : str, numpy.dtype, or ExtensionDtype, optional
+    dtype : str, :class:`numpy.dtype`, or ExtensionDtype, optional
         Data type for the output Series. If not specified,
         this will be inferred from data.
 
@@ -406,10 +406,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             else:
                 index = as_index(data.index)
         elif isinstance(data, pd.Index):
-            name = data.name
+            if name is None:
+                name = data.name
             data = data.values
         elif isinstance(data, BaseIndex):
-            name = data.name
+            if name is None:
+                name = data.name
             data = data._values
             if dtype is not None:
                 data = data.astype(dtype)
@@ -556,6 +558,24 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "Can only use .dt accessor with datetimelike values"
             )
 
+    @property  # type:ignore
+    @_cudf_nvtx_annotate
+    def axes(self):
+        """
+        Return a list representing the axes of the Series.
+
+        Series.axes returns a list containing the row index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> csf1 = cudf.Series([1, 2, 3, 4])
+        >>> csf1.axes
+        [RangeIndex(start=0, stop=4, step=1)]
+
+        """
+        return [self.index]
+
     @_cudf_nvtx_annotate
     def serialize(self):
         header, frames = super().serialize()
@@ -693,17 +713,26 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super()._append(to_append, ignore_index, verify_integrity)
 
     @_cudf_nvtx_annotate
-    def reindex(self, index=None, copy=True):
-        """Return a Series that conforms to a new index
+    def reindex(self, *args, **kwargs):
+        """
+        Conform Series to new index.
 
         Parameters
         ----------
         index : Index, Series-convertible, default None
+            New labels / index to conform to,
+            should be specified using keywords.
+        method: Not Supported
         copy : boolean, default True
+        level: Not Supported
+        fill_value : Value to use for missing values.
+            Defaults to ``NA``, but can be any “compatible” value.
+        limit: Not Supported
+        tolerance: Not Supported
 
         Returns
         -------
-        A new Series that conforms to the supplied index
+        Series with changed index.
 
         Examples
         --------
@@ -721,10 +750,38 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         y    <NA>
         z    <NA>
         dtype: int64
+
+        .. pandas-compat::
+            **Series.reindex**
+
+            Note: One difference from Pandas is that ``NA`` is used for rows
+            that do not match, rather than ``NaN``. One side effect of this is
+            that the series retains an integer dtype in cuDF
+            where it is cast to float in Pandas.
+
         """
+        if len(args) > 1:
+            raise TypeError(
+                "Only one positional argument ('index') is allowed"
+            )
+        if args:
+            (index,) = args
+            if "index" in kwargs:
+                raise TypeError(
+                    "'index' passed as both positional and keyword argument"
+                )
+        else:
+            index = kwargs.get("index", self._index)
+
         name = self.name or 0
-        idx = self._index if index is None else index
-        series = self.to_frame(name).reindex(idx, copy=copy)[name]
+        series = self._reindex(
+            deep=kwargs.get("copy", True),
+            dtypes={name: self.dtype},
+            index=index,
+            column_names=[name],
+            inplace=False,
+            fill_value=kwargs.get("fill_value", cudf.NA),
+        )
         series.name = self.name
         return series
 
@@ -805,8 +862,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return cudf.core.dataframe.DataFrame._from_data(data, index)
         # For ``name`` behavior, see:
         # https://github.com/pandas-dev/pandas/issues/44575
+        # ``name`` has to be ignored when `drop=True`
         return self._mimic_inplace(
-            Series._from_data(data, index, name if inplace else None),
+            Series._from_data(data, index, self.name),
             inplace=inplace,
         )
 
@@ -1308,7 +1366,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Returns
         -------
         out : bool
-            If Series has atleast one null value, return True, if not
+            If Series has at least one null value, return True, if not
             return False.
 
         Examples
@@ -1444,7 +1502,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         5     hippo
         Name: animal, dtype: object
 
-        With the `keep` parameter, the selection behaviour of duplicated
+        With the `keep` parameter, the selection behavior of duplicated
         values can be changed. The value 'first' keeps the first
         occurrence for each set of duplicated entries.
         The default value of keep is 'first'. Note that order of
@@ -1506,6 +1564,95 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return super().fillna(
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
+
+    def between(self, left, right, inclusive="both") -> Series:
+        """
+        Return boolean Series equivalent to left <= series <= right.
+
+        This function returns a boolean vector containing `True` wherever the
+        corresponding Series element is between the boundary values `left` and
+        `right`. NA values are treated as `False`.
+
+        Parameters
+        ----------
+        left : scalar or list-like
+            Left boundary.
+        right : scalar or list-like
+            Right boundary.
+        inclusive : {"both", "neither", "left", "right"}
+            Include boundaries. Whether to set each bound as closed or open.
+
+        Returns
+        -------
+        Series
+            Series representing whether each element is between left and
+            right (inclusive).
+
+        See Also
+        --------
+        Series.gt : Greater than of series and other.
+        Series.lt : Less than of series and other.
+
+        Notes
+        -----
+        This function is equivalent to ``(left <= ser) & (ser <= right)``
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([2, 0, 4, 8, None])
+
+        Boundary values are included by default:
+
+        >>> s.between(1, 4)
+        0     True
+        1    False
+        2     True
+        3    False
+        4     <NA>
+        dtype: bool
+
+        With `inclusive` set to ``"neither"`` boundary values are excluded:
+
+        >>> s.between(1, 4, inclusive="neither")
+        0     True
+        1    False
+        2    False
+        3    False
+        4     <NA>
+        dtype: bool
+
+        `left` and `right` can be any scalar value:
+
+        >>> s = cudf.Series(['Alice', 'Bob', 'Carol', 'Eve'])
+        >>> s.between('Anna', 'Daniel')
+        0    False
+        1     True
+        2     True
+        3    False
+        dtype: bool
+        """
+        left_operand = left if is_scalar(left) else as_column(left)
+        right_operand = right if is_scalar(right) else as_column(right)
+
+        if inclusive == "both":
+            lmask = self._column >= left_operand
+            rmask = self._column <= right_operand
+        elif inclusive == "left":
+            lmask = self._column >= left_operand
+            rmask = self._column < right_operand
+        elif inclusive == "right":
+            lmask = self._column > left_operand
+            rmask = self._column <= right_operand
+        elif inclusive == "neither":
+            lmask = self._column > left_operand
+            rmask = self._column < right_operand
+        else:
+            raise ValueError(
+                "Inclusive has to be either string of 'both', "
+                "'left', 'right', or 'neither'."
+            )
+        return self._from_data({self.name: lmask & rmask}, self._index)
 
     @_cudf_nvtx_annotate
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
@@ -2021,12 +2168,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Similar to ``pandas.Series.apply``.
 
         ``apply`` relies on Numba to JIT compile ``func``.
-        Thus the allowed operations within ``func`` are limited
-        to the ones specified
-        [here](https://numba.pydata.org/numba-doc/latest/cuda/cudapysupported.html).
-        For more information, see the cuDF guide to
-        user defined functions found
-        [here](https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html).
+        Thus the allowed operations within ``func`` are limited to `those
+        supported by the CUDA Python Numba target
+        <https://numba.pydata.org/numba-doc/latest/cuda/cudapysupported.html>`__.
+        For more information, see the `cuDF guide to user defined functions
+        <https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs.html>`__.
 
         Parameters
         ----------
@@ -2126,7 +2272,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Either a callable python function or a python function already
             decorated by ``numba.cuda.jit`` for call on the GPU as a device
 
-        out_dtype  : numpy.dtype; optional
+        out_dtype : :class:`numpy.dtype`; optional
             The dtype for use in the output.
             Only used for ``numba.cuda.jit`` decorated udf.
             By default, the result will have the same dtype as the source.
@@ -3266,6 +3412,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         change = diff / data.shift(periods=periods, freq=freq)
         return change
 
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        result_col = super().where(cond, other, inplace)
+        return self._mimic_inplace(
+            self._from_data_like_self({self.name: result_col}),
+            inplace=inplace,
+        )
+
 
 def make_binop_func(op):
     # This function is used to wrap binary operations in Frame with an
@@ -3931,7 +4085,7 @@ class DatetimeProperties:
         Returns
         -------
         Series
-        Booleans indicating if dates are the begining of a quarter
+        Booleans indicating if dates are the beginning of a quarter
 
         Examples
         --------
@@ -4302,7 +4456,7 @@ class DatetimeProperties:
 
 class TimedeltaProperties:
     """
-    Accessor object for timedeltalike properties of the Series values.
+    Accessor object for timedelta-like properties of the Series values.
 
     Returns
     -------
@@ -4584,22 +4738,16 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     if all_index_equal:
         return series_list
 
-    if how == "outer":
-        combined_index = cudf.core.reshape.concat(
-            [sr.index for sr in series_list]
-        ).unique()
-        combined_index.names = new_index_names
-    else:
-        combined_index = series_list[0].index
-        for sr in series_list[1:]:
-            combined_index = (
-                cudf.DataFrame(index=sr.index).join(
-                    cudf.DataFrame(index=combined_index),
-                    sort=True,
-                    how="inner",
-                )
-            ).index
-        combined_index.names = new_index_names
+    combined_index = series_list[0].index
+    for sr in series_list[1:]:
+        combined_index = (
+            cudf.DataFrame(index=sr.index).join(
+                cudf.DataFrame(index=combined_index),
+                sort=True,
+                how=how,
+            )
+        ).index
+    combined_index.names = new_index_names
 
     # align all Series to the combined index
     result = [

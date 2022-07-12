@@ -19,7 +19,7 @@
 
 #include <cudf/detail/scan.hpp>
 #include <cudf/filling.hpp>
-#include <cudf/lists/list_view.cuh>
+#include <cudf/lists/list_view.hpp>
 
 #include <nvbench/nvbench.cuh>
 

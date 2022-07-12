@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,6 @@ namespace lists {
  * Output `column[i]` is set to null if one or more of the following are true:
  *   1. The search key `search_key` is null
  *   2. The list row `lists[i]` is null
- *   3. The list row `lists[i]` does not contain the search key, and contains at least
- *      one null.
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_key The scalar key to be looked up in each list row
@@ -61,8 +59,6 @@ std::unique_ptr<column> contains(
  * Output `column[i]` is set to null if one or more of the following are true:
  *   1. The row `search_keys[i]` is null
  *   2. The list row `lists[i]` is null
- *   3. The list row `lists[i]` does not contain the `search_keys[i]`, and contains at least
- *      one null.
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_keys Column of elements to be looked up in each list row
@@ -79,10 +75,12 @@ std::unique_ptr<column> contains(
  * contains at least one null element.
  *
  * The output column has as many elements as the input `lists` column.
- * Output `column[i]` is set to null the list row `lists[i]` is null.
+ * Output `column[i]` is set to null if the row `lists[i]` is null.
  * Otherwise, `column[i]` is set to a non-null boolean value, depending on whether that list
  * contains a null element.
- * (Empty list rows are considered *NOT* to contain a null element.)
+ *
+ * A row with an empty list will always return false.
+ * Nulls inside non-null nested elements (such as lists or structs) are not considered.
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param mr Device memory resource used to allocate the returned column's device memory.
