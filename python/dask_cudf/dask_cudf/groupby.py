@@ -21,6 +21,11 @@ from dask.highlevelgraph import HighLevelGraph
 import cudf
 from cudf.utils.utils import _dask_cudf_nvtx_annotate
 
+CUMULATIVE_AGGS = (
+    'cumsum',
+    'cumcount',
+)
+
 SUPPORTED_AGGS = (
     "count",
     "mean",
@@ -32,11 +37,7 @@ SUPPORTED_AGGS = (
     "collect",
     "first",
     "last",
-    "cumsum",
-    "cummin",
-    "cumcount",
-    "cummax",
-    "cumprod"
+    *CUMULATIVE_AGGS
 )
 
 

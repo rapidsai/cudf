@@ -11,7 +11,7 @@ import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
-from dask_cudf.groupby import SUPPORTED_AGGS, _aggs_supported
+from dask_cudf.groupby import SUPPORTED_AGGS, _aggs_supported, CUMULATIVE_AGGS
 
 
 @pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
@@ -45,13 +45,15 @@ def test_groupby_basic(series, aggregation):
     else:
         dd.assert_eq(a, b)
 
-    a = gdf_grouped.agg({"xx": aggregation})
-    b = ddf_grouped.agg({"xx": aggregation}).compute()
+    if aggregation not in CUMULATIVE_AGGS:
 
-    if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
-    else:
-        dd.assert_eq(a, b)
+        a = gdf_grouped.agg({"xx": aggregation})
+        b = ddf_grouped.agg({"xx": aggregation}).compute()
+
+        if aggregation == "count":
+            dd.assert_eq(a, b, check_dtype=False)
+        else:
+            dd.assert_eq(a, b)
 
 
 @pytest.mark.parametrize(
