@@ -6,7 +6,7 @@ Benchmarks in cuDF are written using the
 [`pytest`](https://docs.pytest.org/en/latest/) Python testing framework.
 Using `pytest-benchmark` provides a seamless experience for developers familiar with `pytest`.
 We include benchmarks of both public APIs and internal functions.
-The former give us a macro view of our performance, especially vis a vis pandas.
+The former give us a macro view of our performance, especially vis-à-vis pandas.
 The latter help us quantify and minimize the overhead of our Python bindings.
 
 ```{note}
@@ -33,6 +33,8 @@ Benchmarks should be written at the highest level of generality possible with re
 For instance, all classes support the `take` method, so those benchmarks belong in `API/bench_frame_or_index.py`.
 If a method has a slightly different API for different classes, benchmarks should use a minimal common API,
 _unless_ developers expect certain arguments to trigger code paths with very different performance characteristics.
+One example, is `DataFrame.where`, which supports a wide range of inputs (like other `DataFrame`s) that other classes don't support.
+Therefore, we have separate benchmarks for `DataFrame`, in addition to the general benchmarks for all `Frame` and `Index` classes.
 
 ```{note}
 `pytest` does not support having two benchmark files with the same name, even if they are in separate directories.
@@ -81,11 +83,9 @@ pytest-benchmark compare XXXX YYYY --sort="name" --columns=Mean --name=short --g
 Our benchmarks aim to support [comparing to pandas](pandascompare) or [running tests](testing) out of the box.
 In order for the former to work, _all tests must import `cudf` and `cupy` from the `config` module_.
 In other words:
-```
-# This is good
-from ..common.config import cudf
-# This is bad
-import cudf
+```python
+from ..common.config import cudf  # This is good
+import cudf  # This is bad
 ```
 Testing is usually transparently supported except when users define custom fixtures or cases.
 In those instances, as a general rule developers should avoid hardcoding data sizes in benchmarks.
@@ -113,11 +113,11 @@ def bench_foo(benchmark, dataframe):
 In the example above `bench_foo` will be run for DataFrames containing six columns of integer data.
 The decorator allows automatically parametrizing the following object properties:
 
-- Class: Objects of a specific class, e.g. `DataFrame`.
-- Nullability: Objects with and without null entries.
-- Dtype: Objects of a specific dtype.
-- Rows: Objects with a certain number of rows.
-- Columns: Objects with a certain number of columns.
+- `cls`: Objects of a specific class, e.g. `DataFrame`.
+- `dtype`: Objects of a specific dtype.
+- `nulls`: Objects with and without null entries.
+- `cols`: Objects with a certain number of columns.
+- `rows`: Objects with a certain number of rows.
 
 In the example, since we did not specify the number of rows or nullability,
 it will be run once for each valid number of rows and for both nullable and non-nullable data.
@@ -128,7 +128,7 @@ then have that benchmark automatically run for all objects of interest.
 ### Custom fixtures
 
 Developers may define custom fixtures if necessary, but this should be done with care.
-The `benchmark_with_object` decorator covers most use cases and automatically improves benchmark coverage.
+The `benchmark_with_object` decorator covers most use cases and automatically guarantees a baseline of benchmark coverage.
 When writing fixtures, developers should make the data sizes dependent on the benchmarks configuration.
 The `benchmarks/common/config.py` file defines standard data sizes to be used in benchmarks.
 These data sizes can be tweaked for debugging purposes (see {ref}`testing` below).
@@ -251,10 +251,10 @@ Under the hood, `benchmark_with_object` is made up of two critical pieces, fixtu
 
 #### Fixture unions
 
-Fixture unions are a feature of `pytest_cases`.
+Fixture unions are a feature of [`pytest_cases`](https://smarie.github.io/python-pytest-cases/).
 A fixture union is a fixture that, when used as a test function parameter,
 will trigger the test to run once for each fixture contained in the union.
-Since most cuDF benchmarks can be run with the same relative small set of objects,
+Since most cuDF benchmarks can be run with the same relatively small set of objects,
 our benchmarks generate the Cartesian product of possible fixtures and then create all possible unions.
 
 This feature is critical to the design of our benchmarks.
