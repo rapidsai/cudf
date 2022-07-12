@@ -387,18 +387,29 @@ class CachedInstanceMeta(type):
         self.__instances = OrderedDict()
 
     def __call__(self, *args, **kwargs):
-        arg_tuple = tuple(map(type, args)) + args + tuple(kwargs.values())
+        # the cache key is constructed from args and kwargs, and also
+        # the _types_ of args and kwargs, since objects of different
+        # types can compare equal
+        arg_tuple = (
+            args
+            + tuple(kwargs.values())
+            + map(type, args)
+            + map(type, kwargs.values())
+        )
         try:
+            # try retrieving an instance from the cache:
             self.__instances.move_to_end(arg_tuple)
             return self.__instances[arg_tuple]
         except KeyError:
+            # if an instance couldn't be found in the cache,
+            # construct it and add to cache:
             obj = super().__call__(*args, **kwargs)
             self.__instances[arg_tuple] = obj
             if len(self.__instances) > self.__maxsize:
                 self.__instances.popitem(last=False)
             return obj
         except TypeError:
-            # can't hash args/kwargs, don't cache:
+            # couldn't hash args/kwargs, don't cache:
             return super().__call__(*args, **kwargs)
 
     def clear(self):
