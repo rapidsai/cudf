@@ -135,7 +135,7 @@ def test_scalar_device_initialization(value):
     column = cudf.Series([value], nan_as_null=False)._column
     dev_slr = get_element(column, 0)
 
-    s = cudf.Scalar(dev_slr)
+    s = cudf.Scalar.from_device_scalar(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
@@ -156,7 +156,7 @@ def test_scalar_device_initialization_decimal(value, decimal_type):
     column = cudf.Series([str(value)]).astype(dtype)._column
     dev_slr = get_element(column, 0)
 
-    s = cudf.Scalar(dev_slr)
+    s = cudf.Scalar.from_device_scalar(dev_slr)
 
     assert s._is_device_value_current
     assert not s._is_host_value_current
@@ -169,6 +169,8 @@ def test_scalar_device_initialization_decimal(value, decimal_type):
 
 @pytest.mark.parametrize("value", SCALAR_VALUES + DECIMAL_VALUES)
 def test_scalar_roundtrip(value):
+    cudf.Scalar.clear_cache()
+
     s = cudf.Scalar(value)
 
     assert s._is_host_value_current

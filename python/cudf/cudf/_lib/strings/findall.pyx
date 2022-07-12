@@ -15,7 +15,6 @@ from cudf._lib.cpp.strings.findall cimport (
 )
 from cudf._lib.cpp.strings.regex_flags cimport regex_flags
 from cudf._lib.cpp.table.table cimport table
-from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport data_from_unique_ptr
 
 

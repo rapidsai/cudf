@@ -14,9 +14,10 @@ from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
+from cudf.utils.utils import CachedInstanceMeta
 
 
-class Scalar(BinaryOperand):
+class Scalar(BinaryOperand, metaclass=CachedInstanceMeta):
     """
     A GPU-backed scalar object with NumPy scalar like properties
     May be used in binary operations against other scalars, cuDF
@@ -70,12 +71,23 @@ class Scalar(BinaryOperand):
                 self._host_dtype = value._host_dtype
             else:
                 self._device_value = value._device_value
-        elif isinstance(value, cudf._lib.scalar.DeviceScalar):
-            self._device_value = value
         else:
             self._host_value, self._host_dtype = self._preprocess_host_value(
                 value, dtype
             )
+
+    @classmethod
+    def from_device_scalar(cls, dscalar):
+        if not isinstance(dscalar, cudf._lib.scalar.DeviceScalar):
+            raise TypeError(
+                "Expected an instance of DeviceScalar, "
+                f"got {type(dscalar).__name__}"
+            )
+        obj = object.__new__(cls)
+        obj._host_value = None
+        obj._host_dtype = None
+        obj._device_value = dscalar
+        return obj
 
     @property
     def _is_host_value_current(self):
@@ -321,3 +333,7 @@ class Scalar(BinaryOperand):
 
     def astype(self, dtype):
         return Scalar(self.value, dtype)
+
+    @classmethod
+    def clear_cache(cls):
+        type(cls).clear(cls)
