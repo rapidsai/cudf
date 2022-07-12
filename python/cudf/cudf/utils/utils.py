@@ -393,8 +393,8 @@ class CachedInstanceMeta(type):
         arg_tuple = (
             args
             + tuple(kwargs.values())
-            + map(type, args)
-            + map(type, kwargs.values())
+            + tuple(map(type, args))
+            + tuple(map(type, kwargs.values()))
         )
         try:
             # try retrieving an instance from the cache:
