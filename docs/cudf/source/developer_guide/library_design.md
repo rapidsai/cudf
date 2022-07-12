@@ -210,7 +210,7 @@ A `Buffer` constructed from a preexisting device memory allocation (such as a Cu
 Conversely, when constructed from a host object,
 `Buffer` uses [`rmm.DeviceBuffer`](https://github.com/rapidsai/rmm#devicebuffers) to allocate new memory.
 The data is then copied from the host object into the newly allocated device memory.
-You can read more about device memory allocation with RMM [here](https://github.com/rapidsai/rmm).
+You can read more about [device memory allocation with RMM here](https://github.com/rapidsai/rmm).
 
 (cythonlayer)=
 

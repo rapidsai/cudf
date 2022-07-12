@@ -5,7 +5,7 @@ At present, this guide only covers the main cuDF library.
 In the future, it may be expanded to also cover dask_cudf, cudf_kafka, and custreamz.
 ```
 
-The cuDF library is a GPU-accelerated, [Pandas-like](https://pandas.pydata.org/) DataFrame library.
+cuDF is a GPU-accelerated, [Pandas-like](https://pandas.pydata.org/) DataFrame library.
 Under the hood, all of cuDF's functionality relies on the CUDA-accelerated `libcudf` C++ library.
 Thus, cuDF's internals are designed to efficiently and robustly map pandas APIs to `libcudf` functions.
 For more information about the `libcudf` library, a good starting point is the
@@ -24,7 +24,7 @@ More specific information on these can be found in the pages below:
 library_design
 ```
 
-The rest of this document focuses on a higher-level overview of best practices in cuDF.
+The rest of this document focuses on a high-level overview of best practices in cuDF.
 
 ## Directory structure and file naming
 
@@ -36,7 +36,11 @@ All Cython code is contained in `python/cudf/cudf/_lib`.
 
 ## Code style
 
-cuDF employs a number of linters to ensure consistent style across the code base:
+cuDF employs a number of linters to ensure consistent style across the code base.
+We manage our linters using [`pre-commit`](https://pre-commit.com/).
+Developers are strongly recommended to set up `pre-commit` prior to any development.
+The `.pre-commit-config.yaml` file at the root of the repo is the primary source of truth for what linters are used and their configuration.
+Specifically, cuDF uses the following tools:
 
 - [`flake8`](https://github.com/pycqa/flake8) checks for general code formatting compliance. 
 - [`black`](https://github.com/psf/black) is an automatic code formatter.
@@ -46,15 +50,12 @@ cuDF employs a number of linters to ensure consistent style across the code base
   `mypy` can help catch various bugs that are otherwise difficult to find.
 - [`pydocstyle`](https://github.com/PyCQA/pydocstyle/) lints docstring style.
 
-Configuration information for these tools is contained in a number of files.
-The primary source of truth is the `.pre-commit-config.yaml` file at the root of the repo.
-As described in the
-[overall contributing guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md),
-we recommend using [`pre-commit`](https://pre-commit.com/) to manage all linters.
+For more information, see the
+[overall contributing guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#python--pre-commit-hooks).
 
 ## Deprecating and removing code
 
-cuDF generally follows the policy of deprecating code for one release prior to removal.
+cuDF follows the policy of deprecating code for one release prior to removal.
 For example, if we decide to remove an API during the 22.08 release cycle,
 it will be marked as deprecated in the 22.08 release and removed in the 22.10 release.
 All internal usage of deprecated APIs in cuDF should be removed when the API is deprecated.
@@ -67,13 +68,12 @@ If necessary, the removal timeline can be discussed on this issue.
 Upon removal this issue may be closed.
 Additionally, when removing an API, make sure to remove all tests and documentation.
 
-Deprecation messages should follow these guidelines:
-- Emit a FutureWarning.
-- Use a single line (no newline characters)
-- Indicate a replacement API, if any exists.
-  Deprecations are an opportunity to show users better ways to do things.
-- Don't specify a version when removal will occur.
-  This gives us more flexibility.
+Deprecation messages should:
+- emit a FutureWarning;
+- consist of a single line with no newline characters.
+- indicate a replacement API, if any exists
+  (deprecation messages are an opportunity to show users better ways to do things);
+- not specify a version when removal will occur (this gives us more flexibility).
 
 For example:
 ```python
@@ -91,7 +91,7 @@ Deprecations should be signaled using a `FutureWarning` **not a `DeprecationWarn
 
 ## `pandas` compatibility
 
-Maintaining compatibility with the pandas API is a primary goal of cuDF.
+Maintaining compatibility with the [pandas API](https://pandas.pydata.org/docs/reference/index.html) is a primary goal of cuDF.
 Developers should always look at pandas APIs when adding a new feature to cuDF.
 However, there are occasionally good reasons to deviate from pandas behavior.
 
@@ -113,7 +113,7 @@ Therefore, developers should generally prefer Python code over Cython where poss
 
 The primary use-case for Cython in cuDF is to expose libcudf C++ APIs to Python.
 This Cython usage is generally composed of two parts:
-1. A `pxd` file simply declaring C++ APIs so that they may be used in Cython, and
+1. A `pxd` file declaring C++ APIs so that they may be used in Cython, and
 2. A `pyx` file containing Cython functions that wrap those C++ APIs so that they can be called from Python.
 
 The latter wrappers should generally be kept as thin as possible to minimize Cython usage.
