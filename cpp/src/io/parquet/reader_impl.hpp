@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,7 @@ class reader::impl {
    */
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
+                           bool row_bounds,
                            std::vector<std::vector<size_type>> const& row_group_indices,
                            rmm::cuda_stream_view stream);
 
@@ -164,18 +165,20 @@ class reader::impl {
    *
    * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders)
    *
-   * @param[in,out] chunks All chunks to be decoded
-   * @param[in,out] pages All pages to be decoded
-   * @param[in] min_rows crop all rows below min_row
-   * @param[in] total_rows Maximum number of rows to read
-   * @param[in] has_lists Whether or not this data contains lists and requires
+   * @param chunks All chunks to be decoded
+   * @param pages All pages to be decoded
+   * @param min_rows crop all rows below min_row
+   * @param total_rows Maximum number of rows to read
+   * @param row_bounds Whether or not num_rows and min_rows represents user-specific bounds
+   * @param has_lists Whether or not this data contains lists and requires
    * a preprocess.
-   * @param[in] stream Cuda stream
+   * @param stream Cuda stream
    */
   void preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
                           hostdevice_vector<gpu::PageInfo>& pages,
                           size_t min_row,
                           size_t total_rows,
+                          bool row_bounds,
                           bool has_lists,
                           rmm::cuda_stream_view stream);
 

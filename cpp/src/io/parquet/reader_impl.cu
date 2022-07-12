@@ -1352,6 +1352,7 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
                                       hostdevice_vector<gpu::PageInfo>& pages,
                                       size_t min_row,
                                       size_t total_rows,
+                                      bool row_bounds,
                                       bool has_lists,
                                       rmm::cuda_stream_view stream)
 {
@@ -1373,7 +1374,7 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc>& c
   } else {
     // preprocess per-nesting level sizes by page
     gpu::PreprocessColumnData(
-      pages, chunks, _input_columns, _output_columns, total_rows, min_row, stream, _mr);
+      pages, chunks, _input_columns, _output_columns, total_rows, min_row, row_bounds, stream, _mr);
     stream.synchronize();
   }
 }
@@ -1597,6 +1598,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
+                                       bool row_bounds,
                                        std::vector<std::vector<size_type>> const& row_group_list,
                                        rmm::cuda_stream_view stream)
 {
@@ -1756,7 +1758,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       //
       // - for nested schemas, output buffer offset values per-page, per nesting-level for the
       // purposes of decoding.
-      preprocess_columns(chunks, pages, skip_rows, num_rows, has_lists, stream);
+      preprocess_columns(chunks, pages, skip_rows, num_rows, row_bounds, has_lists, stream);
 
       // decoding of column data itself
       decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows, stream);
@@ -1805,8 +1807,10 @@ reader::~reader() = default;
 table_with_metadata reader::read(parquet_reader_options const& options,
                                  rmm::cuda_stream_view stream)
 {
+  // if the user has specified any aritificial row bounds
+  bool const row_bounds = options.get_num_rows() >= 0 || options.get_skip_rows() != 0;
   return _impl->read(
-    options.get_skip_rows(), options.get_num_rows(), options.get_row_groups(), stream);
+    options.get_skip_rows(), options.get_num_rows(), row_bounds, options.get_row_groups(), stream);
 }
 
 }  // namespace parquet
