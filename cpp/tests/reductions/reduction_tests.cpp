@@ -95,9 +95,9 @@ struct ReductionTest : public cudf::test::BaseFixture {
   template <typename T_out>
   std::pair<T_out, bool> reduction_test(cudf::column_view const& underlying_column,
                                         std::unique_ptr<reduce_aggregation> const& agg,
-                                        cudf::data_type output_dtype = cudf::data_type{})
+                                        std::optional<cudf::data_type> _output_dtype = {})
   {
-    if (cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
+    auto const output_dtype                 = _output_dtype.value_or(underlying_column.type());
     std::unique_ptr<cudf::scalar> reduction = cudf::reduce(underlying_column, agg, output_dtype);
     using ScalarType                        = cudf::scalar_type_t<T_out>;
     auto result                             = static_cast<ScalarType*>(reduction.get());
@@ -109,9 +109,9 @@ struct ReductionTest : public cudf::test::BaseFixture {
   std::pair<T_out, bool> reduction_test(cudf::column_view const& underlying_column,
                                         cudf::scalar const& initial_value,
                                         std::unique_ptr<reduce_aggregation> const& agg,
-                                        cudf::data_type output_dtype = cudf::data_type{})
+                                        std::optional<cudf::data_type> _output_dtype = {})
   {
-    if (cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
+    auto const output_dtype = _output_dtype.value_or(underlying_column.type());
     std::unique_ptr<cudf::scalar> reduction =
       cudf::reduce(underlying_column, agg, output_dtype, initial_value);
     using ScalarType = cudf::scalar_type_t<T_out>;
@@ -860,8 +860,7 @@ TEST_F(ReductionDtypeTest, different_precision)
                                                    cudf::data_type(cudf::type_id::INT64));
 }
 
-struct ReductionErrorTest : public cudf::test::BaseFixture {
-};
+struct ReductionErrorTest : public cudf::test::BaseFixture {};
 
 // test case for empty input cases
 TEST_F(ReductionErrorTest, empty_column)
@@ -896,8 +895,7 @@ TEST_F(ReductionErrorTest, empty_column)
 // ----------------------------------------------------------------------------
 
 struct ReductionParamTest : public ReductionTest<double>,
-                            public ::testing::WithParamInterface<cudf::size_type> {
-};
+                            public ::testing::WithParamInterface<cudf::size_type> {};
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
 
@@ -1835,8 +1833,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
   }
 }
 
-struct Decimal128Only : public cudf::test::BaseFixture {
-};
+struct Decimal128Only : public cudf::test::BaseFixture {};
 
 TEST_F(Decimal128Only, Decimal128ProductReduction)
 {
@@ -1999,8 +1996,7 @@ TYPED_TEST(ReductionTest, NthElement)
   }
 }
 
-struct DictionaryStringReductionTest : public StringReductionTest {
-};
+struct DictionaryStringReductionTest : public StringReductionTest {};
 
 std::vector<std::string> data_list[] = {
   {"nine", "two", "five", "three", "five", "six", "two", "eight", "nine"},
