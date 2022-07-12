@@ -1417,7 +1417,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         return result._copy_type_metadata(values)
 
     def pct_change(
-        self, periods=1, fill_method="ffill", limit=None, freq=None
+        self, periods=1, fill_method="ffill", axis=0, limit=None, freq=None
     ):
         """
         Calculates the percent change between sequential elements
@@ -1441,7 +1441,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Percentage changes within each group
         """
-
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
         if limit is not None:
             raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
@@ -1452,7 +1453,8 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "'bfill', or 'backfill'."
             )
 
-        data = self.fillna(method=fill_method, limit=limit)
+        obj = self.obj.fillna(method=fill_method, limit=limit)
+        data = obj.groupby(self.grouping)
 
         return data.diff(periods=periods) / data.shift(
             periods=periods, freq=freq
