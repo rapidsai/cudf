@@ -418,8 +418,7 @@ struct list_child_constructor {
       });
 
     auto const iter_target_member_as_list = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<cudf::size_type>(0),
-      [&](auto child_idx) {
+      thrust::make_counting_iterator<cudf::size_type>(0), [&](auto child_idx) {
         return project_member_as_list_view(target_structs.child(child_idx),
                                            target_lists_column_view.size(),
                                            target_lists_column_view.offsets(),
@@ -427,21 +426,21 @@ struct list_child_constructor {
                                            target_lists_column_view.null_count());
       });
 
-      std::transform(iter_source_member_as_list,
-                     iter_source_member_as_list + num_struct_members,
-                     iter_target_member_as_list,
-                     std::back_inserter(child_columns),
-                     [&](auto source_struct_member_list_view, auto target_struct_member_list_view) {
-                       return cudf::type_dispatcher<dispatch_storage_type>(
-                         source_struct_member_list_view.child().type(),
-                         list_child_constructor{},
-                         list_vector,
-                         list_offsets,
-                         source_struct_member_list_view,
-                         target_struct_member_list_view,
-                         stream,
-                         mr);
-                     });
+    std::transform(iter_source_member_as_list,
+                   iter_source_member_as_list + num_struct_members,
+                   iter_target_member_as_list,
+                   std::back_inserter(child_columns),
+                   [&](auto source_struct_member_list_view, auto target_struct_member_list_view) {
+                     return cudf::type_dispatcher<dispatch_storage_type>(
+                       source_struct_member_list_view.child().type(),
+                       list_child_constructor{},
+                       list_vector,
+                       list_offsets,
+                       source_struct_member_list_view,
+                       target_struct_member_list_view,
+                       stream,
+                       mr);
+                   });
 
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
