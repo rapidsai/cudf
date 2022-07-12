@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@
 #include "column_type_histogram.hpp"
 
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/reverse_iterator.h>
 
 #include <optional>
 
@@ -68,7 +71,7 @@ struct parse_options {
   cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
 
-  parse_options_view view()
+  [[nodiscard]] parse_options_view view() const
   {
     return {delimiter,
             terminator,
@@ -98,7 +101,7 @@ struct parse_options {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<std::is_integral_v<T>>* = nullptr>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
@@ -119,7 +122,7 @@ constexpr uint8_t decode_digit(char c, bool* valid_flag)
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
+template <typename T, std::enable_if_t<!std::is_integral_v<T>>* = nullptr>
 constexpr uint8_t decode_digit(char c, bool* valid_flag)
 {
   if (c >= '0' && c <= '9') return c - '0';
@@ -159,6 +162,7 @@ constexpr bool is_infinity(char const* begin, char const* end)
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param opts The global parsing behavior options
+ * @param error_result Value to return on parse error
  * @tparam base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
@@ -176,7 +180,7 @@ constexpr T parse_numeric(const char* begin,
   int32_t sign = (*begin == '-') ? -1 : 1;
 
   // Handle infinity
-  if (std::is_floating_point<T>::value && is_infinity(begin, end)) {
+  if (std::is_floating_point_v<T> && is_infinity(begin, end)) {
     return sign * std::numeric_limits<T>::infinity();
   }
   if (*begin == '-' || *begin == '+') begin++;
@@ -198,7 +202,7 @@ constexpr T parse_numeric(const char* begin,
     ++begin;
   }
 
-  if (std::is_floating_point<T>::value) {
+  if (std::is_floating_point_v<T>) {
     // Handle fractional part of the number if necessary
     double divisor = 1;
     while (begin < end) {
@@ -252,7 +256,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
   bool quotation   = false;
   auto current     = begin;
   bool escape_next = false;
-  while (true) {
+  while (current < end) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields.
@@ -262,7 +266,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {
-        while (opts.multi_delimiter && current < end && *(current + 1) == opts.delimiter) {
+        while (opts.multi_delimiter && (current + 1 < end) && *(current + 1) == opts.delimiter) {
           ++current;
         }
         break;
@@ -283,8 +287,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
       }
     }
 
-    if (current >= end) break;
-    current++;
+    if (current < end) { current++; }
   }
   return current;
 }
@@ -335,7 +338,9 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
   // Remove preceding zeros
   if (digit_count >= (sizeof(int64_max_abs) - 1)) {
     // Trim zeros at the beginning of raw_data
-    while (*data_begin == '0' && (data_begin < data_end)) { data_begin++; }
+    while (*data_begin == '0' && (data_begin < data_end)) {
+      data_begin++;
+    }
   }
   digit_count = data_end - data_begin;
 
@@ -389,8 +394,8 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
  * @return cudf::size_type total number of occurrences
  */
 template <class T>
-cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
-                                  const std::vector<char>& keys,
+cudf::size_type find_all_from_set(device_span<char const> data,
+                                  std::vector<char> const& keys,
                                   uint64_t result_offset,
                                   T* positions,
                                   rmm::cuda_stream_view stream);
@@ -413,8 +418,7 @@ cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
  * @return cudf::size_type total number of occurrences
  */
 template <class T>
-cudf::size_type find_all_from_set(const char* h_data,
-                                  size_t h_size,
+cudf::size_type find_all_from_set(host_span<char const> data,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
                                   T* positions,
@@ -430,8 +434,8 @@ cudf::size_type find_all_from_set(const char* h_data,
  *
  * @return cudf::size_type total number of occurrences
  */
-cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
-                                   const std::vector<char>& keys,
+cudf::size_type count_all_from_set(device_span<char const> data,
+                                   std::vector<char> const& keys,
                                    rmm::cuda_stream_view stream);
 
 /**
@@ -448,28 +452,9 @@ cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
  *
  * @return cudf::size_type total number of occurrences
  */
-cudf::size_type count_all_from_set(const char* h_data,
-                                   size_t h_size,
+cudf::size_type count_all_from_set(host_span<char const> data,
                                    const std::vector<char>& keys,
                                    rmm::cuda_stream_view stream);
-
-/**
- * @brief Infer file compression type based on user supplied arguments.
- *
- * If the user specifies a valid compression_type for compression arg,
- * compression type will be computed based on that.  Otherwise the filename
- * and ext_to_comp_map will be used.
- *
- * @param[in] compression_arg User specified compression type (if any)
- * @param[in] filename Filename to base compression type (by extension) on
- * @param[in] ext_to_comp_map User supplied mapping of file extension to compression type
- *
- * @return string representing compression type ("gzip, "bz2", etc)
- */
-std::string infer_compression_type(
-  const compression_type& compression_arg,
-  const std::string& filename,
-  const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map);
 
 /**
  * @brief Checks whether the given character is a whitespace character.
@@ -516,7 +501,7 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
  * @brief Excludes the prefix from the input range if the string starts with the prefix.
  *
  * @tparam N length on the prefix, plus one
- * @param begin[in, out] Pointer to the first element of the string
+ * @param[in, out] begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param prefix String we're searching for at the start of the input range
  */

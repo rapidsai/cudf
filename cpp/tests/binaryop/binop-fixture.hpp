@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -23,6 +23,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <string>
+#include <type_traits>
 
 namespace cudf {
 namespace test {
@@ -35,13 +37,13 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   static constexpr int r_max = 10;
 
   template <typename T>
-  auto make_data_iter(cudf::test::UniformRandomGenerator<T>& rand_gen)
+  static auto make_data_iter(cudf::test::UniformRandomGenerator<T>& rand_gen)
   {
     return cudf::detail::make_counting_transform_iterator(
       0, [&](auto row) { return rand_gen.generate(); });
   }
 
-  auto make_validity_iter()
+  static auto make_validity_iter()
   {
     cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
     uint8_t mod_base = rand_gen.generate();
@@ -50,7 +52,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   }
 
   template <typename T>
-  auto make_random_wrapped_column(size_type size)
+  static auto make_random_wrapped_column(size_type size)
   {
     cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
     auto data_iter     = make_data_iter(rand_gen);
@@ -59,11 +61,20 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
     return cudf::test::fixed_width_column_wrapper<T>(data_iter, data_iter + size, validity_iter);
   }
 
-  template <typename T>
+  template <typename T, std::enable_if_t<!std::is_same_v<T, std::string>>* = nullptr>
   auto make_random_wrapped_scalar()
   {
     cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
     return cudf::scalar_type_t<T>(rand_gen.generate());
+  }
+
+  template <typename T, std::enable_if_t<std::is_same_v<T, std::string>>* = nullptr>
+  auto make_random_wrapped_scalar()
+  {
+    cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
+    uint8_t size = rand_gen.generate();
+    std::string str{"ஔⒶbc⁂∰ൠ \tنж水✉♪✿™"};
+    return cudf::scalar_type_t<T>(str.substr(0, size));
   }
 };
 

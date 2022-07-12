@@ -1,0 +1,27 @@
+---
+Checks:
+      'modernize-*,
+       -modernize-use-equals-default,
+       -modernize-concat-nested-namespaces,
+       -modernize-use-trailing-return-type'
+
+      # -modernize-use-equals-default        # auto-fix is broken (doesn't insert =default correctly)
+      # -modernize-concat-nested-namespaces  # auto-fix is broken (can delete code)
+      # -modernize-use-trailing-return-type  # just a preference
+
+WarningsAsErrors: ''
+HeaderFilterRegex: ''
+AnalyzeTemporaryDtors: false
+FormatStyle:     none
+CheckOptions:
+ - key:             modernize-loop-convert.MaxCopySize
+   value:           '16'
+ - key:             modernize-loop-convert.MinConfidence
+   value:           reasonable
+ - key:             modernize-pass-by-value.IncludeStyle
+   value:           llvm
+ - key:             modernize-replace-auto-ptr.IncludeStyle
+   value:           llvm
+ - key:             modernize-use-nullptr.NullMacros
+   value:           'NULL'
+...

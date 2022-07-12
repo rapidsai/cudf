@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,14 +27,18 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
+
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
 template <typename T>
 class ReverseTypedTestFixture : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ReverseTypedTestFixture, cudf::test::AllTypes);
+TYPED_TEST_SUITE(ReverseTypedTestFixture, cudf::test::AllTypes);
 TYPED_TEST(ReverseTypedTestFixture, ReverseTable)
 {
   using T = TypeParam;
@@ -54,7 +58,7 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseTable)
   auto const p_ret = cudf::reverse(input_table);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected, verbosity);
 }
 
 TYPED_TEST(ReverseTypedTestFixture, ReverseColumn)
@@ -74,7 +78,7 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseColumn)
 
   auto const column_ret = cudf::reverse(input);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(column_ret->view(), expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(column_ret->view(), expected, verbosity);
 }
 
 TYPED_TEST(ReverseTypedTestFixture, ReverseNullable)

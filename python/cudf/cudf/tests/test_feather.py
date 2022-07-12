@@ -10,7 +10,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.tests.utils import NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, assert_eq
 
 if LooseVersion(pd.__version__) < LooseVersion("0.24"):
     try:

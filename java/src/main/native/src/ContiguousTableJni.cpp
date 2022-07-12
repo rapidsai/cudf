@@ -93,7 +93,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ContiguousTable_createPackedMetadata
     auto data_addr = reinterpret_cast<uint8_t const *>(j_buffer_addr);
     auto data_size = static_cast<size_t>(j_buffer_length);
     auto metadata_ptr =
-      new cudf::packed_columns::metadata(cudf::pack_metadata(*table, data_addr, data_size));
+        new cudf::packed_columns::metadata(cudf::pack_metadata(*table, data_addr, data_size));
     return reinterpret_cast<jlong>(metadata_ptr);
   }
   CATCH_STD(env, 0);

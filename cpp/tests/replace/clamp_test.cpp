@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <gtest/gtest.h>
+
+#include <thrust/iterator/counting_iterator.h>
 
 struct ClampErrorTest : public cudf::test::BaseFixture {
 };
@@ -204,7 +206,7 @@ struct ClampTestNumeric : public cudf::test::BaseFixture {
 };
 using Types = cudf::test::FixedWidthTypesWithoutFixedPoint;
 
-TYPED_TEST_CASE(ClampTestNumeric, Types);
+TYPED_TEST_SUITE(ClampTestNumeric, Types);
 
 TYPED_TEST(ClampTestNumeric, WithNoNull)
 {
@@ -292,7 +294,7 @@ template <typename T>
 struct ClampFloatTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ClampFloatTest, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(ClampFloatTest, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(ClampFloatTest, WithNANandNoNull)
 {
@@ -591,7 +593,7 @@ template <typename T>
 struct FixedPointTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTest, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTest, ZeroScale)
 {

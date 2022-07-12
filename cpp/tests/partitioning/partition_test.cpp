@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/copying.hpp>
-#include <cudf/partitioning.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include "cudf/sorting.hpp"
+#include <cudf/copying.hpp>
+#include <cudf/partitioning.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
 
 template <typename T>
 class PartitionTest : public cudf::test::BaseFixture {
@@ -35,7 +35,7 @@ using types =
 
 // using types = cudf::test::Types<cudf::test::Types<int32_t, int32_t> >;
 
-TYPED_TEST_CASE(PartitionTest, types);
+TYPED_TEST_SUITE(PartitionTest, types);
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
@@ -234,7 +234,7 @@ template <typename T>
 class PartitionTestFixedPoint : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(PartitionTestFixedPoint, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(PartitionTestFixedPoint, cudf::test::FixedPointTypes);
 
 TYPED_TEST(PartitionTestFixedPoint, Partition)
 {

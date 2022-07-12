@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,23 +58,25 @@ using block_reduce_storage = detail::block_reduce_storage<dimension>;
  * @tparam block_size Dimension of the block
  * @tparam IO File format for which statistics calculation is being done
  */
-template <int block_size, detail::io_file_format IO>
+template <int block_size,
+          detail::io_file_format IO,
+          detail::is_int96_timestamp INT96 = detail::is_int96_timestamp::YES>
 struct calculate_group_statistics_functor {
-  block_reduce_storage<block_size> &temp_storage;
+  block_reduce_storage<block_size>& temp_storage;
 
   /**
    * @brief Construct a statistics calculator
    *
    * @param d_temp_storage Temporary storage to be used by cub calls
    */
-  __device__ calculate_group_statistics_functor(block_reduce_storage<block_size> &d_temp_storage)
+  __device__ calculate_group_statistics_functor(block_reduce_storage<block_size>& d_temp_storage)
     : temp_storage(d_temp_storage)
   {
   }
 
   template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::is_ignored> * = nullptr>
-  __device__ void operator()(stats_state_s &s, uint32_t t)
+            std::enable_if_t<detail::statistics_type_category<T, IO>::ignore>* = nullptr>
+  __device__ void operator()(stats_state_s&, uint32_t)
   {
     // No-op for unsupported aggregation types
   }
@@ -88,27 +90,54 @@ struct calculate_group_statistics_functor {
    * @param t thread id
    */
   template <typename T,
-            std::enable_if_t<not detail::statistics_type_category<T, IO>::is_ignored> * = nullptr>
-  __device__ void operator()(stats_state_s &s, uint32_t t)
+            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
+  __device__ void operator()(stats_state_s& s, uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
-    using type_convert = detail::type_conversion<detail::conversion_map<IO>>;
+    using type_convert = detail::type_conversion<detail::conversion_map<IO, INT96>>;
     using CT           = typename type_convert::template type<T>;
-    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::is_aggregated> chunk(
-      s.group.num_rows);
+    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
 
     for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
-      uint32_t r          = i + t;
-      uint32_t row        = r + s.group.start_row;
-      auto const is_valid = (r < s.group.num_rows) ? s.col.leaf_column->is_valid(row) : 0;
-      if (is_valid) {
-        auto converted_value = type_convert::convert(s.col.leaf_column->element<T>(row));
-        chunk.reduce(converted_value);
+      uint32_t r   = i + t;
+      uint32_t row = r + s.group.start_row;
+      if (r < s.group.num_rows) {
+        if (s.col.leaf_column->is_valid(row)) {
+          auto converted_value = type_convert::convert(s.col.leaf_column->element<T>(row));
+          chunk.reduce(converted_value);
+        } else {
+          chunk.null_count++;
+        }
       }
     }
 
     chunk = block_reduce(chunk, storage);
+
+    if (t == 0) { s.ck = get_untyped_chunk(chunk); }
+  }
+
+  template <
+    typename T,
+    std::enable_if_t<detail::statistics_type_category<T, IO>::include_count and
+                     not detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
+  __device__ void operator()(stats_state_s& s, uint32_t t)
+  {
+    detail::storage_wrapper<block_size> storage(temp_storage);
+    typed_statistics_chunk<uint32_t, false> chunk;
+
+    for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
+      uint32_t r   = i + t;
+      uint32_t row = r + s.group.start_row;
+      if (r < s.group.num_rows) {
+        if (s.col.leaf_column->is_valid(row)) {
+          chunk.non_nulls++;
+        } else {
+          chunk.null_count++;
+        }
+      }
+    }
+    cub::BlockReduce<uint32_t, block_size>(storage.template get<uint32_t>()).Sum(chunk.non_nulls);
 
     if (t == 0) { s.ck = get_untyped_chunk(chunk); }
   }
@@ -123,17 +152,17 @@ struct calculate_group_statistics_functor {
  */
 template <int block_size, detail::io_file_format IO>
 struct merge_group_statistics_functor {
-  block_reduce_storage<block_size> &temp_storage;
+  block_reduce_storage<block_size>& temp_storage;
 
-  __device__ merge_group_statistics_functor(block_reduce_storage<block_size> &d_temp_storage)
+  __device__ merge_group_statistics_functor(block_reduce_storage<block_size>& d_temp_storage)
     : temp_storage(d_temp_storage)
   {
   }
 
   template <typename T,
-            std::enable_if_t<detail::statistics_type_category<T, IO>::is_ignored> * = nullptr>
-  __device__ void operator()(merge_state_s &s,
-                             const statistics_chunk *chunks,
+            std::enable_if_t<detail::statistics_type_category<T, IO>::ignore>* = nullptr>
+  __device__ void operator()(merge_state_s& s,
+                             const statistics_chunk* chunks,
                              const uint32_t num_chunks,
                              uint32_t t)
   {
@@ -141,18 +170,41 @@ struct merge_group_statistics_functor {
   }
 
   template <typename T,
-            std::enable_if_t<not detail::statistics_type_category<T, IO>::is_ignored> * = nullptr>
-  __device__ void operator()(merge_state_s &s,
-                             const statistics_chunk *chunks,
+            std::enable_if_t<detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
+  __device__ void operator()(merge_state_s& s,
+                             const statistics_chunk* chunks,
                              const uint32_t num_chunks,
                              uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
-    typed_statistics_chunk<T, detail::statistics_type_category<T, IO>::is_aggregated> chunk;
+    typed_statistics_chunk<T, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
 
-    for (uint32_t i = t; i < num_chunks; i += block_size) { chunk.reduce(chunks[i]); }
+    for (uint32_t i = t; i < num_chunks; i += block_size) {
+      chunk.reduce(chunks[i]);
+    }
     chunk.has_minmax = (chunk.minimum_value <= chunk.maximum_value);
+
+    chunk = block_reduce(chunk, storage);
+
+    if (t == 0) { s.ck = get_untyped_chunk(chunk); }
+  }
+
+  template <
+    typename T,
+    std::enable_if_t<detail::statistics_type_category<T, IO>::include_count and
+                     not detail::statistics_type_category<T, IO>::include_extrema>* = nullptr>
+  __device__ void operator()(merge_state_s& s,
+                             const statistics_chunk* chunks,
+                             const uint32_t num_chunks,
+                             uint32_t t)
+  {
+    detail::storage_wrapper<block_size> storage(temp_storage);
+    typed_statistics_chunk<uint32_t, false> chunk;
+
+    for (uint32_t i = t; i < num_chunks; i += block_size) {
+      chunk.reduce(chunks[i]);
+    }
 
     chunk = block_reduce(chunk, storage);
 
@@ -170,17 +222,16 @@ struct merge_group_statistics_functor {
  * @tparam T Type of object
  */
 template <typename T>
-__device__ void cooperative_load(T &destination, const T *source = nullptr)
+__device__ void cooperative_load(T& destination, const T* source = nullptr)
 {
   using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0), uint32_t, uint8_t>;
   if (source == nullptr) {
     for (auto i = threadIdx.x; i < (sizeof(T) / sizeof(load_type)); i += blockDim.x) {
-      reinterpret_cast<load_type *>(&destination)[i] = load_type{0};
+      reinterpret_cast<load_type*>(&destination)[i] = load_type{0};
     }
   } else {
     for (auto i = threadIdx.x; i < sizeof(T) / sizeof(load_type); i += blockDim.x) {
-      reinterpret_cast<load_type *>(&destination)[i] =
-        reinterpret_cast<const load_type *>(source)[i];
+      reinterpret_cast<load_type*>(&destination)[i] = reinterpret_cast<const load_type*>(source)[i];
     }
   }
 }
@@ -195,7 +246,9 @@ __device__ void cooperative_load(T &destination, const T *source = nullptr)
  */
 template <int block_size, detail::io_file_format IO>
 __global__ void __launch_bounds__(block_size, 1)
-  gpu_calculate_group_statistics(statistics_chunk *chunks, const statistics_group *groups)
+  gpu_calculate_group_statistics(statistics_chunk* chunks,
+                                 const statistics_group* groups,
+                                 const bool int96_timestamps)
 {
   __shared__ __align__(8) stats_state_s state;
   __shared__ block_reduce_storage<block_size> storage;
@@ -208,10 +261,29 @@ __global__ void __launch_bounds__(block_size, 1)
   __syncthreads();
 
   // Calculate statistics
-  type_dispatcher(state.col.leaf_column->type(),
-                  calculate_group_statistics_functor<block_size, IO>(storage),
-                  state,
-                  threadIdx.x);
+  if constexpr (IO == detail::io_file_format::PARQUET) {
+    // Do not convert ns to us for int64 timestamps
+    if (not int96_timestamps) {
+      type_dispatcher(
+        state.col.leaf_column->type(),
+        calculate_group_statistics_functor<block_size, IO, detail::is_int96_timestamp::NO>(storage),
+        state,
+        threadIdx.x);
+    }
+    // Temporarily disable stats writing for int96 timestamps
+    // TODO: https://github.com/rapidsai/cudf/issues/10438
+    else if (not cudf::is_timestamp(state.col.leaf_column->type())) {
+      type_dispatcher(state.col.leaf_column->type(),
+                      calculate_group_statistics_functor<block_size, IO>(storage),
+                      state,
+                      threadIdx.x);
+    }
+  } else {
+    type_dispatcher(state.col.leaf_column->type(),
+                    calculate_group_statistics_functor<block_size, IO>(storage),
+                    state,
+                    threadIdx.x);
+  }
   __syncthreads();
 
   cooperative_load(chunks[blockIdx.x], &state.ck);
@@ -229,14 +301,15 @@ namespace detail {
  * @tparam IO File format for which statistics calculation is being done
  */
 template <detail::io_file_format IO>
-void calculate_group_statistics(statistics_chunk *chunks,
-                                const statistics_group *groups,
+void calculate_group_statistics(statistics_chunk* chunks,
+                                const statistics_group* groups,
                                 uint32_t num_chunks,
-                                rmm::cuda_stream_view stream)
+                                rmm::cuda_stream_view stream,
+                                const bool int96_timestamps = false)
 {
   constexpr int block_size = 256;
   gpu_calculate_group_statistics<block_size, IO>
-    <<<num_chunks, block_size, 0, stream.value()>>>(chunks, groups);
+    <<<num_chunks, block_size, 0, stream.value()>>>(chunks, groups, int96_timestamps);
 }
 
 /**
@@ -250,19 +323,17 @@ void calculate_group_statistics(statistics_chunk *chunks,
  */
 template <int block_size, detail::io_file_format IO>
 __global__ void __launch_bounds__(block_size, 1)
-  gpu_merge_group_statistics(statistics_chunk *chunks_out,
-                             const statistics_chunk *chunks_in,
-                             const statistics_merge_group *groups)
+  gpu_merge_group_statistics(statistics_chunk* chunks_out,
+                             const statistics_chunk* chunks_in,
+                             const statistics_merge_group* groups)
 {
   __shared__ __align__(8) merge_state_s state;
   __shared__ block_reduce_storage<block_size> storage;
 
   cooperative_load(state.group, &groups[blockIdx.x]);
   __syncthreads();
-  cooperative_load(state.col, state.group.col);
-  __syncthreads();
 
-  type_dispatcher(state.col.leaf_column->type(),
+  type_dispatcher(state.group.col_dtype,
                   merge_group_statistics_functor<block_size, IO>(storage),
                   state,
                   chunks_in + state.group.start_chunk,
@@ -284,9 +355,9 @@ __global__ void __launch_bounds__(block_size, 1)
  * @tparam IO File format for which statistics calculation is being done
  */
 template <detail::io_file_format IO>
-void merge_group_statistics(statistics_chunk *chunks_out,
-                            const statistics_chunk *chunks_in,
-                            const statistics_merge_group *groups,
+void merge_group_statistics(statistics_chunk* chunks_out,
+                            const statistics_chunk* chunks_in,
+                            const statistics_merge_group* groups,
                             uint32_t num_chunks,
                             rmm::cuda_stream_view stream)
 {

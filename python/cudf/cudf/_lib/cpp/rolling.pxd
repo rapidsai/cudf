@@ -2,12 +2,12 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
+from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.aggregation cimport rolling_aggregation
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.aggregation cimport rolling_aggregation
+from cudf._lib.cpp.types cimport size_type
 
 
 cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:

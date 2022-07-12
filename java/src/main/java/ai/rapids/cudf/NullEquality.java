@@ -18,8 +18,8 @@
 
 package ai.rapids.cudf;
 
-/*
- * This is analogous to the native 'null_equality'.
+/**
+ * How should nulls be compared in an operation.
  */
 public enum NullEquality {
   UNEQUAL(false),

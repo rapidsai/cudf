@@ -34,6 +34,8 @@
 #include <numeric>
 #include <random>
 
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
+
 template <typename T>
 class RepeatTypedTestFixture : public cudf::test::BaseFixture,
                                cudf::test::UniformRandomGenerator<cudf::size_type> {
@@ -43,7 +45,7 @@ class RepeatTypedTestFixture : public cudf::test::BaseFixture,
   cudf::size_type repeat_count() { return this->generate(); }
 };
 
-TYPED_TEST_CASE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
 {
@@ -67,7 +69,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
   auto const p_ret = cudf::repeat(input_table, repeat_count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected, verbosity);
 }
 
 TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
@@ -117,7 +119,9 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
   std::vector<int64_t> input_values(num_values);
   std::iota(input_values.begin(), input_values.end(), 0);
   std::vector<bool> input_valids(num_values);
-  for (size_t i{0}; i < input_valids.size(); i++) { input_valids[i] = (i % 2) == 0 ? true : false; }
+  for (size_t i{0}; i < input_valids.size(); i++) {
+    input_valids[i] = (i % 2) == 0 ? true : false;
+  }
 
   std::vector<cudf::size_type> counts(num_values);
   std::transform(counts.begin(), counts.end(), counts.begin(), [&](cudf::size_type count) {

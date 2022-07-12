@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -30,7 +31,9 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <thrust/execution_policy.h>
 #include <thrust/sequence.h>
+
 #include <random>
 
 template <typename T>
@@ -38,8 +41,8 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest()
-    : data{_num_elements * cudf::size_of(type()), rmm::cuda_stream_default},
-      mask{cudf::bitmask_allocation_size_bytes(_num_elements), rmm::cuda_stream_default}
+    : data{_num_elements * cudf::size_of(type()), cudf::default_stream_value},
+      mask{cudf::bitmask_allocation_size_bytes(_num_elements), cudf::default_stream_value}
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
@@ -59,7 +62,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   rmm::device_buffer all_null_mask{create_null_mask(num_elements(), cudf::mask_state::ALL_NULL)};
 };
 
-TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);
+TYPED_TEST_SUITE(TypedColumnTest, cudf::test::Types<int32_t>);
 
 /**
  * @brief Verifies equality of the properties and data of a `column`'s views.
@@ -240,8 +243,8 @@ TYPED_TEST(TypedColumnTest, CopyDataAndMask)
 {
   cudf::column col{this->type(),
                    this->num_elements(),
-                   rmm::device_buffer{this->data, rmm::cuda_stream_default},
-                   rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default}};
+                   rmm::device_buffer{this->data, cudf::default_stream_value},
+                   rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}};
   EXPECT_EQ(this->type(), col.type());
   EXPECT_TRUE(col.nullable());
   EXPECT_EQ(0, col.null_count());
@@ -349,17 +352,17 @@ TYPED_TEST(TypedColumnTest, ConstructWithChildren)
   children.emplace_back(std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::INT8},
     42,
-    rmm::device_buffer{this->data, rmm::cuda_stream_default},
-    rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default}));
+    rmm::device_buffer{this->data, cudf::default_stream_value},
+    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
   children.emplace_back(std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::FLOAT64},
     314,
-    rmm::device_buffer{this->data, rmm::cuda_stream_default},
-    rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default}));
+    rmm::device_buffer{this->data, cudf::default_stream_value},
+    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
   cudf::column col{this->type(),
                    this->num_elements(),
-                   rmm::device_buffer{this->data, rmm::cuda_stream_default},
-                   rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default},
+                   rmm::device_buffer{this->data, cudf::default_stream_value},
+                   rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value},
                    cudf::UNKNOWN_NULL_COUNT,
                    std::move(children)};
 
@@ -394,17 +397,17 @@ TYPED_TEST(TypedColumnTest, ReleaseWithChildren)
   children.emplace_back(std::make_unique<cudf::column>(
     this->type(),
     this->num_elements(),
-    rmm::device_buffer{this->data, rmm::cuda_stream_default},
-    rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default}));
+    rmm::device_buffer{this->data, cudf::default_stream_value},
+    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
   children.emplace_back(std::make_unique<cudf::column>(
     this->type(),
     this->num_elements(),
-    rmm::device_buffer{this->data, rmm::cuda_stream_default},
-    rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default}));
+    rmm::device_buffer{this->data, cudf::default_stream_value},
+    rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value}));
   cudf::column col{this->type(),
                    this->num_elements(),
-                   rmm::device_buffer{this->data, rmm::cuda_stream_default},
-                   rmm::device_buffer{this->all_valid_mask, rmm::cuda_stream_default},
+                   rmm::device_buffer{this->data, cudf::default_stream_value},
+                   rmm::device_buffer{this->all_valid_mask, cudf::default_stream_value},
                    cudf::UNKNOWN_NULL_COUNT,
                    std::move(children)};
 
@@ -443,7 +446,7 @@ struct ListsColumnTest : public cudf::test::BaseFixture {
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
-TYPED_TEST_CASE(ListsColumnTest, NumericTypesNotBool);
+TYPED_TEST_SUITE(ListsColumnTest, NumericTypesNotBool);
 
 TYPED_TEST(ListsColumnTest, ListsColumnViewConstructor)
 {

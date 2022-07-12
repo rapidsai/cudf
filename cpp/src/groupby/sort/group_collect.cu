@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,16 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy_if.cuh>
-#include <cudf/detail/gather.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 #include <memory>
 
@@ -41,11 +45,11 @@ namespace detail {
  * @return Pair of null-eliminated grouped values and corresponding offsets
  */
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
-  column_view const &values,
-  column_view const &offsets,
+  column_view const& values,
+  column_view const& offsets,
   size_type num_groups,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr)
+  rmm::mr::device_memory_resource* mr)
 {
   auto values_device_view = column_device_view::create(values, stream);
 
@@ -58,6 +62,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
     cudf::detail::copy_if(table_view{{values}}, not_null_pred, stream, mr)->release();
 
   auto null_purged_values = std::move(null_purged_entries.front());
+  null_purged_values->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
 
   // Recalculate offsets after null entries are purged.
   rmm::device_uvector<size_type> null_purged_sizes(num_groups, stream);
@@ -77,16 +82,15 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   auto null_purged_offsets = strings::detail::make_offsets_child_column(
     null_purged_sizes.cbegin(), null_purged_sizes.cend(), stream, mr);
 
-  return std::make_pair<std::unique_ptr<column>, std::unique_ptr<column>>(
-    std::move(null_purged_values), std::move(null_purged_offsets));
+  return std::pair(std::move(null_purged_values), std::move(null_purged_offsets));
 }
 
-std::unique_ptr<column> group_collect(column_view const &values,
+std::unique_ptr<column> group_collect(column_view const& values,
                                       cudf::device_span<size_type const> group_offsets,
                                       size_type num_groups,
                                       null_policy null_handling,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource *mr)
+                                      rmm::mr::device_memory_resource* mr)
 {
   auto [child_column,
         offsets_column] = [null_handling, num_groups, &values, &group_offsets, stream, mr] {
@@ -104,8 +108,8 @@ std::unique_ptr<column> group_collect(column_view const &values,
       return cudf::groupby::detail::purge_null_entries(
         values, offsets_column->view(), num_groups, stream, mr);
     } else {
-      return std::make_pair(std::make_unique<cudf::column>(values, stream, mr),
-                            std::move(offsets_column));
+      return std::pair(std::make_unique<cudf::column>(values, stream, mr),
+                       std::move(offsets_column));
     }
   }();
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
@@ -26,6 +26,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -33,6 +34,9 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 
 using namespace cudf::test::iterators;
 
@@ -172,8 +176,8 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   std::vector<std::string> input{"", "", "", "", "", "", "", ""};
   std::vector<cudf::valid_type> input_v{0, 0, 0, 0, 0, 0, 0, 0};
   std::unique_ptr<cudf::scalar> repl =
-    cudf::make_string_scalar("rep", rmm::cuda_stream_default, mr());
-  repl->set_valid_async(true, rmm::cuda_stream_default);
+    cudf::make_string_scalar("rep", cudf::default_stream_value, mr());
+  repl->set_valid_async(true, cudf::default_stream_value);
   std::vector<std::string> expected{"rep", "rep", "rep", "rep", "rep", "rep", "rep", "rep"};
 
   cudf::test::strings_column_wrapper input_w{input.begin(), input.end(), input_v.begin()};
@@ -246,7 +250,7 @@ struct ReplaceNullsTest : public cudf::test::BaseFixture {
 
 using test_types = cudf::test::NumericTypes;
 
-TYPED_TEST_CASE(ReplaceNullsTest, test_types);
+TYPED_TEST_SUITE(ReplaceNullsTest, test_types);
 
 template <typename T>
 void ReplaceNullsColumn(cudf::test::fixed_width_column_wrapper<T> input,
@@ -335,11 +339,14 @@ TYPED_TEST(ReplaceNullsTest, ReplacementHasNulls)
 TYPED_TEST(ReplaceNullsTest, LargeScale)
 {
   std::vector<TypeParam> inputColumn(10000);
-  for (size_t i = 0; i < inputColumn.size(); i++) inputColumn[i] = i % 2;
+  for (size_t i = 0; i < inputColumn.size(); i++)
+    inputColumn[i] = i % 2;
   std::vector<cudf::valid_type> inputValid(10000);
-  for (size_t i = 0; i < inputValid.size(); i++) inputValid[i] = i % 2;
+  for (size_t i = 0; i < inputValid.size(); i++)
+    inputValid[i] = i % 2;
   std::vector<TypeParam> expectedColumn(10000);
-  for (size_t i = 0; i < expectedColumn.size(); i++) expectedColumn[i] = 1;
+  for (size_t i = 0; i < expectedColumn.size(); i++)
+    expectedColumn[i] = 1;
 
   ReplaceNullsColumn<TypeParam>(
     cudf::test::fixed_width_column_wrapper<TypeParam>(
@@ -352,11 +359,14 @@ TYPED_TEST(ReplaceNullsTest, LargeScale)
 TYPED_TEST(ReplaceNullsTest, LargeScaleScalar)
 {
   std::vector<TypeParam> inputColumn(10000);
-  for (size_t i = 0; i < inputColumn.size(); i++) inputColumn[i] = i % 2;
+  for (size_t i = 0; i < inputColumn.size(); i++)
+    inputColumn[i] = i % 2;
   std::vector<cudf::valid_type> inputValid(10000);
-  for (size_t i = 0; i < inputValid.size(); i++) inputValid[i] = i % 2;
+  for (size_t i = 0; i < inputValid.size(); i++)
+    inputValid[i] = i % 2;
   std::vector<TypeParam> expectedColumn(10000);
-  for (size_t i = 0; i < expectedColumn.size(); i++) expectedColumn[i] = 1;
+  for (size_t i = 0; i < expectedColumn.size(); i++)
+    expectedColumn[i] = 1;
   cudf::numeric_scalar<TypeParam> replacement(1);
 
   ReplaceNullsScalar<TypeParam>(cudf::test::fixed_width_column_wrapper<TypeParam>(
@@ -370,7 +380,7 @@ template <typename T>
 struct ReplaceNullsPolicyTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ReplaceNullsPolicyTest, test_types);
+TYPED_TEST_SUITE(ReplaceNullsPolicyTest, test_types);
 
 template <typename T>
 void TestReplaceNullsWithPolicy(cudf::test::fixed_width_column_wrapper<T> input,
@@ -437,11 +447,53 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillTrailingNulls)
     cudf::replace_policy::FOLLOWING);
 }
 
+TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFillLargeArray)
+{
+  cudf::size_type const sz = 1000;
+
+  // Source: 0, null, null...
+  auto src_begin       = thrust::make_counting_iterator(0);
+  auto src_end         = src_begin + sz;
+  auto nulls_idx_begin = thrust::make_counting_iterator(1);
+  auto nulls_idx_end   = nulls_idx_begin + sz - 1;
+
+  // Expected: 0, 0, 0, ...
+  auto expected_begin = thrust::make_constant_iterator(0);
+  auto expected_end   = expected_begin + sz;
+
+  TestReplaceNullsWithPolicy(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(
+      src_begin, src_end, nulls_at(nulls_idx_begin, nulls_idx_end)),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(expected_begin, expected_end, no_nulls()),
+    cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillLargeArray)
+{
+  cudf::size_type const sz = 1000;
+
+  // Source: null, ... null, 999
+  auto src_begin       = thrust::make_counting_iterator(0);
+  auto src_end         = src_begin + sz;
+  auto nulls_idx_begin = thrust::make_counting_iterator(0);
+  auto nulls_idx_end   = nulls_idx_begin + sz - 1;
+
+  // Expected: 999, 999, 999, ...
+  auto expected_begin = thrust::make_constant_iterator(sz - 1);
+  auto expected_end   = expected_begin + sz;
+
+  TestReplaceNullsWithPolicy(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(
+      src_begin, src_end, nulls_at(nulls_idx_begin, nulls_idx_end)),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(expected_begin, expected_end, no_nulls()),
+    cudf::replace_policy::FOLLOWING);
+}
+
 template <typename T>
 struct ReplaceNullsFixedPointTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ReplaceNullsFixedPointTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(ReplaceNullsFixedPointTest, cudf::test::FixedPointTypes);
 
 TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceColumn)
 {
@@ -528,7 +580,7 @@ template <typename T>
 struct ReplaceNullsPolicyFixedPointTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ReplaceNullsPolicyFixedPointTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(ReplaceNullsPolicyFixedPointTest, cudf::test::FixedPointTypes);
 
 TYPED_TEST(ReplaceNullsPolicyFixedPointTest, PrecedingFill)
 {

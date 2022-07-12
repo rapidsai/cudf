@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <tests/strings/utilities.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
@@ -24,6 +23,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <tests/strings/utilities.h>
 
 class GatherTestStr : public cudf::test::BaseFixture {
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,14 @@
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/logical.h>
+#include <thrust/pair.h>
+#include <thrust/tabulate.h>
 
 #include <cstdlib>
 #include <iostream>
@@ -32,7 +35,6 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "rmm/exec_policy.hpp"
 
 template <typename K, typename V>
 struct key_value_types {
@@ -54,13 +56,13 @@ struct InsertTest : public cudf::test::BaseFixture {
     // prevent overflow of small types
     const size_t input_size =
       std::min(static_cast<key_type>(size), std::numeric_limits<key_type>::max());
-    pairs.resize(input_size, rmm::cuda_stream_default);
+    pairs.resize(input_size, cudf::default_stream_value);
     map = std::move(map_type::create(compute_hash_table_size(size)));
-    rmm::cuda_stream_default.synchronize();
+    cudf::default_stream_value.synchronize();
   }
 
   const cudf::size_type size{10000};
-  rmm::device_uvector<pair_type> pairs{static_cast<std::size_t>(size), rmm::cuda_stream_default};
+  rmm::device_uvector<pair_type> pairs{static_cast<std::size_t>(size), cudf::default_stream_value};
   std::unique_ptr<map_type, std::function<void(map_type*)>> map;
 };
 
@@ -73,7 +75,7 @@ using TestTypes = ::testing::Types<key_value_types<int32_t, int32_t>,
                                    key_value_types<int32_t, float>,
                                    key_value_types<int64_t, double>>;
 
-TYPED_TEST_CASE(InsertTest, TestTypes);
+TYPED_TEST_SUITE(InsertTest, TestTypes);
 
 template <typename map_type, typename pair_type>
 struct insert_pair {

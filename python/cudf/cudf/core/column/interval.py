@@ -1,11 +1,11 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 import pandas as pd
 import pyarrow as pa
 
 import cudf
+from cudf.api.types import is_categorical_dtype, is_interval_dtype
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import IntervalDtype
-from cudf.utils.dtypes import is_interval_dtype, is_categorical_dtype
 
 
 class IntervalColumn(StructColumn):
@@ -39,7 +39,7 @@ class IntervalColumn(StructColumn):
         return self._closed
 
     @classmethod
-    def from_arrow(self, data):
+    def from_arrow(cls, data):
         new_col = super().from_arrow(data.storage)
         size = len(data)
         dtype = IntervalDtype.from_arrow(data.type)

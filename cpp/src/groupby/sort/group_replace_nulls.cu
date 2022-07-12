@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/group_replace_nulls.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/replace/nulls.cuh>
 #include <cudf/replace.hpp>
 
@@ -25,6 +26,9 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/scan.h>
+#include <thrust/tuple.h>
 
 #include <utility>
 
@@ -40,7 +44,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
 {
   cudf::size_type size = grouped_value.size();
 
-  auto device_in = cudf::column_device_view::create(grouped_value);
+  auto device_in = cudf::column_device_view::create(grouped_value, stream);
   auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
@@ -68,9 +72,9 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   }
 
   auto output = cudf::detail::gather(cudf::table_view({grouped_value}),
-                                     gather_map.begin(),
-                                     gather_map.end(),
+                                     gather_map,
                                      cudf::out_of_bounds_policy::DONT_CHECK,
+                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
 

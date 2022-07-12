@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
+
 #include <string>
 
 template <typename T>
@@ -31,7 +34,7 @@ struct EmptyLikeTest : public cudf::test::BaseFixture {
 
 using numeric_types = cudf::test::NumericTypes;
 
-TYPED_TEST_CASE(EmptyLikeTest, numeric_types);
+TYPED_TEST_SUITE(EmptyLikeTest, numeric_types);
 
 TYPED_TEST(EmptyLikeTest, ColumnNumericTests)
 {
@@ -76,7 +79,7 @@ template <typename T>
 struct EmptyLikeScalarTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(EmptyLikeScalarTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(EmptyLikeScalarTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(EmptyLikeScalarTest, FixedWidth)
 {
@@ -191,7 +194,7 @@ struct AllocateLikeTest : public cudf::test::BaseFixture {
 };
 ;
 
-TYPED_TEST_CASE(AllocateLikeTest, numeric_types);
+TYPED_TEST_SUITE(AllocateLikeTest, numeric_types);
 
 TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
 {

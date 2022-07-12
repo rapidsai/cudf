@@ -15,25 +15,45 @@
  */
 #pragma once
 
-#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/lists/drop_list_duplicates.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace lists {
 namespace detail {
-
 /**
- * @copydoc cudf::lists::drop_list_duplicates
- *
+ * @copydoc cudf::lists::drop_list_duplicates(lists_column_view const&,
+ *                                            lists_column_view const&,
+ *                                            duplicate_keep_option,
+ *                                            null_equality,
+ *                                            nan_equality,
+ *                                            rmm::mr::device_memory_resource*)
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> drop_list_duplicates(
-  lists_column_view const& lists_column,
+  lists_column_view const& keys,
+  lists_column_view const& values,
+  duplicate_keep_option keep_option,
   null_equality nulls_equal,
   nan_equality nans_equal,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::lists::drop_list_duplicates(lists_column_view const&,
+ *                                            null_equality,
+ *                                            nan_equality,
+ *                                            rmm::mr::device_memory_resource*)
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> drop_list_duplicates(
+  lists_column_view const& input,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf

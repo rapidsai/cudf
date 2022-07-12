@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@
 using namespace cudf::test::iterators;
 
 namespace {
-constexpr bool print_all{false};  // For debugging
-constexpr int32_t null{0};        // Mark for null elements
+constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::FIRST_ERROR};
+constexpr int32_t null{0};  // Mark for null elements
 
 using vcol_views = std::vector<cudf::column_view>;
 
@@ -42,12 +42,12 @@ auto merge_sets(vcol_views const& keys_cols, vcol_views const& values_cols)
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = *values;
-  requests[0].aggregations.emplace_back(cudf::make_merge_sets_aggregation());
+  requests[0].aggregations.emplace_back(
+    cudf::make_merge_sets_aggregation<cudf::groupby_aggregation>());
 
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({*keys}));
   auto result = gb_obj.aggregate(requests);
-  return std::make_pair(std::move(result.first->release()[0]),
-                        std::move(result.second[0].results[0]));
+  return std::pair(std::move(result.first->release()[0]), std::move(result.second[0].results[0]));
 }
 
 }  // namespace
@@ -59,7 +59,7 @@ struct GroupbyMergeSetsTypedTest : public cudf::test::BaseFixture {
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(GroupbyMergeSetsTypedTest, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(GroupbyMergeSetsTypedTest, FixedWidthTypesNotBool);
 
 TYPED_TEST(GroupbyMergeSetsTypedTest, InvalidInput)
 {
@@ -91,8 +91,8 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, EmptyInput)
   auto const expected_keys         = keys_col{};
   auto const expected_lists        = cudf::empty_like(lists0);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeSetsTypedTest, InputWithoutNull)
@@ -128,8 +128,8 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, InputWithoutNull)
     {30, 31, 32}                           // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasNulls)
@@ -167,8 +167,8 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasNulls)
     lists_col{{30, 32, null}, null_at(2)}                           // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasEmptyLists)
@@ -204,8 +204,8 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasEmptyLists)
     {24, 25, 26}         // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasNullsAndEmptyLists)
@@ -245,8 +245,8 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasNullsAndEmptyLists)
     lists_col{{20, 24, 25, 26, null}, null_at(4)}     // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 TYPED_TEST(GroupbyMergeSetsTypedTest, SlicedColumnsInput)
@@ -293,8 +293,8 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, SlicedColumnsInput)
     {24, 25, 26}                       // key = 4
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }
 
 struct GroupbyMergeSetsTest : public cudf::test::BaseFixture {
@@ -340,6 +340,6 @@ TEST_F(GroupbyMergeSetsTest, StringsColumnInput)
     lists_col{{"Mini", "Seeedless"}, no_nulls()}                  // key = "water melon"
   };
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lists, *out_lists, verbosity);
 }

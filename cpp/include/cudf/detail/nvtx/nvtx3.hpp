@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@
  * \code{.cpp}
  * #include "nvtx3.hpp"
  * void some_function(){
- *    // Begins a NVTX range with the messsage "some_function"
+ *    // Begins a NVTX range with the message "some_function"
  *    // The range ends when some_function() returns and `r` is destroyed
  *    nvtx3::thread_range r{"some_function"};
  *
@@ -322,7 +322,7 @@
  * Example:
  * \code{.cpp}
  * // Create an `event_attributes` with the custom message "my message"
- * nvtx3::event_attributes attr{nvtx3::Mesage{"my message"}};
+ * nvtx3::event_attributes attr{nvtx3::message{"my message"}};
  *
  * // strings and string literals implicitly assumed to be a `nvtx3::message`
  * nvtx3::event_attributes attr{"my message"};
@@ -524,8 +524,8 @@ namespace detail {
 template <typename T>
 constexpr auto has_name_member() noexcept -> decltype(T::name, bool())
 {
-  return (std::is_same<char const*, typename std::decay<decltype(T::name)>::type>::value or
-          std::is_same<wchar_t const*, typename std::decay<decltype(T::name)>::type>::value);
+  return (std::is_same_v<char const*, typename std::decay<decltype(T::name)>::type> or
+          std::is_same_v<wchar_t const*, typename std::decay<decltype(T::name)>::type>);
 }
 }  // namespace detail
 
@@ -1267,7 +1267,7 @@ class registered_message {
  * nvtx3::thread_range range1{attr1};
  *
  * // `range2` contains message "message 2"
- * nvtx3::thread_range range2{nvtx3::Mesage{"message 2"}};
+ * nvtx3::thread_range range2{nvtx3::message{"message 2"}};
  *
  * // `std::string` and string literals are implicitly assumed to be
  * // the contents of an `nvtx3::message`
@@ -1525,7 +1525,7 @@ class payload {
  *
  * // For convenience, the arguments that can be passed to the
  * `event_attributes`
- * // constructor may be passed to the `domain_thread_range` contructor where
+ * // constructor may be passed to the `domain_thread_range` constructor where
  * // they will be forwarded to the `EventAttribute`s constructor
  * nvtx3::thread_range r{nvtx3::payload{42}, nvtx3::category{1}, "message"};
  * \endcode
@@ -1728,7 +1728,7 @@ class domain_thread_range {
   template <typename First,
             typename... Args,
             typename = typename std::enable_if<
-              not std::is_same<event_attributes, typename std::decay<First>>::value>>
+              not std::is_same_v<event_attributes, typename std::decay<First>>>>
   explicit domain_thread_range(First const& first, Args const&... args) noexcept
     : domain_thread_range{event_attributes{first, args...}}
   {
@@ -1798,7 +1798,7 @@ class domain_process_range {
   template <typename First,
             typename... Args,
             typename = typename std::enable_if<
-              not std::is_same<event_attributes, typename std::decay<First>>::value>>
+              not std::is_same_v<event_attributes, typename std::decay<First>>>>
   explicit domain_process_range(First const& first, Args const&... args) noexcept
     : domain_process_range{event_attributes{first, args...}}
   {

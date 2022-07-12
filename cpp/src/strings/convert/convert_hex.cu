@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,15 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/distance.h>
+#include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
@@ -90,7 +93,7 @@ struct hex_to_integer_fn {
  * The output_column is expected to be one of the integer types only.
  */
 struct dispatch_hex_to_integers_fn {
-  template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
+  template <typename IntegerType, std::enable_if_t<std::is_integral_v<IntegerType>>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
                   rmm::cuda_stream_view stream) const
@@ -104,7 +107,7 @@ struct dispatch_hex_to_integers_fn {
   }
   // non-integral types throw an exception
   template <typename T, typename... Args>
-  std::enable_if_t<not std::is_integral<T>::value, void> operator()(Args&&...) const
+  std::enable_if_t<not std::is_integral_v<T>, void> operator()(Args&&...) const
   {
     CUDF_FAIL("Output for hex_to_integers must be an integral type.");
   }
@@ -154,7 +157,9 @@ struct integer_to_hex_fn {
     // compute the number of output bytes
     int bytes      = sizeof(IntegerType);
     int byte_index = sizeof(IntegerType);
-    while ((--byte_index > 0) && (value_bytes[byte_index] & 0xFF) == 0) { --bytes; }
+    while ((--byte_index > 0) && (value_bytes[byte_index] & 0xFF) == 0) {
+      --bytes;
+    }
 
     // create output
     byte_index = bytes - 1;
@@ -186,9 +191,7 @@ struct dispatch_integers_to_hex_fn {
                                std::move(children.first),
                                std::move(children.second),
                                input.null_count(),
-                               cudf::detail::copy_bitmask(input, stream, mr),
-                               stream,
-                               mr);
+                               cudf::detail::copy_bitmask(input, stream, mr));
   }
   // non-integral types throw an exception
   template <typename T, typename... Args>
@@ -267,7 +270,7 @@ std::unique_ptr<column> integers_to_hex(column_view const& input,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) { return cudf::make_empty_column(data_type{type_id::STRING}); }
+  if (input.is_empty()) { return cudf::make_empty_column(type_id::STRING); }
   return type_dispatcher(input.type(), dispatch_integers_to_hex_fn{}, input, stream, mr);
 }
 
@@ -279,21 +282,21 @@ std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hex_to_integers(strings, output_type, rmm::cuda_stream_default, mr);
+  return detail::hex_to_integers(strings, output_type, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> is_hex(strings_column_view const& strings,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_hex(strings, rmm::cuda_stream_default, mr);
+  return detail::is_hex(strings, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> integers_to_hex(column_view const& input,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::integers_to_hex(input, rmm::cuda_stream_default, mr);
+  return detail::integers_to_hex(input, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

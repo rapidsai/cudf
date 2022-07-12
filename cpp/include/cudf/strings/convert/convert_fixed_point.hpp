@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace strings {
@@ -51,7 +53,7 @@ namespace strings {
  *
  * @throw cudf::logic_error if `output_type` is not a fixed-point decimal type.
  *
- * @param strings Strings instance for this operation.
+ * @param input Strings instance for this operation.
  * @param output_type Type of fixed-point column to return including the scale value.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of `output_type`.
@@ -93,18 +95,16 @@ std::unique_ptr<column> from_fixed_point(
  * @brief Returns a boolean column identifying strings in which all
  * characters are valid for conversion to fixed-point.
  *
- * The output row entry is set to `true` if the corresponding string element
- * has at least one character in [+-0123456789.]. The optional sign character
- * must only be in the first position. The decimal point may only appear once.
+ * The sign and the exponent is optional. The decimal point may only appear once.
  * Also, the integer component must fit within the size limits of the
  * underlying fixed-point storage type. The value of the integer component
  * is based on the scale of the `decimal_type` provided.
  *
  * @code{.pseudo}
  * Example:
- * s = ['123', '-456', '', '1.2.3', '+17E30', '12.34' '.789', '-0.005]
+ * s = ['123', '-456', '', '1.2.3', '+17E30', '12.34', '.789', '-0.005]
  * b = is_fixed_point(s)
- * b is [true, true, false, false, false, true, true, true]
+ * b is [true, true, false, false, true, true, true, true]
  * @endcode
  *
  * Any null entries result in corresponding null entries in the output column.

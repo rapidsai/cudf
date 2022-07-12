@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace strings {
@@ -139,7 +141,7 @@ std::unique_ptr<table> rsplit(
  *
  * @throw cudf:logic_error if `delimiter` is invalid.
  *
- * @param strings A column of string elements to be splitted.
+ * @param strings A column of string elements to be split.
  * @param delimiter The string to identify split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
@@ -216,7 +218,7 @@ std::unique_ptr<column> split_record(
  *
  * @throw cudf:logic_error if `delimiter` is invalid.
  *
- * @param strings A column of string elements to be splitted.
+ * @param strings A column of string elements to be split.
  * @param delimiter The string to identify split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.

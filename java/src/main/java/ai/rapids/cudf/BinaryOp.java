@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020,2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ package ai.rapids.cudf;
 import java.util.EnumSet;
 
 /**
- * Mathematical unary operations.
+ * Mathematical binary operations.
  */
 public enum BinaryOp {
   ADD(0),
@@ -28,30 +28,31 @@ public enum BinaryOp {
   TRUE_DIV(4), // divide after promoting to FLOAT64 point
   FLOOR_DIV(5), // divide after promoting to FLOAT64 and flooring the result
   MOD(6),
-  PYMOD(7), // mod operator % follow by python's sign rules for negatives
-  POW(8),
-  EQUAL(9),
-  NOT_EQUAL(10),
-  LESS(11),
-  GREATER(12),
-  LESS_EQUAL(13), // <=
-  GREATER_EQUAL(14), // >=
+  PMOD(7), // pmod
+  PYMOD(8), // mod operator % follow by python's sign rules for negatives
+  POW(9),
+  LOG_BASE(10), // logarithm to the base
+  ATAN2(11), // atan2
+  SHIFT_LEFT(12), // bitwise shift left (<<)
+  SHIFT_RIGHT(13), // bitwise shift right (>>)
+  SHIFT_RIGHT_UNSIGNED(14), // bitwise shift right (>>>)
   BITWISE_AND(15),
   BITWISE_OR(16),
   BITWISE_XOR(17),
   LOGICAL_AND(18),
   LOGICAL_OR(19),
-  //NOT IMPLEMENTED YET COALESCE(20); // x == null ? y : x
-  //NOT IMPLEMENTED YET GENERIC_BINARY(21);
-  SHIFT_LEFT(22), // bitwise shift left (<<)
-  SHIFT_RIGHT(23), // bitwise shift right (>>)
-  SHIFT_RIGHT_UNSIGNED(24), // bitwise shift right (>>>)
-  LOG_BASE(25), // logarithm to the base
-  ATAN2(26), // atan2
-  PMOD(27), // pmod
-  NULL_EQUALS(28), // like EQUAL but NULL == NULL is TRUE and NULL == not NULL is FALSE
-  NULL_MAX(29), // MAX but NULL < not NULL
-  NULL_MIN(30); // MIN but NULL > not NULL
+  EQUAL(20),
+  NOT_EQUAL(21),
+  LESS(22),
+  GREATER(23),
+  LESS_EQUAL(24), // <=
+  GREATER_EQUAL(25), // >=
+  NULL_EQUALS(26), // like EQUAL but NULL == NULL is TRUE and NULL == not NULL is FALSE
+  NULL_MAX(27), // MAX but NULL < not NULL
+  NULL_MIN(28), // MIN but NULL > not NULL
+  //NOT IMPLEMENTED YET GENERIC_BINARY(29);
+  NULL_LOGICAL_AND(30),
+  NULL_LOGICAL_OR(31);
 
 
   static final EnumSet<BinaryOp> COMPARISON = EnumSet.of(

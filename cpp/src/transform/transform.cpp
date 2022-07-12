@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
-
-#include <jit/cache.hpp>
-#include <jit/parser.hpp>
-#include <jit/type.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
+
+#include <jit/cache.hpp>
+#include <jit/parser.hpp>
+#include <jit/type.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -98,7 +99,7 @@ std::unique_ptr<column> transform(column_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transform(input, unary_udf, output_type, is_ptx, rmm::cuda_stream_default, mr);
+  return detail::transform(input, unary_udf, output_type, is_ptx, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

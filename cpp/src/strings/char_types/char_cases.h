@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 #pragma once
+
+#include <cudf/strings/detail/char_tables.hpp>
 
 #include <cstdint>
 
@@ -4727,12 +4729,6 @@ namespace detail {
  * cudf::strings::detail::generate_special_mapping_hash_table
  */
 
-struct special_case_mapping {
-  uint16_t num_upper_chars;
-  uint16_t upper[3];
-  uint16_t num_lower_chars;
-  uint16_t lower[3];
-};
 constexpr special_case_mapping g_special_case_mappings[] = {
   {},
   {},
@@ -5234,13 +5230,6 @@ constexpr special_case_mapping g_special_case_mappings[] = {
   {},
   {1, {497, 0, 0}, 1, {499, 0, 0}},
 };
-// the special case mapping table is a perfect hash table with no collisions, allowing us
-// to 'hash' by simply modding by the incoming codepoint
-constexpr uint16_t get_special_case_hash_index(uint32_t code_point)
-{
-  constexpr uint16_t special_case_prime = 499;
-  return static_cast<uint16_t>(code_point % special_case_prime);
-}
 
 }  // namespace detail
 }  // namespace strings

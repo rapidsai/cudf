@@ -3,25 +3,23 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf.utils.dtypes import is_scalar
+from cudf.api.types import is_scalar
 
 from cudf._lib.column cimport Column
-from cudf._lib.scalar import as_device_scalar
-from cudf._lib.scalar cimport DeviceScalar
 
-from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.scalar import as_device_scalar
+
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport (
-    column_view,
-    mutable_column_view
-)
+from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.replace cimport (
-    replace_policy as cpp_replace_policy,
-    find_and_replace_all as cpp_find_and_replace_all,
-    replace_nulls as cpp_replace_nulls,
     clamp as cpp_clamp,
-    normalize_nans_and_zeros as cpp_normalize_nans_and_zeros
+    find_and_replace_all as cpp_find_and_replace_all,
+    normalize_nans_and_zeros as cpp_normalize_nans_and_zeros,
+    replace_nulls as cpp_replace_nulls,
+    replace_policy as cpp_replace_policy,
 )
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.scalar cimport DeviceScalar
 
 
 def replace(Column input_col, Column values_to_replace,
@@ -206,12 +204,8 @@ def clip(Column input_col, object lo, object hi):
     and > hi will be replaced by hi
     """
 
-    lo_scalar = as_device_scalar(
-        lo, dtype=input_col.dtype if lo is None else None
-    )
-    hi_scalar = as_device_scalar(
-        hi, dtype=input_col.dtype if hi is None else None
-    )
+    lo_scalar = as_device_scalar(lo, dtype=input_col.dtype)
+    hi_scalar = as_device_scalar(hi, dtype=input_col.dtype)
 
     return clamp(input_col, lo_scalar, hi_scalar)
 

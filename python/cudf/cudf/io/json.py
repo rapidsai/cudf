@@ -1,22 +1,13 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2022, NVIDIA CORPORATION.
 import warnings
 from io import BytesIO, StringIO
 
 import pandas as pd
-from fsspec.core import get_fs_token_paths
 
 import cudf
 from cudf._lib import json as libjson
+from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_list_like
-
-
-def _ensure_filesystem(passed_filesystem, path):
-    if passed_filesystem is None:
-        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
-            0
-        ]
-    return passed_filesystem
 
 
 @ioutils.doc_read_json()
@@ -45,14 +36,17 @@ def read_json(
         filepaths_or_buffers = []
         for source in path_or_buf:
             if ioutils.is_directory(source, **kwargs):
-                fs = _ensure_filesystem(passed_filesystem=None, path=source)
+                fs = ioutils._ensure_filesystem(
+                    passed_filesystem=None, path=source, **kwargs
+                )
                 source = ioutils.stringify_pathlike(source)
                 source = fs.sep.join([source, "*.json"])
 
-            tmp_source, compression = ioutils.get_filepath_or_buffer(
+            tmp_source, compression = ioutils.get_reader_filepath_or_buffer(
                 path_or_data=source,
                 compression=compression,
                 iotypes=(BytesIO, StringIO),
+                allow_raw_text_input=True,
                 **kwargs,
             )
             if isinstance(tmp_source, list):
@@ -60,8 +54,8 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        return cudf.DataFrame._from_table(
-            libjson.read_json(
+        return cudf.DataFrame._from_data(
+            *libjson.read_json(
                 filepaths_or_buffers, dtype, lines, compression, byte_range
             )
         )
@@ -72,17 +66,19 @@ def read_json(
         )
 
         if not ioutils.ensure_single_filepath_or_buffer(
-            path_or_data=path_or_buf, **kwargs,
+            path_or_data=path_or_buf,
+            **kwargs,
         ):
             raise NotImplementedError(
                 "`read_json` does not yet support reading "
                 "multiple files via pandas"
             )
 
-        path_or_buf, compression = ioutils.get_filepath_or_buffer(
+        path_or_buf, compression = ioutils.get_reader_filepath_or_buffer(
             path_or_data=path_or_buf,
             compression=compression,
             iotypes=(BytesIO, StringIO),
+            allow_raw_text_input=True,
             **kwargs,
         )
 

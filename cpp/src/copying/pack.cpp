@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -145,7 +146,7 @@ packed_columns pack(cudf::table_view const& input,
   // do a contiguous_split with no splits to get the memory for the table
   // arranged as we want it
   auto contig_split_result = cudf::detail::contiguous_split(input, {}, stream, mr);
-  return std::move(contig_split_result[0].data);
+  return contig_split_result.empty() ? packed_columns{} : std::move(contig_split_result[0].data);
 }
 
 template <typename ColumnIter>
@@ -218,7 +219,7 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pack(input, rmm::cuda_stream_default, mr);
+  return detail::pack(input, cudf::default_stream_value, mr);
 }
 
 /**
@@ -229,7 +230,9 @@ packed_columns::metadata pack_metadata(table_view const& table,
                                        size_t buffer_size)
 {
   CUDF_FUNC_RANGE();
-  return detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
+  return table.is_empty()
+           ? packed_columns::metadata{}
+           : detail::pack_metadata(table.begin(), table.end(), contiguous_buffer, buffer_size);
 }
 
 /**
@@ -238,12 +241,14 @@ packed_columns::metadata pack_metadata(table_view const& table,
 table_view unpack(packed_columns const& input)
 {
   CUDF_FUNC_RANGE();
-  return detail::unpack(input.metadata_->data(),
-                        reinterpret_cast<uint8_t const*>(input.gpu_data->data()));
+  return input.metadata_->size() == 0
+           ? table_view{}
+           : detail::unpack(input.metadata_->data(),
+                            reinterpret_cast<uint8_t const*>(input.gpu_data->data()));
 }
 
 /**
- * @copydoc cudf::unpack
+ * @copydoc cudf::unpack(uint8_t const*, uint8_t const* )
  */
 table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {

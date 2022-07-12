@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@
 #include "parquet.hpp"
 #include "parquet_common.hpp"
 
-#include <stddef.h>
-#include <stdint.h>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -36,34 +36,42 @@ namespace parquet {
  */
 class CompactProtocolWriter {
  public:
-  CompactProtocolWriter(std::vector<uint8_t> *output) : m_buf(*output) {}
+  CompactProtocolWriter(std::vector<uint8_t>* output) : m_buf(*output) {}
 
-  size_t write(const FileMetaData &);
-  size_t write(const SchemaElement &);
-  size_t write(const RowGroup &);
-  size_t write(const KeyValue &);
-  size_t write(const ColumnChunk &);
-  size_t write(const ColumnChunkMetaData &);
+  size_t write(const FileMetaData&);
+  size_t write(const DecimalType&);
+  size_t write(const TimeUnit&);
+  size_t write(const TimeType&);
+  size_t write(const TimestampType&);
+  size_t write(const IntType&);
+  size_t write(const LogicalType&);
+  size_t write(const SchemaElement&);
+  size_t write(const RowGroup&);
+  size_t write(const KeyValue&);
+  size_t write(const ColumnChunk&);
+  size_t write(const ColumnChunkMetaData&);
+  size_t write(const PageLocation&);
+  size_t write(const OffsetIndex&);
 
  protected:
-  std::vector<uint8_t> &m_buf;
+  std::vector<uint8_t>& m_buf;
   friend class CompactProtocolFieldWriter;
 };
 
 class CompactProtocolFieldWriter {
-  CompactProtocolWriter &writer;
+  CompactProtocolWriter& writer;
   size_t struct_start_pos;
   int current_field_value;
 
  public:
-  CompactProtocolFieldWriter(CompactProtocolWriter &caller)
+  CompactProtocolFieldWriter(CompactProtocolWriter& caller)
     : writer(caller), struct_start_pos(writer.m_buf.size()), current_field_value(0)
   {
   }
 
   void put_byte(uint8_t v);
 
-  void put_byte(const uint8_t *raw, uint32_t len);
+  void put_byte(const uint8_t* raw, uint32_t len);
 
   uint32_t put_uint(uint64_t v);
 
@@ -71,30 +79,34 @@ class CompactProtocolFieldWriter {
 
   void put_field_header(int f, int cur, int t);
 
+  inline void field_bool(int field, bool b);
+
+  inline void field_int8(int field, int8_t val);
+
   inline void field_int(int field, int32_t val);
 
   inline void field_int(int field, int64_t val);
 
   template <typename Enum>
-  inline void field_int_list(int field, const std::vector<Enum> &val);
+  inline void field_int_list(int field, const std::vector<Enum>& val);
 
   template <typename T>
-  inline void field_struct(int field, const T &val);
+  inline void field_struct(int field, const T& val);
 
   template <typename T>
-  inline void field_struct_list(int field, const std::vector<T> &val);
+  inline void field_struct_list(int field, const std::vector<T>& val);
 
   inline size_t value();
 
-  inline void field_struct_blob(int field, const std::vector<uint8_t> &val);
+  inline void field_struct_blob(int field, const std::vector<uint8_t>& val);
 
-  inline void field_string(int field, const std::string &val);
+  inline void field_string(int field, const std::string& val);
 
-  inline void field_string_list(int field, const std::vector<std::string> &val);
+  inline void field_string_list(int field, const std::vector<std::string>& val);
 
   inline int current_field();
 
-  inline void set_current_field(const int &field);
+  inline void set_current_field(const int& field);
 };
 
 }  // namespace parquet

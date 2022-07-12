@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef ROLLING_DETAIL_HPP
-#define ROLLING_DETAIL_HPP
+#pragma once
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
@@ -29,36 +28,72 @@ namespace detail {
 // store functor
 template <typename T, bool is_mean = false>
 struct rolling_store_output_functor {
-  CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count) { out = val; }
+  CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count) { out = val; }
 };
 
 // Specialization for MEAN
 template <typename _T>
 struct rolling_store_output_functor<_T, true> {
   // SFINAE for non-bool types
-  template <typename T                                                              = _T,
-            std::enable_if_t<!(cudf::is_boolean<T>() || cudf::is_timestamp<T>())> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
+  template <typename T                                                             = _T,
+            std::enable_if_t<!(cudf::is_boolean<T>() || cudf::is_timestamp<T>())>* = nullptr>
+  CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
   {
     out = val / count;
   }
 
   // SFINAE for bool type
-  template <typename T = _T, std::enable_if_t<cudf::is_boolean<T>()> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
+  template <typename T = _T, std::enable_if_t<cudf::is_boolean<T>()>* = nullptr>
+  CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
   {
     out = static_cast<int32_t>(val) / count;
   }
 
   // SFINAE for timestamp types
-  template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(T &out, T &val, size_type count)
+  template <typename T = _T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  CUDF_HOST_DEVICE inline void operator()(T& out, T& val, size_type count)
   {
     out = static_cast<T>(val.time_since_epoch() / count);
   }
 };
+
+/**
+ * @copydoc cudf::rolling_window(column_view const& input,
+ *                               column_view const& default_outputs,
+ *                               size_type preceding_window,
+ *                               size_type following_window,
+ *                               size_type min_periods,
+ *                               rolling_aggregation const& agg,
+ *                               rmm::mr::device_memory_resource* mr)
+ *
+ * @param stream CUDA stream to use for device memory operations
+ */
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       column_view const& default_outputs,
+                                       size_type preceding_window,
+                                       size_type following_window,
+                                       size_type min_periods,
+                                       rolling_aggregation const& agg,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr);
+
+/**
+ * @copydoc cudf::rolling_window(column_view const& input,
+ *                               column_view const& preceding_window,
+ *                               column_view const& following_window,
+ *                               size_type min_periods,
+ *                               rolling_aggregation const& agg,
+ *                               rmm::mr::device_memory_resource* mr);
+ *
+ * @param stream CUDA stream to use for device memory operations
+ */
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       column_view const& preceding_window,
+                                       column_view const& following_window,
+                                       size_type min_periods,
+                                       rolling_aggregation const& agg,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr);
 }  // namespace detail
 
 }  // namespace cudf
-
-#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/types.hpp>
 
 #include <thrust/functional.h>
+#include <thrust/tuple.h>
 
 namespace cudf {
 namespace detail {
@@ -35,8 +36,7 @@ using idx_valid_pair_t = thrust::tuple<cudf::size_type, bool>;
 struct replace_policy_functor {
   __device__ idx_valid_pair_t operator()(idx_valid_pair_t const& lhs, idx_valid_pair_t const& rhs)
   {
-    return thrust::get<1>(rhs) ? thrust::make_tuple(thrust::get<0>(rhs), true)
-                               : thrust::make_tuple(thrust::get<0>(lhs), true);
+    return thrust::get<1>(rhs) ? rhs : lhs;
   }
 };
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -19,9 +19,9 @@
 
 #pragma once
 
-#include <tests/binaryop/util/operation.h>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <tests/binaryop/util/operation.h>
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -36,28 +36,21 @@ namespace binop {
 // result returned by the binop operation into string, which is then used for display purposes
 // when the values do not match.
 struct stringify_out_values {
-  template <typename TypeOut, std::enable_if_t<!is_chrono<TypeOut>()>* = nullptr>
-  std::string operator()(TypeOut lhs, TypeOut rhs) const
+  template <typename TypeOut>
+  std::string operator()(size_type i, TypeOut lhs, TypeOut rhs) const
   {
     std::stringstream out_str;
-    out_str << "lhs: " << lhs << "\nrhs: " << rhs;
-    return out_str.str();
-  }
-
-  template <typename TypeOut, std::enable_if_t<is_timestamp<TypeOut>()>* = nullptr>
-  std::string operator()(TypeOut lhs, TypeOut rhs) const
-  {
-    std::stringstream out_str;
-    out_str << "lhs: " << lhs.time_since_epoch().count()
-            << "\nrhs: " << rhs.time_since_epoch().count();
-    return out_str.str();
-  }
-
-  template <typename TypeOut, std::enable_if_t<is_duration<TypeOut>()>* = nullptr>
-  std::string operator()(TypeOut lhs, TypeOut rhs) const
-  {
-    std::stringstream out_str;
-    out_str << "lhs: " << lhs.count() << "\nrhs: " << rhs.count();
+    out_str << "[" << i << "]:\n";
+    if constexpr (is_fixed_point<TypeOut>()) {
+      out_str << "lhs: " << std::string(lhs) << "\nrhs: " << std::string(rhs);
+    } else if constexpr (is_timestamp<TypeOut>()) {
+      out_str << "lhs: " << lhs.time_since_epoch().count()
+              << "\nrhs: " << rhs.time_since_epoch().count();
+    } else if constexpr (is_duration<TypeOut>()) {
+      out_str << "lhs: " << lhs.count() << "\nrhs: " << rhs.count();
+    } else {
+      out_str << "lhs: " << lhs << "\nrhs: " << rhs;
+    }
     return out_str.str();
   }
 };
@@ -101,7 +94,7 @@ void ASSERT_BINOP(column_view const& out,
   for (size_t i = 0; i < out_data.size(); ++i) {
     auto lhs = out_data[i];
     auto rhs = (TypeOut)(op(lhs_h, rhs_data[i]));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(lhs, rhs);
+    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
   }
 
   if (rhs.nullable()) {
@@ -148,7 +141,7 @@ void ASSERT_BINOP(column_view const& out,
   for (size_t i = 0; i < out_data.size(); ++i) {
     auto lhs = out_data[i];
     auto rhs = (TypeOut)(op(lhs_data[i], rhs_h));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(lhs, rhs);
+    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
   }
 
   if (lhs.nullable()) {
@@ -196,7 +189,7 @@ void ASSERT_BINOP(column_view const& out,
   for (size_t i = 0; i < out_data.size(); ++i) {
     auto lhs = out_data[i];
     auto rhs = (TypeOut)(op(lhs_data[i], rhs_data[i]));
-    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(lhs, rhs);
+    ASSERT_TRUE(value_comparator(lhs, rhs)) << stringify_out_values{}(i, lhs, rhs);
   }
 
   if (lhs.nullable() and rhs.nullable()) {

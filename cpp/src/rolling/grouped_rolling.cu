@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,15 @@
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
+#include <thrust/binary_search.h>
+#include <thrust/copy.h>
+#include <thrust/execution_policy.h>
+#include <thrust/for_each.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/partition.h>
 
 namespace cudf {
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
@@ -142,8 +151,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                preceding_window] __device__(size_type idx) {
     auto group_label = d_group_labels[idx];
     auto group_start = d_group_offsets[group_label];
-    return thrust::minimum<size_type>{}(preceding_window,
-                                        idx - group_start + 1);  // Preceding includes current row.
+    return thrust::minimum{}(preceding_window,
+                             idx - group_start + 1);  // Preceding includes current row.
   };
 
   auto following_calculator = [d_group_offsets = group_offsets.data(),
@@ -152,7 +161,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     auto group_label = d_group_labels[idx];
     auto group_end   = d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
                                                           // is capped with `input.size()`.
-    return thrust::minimum<size_type>{}(following_window, (group_end - 1) - idx);
+    return thrust::minimum{}(following_window, (group_end - 1) - idx);
   };
 
   if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
@@ -202,7 +211,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                         following_window_bounds,
                                         min_periods,
                                         aggr,
-                                        rmm::cuda_stream_default,
+                                        cudf::default_stream_value,
                                         mr);
 }
 
@@ -407,7 +416,7 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
     auto null_start = rmm::device_uvector<size_type>(num_groups, stream);
     auto null_end   = rmm::device_uvector<size_type>(num_groups, stream);
 
-    auto p_orderby_device_view = column_device_view::create(orderby_column);
+    auto p_orderby_device_view = column_device_view::create(orderby_column, stream);
 
     // Null timestamps exist. Find null bounds, per group.
     thrust::for_each(
@@ -1040,7 +1049,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
 }
 
 /**
- * @copydoc std::unique_ptr<column> grouped_time_range_rolling_window(
+ * @copydoc grouped_time_range_rolling_window(
  *            table_view const& group_keys,
  *            column_view const& timestamp_column,
  *            cudf::order const& timestamp_order,
@@ -1074,12 +1083,12 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                       following,
                                       min_periods,
                                       aggr,
-                                      rmm::cuda_stream_default,
+                                      cudf::default_stream_value,
                                       mr);
 }
 
 /**
- * @copydoc  std::unique_ptr<column> grouped_range_rolling_window(
+ * @copydoc grouped_range_rolling_window(
  *               table_view const& group_keys,
  *               column_view const& orderby_column,
  *               cudf::order const& order,
@@ -1108,7 +1117,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                               following,
                                               min_periods,
                                               aggr,
-                                              rmm::cuda_stream_default,
+                                              cudf::default_stream_value,
                                               mr);
 }
 

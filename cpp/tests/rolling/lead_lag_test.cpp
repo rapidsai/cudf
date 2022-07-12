@@ -59,7 +59,7 @@ using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypes,
                                         cudf::test::DurationTypes,
                                         cudf::test::TimestampTypes>;
 
-TYPED_TEST_CASE(TypedLeadLagWindowTest, TypesForTest);
+TYPED_TEST_SUITE(TypedLeadLagWindowTest, TypesForTest);
 
 TYPED_TEST(TypedLeadLagWindowTest, LeadLagBasics)
 {
@@ -536,7 +536,7 @@ template <typename T>
 struct TypedNestedLeadLagWindowTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedNestedLeadLagWindowTest, TypesForTest);
+TYPED_TEST_SUITE(TypedNestedLeadLagWindowTest, TypesForTest);
 
 TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithNullsAllOver)
 {

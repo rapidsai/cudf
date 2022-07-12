@@ -1,15 +1,13 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
-from libc.stdint cimport (
-    int32_t, int64_t
-)
+from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
 from libcpp.string cimport string
 
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type
 from cudf._lib.cpp.wrappers.decimals cimport scale_type
-
-from cudf._lib.cpp.column.column_view cimport column_view
 
 
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
@@ -61,8 +59,17 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         fixed_point_scalar(int64_t value,
                            scale_type scale,
                            bool is_valid) except +
+        fixed_point_scalar(data_type value,
+                           scale_type scale,
+                           bool is_valid) except +
         int64_t value() except +
         # TODO: Figure out how to add an int32 overload of value()
 
     cdef cppclass list_scalar(scalar):
+        list_scalar(column_view col) except +
+        list_scalar(column_view col, bool is_valid) except +
         column_view view() except +
+
+    cdef cppclass struct_scalar(scalar):
+        struct_scalar(table_view cols, bool valid) except +
+        table_view view() except +

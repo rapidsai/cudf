@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ template <typename Timestamp>
 struct TimestampRangeWindowBoundsTest : RangeWindowBoundsTest {
 };
 
-TYPED_TEST_CASE(TimestampRangeWindowBoundsTest, cudf::test::TimestampTypes);
+TYPED_TEST_SUITE(TimestampRangeWindowBoundsTest, cudf::test::TimestampTypes);
 
 TEST_F(RangeWindowBoundsTest, TestBasicTimestampRangeTypeMapping)
 {
@@ -49,17 +49,17 @@ TEST_F(RangeWindowBoundsTest, TestBasicTimestampRangeTypeMapping)
 
   using namespace cudf::detail;
 
-  static_assert(std::is_same<range_type<timestamp_D>, duration_D>::value);
-  static_assert(std::is_same<range_type<timestamp_s>, duration_s>::value);
-  static_assert(std::is_same<range_type<timestamp_ms>, duration_ms>::value);
-  static_assert(std::is_same<range_type<timestamp_us>, duration_us>::value);
-  static_assert(std::is_same<range_type<timestamp_ns>, duration_ns>::value);
+  static_assert(std::is_same_v<range_type<timestamp_D>, duration_D>);
+  static_assert(std::is_same_v<range_type<timestamp_s>, duration_s>);
+  static_assert(std::is_same_v<range_type<timestamp_ms>, duration_ms>);
+  static_assert(std::is_same_v<range_type<timestamp_us>, duration_us>);
+  static_assert(std::is_same_v<range_type<timestamp_ns>, duration_ns>);
 
-  static_assert(std::is_same<range_rep_type<timestamp_D>, int32_t>::value);
-  static_assert(std::is_same<range_rep_type<timestamp_s>, int64_t>::value);
-  static_assert(std::is_same<range_rep_type<timestamp_ms>, int64_t>::value);
-  static_assert(std::is_same<range_rep_type<timestamp_us>, int64_t>::value);
-  static_assert(std::is_same<range_rep_type<timestamp_ns>, int64_t>::value);
+  static_assert(std::is_same_v<range_rep_type<timestamp_D>, int32_t>);
+  static_assert(std::is_same_v<range_rep_type<timestamp_s>, int64_t>);
+  static_assert(std::is_same_v<range_rep_type<timestamp_ms>, int64_t>);
+  static_assert(std::is_same_v<range_rep_type<timestamp_us>, int64_t>);
+  static_assert(std::is_same_v<range_rep_type<timestamp_ns>, int64_t>);
 }
 
 TYPED_TEST(TimestampRangeWindowBoundsTest, BoundsConstruction)
@@ -87,7 +87,7 @@ TYPED_TEST(TimestampRangeWindowBoundsTest, WrongRangeType)
   using OrderByType = TypeParam;
 
   using wrong_range_type =
-    std::conditional_t<std::is_same<OrderByType, timestamp_D>::value, duration_ns, duration_D>;
+    std::conditional_t<std::is_same_v<OrderByType, timestamp_D>, duration_ns, duration_D>;
   auto range_3 = cudf::range_window_bounds::get(duration_scalar<wrong_range_type>{3, true});
 
   EXPECT_THROW(cudf::detail::range_comparable_value<OrderByType>(range_3), cudf::logic_error);
@@ -103,7 +103,7 @@ struct NumericRangeWindowBoundsTest : RangeWindowBoundsTest {
 
 using TypesForTest = cudf::test::IntegralTypesNotBool;
 
-TYPED_TEST_CASE(NumericRangeWindowBoundsTest, TypesForTest);
+TYPED_TEST_SUITE(NumericRangeWindowBoundsTest, TypesForTest);
 
 TYPED_TEST(NumericRangeWindowBoundsTest, BasicNumericRangeTypeMapping)
 {
@@ -112,8 +112,8 @@ TYPED_TEST(NumericRangeWindowBoundsTest, BasicNumericRangeTypeMapping)
   using range_type     = cudf::detail::range_type<T>;
   using range_rep_type = cudf::detail::range_rep_type<T>;
 
-  static_assert(std::is_same<T, range_type>::value);
-  static_assert(std::is_same<T, range_rep_type>::value);
+  static_assert(std::is_same_v<T, range_type>);
+  static_assert(std::is_same_v<T, range_rep_type>);
 }
 
 TYPED_TEST(NumericRangeWindowBoundsTest, BoundsConstruction)
@@ -124,7 +124,7 @@ TYPED_TEST(NumericRangeWindowBoundsTest, BoundsConstruction)
 
   using range_window_bounds = cudf::range_window_bounds;
 
-  static_assert(std::is_integral<range_type>::value);
+  static_assert(std::is_integral_v<range_type>);
   auto range_3 = range_window_bounds::get(numeric_scalar<range_type>{3, true});
   EXPECT_FALSE(range_3.is_unbounded() &&
                "range_window_bounds constructed from scalar cannot be unbounded.");
@@ -141,7 +141,7 @@ TYPED_TEST(NumericRangeWindowBoundsTest, WrongRangeType)
   using OrderByType = TypeParam;
 
   using wrong_range_type =
-    std::conditional_t<std::is_same<OrderByType, int32_t>::value, int16_t, int32_t>;
+    std::conditional_t<std::is_same_v<OrderByType, int32_t>, int16_t, int32_t>;
   auto range_3 = cudf::range_window_bounds::get(numeric_scalar<wrong_range_type>{3, true});
 
   EXPECT_THROW(cudf::detail::range_comparable_value<OrderByType>(range_3), cudf::logic_error);

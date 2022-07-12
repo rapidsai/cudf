@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ namespace cudf {
  * @file
  */
 
+/// Utility metafunction that maps a sequence of any types to the type void.
 template <typename...>
 using void_t = void;
 
@@ -40,22 +41,29 @@ using void_t = void;
  * Example:
  * \code{cpp}
  * // This function will participate in overload resolution only if T is an integral type
- * template <typename T, CUDF_ENABLE_IF(std::is_integral<T>::value)>
+ * template <typename T, CUDF_ENABLE_IF(std::is_integral_v<T> )>
  * void foo();
  * \endcode
  *
  */
 #define CUDF_ENABLE_IF(...) std::enable_if_t<(__VA_ARGS__)>* = nullptr
 
-template <typename L, typename R, typename = void>
-struct is_relationally_comparable_impl : std::false_type {
-};
-
+/// Checks if two types are comparable using less operator (i.e. <).
 template <typename L, typename R>
 using less_comparable = decltype(std::declval<L>() < std::declval<R>());
 
+/// Checks if two types are comparable using greater operator (i.e. >).
 template <typename L, typename R>
 using greater_comparable = decltype(std::declval<L>() > std::declval<R>());
+
+/// Checks if two types are comparable using equality operator (i.e. ==).
+template <typename L, typename R>
+using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
+
+namespace detail {
+template <typename L, typename R, typename = void>
+struct is_relationally_comparable_impl : std::false_type {
+};
 
 template <typename L, typename R>
 struct is_relationally_comparable_impl<L,
@@ -69,12 +77,28 @@ struct is_equality_comparable_impl : std::false_type {
 };
 
 template <typename L, typename R>
-using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
-
-template <typename L, typename R>
 struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : std::true_type {
 };
 
+// has common type
+template <typename AlwaysVoid, typename... Ts>
+struct has_common_type_impl : std::false_type {
+};
+
+template <typename... Ts>
+struct has_common_type_impl<void_t<std::common_type_t<Ts...>>, Ts...> : std::true_type {
+};
+}  // namespace detail
+
+/// Checks if types have a common type
+template <typename... Ts>
+using has_common_type = typename detail::has_common_type_impl<void, Ts...>::type;
+
+/// Helper variable template for has_common_type<>::value
+template <typename... Ts>
+constexpr inline bool has_common_type_v = detail::has_common_type_impl<void, Ts...>::value;
+
+/// Checks if a type is a timestamp type.
 template <typename T>
 using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>,
                                               std::is_same<cudf::timestamp_s, T>,
@@ -82,6 +106,7 @@ using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>
                                               std::is_same<cudf::timestamp_us, T>,
                                               std::is_same<cudf::timestamp_ns, T>>;
 
+/// Checks if a type is a duration type.
 template <typename T>
 using is_duration_t = cuda::std::disjunction<std::is_same<cudf::duration_D, T>,
                                              std::is_same<cudf::duration_s, T>,
@@ -104,7 +129,39 @@ using is_duration_t = cuda::std::disjunction<std::is_same<cudf::duration_D, T>,
 template <typename L, typename R>
 constexpr inline bool is_relationally_comparable()
 {
-  return is_relationally_comparable_impl<L, R>::value;
+  return detail::is_relationally_comparable_impl<L, R>::value;
+}
+
+namespace detail {
+/**
+ * @brief Helper functor to check if a specified type `T` supports relational comparisons.
+ *
+ */
+struct unary_relationally_comparable_functor {
+  /**
+   * @brief Returns true if `T` supports relational comparisons.
+   *
+   * @tparam T Type to check
+   * @return true if `T` supports relational comparisons
+   */
+  template <typename T>
+  inline bool operator()() const
+  {
+    return cudf::is_relationally_comparable<T, T>();
+  }
+};
+}  // namespace detail
+
+/**
+ * @brief Checks whether `data_type` `type` supports relational comparisons.
+ *
+ * @param type Data_type for comparison.
+ * @return true If `type` supports relational comparisons.
+ * @return false If `type` does not support relational comparisons.
+ */
+inline bool is_relationally_comparable(data_type type)
+{
+  return type_dispatcher(type, detail::unary_relationally_comparable_functor{});
 }
 
 /**
@@ -122,7 +179,39 @@ constexpr inline bool is_relationally_comparable()
 template <typename L, typename R>
 constexpr inline bool is_equality_comparable()
 {
-  return is_equality_comparable_impl<L, R>::value;
+  return detail::is_equality_comparable_impl<L, R>::value;
+}
+
+namespace detail {
+/**
+ * @brief Helper functor to check if a specified type `T` supports equality comparisons.
+ *
+ */
+struct unary_equality_comparable_functor {
+  /**
+   * @brief Checks whether `T` supports equality comparisons.
+   *
+   * @tparam T Type to check
+   * @return true if `T` supports equality comparisons
+   */
+  template <typename T>
+  bool operator()() const
+  {
+    return cudf::is_equality_comparable<T, T>();
+  }
+};
+}  // namespace detail
+
+/**
+ * @brief Checks whether `data_type` `type` supports equality comparisons.
+ *
+ * @param type Data_type for comparison.
+ * @return true If `type` supports equality comparisons.
+ * @return false If `type` does not support equality comparisons.
+ */
+inline bool is_equality_comparable(data_type type)
+{
+  return cudf::type_dispatcher(type, detail::unary_equality_comparable_functor{});
 }
 
 /**
@@ -135,7 +224,7 @@ constexpr inline bool is_equality_comparable()
 template <typename T>
 constexpr inline bool is_numeric()
 {
-  return std::is_integral<T>::value or std::is_floating_point<T>::value;
+  return cuda::std::is_arithmetic<T>();
 }
 
 struct is_numeric_impl {
@@ -176,7 +265,7 @@ constexpr inline bool is_numeric(data_type type)
 template <typename T>
 constexpr inline bool is_index_type()
 {
-  return std::is_integral<T>::value and not std::is_same<T, bool>::value;
+  return std::is_integral_v<T> and not std::is_same_v<T, bool>;
 }
 
 struct is_index_type_impl {
@@ -213,7 +302,7 @@ constexpr inline bool is_index_type(data_type type)
 template <typename T>
 constexpr inline bool is_unsigned()
 {
-  return std::is_unsigned<T>::value;
+  return std::is_unsigned_v<T>;
 }
 
 struct is_unsigned_impl {
@@ -246,7 +335,7 @@ constexpr inline bool is_unsigned(data_type type)
 template <typename Iterator>
 constexpr inline bool is_signed_iterator()
 {
-  return std::is_signed<typename std::iterator_traits<Iterator>::value_type>::value;
+  return std::is_signed_v<typename std::iterator_traits<Iterator>::value_type>;
 }
 
 /**
@@ -259,7 +348,7 @@ constexpr inline bool is_signed_iterator()
 template <typename T>
 constexpr inline bool is_floating_point()
 {
-  return std::is_floating_point<T>::value;
+  return std::is_floating_point_v<T>;
 }
 
 struct is_floating_point_impl {
@@ -294,7 +383,7 @@ constexpr inline bool is_floating_point(data_type type)
 template <typename T>
 constexpr inline bool is_boolean()
 {
-  return std::is_same<T, bool>::value;
+  return std::is_same_v<T, bool>;
 }
 
 struct is_boolean_impl {
@@ -362,7 +451,8 @@ constexpr inline bool is_timestamp(data_type type)
 template <typename T>
 constexpr inline bool is_fixed_point()
 {
-  return std::is_same<numeric::decimal32, T>::value || std::is_same<numeric::decimal64, T>::value;
+  return std::is_same_v<numeric::decimal32, T> || std::is_same_v<numeric::decimal64, T> ||
+         std::is_same_v<numeric::decimal128, T>;
 }
 
 struct is_fixed_point_impl {
@@ -466,6 +556,7 @@ constexpr inline bool is_chrono(data_type type)
  * As further example, `duration_ns` is distinct from its concrete `int64_t` representation type,
  * but they are layout compatible.
  *
+ * @return true if `T` is layout compatible with its "representation" type
  */
 template <typename T>
 constexpr bool is_rep_layout_compatible()
@@ -483,7 +574,7 @@ constexpr bool is_rep_layout_compatible()
 template <typename T>
 constexpr inline bool is_dictionary()
 {
-  return std::is_same<dictionary32, T>::value;
+  return std::is_same_v<dictionary32, T>;
 }
 
 struct is_dictionary_impl {
@@ -561,8 +652,8 @@ class string_view;
 template <typename T>
 constexpr inline bool is_compound()
 {
-  return std::is_same<T, cudf::string_view>::value or std::is_same<T, cudf::dictionary32>::value or
-         std::is_same<T, cudf::list_view>::value or std::is_same<T, cudf::struct_view>::value;
+  return std::is_same_v<T, cudf::string_view> or std::is_same_v<T, cudf::dictionary32> or
+         std::is_same_v<T, cudf::list_view> or std::is_same_v<T, cudf::struct_view>;
 }
 
 struct is_compound_impl {
@@ -604,7 +695,7 @@ constexpr inline bool is_compound(data_type type)
 template <typename T>
 constexpr inline bool is_nested()
 {
-  return std::is_same<T, cudf::list_view>::value || std::is_same<T, cudf::struct_view>::value;
+  return std::is_same_v<T, cudf::list_view> || std::is_same_v<T, cudf::struct_view>;
 }
 
 struct is_nested_impl {
@@ -631,15 +722,46 @@ constexpr inline bool is_nested(data_type type)
   return cudf::type_dispatcher(type, is_nested_impl{});
 }
 
+/**
+ * @brief Indicates whether `T` is a struct type.
+ *
+ * @param T The type to verify
+ * @return A boolean indicating if T is a struct type
+ */
+template <typename T>
+constexpr inline bool is_struct()
+{
+  return std::is_same_v<T, cudf::struct_view>;
+}
+
+struct is_struct_impl {
+  template <typename T>
+  constexpr bool operator()()
+  {
+    return is_struct<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a struct type.
+ *
+ * @param type The `data_type` to verify
+ * @return A boolean indicating if `type` is a struct type
+ */
+constexpr inline bool is_struct(data_type type)
+{
+  return cudf::type_dispatcher(type, is_struct_impl{});
+}
+
 template <typename FromType>
 struct is_bit_castable_to_impl {
-  template <typename ToType, typename std::enable_if_t<is_compound<ToType>()>* = nullptr>
+  template <typename ToType, std::enable_if_t<is_compound<ToType>()>* = nullptr>
   constexpr bool operator()()
   {
     return false;
   }
 
-  template <typename ToType, typename std::enable_if_t<not is_compound<ToType>()>* = nullptr>
+  template <typename ToType, std::enable_if_t<not is_compound<ToType>()>* = nullptr>
   constexpr bool operator()()
   {
     if (not cuda::std::is_trivially_copyable_v<FromType> ||
@@ -653,13 +775,13 @@ struct is_bit_castable_to_impl {
 };
 
 struct is_bit_castable_from_impl {
-  template <typename FromType, typename std::enable_if_t<is_compound<FromType>()>* = nullptr>
+  template <typename FromType, std::enable_if_t<is_compound<FromType>()>* = nullptr>
   constexpr bool operator()(data_type)
   {
     return false;
   }
 
-  template <typename FromType, typename std::enable_if_t<not is_compound<FromType>()>* = nullptr>
+  template <typename FromType, std::enable_if_t<not is_compound<FromType>()>* = nullptr>
   constexpr bool operator()(data_type to)
   {
     return cudf::type_dispatcher(to, is_bit_castable_to_impl<FromType>{});

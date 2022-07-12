@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,16 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/copy.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -33,7 +39,7 @@ struct byte_list_conversion {
    * @brief Function object for converting primitive types and string columns to lists of bytes.
    */
   template <typename T>
-  std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>(), std::unique_ptr<column>>
+  std::enable_if_t<!std::is_integral_v<T> and !is_floating_point<T>(), std::unique_ptr<column>>
   operator()(column_view const&,
              flip_endianness,
              rmm::cuda_stream_view,
@@ -43,7 +49,7 @@ struct byte_list_conversion {
   }
 
   template <typename T>
-  std::enable_if_t<is_floating_point<T>() or std::is_integral<T>::value, std::unique_ptr<column>>
+  std::enable_if_t<is_floating_point<T>() or std::is_integral_v<T>, std::unique_ptr<column>>
   operator()(column_view const& input_column,
              flip_endianness configuration,
              rmm::cuda_stream_view stream,
@@ -108,7 +114,7 @@ std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
 }  // namespace
 
 /**
- * @copydoc cudf::byte_cast(input_column,flip_endianess,rmm::mr::device_memory_resource)
+ * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -124,14 +130,14 @@ std::unique_ptr<column> byte_cast(column_view const& input_column,
 }  // namespace detail
 
 /**
- * @copydoc cudf::byte_cast(input_column,flip_endianess,rmm::mr::device_memory_resource)
+ * @copydoc cudf::byte_cast(column_view const&, flip_endianness, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   flip_endianness endian_configuration,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_cast(input_column, endian_configuration, rmm::cuda_stream_default, mr);
+  return detail::byte_cast(input_column, endian_configuration, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

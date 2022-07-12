@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,10 @@
 
 #include <strings/convert/utilities.cuh>
 
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -49,7 +53,7 @@ __device__ void dissect_duration(T duration, duration_component* timeparts)
   timeparts->is_negative = (duration < T{0});
   timeparts->day         = cuda::std::chrono::floor<duration_D>(duration).count();
 
-  if (cuda::std::is_same<T, duration_D>::value) return;
+  if (cuda::std::is_same_v<T, duration_D>) return;
 
   // adjust for pandas format
   if (timeparts->is_negative) {
@@ -63,7 +67,7 @@ __device__ void dissect_duration(T duration, duration_component* timeparts)
                        cuda::std::chrono::hours(1))
                         .count();
   timeparts->second = (seconds % cuda::std::chrono::minutes(1)).count();
-  if (not cuda::std::is_same<T, duration_s>::value) {
+  if (not cuda::std::is_same_v<T, duration_s>) {
     timeparts->nanosecond =
       (cuda::std::chrono::duration_cast<duration_ns>(duration) % duration_s(1)).count();
   }
@@ -204,9 +208,7 @@ struct dispatch_from_durations_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                durations.null_count(),
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 
   // non-duration types throw an exception
@@ -226,7 +228,7 @@ std::unique_ptr<column> pandas_format_durations(column_view const& durations,
                                                 rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = durations.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(durations.type(), dispatch_from_durations_fn{}, durations, stream, mr);
 }

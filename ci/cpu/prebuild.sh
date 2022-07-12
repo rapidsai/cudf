@@ -1,31 +1,12 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 set -e
 
-#Always upload cudf Python package
+#Always upload cudf packages
 export UPLOAD_CUDF=1
-
-#Upload libcudf once per CUDA
-if [[ "$PYTHON" == "3.7" ]]; then
-    export UPLOAD_LIBCUDF=1
-else
-    export UPLOAD_LIBCUDF=0
-fi
-
-# upload cudf_kafka for all versions of Python
-if [[ "$CUDA" == "11.0" ]]; then
-    export UPLOAD_CUDF_KAFKA=1
-else
-    export UPLOAD_CUDF_KAFKA=0
-fi
-
-#We only want to upload libcudf_kafka once per python/CUDA combo
-if [[ "$PYTHON" == "3.7" ]] && [[ "$CUDA" == "11.0" ]]; then
-    export UPLOAD_LIBCUDF_KAFKA=1
-else
-    export UPLOAD_LIBCUDF_KAFKA=0
-fi
+export UPLOAD_LIBCUDF=1
+export UPLOAD_CUDF_KAFKA=1
 
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     #If project flash is not activate, always build both

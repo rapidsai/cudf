@@ -33,7 +33,7 @@ template <typename T>
 class CrossJoinTypeTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CrossJoinTypeTests, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(CrossJoinTypeTests, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(CrossJoinTypeTests, CrossJoin)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,14 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_range.cuh>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 
 #include <iostream>
 
@@ -81,7 +85,9 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                            std::move(offsets),
                            std::move(child),
                            cudf::UNKNOWN_NULL_COUNT,
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 }  // namespace detail

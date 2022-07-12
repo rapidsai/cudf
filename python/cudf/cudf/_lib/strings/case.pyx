@@ -3,14 +3,14 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.case cimport (
     swapcase as cpp_swapcase,
     to_lower as cpp_to_lower,
-    to_upper as cpp_to_upper
+    to_upper as cpp_to_upper,
 )
-from cudf._lib.column cimport Column
 
 
 def to_upper(Column source_strings):

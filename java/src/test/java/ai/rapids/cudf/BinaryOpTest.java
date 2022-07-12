@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,11 +22,12 @@ import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static ai.rapids.cudf.TestUtils.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -54,7 +55,12 @@ public class BinaryOpTest extends CudfTestBase {
   private static final int[] DECIMAL32_1 = new int[]{1000, 2000, 3000, 4000, 5000};
   private static final int[] DECIMAL32_2 = new int[]{100, 200, 300, 400, 50};
   private static final long[] DECIMAL64_1 = new long[]{10L, 23L, 12L, 24L, 123456789L};
-  private static final long[] DECIMAL64_2 = new long[]{20L, 13L, 22L, 14L, 132457689L};
+  private static final long[] DECIMAL64_2 = new long[]{33041L, 97290L, 36438L, 25379L, 48473L};
+
+  private static final BigInteger[] DECIMAL128_1 = new BigInteger[]{new BigInteger("1234567891234567"), new BigInteger("1234567891234567"),
+      new BigInteger("1234567891234567"), new BigInteger("1234567891234567"), new BigInteger("1234567891234567")};
+  private static final BigInteger[] DECIMAL128_2 = new BigInteger[]{new BigInteger("234567891234567"), new BigInteger("234567891234567"),
+      new BigInteger("234567891234567"), new BigInteger("234567891234567"), new BigInteger("234567891234567")};
 
   private static final BigDecimal[] BIGDECIMAL32_1 = new BigDecimal[]{
           BigDecimal.valueOf(12, dec32Scale_1),
@@ -85,12 +91,16 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   public static ColumnVector forEach(DType retType, ColumnVector lhs, ColumnVector rhs, CpuOpVV op) {
+    return forEach(retType, lhs, rhs, op, false);
+  }
+
+  public static ColumnVector forEach(DType retType, ColumnVector lhs, ColumnVector rhs, CpuOpVV op, boolean evalNulls) {
     int len = (int)lhs.getRowCount();
     try (HostColumnVector hostLHS  = lhs.copyToHost();
          HostColumnVector hostRHS = rhs.copyToHost();
          Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (hostLHS.isNull(i) || hostRHS.isNull(i)) {
+        if (!evalNulls && (hostLHS.isNull(i) || hostRHS.isNull(i))) {
           builder.appendNull();
         } else {
           op.computeNullSafe(builder, hostLHS, hostRHS, i);
@@ -101,11 +111,15 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   public static <S> ColumnVector forEachS(DType retType, ColumnVector lhs, S rhs, CpuOpVS<S> op) {
+    return forEachS(retType, lhs, rhs, op, false);
+  }
+
+  public static <S> ColumnVector forEachS(DType retType, ColumnVector lhs, S rhs, CpuOpVS<S> op, boolean evalNulls) {
     int len = (int)lhs.getRowCount();
     try (HostColumnVector hostLHS = lhs.copyToHost();
          Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (hostLHS.isNull(i) || rhs == null) {
+        if (!evalNulls && (hostLHS.isNull(i) || rhs == null)) {
           builder.appendNull();
         } else {
           op.computeNullSafe(builder, hostLHS, rhs, i);
@@ -116,11 +130,15 @@ public class BinaryOpTest extends CudfTestBase {
   }
 
   public static <S> ColumnVector forEachS(DType retType, S lhs, ColumnVector rhs, CpuOpSV<S> op) {
+    return forEachS(retType, lhs, rhs, op, false);
+  }
+
+  public static <S> ColumnVector forEachS(DType retType, S lhs, ColumnVector rhs, CpuOpSV<S> op, boolean evalNulls) {
     int len = (int)rhs.getRowCount();
     try (HostColumnVector hostRHS = rhs.copyToHost();
         Builder builder = HostColumnVector.builder(retType, len)) {
       for (int i = 0; i < len; i++) {
-        if (hostRHS.isNull(i) || lhs == null) {
+        if (!evalNulls && (hostRHS.isNull(i) || lhs == null)) {
           builder.appendNull();
         } else {
           op.computeNullSafe(builder, lhs, hostRHS, i);
@@ -250,7 +268,9 @@ public class BinaryOpTest extends CudfTestBase {
          ColumnVector dec32cv1 = ColumnVector.fromDecimals(BIGDECIMAL32_1);
          ColumnVector dec32cv2 = ColumnVector.fromDecimals(BIGDECIMAL32_2);
          ColumnVector dec64cv1 = ColumnVector.decimalFromLongs(-dec64Scale_1, DECIMAL64_1);
-         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2)) {
+         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2);
+         ColumnVector dec128cv1 = ColumnVector.decimalFromBigInt(-dec64Scale_1, DECIMAL128_1);
+         ColumnVector dec128cv2 = ColumnVector.decimalFromBigInt(-dec64Scale_2, DECIMAL128_2)) {
       try (ColumnVector add = icv1.add(icv2);
            ColumnVector expected = forEach(DType.INT32, icv1, icv2,
                    (b, l, r, i) -> b.append(l.getInt(i) + r.getInt(i)))) {
@@ -331,6 +351,14 @@ public class BinaryOpTest extends CudfTestBase {
         }
       }
 
+      try (ColumnVector add = dec128cv1.add(dec128cv2)) {
+        try (ColumnVector expected = forEach(
+            DType.create(DType.DTypeEnum.DECIMAL128, -6), dec128cv1, dec128cv2,
+            (b, l, r, i) -> b.append(l.getBigDecimal(i).add(r.getBigDecimal(i))))) {
+          assertColumnsAreEqual(expected, add, "dec128");
+        }
+      }
+
       try (Scalar s = Scalar.fromDecimal(2, 100);
            ColumnVector add = dec32cv1.add(s)) {
         try (ColumnVector expected = forEachS(
@@ -381,7 +409,9 @@ public class BinaryOpTest extends CudfTestBase {
          ColumnVector dec32cv1 = ColumnVector.fromDecimals(BIGDECIMAL32_1);
          ColumnVector dec32cv2 = ColumnVector.fromDecimals(BIGDECIMAL32_2);
          ColumnVector dec64cv1 = ColumnVector.decimalFromLongs(-dec64Scale_1, DECIMAL64_1);
-         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2)) {
+         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2);
+         ColumnVector dec128cv1 = ColumnVector.decimalFromBigInt(-dec64Scale_1, DECIMAL128_1);
+         ColumnVector dec128cv2 = ColumnVector.decimalFromBigInt(-dec64Scale_2, DECIMAL128_2)) {
       try (ColumnVector sub = icv1.sub(icv2);
            ColumnVector expected = forEach(DType.INT32, icv1, icv2,
                    (b, l, r, i) -> b.append(l.getInt(i) - r.getInt(i)))) {
@@ -473,6 +503,14 @@ public class BinaryOpTest extends CudfTestBase {
         }
       }
 
+      try (ColumnVector sub = dec128cv1.sub(dec128cv2)) {
+        try (ColumnVector expected = forEach(
+            DType.create(DType.DTypeEnum.DECIMAL128, -6), dec128cv1, dec128cv2,
+            (b, l, r, i) -> b.append(l.getBigDecimal(i).subtract(r.getBigDecimal(i))))) {
+          assertColumnsAreEqual(expected, sub, "dec128");
+        }
+      }
+
       try (Scalar s = Scalar.fromFloat(1.1f);
            ColumnVector sub = lcv1.sub(s);
            ColumnVector expected = forEachS(DType.FLOAT32, lcv1, 1.1f,
@@ -507,7 +545,9 @@ public class BinaryOpTest extends CudfTestBase {
          ColumnVector dec32cv1 = ColumnVector.fromDecimals(BIGDECIMAL32_1);
          ColumnVector dec32cv2 = ColumnVector.fromDecimals(BIGDECIMAL32_2);
          ColumnVector dec64cv1 = ColumnVector.decimalFromLongs(-dec64Scale_1, DECIMAL64_1);
-         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2)) {
+         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2);
+         ColumnVector dec128cv1 = ColumnVector.decimalFromBigInt(-dec64Scale_1, DECIMAL128_1);
+         ColumnVector dec128cv2 = ColumnVector.decimalFromBigInt(-dec64Scale_2, DECIMAL128_2)) {
       try (ColumnVector answer = icv.mul(dcv);
            ColumnVector expected = forEach(DType.FLOAT64, icv, dcv,
                    (b, l, r, i) -> b.append(l.getInt(i) * r.getDouble(i)))) {
@@ -559,6 +599,14 @@ public class BinaryOpTest extends CudfTestBase {
            ColumnVector expected = forEachS(DType.UINT32, (short) 0x89ab,  uicv,
                    (b, l, r, i) -> b.append(Short.toUnsignedInt(l) * r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar uint16 * uint32");
+      }
+
+      try (ColumnVector mul = dec128cv1.mul(dec128cv2)) {
+        try (ColumnVector expected = forEach(
+            DType.create(DType.DTypeEnum.DECIMAL128, dec128cv1.type.getScale() + dec128cv2.type.getScale()), dec128cv1, dec128cv2,
+            (b, l, r, i) -> b.append(l.getBigDecimal(i).multiply(r.getBigDecimal(i))))) {
+          assertColumnsAreEqual(expected, mul, "dec128");
+        }
       }
     }
   }
@@ -836,12 +884,16 @@ public class BinaryOpTest extends CudfTestBase {
 
   @Test
   public void testNotEqual() {
-    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
+    try (ColumnVector icv1 = ColumnVector.fromBoxedInts(INTS_1);
+         ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2);
+         ColumnVector structcv1 = ColumnVector.makeStruct(icv1);
+         ColumnVector structcv2 = ColumnVector.makeStruct(icv2);
+         ColumnVector intscalar = ColumnVector.fromInts(4);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector dec32cv_1 = ColumnVector.decimalFromInts(-dec32Scale_1, DECIMAL32_1);
          ColumnVector dec32cv_2 = ColumnVector.decimalFromInts(-dec32Scale_2, DECIMAL32_2)) {
-      try (ColumnVector answer = icv.notEqualTo(dcv);
-           ColumnVector expected = forEach(DType.BOOL8, icv, dcv,
+      try (ColumnVector answer = icv1.notEqualTo(dcv);
+           ColumnVector expected = forEach(DType.BOOL8, icv1, dcv,
                    (b, l, r, i) -> b.append(l.getInt(i) != r.getDouble(i)))) {
         assertColumnsAreEqual(expected, answer, "int32 != double");
       }
@@ -861,17 +913,37 @@ public class BinaryOpTest extends CudfTestBase {
       }
 
       try (Scalar s = Scalar.fromFloat(1.0f);
-           ColumnVector answer = icv.notEqualTo(s);
-           ColumnVector expected = forEachS(DType.BOOL8, icv, 1.0f,
+           ColumnVector answer = icv1.notEqualTo(s);
+           ColumnVector expected = forEachS(DType.BOOL8, icv1, 1.0f,
                    (b, l, r, i) -> b.append(l.getInt(i) != r))) {
         assertColumnsAreEqual(expected, answer, "int64 != scalar float");
       }
 
       try (Scalar s = Scalar.fromShort((short) 100);
-           ColumnVector answer = s.notEqualTo(icv);
-           ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv,
+           ColumnVector answer = s.notEqualTo(icv1);
+           ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv1,
                    (b, l, r, i) -> b.append(l != r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short != int32");
+      }
+
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
+           ColumnVector answersv = s.notEqualTo(structcv1);
+           ColumnVector expectedsv = forEachS(DType.BOOL8, 4, icv1,
+           (b, l, r, i) -> b.append(r.isNull(i) ? true : l != r.getInt(i)), true)) {
+        assertColumnsAreEqual(expectedsv, answersv, "scalar struct int32 != struct int32");
+      }
+
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
+           ColumnVector answervs = structcv1.notEqualTo(s);
+           ColumnVector expectedvs = forEachS(DType.BOOL8, icv1, 4,
+           (b, l, r, i) -> b.append(l.isNull(i) ? true : l.getInt(i) != r), true)) {
+        assertColumnsAreEqual(expectedvs, answervs, "struct int32 != scalar struct int32");
+      }
+
+      try (ColumnVector answervv = structcv1.notEqualTo(structcv2);
+           ColumnVector expectedvv = forEach(DType.BOOL8, icv1, icv2,
+           (b, l, r, i) -> b.append(l.isNull(i) ? !r.isNull(i) : r.isNull(i) || l.getInt(i) != r.getInt(i)), true)) {
+        assertColumnsAreEqual(expectedvv, answervv, "struct int32 != struct int32");
       }
     }
   }
@@ -1003,12 +1075,16 @@ public class BinaryOpTest extends CudfTestBase {
 
   @Test
   public void testGreaterThan() {
-    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
+    try (ColumnVector icv1 = ColumnVector.fromBoxedInts(INTS_1);
+         ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2);
+         ColumnVector structcv1 = ColumnVector.makeStruct(icv1);
+         ColumnVector structcv2 = ColumnVector.makeStruct(icv2);
+         ColumnVector intscalar = ColumnVector.fromInts(4);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector dec32cv1 = ColumnVector.fromDecimals(BIGDECIMAL32_1);
          ColumnVector dec32cv2 = ColumnVector.fromDecimals(BIGDECIMAL32_2)) {
-      try (ColumnVector answer = icv.greaterThan(dcv);
-           ColumnVector expected = forEach(DType.BOOL8, icv, dcv,
+      try (ColumnVector answer = icv1.greaterThan(dcv);
+           ColumnVector expected = forEach(DType.BOOL8, icv1, dcv,
                    (b, l, r, i) -> b.append(l.getInt(i) > r.getDouble(i)))) {
         assertColumnsAreEqual(expected, answer, "int32 > double");
       }
@@ -1020,17 +1096,37 @@ public class BinaryOpTest extends CudfTestBase {
       }
 
       try (Scalar s = Scalar.fromFloat(1.0f);
-           ColumnVector answer = icv.greaterThan(s);
-           ColumnVector expected = forEachS(DType.BOOL8, icv, 1.0f,
+           ColumnVector answer = icv1.greaterThan(s);
+           ColumnVector expected = forEachS(DType.BOOL8, icv1, 1.0f,
                    (b, l, r, i) -> b.append(l.getInt(i) > r))) {
         assertColumnsAreEqual(expected, answer, "int64 > scalar float");
       }
 
       try (Scalar s = Scalar.fromShort((short) 100);
-           ColumnVector answer = s.greaterThan(icv);
-           ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv,
+           ColumnVector answer = s.greaterThan(icv1);
+           ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv1,
                    (b, l, r, i) -> b.append(l > r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short > int32");
+      }
+
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
+           ColumnVector answersv = s.greaterThan(structcv1);
+           ColumnVector expectedsv = forEachS(DType.BOOL8, 4, icv1,
+           (b, l, r, i) -> b.append(r.isNull(i) ? true : l > r.getInt(i)), true)) {
+        assertColumnsAreEqual(expectedsv, answersv, "scalar struct int32 > struct int32");
+      }
+
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
+           ColumnVector answervs = structcv1.greaterThan(s);
+           ColumnVector expectedvs = forEachS(DType.BOOL8, icv1, 4,
+           (b, l, r, i) -> b.append(l.isNull(i) ? false : l.getInt(i) > r), true)) {
+        assertColumnsAreEqual(expectedvs, answervs, "struct int32 > scalar struct int32");
+      }
+
+      try (ColumnVector answervv = structcv1.greaterThan(structcv2);
+           ColumnVector expectedvv = forEach(DType.BOOL8, icv1, icv2,
+           (b, l, r, i) -> b.append(l.isNull(i) ? false : r.isNull(i) || l.getInt(i) > r.getInt(i)), true)) {
+        assertColumnsAreEqual(expectedvv, answervv, "struct int32 > struct int32");
       }
     }
   }
@@ -1085,25 +1181,29 @@ public class BinaryOpTest extends CudfTestBase {
 
   @Test
   public void testLessOrEqualTo() {
-    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
+    try (ColumnVector icv1 = ColumnVector.fromBoxedInts(INTS_1);
+         ColumnVector icv2 = ColumnVector.fromBoxedInts(INTS_2);
+         ColumnVector structcv1 = ColumnVector.makeStruct(icv1);
+         ColumnVector structcv2 = ColumnVector.makeStruct(icv2);
+         ColumnVector intscalar = ColumnVector.fromInts(4);
          ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector dec32cv = ColumnVector.decimalFromInts(-dec32Scale_2, DECIMAL32_2)) {
-      try (ColumnVector answer = icv.lessOrEqualTo(dcv);
-           ColumnVector expected = forEach(DType.BOOL8, icv, dcv,
+      try (ColumnVector answer = icv1.lessOrEqualTo(dcv);
+           ColumnVector expected = forEach(DType.BOOL8, icv1, dcv,
                    (b, l, r, i) -> b.append(l.getInt(i) <= r.getDouble(i)))) {
         assertColumnsAreEqual(expected, answer, "int32 <= double");
       }
 
       try (Scalar s = Scalar.fromFloat(1.0f);
-           ColumnVector answer = icv.lessOrEqualTo(s);
-           ColumnVector expected = forEachS(DType.BOOL8, icv, 1.0f,
+           ColumnVector answer = icv1.lessOrEqualTo(s);
+           ColumnVector expected = forEachS(DType.BOOL8, icv1, 1.0f,
                    (b, l, r, i) -> b.append(l.getInt(i) <= r))) {
         assertColumnsAreEqual(expected, answer, "int64 <= scalar float");
       }
 
       try (Scalar s = Scalar.fromShort((short) 100);
-           ColumnVector answer = s.lessOrEqualTo(icv);
-           ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv,
+           ColumnVector answer = s.lessOrEqualTo(icv1);
+           ColumnVector expected = forEachS(DType.BOOL8, (short) 100,  icv1,
                    (b, l, r, i) -> b.append(l <= r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short <= int32");
       }
@@ -1114,6 +1214,26 @@ public class BinaryOpTest extends CudfTestBase {
                 (b, l, r, i) -> b.append(l.getBigDecimal(i).compareTo(r) <= 0))) {
           assertColumnsAreEqual(expected, answer, "dec32 <= scalar dec32");
         }
+      }
+
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
+           ColumnVector answersv = s.lessOrEqualTo(structcv1);
+           ColumnVector expectedsv = forEachS(DType.BOOL8, 4, icv1,
+           (b, l, r, i) -> b.append(r.isNull(i) ? false : l <= r.getInt(i)), true)) {
+        assertColumnsAreEqual(expectedsv, answersv, "scalar struct int32 <= struct int32");
+      }
+
+      try (Scalar s = Scalar.structFromColumnViews(intscalar);
+           ColumnVector answervs = structcv1.lessOrEqualTo(s);
+           ColumnVector expectedvs = forEachS(DType.BOOL8, icv1, 4,
+           (b, l, r, i) -> b.append(l.isNull(i) ? true : l.getInt(i) <= r), true)) {
+        assertColumnsAreEqual(expectedvs, answervs, "struct int32 <= scalar struct int32");
+      }
+
+      try (ColumnVector answervv = structcv1.lessOrEqualTo(structcv2);
+           ColumnVector expectedvv = forEach(DType.BOOL8, icv1, icv2,
+           (b, l, r, i) -> b.append(l.isNull(i) ? true : !r.isNull(i) && l.getInt(i) <= r.getInt(i)), true)) {
+        assertColumnsAreEqual(expectedvv, answervv, "struct int32 <= struct int32");
       }
     }
   }
@@ -1323,6 +1443,46 @@ public class BinaryOpTest extends CudfTestBase {
            ColumnVector expected = forEachS(DType.INT32, (short) 100,  icv1,
                    (b, l, r, i) -> b.append(l ^ r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar short ^ int32");
+      }
+    }
+  }
+
+  @Test
+  public void testNullAnd() {
+    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(
+        true, true, true,
+        false, false, false,
+        null, null, null);
+         ColumnVector icv2 = ColumnVector.fromBoxedBooleans(
+             true, false, null,
+             true, false, null,
+             true, false, null)) {
+      try (ColumnVector answer = icv1.binaryOp(BinaryOp.NULL_LOGICAL_AND, icv2, DType.BOOL8);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(
+               true, false, null,
+               false, false, false,
+               null, false, null)) {
+        assertColumnsAreEqual(expected, answer, "boolean NULL AND boolean");
+      }
+    }
+  }
+
+  @Test
+  public void testNullOr() {
+    try (ColumnVector icv1 = ColumnVector.fromBoxedBooleans(
+        true, true, true,
+        false, false, false,
+        null, null, null);
+         ColumnVector icv2 = ColumnVector.fromBoxedBooleans(
+             true, false, null,
+             true, false, null,
+             true, false, null)) {
+      try (ColumnVector answer = icv1.binaryOp(BinaryOp.NULL_LOGICAL_OR, icv2, DType.BOOL8);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(
+               true, true, true,
+               true, false, null,
+               true, null, null)) {
+        assertColumnsAreEqual(expected, answer, "boolean NULL OR boolean");
       }
     }
   }

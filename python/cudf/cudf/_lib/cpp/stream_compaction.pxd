@@ -1,17 +1,20 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-from libcpp cimport bool
 
-from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
+from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
-from cudf._lib.cpp.types cimport (
-    size_type, null_policy, nan_policy, null_equality
-)
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.types cimport (
+    nan_policy,
+    null_equality,
+    null_policy,
+    size_type,
+)
 
 
 cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
@@ -30,11 +33,13 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
         column_view boolean_mask
     ) except +
 
-    cdef unique_ptr[table] drop_duplicates(table_view source_table,
-                                           vector[size_type] keys,
-                                           duplicate_keep_option keep,
-                                           null_equality nulls_equal) except +
+    cdef unique_ptr[table] unique(
+        table_view source_table,
+        vector[size_type] keys,
+        duplicate_keep_option keep,
+        null_equality nulls_equal) except +
 
-    cdef size_type distinct_count(column_view source_table,
-                                  null_policy null_handling,
-                                  nan_policy nan_handling) except +
+    cdef size_type distinct_count(
+        column_view source_table,
+        null_policy null_handling,
+        nan_policy nan_handling) except +

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <limits>
-
 #include <cuda/std/chrono>
 
 namespace cudf {
@@ -33,6 +31,14 @@ namespace cudf {
  * @brief Type alias representing an int32_t duration of days.
  */
 using duration_D = cuda::std::chrono::duration<int32_t, cuda::std::chrono::days::period>;
+/**
+ * @brief Type alias representing an int32_t duration of hours.
+ */
+using duration_h = cuda::std::chrono::duration<int32_t, cuda::std::chrono::hours::period>;
+/**
+ * @brief Type alias representing an int32_t duration of minutes.
+ */
+using duration_m = cuda::std::chrono::duration<int32_t, cuda::std::chrono::minutes::period>;
 /**
  * @brief Type alias representing an int64_t duration of seconds.
  */
@@ -51,6 +57,8 @@ using duration_us = cuda::std::chrono::duration<int64_t, cuda::std::chrono::micr
 using duration_ns = cuda::std::chrono::duration<int64_t, cuda::std::chrono::nanoseconds::period>;
 
 static_assert(sizeof(duration_D) == sizeof(typename duration_D::rep), "");
+static_assert(sizeof(duration_h) == sizeof(typename duration_h::rep), "");
+static_assert(sizeof(duration_m) == sizeof(typename duration_m::rep), "");
 static_assert(sizeof(duration_s) == sizeof(typename duration_s::rep), "");
 static_assert(sizeof(duration_ms) == sizeof(typename duration_ms::rep), "");
 static_assert(sizeof(duration_us) == sizeof(typename duration_us::rep), "");
@@ -58,30 +66,3 @@ static_assert(sizeof(duration_ns) == sizeof(typename duration_ns::rep), "");
 
 /** @} */  // end of group
 }  // namespace cudf
-
-namespace std {
-/**
- * @brief Specialization of std::numeric_limits for cudf::detail::duration
- *
- * Pass through to return the limits of the underlying numeric representation.
- */
-#define DURATION_LIMITS(TypeName)                                             \
-  template <>                                                                 \
-  struct numeric_limits<TypeName> {                                           \
-    static constexpr TypeName max() noexcept { return TypeName::max(); }      \
-    static constexpr TypeName lowest() noexcept                               \
-    {                                                                         \
-      return TypeName(std::numeric_limits<typename TypeName::rep>::lowest()); \
-    }                                                                         \
-    static constexpr TypeName min() noexcept { return TypeName::min(); }      \
-  }
-
-DURATION_LIMITS(cudf::duration_D);
-DURATION_LIMITS(cudf::duration_s);
-DURATION_LIMITS(cudf::duration_ms);
-DURATION_LIMITS(cudf::duration_us);
-DURATION_LIMITS(cudf::duration_ns);
-
-#undef DURATION_LIMITS
-
-}  // namespace std

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <text/subword/detail/data_normalizer.hpp>
+#include <text/subword/detail/tokenizer_utils.cuh>
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <nvtext/normalize.hpp>
@@ -32,10 +33,13 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
+#include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
 
 #include <limits>
@@ -185,9 +189,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
                                    std::move(children.first),
                                    std::move(children.second),
                                    strings.null_count(),
-                                   cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                   stream,
-                                   mr);
+                                   cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 /**
@@ -201,12 +203,14 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
   // create the normalizer and call it
-  data_normalizer normalizer(stream, do_lower_case);
-  auto result = [&strings, &normalizer, stream] {
-    auto const offsets   = strings.offsets();
-    auto const d_offsets = offsets.data<uint32_t>() + strings.offset();
-    auto const offset    = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
-    auto const d_chars   = strings.chars().data<char>() + offset;
+  auto result = [&] {
+    auto const cp_metadata = get_codepoint_metadata(stream);
+    auto const aux_table   = get_aux_codepoint_data(stream);
+    auto const normalizer  = data_normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
+    auto const offsets     = strings.offsets();
+    auto const d_offsets   = offsets.data<uint32_t>() + strings.offset();
+    auto const offset      = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
+    auto const d_chars     = strings.chars().data<char>() + offset;
     return normalizer.normalize(d_chars, d_offsets, strings.size(), stream);
   }();
 
@@ -230,9 +234,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
                                    std::move(children.first),
                                    std::move(children.second),
                                    strings.null_count(),
-                                   cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                   stream,
-                                   mr);
+                                   cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
 
 }  // namespace detail
@@ -243,7 +245,7 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_spaces(strings, rmm::cuda_stream_default, mr);
+  return detail::normalize_spaces(strings, cudf::default_stream_value, mr);
 }
 
 /**
@@ -254,7 +256,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_characters(strings, do_lower_case, rmm::cuda_stream_default, mr);
+  return detail::normalize_characters(strings, do_lower_case, cudf::default_stream_value, mr);
 }
 
 }  // namespace nvtext

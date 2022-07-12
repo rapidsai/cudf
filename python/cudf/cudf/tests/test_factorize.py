@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame, Index
-from cudf.tests.utils import assert_eq
+from cudf import DataFrame, Index
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
@@ -19,11 +19,11 @@ def test_factorize_series_obj(ncats, nelem):
     df["cats"] = arr = np.random.randint(2, size=10, dtype=np.int32)
 
     uvals, labels = df["cats"].factorize()
-    np.testing.assert_array_equal(labels.to_array(), sorted(set(arr)))
+    np.testing.assert_array_equal(labels.to_numpy(), sorted(set(arr)))
     assert isinstance(uvals, cp.ndarray)
     assert isinstance(labels, Index)
 
-    encoder = dict((labels[idx], idx) for idx in range(len(labels)))
+    encoder = {labels[idx]: idx for idx in range(len(labels))}
     handcoded = [encoder[v] for v in arr]
     np.testing.assert_array_equal(uvals.get(), handcoded)
 
@@ -42,7 +42,7 @@ def test_factorize_index_obj(ncats, nelem):
     assert isinstance(uvals, cp.ndarray)
     assert isinstance(labels, Index)
 
-    encoder = dict((labels[idx], idx) for idx in range(len(labels)))
+    encoder = {labels[idx]: idx for idx in range(len(labels))}
     handcoded = [encoder[v] for v in arr]
     np.testing.assert_array_equal(uvals.get(), handcoded)
 

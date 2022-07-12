@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,14 @@
  */
 
 #pragma once
-#include <stdint.h>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cstdint>
 
 namespace cudf {
 namespace io {
@@ -53,15 +55,15 @@ struct stats_column_desc {
                         //!< nested columns
   int32_t ts_scale;     //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
 
-  column_device_view *leaf_column;    //!< Pointer to leaf column
-  column_device_view *parent_column;  //!< Pointer to parent column. Is nullptr if not list type.
+  column_device_view const* leaf_column;    //!< Pointer to leaf column
+  column_device_view const* parent_column;  //!< Pointer to parent column; nullptr if not list type
 };
 
 struct string_stats {
-  const char *ptr;  //!< ptr to character data
+  const char* ptr;  //!< ptr to character data
   uint32_t length;  //!< length of string
-  __host__ __device__ __forceinline__ volatile string_stats &operator=(
-    const string_view &val) volatile
+  __host__ __device__ __forceinline__ volatile string_stats& operator=(
+    const string_view& val) volatile
   {
     ptr    = val.data();
     length = val.size_bytes();
@@ -99,13 +101,14 @@ struct statistics_chunk {
 };
 
 struct statistics_group {
-  const stats_column_desc *col;  //!< Column information
+  const stats_column_desc* col;  //!< Column information
   uint32_t start_row;            //!< Start row of this group
   uint32_t num_rows;             //!< Number of rows in group
 };
 
 struct statistics_merge_group {
-  const stats_column_desc *col;  //!< Column information
+  data_type col_dtype;           //!< Column data type
+  statistics_dtype stats_dtype;  //!< Statistics data type for this column
   uint32_t start_chunk;          //!< Start chunk of this group
   uint32_t num_chunks;           //!< Number of chunks in group
 };

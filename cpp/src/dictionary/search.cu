@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/search.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -25,6 +26,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 
 namespace cudf {
@@ -61,15 +63,15 @@ struct dispatch_scalar_index {
  */
 struct find_index_fn {
   template <typename Element,
-            std::enable_if_t<not std::is_same<Element, dictionary32>::value and
-                             not std::is_same<Element, list_view>::value and
-                             not std::is_same<Element, struct_view>::value>* = nullptr>
+            std::enable_if_t<not std::is_same_v<Element, dictionary32> and
+                             not std::is_same_v<Element, list_view> and
+                             not std::is_same_v<Element, struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
                                      scalar const& key,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    if (!key.is_valid())
+    if (!key.is_valid(stream))
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
@@ -90,10 +92,10 @@ struct find_index_fn {
                            mr);
   }
 
-  template <typename Element,
-            std::enable_if_t<std::is_same<Element, dictionary32>::value or
-                             std::is_same<Element, list_view>::value or
-                             std::is_same<Element, struct_view>::value>* = nullptr>
+  template <
+    typename Element,
+    std::enable_if_t<std::is_same_v<Element, dictionary32> or std::is_same_v<Element, list_view> or
+                     std::is_same_v<Element, struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(dictionary_column_view const&,
                                      scalar const&,
                                      rmm::cuda_stream_view,
@@ -106,15 +108,15 @@ struct find_index_fn {
 
 struct find_insert_index_fn {
   template <typename Element,
-            std::enable_if_t<not std::is_same<Element, dictionary32>::value and
-                             not std::is_same<Element, list_view>::value and
-                             not std::is_same<Element, struct_view>::value>* = nullptr>
+            std::enable_if_t<not std::is_same_v<Element, dictionary32> and
+                             not std::is_same_v<Element, list_view> and
+                             not std::is_same_v<Element, struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
                                      scalar const& key,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    if (!key.is_valid())
+    if (!key.is_valid(stream))
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
@@ -132,10 +134,10 @@ struct find_insert_index_fn {
                            mr);
   }
 
-  template <typename Element,
-            std::enable_if_t<std::is_same<Element, dictionary32>::value or
-                             std::is_same<Element, list_view>::value or
-                             std::is_same<Element, struct_view>::value>* = nullptr>
+  template <
+    typename Element,
+    std::enable_if_t<std::is_same_v<Element, dictionary32> or std::is_same_v<Element, list_view> or
+                     std::is_same_v<Element, struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(dictionary_column_view const&,
                                      scalar const&,
                                      rmm::cuda_stream_view,
@@ -178,7 +180,7 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_index(dictionary, key, rmm::cuda_stream_default, mr);
+  return detail::get_index(dictionary, key, cudf::default_stream_value, mr);
 }
 
 }  // namespace dictionary

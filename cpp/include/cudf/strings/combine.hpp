@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 namespace cudf {
 namespace strings {
@@ -272,7 +274,7 @@ std::unique_ptr<column> join_list_elements(
  * delimited by the @p separator provided.
  *
  * A null list row will always result in a null string in the output row. Any non-null list row
- * having a null elenent will result in the corresponding output row to be null unless a
+ * having a null element will result in the corresponding output row to be null unless a
  * @p narep string is specified to be used in its place.
  *
  * If @p separate_nulls is set to `NO` and @p narep is valid then separators are not added to the

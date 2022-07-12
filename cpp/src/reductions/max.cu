@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,11 +34,12 @@ std::unique_ptr<cudf::scalar> max(column_view const& col,
   auto const dispatch_type = cudf::is_dictionary(col.type())
                                ? cudf::dictionary_column_view(col).indices().type()
                                : col.type();
-  return cudf::type_dispatcher(dispatch_type,
-                               simple::same_element_type_dispatcher<cudf::reduction::op::max>{},
-                               col,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    dispatch_type,
+    simple::detail::same_element_type_dispatcher<cudf::reduction::op::max>{},
+    col,
+    stream,
+    mr);
 }
 
 }  // namespace reduction

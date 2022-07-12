@@ -33,7 +33,7 @@
 namespace cudf {
 namespace detail {
 
-rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<std::string> &keys,
+rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<std::string>& keys,
                                                              rmm::cuda_stream_view stream)
 {
   static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
@@ -47,8 +47,8 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<s
   // The trie takes a lot of memory, but the lookup is fast:
   // allows direct addressing of children nodes
   TreeTrieNode tree_trie;
-  for (const auto &key : keys) {
-    auto *current_node = &tree_trie;
+  for (const auto& key : keys) {
+    auto* current_node = &tree_trie;
 
     for (const char character : key) {
       if (current_node->children[character] == nullptr)
@@ -61,9 +61,9 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<s
   }
 
   struct IndexedTrieNode {
-    TreeTrieNode const *const pnode;
+    TreeTrieNode const* const pnode;
     int16_t const idx;
-    IndexedTrieNode(TreeTrieNode const *const node, int16_t index) : pnode(node), idx(index) {}
+    IndexedTrieNode(TreeTrieNode const* const node, int16_t index) : pnode(node), idx(index) {}
   };
 
   // Serialize the tree trie

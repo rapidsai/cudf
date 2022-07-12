@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,17 +16,18 @@
 # limitations under the License.
 #
 
-set -e
+set -ex
 gcc --version
 
-PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 SKIP_JAVA_TESTS=${SKIP_JAVA_TESTS:-true}
 BUILD_CPP_TESTS=${BUILD_CPP_TESTS:-OFF}
+ENABLE_CUDA_STATIC_RUNTIME=${ENABLE_CUDA_STATIC_RUNTIME:-ON}
 ENABLE_PTDS=${ENABLE_PTDS:-ON}
 RMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL:-OFF}
 ENABLE_NVTX=${ENABLE_NVTX:-ON}
 ENABLE_GDS=${ENABLE_GDS:-OFF}
 OUT=${OUT:-out}
+CMAKE_GENERATOR=${CMAKE_GENERATOR:-Ninja}
 
 SIGN_FILE=$1
 #Set absolute path for OUT_PATH
@@ -36,6 +37,7 @@ OUT_PATH="$WORKSPACE/$OUT"
 echo "SIGN_FILE: $SIGN_FILE,\
  SKIP_JAVA_TESTS: $SKIP_JAVA_TESTS,\
  BUILD_CPP_TESTS: $BUILD_CPP_TESTS,\
+ ENABLE_CUDA_STATIC_RUNTIME: $ENABLE_CUDA_STATIC_RUNTIME,\
  ENABLED_PTDS: $ENABLE_PTDS,\
  ENABLE_NVTX: $ENABLE_NVTX,\
  ENABLE_GDS: $ENABLE_GDS,\
@@ -52,13 +54,32 @@ export LIBCUDF_KERNEL_CACHE_PATH=/rapids
 rm -rf "$WORKSPACE/cpp/build"
 mkdir -p "$WORKSPACE/cpp/build"
 cd "$WORKSPACE/cpp/build"
-cmake .. -DUSE_NVTX=$ENABLE_NVTX -DCUDF_USE_ARROW_STATIC=ON -DCUDF_ENABLE_ARROW_S3=OFF -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL
+cmake .. -G"${CMAKE_GENERATOR}" \
+         -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
+         -DCUDA_STATIC_RUNTIME=$ENABLE_CUDA_STATIC_RUNTIME \
+         -DUSE_NVTX=$ENABLE_NVTX \
+         -DCUDF_USE_ARROW_STATIC=ON \
+         -DCUDF_ENABLE_ARROW_S3=OFF \
+         -DBUILD_TESTS=$BUILD_CPP_TESTS \
+         -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS \
+         -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL \
+         -DBUILD_SHARED_LIBS=OFF
 
-make -j$PARALLEL_LEVEL
-make install DESTDIR=$INSTALL_PREFIX
+if [[ -z "${PARALLEL_LEVEL}" ]]; then
+    cmake --build .
+else
+    cmake --build . --parallel $PARALLEL_LEVEL
+fi
+cmake --install .
 
 ###### Build cudf jar ######
-BUILD_ARG="-Dmaven.repo.local=\"$WORKSPACE/.m2\" -DskipTests=$SKIP_JAVA_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL -DUSE_GDS=$ENABLE_GDS"
+BUILD_ARG="-Dmaven.repo.local=\"$WORKSPACE/.m2\"\
+ -DskipTests=$SKIP_JAVA_TESTS\
+ -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS\
+ -DCUDA_STATIC_RUNTIME=$ENABLE_CUDA_STATIC_RUNTIME\
+ -DCUDF_JNI_LIBCUDF_STATIC=ON\
+ -DUSE_GDS=$ENABLE_GDS -Dtest=*,!CuFileTest,!CudaFatalTest"
+
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
     BUILD_ARG="$BUILD_ARG -Prelease"
@@ -71,9 +92,6 @@ fi
 
 cd "$WORKSPACE/java"
 mvn -B clean package $BUILD_ARG
-
-###### Sanity test: fail if static cudart found ######
-find . -name '*.so' | xargs -I{} readelf -Ws {} | grep cuInit && echo "Found statically linked CUDA runtime, this is currently not tested" && exit 1
 
 ###### Stash Jar files ######
 rm -rf $OUT_PATH

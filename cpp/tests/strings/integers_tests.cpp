@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,18 @@
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <tests/strings/utilities.h>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+#include <tests/strings/utilities.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/host_vector.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <string>
 #include <vector>
@@ -287,7 +290,7 @@ template <typename T>
 class StringsIntegerConvertTest : public StringsConvertTest {
 };
 
-TYPED_TEST_CASE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 {
@@ -299,10 +302,10 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                             (cudf::size_type)d_integers.size());
   auto integers_view = integers->mutable_view();
-  CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
-                      d_integers.data(),
-                      d_integers.size() * sizeof(TypeParam),
-                      cudaMemcpyDeviceToDevice));
+  CUDF_CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
+                           d_integers.data(),
+                           d_integers.size() * sizeof(TypeParam),
+                           cudaMemcpyDeviceToDevice));
   integers_view.set_null_count(0);
 
   // convert to strings
@@ -330,7 +333,7 @@ class StringsFloatConvertTest : public StringsConvertTest {
 };
 
 using FloatTypes = cudf::test::Types<float, double>;
-TYPED_TEST_CASE(StringsFloatConvertTest, FloatTypes);
+TYPED_TEST_SUITE(StringsFloatConvertTest, FloatTypes);
 
 TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
 namespace cudf {
@@ -49,7 +52,7 @@ struct var_transform {
   {
     if (d_values.is_null(i)) return 0.0;
 
-    ResultType x = static_cast<ResultType>(values_iter[i]);
+    auto x = static_cast<ResultType>(values_iter[i]);
 
     size_type group_idx  = d_group_labels[i];
     size_type group_size = d_group_sizes[group_idx];
@@ -87,7 +90,7 @@ void reduce_by_key_fn(column_device_view const& values,
 
 struct var_functor {
   template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_arithmetic_v<T>, std::unique_ptr<column>> operator()(
     column_view const& values,
     column_view const& group_means,
     column_view const& group_sizes,
@@ -144,7 +147,7 @@ struct var_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(Args&&...)
+  std::enable_if_t<!std::is_arithmetic_v<T>, std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("Only numeric types are supported in std/variance");
   }

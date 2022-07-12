@@ -1,15 +1,15 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.memory cimport unique_ptr
-from libcpp.memory cimport shared_ptr
-from libcpp.vector cimport vector
+from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
-
+from libcpp.vector cimport vector
 from pyarrow.lib cimport CTable
-from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
+
+from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
+
 
 cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:

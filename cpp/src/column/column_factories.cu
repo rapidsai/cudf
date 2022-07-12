@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/fill.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+
 namespace cudf {
 
 namespace {
@@ -34,7 +36,7 @@ struct column_from_scalar_dispatch {
                                            rmm::mr::device_memory_resource* mr) const
   {
     if (size == 0) return make_empty_column(value.type());
-    if (!value.is_valid())
+    if (!value.is_valid(stream))
       return make_fixed_width_column(value.type(), size, mask_state::ALL_NULL, stream, mr);
     auto output_column =
       make_fixed_width_column(value.type(), size, mask_state::UNALLOCATED, stream, mr);
@@ -54,7 +56,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   if (size == 0) return make_empty_column(value.type());
   auto null_mask = detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
 
-  if (!value.is_valid())
+  if (!value.is_valid(stream))
     return std::make_unique<column>(
       value.type(), size, rmm::device_buffer{}, std::move(null_mask), size);
 
@@ -63,7 +65,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   // any of the children in the strings column which would otherwise cause an exception.
   column_view sc{
     data_type{type_id::STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
-  auto sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
+  auto& sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
   // fill the column with the scalar
   auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, stream, mr);
   output->set_null_mask(rmm::device_buffer{}, 0);  // should be no nulls
@@ -96,12 +98,12 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
   rmm::mr::device_memory_resource* mr) const
 {
   if (size == 0) CUDF_FAIL("0-length struct column is unsupported.");
-  auto ss   = static_cast<scalar_type_t<cudf::struct_view> const&>(value);
+  auto& ss  = static_cast<scalar_type_t<cudf::struct_view> const&>(value);
   auto iter = thrust::make_constant_iterator(0);
 
   auto children =
     detail::gather(ss.view(), iter, iter + size, out_of_bounds_policy::NULLIFY, stream, mr);
-  auto const is_valid = ss.is_valid();
+  auto const is_valid = ss.is_valid(stream);
   return make_structs_column(size,
                              std::move(children->release()),
                              is_valid ? 0 : size,

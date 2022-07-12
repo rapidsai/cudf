@@ -1,7 +1,8 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-import numpy as np
 from enum import IntEnum
+
+import numpy as np
 
 from libc.stdint cimport uint32_t
 from libcpp cimport bool as cbool
@@ -9,12 +10,12 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
+
 from cudf._lib.replace import replace_nulls
 
-from cudf._lib.cpp.labeling cimport inclusive
-from cudf._lib.cpp.labeling cimport label_bins as cpp_label_bins
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.labeling cimport inclusive, label_bins as cpp_label_bins
 
 
 # Note that the parameter input shadows a Python built-in in the local scope,

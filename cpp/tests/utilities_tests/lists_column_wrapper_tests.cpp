@@ -43,7 +43,7 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::DurationTypes,
                                                   cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(ListColumnWrapperTestTyped, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(ListColumnWrapperTestTyped, FixedWidthTypesNotBool);
 
 TYPED_TEST(ListColumnWrapperTestTyped, List)
 {

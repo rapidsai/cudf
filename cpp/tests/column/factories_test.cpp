@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,23 +24,26 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
 
  public:
   cudf::size_type size() { return _size; }
-  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
+  rmm::cuda_stream_view stream() { return cudf::default_stream_value; }
 };
 
 template <typename T>
 class NumericFactoryTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(NumericFactoryTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(NumericFactoryTest, cudf::test::NumericTypes);
 
 TYPED_TEST(NumericFactoryTest, EmptyNoMask)
 {
@@ -203,7 +206,7 @@ template <typename T>
 class FixedWidthFactoryTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(FixedWidthFactoryTest, EmptyNoMask)
 {
@@ -219,7 +222,7 @@ template <typename T>
 class EmptyFactoryTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(EmptyFactoryTest, cudf::test::AllTypes);
+TYPED_TEST_SUITE(EmptyFactoryTest, cudf::test::AllTypes);
 
 TYPED_TEST(EmptyFactoryTest, Empty)
 {
@@ -466,7 +469,7 @@ template <typename T>
 class ListsFixedWidthLeafTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(ListsFixedWidthLeafTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ListsFixedWidthLeafTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ListsFixedWidthLeafTest, FromNonNested)
 {
@@ -504,7 +507,7 @@ template <typename T>
 class ListsDictionaryLeafTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ListsDictionaryLeafTest, FromNonNested)
 {
@@ -530,7 +533,7 @@ TYPED_TEST(ListsDictionaryLeafTest, FromNested)
   DCW leaf({1, 3, -1, 1, 3, 1, 3, -1, 1, 3}, {1, 1, 0, 1, 1, 1, 1, 0, 1, 1});
   offset_t offsets{0, 3, 3, 6, 6, 10};
   auto mask = cudf::create_null_mask(5, cudf::mask_state::ALL_VALID);
-  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask.data()), 1, 2, false);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), 1, 2, false);
   auto data = cudf::make_lists_column(5, offsets.release(), leaf.release(), 0, std::move(mask));
 
   auto s   = cudf::make_list_scalar(*data);
@@ -542,9 +545,9 @@ TYPED_TEST(ListsDictionaryLeafTest, FromNested)
     {1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1});
   offset_t offsets2{0, 3, 3, 6, 6, 10, 13, 13, 16, 16, 20, 23, 23, 26, 26, 30};
   auto mask2 = cudf::create_null_mask(15, cudf::mask_state::ALL_VALID);
-  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask2.data()), 1, 2, false);
-  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask2.data()), 6, 7, false);
-  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask2.data()), 11, 12, false);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 1, 2, false);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 6, 7, false);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 11, 12, false);
   auto nested =
     cudf::make_lists_column(15, offsets2.release(), leaf2.release(), 3, std::move(mask2));
 
@@ -613,7 +616,7 @@ class ListsStructsLeafTest : public ColumnFactoryTest {
   }
 };
 
-TYPED_TEST_CASE(ListsStructsLeafTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ListsStructsLeafTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ListsStructsLeafTest, FromNonNested)
 {
@@ -643,7 +646,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNonNested)
                                           0,
                                           cudf::create_null_mask(2, cudf::mask_state::UNALLOCATED));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, *expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *expected);
 }
 
 TYPED_TEST(ListsStructsLeafTest, FromNested)
@@ -658,7 +661,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNested)
     LCWinner_t({LCWinner_t{}, LCWinner_t{42}}, valid_t{1, 1}.begin()),
     valid_t{0, 1}.begin());
   auto mask = cudf::create_null_mask(3, cudf::mask_state::ALL_VALID);
-  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask.data()), 0, 1, false);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), 0, 1, false);
   auto data =
     cudf::make_lists_column(3, offset_t{0, 0, 1, 2}.release(), leaf.release(), 1, std::move(mask));
   auto s = cudf::make_list_scalar(*data);
@@ -674,9 +677,9 @@ TYPED_TEST(ListsStructsLeafTest, FromNested)
       valid_t{1, 1, 1, 1, 1, 1}.begin()),
     valid_t{0, 1, 0, 1, 0, 1}.begin());
   auto mask2 = cudf::create_null_mask(9, cudf::mask_state::ALL_VALID);
-  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask2.data()), 0, 1, false);
-  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask2.data()), 3, 4, false);
-  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask2.data()), 6, 7, false);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 0, 1, false);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 3, 4, false);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask2.data()), 6, 7, false);
   auto data2 = cudf::make_lists_column(
     9, offset_t{0, 0, 1, 2, 2, 3, 4, 4, 5, 6}.release(), leaf2.release(), 3, std::move(mask2));
   auto expected = cudf::make_lists_column(3,

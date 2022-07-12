@@ -22,7 +22,7 @@
 
 #include <cudf/reshape.hpp>
 #include <cudf/table/table.hpp>
-#include "cudf/utilities/error.hpp"
+#include <cudf/utilities/error.hpp>
 
 using namespace cudf::test;
 
@@ -30,7 +30,7 @@ template <typename T>
 struct TileTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(TileTest, cudf::test::AllTypes);
+TYPED_TEST_SUITE(TileTest, cudf::test::AllTypes);
 
 TYPED_TEST(TileTest, NoColumns)
 {

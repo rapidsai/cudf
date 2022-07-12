@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,8 +45,8 @@ namespace detail {
  * @param values Grouped values to get sum of
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_sum(column_view const& values,
                                   size_type num_groups,
@@ -68,8 +68,8 @@ std::unique_ptr<column> group_sum(column_view const& values,
  * @param values Grouped values to get product of
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_product(column_view const& values,
                                       size_type num_groups,
@@ -91,8 +91,8 @@ std::unique_ptr<column> group_product(column_view const& values,
  * @param values Grouped values to get minimum from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_min(column_view const& values,
                                   size_type num_groups,
@@ -114,8 +114,8 @@ std::unique_ptr<column> group_min(column_view const& values,
  * @param values Grouped values to get maximum from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_max(column_view const& values,
                                   size_type num_groups,
@@ -138,8 +138,8 @@ std::unique_ptr<column> group_max(column_view const& values,
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
  * @param key_sort_order Indices indicating sort order of groupby keys
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_argmax(column_view const& values,
                                      size_type num_groups,
@@ -163,8 +163,8 @@ std::unique_ptr<column> group_argmax(column_view const& values,
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
  * @param key_sort_order Indices indicating sort order of groupby keys
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_argmin(column_view const& values,
                                      size_type num_groups,
@@ -188,8 +188,8 @@ std::unique_ptr<column> group_argmin(column_view const& values,
  * @param values Grouped values to get valid count of
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_count_valid(column_view const& values,
                                           cudf::device_span<size_type const> group_labels,
@@ -209,13 +209,37 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
  *
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param num_groups Number of groups ( unique values in @p group_labels )
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group_offsets,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Internal API to calculate sum of squares of differences from means.
+ *
+ * If there are only nulls in the group, the output value of that group will be null.
+ *
+ * @code{.pseudo}
+ * values        = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels  = [0, 0, 0,  1,  1,    2, 2,    3]
+ * group_means   = [2.333333, -1.5, 4.0, <NA>]
+ * group_m2(...) = [4.666666,  1.0, 0.0, <NA>]
+ * @endcode
+ *
+ * @param values Grouped values to compute M2 values
+ * @param group_means Pre-computed groupwise MEAN
+ * @param group_labels ID of group corresponding value in @p values belongs to
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_m2(column_view const& values,
+                                 column_view const& group_means,
+                                 cudf::device_span<size_type const> group_labels,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Internal API to calculate groupwise variance
@@ -236,8 +260,8 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
  * @param group_labels ID of group corresponding value in @p values belongs to
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `var` is `N - ddof`, where `N` is the group size.
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_var(column_view const& values,
                                   column_view const& group_means,
@@ -265,8 +289,8 @@ std::unique_ptr<column> group_var(column_view const& values,
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param quantiles List of quantiles q where q lies in [0,1]
  * @param interp Method to use when desired value lies between data points
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_quantiles(column_view const& values,
                                         column_view const& group_sizes,
@@ -298,8 +322,8 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
  * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
  *  Include nulls if null_policy::INCLUDE.
  *  Nulls are treated equal.
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_nunique(column_view const& values,
                                       cudf::device_span<size_type const> group_labels,
@@ -331,8 +355,8 @@ std::unique_ptr<column> group_nunique(column_view const& values,
  * @param n nth element to choose from each group of @p values
  * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
  *  Include nulls if null_policy::INCLUDE.
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_nth_element(column_view const& values,
                                           column_view const& group_sizes,
@@ -392,9 +416,73 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr);
 
-/** @endinternal
+/**
+ * @brief Internal API to merge grouped M2 values corresponding to the same key.
  *
+ * The values of M2 are merged following the parallel algorithm described here:
+ * `https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm`
+ *
+ * Merging M2 values require accessing to partial M2 values, means, and valid counts. Thus, the
+ * input to this aggregation need to be a structs column containing tuples of 3 values
+ * `(valid_count, mean, M2)`.
+ *
+ * This aggregation not only merges the partial results of `M2` but also merged all the partial
+ * results of input aggregations (`COUNT_VALID`, `MEAN`, and `M2`). As such, the output will be a
+ * structs column containing children columns of merged `COUNT_VALID`, `MEAN`, and `M2` values.
+ *
+ * @param values Grouped values (tuples of values `(valid_count, mean, M2)`) to merge.
+ * @param group_offsets Offsets of groups' starting points within @p values.
+ * @param num_groups Number of groups.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
+std::unique_ptr<column> group_merge_m2(column_view const& values,
+                                       cudf::device_span<size_type const> group_offsets,
+                                       size_type num_groups,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr);
+/**
+ * @brief Internal API to find covariance of child columns of a non-nullable struct column.
+ *
+ * @param values_0 The first grouped values column to compute covariance
+ * @param values_1 The second grouped values column to compute covariance
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups.
+ * @param count The count of valid rows of the grouped values of both columns
+ * @param mean_0 The mean of the first grouped values column
+ * @param mean_1 The mean of the second grouped values column
+ * @param min_periods The minimum number of non-null rows required to consider the covariance
+ * @param ddof The delta degrees of freedom used in the calculation of the variance
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_covariance(column_view const& values_0,
+                                         column_view const& values_1,
+                                         cudf::device_span<size_type const> group_labels,
+                                         size_type num_groups,
+                                         column_view const& count,
+                                         column_view const& mean_0,
+                                         column_view const& mean_1,
+                                         size_type min_periods,
+                                         size_type ddof,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Internal API to find correlation from covariance and standard deviation.
+ *
+ * @param covariance The covariance of two grouped values columns
+ * @param stddev_0 The standard deviation of the first grouped values column
+ * @param stddev_1 The standard deviation of the second grouped values column
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_correlation(column_view const& covariance,
+                                          column_view const& stddev_0,
+                                          column_view const& stddev_1,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
+
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
@@ -29,13 +29,14 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 
+#include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
-#include <gtest/gtest.h>
 #include <cstdlib>
+#include <cudf/types.hpp>
+#include <gtest/gtest.h>
 #include <iostream>
 #include <vector>
-#include "cudf/types.hpp"
 
 struct ReplaceErrorTest : public cudf::test::BaseFixture {
 };
@@ -298,7 +299,7 @@ struct ReplaceTest : cudf::test::BaseFixture {
     std::srand(number_of_instantiations++);
   }
 
-  ~ReplaceTest() {}
+  ~ReplaceTest() override {}
 };
 
 /**
@@ -391,7 +392,7 @@ void test_replace(cudf::host_span<T const> input_column,
 
 using Types = cudf::test::NumericTypes;
 
-TYPED_TEST_CASE(ReplaceTest, Types);
+TYPED_TEST_SUITE(ReplaceTest, Types);
 
 // Simple test, replacing all even replacement_values_column
 TYPED_TEST(ReplaceTest, ReplaceEvenPosition)
@@ -539,14 +540,14 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReplace)
 {
   using namespace numeric;
   using decimalXX = TypeParam;

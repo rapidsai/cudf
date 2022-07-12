@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import copy
 import io
@@ -15,7 +15,7 @@ from cudf._fuzz_testing.utils import (
     pandas_to_avro,
     pyarrow_to_pandas,
 )
-from cudf.tests import dataset_generator as dg
+from cudf.testing import dataset_generator as dg
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -73,7 +73,7 @@ class AvroReader(IOFuzz):
                 self, dtypes_list
             )
             self._current_params["dtypes_meta"] = dtypes_meta
-            seed = random.randint(0, 2 ** 32 - 1)
+            seed = random.randint(0, 2**32 - 1)
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_cols"] = num_cols

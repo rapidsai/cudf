@@ -70,7 +70,7 @@ template <typename>
 class Detect;
 
 /**
- * @brief Utility class to detect multiple occurences of a type in the first element of pairs in a
+ * @brief Utility class to detect multiple occurrences of a type in the first element of pairs in a
  * tuple For eg. with the following tuple :
  *
  * using conversion_types =

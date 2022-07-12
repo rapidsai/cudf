@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,9 +25,19 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/distance.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/scatter.h>
+#include <thrust/sequence.h>
+#include <thrust/transform.h>
 
 #include <cinttypes>
 
@@ -86,10 +96,10 @@ std::unique_ptr<column> scatter_impl(
   MapIterator scatter_map_end,
   column_view const& source,
   column_view const& target,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  assert_same_data_type(source, target);
+  CUDF_EXPECTS(column_types_equal(source, target), "Mismatched column types.");
 
   auto const child_column_type = lists_column_view(target).child().type();
 
@@ -159,7 +169,7 @@ std::unique_ptr<column> scatter(
   MapIterator scatter_map_begin,
   MapIterator scatter_map_end,
   column_view const& target,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto const num_rows = target.size();
@@ -216,7 +226,7 @@ std::unique_ptr<column> scatter(
   MapIterator scatter_map_begin,
   MapIterator scatter_map_end,
   column_view const& target,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::cuda_stream_view stream        = cudf::default_stream_value,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto const num_rows = target.size();

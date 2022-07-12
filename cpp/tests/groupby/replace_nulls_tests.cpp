@@ -38,7 +38,7 @@ template <typename T>
 struct GroupbyReplaceNullsFixedWidthTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(GroupbyReplaceNullsFixedWidthTest, FixedWidthTypes);
+TYPED_TEST_SUITE(GroupbyReplaceNullsFixedWidthTest, FixedWidthTypes);
 
 template <typename K, typename V>
 void TestReplaceNullsGroupbySingle(
@@ -172,7 +172,7 @@ template <typename T>
 struct GroupbyReplaceNullsListsTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(GroupbyReplaceNullsListsTest, FixedWidthTypes);
+TYPED_TEST_SUITE(GroupbyReplaceNullsListsTest, FixedWidthTypes);
 
 TYPED_TEST(GroupbyReplaceNullsListsTest, PrecedingFillNonNested)
 {

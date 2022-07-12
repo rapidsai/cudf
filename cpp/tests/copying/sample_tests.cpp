@@ -89,9 +89,8 @@ struct SampleBasicTest : public SampleTest,
 
 TEST_P(SampleBasicTest, CombinationOfParameters)
 {
-  cudf::size_type const table_size         = 1024;
-  cudf::size_type const n_samples          = std::get<0>(GetParam());
-  cudf::sample_with_replacement multi_smpl = std::get<1>(GetParam());
+  cudf::size_type const table_size   = 1024;
+  auto const [n_samples, multi_smpl] = GetParam();
 
   auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<int16_t> col1(data, data + table_size);

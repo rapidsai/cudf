@@ -1,11 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf.utils.docutils import docfmt_partial
 import warnings
 
-import cudf
 from pandas.core.accessor import CachedAccessor
 
+import cudf
+from cudf.utils.docutils import docfmt_partial
 
 _docstring_register_accessor = """
     Extends `cudf.{klass}` with custom defined accessor

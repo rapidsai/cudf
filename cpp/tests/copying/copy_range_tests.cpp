@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 auto all_valid  = [](cudf::size_type row) { return true; };
 auto even_valid = [](cudf::size_type row) { return (row % 2 == 0); };
@@ -60,7 +61,7 @@ class CopyRangeTypedTestFixture : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(CopyRangeTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(CopyRangeTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls)
 {
@@ -471,7 +472,7 @@ template <typename T>
 struct FixedPointTypesCopyRange : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTypesCopyRange, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTypesCopyRange, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTypesCopyRange, FixedPointSimple)
 {

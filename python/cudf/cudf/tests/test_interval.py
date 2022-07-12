@@ -1,14 +1,15 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize(
-    "data1, data2", [(1, 2), (1.0, 2.0), (3, 4.0)],
+    "data1, data2",
+    [(1, 2), (1.0, 2.0), (3, 4.0)],
 )
 @pytest.mark.parametrize("data3, data4", [(6, 10), (5.0, 9.0), (2, 6.0)])
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
@@ -48,7 +49,8 @@ def test_create_interval_series(data1, data2, data3, data4, closed):
 
 
 @pytest.mark.parametrize(
-    "data1, data2", [(1, 2), (1.0, 2.0), (3, 4.0)],
+    "data1, data2",
+    [(1, 2), (1.0, 2.0), (3, 4.0)],
 )
 @pytest.mark.parametrize("data3, data4", [(6, 10), (5.0, 9.0), (2, 6.0)])
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])

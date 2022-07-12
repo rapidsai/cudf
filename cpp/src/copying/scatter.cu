@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
@@ -26,16 +25,22 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/search.hpp>
-#include <cudf/lists/list_view.cuh>
+#include <cudf/lists/list_view.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/count.h>
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/permutation_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+#include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
 namespace cudf {
@@ -47,7 +52,8 @@ __global__ void marking_bitmask_kernel(mutable_column_device_view destination,
                                        MapIterator scatter_map,
                                        size_type num_scatter_rows)
 {
-  size_type row = threadIdx.x + blockIdx.x * blockDim.x;
+  thread_index_type row          = threadIdx.x + blockIdx.x * blockDim.x;
+  thread_index_type const stride = blockDim.x * gridDim.x;
 
   while (row < num_scatter_rows) {
     size_type const output_row = scatter_map[row];
@@ -58,37 +64,38 @@ __global__ void marking_bitmask_kernel(mutable_column_device_view destination,
       destination.set_null(output_row);
     }
 
-    row += blockDim.x * gridDim.x;
+    row += stride;
   }
 }
 
 template <typename MapIterator>
-void scatter_scalar_bitmask(std::vector<std::reference_wrapper<const scalar>> const& source,
-                            MapIterator scatter_map,
-                            size_type num_scatter_rows,
-                            std::vector<std::unique_ptr<column>>& target,
-                            rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
+void scatter_scalar_bitmask_inplace(std::reference_wrapper<const scalar> const& source,
+                                    MapIterator scatter_map,
+                                    size_type num_scatter_rows,
+                                    column& target,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   constexpr size_type block_size = 256;
   size_type const grid_size      = grid_1d(num_scatter_rows, block_size).num_blocks;
 
-  for (size_t i = 0; i < target.size(); ++i) {
-    auto const source_is_valid = source[i].get().is_valid(stream);
-    if (target[i]->nullable() or not source_is_valid) {
-      if (not target[i]->nullable()) {
-        // Target must have a null mask if the source is not valid
-        auto mask = detail::create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
-        target[i]->set_null_mask(std::move(mask), 0);
-      }
-
-      auto target_view = mutable_column_device_view::create(target[i]->mutable_view(), stream);
-
-      auto bitmask_kernel = source_is_valid ? marking_bitmask_kernel<true, decltype(scatter_map)>
-                                            : marking_bitmask_kernel<false, decltype(scatter_map)>;
-      bitmask_kernel<<<grid_size, block_size, 0, stream.value()>>>(
-        *target_view, scatter_map, num_scatter_rows);
+  auto const source_is_valid = source.get().is_valid(stream);
+  if (target.nullable() or not source_is_valid) {
+    if (not target.nullable()) {
+      // Target must have a null mask if the source is not valid
+      auto mask = detail::create_null_mask(target.size(), mask_state::ALL_VALID, stream, mr);
+      target.set_null_mask(std::move(mask), 0);
     }
+
+    auto target_view = mutable_column_device_view::create(target, stream);
+
+    auto bitmask_kernel = source_is_valid ? marking_bitmask_kernel<true, decltype(scatter_map)>
+                                          : marking_bitmask_kernel<false, decltype(scatter_map)>;
+    bitmask_kernel<<<grid_size, block_size, 0, stream.value()>>>(
+      *target_view, scatter_map, num_scatter_rows);
+
+    target.set_null_count(
+      cudf::detail::null_count(target.view().null_mask(), 0, target.size(), stream));
   }
 }
 
@@ -103,6 +110,7 @@ struct column_scalar_scatterer_impl {
   {
     CUDF_EXPECTS(source.get().type() == target.type(), "scalar and column types must match");
 
+    // make a copy of data and null mask from source
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
@@ -117,6 +125,7 @@ struct column_scalar_scatterer_impl {
                     scatter_iter,
                     result_view.begin<Element>());
 
+    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
     return result;
   }
 };
@@ -136,7 +145,10 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
     auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
     auto const begin       = thrust::make_constant_iterator(source_view);
     auto const end         = begin + scatter_rows;
-    return strings::detail::scatter(begin, end, scatter_iter, target, stream, mr);
+    auto result            = strings::detail::scatter(begin, end, scatter_iter, target, stream, mr);
+
+    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
+    return result;
   }
 };
 
@@ -149,17 +161,11 @@ struct column_scalar_scatterer_impl<list_view, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    return lists::detail::scatter(
-      source, scatter_iter, scatter_iter + scatter_rows, target, stream, mr);
-  }
-};
+    auto result =
+      lists::detail::scatter(source, scatter_iter, scatter_iter + scatter_rows, target, stream, mr);
 
-template <typename MapIterator>
-struct column_scalar_scatterer_impl<struct_view, MapIterator> {
-  template <typename... Args>
-  std::unique_ptr<column> operator()(Args&&...) const
-  {
-    CUDF_FAIL("scatter scalar to struct_view not implemented");
+    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
+    return result;
   }
 };
 
@@ -200,10 +206,13 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
     // use the keys from the matched column
     std::unique_ptr<column> keys_column(std::move(dict_target->release().children.back()));
     // create the output column
-    return make_dictionary_column(std::move(keys_column),
-                                  std::move(indices_column),
-                                  std::move(*(contents.null_mask.release())),
-                                  null_count);
+    auto result = make_dictionary_column(std::move(keys_column),
+                                         std::move(indices_column),
+                                         std::move(*(contents.null_mask.release())),
+                                         null_count);
+
+    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, *result, stream, mr);
+    return result;
   }
 };
 
@@ -219,6 +228,55 @@ struct column_scalar_scatterer {
   {
     column_scalar_scatterer_impl<Element, MapIterator> scatterer{};
     return scatterer(source, scatter_iter, scatter_rows, target, stream, mr);
+  }
+};
+
+template <typename MapIterator>
+struct column_scalar_scatterer_impl<struct_view, MapIterator> {
+  std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
+                                     MapIterator scatter_iter,
+                                     size_type scatter_rows,
+                                     column_view const& target,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
+  {
+    // For each field of `source`, copy construct a scalar from the field
+    // and dispatch to the corresponding scalar scatterer
+
+    auto typed_s             = static_cast<struct_scalar const*>(&source.get());
+    size_type const n_fields = typed_s->view().num_columns();
+    CUDF_EXPECTS(n_fields == target.num_children(), "Mismatched number of fields.");
+
+    auto scatter_functor   = column_scalar_scatterer<decltype(scatter_iter)>{};
+    auto fields_iter_begin = make_counting_transform_iterator(0, [&](auto const& i) {
+      auto row_slr = get_element(typed_s->view().column(i), 0, stream);
+      return type_dispatcher<dispatch_storage_type>(row_slr->type(),
+                                                    scatter_functor,
+                                                    *row_slr,
+                                                    scatter_iter,
+                                                    scatter_rows,
+                                                    target.child(i),
+                                                    stream,
+                                                    mr);
+    });
+    std::vector<std::unique_ptr<column>> fields(fields_iter_begin, fields_iter_begin + n_fields);
+
+    // Compute null mask
+    rmm::device_buffer null_mask =
+      target.nullable() ? copy_bitmask(target, stream, mr)
+                        : create_null_mask(target.size(), mask_state::UNALLOCATED, stream, mr);
+    column null_mask_stub(data_type{type_id::STRUCT},
+                          target.size(),
+                          rmm::device_buffer{},
+                          std::move(null_mask),
+                          target.null_count());
+    scatter_scalar_bitmask_inplace(source, scatter_iter, scatter_rows, null_mask_stub, stream, mr);
+    size_type null_count = null_mask_stub.null_count();
+    auto contents        = null_mask_stub.release();
+
+    // Null mask pushdown inside factory method
+    return make_structs_column(
+      target.size(), std::move(fields), null_count, std::move(*contents.null_mask), stream, mr);
   }
 };
 
@@ -250,6 +308,21 @@ std::unique_ptr<table> scatter(table_view const& source,
   auto map_begin = indexalator_factory::make_input_iterator(scatter_map);
   auto map_end   = map_begin + scatter_map.size();
   return detail::scatter(source, map_begin, map_end, target, check_bounds, stream, mr);
+}
+
+std::unique_ptr<table> scatter(table_view const& source,
+                               device_span<size_type const> const scatter_map,
+                               table_view const& target,
+                               bool check_bounds,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(scatter_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+               "invalid scatter map size");
+  auto map_col = column_view(data_type{type_to_id<size_type>()},
+                             static_cast<size_type>(scatter_map.size()),
+                             scatter_map.data());
+  return scatter(source, map_col, target, check_bounds, stream, mr);
 }
 
 std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>> const& source,
@@ -284,8 +357,13 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
 
   // Transform negative indices to index + target size
   auto scatter_rows = indices.size();
+  // note: the intermediate ((in % n_rows) + n_rows) will overflow a size_type for any value of `in`
+  // > (2^31)/2, but the end result after the final (% n_rows) will fit. so we'll do the computation
+  // using a signed 64 bit value.
   auto scatter_iter = thrust::make_transform_iterator(
-    map_begin, [n_rows] __device__(size_type in) { return ((in % n_rows) + n_rows) % n_rows; });
+    map_begin, [n_rows = static_cast<int64_t>(n_rows)] __device__(size_type in) -> size_type {
+      return ((static_cast<int64_t>(in) % n_rows) + n_rows) % n_rows;
+    });
 
   // Dispatch over data type per column
   auto result          = std::vector<std::unique_ptr<column>>(target.num_columns());
@@ -304,8 +382,6 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
                                                                  stream,
                                                                  mr);
                  });
-
-  scatter_scalar_bitmask(source, scatter_iter, scatter_rows, result, stream, mr);
 
   return std::make_unique<table>(std::move(result));
 }
@@ -433,7 +509,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scatter(source, scatter_map, target, check_bounds, rmm::cuda_stream_default, mr);
+  return detail::scatter(source, scatter_map, target, check_bounds, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>> const& source,
@@ -443,7 +519,7 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::scatter(source, indices, target, check_bounds, rmm::cuda_stream_default, mr);
+  return detail::scatter(source, indices, target, check_bounds, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
@@ -452,7 +528,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::boolean_mask_scatter(input, target, boolean_mask, rmm::cuda_stream_default, mr);
+  return detail::boolean_mask_scatter(input, target, boolean_mask, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
@@ -462,7 +538,7 @@ std::unique_ptr<table> boolean_mask_scatter(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::boolean_mask_scatter(input, target, boolean_mask, rmm::cuda_stream_default, mr);
+  return detail::boolean_mask_scatter(input, target, boolean_mask, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf
