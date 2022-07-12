@@ -3465,6 +3465,72 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._n_largest_or_smallest(False, n, columns, keep)
 
     @_cudf_nvtx_annotate
+    def swaplevel(self, i=-2, j=-1, axis=0):
+        """
+        Swap level i with level j.
+        Calling this method does not change the ordering of the values.
+
+        Parameters
+        ----------
+        i : int or str, default -2
+            First level of index to be swapped.
+        j : int or str, default -1
+            Second level of index to be swapped.
+        axis : The axis to swap levels on.
+            0 or 'index' for row-wise, 1 or 'columns' for column-wise.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> midx = cudf.MultiIndex(levels=[['llama', 'cow', 'falcon'],
+        ...   ['speed', 'weight', 'length'],['first','second']],
+        ...   codes=[[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2],
+        ...             [0, 0, 0, 0, 0, 0, 1, 1, 1]])
+        >>> cdf = cudf.DataFrame(index=midx, columns=['big', 'small'],
+        ...  data=[[45, 30], [200, 100], [1.5, 1], [30, 20],
+        ...         [250, 150], [1.5, 0.8], [320, 250], [1, 0.8], [0.3, 0.2]])
+
+        >>> cdf
+                                     big  small
+             llama  speed  first    45.0   30.0
+                    weight first   200.0  100.0
+                    length first     1.5    1.0
+             cow    speed  first    30.0   20.0
+                    weight first   250.0  150.0
+                    length first     1.5    0.8
+             falcon speed  second  320.0  250.0
+                    weight second    1.0    0.8
+                    length second    0.3    0.2
+
+        >>> cdf.swaplevel()
+                                     big  small
+             llama  first  speed    45.0   30.0
+                           weight  200.0  100.0
+                           length    1.5    1.0
+             cow    first  speed    30.0   20.0
+                           weight  250.0  150.0
+                           length    1.5    0.8
+             falcon second speed   320.0  250.0
+                           weight    1.0    0.8
+                           length    0.3    0.2
+        """
+        result = self.copy()
+
+        # To get axis number
+        axis = self._get_axis_from_axis_arg(axis)
+
+        if axis == 0:
+            if not isinstance(result.index, MultiIndex):
+                raise TypeError("Can only swap levels on a hierarchical axis.")
+            result.index = result.index.swaplevel(i, j)
+        else:
+            if not result._data.multiindex:
+                raise TypeError("Can only swap levels on a hierarchical axis.")
+            result._data = result._data.swaplevel(i, j)
+
+        return result
+
+    @_cudf_nvtx_annotate
     def transpose(self):
         """Transpose index and columns.
 

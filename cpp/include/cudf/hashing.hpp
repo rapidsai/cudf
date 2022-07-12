@@ -18,6 +18,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 
 using hash_value_type = uint32_t;  ///< Type of hash value
