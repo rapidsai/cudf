@@ -18,6 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 namespace cudf {
 /**
  * @addtogroup reshape_transpose
