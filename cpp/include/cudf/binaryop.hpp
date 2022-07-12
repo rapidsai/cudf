@@ -19,6 +19,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 #include <memory>
 
 namespace cudf {
