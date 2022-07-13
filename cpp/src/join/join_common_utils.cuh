@@ -109,10 +109,10 @@ class pair_equality {
   {
   }
 
-  pair_equality(Comparator const d_eqcomp) : _check_row_equality{d_eqcomp} {}
+  pair_equality(Comparator const d_eqcomp) : _check_row_equality{std::move(d_eqcomp)} {}
 
-  template <typename LHSPair, typename RHSPair>
-  __device__ __forceinline__ bool operator()(LHSPair const& lhs, RHSPair const& rhs) const noexcept
+  template <typename LhsPair, typename RhsPair>
+  __device__ __forceinline__ bool operator()(LhsPair const& lhs, RhsPair const& rhs) const noexcept
   {
     return lhs.first == rhs.first and _check_row_equality(rhs.second, lhs.second);
   }
