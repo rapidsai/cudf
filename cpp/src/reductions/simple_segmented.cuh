@@ -38,6 +38,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
+#include <optional>
 #include <type_traits>
 
 namespace cudf {
