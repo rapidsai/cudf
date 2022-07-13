@@ -82,6 +82,7 @@ struct all_fn {
 
 std::unique_ptr<cudf::scalar> all(column_view const& col,
                                   cudf::data_type const output_dtype,
+                                  std::optional<std::reference_wrapper<scalar const>> init,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
@@ -97,6 +98,7 @@ std::unique_ptr<cudf::scalar> all(column_view const& col,
     col.type(),
     simple::detail::bool_result_element_dispatcher<cudf::reduction::op::min>{},
     col,
+    init,
     stream,
     mr);
 }
