@@ -60,6 +60,8 @@
 #include <optional>
 #include <tuple>
 
+namespace {
+
 constexpr auto JCUDF_ROW_ALIGNMENT = 8;
 
 constexpr auto MAX_BATCH_SIZE = std::numeric_limits<cudf::size_type>::max();
@@ -71,6 +73,8 @@ constexpr auto MIN_STRING_BLOCKS = 32;
 constexpr auto MAX_STRING_BLOCKS = MAX_BATCH_SIZE;
 
 constexpr auto NUM_WARPS_IN_BLOCK = 32;
+
+} // anonymous namespace
 
 // needed to suppress warning about cuda::barrier
 #pragma nv_diag_suppress static_var_with_dynamic_init
