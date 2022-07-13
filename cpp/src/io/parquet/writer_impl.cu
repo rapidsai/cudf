@@ -307,7 +307,7 @@ struct leaf_schema_fn {
     col_schema.type = Type::BYTE_ARRAY;
     if (col_meta.is_enabled_output_as_binary()) {
       col_schema.converted_type = ConvertedType::UNKNOWN;
-      col_schema.stats_dtype    = statistics_dtype::dtype_int8;
+      col_schema.stats_dtype    = statistics_dtype::dtype_string;
     } else {
       col_schema.converted_type = ConvertedType::UTF8;
       col_schema.stats_dtype    = statistics_dtype::dtype_string;
