@@ -657,14 +657,14 @@ TEST_F(ParquetWriterTest, Strings)
 
 TEST_F(ParquetWriterTest, StringsAsBinary)
 {
-  std::vector<const char*> strings{
+  std::vector<const char*> unicode_strings{
     "Monday", "Wȅdnȅsday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
-  std::vector<const char*> single_byte_strings{
+  std::vector<const char*> ascii_strings{
     "Monday", "Wednesday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
 
-  column_wrapper<cudf::string_view> col0{single_byte_strings.begin(), single_byte_strings.end()};
-  column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
-  column_wrapper<cudf::string_view> col2{single_byte_strings.begin(), single_byte_strings.end()};
+  column_wrapper<cudf::string_view> col0{ascii_strings.begin(), ascii_strings.end()};
+  column_wrapper<cudf::string_view> col1{unicode_strings.begin(), unicode_strings.end()};
+  column_wrapper<cudf::string_view> col2{ascii_strings.begin(), ascii_strings.end()};
   cudf::test::lists_column_wrapper<int8_t> col3{{'M', 'o', 'n', 'd', 'a', 'y'},
                                                 {'W', 'e', 'd', 'n', 'e', 's', 'd', 'a', 'y'},
                                                 {'F', 'r', 'i', 'd', 'a', 'y'},
