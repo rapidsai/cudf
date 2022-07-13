@@ -22,7 +22,6 @@ from typing import (
 import cupy
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 from pandas._config import get_option
 
 import cudf
@@ -810,7 +809,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self.values_host
 
     def to_arrow(self):
-        return pa.array(self._range, type=pa.from_numpy_dtype(self.dtype))
+        return self._as_int64().to_arrow()
 
     def __array__(self, dtype=None):
         raise TypeError(
@@ -823,14 +822,25 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def nunique(self):
         return len(self)
 
-    def min(self):
-        return self.start
-
-    def max(self):
-        return self._end
-
     def isna(self):
         return cupy.zeros(len(self), dtype=bool)
+
+    def _minmax(self, meth: str):
+        no_steps = len(self) - 1
+        if no_steps == -1:
+            return np.nan
+        elif (meth == "min" and self.step > 0) or (
+            meth == "max" and self.step < 0
+        ):
+            return self.start
+
+        return self.start + self.step * no_steps
+
+    def min(self):
+        return self._minmax("min")
+
+    def max(self):
+        return self._minmax("max")
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
