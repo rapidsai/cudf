@@ -12,6 +12,7 @@ def bench_to_numpy(benchmark, rangeindex):
     benchmark(rangeindex.to_numpy)
 
 
+@pytest.mark.pandas_incompatible
 def bench_to_arrow(benchmark, rangeindex):
     benchmark(rangeindex.to_arrow)
 
