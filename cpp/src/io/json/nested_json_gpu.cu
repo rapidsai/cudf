@@ -35,10 +35,13 @@ namespace gpu {
 //------------------------------------------------------------------------------
 namespace to_stack_op {
 
+// Type used to represent the target state in the transition table
+using StateT = char;
+
 /**
  * @brief Definition of the DFA's states
  */
-enum DFA_STATES {
+enum DFA_STATES : StateT {
   // The state being active while being outside of a string. When encountering an opening bracket
   // or curly brace, we push it onto the stack. When encountering a closing bracket or brace, we
   // pop from the stack.
@@ -74,7 +77,7 @@ enum DFA_SGID {
 const std::vector<std::string> symbol_groups = {"{", "[", "}", "]", "\"", "\\"};
 
 // Transition table
-const std::vector<std::vector<int32_t>> transition_table = {
+const std::vector<std::vector<StateT>> transition_table = {
   /* IN_STATE         {       [       }       ]       "       \    OTHER */
   /* TT_OOS    */ {TT_OOS, TT_OOS, TT_OOS, TT_OOS, TT_STR, TT_OOS, TT_OOS},
   /* TT_STR    */ {TT_STR, TT_STR, TT_STR, TT_STR, TT_OOS, TT_STR, TT_STR},
@@ -95,6 +98,9 @@ constexpr int32_t start_state = TT_OOS;
 // JSON TOKENIZER PUSHDOWN AUTOMATON
 //------------------------------------------------------------------------------
 namespace tokenizer_pda {
+
+// Type used to represent the target state in the transition table
+using StateT = char;
 
 /**
  * @brief Symbol groups for the input alphabet for the pushdown automaton
@@ -183,7 +189,7 @@ struct PdaSymbolToSymbolGroupId {
 };
 
 // The states defined by the pushdown automaton
-enum pda_state_t : int32_t {
+enum pda_state_t : StateT {
   PD_BOV,
   PD_BOA,
   PD_LON,
@@ -199,7 +205,7 @@ enum pda_state_t : int32_t {
 };
 
 // The starting state of the pushdown automaton
-constexpr int32_t start_state = PD_BOV;
+constexpr StateT start_state = PD_BOV;
 
 // Identity symbol to symbol group lookup table
 const std::vector<std::vector<char>> pda_sgids{
@@ -207,11 +213,11 @@ const std::vector<std::vector<char>> pda_sgids{
   {15}, {16}, {17}, {18}, {19}, {20}, {21}, {22}, {23}, {24}, {25}, {26}, {27}, {28}, {29}};
 
 /**
- * @brief Getting the transition table  
+ * @brief Getting the transition table
  */
-std::vector<std::vector<int32_t>> get_transition_table()
+std::vector<std::vector<StateT>> get_transition_table()
 {
-  std::vector<std::vector<int32_t>> pda_tt(PD_NUM_STATES);
+  std::vector<std::vector<StateT>> pda_tt(PD_NUM_STATES);
   pda_tt[PD_BOV] = {PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON,
                     PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON,
                     PD_BOA, PD_BOA, PD_ERR, PD_ERR, PD_STR, PD_ERR, PD_ERR, PD_ERR, PD_BOV, PD_LON};
@@ -249,7 +255,7 @@ std::vector<std::vector<int32_t>> get_transition_table()
 }
 
 /**
- * @brief Getting the translation table  
+ * @brief Getting the translation table
  */
 std::vector<std::vector<std::vector<char>>> get_translation_table()
 {
