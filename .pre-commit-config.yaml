@@ -55,7 +55,7 @@ repos:
         rev: 6.1.1
         hooks:
               - id: pydocstyle
-                args: ["--config=python/.flake8"]
+                args: ["--config=setup.cfg"]
                 exclude: |
                     (?x)^(
                     ci|
