@@ -43,6 +43,7 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
 
 /**
  * @brief Device functor to create a pair of {hash_value, row_index} for a given row.
+ *
  * @tparam T Type of row index, must be convertible to `size_type`.
  * @tparam Hasher The type of internal hasher to compute row hash.
  */
