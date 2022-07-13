@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION.
 
 [build-system]
 
@@ -6,23 +6,3 @@ requires = [
     "wheel",
     "setuptools",
 ]
-
-[tool.black]
-line-length = 79
-target-version = ["py38"]
-include = '\.py?$'
-exclude = '''
-/(
-    thirdparty |
-    \.eggs |
-    \.git |
-    \.hg |
-    \.mypy_cache |
-    \.tox |
-    \.venv |
-    _build |
-    buck-out |
-    build |
-    dist
-)/
-'''
