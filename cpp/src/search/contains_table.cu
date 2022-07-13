@@ -87,7 +87,8 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       // Otherwise, we have only one nullable column and can use its null mask directly.
       auto const row_bitmask =
         haystack_nullable_columns.size() > 1
-          ? cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream).first
+          ? std::move(
+              cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream).first)
           : rmm::device_buffer{0, stream};
       auto const row_bitmask_ptr = haystack_nullable_columns.size() > 1
                                      ? static_cast<bitmask_type const*>(row_bitmask.data())
