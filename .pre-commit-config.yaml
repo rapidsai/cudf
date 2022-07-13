@@ -34,6 +34,8 @@ repos:
         hooks:
               - id: black
                 files: python/.*
+                # Explicitly specify the pyproject.toml at the repo root, not per-project.
+                args: ["--config", "pyproject.toml"]
       - repo: https://github.com/PyCQA/flake8
         rev: 3.8.3
         hooks:
