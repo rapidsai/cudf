@@ -1453,12 +1453,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "'bfill', or 'backfill'."
             )
 
-        obj = self.obj.fillna(method=fill_method, limit=limit)
-        data = obj.groupby(self.grouping)
-
-        return data.diff(periods=periods) / data.shift(
-            periods=periods, freq=freq
-        )
+        filled = self.fillna(method=fill_method, limit=limit)
+        fill_grp = filled.groupby(self.grouping)
+        shifted = fill_grp.shift(periods=periods, freq=freq)
+        return (filled / shifted) - 1
 
     def _mimic_pandas_order(
         self, result: DataFrameOrSeries
