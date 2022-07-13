@@ -39,7 +39,7 @@ auto collect_set(cudf::column_view const& input, std::unique_ptr<reduce_aggregat
                {},
                {cudf::null_order::AFTER});
 
-  return std::make_unique<cudf::list_scalar>(result_sorted_table->get_column(0));
+  return std::make_unique<cudf::list_scalar>(std::move(result_sorted_table->get_column(0)));
 }
 
 }  // namespace
