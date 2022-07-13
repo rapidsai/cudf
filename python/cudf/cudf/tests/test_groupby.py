@@ -2651,7 +2651,7 @@ def test_groupby_pct_change(data, gkey, periods, fill_method):
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(reason="xx")
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/11259")
 @pytest.mark.parametrize("periods", [-5, 5])
 def test_groupby_pct_change_multiindex_dataframe(periods):
     gdf = cudf.DataFrame(
