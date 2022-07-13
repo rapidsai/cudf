@@ -2525,6 +2525,9 @@ range_data = [
     range(9, 12, 2),
     range(20, 30),
     range(100, 1000, 10),
+    range(0, 10, -2),
+    range(0, -10, 2),
+    range(0, -10, -2),
 ]
 
 
