@@ -581,7 +581,7 @@ def test_series_value_counts_bins(bins):
     expected = psr.value_counts(bins=bins)
     got = gsr.value_counts(bins=bins)
 
-    assert_eq(expected, got, check_dtype=False)
+    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
 
 
 @pytest.mark.parametrize("bins", [1, 2, 3])
@@ -593,7 +593,7 @@ def test_series_value_counts_bins_dropna(bins, dropna):
     expected = psr.value_counts(bins=bins, dropna=dropna)
     got = gsr.value_counts(bins=bins, dropna=dropna)
 
-    assert_eq(expected, got, check_dtype=False)
+    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
 
 
 @pytest.mark.parametrize("ascending", [True, False])

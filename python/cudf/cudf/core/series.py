@@ -2836,7 +2836,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if bins is not None:
             res = self.groupby(series_bins, dropna=dropna).count(dropna=dropna)
             res = res[res.index.notna()]
-            res = res.sort_index()
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
 
