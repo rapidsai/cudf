@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -66,8 +67,8 @@ column_view_base::column_view_base(data_type type,
 size_type column_view_base::null_count() const
 {
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count =
-      cudf::detail::null_count(null_mask(), offset(), offset() + size(), rmm::cuda_stream_default);
+    _null_count = cudf::detail::null_count(
+      null_mask(), offset(), offset() + size(), cudf::default_stream_value);
   }
   return _null_count;
 }
@@ -78,7 +79,7 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
   return (null_count() == 0)
            ? 0
            : cudf::detail::null_count(
-               null_mask(), offset() + begin, offset() + end, rmm::cuda_stream_default);
+               null_mask(), offset() + begin, offset() + end, cudf::default_stream_value);
 }
 
 // Struct to use custom hash combine and fold expression

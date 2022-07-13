@@ -81,7 +81,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
     else:
         index = indexes[0]
         if sort is None:
-            sort = False if isinstance(index, cudf.StringIndex) else True
+            sort = not isinstance(index, cudf.StringIndex)
         for other in indexes[1:]:
             index = index.union(other, sort=False)
 
@@ -872,7 +872,7 @@ def _pivot(df, index, columns):
         if num_elements > 0:
             col = df._data[v]
             scatter_map = (columns_idx * np.int32(nrows)) + index_idx
-            target = cudf.core.frame.Frame(
+            target = cudf.DataFrame._from_data(
                 {
                     None: cudf.core.column.column_empty_like(
                         col, masked=True, newsize=nrows * ncols

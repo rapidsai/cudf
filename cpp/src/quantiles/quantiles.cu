@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -80,12 +81,16 @@ std::unique_ptr<table> quantiles(table_view const& input,
   CUDF_EXPECTS(input.num_rows() > 0, "multi-column quantiles require at least one input row.");
 
   if (is_input_sorted == sorted::YES) {
-    return detail::quantiles(
-      input, thrust::make_counting_iterator<size_type>(0), q, interp, rmm::cuda_stream_default, mr);
+    return detail::quantiles(input,
+                             thrust::make_counting_iterator<size_type>(0),
+                             q,
+                             interp,
+                             cudf::default_stream_value,
+                             mr);
   } else {
     auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
     return detail::quantiles(
-      input, sorted_idx->view().data<size_type>(), q, interp, rmm::cuda_stream_default, mr);
+      input, sorted_idx->view().data<size_type>(), q, interp, cudf::default_stream_value, mr);
   }
 }
 

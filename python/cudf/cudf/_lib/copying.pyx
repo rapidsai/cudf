@@ -777,7 +777,7 @@ cdef class _CPackedColumns:
         return p
 
     def unpack(self):
-        output_table = cudf.core.frame.Frame(*data_from_table_view(
+        output_table = cudf.DataFrame._from_data(*data_from_table_view(
             cpp_copying.unpack(self.c_obj),
             self,
             self.column_names,

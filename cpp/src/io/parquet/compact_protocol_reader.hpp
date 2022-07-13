@@ -116,6 +116,10 @@ class CompactProtocolReader {
   bool read(DataPageHeader* d);
   bool read(DictionaryPageHeader* d);
   bool read(KeyValue* k);
+  bool read(PageLocation* p);
+  bool read(OffsetIndex* o);
+  bool read(ColumnIndex* c);
+  bool read(Statistics* s);
 
  public:
   static int NumRequiredBits(uint32_t max_level) noexcept
@@ -137,10 +141,12 @@ class CompactProtocolReader {
   const uint8_t* m_end  = nullptr;
 
   friend class ParquetFieldBool;
+  friend class ParquetFieldBoolList;
   friend class ParquetFieldInt8;
   friend class ParquetFieldInt32;
   friend class ParquetFieldOptionalInt32;
   friend class ParquetFieldInt64;
+  friend class ParquetFieldInt64List;
   template <typename T>
   friend class ParquetFieldStructListFunctor;
   friend class ParquetFieldString;
@@ -153,6 +159,8 @@ class CompactProtocolReader {
   template <typename T>
   friend class ParquetFieldEnumListFunctor;
   friend class ParquetFieldStringList;
+  friend class ParquetFieldBinary;
+  friend class ParquetFieldBinaryList;
   friend class ParquetFieldStructBlob;
 };
 
@@ -172,6 +180,36 @@ class ParquetFieldBool {
   {
     return (field_type != ST_FLD_TRUE && field_type != ST_FLD_FALSE) ||
            !(val = (field_type == ST_FLD_TRUE), true);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to read a vector of booleans from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * bool fails
+ */
+class ParquetFieldBoolList {
+  int field_val;
+  std::vector<bool>& val;
+
+ public:
+  ParquetFieldBoolList(int f, std::vector<bool>& v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    if (field_type != ST_FLD_LIST) return true;
+    uint8_t t;
+    int32_t n = cpr->get_listh(&t);
+    if (t != ST_FLD_TRUE) return true;
+    val.resize(n);
+    for (int32_t i = 0; i < n; i++) {
+      unsigned int current_byte = cpr->getb();
+      if (current_byte != ST_FLD_TRUE && current_byte != ST_FLD_FALSE) return true;
+      val[i] = current_byte == ST_FLD_TRUE;
+    }
+    return false;
   }
 
   int field() { return field_val; }
@@ -256,6 +294,34 @@ class ParquetFieldInt64 {
   {
     val = cpr->get_i64();
     return (field_type < ST_FLD_I16 || field_type > ST_FLD_I64);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to read a vector of 64-bit integers from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading an
+ * int64 fails
+ */
+class ParquetFieldInt64List {
+  int field_val;
+  std::vector<int64_t>& val;
+
+ public:
+  ParquetFieldInt64List(int f, std::vector<int64_t>& v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    if (field_type != ST_FLD_LIST) return true;
+    uint8_t t;
+    int32_t n = cpr->get_listh(&t);
+    if (t != ST_FLD_I64) return true;
+    val.resize(n);
+    for (int32_t i = 0; i < n; i++) {
+      val[i] = cpr->get_i64();
+    }
+    return false;
   }
 
   int field() { return field_val; }
@@ -488,15 +554,78 @@ class ParquetFieldStringList {
   inline bool operator()(CompactProtocolReader* cpr, int field_type)
   {
     if (field_type != ST_FLD_LIST) return true;
-    int current_byte = cpr->getb();
-    if ((current_byte & 0xf) != ST_FLD_BINARY) return true;
-    int n = current_byte >> 4;
-    if (n == 0xf) n = cpr->get_u32();
+    uint8_t t;
+    int32_t n = cpr->get_listh(&t);
+    if (t != ST_FLD_BINARY) return true;
     val.resize(n);
     for (int32_t i = 0; i < n; i++) {
       uint32_t l = cpr->get_u32();
       if (l < (size_t)(cpr->m_end - cpr->m_cur)) {
         val[i].assign((const char*)cpr->m_cur, l);
+        cpr->m_cur += l;
+      } else
+        return true;
+    }
+    return false;
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to read a binary from CompactProtocolReader
+ *
+ * @return True if field type mismatches or if size of binary exceeds bounds
+ * of the CompactProtocolReader
+ */
+class ParquetFieldBinary {
+  int field_val;
+  std::vector<uint8_t>& val;
+
+ public:
+  ParquetFieldBinary(int f, std::vector<uint8_t>& v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    if (field_type != ST_FLD_BINARY) return true;
+    uint32_t n = cpr->get_u32();
+    if (n <= (size_t)(cpr->m_end - cpr->m_cur)) {
+      val.resize(n);
+      val.assign(cpr->m_cur, cpr->m_cur + n);
+      cpr->m_cur += n;
+      return false;
+    } else {
+      return true;
+    }
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to read a vector of binaries from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * binary fails
+ */
+class ParquetFieldBinaryList {
+  int field_val;
+  std::vector<std::vector<uint8_t>>& val;
+
+ public:
+  ParquetFieldBinaryList(int f, std::vector<std::vector<uint8_t>>& v) : field_val(f), val(v) {}
+  inline bool operator()(CompactProtocolReader* cpr, int field_type)
+  {
+    if (field_type != ST_FLD_LIST) return true;
+    uint8_t t;
+    int32_t n = cpr->get_listh(&t);
+    if (t != ST_FLD_BINARY) return true;
+    val.resize(n);
+    for (int32_t i = 0; i < n; i++) {
+      uint32_t l = cpr->get_u32();
+      if (l <= (size_t)(cpr->m_end - cpr->m_cur)) {
+        val[i].resize(l);
+        val[i].assign(cpr->m_cur, cpr->m_cur + l);
         cpr->m_cur += l;
       } else
         return true;

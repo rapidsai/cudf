@@ -20,10 +20,12 @@
 #include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <optional>
 #include <utility>
@@ -536,7 +538,7 @@ class hash_join {
    */
   hash_join(cudf::table_view const& build,
             null_equality compare_nulls,
-            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+            rmm::cuda_stream_view stream = cudf::default_stream_value);
 
   /**
    * Returns the row indices that can be used to construct the result of performing
@@ -557,7 +559,7 @@ class hash_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
              std::optional<std::size_t> output_size = {},
-             rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+             rmm::cuda_stream_view stream           = cudf::default_stream_value,
              rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
   /**
@@ -579,7 +581,7 @@ class hash_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
-            rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+            rmm::cuda_stream_view stream           = cudf::default_stream_value,
             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
   /**
@@ -601,7 +603,7 @@ class hash_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
             std::optional<std::size_t> output_size = {},
-            rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+            rmm::cuda_stream_view stream           = cudf::default_stream_value,
             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
   /**
@@ -615,7 +617,7 @@ class hash_join {
    * `build` and `probe` as the the join keys .
    */
   [[nodiscard]] std::size_t inner_join_size(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+    cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::default_stream_value) const;
 
   /**
    * Returns the exact number of matches (rows) when performing a left join with the specified probe
@@ -628,7 +630,7 @@ class hash_join {
    * and `probe` as the the join keys .
    */
   [[nodiscard]] std::size_t left_join_size(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+    cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::default_stream_value) const;
 
   /**
    * Returns the exact number of matches (rows) when performing a full join with the specified probe
@@ -644,7 +646,7 @@ class hash_join {
    */
   std::size_t full_join_size(
     cudf::table_view const& probe,
-    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::cuda_stream_view stream        = cudf::default_stream_value,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
