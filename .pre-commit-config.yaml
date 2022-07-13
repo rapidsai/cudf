@@ -76,6 +76,12 @@ repos:
                 args: ['-fallback-style=none', '-style=file', '-i']
       - repo: local
         hooks:
+              - id: no-deprecationwarning
+                name: no-deprecationwarning
+                description: 'Enforce that DeprecationWarning is not introduced (use FutureWarning instead)'
+                entry: '(category=|\s)DeprecationWarning[,)]'
+                language: pygrep
+                types_or: [python, cython]
               - id: cmake-format
                 name: cmake-format
                 entry: ./cpp/scripts/run-cmake-format.sh cmake-format
