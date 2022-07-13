@@ -36,10 +36,10 @@ namespace detail {
  * @tparam Op           the compound operator derived from `cudf::reduction::op::compound_op`
  *
  * @param col input column view
- * @param output_dtype data type of return type and typecast elements of input column.
+ * @param output_dtype data type of return type and typecast elements of input column
  * @param ddof Delta degrees of freedom used for standard deviation and variance. The divisor used
  * is N - ddof, where N represents the number of elements.
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
  */
@@ -50,7 +50,7 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
-  cudf::size_type valid_count = col.size() - col.null_count();
+  auto const valid_count = col.size() - col.null_count();
 
   // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
