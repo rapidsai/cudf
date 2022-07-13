@@ -21,12 +21,14 @@
 namespace cudf {
 namespace reduction {
 
-std::unique_ptr<cudf::column> segmented_all(column_view const& col,
-                                            device_span<size_type const> offsets,
-                                            cudf::data_type const output_dtype,
-                                            null_policy null_handling,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<cudf::column> segmented_all(
+  column_view const& col,
+  device_span<size_type const> offsets,
+  cudf::data_type const output_dtype,
+  null_policy null_handling,
+  std::optional<std::reference_wrapper<scalar const>> init,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "segmented_all() operation requires output type `BOOL8`");
@@ -38,6 +40,7 @@ std::unique_ptr<cudf::column> segmented_all(column_view const& col,
     col,
     offsets,
     null_handling,
+    init,
     stream,
     mr);
 }
