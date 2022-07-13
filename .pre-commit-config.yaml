@@ -42,12 +42,12 @@ repos:
               - id: flake8
                 alias: flake8
                 name: flake8
-                args: ["--config=python/.flake8"]
+                args: ["--config=setup.cfg"]
                 files: python/.*\.py$
               - id: flake8
                 alias: flake8-cython
                 name: flake8-cython
-                args: ["--config=python/.flake8"]
+                args: ["--config=setup.cfg"]
                 types: [cython]
       - repo: https://github.com/pre-commit/mirrors-mypy
         rev: 'v0.782'
