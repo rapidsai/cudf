@@ -42,7 +42,7 @@ dependencies:
   - pip
   - flake8=3.8.3
   - black=22.3.0
-  - isort=5.6.4
+  - isort=5.10.1
   - mypy=0.782
   - doxygen=1.8.20
   - pydocstyle=6.1.1
