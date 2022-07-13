@@ -30,6 +30,7 @@ namespace {
 
 /**
  * @brief Check if we need to handle nulls in the input column.
+ *
  * @param input The input column
  * @param null_handling The null handling policy
  * @return A boolean value indicating if we need to handle nulls
