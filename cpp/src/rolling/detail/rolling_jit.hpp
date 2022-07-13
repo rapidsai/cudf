@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef ROLLING_JIT_DETAIL_HPP
-#define ROLLING_JIT_DETAIL_HPP
+#pragma once
 
 #include <cudf/types.hpp>
 
@@ -60,5 +59,3 @@ struct following_window_wrapper {
 }  // namespace detail
 
 }  // namespace cudf
-
-#endif
