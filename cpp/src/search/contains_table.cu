@@ -79,7 +79,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     // - https://github.com/rapidsai/cudf/pull/8277
     if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
       // Collect all nullable columns at all levels from the haystack table.
-      auto const haystack_nullable_columns = accumulate_nullable_columns(haystack);
+      auto const haystack_nullable_columns = get_nullable_columns(haystack);
       CUDF_EXPECTS(haystack_nullable_columns.size() > 0,
                    "Haystack table has nulls thus it should have nullable columns.");
 
