@@ -479,7 +479,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_LISTS>(aggregation 
  * removing duplicate entries for the partial results.
  *
  * Since duplicate list entries will be removed, the parameters `null_equality` and `nan_equality`
- * are needed for calling to `lists::distinct`.
+ * are needed for calling `lists::distinct`.
  */
 template <>
 void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation const& agg)
