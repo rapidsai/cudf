@@ -25,10 +25,7 @@
 
 #include <rmm/exec_policy.hpp>
 
-namespace cudf {
-namespace io {
-namespace json {
-namespace gpu {
+namespace cudf::io::json::gpu {
 
 //------------------------------------------------------------------------------
 // JSON-TO-STACK-OP DFA
@@ -320,6 +317,8 @@ struct JSONToStackOp {
   }
 };
 
+namespace detail {
+
 void get_stack_context(device_span<SymbolT const> d_json_in,
                        device_span<SymbolT> d_top_of_stack,
                        rmm::cuda_stream_view stream)
@@ -410,7 +409,6 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                                stream);
 }
 
-}  // namespace gpu
-}  // namespace json
-}  // namespace io
-}  // namespace cudf
+}  // namespace detail
+
+}  // namespace cudf::io::json::gpu

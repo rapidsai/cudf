@@ -61,7 +61,7 @@ TEST_F(JsonTest, StackContext)
     d_input.data(), input.data(), input.size() * sizeof(SymbolT), cudaMemcpyHostToDevice, stream));
 
   // Run algorithm
-  cudf::io::json::gpu::get_stack_context(
+  cudf::io::json::gpu::detail::get_stack_context(
     d_input,
     cudf::device_span<StackSymbolT>{stack_context.device_ptr(), stack_context.size()},
     stream);
@@ -130,13 +130,12 @@ TEST_F(JsonTest, TokenStream)
   ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(
     d_input.data(), input.data(), input.size() * sizeof(SymbolT), cudaMemcpyHostToDevice, stream));
 
-
   hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream};
   hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream};
   hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream};
 
   // Parse the JSON and get the token stream
-  cudf::io::json::gpu::get_token_stream(
+  cudf::io::json::gpu::detail::get_token_stream(
     d_input,
     cudf::device_span<PdaTokenT>{tokens_gpu.device_ptr(), tokens_gpu.size()},
     cudf::device_span<SymbolOffsetT>{token_indices_gpu.device_ptr(), token_indices_gpu.size()},
@@ -179,7 +178,7 @@ TEST_F(JsonTest, TokenStream)
 
   // Verify the number of tokens matches
   ASSERT_EQ(golden_token_stream.size(), num_tokens_out[0]);
-  
+
   for (std::size_t i = 0; i < num_tokens_out[0]; i++) {
     // Ensure the index the tokens are pointing to do match
     ASSERT_EQ(golden_token_stream[i].first, token_indices_gpu[i]);

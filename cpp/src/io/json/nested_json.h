@@ -20,10 +20,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace cudf {
-namespace io {
-namespace json {
-namespace gpu {
+namespace cudf::io::json::gpu {
 
 /// Type used to represent the atomic symbol type used within the finite-state machine
 using SymbolT = char;
@@ -79,6 +76,7 @@ enum token_t : PdaTokenT {
   NUM_TOKENS
 };
 
+namespace detail {
 /**
  * @brief Identifies the stack context for each character from a JSON input. Specifically, we
  * identify brackets and braces outside of quoted fields (e.g., field names, strings).
@@ -109,8 +107,6 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                       device_span<SymbolOffsetT> d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
                       rmm::cuda_stream_view stream);
+}  // namespace detail
 
-}  // namespace gpu
-}  // namespace json
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::json::gpu
