@@ -52,6 +52,7 @@ auto merge_sets(vcol_views const& keys_cols, vcol_views const& values_cols)
   auto const result_vals = result.second[0].results[0]->view();  // <== column_view
 
   // Sort the output columns based on the output keys.
+  // This is to facilitate comparison of the output with the expected columns.
   auto keys_vals_sorted = cudf::sort_by_key(cudf::table_view{{result_keys.column(0), result_vals}},
                                             result_keys,
                                             {},
@@ -155,8 +156,6 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasNulls)
   using keys_col  = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  // Note that the null elements here are not sorted, while the results from current collect_list
-  // and collect_set are sorted.
   auto const keys1 = keys_col{1, 2};
   auto const keys2 = keys_col{1, 3};
   auto const keys3 = keys_col{2, 3, 4};
@@ -231,8 +230,6 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasNullsAndEmptyLists)
   using keys_col  = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  // Note that the null elements here are not sorted, while the results from current collect_list
-  // and collect_set are sorted.
   auto const keys1 = keys_col{1, 2, 3};
   auto const keys2 = keys_col{1, 3, 4};
   auto const keys3 = keys_col{2, 3, 4};

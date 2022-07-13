@@ -51,6 +51,7 @@ auto groupby_collect_set(cudf::column_view const& keys,
   auto const result_vals = result.second[0].results[0]->view();  // <== column_view
 
   // Sort the output columns based on the output keys.
+  // This is to facilitate comparison of the output with the expected columns.
   auto keys_vals_sorted = cudf::sort_by_key(cudf::table_view{{result_keys.column(0), result_vals}},
                                             result_keys,
                                             {},
