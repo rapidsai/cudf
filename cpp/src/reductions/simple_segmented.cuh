@@ -53,31 +53,44 @@ namespace detail {
  * @tparam ResultType   the output data-type
  * @tparam Op           the operator of cudf::reduction::op::
 
- * @param col Input column of data to reduce.
- * @param offsets Indices to segment boundaries.
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
- * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
- * the reduced value is valid if any element in the segment is valid.
- * @param stream Used for device memory operations and kernel launches.
+ * @param col Input column of data to reduce
+ * @param offsets Indices to segment boundaries
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
+ * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+ * in the segment is valid.
+ * @param init Optional initial value of the reduction
+ * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
  */
 template <typename InputType, typename ResultType, typename Op>
-std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
-                                                   device_span<size_type const> offsets,
-                                                   null_policy null_handling,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> simple_segmented_reduction(
+  column_view const& col,
+  device_span<size_type const> offsets,
+  null_policy null_handling,
+  std::optional<std::reference_wrapper<scalar const>> init,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   // TODO: Rewrites this function to accept a pair of iterators for start/end indices
   // to enable `2N` type offset input.
   // reduction by iterator
-  auto dcol              = cudf::column_device_view::create(col, stream);
-  auto simple_op         = Op{};
-  size_type num_segments = offsets.size() - 1;
+  auto dcol               = cudf::column_device_view::create(col, stream);
+  auto simple_op          = Op{};
+  auto const num_segments = offsets.size() - 1;
 
-  auto binary_op = simple_op.get_binary_op();
-  auto identity  = simple_op.template get_identity<ResultType>();
+  auto const binary_op = simple_op.get_binary_op();
+
+  // Cast initial value
+  ResultType initial_value = [&] {
+    if (init.has_value() && init.value().get().is_valid()) {
+      using ScalarType = cudf::scalar_type_t<InputType>;
+      auto input_value = static_cast<const ScalarType*>(&init.value().get())->value(stream);
+      return static_cast<ResultType>(input_value);
+    } else {
+      return simple_op.template get_identity<ResultType>();
+    }
+  }();
 
   auto const result_type =
     cudf::is_fixed_point(col.type()) ? col.type() : data_type{type_to_id<ResultType>()};
@@ -90,27 +103,28 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
     auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
     auto it = thrust::make_transform_iterator(dcol->pair_begin<InputType, true>(), f);
     cudf::reduction::detail::segmented_reduce(
-      it, offsets.begin(), offsets.end(), outit, binary_op, identity, stream);
+      it, offsets.begin(), offsets.end(), outit, binary_op, initial_value, stream);
   } else {
     auto f  = simple_op.template get_element_transformer<ResultType>();
     auto it = thrust::make_transform_iterator(dcol->begin<InputType>(), f);
     cudf::reduction::detail::segmented_reduce(
-      it, offsets.begin(), offsets.end(), outit, binary_op, identity, stream);
+      it, offsets.begin(), offsets.end(), outit, binary_op, initial_value, stream);
   }
 
   // Compute the output null mask
-  auto const bitmask                 = col.null_mask();
-  auto const first_bit_indices_begin = offsets.begin();
-  auto const first_bit_indices_end   = offsets.end() - 1;
-  auto const last_bit_indices_begin  = first_bit_indices_begin + 1;
-  auto const [output_null_mask, output_null_count] =
-    cudf::detail::segmented_null_mask_reduction(bitmask,
-                                                first_bit_indices_begin,
-                                                first_bit_indices_end,
-                                                last_bit_indices_begin,
-                                                null_handling,
-                                                stream,
-                                                mr);
+  auto const bitmask                               = col.null_mask();
+  auto const first_bit_indices_begin               = offsets.begin();
+  auto const first_bit_indices_end                 = offsets.end() - 1;
+  auto const last_bit_indices_begin                = first_bit_indices_begin + 1;
+  auto const [output_null_mask, output_null_count] = cudf::detail::segmented_null_mask_reduction(
+    bitmask,
+    first_bit_indices_begin,
+    first_bit_indices_end,
+    last_bit_indices_begin,
+    null_handling,
+    init.has_value() ? std::optional(init.value().get().is_valid()) : std::nullopt,
+    stream,
+    mr);
   result->set_null_mask(output_null_mask, output_null_count, stream);
 
   return result;
@@ -125,12 +139,12 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
  * @tparam InputType    the input column data-type
  * @tparam Op           the operator of cudf::reduction::op::
 
- * @param col Input column of data to reduce.
- * @param offsets Indices to segment boundaries.
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
- * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
- * the reduced value is valid if any element in the segment is valid.
- * @param stream Used for device memory operations and kernel launches.
+ * @param col Input column of data to reduce
+ * @param offsets Indices to segment boundaries
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
+ * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+ * in the segment is valid.
+ * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
  */
@@ -178,6 +192,7 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
                                                 offsets.end() - 1,
                                                 offsets.begin() + 1,
                                                 null_handling,
+                                                std::nullopt,
                                                 stream,
                                                 mr);
 
@@ -227,12 +242,12 @@ std::unique_ptr<column> string_segmented_reduction(column_view const& col,
  * @tparam InputType    the input column data-type
  * @tparam Op           the operator of cudf::reduction::op::
 
- * @param col Input column of data to reduce.
- * @param offsets Indices to segment boundaries.
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
- * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
- * the reduced value is valid if any element in the segment is valid.
- * @param stream Used for device memory operations and kernel launches.
+ * @param col Input column of data to reduce
+ * @param offsets Indices to segment boundaries
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
+ * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+ * in the segment is valid.
+ * @param stream Used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
  */
@@ -241,25 +256,30 @@ template <typename InputType,
           typename Op,
           CUDF_ENABLE_IF(std::is_same_v<Op, cudf::reduction::op::min> ||
                          std::is_same_v<Op, cudf::reduction::op::max>)>
-std::unique_ptr<column> fixed_point_segmented_reduction(column_view const& col,
-                                                        device_span<size_type const> offsets,
-                                                        null_policy null_handling,
-                                                        rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> fixed_point_segmented_reduction(
+  column_view const& col,
+  device_span<size_type const> offsets,
+  null_policy null_handling,
+  std::optional<std::reference_wrapper<scalar const>> init,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   using RepType = device_storage_type_t<InputType>;
-  return simple_segmented_reduction<RepType, RepType, Op>(col, offsets, null_handling, stream, mr);
+  return simple_segmented_reduction<RepType, RepType, Op>(
+    col, offsets, null_handling, init, stream, mr);
 }
 
 template <typename InputType,
           typename Op,
           CUDF_ENABLE_IF(!std::is_same_v<Op, cudf::reduction::op::min>() &&
                          !std::is_same_v<Op, cudf::reduction::op::max>())>
-std::unique_ptr<column> fixed_point_segmented_reduction(column_view const& col,
-                                                        device_span<size_type const> offsets,
-                                                        null_policy null_handling,
-                                                        rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> fixed_point_segmented_reduction(
+  column_view const& col,
+  device_span<size_type const> offsets,
+  null_policy null_handling,
+  std::optional<std::reference_wrapper<scalar const>>,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FAIL("Segmented reduction on fixed point column only supports min and max reduction.");
 }
@@ -277,17 +297,19 @@ struct bool_result_column_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     return simple_segmented_reduction<ElementType, bool, Op>(
-      col, offsets, null_handling, stream, mr);
+      col, offsets, null_handling, init, stream, mr);
   }
 
   template <typename ElementType, std::enable_if_t<not cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,
+                                     std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -320,11 +342,12 @@ struct same_column_type_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     return simple_segmented_reduction<ElementType, ElementType, Op>(
-      col, offsets, null_handling, stream, mr);
+      col, offsets, null_handling, init, stream, mr);
   }
 
   template <typename ElementType,
@@ -332,9 +355,12 @@ struct same_column_type_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    if (init.has_value()) { CUDF_FAIL("Initial value not supported for strings"); }
+
     return string_segmented_reduction<ElementType, Op>(col, offsets, null_handling, stream, mr);
   }
 
@@ -343,17 +369,19 @@ struct same_column_type_dispatcher {
   std::unique_ptr<column> operator()(column_view const& col,
                                      device_span<size_type const> offsets,
                                      null_policy null_handling,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     return fixed_point_segmented_reduction<ElementType, Op>(
-      col, offsets, null_handling, stream, mr);
+      col, offsets, null_handling, init, stream, mr);
   }
 
   template <typename ElementType, CUDF_ENABLE_IF(!is_supported<ElementType>())>
   std::unique_ptr<column> operator()(column_view const&,
                                      device_span<size_type const>,
                                      null_policy,
+                                     std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -381,12 +409,13 @@ struct column_type_dispatcher {
                                          device_span<size_type const> offsets,
                                          data_type const output_type,
                                          null_policy null_handling,
+                                         std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
     // TODO: per gh-9988, we should change the compute precision to `output_type`.
-    auto result =
-      simple_segmented_reduction<ElementType, double, Op>(col, offsets, null_handling, stream, mr);
+    auto result = simple_segmented_reduction<ElementType, double, Op>(
+      col, offsets, null_handling, init, stream, mr);
     if (output_type == result->type()) { return result; }
     return cudf::detail::cast(*result, output_type, stream, mr);
   }
@@ -400,12 +429,13 @@ struct column_type_dispatcher {
                                          device_span<size_type const> offsets,
                                          data_type const output_type,
                                          null_policy null_handling,
+                                         std::optional<std::reference_wrapper<scalar const>> init,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
     // TODO: per gh-9988, we should change the compute precision to `output_type`.
-    auto result =
-      simple_segmented_reduction<ElementType, int64_t, Op>(col, offsets, null_handling, stream, mr);
+    auto result = simple_segmented_reduction<ElementType, int64_t, Op>(
+      col, offsets, null_handling, init, stream, mr);
     if (output_type == result->type()) { return result; }
     return cudf::detail::cast(*result, output_type, stream, mr);
   }
@@ -414,14 +444,14 @@ struct column_type_dispatcher {
    * @brief Called by the type-dispatcher to reduce the input column `col` using
    * the `Op` operation.
    *
-   * @tparam ElementType The input column type or key type.
+   * @tparam ElementType The input column type or key type
    * @param col Input column (must be numeric)
    * @param offsets Indices to segment boundaries
    * @param output_type Requested type of the scalar result
-   * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
-   * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
-   * the reduced value is valid if any element in the segment is valid.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
+   * reduced value to be valid. If `null_policy::EXCLUDE`, the reduced value is valid if any element
+   * in the segment is valid.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
   template <typename ElementType,
@@ -430,15 +460,16 @@ struct column_type_dispatcher {
                                      device_span<size_type const> offsets,
                                      data_type const output_type,
                                      null_policy null_handling,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     if (output_type.id() == cudf::type_to_id<ElementType>()) {
       return simple_segmented_reduction<ElementType, ElementType, Op>(
-        col, offsets, null_handling, stream, mr);
+        col, offsets, null_handling, init, stream, mr);
     }
     // reduce and map to output type
-    return reduce_numeric<ElementType>(col, offsets, output_type, null_handling, stream, mr);
+    return reduce_numeric<ElementType>(col, offsets, output_type, null_handling, init, stream, mr);
   }
 
   template <typename ElementType,
@@ -447,6 +478,7 @@ struct column_type_dispatcher {
                                      device_span<size_type const>,
                                      data_type const,
                                      null_policy,
+                                     std::optional<std::reference_wrapper<scalar const>>,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {

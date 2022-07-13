@@ -508,17 +508,20 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
  * validity of any/all elements of segments of an input null mask.
  *
  * @tparam OffsetIterator Random-access input iterator type.
- * @param bitmask Null mask residing in device memory whose segments will be
- * reduced into a new mask.
- * @param first_bit_indices_begin Random-access input iterator to the beginning
- * of a sequence of indices of the first bit in each segment (inclusive).
- * @param first_bit_indices_end Random-access input iterator to the end of a
- * sequence of indices of the first bit in each segment (inclusive).
- * @param last_bit_indices_begin Random-access input iterator to the beginning
- * of a sequence of indices of the last bit in each segment (exclusive).
- * @param null_handling If `null_policy::INCLUDE`, all elements in a segment
- * must be valid for the reduced value to be valid. If `null_policy::EXCLUDE`,
- * the reduction is valid if any element in the segment is valid.
+ * @param bitmask Null mask residing in device memory whose segments will be reduced into a new
+ * mask.
+ * @param first_bit_indices_begin Random-access input iterator to the beginning of a sequence of
+ * indices of the first bit in each segment (inclusive).
+ * @param first_bit_indices_end Random-access input iterator to the end of a sequence of indices of
+ * the first bit in each segment (inclusive).
+ * @param last_bit_indices_begin Random-access input iterator to the beginning of a sequence of
+ * indices of the last bit in each segment (exclusive).
+ * @param null_handling If `null_policy::INCLUDE`, all elements in a segment must be valid for the
+ * reduced value to be valid. If `null_policy::EXCLUDE`, the reduction is valid if any element in
+ * the segment is valid.
+ * @param valid_initial_value Indicates whether a valid initial value was provided to the reduction.
+ * True indicates a valid initial value, false indicates a null initial value, and null indicates no
+ * initial value was provided.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned buffer's device memory.
  * @return A pair containing the reduced null mask and number of nulls.
@@ -530,6 +533,7 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
   OffsetIterator first_bit_indices_end,
   OffsetIterator last_bit_indices_begin,
   null_policy null_handling,
+  std::optional<bool> valid_initial_value,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -549,7 +553,9 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
     return cudf::detail::valid_if(
       segment_length_iterator,
       segment_length_iterator + num_segments,
-      [] __device__(auto const& length) { return length > 0; },
+      [valid_initial_value] __device__(auto const& length) {
+        return valid_initial_value.value_or(length > 0);
+      },
       stream,
       mr);
   }
@@ -567,11 +573,12 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
   return cudf::detail::valid_if(
     length_and_valid_count,
     length_and_valid_count + num_segments,
-    [null_handling] __device__(auto const& length_and_valid_count) {
+    [null_handling, valid_initial_value] __device__(auto const& length_and_valid_count) {
       auto const length      = thrust::get<0>(length_and_valid_count);
       auto const valid_count = thrust::get<1>(length_and_valid_count);
-      return (length > 0) and
-             ((null_handling == null_policy::EXCLUDE) ? valid_count > 0 : valid_count == length);
+      return (null_handling == null_policy::EXCLUDE)
+               ? (valid_initial_value.value_or(false) || valid_count > 0)
+               : (valid_initial_value.value_or(length > 0) && valid_count == length);
     },
     stream,
     mr);
