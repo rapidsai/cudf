@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/is_flags.h>
-#include <strings/utf8.cuh>
-
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/string_view.cuh>
 
 namespace cudf {
@@ -262,7 +261,7 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
           startchar = static_cast<char_utf8>('\n');
         case CHAR: {
           auto const fidx = dstr.find(startchar, pos);
-          if (fidx < 0) { return match; }
+          if (fidx == string_view::npos) { return match; }
           pos = fidx + (jnk.starttype == BOL);
           break;
         }
@@ -323,15 +322,11 @@ __device__ __forceinline__ int32_t reprog_device::regexec(string_view const dstr
             break;
           case BOW:
           case NBOW: {
-            auto const codept      = utf8_to_codepoint(c);
-            auto const last_c      = pos > 0 ? dstr[pos - 1] : 0;
-            auto const last_codept = utf8_to_codepoint(last_c);
-
-            bool const cur_alphaNumeric =
-              (codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[codept]);
-            bool const last_alphaNumeric =
-              (last_codept < 0x010000) && IS_ALPHANUM(_codepoint_flags[last_codept]);
-            if ((cur_alphaNumeric == last_alphaNumeric) != (inst.type == BOW)) {
+            auto const prev_c       = pos > 0 ? dstr[pos - 1] : 0;
+            auto const word_class   = reclass_device{CCLASS_W};
+            bool const curr_is_word = word_class.is_match(c, _codepoint_flags);
+            bool const prev_is_word = word_class.is_match(prev_c, _codepoint_flags);
+            if ((curr_is_word == prev_is_word) != (inst.type == BOW)) {
               id_activate = inst.u2.next_id;
               expanded    = true;
             }
