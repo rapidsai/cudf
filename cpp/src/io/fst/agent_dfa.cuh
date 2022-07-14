@@ -483,11 +483,8 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
 
   static constexpr int32_t NUM_STATES = DfaT::MAX_NUM_STATES;
 
-  enum {
-    BLOCK_THREADS     = AgentDFAPolicy::BLOCK_THREADS,
-    ITEMS_PER_THREAD  = AgentDFAPolicy::ITEMS_PER_THREAD,
-    SYMBOLS_PER_BLOCK = AgentDfaSimT::SYMBOLS_PER_BLOCK
-  };
+  constexpr uint32_t BLOCK_THREADS     = AgentDFAPolicy::BLOCK_THREADS;
+  constexpr uint32_t SYMBOLS_PER_BLOCK = AgentDfaSimT::SYMBOLS_PER_BLOCK;
 
   // Shared memory required by the DFA simulation algorithm
   __shared__ typename AgentDfaSimT::TempStorage dfa_storage;
