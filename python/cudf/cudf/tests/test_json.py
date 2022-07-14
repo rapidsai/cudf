@@ -509,3 +509,54 @@ def test_json_to_json_compare_contents(gdf, pdf):
     actual_json = gdf.to_json(lines=True, orient="records")
 
     assert expected_json == actual_json
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize("engine", ["cudf", "pandas"])
+def test_default_32bit_integer(default_32bit_int_column, engine):
+    buf = BytesIO()
+    pd.DataFrame({"a": range(10)}).to_json(buf, lines=True, orient="records")
+    buf.seek(0)
+    df = cudf.read_json(buf, engine=engine, lines=True, orient="records")
+
+    assert df["a"].dtype == np.dtype("i4")
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize(
+    "engine",
+    [
+        pytest.param(
+            "cudf",
+            marks=pytest.mark.skip(
+                reason="cannot partially set dtypes for cudf json engine"
+            ),
+        ),
+        "pandas",
+    ],
+)
+def test_default_32bit_integer_partial(default_32bit_int_column, engine):
+    buf = BytesIO()
+    pd.DataFrame({"a": range(10), "b": range(10, 20)}).to_json(
+        buf, lines=True, orient="records"
+    )
+    buf.seek(0)
+    df = cudf.read_json(
+        buf, engine=engine, lines=True, orient="records", dtype={"b": "i8"}
+    )
+
+    assert df["a"].dtype == np.dtype("i4")
+    assert df["b"].dtype == np.dtype("i8")
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize("engine", ["cudf", "pandas"])
+def test_default_32bit_integer_extremes(default_32bit_int_column, engine):
+    buf = StringIO(
+        '{"u8":18446744073709551615, "i8":9223372036854775807}\n'
+        '{"u8": 0, "i8": -9223372036854775808}'
+    )
+    df = cudf.read_json(buf, engine=engine, lines=True, orient="records")
+
+    assert df["u8"].dtype == np.dtype("u4")
+    assert df["i8"].dtype == np.dtype("i4")
