@@ -814,6 +814,35 @@ def test_string_udf_contains(data, substr):
     run_masked_udf_test(func, data, check_dtype=False)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "str_col": [
+                "cudf",
+                "rapids",
+                "AI",
+                "gpu",
+                "2022",
+                "cuDF",
+                "again_gpu",
+            ]
+        }
+    ],
+)
+@pytest.mark.parametrize("other", ["cudf", "123", "", " "])
+@pytest.mark.parametrize("cmpop", comparison_ops)
+def test_string_udf_cmpops(data, other, cmpop):
+    data = cudf.DataFrame(data)
+
+    def func(row):
+        st = row['str_col']
+        return cmpop(st, other)
+
+    run_masked_udf_test(func, data, check_dtype=False)
+
+
+
 @pytest.mark.parametrize('data', [
     {
         'str_col': ["abc", "ABC", "aBc", "123", ""]

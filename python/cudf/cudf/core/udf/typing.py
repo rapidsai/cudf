@@ -394,6 +394,21 @@ class MaskedStringViewContains(AbstractTemplate):
         ) or isinstance(args[1], types.StringLiteral)):
             return nb_signature(MaskedType(types.boolean), MaskedType(string_view), MaskedType(string_view))
 
+class MaskedStringViewCmpOp(AbstractTemplate):
+    """
+    return the boolean result of `cmpop` between to strings
+    since the typing is the same for every comparison operator,
+    we can reuse this class for all of them.
+    """
+
+    def generic(self, args, kws):
+        if (isinstance(args[0], MaskedType) and isinstance(
+            args[0].value_type, StringView
+        ) or isinstance(args[0], types.StringLiteral)) and (isinstance(args[1], MaskedType) and isinstance(
+            args[1].value_type, StringView
+        ) or isinstance(args[1], types.StringLiteral)):
+            return nb_signature(MaskedType(types.boolean), MaskedType(string_view), MaskedType(string_view))
+
 @cuda_decl_registry.register_global(len)
 class StringLiteralLength(AbstractTemplate):
     """
@@ -466,6 +481,10 @@ class MaskedStringViewAttrs(AttributeTemplate):
 
     def resolve_valid(self, mod):
         return types.boolean
+
+for op in comparison_ops:
+    cuda_decl_registry.register_global(op)(MaskedStringViewCmpOp)
+
 
 for binary_op in arith_ops + bitwise_ops + comparison_ops:
     # Every op shares the same typing class
