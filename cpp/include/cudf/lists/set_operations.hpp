@@ -52,7 +52,7 @@ namespace cudf::lists {
  *        to be `UNEQUAL` which means only non-null elements are checked for overlapping
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
- * @return A column of type BOOL containing the check result
+ * @return A column of type BOOL containing the check results
  */
 std::unique_ptr<column> have_overlap(
   lists_column_view const& lhs,
@@ -65,9 +65,9 @@ std::unique_ptr<column> have_overlap(
  * @brief Find the intersection without duplicate between lists at each row of the given lists
  *        columns.
  *
- * Given two input lists columns, an output lists column is created in such a way that each of its
- * row contains the common elements (without duplicates) of each pair of lists at the same row
- * from the input columns.
+ * Given two input lists columns, an output lists column is created in a way such that each row
+ * contains the common elements (without duplicates) of the lists from the input columns at the
+ * corresponding row.
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
@@ -86,7 +86,7 @@ std::unique_ptr<column> have_overlap(
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
- * @return A lists column containing the intersection result
+ * @return A lists column containing the intersection results
  */
 std::unique_ptr<column> set_intersect(
   lists_column_view const& lhs,
@@ -122,7 +122,7 @@ std::unique_ptr<column> set_intersect(
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
- * @return A lists column containing the union result
+ * @return A lists column containing the union results
  */
 std::unique_ptr<column> set_union(
   lists_column_view const& lhs,
@@ -136,9 +136,9 @@ std::unique_ptr<column> set_union(
  *        in the corresponding list of the right column.
  *
  * Given two input lists columns, an output lists column is created by finding the difference of
- * lists of the left column against lists of the right column. Specifically, find the elements
- * (without duplicates) in each list of the left column such that they do not exist in the
- * corresponding list of the right column.
+ * lists in the left column against the corresponding lists in the right column. Specifically, find
+ * the elements (without duplicates) in each list of the left column such that they do not exist in
+ * the corresponding list of the right column.
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
@@ -157,7 +157,7 @@ std::unique_ptr<column> set_union(
  * @param nulls_equal Flag to specify whether null elements should be considered as equal
  * @param nans_equal Flag to specify whether floating-point NaNs should be considered as equal
  * @param mr Device memory resource used to allocate the returned object
- * @return A lists column containing the difference result
+ * @return A lists column containing the difference results
  */
 std::unique_ptr<column> set_difference(
   lists_column_view const& lhs,
