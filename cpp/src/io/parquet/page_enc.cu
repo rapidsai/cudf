@@ -1309,11 +1309,12 @@ class header_encoder {
   inline __device__ void set_ptr(uint8_t* ptr) { current_header_ptr = ptr; }
 };
 
-// byteswap 128 bit integer into char array in network byte order
-static __device__ void swap128(__int128_t v, void* dst)
+// byteswap 128 bit integer, placing result in dst in network byte order.
+// dst must point to at least 16 bytes of memory.
+static __device__ void byte_reverse128(__int128_t v, void* dst)
 {
   auto const v_char_ptr = reinterpret_cast<unsigned char const*>(&v);
-  auto d_char_ptr       = reinterpret_cast<unsigned char*>(dst);
+  auto const d_char_ptr = static_cast<unsigned char*>(dst);
   thrust::copy(thrust::seq,
                thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
                thrust::make_reverse_iterator(v_char_ptr),
@@ -1353,17 +1354,17 @@ __device__ void get_min_max(const statistics_chunk* s,
     } else {
       *lmin = *lmax = dtype_len;
       if (dtype == dtype_float32) {  // Convert from double to float32
-        float* fp_scratch = reinterpret_cast<float*>(scratch);
-        fp_scratch[0]     = s->min_value.fp_val;
-        fp_scratch[1]     = s->max_value.fp_val;
-        *vmin             = &fp_scratch[0];
-        *vmax             = &fp_scratch[1];
+        auto const fp_scratch = static_cast<float*>(scratch);
+        fp_scratch[0]         = s->min_value.fp_val;
+        fp_scratch[1]         = s->max_value.fp_val;
+        vmin                  = &fp_scratch[0];
+        vmax                  = &fp_scratch[1];
       } else if (dtype == dtype_decimal128) {
-        uint8_t* d128_scratch = reinterpret_cast<uint8_t*>(scratch);
-        swap128(s->min_value.d128_val, &d128_scratch[0]);
-        swap128(s->max_value.d128_val, &d128_scratch[16]);
-        *vmin = &d128_scratch[0];
-        *vmax = &d128_scratch[16];
+        auto const d128_scratch = static_cast<uint8_t*>(scratch);
+        byte_reverse128(s->min_value.d128_val, d128_scratch);
+        byte_reverse128(s->max_value.d128_val, &d128_scratch[16]);
+        vmin = &d128_scratch[0];
+        vmax = &d128_scratch[16];
       } else {
         *vmin = &s->min_value;
         *vmax = &s->max_value;
