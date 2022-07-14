@@ -59,14 +59,14 @@ enum DFA_STATES : StateT {
 /**
  * @brief Definition of the symbol groups
  */
-enum DFA_SGID {
-  OBC = 0U,          ///< Opening brace SG: {
-  OBT,               ///< Opening bracket SG: [
-  CBC,               ///< Closing brace SG: }
-  CBT,               ///< Closing bracket SG: ]
-  QTE,               ///< Quote character SG: "
-  ESC,               ///< Escape character SG: '\'
-  OTR,               ///< SG implicitly matching all other characters
+enum class DFASymbolGroupID : uint32_t {
+  OpenBrace,         ///< Opening brace SG: {
+  OpenBracket,       ///< Opening bracket SG: [
+  CloseBrace,        ///< Closing brace SG: }
+  CloseBracket,      ///< Closing bracket SG: ]
+  Quote,             ///< Quote character SG: "
+  Escape,            ///< Escape character SG: '\'
+  Other,             ///< SG implicitly matching all other characters
   NUM_SYMBOL_GROUPS  ///< Total number of symbol groups
 };
 
@@ -257,44 +257,251 @@ std::vector<std::vector<StateT>> get_transition_table()
 std::vector<std::vector<std::vector<char>>> get_translation_table()
 {
   std::vector<std::vector<std::vector<char>>> pda_tlt(PD_NUM_STATES);
-  pda_tlt[PD_BOV] = {{TK_BOS}, {TK_BOL}, {TK_ERR}, {TK_ERR}, {TK_BST}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {},       {TK_BOV}, {TK_BOS}, {TK_BOL}, {TK_ERR}, {TK_ERR}, {TK_BST}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {},       {TK_BOV}, {TK_BOS}, {TK_BOL}, {TK_ERR}, {TK_ERR},
-                     {TK_BST}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {},       {TK_BOV}};
-  pda_tlt[PD_BOA] = {{TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_BOS}, {TK_BOL}, {TK_ERR}, {TK_EOL}, {TK_BST}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {},       {TK_BOV}, {TK_ERR}, {TK_ERR}, {TK_EOS}, {TK_ERR},
-                     {TK_BFN}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {},       {TK_ERR}};
-  pda_tlt[PD_LON] = {{TK_ERR}, {TK_ERR}, {TK_ERR},         {TK_ERR},         {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR},         {TK_POV},         {},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR},         {TK_POV, TK_EOL}, {TK_ERR},
-                     {TK_ERR}, {TK_POV}, {TK_ERR},         {TK_POV},         {},
-                     {TK_ERR}, {TK_ERR}, {TK_POV, TK_EOS}, {TK_ERR},         {TK_ERR},
-                     {TK_ERR}, {TK_POV}, {TK_ERR},         {TK_POV},         {}};
-  pda_tlt[PD_STR] = {{}, {}, {}, {}, {TK_EST}, {}, {}, {}, {}, {},       {}, {}, {}, {}, {TK_EST},
-                     {}, {}, {}, {}, {},       {}, {}, {}, {}, {TK_EST}, {}, {}, {}, {}, {}};
+  pda_tlt[PD_BOV] = {{token_t::StructBegin},
+                     {token_t::ListBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::StringBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ValueBegin},
+                     {token_t::StructBegin},
+                     {token_t::ListBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::StringBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ValueBegin},
+                     {token_t::StructBegin},
+                     {token_t::ListBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::StringBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ValueBegin}};
+  pda_tlt[PD_BOA] = {{token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::StructBegin},
+                     {token_t::ListBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ListEnd},
+                     {token_t::StringBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ValueBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::StructEnd},
+                     {token_t::ErrorBegin},
+                     {token_t::FieldNameBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ErrorBegin}};
+  pda_tlt[PD_LON] = {{token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ValueEnd},
+                     {},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ValueEnd, token_t::ListEnd},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ValueEnd},
+                     {token_t::ErrorBegin},
+                     {token_t::ValueEnd},
+                     {},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ValueEnd, token_t::StructEnd},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ValueEnd},
+                     {token_t::ErrorBegin},
+                     {token_t::ValueEnd},
+                     {}};
+  pda_tlt[PD_STR] = {{}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {},
+                     {}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {},
+                     {}, {}, {}, {}, {token_t::StringEnd}, {}, {}, {}, {}, {}};
   pda_tlt[PD_SCE] = {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
                      {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
-  pda_tlt[PD_PVL] = {{TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {},       {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_EOL}, {TK_ERR}, {TK_ERR},
-                     {},       {TK_ERR}, {},       {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_EOS}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {},       {TK_ERR}, {},       {TK_ERR}};
-  pda_tlt[PD_BFN] = {{TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_BFN}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {},       {TK_ERR}};
-  pda_tlt[PD_FLN] = {{TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {},       {},       {},       {},
-                     {TK_EFN}, {},       {},       {},       {},       {}};
-  pda_tlt[PD_FNE] = {{TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {},       {},       {},       {},
-                     {},       {},       {},       {},       {},       {}};
-  pda_tlt[PD_PFN] = {{TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR}, {TK_ERR},
-                     {TK_ERR}, {TK_ERR}, {TK_ERR}, {},       {},       {TK_ERR}};
+  pda_tlt[PD_PVL] = {{token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ListEnd},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::StructEnd},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ErrorBegin}};
+  pda_tlt[PD_BFN] = {{token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::FieldNameBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {token_t::ErrorBegin}};
+  pda_tlt[PD_FLN] = {{token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {},
+                     {},
+                     {},
+                     {token_t::FieldNameEnd},
+                     {},
+                     {},
+                     {},
+                     {},
+                     {}};
+  pda_tlt[PD_FNE] = {{token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {},
+                     {},
+                     {},
+                     {},
+                     {},
+                     {},
+                     {},
+                     {},
+                     {}};
+  pda_tlt[PD_PFN] = {{token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {token_t::ErrorBegin},
+                     {},
+                     {},
+                     {token_t::ErrorBegin}};
   pda_tlt[PD_ERR] = {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
                      {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
   return pda_tlt;
@@ -320,7 +527,7 @@ struct JSONToStackOp {
 namespace detail {
 
 void get_stack_context(device_span<SymbolT const> d_json_in,
-                       device_span<SymbolT> d_top_of_stack,
+                       SymbolT* d_top_of_stack,
                        rmm::cuda_stream_view stream)
 {
   constexpr std::size_t single_item = 1;
@@ -338,9 +545,11 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
   rmm::device_uvector<SymbolOffsetT> d_stack_op_indices{d_json_in.size(), stream};
 
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
-  using ToStackOpFstT = cudf::io::fst::detail::Dfa<StackSymbolT,
-                                                   to_stack_op::DFA_SGID::NUM_SYMBOL_GROUPS,
-                                                   to_stack_op::DFA_STATES::TT_NUM_STATES>;
+  using ToStackOpFstT =
+    cudf::io::fst::detail::Dfa<StackSymbolT,
+                               static_cast<int32_t>(
+                                 to_stack_op::DFASymbolGroupID::NUM_SYMBOL_GROUPS),
+                               to_stack_op::DFA_STATES::TT_NUM_STATES>;
   ToStackOpFstT json_to_stack_ops_fst{to_stack_op::symbol_groups,
                                       to_stack_op::transition_table,
                                       to_stack_op::translation_table,
@@ -361,7 +570,7 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
     d_stack_ops.data(),
     device_span<SymbolOffsetT>{d_stack_op_indices.data(), d_stack_op_indices.size()},
     JSONToStackOp{},
-    d_top_of_stack.data(),
+    d_top_of_stack,
     root_symbol,
     read_symbol,
     d_json_in.size(),
@@ -369,8 +578,8 @@ void get_stack_context(device_span<SymbolT const> d_json_in,
 }
 
 void get_token_stream(device_span<SymbolT const> d_json_in,
-                      device_span<PdaTokenT> d_tokens,
-                      device_span<SymbolOffsetT> d_tokens_indices,
+                      PdaTokenT* d_tokens,
+                      SymbolOffsetT* d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
                       rmm::cuda_stream_view stream)
 {
@@ -378,7 +587,7 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
   rmm::device_uvector<StackSymbolT> d_top_of_stack{d_json_in.size(), stream};
 
   // Identify what is the stack context for each input character (is it: JSON-root, struct, or list)
-  get_stack_context(d_json_in, d_top_of_stack, stream);
+  get_stack_context(d_json_in, d_top_of_stack.data(), stream);
 
   // Prepare for PDA transducer pass, merging input symbols with stack symbols
   rmm::device_uvector<PdaSymbolGroupIdT> d_pda_sgids{d_json_in.size(), stream};
@@ -402,8 +611,8 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
   // Perform a PDA-transducer pass
   json_to_tokens_fst.Transduce(d_pda_sgids.begin(),
                                static_cast<SymbolOffsetT>(d_json_in.size()),
-                               d_tokens.data(),
-                               d_tokens_indices.data(),
+                               d_tokens,
+                               d_tokens_indices,
                                d_num_written_tokens,
                                tokenizer_pda::start_state,
                                stream);

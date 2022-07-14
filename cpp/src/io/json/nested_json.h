@@ -51,27 +51,27 @@ using PdaTokenT = char;
  */
 enum token_t : PdaTokenT {
   /// Beginning-of-struct token (on encounter of semantic '{')
-  TK_BOS,
+  StructBegin,
   /// Beginning-of-list token (on encounter of semantic '[')
-  TK_BOL,
+  ListBegin,
   /// Beginning-of-error token (on first encounter of a parsing error)
-  TK_ERR,
+  ErrorBegin,
   /// Beginning-of-string-value token (on encounter of the string's first quote)
-  TK_BST,
+  StringBegin,
   /// Beginning-of-value token (first character of literal or numeric)
-  TK_BOV,
+  ValueBegin,
   /// End-of-list token (on encounter of semantic ']')
-  TK_EOL,
+  ListEnd,
   /// End-of-struct token (on encounter of semantic '}')
-  TK_EOS,
+  StructEnd,
   /// Beginning-of-field-name token (on encounter of first quote)
-  TK_BFN,
+  FieldNameBegin,
   /// Post-value token (first character after a literal or numeric string)
-  TK_POV,
+  ValueEnd,
   /// End-of-string token (on encounter of a string's second quote)
-  TK_EST,
+  StringEnd,
   /// End-of-field-name token (on encounter of a field name's second quote)
-  TK_EFN,
+  FieldNameEnd,
   /// Total number of tokens
   NUM_TOKENS
 };
@@ -83,28 +83,28 @@ namespace detail {
  * At this stage, we do not perform bracket matching, i.e., we do not verify whether a closing
  * bracket would actually pop a the corresponding opening brace.
  *
- * @param d_json_in The string of input characters
- * @param d_top_of_stack
- * @param stream The cuda stream to dispatch GPU kernels to
+ * @param[in] d_json_in The string of input characters
+ * @param[out] d_top_of_stack
+ * @param[in] stream The cuda stream to dispatch GPU kernels to
  */
 void get_stack_context(device_span<SymbolT const> d_json_in,
-                       device_span<SymbolT> d_top_of_stack,
+                       SymbolT* d_top_of_stack,
                        rmm::cuda_stream_view stream);
 
 /**
  * @brief Parses the given JSON string and emits a sequence of tokens that demarcate relevant
  * sections from the input.
  *
- * @param d_json_in The JSON input
- * @param d_tokens_out Device memory to which the parsed tokens are written
- * @param d_tokens_indices Device memory to which the indices are written, where each index
+ * @param[in] d_json_in The JSON input
+ * @param[out] d_tokens_out Device memory to which the parsed tokens are written
+ * @param[out] d_tokens_indices Device memory to which the indices are written, where each index
  * represents the offset within \p d_json_in that cause the input being written
- * @param d_num_written_tokens The total number of tokens that were parsed
- * @param stream The CUDA stream to which kernels are dispatched
+ * @param[out] d_num_written_tokens The total number of tokens that were parsed
+ * @param[in] stream The CUDA stream to which kernels are dispatched
  */
 void get_token_stream(device_span<SymbolT const> d_json_in,
-                      device_span<PdaTokenT> d_tokens,
-                      device_span<SymbolOffsetT> d_tokens_indices,
+                      PdaTokenT* d_tokens,
+                      SymbolOffsetT* d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
                       rmm::cuda_stream_view stream);
 }  // namespace detail

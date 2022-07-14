@@ -61,10 +61,7 @@ TEST_F(JsonTest, StackContext)
     d_input.data(), input.data(), input.size() * sizeof(SymbolT), cudaMemcpyHostToDevice, stream));
 
   // Run algorithm
-  cudf::io::json::gpu::detail::get_stack_context(
-    d_input,
-    cudf::device_span<StackSymbolT>{stack_context.device_ptr(), stack_context.size()},
-    stream);
+  cudf::io::json::gpu::detail::get_stack_context(d_input, stack_context.device_ptr(), stream);
 
   // Copy back the results
   stack_context.device_to_host(stream);
@@ -135,12 +132,11 @@ TEST_F(JsonTest, TokenStream)
   hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream};
 
   // Parse the JSON and get the token stream
-  cudf::io::json::gpu::detail::get_token_stream(
-    d_input,
-    cudf::device_span<PdaTokenT>{tokens_gpu.device_ptr(), tokens_gpu.size()},
-    cudf::device_span<SymbolOffsetT>{token_indices_gpu.device_ptr(), token_indices_gpu.size()},
-    num_tokens_out.device_ptr(),
-    stream);
+  cudf::io::json::gpu::detail::get_token_stream(d_input,
+                                                tokens_gpu.device_ptr(),
+                                                token_indices_gpu.device_ptr(),
+                                                num_tokens_out.device_ptr(),
+                                                stream);
 
   // Copy back the number of tokens that were written
   num_tokens_out.device_to_host(stream);
@@ -151,30 +147,31 @@ TEST_F(JsonTest, TokenStream)
   stream_view.synchronize();
 
   // Golden token stream sample
+  using token_t = nested_json::token_t;
   std::vector<std::pair<std::size_t, nested_json::PdaTokenT>> golden_token_stream = {
-    {2, nested_json::TK_BOL},   {3, nested_json::TK_BOS},   {4, nested_json::TK_BFN},
-    {13, nested_json::TK_EFN},  {16, nested_json::TK_BST},  {26, nested_json::TK_EST},
-    {28, nested_json::TK_BFN},  {35, nested_json::TK_EFN},  {38, nested_json::TK_BOL},
-    {39, nested_json::TK_BOV},  {40, nested_json::TK_POV},  {41, nested_json::TK_BOV},
-    {43, nested_json::TK_POV},  {44, nested_json::TK_BOV},  {46, nested_json::TK_POV},
-    {46, nested_json::TK_EOL},  {48, nested_json::TK_BFN},  {55, nested_json::TK_EFN},
-    {58, nested_json::TK_BST},  {69, nested_json::TK_EST},  {71, nested_json::TK_BFN},
-    {77, nested_json::TK_EFN},  {80, nested_json::TK_BST},  {105, nested_json::TK_EST},
-    {107, nested_json::TK_BFN}, {113, nested_json::TK_EFN}, {116, nested_json::TK_BOV},
-    {120, nested_json::TK_POV}, {120, nested_json::TK_EOS}, {124, nested_json::TK_BOS},
-    {125, nested_json::TK_BFN}, {134, nested_json::TK_EFN}, {137, nested_json::TK_BST},
-    {147, nested_json::TK_EST}, {149, nested_json::TK_BFN}, {155, nested_json::TK_EFN},
-    {158, nested_json::TK_BOL}, {159, nested_json::TK_BOV}, {160, nested_json::TK_POV},
-    {161, nested_json::TK_BOS}, {162, nested_json::TK_EOS}, {164, nested_json::TK_BOV},
-    {168, nested_json::TK_POV}, {169, nested_json::TK_BOS}, {170, nested_json::TK_BFN},
-    {172, nested_json::TK_EFN}, {174, nested_json::TK_BOL}, {175, nested_json::TK_BOS},
-    {177, nested_json::TK_EOS}, {180, nested_json::TK_BOS}, {181, nested_json::TK_EOS},
-    {182, nested_json::TK_EOL}, {184, nested_json::TK_EOS}, {186, nested_json::TK_EOL},
-    {188, nested_json::TK_BFN}, {195, nested_json::TK_EFN}, {198, nested_json::TK_BST},
-    {209, nested_json::TK_EST}, {211, nested_json::TK_BFN}, {217, nested_json::TK_EFN},
-    {220, nested_json::TK_BST}, {252, nested_json::TK_EST}, {254, nested_json::TK_BFN},
-    {260, nested_json::TK_EFN}, {263, nested_json::TK_BOV}, {267, nested_json::TK_POV},
-    {267, nested_json::TK_EOS}, {268, nested_json::TK_EOL}};
+    {2, token_t::ListBegin},        {3, token_t::StructBegin},      {4, token_t::FieldNameBegin},
+    {13, token_t::FieldNameEnd},    {16, token_t::StringBegin},     {26, token_t::StringEnd},
+    {28, token_t::FieldNameBegin},  {35, token_t::FieldNameEnd},    {38, token_t::ListBegin},
+    {39, token_t::ValueBegin},      {40, token_t::ValueEnd},        {41, token_t::ValueBegin},
+    {43, token_t::ValueEnd},        {44, token_t::ValueBegin},      {46, token_t::ValueEnd},
+    {46, token_t::ListEnd},         {48, token_t::FieldNameBegin},  {55, token_t::FieldNameEnd},
+    {58, token_t::StringBegin},     {69, token_t::StringEnd},       {71, token_t::FieldNameBegin},
+    {77, token_t::FieldNameEnd},    {80, token_t::StringBegin},     {105, token_t::StringEnd},
+    {107, token_t::FieldNameBegin}, {113, token_t::FieldNameEnd},   {116, token_t::ValueBegin},
+    {120, token_t::ValueEnd},       {120, token_t::StructEnd},      {124, token_t::StructBegin},
+    {125, token_t::FieldNameBegin}, {134, token_t::FieldNameEnd},   {137, token_t::StringBegin},
+    {147, token_t::StringEnd},      {149, token_t::FieldNameBegin}, {155, token_t::FieldNameEnd},
+    {158, token_t::ListBegin},      {159, token_t::ValueBegin},     {160, token_t::ValueEnd},
+    {161, token_t::StructBegin},    {162, token_t::StructEnd},      {164, token_t::ValueBegin},
+    {168, token_t::ValueEnd},       {169, token_t::StructBegin},    {170, token_t::FieldNameBegin},
+    {172, token_t::FieldNameEnd},   {174, token_t::ListBegin},      {175, token_t::StructBegin},
+    {177, token_t::StructEnd},      {180, token_t::StructBegin},    {181, token_t::StructEnd},
+    {182, token_t::ListEnd},        {184, token_t::StructEnd},      {186, token_t::ListEnd},
+    {188, token_t::FieldNameBegin}, {195, token_t::FieldNameEnd},   {198, token_t::StringBegin},
+    {209, token_t::StringEnd},      {211, token_t::FieldNameBegin}, {217, token_t::FieldNameEnd},
+    {220, token_t::StringBegin},    {252, token_t::StringEnd},      {254, token_t::FieldNameBegin},
+    {260, token_t::FieldNameEnd},   {263, token_t::ValueBegin},     {267, token_t::ValueEnd},
+    {267, token_t::StructEnd},      {268, token_t::ListEnd}};
 
   // Verify the number of tokens matches
   ASSERT_EQ(golden_token_stream.size(), num_tokens_out[0]);
