@@ -82,12 +82,10 @@ from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
 
-from .config import (
-    register_config,
-    get_config,
-    set_config,
-    describe_config,
-    describe_configs,
+from .options import (
+    get_option,
+    set_option,
+    describe_option,
 )
 
 try:
