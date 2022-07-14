@@ -117,7 +117,10 @@ class StructColumn(ColumnBase):
         from cudf.core.column import IntervalColumn
         from cudf.core.dtypes import IntervalDtype
 
-        if isinstance(dtype, StructDtype):
+        # Check IntervalDtype first because it's a subclass of StructDtype
+        if isinstance(dtype, IntervalDtype):
+            return IntervalColumn.from_struct_column(self, closed=dtype.closed)
+        elif isinstance(dtype, StructDtype):
             return build_struct_column(
                 names=dtype.fields.keys(),
                 children=tuple(
@@ -129,8 +132,6 @@ class StructColumn(ColumnBase):
                 offset=self.offset,
                 null_count=self.null_count,
             )
-        elif isinstance(dtype, IntervalDtype):
-            return IntervalColumn.from_struct_column(self, closed=dtype.closed)
 
         return self
 
