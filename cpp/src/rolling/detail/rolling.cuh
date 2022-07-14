@@ -16,12 +16,11 @@
 
 #pragma once
 
-#include "lead_lag_nested_detail.cuh"
+#include "lead_lag_nested.cuh"
 #include "nth_element.cuh"
-#include "rolling/rolling_collect_list.cuh"
-#include "rolling/rolling_detail.hpp"
-#include "rolling/rolling_jit_detail.hpp"
-#include "rolling_detail.hpp"
+#include "rolling.hpp"
+#include "rolling_collect_list.cuh"
+#include "rolling_jit.hpp"
 
 #include <reductions/struct_minmax_util.cuh>
 

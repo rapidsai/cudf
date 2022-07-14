@@ -23,6 +23,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <optional>
+
 namespace cudf {
 namespace reduction {
 /**
