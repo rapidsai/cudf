@@ -255,10 +255,10 @@ TEST_F(FstTest, GroundTruth)
   // Verify results
   ASSERT_EQ(output_gpu_size[0], output_cpu.size());
   for (std::size_t i = 0; i < output_cpu.size(); i++) {
-    ASSERT_EQ(output_gpu[i], output_cpu[i]) << "Mismatch at index #" << i;
+    EXPECT_EQ(output_gpu[i], output_cpu[i]) << "Mismatch at index #" << i;
   }
   for (std::size_t i = 0; i < output_cpu.size(); i++) {
-    ASSERT_EQ(out_indexes_gpu[i], out_index_cpu[i]) << "Mismatch at index #" << i;
+    EXPECT_EQ(out_indexes_gpu[i], out_index_cpu[i]) << "Mismatch at index #" << i;
   }
 }
 
