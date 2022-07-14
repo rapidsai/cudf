@@ -1357,14 +1357,14 @@ __device__ void get_min_max(const statistics_chunk* s,
         auto const fp_scratch = static_cast<float*>(scratch);
         fp_scratch[0]         = s->min_value.fp_val;
         fp_scratch[1]         = s->max_value.fp_val;
-        vmin                  = &fp_scratch[0];
-        vmax                  = &fp_scratch[1];
+        *vmin                 = &fp_scratch[0];
+        *vmax                 = &fp_scratch[1];
       } else if (dtype == dtype_decimal128) {
         auto const d128_scratch = static_cast<uint8_t*>(scratch);
         byte_reverse128(s->min_value.d128_val, d128_scratch);
         byte_reverse128(s->max_value.d128_val, &d128_scratch[16]);
-        vmin = &d128_scratch[0];
-        vmax = &d128_scratch[16];
+        *vmin = &d128_scratch[0];
+        *vmax = &d128_scratch[16];
       } else {
         *vmin = &s->min_value;
         *vmax = &s->max_value;
