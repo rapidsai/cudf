@@ -802,12 +802,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
             indices = indices[::-1]
         return indices
 
+    @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace=False):
         return self._as_int64().where(cond, other, inplace)
 
+    @_cudf_nvtx_annotate
     def to_numpy(self):
         return self.values_host
 
+    @_cudf_nvtx_annotate
     def to_arrow(self):
         return self._as_int64().to_arrow()
 
@@ -819,12 +822,15 @@ class RangeIndex(BaseIndex, BinaryOperand):
             "using .to_numpy()."
         )
 
+    @_cudf_nvtx_annotate
     def nunique(self):
         return len(self)
 
+    @_cudf_nvtx_annotate
     def isna(self):
         return cupy.zeros(len(self), dtype=bool)
 
+    @_cudf_nvtx_annotate
     def _minmax(self, meth: str):
         no_steps = len(self) - 1
         if no_steps == -1:
