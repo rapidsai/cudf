@@ -558,6 +558,24 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "Can only use .dt accessor with datetimelike values"
             )
 
+    @property  # type:ignore
+    @_cudf_nvtx_annotate
+    def axes(self):
+        """
+        Return a list representing the axes of the Series.
+
+        Series.axes returns a list containing the row index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> csf1 = cudf.Series([1, 2, 3, 4])
+        >>> csf1.axes
+        [RangeIndex(start=0, stop=4, step=1)]
+
+        """
+        return [self.index]
+
     @_cudf_nvtx_annotate
     def serialize(self):
         header, frames = super().serialize()
@@ -3394,6 +3412,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         change = diff / data.shift(periods=periods, freq=freq)
         return change
 
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        result_col = super().where(cond, other, inplace)
+        return self._mimic_inplace(
+            self._from_data_like_self({self.name: result_col}),
+            inplace=inplace,
+        )
+
 
 def make_binop_func(op):
     # This function is used to wrap binary operations in Frame with an
@@ -4712,22 +4738,16 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
     if all_index_equal:
         return series_list
 
-    if how == "outer":
-        combined_index = cudf.core.reshape.concat(
-            [sr.index for sr in series_list]
-        ).unique()
-        combined_index.names = new_index_names
-    else:
-        combined_index = series_list[0].index
-        for sr in series_list[1:]:
-            combined_index = (
-                cudf.DataFrame(index=sr.index).join(
-                    cudf.DataFrame(index=combined_index),
-                    sort=True,
-                    how="inner",
-                )
-            ).index
-        combined_index.names = new_index_names
+    combined_index = series_list[0].index
+    for sr in series_list[1:]:
+        combined_index = (
+            cudf.DataFrame(index=sr.index).join(
+                cudf.DataFrame(index=combined_index),
+                sort=True,
+                how=how,
+            )
+        ).index
+    combined_index.names = new_index_names
 
     # align all Series to the combined index
     result = [

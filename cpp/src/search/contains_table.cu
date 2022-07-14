@@ -15,7 +15,6 @@
  */
 
 #include <join/join_common_utils.cuh>
-#include <join/join_common_utils.hpp>
 
 #include <cudf/detail/join.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -36,72 +35,6 @@ namespace {
 
 using cudf::experimental::row::lhs_index_type;
 using cudf::experimental::row::rhs_index_type;
-
-/**
- * @brief Device functor to create a pair of hash value and index for a given row.
- * @tparam T Type of the index, must be `size_type` or a strong index type.
- * @tparam Hasher The functor type to compute row hash.
- */
-template <typename T, typename Hasher>
-struct make_pair_fn {
-  Hasher const hasher;
-  hash_value_type const empty_key_sentinel;
-
-  __device__ inline auto operator()(size_type const i) const
-  {
-    auto const hash_value = remap_sentinel_hash(hasher(i), empty_key_sentinel);
-    return cuco::make_pair(hash_value, T{i});
-  }
-};
-
-/**
- * @brief The functor to compare two rows using row hash and row indices for comparison.
- *
- * @tparam Comparator The row comparator type to perform row equality comparison.
- */
-template <typename Comparator>
-struct pair_comparator_fn {
-  Comparator const d_eqcomp;
-
-  pair_comparator_fn(Comparator const d_eqcomp) : d_eqcomp{d_eqcomp} {}
-
-  template <typename LHSPair, typename RHSPair>
-  __device__ inline bool operator()(LHSPair const& lhs_hash_and_index,
-                                    RHSPair const& rhs_hash_and_index) const
-  {
-    auto const& [lhs_hash, lhs_index] = lhs_hash_and_index;
-    auto const& [rhs_hash, rhs_index] = rhs_hash_and_index;
-    return lhs_hash == rhs_hash ? d_eqcomp(lhs_index, rhs_index) : false;
-  }
-};
-
-/**
- * @brief The functor to accumulate all nullable columns at all nested levels from a given column.
- *
- * This is to avoid expensive materializing the bitmask into a real column when calling to
- * `structs::detail::flatten_nested_columns`.
- */
-struct accumulate_nullable_columns {
-  std::vector<column_view> result;
-
-  accumulate_nullable_columns(table_view const& table)
-  {
-    for (auto const& col : table) {
-      accumulate(col);
-    }
-  }
-
-  auto release() { return std::move(result); }
-
- private:
-  void accumulate(column_view const& col)
-  {
-    if (col.nullable()) { result.push_back(col); }
-    for (auto it = col.child_begin(); it != col.child_end(); ++it) {
-      if (it->size() == col.size()) { accumulate(*it); }
-    }
-  }
-};
 
 }  // namespace
 
@@ -135,25 +68,36 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     auto const hasher   = cudf::experimental::row::hash::row_hasher(haystack, stream);
     auto const d_hasher = hasher.device_hasher(nullate::DYNAMIC{haystack_has_nulls});
 
+    using make_pair_fn = make_pair_function<decltype(d_hasher), lhs_index_type>;
+
     auto const haystack_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0},
-      make_pair_fn<lhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
+      size_type{0}, make_pair_fn{d_hasher, map.get_empty_key_sentinel()});
 
     // If the haystack table has nulls but they are compared unequal, don't insert them.
     // Otherwise, it was known to cause performance issue:
     // - https://github.com/rapidsai/cudf/pull/6943
     // - https://github.com/rapidsai/cudf/pull/8277
     if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
-      // Gather all nullable columns at all levels from the right table.
-      auto const haystack_nullable_columns = accumulate_nullable_columns{haystack}.release();
-      auto const row_bitmask =
-        std::move(cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream).first);
+      // Collect all nullable columns at all levels from the haystack table.
+      auto const haystack_nullable_columns = get_nullable_columns(haystack);
+      CUDF_EXPECTS(haystack_nullable_columns.size() > 0,
+                   "Haystack table has nulls thus it should have nullable columns.");
 
-      // Insert only rows that do not have any nulls at any level.
+      // If there are more than one nullable column, we compute bitmask_and of their null masks.
+      // Otherwise, we have only one nullable column and can use its null mask directly.
+      auto const row_bitmask =
+        haystack_nullable_columns.size() > 1
+          ? cudf::detail::bitmask_and(table_view{haystack_nullable_columns}, stream).first
+          : rmm::device_buffer{0, stream};
+      auto const row_bitmask_ptr = haystack_nullable_columns.size() > 1
+                                     ? static_cast<bitmask_type const*>(row_bitmask.data())
+                                     : haystack_nullable_columns.front().null_mask();
+
+      // Insert only rows that do not have any null at any level.
       map.insert_if(haystack_it,
                     haystack_it + haystack.num_rows(),
                     thrust::counting_iterator<size_type>(0),  // stencil
-                    row_is_valid{static_cast<bitmask_type const*>(row_bitmask.data())},
+                    row_is_valid{row_bitmask_ptr},
                     stream.value());
     } else {
       map.insert(haystack_it, haystack_it + haystack.num_rows(), stream.value());
@@ -171,9 +115,10 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     auto const comparator =
       cudf::experimental::row::equality::two_table_comparator(haystack, needles, stream);
 
+    using make_pair_fn = make_pair_function<decltype(d_hasher), rhs_index_type>;
+
     auto const needles_it = cudf::detail::make_counting_transform_iterator(
-      size_type{0},
-      make_pair_fn<rhs_index_type, decltype(d_hasher)>{d_hasher, map.get_empty_key_sentinel()});
+      size_type{0}, make_pair_fn{d_hasher, map.get_empty_key_sentinel()});
 
     auto const check_contains = [&](auto const value_comp) {
       auto const d_eqcomp = comparator.equal_to(
@@ -181,17 +126,17 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       map.pair_contains(needles_it,
                         needles_it + needles.num_rows(),
                         contained.begin(),
-                        pair_comparator_fn{d_eqcomp},
+                        pair_equality{d_eqcomp},
                         stream.value());
     };
 
-    using nan_equal_comparator =
-      cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
-    using nan_unequal_comparator = cudf::experimental::row::equality::physical_equality_comparator;
-
     if (compare_nans == nan_equality::ALL_EQUAL) {
+      using nan_equal_comparator =
+        cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
       check_contains(nan_equal_comparator{});
     } else {
+      using nan_unequal_comparator =
+        cudf::experimental::row::equality::physical_equality_comparator;
       check_contains(nan_unequal_comparator{});
     }
   }

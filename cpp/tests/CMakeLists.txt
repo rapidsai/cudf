@@ -224,6 +224,7 @@ ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
+ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 if(CUDF_ENABLE_ARROW_S3)
   target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
 endif()
@@ -340,6 +341,7 @@ ConfigureTest(
   rolling/empty_input_test.cpp
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
+  rolling/nth_element_test.cpp
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
   rolling/rolling_test.cpp

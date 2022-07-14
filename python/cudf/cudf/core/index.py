@@ -183,9 +183,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # whereas _stop is an upper bound.
         self._end = self._start + self._step * (len(self._range) - 1)
 
-    def _copy_type_metadata(
-        self, other: Frame, include_index: bool = True
-    ) -> RangeIndex:
+    def _copy_type_metadata(self: RangeIndex, other: RangeIndex) -> RangeIndex:
         # There is no metadata to be copied for RangeIndex since it does not
         # have an underlying column.
         return self
@@ -776,6 +774,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def _binaryop(self, other, op: str):
         return self._as_int64()._binaryop(other, op=op)
 
+    def join(
+        self, other, how="left", level=None, return_indexers=False, sort=False
+    ):
+        # TODO: pandas supports directly merging RangeIndex objects and can
+        # intelligently create RangeIndex outputs depending on the type of
+        # join. We need to implement that for the supported special cases.
+        return self._as_int64().join(other, how, level, return_indexers, sort)
+
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
 # and prevent the above overload from working.
@@ -894,22 +900,12 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             return ret.values
         return ret
 
+    # Override just to make mypy happy.
     @_cudf_nvtx_annotate
     def _copy_type_metadata(
-        self, other: Frame, include_index: bool = True
+        self: GenericIndex, other: GenericIndex
     ) -> GenericIndex:
-        """
-        Copy type metadata from each column of `other` to the corresponding
-        column of `self`.
-        See `ColumnBase._with_type_metadata` for more information.
-        """
-        for name, col, other_col in zip(
-            self._data.keys(), self._data.values(), other._data.values()
-        ):
-            self._data.set_by_label(
-                name, col._with_type_metadata(other_col.dtype), validate=False
-            )
-        return self
+        return super()._copy_type_metadata(other)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -1305,6 +1301,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def repeat(self, repeats, axis=None):
         return self._from_columns_like_self(
             Frame._repeat([*self._columns], repeats, axis), self._column_names
+        )
+
+    @_cudf_nvtx_annotate
+    def where(self, cond, other=None, inplace=False):
+        result_col = super().where(cond, other, inplace)
+        return self._mimic_inplace(
+            _index_from_data({self.name: result_col}),
+            inplace=inplace,
         )
 
 

@@ -386,7 +386,6 @@ add_library(
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
   src/lists/sequences.cu
-  src/lists/set_operations.cu
   src/lists/stream_compaction/apply_boolean_mask.cu
   src/lists/stream_compaction/distinct.cu
   src/lists/utilities.cu
@@ -434,6 +433,8 @@ add_library(
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
   src/rolling/rolling_collect_list.cu
+  src/rolling/rolling_detail_fixed_window.cu
+  src/rolling/rolling_detail_variable_window.cu
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp

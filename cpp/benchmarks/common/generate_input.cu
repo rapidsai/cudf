@@ -397,19 +397,21 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     random_value_fn<bool>(distribution_params<bool>{1. - profile.get_null_frequency().value_or(0)});
   auto value_dist = random_value_fn<T>{profile.get_distribution_params<T>()};
 
-  auto const cardinality                      = std::min(num_rows, profile.get_cardinality());
-  rmm::device_uvector<bool> samples_null_mask = valid_dist(engine, cardinality);
-  rmm::device_uvector<T> samples              = value_dist(engine, cardinality);
-
   // Distribution for picking elements from the array of samples
   auto const avg_run_len = profile.get_avg_run_length();
   rmm::device_uvector<T> data(0, cudf::default_stream_value);
   rmm::device_uvector<bool> null_mask(0, cudf::default_stream_value);
 
-  if (cardinality == 0) {
+  if (profile.get_cardinality() == 0 and avg_run_len == 1) {
     data      = value_dist(engine, num_rows);
     null_mask = valid_dist(engine, num_rows);
   } else {
+    auto const cardinality = [profile_cardinality = profile.get_cardinality(), num_rows] {
+      return (profile_cardinality == 0 or profile_cardinality > num_rows) ? num_rows
+                                                                          : profile_cardinality;
+    }();
+    rmm::device_uvector<bool> samples_null_mask = valid_dist(engine, cardinality);
+    rmm::device_uvector<T> samples              = value_dist(engine, cardinality);
     // generate n samples and gather.
     auto const sample_indices =
       sample_indices_with_run_length(avg_run_len, cardinality, num_rows, engine);

@@ -201,11 +201,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             cudf.Series(
                 cudf.core.column.column_empty(
                     len(self.obj), "int8", masked=False
-                )
+                ),
+                index=self.obj.index,
             )
             .groupby(self.grouping, sort=self._sort)
             .agg("cumcount")
-            .reset_index(drop=True)
         )
 
     def rank(
@@ -343,7 +343,6 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not self._as_index:
             result = result.reset_index()
-
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
             return self._mimic_pandas_order(result)

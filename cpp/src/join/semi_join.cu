@@ -60,34 +60,26 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     return result;
   }
 
-  auto const flagged = [&] {
-    auto contained = contains(right_keys,
-                              left_keys,
-                              compare_nulls,
-                              nan_equality::ALL_EQUAL,
-                              stream,
-                              rmm::mr::get_current_device_resource());
-    if (kind == join_kind::LEFT_ANTI_JOIN) {
-      thrust::transform(rmm::exec_policy(stream),
-                        contained.begin(),
-                        contained.end(),
-                        contained.begin(),
-                        thrust::logical_not{});
-    }
-    return contained;
-  }();
+  // Materialize a `flagged` boolean array to generate a gather map.
+  // Previously, the gather map was generated directly without this array but by calling to
+  // `map.contains` inside the `thrust::copy_if` kernel. However, that led to increasing register
+  // usage and reducing performance, as reported here: https://github.com/rapidsai/cudf/pull/10511.
+  auto const flagged =
+    cudf::detail::contains(right_keys, left_keys, compare_nulls, nan_equality::ALL_EQUAL, stream);
 
   auto const left_num_rows = left_keys.num_rows();
   auto gather_map =
     std::make_unique<rmm::device_uvector<cudf::size_type>>(left_num_rows, stream, mr);
 
   // gather_map_end will be the end of valid data in gather_map
-  auto gather_map_end = thrust::copy_if(
-    rmm::exec_policy(stream),
-    thrust::counting_iterator<size_type>(0),
-    thrust::counting_iterator<size_type>(left_num_rows),
-    gather_map->begin(),
-    [d_flagged = flagged.begin()] __device__(size_type const idx) { return *(d_flagged + idx); });
+  auto gather_map_end =
+    thrust::copy_if(rmm::exec_policy(stream),
+                    thrust::counting_iterator<size_type>(0),
+                    thrust::counting_iterator<size_type>(left_num_rows),
+                    gather_map->begin(),
+                    [kind, d_flagged = flagged.begin()] __device__(size_type const idx) {
+                      return *(d_flagged + idx) == (kind == join_kind::LEFT_SEMI_JOIN);
+                    });
 
   gather_map->resize(thrust::distance(gather_map->begin(), gather_map_end), stream);
   return gather_map;

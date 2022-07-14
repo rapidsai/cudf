@@ -47,8 +47,8 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
     thrust::uninitialized_fill(rmm::exec_policy(stream), markers.begin(), markers.end(), false);
     thrust::scatter(
       rmm::exec_policy(stream),
-      thrust::constant_iterator<size_type>(true, 0),
-      thrust::constant_iterator<size_type>(true, static_cast<size_type>(distinct_indices.size())),
+      thrust::constant_iterator<bool>(true, 0),
+      thrust::constant_iterator<bool>(true, static_cast<size_type>(distinct_indices.size())),
       distinct_indices.begin(),
       markers.begin());
     return markers;
@@ -57,7 +57,7 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
   return cudf::detail::copy_if(
     input,
     [output_markers = output_markers.begin()] __device__(auto const idx) {
-      return output_markers[idx];
+      return *(output_markers + idx);
     },
     stream,
     mr);

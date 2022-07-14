@@ -17,6 +17,7 @@
 #pragma once
 
 #include "lead_lag_nested_detail.cuh"
+#include "nth_element.cuh"
 #include "rolling/rolling_collect_list.cuh"
 #include "rolling/rolling_detail.hpp"
 #include "rolling/rolling_jit_detail.hpp"
@@ -604,7 +605,7 @@ struct DeviceRollingLag {
 };
 
 /**
- * @brief Maps an `InputType and `aggregation::Kind` value to it's corresponding
+ * @brief Maps an `InputType and `aggregation::Kind` value to its corresponding
  * rolling window operator.
  *
  * @tparam InputType The input type to map to its corresponding operator
@@ -818,6 +819,13 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
     aggs.push_back(agg.clone());
     return aggs;
   }
+
+  // NTH_ELEMENT aggregations are computed in finalize(). Skip preprocessing.
+  std::vector<std::unique_ptr<aggregation>> visit(
+    data_type, cudf::detail::nth_element_aggregation const&) override
+  {
+    return {};
+  }
 };
 
 /**
@@ -959,6 +967,17 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
     else {
       result = std::move(intermediate);
     }
+  }
+
+  // Nth_ELEMENT aggregation.
+  void visit(cudf::detail::nth_element_aggregation const& agg) override
+  {
+    result =
+      agg._null_handling == null_policy::EXCLUDE
+        ? rolling::nth_element<null_policy::EXCLUDE>(
+            agg._n, input, preceding_window_begin, following_window_begin, min_periods, stream, mr)
+        : rolling::nth_element<null_policy::INCLUDE>(
+            agg._n, input, preceding_window_begin, following_window_begin, min_periods, stream, mr);
   }
 
  private:

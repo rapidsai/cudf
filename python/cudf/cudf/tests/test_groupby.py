@@ -1116,13 +1116,15 @@ def test_groupby_size():
     )
 
 
-def test_groupby_cumcount():
+@pytest.mark.parametrize("index", [None, [1, 2, 3, 4]])
+def test_groupby_cumcount(index):
     pdf = pd.DataFrame(
         {
             "a": [1, 1, 3, 4],
             "b": ["bob", "bob", "alice", "cooper"],
             "c": [1, 2, 3, 4],
-        }
+        },
+        index=index,
     )
     gdf = cudf.from_pandas(pdf)
 
@@ -1138,7 +1140,7 @@ def test_groupby_cumcount():
         check_dtype=False,
     )
 
-    sr = pd.Series(range(len(pdf)))
+    sr = pd.Series(range(len(pdf)), index=index)
     assert_groupby_results_equal(
         pdf.groupby(sr).cumcount(),
         gdf.groupby(sr).cumcount(),

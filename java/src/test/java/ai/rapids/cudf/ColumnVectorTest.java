@@ -4097,17 +4097,48 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
-    @Test
-    void testExtractRe() {
-        try (ColumnVector input = ColumnVector.fromStrings("a1", "b2", "c3", null);
-             Table expected = new Table.TestBuilder()
-                     .column("a", "b", null, null)
-                     .column("1", "2", null, null)
-                     .build();
-             Table found = input.extractRe("([ab])(\\d)")) {
-            assertTablesAreEqual(expected, found);
-        }
+  @Test
+  void testExtractRe() {
+      try (ColumnVector input = ColumnVector.fromStrings("a1", "b2", "c3", null);
+            Table expected = new Table.TestBuilder()
+                    .column("a", "b", null, null)
+                    .column("1", "2", null, null)
+                    .build();
+            Table found = input.extractRe("([ab])(\\d)")) {
+          assertTablesAreEqual(expected, found);
+      }
+  }
+
+  @Test
+  void testExtractAllRecord() {
+    String pattern = "([ab])(\\d)";
+    try (ColumnVector v = ColumnVector.fromStrings("a1", "b2", "c3", null, "a1b1c3a2");
+          ColumnVector expectedIdx0 = ColumnVector.fromLists(
+            new HostColumnVector.ListType(true,
+              new HostColumnVector.BasicType(true, DType.STRING)),
+            Arrays.asList("a1"),
+            Arrays.asList("b2"),
+            Arrays.asList(),
+            null,
+            Arrays.asList("a1", "b1", "a2"));
+          ColumnVector expectedIdx12 = ColumnVector.fromLists(
+              new HostColumnVector.ListType(true,
+                new HostColumnVector.BasicType(true, DType.STRING)),
+              Arrays.asList("a", "1"),
+              Arrays.asList("b", "2"),
+              null,
+              null,
+              Arrays.asList("a", "1", "b", "1", "a", "2"));
+          
+          ColumnVector resultIdx0 = v.extractAllRecord(pattern, 0);
+          ColumnVector resultIdx1 = v.extractAllRecord(pattern, 1);
+          ColumnVector resultIdx2 = v.extractAllRecord(pattern, 2);
+    ) {
+      assertColumnsAreEqual(expectedIdx0, resultIdx0);
+      assertColumnsAreEqual(expectedIdx12, resultIdx1);
+      assertColumnsAreEqual(expectedIdx12, resultIdx2);
     }
+  }
 
   @Test
   void testMatchesRe() {

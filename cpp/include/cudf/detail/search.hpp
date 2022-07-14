@@ -67,20 +67,22 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                  rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Check if rows in the given `needles` table exists in the `haystack` table.
+ * @brief Check if rows in the given `needles` table exist in the `haystack` table.
  *
- * Given two tables, each row in the `needles` table is checked if there is any matching row (i.e.,
- * compared as equal) in the `haystack` table. The boolean search result is written into the
- * corresponding row of the output array.
+ * Given two tables, each row in the `needles` table is checked to see if there is any matching row
+ * (i.e., compared equal to it) in the `haystack` table. The boolean search results are written into
+ * the corresponding rows of the output array.
  *
  * @code{.pseudo}
+ * Example:
+ *
  * haystack = { { 5, 4, 1, 2, 3 } }
  * needles  = { { 0, 1, 2 } }
  * output   = { false, true, true }
  * @endcode
  *
- * @param haystack The table containing search space
- * @param needles A table of rows to check for existence in the search space
+ * @param haystack The table containing the search space
+ * @param needles A table of rows whose existence to check in the search space
  * @param compare_nulls Control whether nulls should be compared as equal or not
  * @param compare_nans Control whether floating-point NaNs values should be compared as equal or not
  * @param stream CUDA stream used for device memory operations and kernel launches

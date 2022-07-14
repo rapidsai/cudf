@@ -17,7 +17,6 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
-    cast,
 )
 
 import cupy
@@ -37,7 +36,6 @@ from cudf.core.column import (
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.join import Merge, MergeSemi
 from cudf.core.mixins import BinaryOperand, Scannable
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
@@ -48,6 +46,7 @@ from cudf.utils.utils import _array_ufunc, _cudf_nvtx_annotate
 T = TypeVar("T", bound="Frame")
 
 
+# TODO: It looks like Frame is missing a declaration of `copy`, need to add
 class Frame(BinaryOperand, Scannable):
     """A collection of Column objects with an optional index.
 
@@ -60,18 +59,13 @@ class Frame(BinaryOperand, Scannable):
     """
 
     _data: "ColumnAccessor"
-    # TODO: Once all dependence on Frame having an index is removed, this
-    # attribute should be moved to IndexedFrame.
-    _index: Optional[cudf.core.index.BaseIndex]
-    _names: Optional[List]
 
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
-    def __init__(self, data=None, index=None):
+    def __init__(self, data=None):
         if data is None:
             data = {}
         self._data = cudf.core.column_accessor.ColumnAccessor(data)
-        self._index = index
 
     @property
     def _num_columns(self) -> int:
@@ -84,16 +78,6 @@ class Frame(BinaryOperand, Scannable):
     @property
     def _column_names(self) -> Tuple[Any, ...]:  # TODO: Tuple[str]?
         return tuple(self._data.names)
-
-    @property
-    def _index_names(self) -> Optional[Tuple[Any, ...]]:  # TODO: Tuple[str]?
-        # TODO: Temporarily suppressing mypy warnings to avoid introducing bugs
-        # by returning an empty list where one is not expected.
-        return (
-            None  # type: ignore
-            if self._index is None
-            else tuple(self._index._data.names)
-        )
 
     @property
     def _columns(self) -> Tuple[Any, ...]:  # TODO: Tuple[Column]?
@@ -630,11 +614,7 @@ class Frame(BinaryOperand, Scannable):
         4    <NA>
         dtype: int64
         """
-        import cudf.core._internals.where
-
-        return cudf.core._internals.where.where(
-            frame=self, cond=cond, other=other, inplace=inplace
-        )
+        raise NotImplementedError
 
     @_cudf_nvtx_annotate
     def mask(self, cond, other=None, inplace=False):
@@ -1159,9 +1139,7 @@ class Frame(BinaryOperand, Scannable):
             if name in set(column_names)
         ]
 
-    def _copy_type_metadata(
-        self, other: Frame, include_index: bool = True
-    ) -> Frame:
+    def _copy_type_metadata(self: T, other: T) -> T:
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
@@ -1174,31 +1152,6 @@ class Frame(BinaryOperand, Scannable):
                 name, col._with_type_metadata(other_col.dtype), validate=False
             )
 
-        if include_index:
-            if self._index is not None and other._index is not None:
-                self._index._copy_type_metadata(other._index)  # type: ignore
-                # When other._index is a CategoricalIndex, the current index
-                # will be a NumericalIndex with an underlying CategoricalColumn
-                # (the above _copy_type_metadata call will have converted the
-                # column). Calling cudf.Index on that column generates the
-                # appropriate index.
-                if isinstance(
-                    other._index, cudf.core.index.CategoricalIndex
-                ) and not isinstance(
-                    self._index, cudf.core.index.CategoricalIndex
-                ):
-                    self._index = cudf.Index(
-                        cast(
-                            cudf.core.index.NumericIndex, self._index
-                        )._column,
-                        name=self._index.name,
-                    )
-                elif isinstance(
-                    other._index, cudf.MultiIndex
-                ) and not isinstance(self._index, cudf.MultiIndex):
-                    self._index = cudf.MultiIndex._from_data(
-                        self._index._data, name=self._index.name
-                    )
         return self
 
     @_cudf_nvtx_annotate
@@ -1588,68 +1541,6 @@ class Frame(BinaryOperand, Scannable):
         dtype: float64
         """
         return self._unaryop("abs")
-
-    @_cudf_nvtx_annotate
-    def _merge(
-        self,
-        right,
-        on=None,
-        left_on=None,
-        right_on=None,
-        left_index=False,
-        right_index=False,
-        how="inner",
-        sort=False,
-        indicator=False,
-        suffixes=("_x", "_y"),
-        lsuffix=None,
-        rsuffix=None,
-    ):
-        if indicator:
-            raise NotImplementedError(
-                "Only indicator=False is currently supported"
-            )
-
-        if lsuffix or rsuffix:
-            raise ValueError(
-                "The lsuffix and rsuffix keywords have been replaced with the "
-                "``suffixes=`` keyword.  "
-                "Please provide the following instead: \n\n"
-                "    suffixes=('%s', '%s')"
-                % (lsuffix or "_x", rsuffix or "_y")
-            )
-        else:
-            lsuffix, rsuffix = suffixes
-
-        lhs, rhs = self, right
-        merge_cls = Merge
-        if how == "right":
-            # Merge doesn't support right, so just swap
-            how = "left"
-            lhs, rhs = right, self
-            left_on, right_on = right_on, left_on
-            left_index, right_index = right_index, left_index
-            suffixes = (suffixes[1], suffixes[0])
-        elif how in {"leftsemi", "leftanti"}:
-            merge_cls = MergeSemi
-
-        # TODO: the two isinstance checks below indicates that `_merge` should
-        # not be defined in `Frame`, but in `IndexedFrame`.
-        return merge_cls(
-            lhs,
-            rhs,
-            on=on,
-            left_on=left_on,
-            right_on=right_on,
-            left_index=left_index,
-            right_index=right_index,
-            lhs_is_index=isinstance(lhs, cudf.core._base_index.BaseIndex),
-            rhs_is_index=isinstance(rhs, cudf.core._base_index.BaseIndex),
-            how=how,
-            sort=sort,
-            indicator=indicator,
-            suffixes=suffixes,
-        ).perform_merge()
 
     @_cudf_nvtx_annotate
     def _is_sorted(self, ascending=None, null_position=None):
