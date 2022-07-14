@@ -114,6 +114,9 @@ class StructColumn(ColumnBase):
         )
 
     def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
+        from cudf.core.column import IntervalColumn
+        from cudf.core.dtypes import IntervalDtype
+
         if isinstance(dtype, StructDtype):
             return build_struct_column(
                 names=dtype.fields.keys(),
@@ -126,6 +129,8 @@ class StructColumn(ColumnBase):
                 offset=self.offset,
                 null_count=self.null_count,
             )
+        elif isinstance(dtype, IntervalDtype):
+            return IntervalColumn.from_struct_column(self, closed=dtype.closed)
 
         return self
 

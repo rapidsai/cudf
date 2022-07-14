@@ -71,15 +71,18 @@ class IntervalColumn(StructColumn):
             struct_arrow = pa.array([], typ.storage_type)
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
-    def from_struct_column(self, closed="right"):
-        first_field_name = list(self.dtype.fields.keys())[0]
+    @classmethod
+    def from_struct_column(cls, struct_column: StructColumn, closed="right"):
+        first_field_name = list(struct_column.dtype.fields.keys())[0]
         return IntervalColumn(
-            size=self.size,
-            dtype=IntervalDtype(self.dtype.fields[first_field_name], closed),
-            mask=self.base_mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.base_children,
+            size=struct_column.size,
+            dtype=IntervalDtype(
+                struct_column.dtype.fields[first_field_name], closed
+            ),
+            mask=struct_column.base_mask,
+            offset=struct_column.offset,
+            null_count=struct_column.null_count,
+            children=struct_column.base_children,
             closed=closed,
         )
 
