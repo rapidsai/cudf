@@ -384,17 +384,13 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     )
 
 
-def test_pandas_concat_compatibility_axis1_single_column():
+@pytest.mark.parametrize("name", [None, "a"])
+def test_pandas_concat_compatibility_axis1_single_column(name):
     # Pandas renames series name `None` to 0
-    s = gd.Series([1, 2, 3])
+    # and preserves anything else
+    s = gd.Series([1, 2, 3], name=name)
     got = gd.concat([s], axis=1)
     expected = pd.concat([s.to_pandas()], axis=1)
-    assert_eq(expected, got)
-
-    # Test concat preserves name
-    s2 = gd.Series([1, 2, 3], name="a")
-    got = gd.concat([s2], axis=1)
-    expected = pd.concat([s2.to_pandas()], axis=1)
     assert_eq(expected, got)
 
 
