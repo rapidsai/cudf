@@ -90,3 +90,14 @@ def describe_option(key: Optional[str] = None) -> Union[str, Dict[str, str]]:
         return {key: _CUDF_OPTIONS[key].description for key in _CUDF_OPTIONS}
 
     return _CUDF_OPTIONS[key].description
+
+
+_register_option(
+    "default_integer_bitwidth",
+    64,
+    "Default integer bitwidth when inferring integer column or scalars."
+    "Influences integer column bitwidth for csv, json readers if unspecified "
+    "and integer column bitwidth constructed from python scalar and lists. "
+    "Valid values are 32 or 64.",
+    lambda x: x in [32, 64],
+)
