@@ -42,13 +42,9 @@ repos:
               - id: flake8
                 alias: flake8
                 name: flake8
-                args: ["--config=python/.flake8"]
-                files: python/.*\.py$
-              - id: flake8
-                alias: flake8-cython
-                name: flake8-cython
-                args: ["--config=python/.flake8.cython"]
-                types: [cython]
+                args: ["--config=setup.cfg"]
+                files: python/.*\.(py|pyx|pxd)$
+                types: [file]
       - repo: https://github.com/pre-commit/mirrors-mypy
         rev: 'v0.782'
         hooks:
@@ -59,7 +55,7 @@ repos:
         rev: 6.1.1
         hooks:
               - id: pydocstyle
-                args: ["--config=python/.flake8"]
+                args: ["--config=setup.cfg"]
                 exclude: |
                     (?x)^(
                     ci|
