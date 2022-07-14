@@ -481,7 +481,7 @@ ConfigureTest(
   lists/explode_tests.cpp
   lists/extract_tests.cpp
   lists/sequences_tests.cpp
-  lists/set_operations/list_overlap_tests.cpp
+  lists/set_operations/have_overlap_tests.cpp
   lists/set_operations/set_difference_tests.cpp
   lists/set_operations/set_intersect_tests.cpp
   lists/set_operations/set_union_tests.cpp

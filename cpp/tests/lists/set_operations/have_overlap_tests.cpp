@@ -73,7 +73,7 @@ TEST_F(ListOverlapTest, TrivialTest)
                  null_at(3)};
   auto const expected = bools_col{{1, 1, null, null}, nulls_at({2, 3})};
 
-  auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+  auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
 }
 
@@ -84,7 +84,7 @@ TEST_F(ListOverlapTest, FloatingPointTestsWithSignedZero)
   auto const rhs      = floats_lists{{-0.0, -0.0, -0.0, -0.0, -0.0}, {0.0, 2.0}, {1.0}};
   auto const expected = bools_col{1, 1, 0};
 
-  auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+  auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
 }
 
@@ -94,7 +94,7 @@ TEST_F(ListOverlapTest, FloatingPointTestsWithInf)
   auto const rhs      = floats_lists{{neg_Inf, neg_Inf}, {0.0}};
   auto const expected = bools_col{0, 1};
 
-  auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+  auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
 }
 
@@ -109,7 +109,7 @@ TEST_F(ListOverlapTest, FloatingPointTestsWithNaNs)
   {
     auto const expected = bools_col{1, 1, 1, 1};
     auto const results =
-      cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL, NAN_EQUAL);
+      cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL, NAN_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -117,7 +117,7 @@ TEST_F(ListOverlapTest, FloatingPointTestsWithNaNs)
   {
     auto const expected = bools_col{0, 1, 1, 0};
     auto const results =
-      cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL, NAN_UNEQUAL);
+      cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL, NAN_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
@@ -130,7 +130,7 @@ TEST_F(ListOverlapTest, StringTestsNonNull)
     auto const rhs      = strings_lists{};
     auto const expected = bools_col{};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -140,7 +140,7 @@ TEST_F(ListOverlapTest, StringTestsNonNull)
     auto const rhs      = strings_lists{strings_lists{}};
     auto const expected = bools_col{0};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -150,7 +150,7 @@ TEST_F(ListOverlapTest, StringTestsNonNull)
     auto const rhs      = strings_lists{"aha", "bear", "blow", "heat"};
     auto const expected = bools_col{0};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -160,7 +160,7 @@ TEST_F(ListOverlapTest, StringTestsNonNull)
     auto const rhs      = strings_lists{"a", "delicious", "banana"};
     auto const expected = bools_col{1};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -174,7 +174,7 @@ TEST_F(ListOverlapTest, StringTestsNonNull)
                                    strings_lists{"two", "and", "1"}};
     auto const expected = bools_col{1, 0, 1};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
@@ -191,7 +191,7 @@ TEST_F(ListOverlapTest, StringTestsWithNullsEqual)
       strings_lists{{"aha", null, "abc", null, "1111", null, "2222"}, nulls_at({1, 3, 5})};
     auto const expected = bools_col{1};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL);
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -208,7 +208,7 @@ TEST_F(ListOverlapTest, StringTestsWithNullsEqual)
       null_at(1)};
     auto const expected = bools_col{{1, 0 /*null*/, 1}, null_at(1)};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL);
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
@@ -225,7 +225,7 @@ TEST_F(ListOverlapTest, StringTestsWithNullsUnequal)
       strings_lists{{"aha", null, "abc", null, "1111", null, "2222"}, nulls_at({1, 3, 5})};
     auto const expected = bools_col{0};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_UNEQUAL);
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -242,7 +242,7 @@ TEST_F(ListOverlapTest, StringTestsWithNullsUnequal)
       null_at(1)};
     auto const expected = bools_col{{0, 0 /*null*/, 1}, null_at(1)};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_UNEQUAL);
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
@@ -257,7 +257,7 @@ TYPED_TEST(ListOverlapTypedTest, TrivialInputTests)
     auto const rhs      = lists_col{};
     auto const expected = bools_col{};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -267,7 +267,7 @@ TYPED_TEST(ListOverlapTypedTest, TrivialInputTests)
     auto const rhs      = lists_col{lists_col{}, lists_col{}, lists_col{}};
     auto const expected = bools_col{0, 0, 0};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -277,7 +277,7 @@ TYPED_TEST(ListOverlapTypedTest, TrivialInputTests)
     auto const rhs      = lists_col{{}, {}, {0}, {0, 1, 2, 3, 4, 5}, {}, {6, 7}, {}};
     auto const expected = bools_col{0, 0, 0, 1, 0, 1, 0};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
@@ -294,7 +294,7 @@ TYPED_TEST(ListOverlapTypedTest, SlicedNonNullInputTests)
   {
     auto const expected = bools_col{1, 0, 0, 0, 1};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs_original}, lists_cv{rhs_original});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs_original}, lists_cv{rhs_original});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -303,7 +303,7 @@ TYPED_TEST(ListOverlapTypedTest, SlicedNonNullInputTests)
     auto const rhs      = cudf::slice(rhs_original, {1, 5})[0];
     auto const expected = bools_col{0, 0, 0, 1};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -312,7 +312,7 @@ TYPED_TEST(ListOverlapTypedTest, SlicedNonNullInputTests)
     auto const rhs      = cudf::slice(rhs_original, {1, 3})[0];
     auto const expected = bools_col{0, 0};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -321,7 +321,7 @@ TYPED_TEST(ListOverlapTypedTest, SlicedNonNullInputTests)
     auto const rhs      = cudf::slice(rhs_original, {0, 3})[0];
     auto const expected = bools_col{1, 0, 0};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
@@ -340,7 +340,7 @@ TYPED_TEST(ListOverlapTypedTest, InputHaveNullsTests)
     auto const expected =
       bools_col{{1, 0 /*null*/, 0 /*null*/, 0 /*null*/, 1, 0}, nulls_at({1, 2, 3})};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs});
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -354,7 +354,7 @@ TYPED_TEST(ListOverlapTypedTest, InputHaveNullsTests)
                                lists_col{7, 8, 9}};
     auto const expected = bools_col{1, 1, 1};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL);
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -368,7 +368,7 @@ TYPED_TEST(ListOverlapTypedTest, InputHaveNullsTests)
                                lists_col{7, 8, 9}};
     auto const expected = bools_col{0, 1, 1};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_UNEQUAL);
+    auto const results = cudf::lists::have_overlap(lists_cv{lhs}, lists_cv{rhs}, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
@@ -466,7 +466,7 @@ TEST_F(ListOverlapTest, InputListsOfNestedStructsHaveNull)
       3, int32s_col{0, 8, 16, 24}.release(), get_structs_rhs().release(), 0, {});
     auto const expected = bools_col{1, 1, 1};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{*lhs}, lists_cv{*rhs}, NULL_EQUAL);
+    auto const results = cudf::lists::have_overlap(lists_cv{*lhs}, lists_cv{*rhs}, NULL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 
@@ -478,7 +478,7 @@ TEST_F(ListOverlapTest, InputListsOfNestedStructsHaveNull)
       3, int32s_col{0, 8, 16, 24}.release(), get_structs_rhs().release(), 0, {});
     auto const expected = bools_col{0, 0, 0};
 
-    auto const results = cudf::lists::list_overlap(lists_cv{*lhs}, lists_cv{*rhs}, NULL_UNEQUAL);
+    auto const results = cudf::lists::have_overlap(lists_cv{*lhs}, lists_cv{*rhs}, NULL_UNEQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
   }
 }
@@ -545,6 +545,6 @@ TEST_F(ListOverlapTest, InputListsOfStructsOfLists)
 
   auto const expected = bools_col{0, 1, 1};
 
-  auto const results = cudf::lists::list_overlap(lists_cv{*lhs}, lists_cv{*rhs});
+  auto const results = cudf::lists::have_overlap(lists_cv{*lhs}, lists_cv{*rhs});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results);
 }

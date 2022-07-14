@@ -54,7 +54,7 @@ namespace cudf::lists {
  * @param mr Device memory resource used to allocate the returned object
  * @return A column of type BOOL containing the check result
  */
-std::unique_ptr<column> list_overlap(
+std::unique_ptr<column> have_overlap(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
   null_equality nulls_equal           = null_equality::UNEQUAL,

@@ -57,7 +57,7 @@ void check_compatibility(lists_column_view const& lhs, lists_column_view const& 
 
 }  // namespace
 
-std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
+std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                      lists_column_view const& rhs,
                                      null_equality nulls_equal,
                                      nan_equality nans_equal,
@@ -253,14 +253,14 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
 
 }  // namespace detail
 
-std::unique_ptr<column> list_overlap(lists_column_view const& lhs,
+std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                      lists_column_view const& rhs,
                                      null_equality nulls_equal,
                                      nan_equality nans_equal,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::list_overlap(lhs, rhs, nulls_equal, nans_equal, cudf::default_stream_value, mr);
+  return detail::have_overlap(lhs, rhs, nulls_equal, nans_equal, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> set_intersect(lists_column_view const& lhs,

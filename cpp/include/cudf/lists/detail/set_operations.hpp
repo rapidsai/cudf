@@ -21,11 +21,11 @@
 namespace cudf::lists::detail {
 
 /**
- * @copydoc cudf::list::list_overlap
+ * @copydoc cudf::list::have_overlap
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> list_overlap(
+std::unique_ptr<column> have_overlap(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
   null_equality nulls_equal,
