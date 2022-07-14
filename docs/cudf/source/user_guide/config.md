@@ -1,8 +1,8 @@
-# CUDF Configuration
+# Options
 
-CUDF configurations are a set of key value pairs stored in a global dictionary.
+CUDF options are a set of key value pairs stored in a global dictionary.
 
-User may get the full list of cudf configurations with ``cudf.describe_configs``.
-To set value to a configuration, use ``cudf.set_config``.
+User may get the full list of cudf options with ``cudf.describe_option``.
+To set value to a option, use ``cudf.set_option``.
 
-See [API reference](api.config) for detail.
+See [API reference](api.options) for detail.
