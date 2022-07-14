@@ -2,16 +2,14 @@
 
 from io import BytesIO, StringIO
 
-from pyarrow.lib import NativeFile
-
 import numpy as np
+from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
 from cudf.utils.utils import _cudf_nvtx_annotate
-from cudf.config import get_config
 
 
 @_cudf_nvtx_annotate
@@ -109,9 +107,18 @@ def read_csv(
         index_col=index_col,
     )
 
-    if get_config("default_int_bitwidth") == 32:
+    if cudf.get_option("default_integer_bitwidth") == 32:
+        # For any integer column unspecified in dtype, downcast to 32-bit.
         dtype = dtype if dtype is not None else {}
-        to_dtypes = {name:np.int32 for name, ty in zip(df.columns, df.dtypes) if ty == np.int64 and name not in dtype}
+        dtype_maps = {
+            np.dtype("i8"): np.dtype("i4"),
+            np.dtype("u8"): np.dtype("u4"),
+        }
+        to_dtypes = {
+            name: dtype_maps[ty]
+            for name, ty in zip(df.columns, df.dtypes)
+            if ty in dtype_maps and name not in dtype
+        }
         df = df.astype(to_dtypes)
     return df
 
