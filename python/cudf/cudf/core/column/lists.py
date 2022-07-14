@@ -193,6 +193,44 @@ class ListColumn(ColumnBase):
 
         return self
 
+    def copy(self, deep: bool = True):
+        """Columns are immutable, so a deep copy produces a copy of the
+        underlying data and mask and a shallow copy creates a new column and
+        copies the references of the data and mask.
+        """
+        if deep:
+            copied_col = column.build_column(
+                    self.base_data,
+                    self.dtype,
+                    mask=self.base_mask,
+                    size=self.size,
+                    offset=self.offset,
+                    children=self.base_children,
+                )
+            # result = libcudf.copying.copy_column(self)
+            # return cast(T, result._with_type_metadata(self.dtype))
+            # copied_col._weak_ref = weakref.ref(self.base_data, custom_weakref_callback)
+            # if self._weak_ref is None:
+            #     self._weak_ref = copied_col.get_weakref()
+            #     copied_col._weak_ref = self.get_weakref()
+            # else:
+            #     if self.has_a_weakref():
+            #         copied_col._weak_ref = self._weak_ref
+            #         self._weak_ref = copied_col.get_weakref()
+            #     else:
+            #         self._weak_ref = copied_col.get_weakref()
+            #         copied_col._weak_ref = self.get_weakref()
+            return copied_col
+        else:
+            return column.build_column(
+                    self.base_data,
+                    self.dtype,
+                    mask=self.base_mask,
+                    size=self.size,
+                    offset=self.offset,
+                    children=self.base_children,
+                )
+
     def leaves(self):
         if isinstance(self.elements, ListColumn):
             return self.elements.leaves()

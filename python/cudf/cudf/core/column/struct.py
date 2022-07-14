@@ -84,7 +84,15 @@ class StructColumn(ColumnBase):
         super().__setitem__(key, value)
 
     def copy(self, deep=True):
-        result = super().copy(deep=deep)
+        # result = super().copy(deep=deep)
+        result = cudf.core.column.build_column(
+                    self.base_data,
+                    self.dtype,
+                    mask=self.base_mask,
+                    size=self.size,
+                    offset=self.offset,
+                    children=self.base_children,
+                )
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result
