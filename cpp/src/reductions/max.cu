@@ -25,6 +25,7 @@ namespace reduction {
 
 std::unique_ptr<cudf::scalar> max(column_view const& col,
                                   cudf::data_type const output_dtype,
+                                  std::optional<std::reference_wrapper<scalar const>> init,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
@@ -38,6 +39,7 @@ std::unique_ptr<cudf::scalar> max(column_view const& col,
     dispatch_type,
     simple::detail::same_element_type_dispatcher<cudf::reduction::op::max>{},
     col,
+    init,
     stream,
     mr);
 }
