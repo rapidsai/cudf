@@ -438,7 +438,8 @@ add_library(
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
-  src/search/contains.cu
+  src/search/contains_column.cu
+  src/search/contains_table.cu
   src/search/contains_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
