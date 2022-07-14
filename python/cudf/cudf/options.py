@@ -17,7 +17,7 @@ _CUDF_OPTIONS: Dict[str, CUDFOption] = {}
 def _register_option(
     name: str, default_value: Any, description: str, validator: Callable
 ):
-    """Add a registry to the option dictionary.
+    """Register an entry in the option dictionary.
 
     Parameters
     ----------
@@ -31,7 +31,7 @@ def _register_option(
         A text description of the option.
 
     validator : Callable
-        A function that returns ``True`` is a given value is valid for the
+        A function that returns ``True`` if a given value is valid for the
         option, ``False`` otherwise.
     """
     if not validator(default_value):
@@ -58,7 +58,7 @@ def get_option(key: str) -> Any:
 def set_option(key: str, val: Any):
     """Set the value of option.
 
-    Raises ``ValueError`` if val is invalid to the option.
+    Raises ``ValueError`` if the provided value is invalid.
 
     Parameters
     ----------
