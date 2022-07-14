@@ -64,14 +64,14 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
+  check_compatibility(lhs, rhs);
+
   // Algorithm:
   // - Generate labels for lhs and rhs child elements.
   // - Check existence for rows of the table {rhs_labels, rhs_child} in the table
   //   {lhs_labels, lhs_child}.
-  // - `reduce_by_key` with keys are rhs_labels and `logical_or` reduction on the existence array
+  // - `reduce_by_key` with keys are rhs_labels and `logical_or` reduction on the existence reults
   //   computed in the previous step.
-
-  check_compatibility(lhs, rhs);
 
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
@@ -80,7 +80,7 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   auto const lhs_table  = table_view{{lhs_labels->view(), lhs_child}};
   auto const rhs_table  = table_view{{rhs_labels->view(), rhs_child}};
 
-  // Check existence for each row of the rhs_table in the lhs_table.
+  // Check existence for each row of the rhs_table in lhs_table.
   auto const contained =
     cudf::detail::contains(lhs_table, rhs_table, nulls_equal, nans_equal, stream);
 
@@ -127,14 +127,14 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
+  check_compatibility(lhs, rhs);
+
   // Algorithm:
   // - Generate labels for lhs and rhs child elements.
   // - Check existence for rows of the table {rhs_labels, rhs_child} in the table
   //   {lhs_labels, lhs_child}.
-  // - Extract rows of the rhs table using the existence array computed in the previous step.
+  // - Extract rows of the rhs table using the existence results computed in the previous step.
   // - Remove duplicate rows, and build the output lists.
-
-  check_compatibility(lhs, rhs);
 
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
@@ -152,7 +152,7 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
     stream);
 
   auto out_table = cudf::detail::stable_distinct(intersect_table->view(),
-                                                 std::vector<size_type>{0, 1},  // keys
+                                                 {0, 1},  // indices of key columns
                                                  duplicate_keep_option::KEEP_ANY,
                                                  nulls_equal,
                                                  nans_equal,
@@ -162,7 +162,6 @@ std::unique_ptr<column> set_intersect(lists_column_view const& lhs,
   auto out_offsets = reconstruct_offsets(out_table->get_column(0).view(), lhs.size(), stream, mr);
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{lhs.parent(), rhs.parent()}}, stream, mr);
-
   auto output = make_lists_column(lhs.size(),
                                   std::move(out_offsets),
                                   std::move(out_table->release().back()),
@@ -183,9 +182,9 @@ std::unique_ptr<column> set_union(lists_column_view const& lhs,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
-  // Algorithm: `return distinct(concatenate(lhs, rhs))`.
-
   check_compatibility(lhs, rhs);
+
+  // Algorithm: `return distinct(concatenate(lhs, rhs))`.
 
   auto const union_col = lists::detail::concatenate_rows(
     table_view{{lhs.parent(), rhs.parent()}}, concatenate_null_policy::NULLIFY_OUTPUT_ROW, stream);
@@ -201,15 +200,15 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
+  check_compatibility(lhs, rhs);
+
   // Algorithm:
   // - Generate labels for lhs and rhs child elements.
   // - Check existence for rows of the table {lhs_labels, lhs_child} in the table
   //   {rhs_labels, rhs_child}.
-  // - Invert the existence array computed in the previous step, resulting in a difference array.
-  // - Extract rows of the lhs table using that difference array.
+  // - Invert the existence results computed in the previous step, resulting in difference results.
+  // - Extract rows of the lhs table using that difference results.
   // - Remove duplicate rows, and build the output lists.
-
-  check_compatibility(lhs, rhs);
 
   auto const lhs_child  = lhs.get_sliced_child(stream);
   auto const rhs_child  = rhs.get_sliced_child(stream);
@@ -227,7 +226,7 @@ std::unique_ptr<column> set_difference(lists_column_view const& lhs,
     stream);
 
   auto out_table = cudf::detail::stable_distinct(difference_table->view(),
-                                                 std::vector<size_type>{0, 1},  // keys
+                                                 {0, 1},  // indices of key columns
                                                  duplicate_keep_option::KEEP_ANY,
                                                  nulls_equal,
                                                  nans_equal,
