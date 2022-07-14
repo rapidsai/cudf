@@ -220,13 +220,6 @@ dtypes_dict = {"1": np.float64, "2": np.float32, "3": np.int64, "4": np.int32}
 nelem = [5, 25, 100]
 
 
-@pytest.fixture(scope="module")
-def default_32bit_int_column():
-    cudf.set_option("default_integer_bitwidth", 32)
-    yield
-    cudf.set_option("default_integer_bitwidth", 64)
-
-
 @pytest.mark.parametrize("dtype", dtypes)
 @pytest.mark.parametrize("nelem", nelem)
 def test_csv_reader_numeric_data(dtype, nelem, tmpdir):
@@ -2091,7 +2084,7 @@ def test_default_32bit_integer_partial(
     assert read["Integer2"].dtype == np.int32
 
 
-def test_default_32bit_integer_preserve_signess(
+def test_default_32bit_integer_extremes(
     cudf_extreme_numeric_dataframe, default_32bit_int_column
 ):
     buf = BytesIO()

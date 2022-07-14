@@ -10,6 +10,7 @@ import pytest
 
 import rmm  # noqa: F401
 
+import cudf
 from cudf.testing._utils import assert_eq
 
 _CURRENT_DIRECTORY = str(pathlib.Path(__file__).resolve().parent)
@@ -141,3 +142,10 @@ def pytest_sessionfinish(session, exitstatus):
         del os.environ["_CUDF_TEST_ROOT"]
     except KeyError:
         pass
+
+
+@pytest.fixture(scope="module")
+def default_32bit_int_column():
+    cudf.set_option("default_integer_bitwidth", 32)
+    yield
+    cudf.set_option("default_integer_bitwidth", 64)

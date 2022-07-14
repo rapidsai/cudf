@@ -384,4 +384,4 @@ def _cast_integer_64bit_to_32bit(df, dtype):
         for name, ty in zip(df.columns, df.dtypes)
         if ty in dtype_maps and name not in dtype
     }
-    df = df.astype(to_dtypes)
+    return df.astype(to_dtypes)
