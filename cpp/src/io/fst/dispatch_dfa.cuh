@@ -311,11 +311,11 @@ struct DispatchFSM : DeviceFSMPolicy {
 
     // Get SM count
     int device_ordinal = -1;
-    int sm_count = -1;
+    int sm_count       = -1;
 
     // Get current device
     error = cudaGetDevice(&device_ordinal);
-    if (error != cudaSuccess)return error;
+    if (error != cudaSuccess) return error;
 
     error = cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device_ordinal);
     if (error != cudaSuccess) return error;
