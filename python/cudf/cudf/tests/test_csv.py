@@ -181,6 +181,16 @@ def make_all_numeric_extremes_dataframe():
 
 
 @pytest.fixture
+def pandas_extreme_numeric_dataframe():
+    return make_all_numeric_extremes_dataframe()[0]
+
+
+@pytest.fixture
+def cudf_extreme_numeric_dataframe(pandas_extreme_numeric_dataframe):
+    return cudf.from_pandas(pandas_extreme_numeric_dataframe)
+
+
+@pytest.fixture
 def path_or_buf(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_path_or_buf.csv")
     df = make_numeric_dataframe(10, np.int32)
@@ -208,6 +218,13 @@ def path_or_buf(tmpdir):
 dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint64, np.uint32]
 dtypes_dict = {"1": np.float64, "2": np.float32, "3": np.int64, "4": np.int32}
 nelem = [5, 25, 100]
+
+
+@pytest.fixture(scope="module")
+def default_32bit_int_column():
+    cudf.set_option("default_integer_bitwidth", 32)
+    yield
+    cudf.set_option("default_integer_bitwidth", 64)
 
 
 @pytest.mark.parametrize("dtype", dtypes)
@@ -2054,3 +2071,39 @@ def test_empty_df_no_index():
     result = cudf.read_csv(buffer)
 
     assert_eq(actual, result)
+
+
+def test_default_32bit_integer(cudf_mixed_dataframe, default_32bit_int_column):
+    buf = BytesIO()
+    cudf_mixed_dataframe.to_csv(buf)
+    read = cudf.read_csv(buf)
+    assert read["Integer"].dtype == np.int32
+    assert read["Integer2"].dtype == np.int32
+
+
+def test_default_32bit_integer_partial(
+    cudf_mixed_dataframe, default_32bit_int_column
+):
+    buf = BytesIO()
+    cudf_mixed_dataframe.to_csv(buf)
+    read = cudf.read_csv(buf, dtype={"Integer": "int64"})
+    assert read["Integer"].dtype == np.int64
+    assert read["Integer2"].dtype == np.int32
+
+
+def test_default_32bit_integer_preserve_signess(
+    cudf_extreme_numeric_dataframe, default_32bit_int_column
+):
+    buf = BytesIO()
+    cudf_extreme_numeric_dataframe.to_csv(buf)
+    read = cudf.read_csv(buf)
+
+    assert read["int64"].dtype == np.int32
+    assert read["long"].dtype == np.int32
+    assert read["uint64"].dtype == np.uint32
+
+
+def test_default_32bit_integer_preserve_string(default_32bit_int_column):
+    csv = "int\n9223372036854775808\n-1"
+    df = cudf.read_csv(StringIO(csv))
+    assert df["int"].dtype == np.dtype("O")
