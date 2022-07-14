@@ -20,8 +20,6 @@ repos:
         rev: 3.8.3
         hooks:
               - id: flake8
-                alias: flake8
-                name: flake8
                 args: ["--config=setup.cfg"]
                 files: python/.*\.(py|pyx|pxd)$
                 types: [file]
