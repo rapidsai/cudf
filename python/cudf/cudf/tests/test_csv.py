@@ -2069,9 +2069,10 @@ def test_empty_df_no_index():
 def test_default_32bit_integer(cudf_mixed_dataframe, default_32bit_int_column):
     buf = BytesIO()
     cudf_mixed_dataframe.to_csv(buf)
+    buf.seek(0)
     read = cudf.read_csv(buf)
-    assert read["Integer"].dtype == np.int32
-    assert read["Integer2"].dtype == np.int32
+    assert read["Integer"].dtype == np.dtype("i4")
+    assert read["Integer2"].dtype == np.dtype("i4")
 
 
 def test_default_32bit_integer_partial(
@@ -2079,9 +2080,10 @@ def test_default_32bit_integer_partial(
 ):
     buf = BytesIO()
     cudf_mixed_dataframe.to_csv(buf)
+    buf.seek(0)
     read = cudf.read_csv(buf, dtype={"Integer": "int64"})
-    assert read["Integer"].dtype == np.int64
-    assert read["Integer2"].dtype == np.int32
+    assert read["Integer"].dtype == np.dtype("i8")
+    assert read["Integer2"].dtype == np.dtype("i4")
 
 
 def test_default_32bit_integer_extremes(
@@ -2089,14 +2091,26 @@ def test_default_32bit_integer_extremes(
 ):
     buf = BytesIO()
     cudf_extreme_numeric_dataframe.to_csv(buf)
+    buf.seek(0)
     read = cudf.read_csv(buf)
 
-    assert read["int64"].dtype == np.int32
-    assert read["long"].dtype == np.int32
-    assert read["uint64"].dtype == np.uint32
+    assert read["int64"].dtype == np.dtype("i4")
+    assert read["long"].dtype == np.dtype("i4")
+    assert read["uint64"].dtype == np.dtype("u4")
 
 
-def test_default_32bit_integer_preserve_string(default_32bit_int_column):
-    csv = "int\n9223372036854775808\n-1"
-    df = cudf.read_csv(StringIO(csv))
-    assert df["int"].dtype == np.dtype("O")
+def test_default_32bit_float(cudf_mixed_dataframe, default_32bit_float_column):
+    buf = BytesIO()
+    cudf_mixed_dataframe.to_csv(buf)
+    buf.seek(0)
+    read = cudf.read_csv(buf)
+    assert read["Float"].dtype == np.dtype("f4")
+
+
+def test_default_32bit_float_partial(default_32bit_float_column):
+    read = cudf.read_csv(
+        StringIO("float1,float2\n1.0,2.0\n3.0,4.0"),
+        dtype={"float2": "float64"},
+    )
+    assert read["float1"].dtype == np.dtype("f4")
+    assert read["float2"].dtype == np.dtype("f8")

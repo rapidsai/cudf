@@ -101,3 +101,13 @@ _register_option(
     "Valid values are 32 or 64.",
     lambda x: x in [32, 64],
 )
+
+_register_option(
+    "default_float_bitwidth",
+    64,
+    "Default float bitwidth when inferring float column or scalars."
+    "Influences float column bitwidth for csv, json readers if unspecified "
+    "and float column bitwidth constructed from python scalar and lists. "
+    "Valid values are 32 or 64.",
+    lambda x: x in [32, 64],
+)

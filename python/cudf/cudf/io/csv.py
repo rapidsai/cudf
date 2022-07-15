@@ -8,7 +8,11 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_scalar
 from cudf.utils import ioutils
-from cudf.utils.utils import _cast_integer_64bit_to_32bit, _cudf_nvtx_annotate
+from cudf.utils.utils import (
+    _cast_float_64bit_to_32bit,
+    _cast_integer_64bit_to_32bit,
+    _cudf_nvtx_annotate,
+)
 
 
 @_cudf_nvtx_annotate
@@ -107,8 +111,12 @@ def read_csv(
     )
 
     if cudf.get_option("default_integer_bitwidth") == 32:
-        # For any integer column unspecified in dtype, downcast to 32-bit.
+        # Any 64-bit integer column unspecified in dtype is downcast to 32-bit.
         df = _cast_integer_64bit_to_32bit(df, dtype)
+
+    if cudf.get_option("default_float_bitwidth") == 32:
+        # Any 64-bit float column unspecified in dtype is downcast to 32-bit.
+        df = _cast_float_64bit_to_32bit(df, dtype)
 
     return df
 

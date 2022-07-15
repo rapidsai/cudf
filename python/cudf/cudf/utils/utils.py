@@ -385,3 +385,13 @@ def _cast_integer_64bit_to_32bit(df, dtype):
         if ty in dtype_maps and name not in dtype
     }
     return df.astype(to_dtypes)
+
+
+def _cast_float_64bit_to_32bit(df, dtype):
+    dtype = dtype if dtype is not None else {}
+    to_dtypes = {
+        name: np.dtype("f4")
+        for name, ty in zip(df.columns, df.dtypes)
+        if ty == np.dtype("f8") and name not in dtype
+    }
+    return df.astype(to_dtypes)
