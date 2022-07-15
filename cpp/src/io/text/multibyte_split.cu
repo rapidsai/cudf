@@ -28,6 +28,7 @@
 #include <cudf/io/text/detail/multistate.hpp>
 #include <cudf/io/text/detail/tile_state.hpp>
 #include <cudf/io/text/detail/trie.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <limits>
@@ -437,7 +438,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               std::optional<byte_range_info> byte_range,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto stream      = rmm::cuda_stream_default;
+  auto stream      = cudf::default_stream_value;
   auto stream_pool = rmm::cuda_stream_pool(2);
 
   auto result = detail::multibyte_split(

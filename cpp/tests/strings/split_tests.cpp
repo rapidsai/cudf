@@ -428,6 +428,30 @@ TEST_F(StringsSplitTest, SplitRegexWithMaxSplit)
   }
 }
 
+TEST_F(StringsSplitTest, SplitRegexWordBoundary)
+{
+  cudf::test::strings_column_wrapper input({"a", "ab", "-+", "e\né"});
+  auto sv = cudf::strings_column_view(input);
+  {
+    auto result = cudf::strings::split_re(sv, "\\b");
+
+    cudf::test::strings_column_wrapper col0({"", "", "-+", ""});
+    cudf::test::strings_column_wrapper col1({"a", "ab", "", "e"}, {1, 1, 0, 1});
+    cudf::test::strings_column_wrapper col2({"", "", "", "\n"}, {1, 1, 0, 1});
+    cudf::test::strings_column_wrapper col3({"", "", "", "é"}, {0, 0, 0, 1});
+    cudf::test::strings_column_wrapper col4({"", "", "", ""}, {0, 0, 0, 1});
+    auto expected = cudf::table_view({col0, col1, col2, col3, col4});
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result->view(), expected);
+  }
+  {
+    auto result = cudf::strings::split_record_re(sv, "\\B");
+
+    using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+    LCW expected({LCW{"a"}, LCW{"a", "b"}, LCW{"", "-", "+", ""}, LCW{"e\né"}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+  }
+}
+
 TEST_F(StringsSplitTest, RSplitRecord)
 {
   std::vector<const char*> h_strings{

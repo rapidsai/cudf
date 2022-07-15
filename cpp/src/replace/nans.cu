@@ -22,6 +22,7 @@
 #include <cudf/detail/replace.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -113,7 +114,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nans(input, replacement, rmm::cuda_stream_default, mr);
+  return detail::replace_nans(input, replacement, cudf::default_stream_value, mr);
 }
 
 std::unique_ptr<column> replace_nans(column_view const& input,
@@ -121,7 +122,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nans(input, replacement, rmm::cuda_stream_default, mr);
+  return detail::replace_nans(input, replacement, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf
@@ -222,7 +223,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_nans_and_zeros(input, rmm::cuda_stream_default, mr);
+  return detail::normalize_nans_and_zeros(input, cudf::default_stream_value, mr);
 }
 
 /**
@@ -238,7 +239,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
 void normalize_nans_and_zeros(mutable_column_view& in_out)
 {
   CUDF_FUNC_RANGE();
-  detail::normalize_nans_and_zeros(in_out, rmm::cuda_stream_default);
+  detail::normalize_nans_and_zeros(in_out, cudf::default_stream_value);
 }
 
 }  // namespace cudf

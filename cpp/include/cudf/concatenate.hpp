@@ -19,6 +19,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/mr/device/per_device_resource.hpp>
+
 #include <memory>
 
 namespace cudf {
@@ -62,7 +64,7 @@ std::unique_ptr<column> concatenate(
 
 /**
  * @brief Columns of `tables_to_concat` are concatenated vertically to return a
- * single table_view
+ * single table
  *
  * @ingroup column_concatenate
  *
@@ -83,8 +85,8 @@ std::unique_ptr<column> concatenate(
  *
  * @param tables_to_concat host_span of table views to be concatenated into a single table
  * @param mr Device memory resource used to allocate the returned table's device memory
- * @return A single table having all the rows from the elements of `tables_to_concat` respectively
- * in the same order.
+ * @return A single table having all the rows from the elements of
+ * `tables_to_concat` respectively in the same order.
  */
 std::unique_ptr<table> concatenate(
   host_span<table_view const> tables_to_concat,

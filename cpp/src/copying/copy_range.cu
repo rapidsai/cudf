@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <cudf/strings/detail/copy_range.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -273,7 +274,7 @@ void copy_range_in_place(column_view const& source,
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range_in_place(
-    source, target, source_begin, source_end, target_begin, rmm::cuda_stream_default);
+    source, target, source_begin, source_end, target_begin, cudf::default_stream_value);
 }
 
 std::unique_ptr<column> copy_range(column_view const& source,
@@ -285,7 +286,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range(
-    source, target, source_begin, source_end, target_begin, rmm::cuda_stream_default, mr);
+    source, target, source_begin, source_end, target_begin, cudf::default_stream_value, mr);
 }
 
 }  // namespace cudf

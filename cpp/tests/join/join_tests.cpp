@@ -27,6 +27,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -1422,8 +1423,9 @@ TEST_F(JoinTest, HashJoinLargeOutputSize)
 {
   // self-join a table of zeroes to generate an output row count that would overflow int32_t
   std::size_t col_size = 65567;
-  rmm::device_buffer zeroes(col_size * sizeof(int32_t), rmm::cuda_stream_default);
-  CUDF_CUDA_TRY(cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), rmm::cuda_stream_default.value()));
+  rmm::device_buffer zeroes(col_size * sizeof(int32_t), cudf::default_stream_value);
+  CUDF_CUDA_TRY(
+    cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), cudf::default_stream_value.value()));
   cudf::column_view col_zeros(cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data());
   cudf::table_view tview{{col_zeros}};
   cudf::hash_join hash_join(tview, cudf::null_equality::UNEQUAL);

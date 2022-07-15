@@ -26,8 +26,7 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
@@ -113,7 +112,7 @@ inline void test_hash_based_sum_agg(column_view const& keys,
   // resulting table: `t [num_rows, 2 * num_rows - 1]`
   auto combined_table = cudf::concatenate(std::vector{expected_kv, result_kv});
   auto preprocessed_t = cudf::experimental::row::hash::preprocessed_table::create(
-    combined_table->view(), rmm::cuda_stream_default);
+    combined_table->view(), cudf::default_stream_value);
   cudf::experimental::row::equality::self_comparator comparator(preprocessed_t);
 
   auto const null_keys_are_equal =

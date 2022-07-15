@@ -27,6 +27,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <io/utilities/parsing_utils.cuh>
@@ -1047,7 +1048,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_json_object(col, json_path, options, rmm::cuda_stream_default, mr);
+  return detail::get_json_object(col, json_path, options, cudf::default_stream_value, mr);
 }
 
 }  // namespace strings

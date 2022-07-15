@@ -149,11 +149,16 @@ TEST_F(StringsReplaceRegexTest, MultiReplacement)
 
 TEST_F(StringsReplaceRegexTest, WordBoundary)
 {
-  cudf::test::strings_column_wrapper input({"aba bcd\naba", "zéz", "A1B2-é3", "e é"});
+  cudf::test::strings_column_wrapper input({"aba bcd\naba", "zéz", "A1B2-é3", "e é", "_", "a_b"});
   auto results =
     cudf::strings::replace_re(cudf::strings_column_view(input), "\\b", cudf::string_scalar("X"));
-  cudf::test::strings_column_wrapper expected(
-    {"XabaX XbcdX\nXabaX", "XzézX", "XA1B2X-Xé3X", "XeX XéX"});
+  auto expected = cudf::test::strings_column_wrapper(
+    {"XabaX XbcdX\nXabaX", "XzézX", "XA1B2X-Xé3X", "XeX XéX", "X_X", "Xa_bX"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results =
+    cudf::strings::replace_re(cudf::strings_column_view(input), "\\B", cudf::string_scalar("X"));
+  expected = cudf::test::strings_column_wrapper(
+    {"aXbXa bXcXd\naXbXa", "zXéXz", "AX1XBX2-éX3", "e é", "_", "aX_Xb"});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
