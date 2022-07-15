@@ -768,19 +768,20 @@ TYPED_TEST(Sort, WithNullableListColumn)
   if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
 
   using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
+  using cudf::test::iterators::nulls_at;
   lcw col{
-    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},                                          // 0
-    {{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, cudf::test::iterators::nulls_at({3})},  // 1
-    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},                                              // 2
-    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},                                                // 3
-    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, cudf::test::iterators::nulls_at({0})}},        // 4
-    {{7, 8}, {}},                                                                    // 5
-    lcw{lcw{}, lcw{}, lcw{}},                                                        // 6
-    lcw{lcw{}},                                                                      // 7
-    {lcw{10}},                                                                       // 8
-    lcw{},                                                                           // 9
-    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, cudf::test::iterators::nulls_at({0, 2})}},     // 10
-    {{1, 2}, {3}, {4, 5}, {{0, 7}, cudf::test::iterators::nulls_at({0})}},           // 11
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},                   // 0
+    {{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, nulls_at({3})},  // 1
+    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},                       // 2
+    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},                         // 3
+    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, nulls_at({0})}},        // 4
+    {{7, 8}, {}},                                             // 5
+    lcw{lcw{}, lcw{}, lcw{}},                                 // 6
+    lcw{lcw{}},                                               // 7
+    {lcw{10}},                                                // 8
+    lcw{},                                                    // 9
+    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, nulls_at({0, 2})}},     // 10
+    {{1, 2}, {3}, {4, 5}, {{0, 7}, nulls_at({0})}},           // 11
   };
 
   auto expect =
@@ -795,19 +796,20 @@ TYPED_TEST(Sort, WithSlicedListColumn)
   if (std::is_same_v<T, bool>) { GTEST_SKIP(); }
 
   using lcw = cudf::test::lists_column_wrapper<T, int32_t>;
+  using cudf::test::iterators::nulls_at;
   lcw col{
-    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},                                          //
-    {{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, cudf::test::iterators::nulls_at({3})},  // 0
-    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},                                              // 1
-    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},                                                // 2
-    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, cudf::test::iterators::nulls_at({0})}},        // 3
-    {{7, 8}, {}},                                                                    // 4
-    lcw{lcw{}, lcw{}, lcw{}},                                                        // 5
-    lcw{lcw{}},                                                                      // 6
-    {lcw{10}},                                                                       // 7
-    lcw{},                                                                           // 8
-    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, cudf::test::iterators::nulls_at({0, 2})}},     // 9
-    {{1, 2}, {3}, {4, 5}, {{0, 7}, cudf::test::iterators::nulls_at({0})}},           //
+    {{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}},                   //
+    {{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, nulls_at({3})},  // 0
+    {{1, 2, 3}, {}, {4, 5}, {0, 6, 0}},                       // 1
+    {{1, 2}, {3}, {4, 5}, {0, 6, 0}},                         // 2
+    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, nulls_at({0})}},        // 3
+    {{7, 8}, {}},                                             // 4
+    lcw{lcw{}, lcw{}, lcw{}},                                 // 5
+    lcw{lcw{}},                                               // 6
+    {lcw{10}},                                                // 7
+    lcw{},                                                    // 8
+    {{1, 2}, {3}, {4, 5}, {{0, 6, 0}, nulls_at({0, 2})}},     // 9
+    {{1, 2}, {3}, {4, 5}, {{0, 7}, nulls_at({0})}},           //
   };
 
   auto sliced_col = cudf::slice(col, {1, 10});
