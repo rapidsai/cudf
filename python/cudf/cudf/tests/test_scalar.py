@@ -18,6 +18,13 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
 )
 
+
+@pytest.fixture(autouse=True)
+def clear_scalar_cache():
+    cudf.Scalar.clear_cache()
+    yield
+
+
 TEST_DECIMAL_TYPES = [
     cudf.Decimal64Dtype(1, 1),
     cudf.Decimal64Dtype(4, 2),
@@ -169,7 +176,6 @@ def test_scalar_device_initialization_decimal(value, decimal_type):
 
 @pytest.mark.parametrize("value", SCALAR_VALUES + DECIMAL_VALUES)
 def test_scalar_roundtrip(value):
-    cudf.Scalar.clear_cache()
 
     s = cudf.Scalar(value)
 
