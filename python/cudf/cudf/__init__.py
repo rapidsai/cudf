@@ -80,7 +80,7 @@ from cudf.io import (
 )
 from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
-from cudf.utils.utils import set_allocator
+from cudf.utils.utils import set_allocator, clear_cache
 
 try:
     from ptxcompiler.patch import patch_numba_codegen_if_needed

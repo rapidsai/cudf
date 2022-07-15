@@ -20,6 +20,8 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
+from rmm._lib.memory_resource cimport get_current_device_resource
+
 import cudf
 from cudf._lib.types import (
     LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
@@ -73,7 +75,15 @@ from cudf._lib.utils cimport (
 )
 
 
+# The DeviceMemoryResource attribute could be released prematurely
+# by the gc if the DeviceScalar is in a reference cycle. Removing
+# the tp_clear function with the no_gc_clear decoration prevents that.
+# See https://github.com/rapidsai/rmm/pull/931 for details.
+@cython.no_gc_clear
 cdef class DeviceScalar:
+
+    def __cinit(self, *args, **kwargs):
+        self.mr = get_current_device_resource()
 
     def __init__(self, value, dtype):
         """
