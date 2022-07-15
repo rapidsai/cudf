@@ -39,12 +39,6 @@ private:
 namespace cudf {
 namespace jni {
 
-#ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
-constexpr bool is_ptds_enabled{true};
-#else
-constexpr bool is_ptds_enabled{false};
-#endif
-
 static jclass Host_memory_buffer_jclass;
 static jmethodID Host_buffer_allocate;
 static jfieldID Host_buffer_address;
@@ -145,16 +139,6 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     return JNI_ERR;
   }
 
-  // make sure libcudf and the JNI library are built with the same PTDS mode
-  if (cudf::is_ptds_enabled() != cudf::jni::is_ptds_enabled) {
-    std::ostringstream ss;
-    ss << "Libcudf is_ptds_enabled=" << cudf::is_ptds_enabled()
-       << ", which does not match cudf jni is_ptds_enabled=" << cudf::jni::is_ptds_enabled
-       << ". They need to be built with the same per-thread default stream flag.";
-    env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ss.str().c_str());
-    return JNI_ERR;
-  }
-
   // cache any class objects and method IDs here
   if (!cudf::jni::cache_contiguous_table_jni(env)) {
     if (!env->ExceptionCheck()) {
@@ -184,10 +168,6 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
   // release cached class objects here.
   cudf::jni::release_contiguous_table_jni(env);
   cudf::jni::release_host_memory_buffer_jni(env);
-}
-
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_isPtdsEnabled(JNIEnv *env, jclass, jlong size) {
-  return cudf::jni::is_ptds_enabled;
 }
 
 } // extern "C"

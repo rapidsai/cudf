@@ -48,12 +48,6 @@ option(CUDF_ENABLE_ARROW_ORC "Build the Arrow ORC adapter" OFF)
 option(CUDF_ENABLE_ARROW_PYTHON "Find (or build) Arrow with Python support" OFF)
 option(CUDF_ENABLE_ARROW_PARQUET "Find (or build) Arrow with Parquet support" OFF)
 option(CUDF_ENABLE_ARROW_S3 "Build/Enable AWS S3 Arrow filesystem support" ON)
-option(
-  CUDF_USE_PER_THREAD_DEFAULT_STREAM
-  "Build cuDF with per-thread default stream, including passing the per-thread default
-         stream to external libraries."
-  OFF
-)
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
@@ -70,7 +64,6 @@ message(VERBOSE "CUDF: Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
 message(VERBOSE "CUDF: Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(VERBOSE "CUDF: Build and statically link Arrow libraries: ${CUDF_USE_ARROW_STATIC}")
 message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_ENABLE_ARROW_S3}")
-message(VERBOSE "CUDF: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
   "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
@@ -594,11 +587,9 @@ if(JITIFY_USE_CACHE)
 endif()
 
 # Per-thread default stream
-if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
-  target_compile_definitions(
-    cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM
-  )
-endif()
+target_compile_definitions(
+  cudf PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM
+)
 
 # Disable NVTX if necessary
 if(NOT USE_NVTX)

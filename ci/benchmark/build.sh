@@ -102,7 +102,7 @@ conda list --show-channel-urls
 ################################################################################
 
 logger "Build libcudf..."
-"$WORKSPACE/build.sh" clean libcudf cudf dask_cudf benchmarks tests --ptds
+"$WORKSPACE/build.sh" clean libcudf cudf dask_cudf benchmarks tests
 
 ################################################################################
 # BENCHMARK - Run and parse libcudf and cuDF benchmarks

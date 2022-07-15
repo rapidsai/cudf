@@ -274,7 +274,6 @@ ConfigureTest(
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
-  utilities_tests/default_stream_tests.cpp
   utilities_tests/type_check_tests.cpp
 )
 
