@@ -47,6 +47,12 @@ using Table          = cudf::table;
 constexpr cudf::size_type NoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
+// This function is a wrapper around cudf's join APIs that takes the gather map
+// from join APIs and materializes the table that would be created by gathering
+// from the joined tables. Join APIs originally returned tables like this, but
+// they were modified in https://github.com/rapidsai/cudf/pull/7454. This
+// helper function allows us to avoid rewriting all our tests in terms of
+// gather maps.
 template <std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                     std::unique_ptr<rmm::device_uvector<cudf::size_type>>> (*join_impl)(
             cudf::table_view const& left_keys,
@@ -54,7 +60,7 @@ template <std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             cudf::null_equality compare_nulls,
             rmm::mr::device_memory_resource* mr),
           cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK>
-std::unique_ptr<cudf::table> join(
+std::unique_ptr<cudf::table> join_and_gather(
   cudf::table_view const& left_input,
   cudf::table_view const& right_input,
   std::vector<cudf::size_type> const& left_on,
@@ -91,7 +97,8 @@ std::unique_ptr<cudf::table> inner_join(
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
 {
-  return join<cudf::inner_join>(left_input, right_input, left_on, right_on, compare_nulls);
+  return join_and_gather<cudf::inner_join>(
+    left_input, right_input, left_on, right_on, compare_nulls);
 }
 
 std::unique_ptr<cudf::table> left_join(
@@ -101,7 +108,7 @@ std::unique_ptr<cudf::table> left_join(
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
 {
-  return join<cudf::left_join, cudf::out_of_bounds_policy::NULLIFY>(
+  return join_and_gather<cudf::left_join, cudf::out_of_bounds_policy::NULLIFY>(
     left_input, right_input, left_on, right_on, compare_nulls);
 }
 
@@ -112,7 +119,7 @@ std::unique_ptr<cudf::table> full_join(
   std::vector<cudf::size_type> const& right_on,
   cudf::null_equality compare_nulls = cudf::null_equality::EQUAL)
 {
-  return join<cudf::full_join, cudf::out_of_bounds_policy::NULLIFY>(
+  return join_and_gather<cudf::full_join, cudf::out_of_bounds_policy::NULLIFY>(
     full_input, right_input, full_on, right_on, compare_nulls);
 }
 
