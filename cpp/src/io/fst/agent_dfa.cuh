@@ -19,6 +19,9 @@
 
 #include <cub/cub.cuh>
 
+#include <thrust/execution_policy.h>
+#include <thrust/sequence.h>
+
 namespace cudf::io::fst::detail {
 
 /// Type used to enumerate (and index) into the states defined by a DFA
@@ -519,10 +522,7 @@ __launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
     std::array<StateIndexT, NUM_STATES> state_vector;
 
     // Initialize the seed state transition vector with the identity vector
-#pragma unroll
-    for (int32_t i = 0; i < NUM_STATES; ++i) {
-      state_vector[i] = i;
-    }
+    thrust::sequence(thrust::seq, std::begin(state_vector), std::end(state_vector));
 
     // Compute the state transition vector
     agent_dfa.GetThreadStateTransitionVector<NUM_STATES>(symbol_matcher,
