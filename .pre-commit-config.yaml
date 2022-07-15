@@ -49,7 +49,7 @@ repos:
         rev: 'v0.782'
         hooks:
               - id: mypy
-                args: ["--config-file=python/cudf/setup.cfg", "python/cudf/cudf"]
+                args: ["--config-file=setup.cfg", "python/cudf/cudf", "python/dask_cudf/dask_cudf", "python/custreamz/custreamz", "python/cudf_kafka/cudf_kafka"]
                 pass_filenames: false
       - repo: https://github.com/PyCQA/pydocstyle
         rev: 6.1.1
