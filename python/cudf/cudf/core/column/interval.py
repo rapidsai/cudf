@@ -3,7 +3,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.api.types import is_interval_dtype
+from cudf.api.types import is_categorical_dtype, is_interval_dtype
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import IntervalDtype
 
@@ -71,15 +71,18 @@ class IntervalColumn(StructColumn):
             struct_arrow = pa.array([], typ.storage_type)
         return pa.ExtensionArray.from_storage(typ, struct_arrow)
 
-    def from_struct_column(self, closed="right"):
-        first_field_name = list(self.dtype.fields.keys())[0]
+    @classmethod
+    def from_struct_column(cls, struct_column: StructColumn, closed="right"):
+        first_field_name = list(struct_column.dtype.fields.keys())[0]
         return IntervalColumn(
-            size=self.size,
-            dtype=IntervalDtype(self.dtype.fields[first_field_name], closed),
-            mask=self.base_mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=self.base_children,
+            size=struct_column.size,
+            dtype=IntervalDtype(
+                struct_column.dtype.fields[first_field_name], closed
+            ),
+            mask=struct_column.base_mask,
+            offset=struct_column.offset,
+            null_count=struct_column.null_count,
+            children=struct_column.base_children,
             closed=closed,
         )
 
@@ -98,19 +101,26 @@ class IntervalColumn(StructColumn):
 
     def as_interval_column(self, dtype, **kwargs):
         if is_interval_dtype(dtype):
-            # a user can directly input the string `interval` as the dtype
-            # when creating an interval series or interval dataframe
-            if dtype == "interval":
-                dtype = IntervalDtype(self.dtype.fields["left"], self.closed)
-            return IntervalColumn(
-                size=self.size,
-                dtype=dtype,
-                mask=self.mask,
-                offset=self.offset,
-                null_count=self.null_count,
-                children=self.children,
-                closed=dtype.closed,
-            )
+            if is_categorical_dtype(self):
+                new_struct = self._get_decategorized_column()
+                return IntervalColumn.from_struct_column(new_struct)
+            if is_interval_dtype(dtype):
+                # a user can directly input the string `interval` as the dtype
+                # when creating an interval series or interval dataframe
+                if dtype == "interval":
+                    dtype = IntervalDtype(
+                        self.dtype.fields["left"], self.closed
+                    )
+                children = self.children
+                return IntervalColumn(
+                    size=self.size,
+                    dtype=dtype,
+                    mask=self.mask,
+                    offset=self.offset,
+                    null_count=self.null_count,
+                    children=children,
+                    closed=dtype.closed,
+                )
         else:
             raise ValueError("dtype must be IntervalDtype")
 
