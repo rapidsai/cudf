@@ -538,7 +538,6 @@ add_library(
   src/unary/math_ops.cu
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
-  src/utilities/default_stream.cpp
   src/utilities/type_checks.cpp
 )
 
