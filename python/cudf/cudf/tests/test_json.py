@@ -560,3 +560,14 @@ def test_default_32bit_integer_extremes(default_32bit_int_column, engine):
 
     assert df["u8"].dtype == np.dtype("u4")
     assert df["i8"].dtype == np.dtype("i4")
+
+
+def test_default_32bit_float(default_32bit_float_column):
+    df = cudf.read_json(
+        '{"a": 1.0, "b": 2.5}\n{"a": 3.5, "b": 4.0}',
+        engine="cudf",
+        lines=True,
+        orient="records",
+    )
+    assert df["a"].dtype == np.dtype("f4")
+    assert df["b"].dtype == np.dtype("f4")

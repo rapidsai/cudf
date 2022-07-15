@@ -8,7 +8,10 @@ import cudf
 from cudf._lib import json as libjson
 from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.utils import _cast_integer_64bit_to_32bit
+from cudf.utils.utils import (
+    _cast_float_64bit_to_32bit,
+    _cast_integer_64bit_to_32bit,
+)
 
 
 @ioutils.doc_read_json()
@@ -55,7 +58,6 @@ def read_json(
             else:
                 filepaths_or_buffers.append(tmp_source)
 
-        dtype = {} if dtype is True else dtype
         df = cudf.DataFrame._from_data(
             *libjson.read_json(
                 filepaths_or_buffers, dtype, lines, compression, byte_range
@@ -105,7 +107,13 @@ def read_json(
 
     if cudf.get_option("default_integer_bitwidth") == 32:
         # For any integer column unspecified in dtype, downcast to 32-bit.
+        dtype = {} if dtype is True else dtype
         df = _cast_integer_64bit_to_32bit(df, dtype)
+
+    if cudf.get_option("default_float_bitwidth") == 32:
+        # Any 64-bit float column unspecified in dtype is downcast to 32-bit.
+        dtype = {} if dtype is True else dtype
+        df = _cast_float_64bit_to_32bit(df, dtype)
 
     return df
 
