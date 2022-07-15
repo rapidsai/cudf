@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "cudf/lists/lists_column_view.hpp"
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -443,13 +444,38 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return string_view instance representing this element at this index
    */
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
-  __device__ T element(size_type element_index) const noexcept
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
     const auto* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
     const char* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
     size_type offset      = d_offsets[index];
     return string_view{d_strings + offset, d_offsets[index + 1] - offset};
+  }
+
+  /**
+   * @brief Returns `device_span` to the list element at the specified index.
+   *
+   * If the element at the specified index is NULL, i.e., `is_null(element_index)
+   * == true`, then any attempt to use the result will lead to undefined behavior.
+   *
+   * This function accounts for the offset.
+   *
+   * @param element_index Position of the desired list element
+   * @return device_span instance representing this element at this index
+   */
+  template <typename T,
+            CUDF_ENABLE_IF(std::is_same_v<T, device_span<int8_t const>> or
+                           std::is_same_v<T, device_span<uint8_t const>>)>
+  [[nodiscard]] __device__ T element(size_type element_index) const noexcept
+  {
+    using et              = typename T::element_type;
+    size_type index       = element_index + offset();  // account for this view's _offset
+    auto const* d_offsets = d_children[lists_column_view::offsets_column_index].data<offset_type>();
+    typename T::element_type const* d_data =
+      d_children[lists_column_view::child_column_index].data<et>();
+    size_type offset = d_offsets[index];
+    return T(d_data + offset, d_offsets[index + 1] - offset);
   }
 
  private:
