@@ -429,16 +429,17 @@ add_library(
   src/reshape/byte_cast.cu
   src/reshape/interleave_columns.cu
   src/reshape/tile.cu
+  src/rolling/detail/rolling_collect_list.cu
+  src/rolling/detail/rolling_fixed_window.cu
+  src/rolling/detail/rolling_variable_window.cu
   src/rolling/grouped_rolling.cu
   src/rolling/range_window_bounds.cpp
   src/rolling/rolling.cu
-  src/rolling/rolling_collect_list.cu
-  src/rolling/rolling_detail_fixed_window.cu
-  src/rolling/rolling_detail_variable_window.cu
   src/round/round.cu
   src/scalar/scalar.cpp
   src/scalar/scalar_factories.cpp
-  src/search/contains.cu
+  src/search/contains_column.cu
+  src/search/contains_table.cu
   src/search/contains_nested.cu
   src/search/search_ordered.cu
   src/sort/is_sorted.cu
