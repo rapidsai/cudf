@@ -1863,8 +1863,17 @@ def as_column(
         if not arbitrary.flags["C_CONTIGUOUS"]:
             arbitrary = np.ascontiguousarray(arbitrary)
 
+        delayed_cast = False
         if dtype is not None:
-            arbitrary = arbitrary.astype(np.dtype(dtype))
+            try:
+                dtype = np.dtype(dtype)
+            except TypeError:
+                # Some `dtype`'s can't be parsed by `np.dtype`
+                # for which we will have to cast after the column
+                # has been constructed.
+                delayed_cast = True
+            else:
+                arbitrary = arbitrary.astype(dtype)
 
         if arb_dtype.kind == "M":
 
@@ -1919,6 +1928,9 @@ def as_column(
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("O", "U"):
+            # There is no cast operation available for pa.Array from int to
+            # str, Hence instead of handling in pa.Array block, we
+            # will have to type-cast explicitly by passing dtype again here.
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
             )
@@ -1937,6 +1949,9 @@ def as_column(
             )
         else:
             data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
+
+        if delayed_cast and dtype is not None:
+            data = data.astype(cudf.dtype(dtype))
 
     elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
         if is_categorical_dtype(arbitrary.dtype):
