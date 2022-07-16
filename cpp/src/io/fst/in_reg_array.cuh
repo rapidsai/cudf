@@ -51,7 +51,7 @@ class MultiFragmentInRegArray {
   static constexpr uint32_t BITS_PER_FRAG_ITEM =
     0x01U << (cub::Log2<(AVAIL_BITS_PER_FRAG_ITEM + 1)>::VALUE - 1);
 
-  // Number of fragments required to store and to reconstruct each item
+  // The total number of fragments required to store all the items
   static constexpr uint32_t FRAGMENTS_PER_ITEM =
     (MIN_BITS_PER_ITEM + BITS_PER_FRAG_ITEM - 1) / BITS_PER_FRAG_ITEM;
 
