@@ -2076,7 +2076,7 @@ def test_default_32bit_integer(cudf_mixed_dataframe, default_32bit_int_column):
 
 
 def test_default_32bit_integer_partial(
-    cudf_mixed_dataframe, default_32bit_int_column
+    cudf_mixed_dataframe, default_32bit_int_bitwidth
 ):
     buf = BytesIO()
     cudf_mixed_dataframe.to_csv(buf)
@@ -2087,7 +2087,7 @@ def test_default_32bit_integer_partial(
 
 
 def test_default_32bit_integer_extremes(
-    cudf_extreme_numeric_dataframe, default_32bit_int_column
+    cudf_extreme_numeric_dataframe, default_32bit_int_bitwidth
 ):
     buf = BytesIO()
     cudf_extreme_numeric_dataframe.to_csv(buf)
@@ -2099,7 +2099,9 @@ def test_default_32bit_integer_extremes(
     assert read["uint64"].dtype == np.dtype("u4")
 
 
-def test_default_32bit_float(cudf_mixed_dataframe, default_32bit_float_column):
+def test_default_32bit_float(
+    cudf_mixed_dataframe, default_32bit_float_bitwidth
+):
     buf = BytesIO()
     cudf_mixed_dataframe.to_csv(buf)
     buf.seek(0)
@@ -2107,7 +2109,7 @@ def test_default_32bit_float(cudf_mixed_dataframe, default_32bit_float_column):
     assert read["Float"].dtype == np.dtype("f4")
 
 
-def test_default_32bit_float_partial(default_32bit_float_column):
+def test_default_32bit_float_partial(default_32bit_float_bitwidth):
     read = cudf.read_csv(
         StringIO("float1,float2\n1.0,2.0\n3.0,4.0"),
         dtype={"float2": "float64"},

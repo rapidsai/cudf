@@ -1889,11 +1889,12 @@ def test_series_between_with_null(data, left, right, inclusive):
 
 
 @pytest.mark.parametrize("data", [[0, 1, 2, 3, 4], range(5)])
-def test_default_32bit_integer_construction(default_32bit_int_column, data):
+def test_default_32bit_integer_construction(default_32bit_int_bitwidth, data):
     s = cudf.Series(data)
-    assert s.dtype == np.dtype('i4')
+    assert s.dtype == np.dtype("i4")
+
 
 @pytest.mark.parametrize("data", [[1.5, 2.5, 4.5], [1000, 2000, 4000, 3.14]])
-def test_default_32bit_float_construction(default_32bit_float_column, data):
+def test_default_32bit_float_construction(default_32bit_float_bitwidth, data):
     s = cudf.Series(data)
-    assert s.dtype == np.dtype('f4')
+    assert s.dtype == np.dtype("f4")

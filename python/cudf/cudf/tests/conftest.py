@@ -145,14 +145,14 @@ def pytest_sessionfinish(session, exitstatus):
 
 
 @pytest.fixture(scope="module")
-def default_32bit_int_column():
+def default_32bit_int_bitwidth():
     cudf.set_option("default_integer_bitwidth", 32)
     yield
     cudf.set_option("default_integer_bitwidth", 64)
 
 
 @pytest.fixture(scope="module")
-def default_32bit_float_column():
+def default_32bit_float_bitwidth():
     cudf.set_option("default_float_bitwidth", 32)
     yield
     cudf.set_option("default_float_bitwidth", 64)
