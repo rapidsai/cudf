@@ -400,3 +400,13 @@ def test_datetime_scalar_from_string(data, dtype):
     expected = np.datetime64(datetime.datetime(2000, 1, 1)).astype(dtype)
 
     assert expected == slr.value
+
+
+def test_default_32bit_integer_scalar(default_32bit_int_bitwidth):
+    slr = cudf.Scalar(128)
+    assert slr.dtype == np.dtype("i4")
+
+
+def test_default_32bit_float_scalar(default_32bit_float_bitwidth):
+    slr = cudf.Scalar(128.0)
+    assert slr.dtype == np.dtype("f4")

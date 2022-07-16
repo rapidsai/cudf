@@ -269,7 +269,17 @@ def to_cudf_compatible_scalar(val, dtype=None):
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
 
-    val = cudf.api.types.pandas_dtype(type(val)).type(val)
+    inferred_dtype = cudf.api.types.pandas_dtype(type(val))
+    if cudf.get_option(
+        "default_integer_bitwidth"
+    ) == 32 and inferred_dtype == np.dtype("i8"):
+        inferred_dtype = np.dtype("i4")
+    if cudf.get_option(
+        "default_float_bitwidth"
+    ) == 32 and inferred_dtype == np.dtype("f8"):
+        inferred_dtype = np.dtype("f4")
+
+    val = inferred_dtype.type(val)
 
     if dtype is not None:
         if isinstance(val, str) and np.dtype(dtype).kind == "M":
