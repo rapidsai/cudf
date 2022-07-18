@@ -396,6 +396,32 @@ TYPED_TEST(BinaryOperationCompiledTest_FloatOps, PMod_Vector_Vector)
   this->template test<cudf::library::operation::PMod>(cudf::binary_operator::PMOD);
 }
 
+using IntPow_types = cudf::test::Types<cudf::test::Types<int32_t, int32_t, int32_t>,
+                                       cudf::test::Types<int64_t, int64_t, int64_t>>;
+template <typename T>
+struct BinaryOperationCompiledTest_IntPow : public BinaryOperationCompiledTest<T> {
+};
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_IntPow, IntPow_types);
+
+TYPED_TEST(BinaryOperationCompiledTest_IntPow, IntPow_SpecialCases)
+{
+  // This tests special values for which integer powers are required. Casting
+  // to double and casting the result back to int results in floating point
+  // losses, like 3**1 == 2.
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  auto lhs      = fixed_width_column_wrapper<TypeLhs>({3, -3, 8, -8});
+  auto rhs      = fixed_width_column_wrapper<TypeRhs>({1, 1, 7, 7});
+  auto expected = fixed_width_column_wrapper<TypeOut>({3, -3, 2097152, -2097152});
+
+  auto result = cudf::binary_operation(
+    lhs, rhs, cudf::binary_operator::INT_POW, data_type(type_to_id<TypeOut>()));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 // Bit Operations
 //     n      t     d
 // n n . n
