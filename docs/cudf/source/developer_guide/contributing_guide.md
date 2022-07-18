@@ -69,8 +69,12 @@ Deprecations should be signaled using a `FutureWarning` **not a `DeprecationWarn
 
 Maintaining compatibility with the [pandas API](https://pandas.pydata.org/docs/reference/index.html) is a primary goal of cuDF.
 Developers should always look at pandas APIs when adding a new feature to cuDF.
-However, there are occasionally good reasons to deviate from pandas behavior.
+When introducing a new cuDF API with a pandas analog, we should match pandas as much as possible.
+Since we try to maintain compatibility even with various edge cases (such as null handling),
+new pandas releases sometimes require changes that break compatibility with old versions.
+As a result, our compatibility target is the latest pandas version.
 
+However, there are occasionally good reasons to deviate from pandas behavior.
 The most common reasons center around performance.
 Some APIs cannot match pandas behavior exactly without incurring exorbitant runtime costs.
 Others may require using additional memory, which is always at a premium in GPU workflows.
