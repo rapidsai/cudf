@@ -901,7 +901,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         sr = cudf.Series(self)
 
         # Re-label self w.r.t. the provided categories
-        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+        if (
+            isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype))
+            and dtype._categories is not None
+        ):
             labels = sr._label_encoding(cats=dtype.categories)
             if "ordered" in kwargs:
                 warnings.warn(
@@ -1928,9 +1931,6 @@ def as_column(
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("O", "U"):
-            # There is no cast operation available for pa.Array from int to
-            # str, Hence instead of handling in pa.Array block, we
-            # will have to type-cast explicitly by passing dtype again here.
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
             )
