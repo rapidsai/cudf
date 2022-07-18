@@ -25,6 +25,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <stack>
+
 namespace cudf::io::json::gpu {
 
 //------------------------------------------------------------------------------
@@ -618,6 +620,177 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                                stream);
 }
 
-}  // namespace detail
+tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_stream_view stream)
+{
+  constexpr std::size_t single_item = 1;
+  hostdevice_vector<PdaTokenT> tokens_gpu{input.size(), stream};
+  hostdevice_vector<SymbolOffsetT> token_indices_gpu{input.size(), stream};
+  hostdevice_vector<SymbolOffsetT> num_tokens_out{single_item, stream};
 
+  rmm::device_uvector<SymbolT> d_input{input.size(), stream};
+  cudaMemcpyAsync(
+    d_input.data(), input.data(), input.size() * sizeof(input[0]), cudaMemcpyHostToDevice, stream);
+
+  // Parse the JSON and get the token stream
+  cudf::io::json::gpu::detail::get_token_stream(
+    cudf::device_span<SymbolT>{d_input.data(), d_input.size()},
+    tokens_gpu.device_ptr(),
+    token_indices_gpu.device_ptr(),
+    num_tokens_out.device_ptr(),
+    stream);
+
+  // Copy the JSON tokens to the host
+  token_indices_gpu.device_to_host(stream);
+  tokens_gpu.device_to_host(stream);
+  num_tokens_out.device_to_host(stream);
+
+  // Make sure tokens have been copied to the host
+  stream.synchronize();
+
+  // Whether a token does represent a node in the tree representation
+  auto is_node = [](PdaTokenT const token) {
+    switch (token) {
+      case token_t::StructBegin:
+      case token_t::ListBegin:
+      case token_t::StringBegin:
+      case token_t::ValueBegin:
+      case token_t::FieldNameBegin:
+      case token_t::ErrorBegin: return true;
+      default: return false;
+    };
+  };
+
+  // The node that a token represents
+  auto token_to_node = [](PdaTokenT const token) {
+    switch (token) {
+      case token_t::StructBegin: return NC_STRUCT;
+      case token_t::ListBegin: return NC_LIST;
+      case token_t::StringBegin: return NC_STR;
+      case token_t::ValueBegin: return NC_VAL;
+      case token_t::FieldNameBegin: return NC_FN;
+      default: return NC_ERR;
+    };
+  };
+
+  auto get_token_index = [](PdaTokenT const token, SymbolOffsetT const token_index) {
+    constexpr SymbolOffsetT skip_quote_char = 1;
+    switch (token) {
+      case token_t::StringBegin: return token_index + skip_quote_char;
+      case token_t::FieldNameBegin: return token_index + skip_quote_char;
+      default: return token_index;
+    };
+  };
+
+  // Whether a token expects to be followed by its respective end-of-* token partner
+  auto is_begin_of_section = [](PdaTokenT const token) {
+    switch (token) {
+      case token_t::StringBegin:
+      case token_t::ValueBegin:
+      case token_t::FieldNameBegin: return true;
+      default: return false;
+    };
+  };
+
+  // The end-of-* partner token for a given beginning-of-* token
+  auto end_of_partner = [](PdaTokenT const token) {
+    switch (token) {
+      case token_t::StringBegin: return token_t::StringEnd;
+      case token_t::ValueBegin: return token_t::ValueEnd;
+      case token_t::FieldNameBegin: return token_t::FieldNameEnd;
+      default: return token_t::ErrorBegin;
+    };
+  };
+
+  // Whether the token pops from the parent node stack
+  auto does_pop = [](PdaTokenT const token) {
+    switch (token) {
+      case token_t::StructEnd:
+      case token_t::ListEnd: return true;
+      default: return false;
+    };
+  };
+
+  // Whether the token pushes onto the parent node stack
+  auto does_push = [](PdaTokenT const token) {
+    switch (token) {
+      case token_t::StructBegin:
+      case token_t::ListBegin: return true;
+      default: return false;
+    };
+  };
+
+  // The node id sitting on top of the stack becomes the node's parent
+  // The full stack represents the path from the root to the current node
+  std::stack<std::pair<NodeIndexT, bool>> parent_stack;
+
+  constexpr bool field_name_node    = true;
+  constexpr bool no_field_name_node = false;
+
+  std::vector<NodeT> node_categories;
+  std::vector<NodeIndexT> parent_node_ids;
+  std::vector<TreeDepthT> node_levels;
+  std::vector<SymbolOffsetT> node_range_begin;
+  std::vector<SymbolOffsetT> node_range_end;
+
+  std::size_t node_id = 0;
+  for (std::size_t i = 0; i < num_tokens_out[0]; i++) {
+    auto token = tokens_gpu[i];
+
+    // The section from the original JSON input that this token demarcates
+    std::size_t range_begin = get_token_index(token, token_indices_gpu[i]);
+    std::size_t range_end   = range_begin + 1;
+
+    // Identify this node's parent node id
+    std::size_t parent_node_id =
+      (parent_stack.size() > 0) ? parent_stack.top().first : parent_node_sentinel;
+
+    // If this token is the beginning-of-{value, string, field name}, also consume the next end-of-*
+    // token
+    if (is_begin_of_section(token)) {
+      if ((i + 1) < num_tokens_out[0] && end_of_partner(tokens_gpu[i + 1])) {
+        // Update the range_end for this pair of tokens
+        range_end = token_indices_gpu[i + 1];
+        // We can skip the subsequent end-of-* token
+        i++;
+      }
+    }
+
+    // Emit node if this token becomes a node in the tree
+    if (is_node(token)) {
+      node_categories.push_back(token_to_node(token));
+      parent_node_ids.push_back(parent_node_id);
+      node_levels.push_back(parent_stack.size());
+      node_range_begin.push_back(range_begin);
+      node_range_end.push_back(range_end);
+    }
+
+    // Modify the stack if needed
+    if (token == token_t::FieldNameBegin) {
+      parent_stack.push({node_id, field_name_node});
+    } else {
+      if (does_push(token)) {
+        parent_stack.push({node_id, no_field_name_node});
+      } else if (does_pop(token)) {
+        CUDF_EXPECTS(parent_stack.size() >= 1, "Invalid JSON input.");
+        parent_stack.pop();
+      }
+
+      // If what we're left with is a field name on top of stack, we need to pop it
+      if (parent_stack.size() >= 1 && parent_stack.top().second == field_name_node) {
+        parent_stack.pop();
+      }
+    }
+
+    // Update node_id
+    if (is_node(token)) { node_id++; }
+  }
+
+  return {std::move(node_categories),
+          std::move(parent_node_ids),
+          std::move(node_levels),
+          std::move(node_range_begin),
+          std::move(node_range_end)};
+}
+
+}  // namespace detail
 }  // namespace cudf::io::json::gpu

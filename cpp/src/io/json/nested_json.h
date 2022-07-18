@@ -56,11 +56,16 @@ using NodeIndexT = uint32_t;
 /// Type large enough to represent tree depth from [0, max-tree-depth); may be an unsigned type
 using TreeDepthT = StackLevelT;
 
-using tree_meta_t = std::tuple<std::vector<NodeT>,
-                               std::vector<NodeIndexT>,
-                               std::vector<TreeDepthT>,
-                               std::vector<SymbolOffsetT>,
-                               std::vector<SymbolOffsetT>>;
+/**
+ * @brief Struct that encapsulate all information of a columnar tree representation.
+ */
+struct tree_meta_t {
+  std::vector<NodeT> node_categories;
+  std::vector<NodeIndexT> parent_node_ids;
+  std::vector<TreeDepthT> node_levels;
+  std::vector<SymbolOffsetT> node_range_begin;
+  std::vector<SymbolOffsetT> node_range_end;
+};
 
 constexpr NodeIndexT parent_node_sentinel = std::numeric_limits<NodeIndexT>::max();
 
@@ -94,7 +99,6 @@ enum token_t : PdaTokenT {
   NUM_TOKENS
 };
 
-namespace detail {
 /**
  * @brief Class of a node (or a node "category") within the tree representation
  */
@@ -114,6 +118,8 @@ enum node_t : NodeT {
   /// Total number of node classes
   NUM_NODE_CLASSES
 };
+
+namespace detail {
 
 /**
  * @brief Identifies the stack context for each character from a JSON input. Specifically, we
@@ -145,6 +151,16 @@ void get_token_stream(device_span<SymbolT const> d_json_in,
                       SymbolOffsetT* d_tokens_indices,
                       SymbolOffsetT* d_num_written_tokens,
                       rmm::cuda_stream_view stream);
+
+/**
+ * @brief Parses the given JSON string and generates a tree representation of the given input.
+ *
+ * @param input The JSON input
+ * @param stream The CUDA stream to which kernels are dispatched
+ * @return
+ */
+tree_meta_t get_tree_representation(host_span<SymbolT const> input, rmm::cuda_stream_view stream);
+
 }  // namespace detail
 
 }  // namespace cudf::io::json::gpu
