@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
+cimport cython
+
 import decimal
 
 import numpy as np
