@@ -88,7 +88,7 @@ std::unique_ptr<column> have_overlap(
  * @param mr Device memory resource used to allocate the returned object
  * @return A lists column containing the intersection results
  */
-std::unique_ptr<column> set_intersect(
+std::unique_ptr<column> intersect_distinct(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
   null_equality nulls_equal           = null_equality::EQUAL,
@@ -124,7 +124,7 @@ std::unique_ptr<column> set_intersect(
  * @param mr Device memory resource used to allocate the returned object
  * @return A lists column containing the union results
  */
-std::unique_ptr<column> set_union(
+std::unique_ptr<column> union_distinct(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
   null_equality nulls_equal           = null_equality::EQUAL,
@@ -159,7 +159,7 @@ std::unique_ptr<column> set_union(
  * @param mr Device memory resource used to allocate the returned object
  * @return A lists column containing the difference results
  */
-std::unique_ptr<column> set_difference(
+std::unique_ptr<column> difference_distinct(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
   null_equality nulls_equal           = null_equality::EQUAL,

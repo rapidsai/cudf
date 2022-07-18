@@ -34,11 +34,11 @@ std::unique_ptr<column> have_overlap(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::list::set_intersect
+ * @copydoc cudf::list::intersect_distinct
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> set_intersect(
+std::unique_ptr<column> intersect_distinct(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
   null_equality nulls_equal,
@@ -47,11 +47,11 @@ std::unique_ptr<column> set_intersect(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::list::set_union
+ * @copydoc cudf::list::union_distinct
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> set_union(
+std::unique_ptr<column> union_distinct(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
   null_equality nulls_equal,
@@ -60,11 +60,11 @@ std::unique_ptr<column> set_union(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::list::set_difference
+ * @copydoc cudf::list::difference_distinct
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> set_difference(
+std::unique_ptr<column> difference_distinct(
   lists_column_view const& lhs,
   lists_column_view const& rhs,
   null_equality nulls_equal,
