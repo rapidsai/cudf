@@ -573,13 +573,14 @@ void get_dictionary_indices(cudf::detail::device_2dspan<gpu::PageFragment const>
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
+                      device_span<size_type> page_sizes,
+                      device_span<size_type> comp_page_sizes,
                       device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
                       size_t max_page_size_bytes,
                       size_type max_page_size_rows,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
-                      size_t max_page_comp_data_size,
                       rmm::cuda_stream_view stream);
 
 /**

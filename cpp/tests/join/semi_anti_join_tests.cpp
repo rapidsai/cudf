@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
@@ -52,7 +53,7 @@ TEST_F(JoinTest, TestSimple)
     cudf::data_type{cudf::type_to_id<cudf::size_type>()}, result->size(), result->data());
   column_wrapper<cudf::size_type> expected{0, 1};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result_cv);
-};
+}
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> get_saj_tables(
   std::vector<bool> const& left_is_human_nulls, std::vector<bool> const& right_is_human_nulls)
@@ -229,4 +230,30 @@ TEST_F(JoinTest, AntiJoinWithStructsAndNullsNotEqual)
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
 
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+}
+
+TEST_F(JoinTest, AntiJoinWithStructsAndNullsOnOneSide)
+{
+  auto constexpr null{0};
+  auto left_col0 = [] {
+    column_wrapper<int32_t> child1{{1, null}, cudf::test::iterators::null_at(1)};
+    column_wrapper<int32_t> child2{11, 12};
+    return cudf::test::structs_column_wrapper{{child1, child2}};
+  }();
+  auto right_col0 = [] {
+    column_wrapper<int32_t> child1{1, 2, 3, 4};
+    column_wrapper<int32_t> child2{11, 12, 13, 14};
+    return cudf::test::structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto left  = cudf::table_view{{left_col0}};
+  auto right = cudf::table_view{{right_col0}};
+
+  auto result   = cudf::left_anti_join(left, right, {0}, {0});
+  auto expected = [] {
+    column_wrapper<int32_t> child1{{null}, cudf::test::iterators::null_at(0)};
+    column_wrapper<int32_t> child2{12};
+    return cudf::test::structs_column_wrapper{{child1, child2}};
+  }();
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0).view());
 }
