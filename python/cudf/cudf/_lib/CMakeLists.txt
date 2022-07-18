@@ -23,7 +23,6 @@ set(cython_sources
     datetime.pyx
     expressions.pyx
     filling.pyx
-    gpuarrow.pyx
     groupby.pyx
     hash.pyx
     interop.pyx
