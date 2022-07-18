@@ -135,7 +135,7 @@ std::unique_ptr<column> union_distinct(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a column of sets containing list elements that are found only in the left side the
+ * @brief Create a column of sets containing list elements that are found only on the left side the
  * given columns.
  *
  * Given two input lists columns `lhs` and `rhs`, an output lists column is created in a way such
