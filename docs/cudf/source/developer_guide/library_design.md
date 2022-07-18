@@ -212,8 +212,6 @@ Conversely, when constructed from a host object,
 The data is then copied from the host object into the newly allocated device memory.
 You can read more about [device memory allocation with RMM here](https://github.com/rapidsai/rmm).
 
-(cythonlayer)=
-
 ## The Cython layer
 
 The lowest level of cuDF is its interaction with `libcudf` via Cython.

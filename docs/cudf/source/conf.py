@@ -60,6 +60,9 @@ ipython_mplbackend = "str"
 
 html_use_modindex = True
 
+# Enable automatic generation of systematic, namespaced labels for sections
+myst_heading_anchors = 2
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 

@@ -103,7 +103,7 @@ If you are developing a feature and believe that perfect pandas compatibility is
 you should consult with other members of the team to assess how to proceed.
 
 When such a deviation from pandas behavior is necessary, it should be documented.
-For more information on how to do that, see [link to documentation#Comparing to pandas].
+For more information on how to do that, see [our documentation on pandas comparison](./documentation.md#comparing-to-pandas).
 
 ## Python vs Cython
 
@@ -118,7 +118,7 @@ This Cython usage is generally composed of two parts:
 2. A `pyx` file containing Cython functions that wrap those C++ APIs so that they can be called from Python.
 
 The latter wrappers should generally be kept as thin as possible to minimize Cython usage.
-For more information see [our Cython layer design documentation](cythonlayer).
+For more information see [our Cython layer design documentation](./library_design.md#the-cython-layer).
 
 In some rare cases we may actually benefit from writing pure Cython code to speed up particular code paths.
 Given that most numerical computations in cuDF actually happen in libcudf, however,
