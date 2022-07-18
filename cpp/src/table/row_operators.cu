@@ -261,7 +261,7 @@ auto decompose_structs(table_view table,
 
 auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
 {
-  std::vector<io::parquet::gpu::dremel_data> dremel_data;
+  std::vector<detail::dremel_data> dremel_data;
   std::vector<uint8_t> max_def_levels;
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
@@ -277,8 +277,7 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
       max_def_level += (cur_col.nullable() ? 1 : 0);
       nullability.push_back(static_cast<uint8_t>(cur_col.nullable()));
       auto d_nullability = detail::make_device_uvector_async(nullability, stream);
-      dremel_data.push_back(
-        io::parquet::gpu::get_dremel_data(col, d_nullability, nullability, stream));
+      dremel_data.push_back(detail::get_dremel_data(col, d_nullability, nullability, stream));
       max_def_levels.push_back(max_def_level);
       // } else {
       //   max_def_levels.push_back(0);
@@ -288,19 +287,18 @@ auto list_lex_preprocess(table_view table, rmm::cuda_stream_view stream)
   // std::vector<device_span<size_type>> dremel_offsets;
   // std::vector<device_span<uint8_t>> rep_levels;
   // std::vector<device_span<uint8_t>> def_levels;
-  std::vector<row::lexicographic::dremel_device_view> dremel_device_views;
+  std::vector<detail::dremel_device_view> dremel_device_views;
   size_type c = 0;
   for (auto const& col : table) {
     if (col.type().id() == type_id::LIST) {
       // dremel_offsets.emplace_back(dremel_data[c].dremel_offsets);
       // rep_levels.emplace_back(dremel_data[c].rep_level);
       // def_levels.emplace_back(dremel_data[c].def_level);
-      dremel_device_views.push_back(
-        row::lexicographic::dremel_device_view{dremel_data[c].dremel_offsets.data(),
-                                               dremel_data[c].rep_level.data(),
-                                               dremel_data[c].def_level.data(),
-                                               dremel_data[c].leaf_data_size,
-                                               max_def_levels[c]});
+      dremel_device_views.push_back(detail::dremel_device_view{dremel_data[c].dremel_offsets.data(),
+                                                               dremel_data[c].rep_level.data(),
+                                                               dremel_data[c].def_level.data(),
+                                                               dremel_data[c].leaf_data_size,
+                                                               max_def_levels[c]});
       ++c;
     } else {
       // dremel_offsets.emplace_back();

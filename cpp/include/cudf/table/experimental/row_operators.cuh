@@ -16,13 +16,12 @@
 
 #pragma once
 
-#include "io/parquet/parquet_gpu.hpp"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/detail/utilities/dremel.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
@@ -206,14 +205,6 @@ struct sorting_physical_element_comparator {
   }
 };
 
-struct dremel_device_view {
-  size_type* offsets;
-  uint8_t* rep_levels;
-  uint8_t* def_levels;
-  size_type leaf_data_size;
-  uint8_t max_def_level;
-};
-
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
  *
@@ -261,12 +252,14 @@ class device_row_comparator {
     Nullate check_nulls,
     table_device_view lhs,
     table_device_view rhs,
-    std::optional<device_span<int const>> depth                                = std::nullopt,
-    std::optional<device_span<order const>> column_order                       = std::nullopt,
-    std::optional<device_span<null_order const>> null_precedence               = std::nullopt,
-    std::optional<device_span<dremel_device_view const>> l_dremel_device_views = std::nullopt,
-    std::optional<device_span<dremel_device_view const>> r_dremel_device_views = std::nullopt,
-    PhysicalElementComparator comparator                                       = {}) noexcept
+    std::optional<device_span<int const>> depth                  = std::nullopt,
+    std::optional<device_span<order const>> column_order         = std::nullopt,
+    std::optional<device_span<null_order const>> null_precedence = std::nullopt,
+    std::optional<device_span<detail::dremel_device_view const>> l_dremel_device_views =
+      std::nullopt,
+    std::optional<device_span<detail::dremel_device_view const>> r_dremel_device_views =
+      std::nullopt,
+    PhysicalElementComparator comparator = {}) noexcept
     : _lhs{lhs},
       _rhs{rhs},
       _check_nulls{check_nulls},
@@ -301,11 +294,11 @@ class device_row_comparator {
     __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
                                   column_device_view rhs,
-                                  null_order null_precedence              = null_order::BEFORE,
-                                  int depth                               = 0,
-                                  PhysicalElementComparator comparator    = {},
-                                  dremel_device_view l_dremel_device_view = {},
-                                  dremel_device_view r_dremel_device_view = {})
+                                  null_order null_precedence           = null_order::BEFORE,
+                                  int depth                            = 0,
+                                  PhysicalElementComparator comparator = {},
+                                  detail::dremel_device_view l_dremel_device_view = {},
+                                  detail::dremel_device_view r_dremel_device_view = {})
       : _lhs{lhs},
         _rhs{rhs},
         _check_nulls{check_nulls},
@@ -444,8 +437,8 @@ class device_row_comparator {
     Nullate const _check_nulls;
     null_order const _null_precedence;
     int const _depth;
-    dremel_device_view _l_dremel_device_view;
-    dremel_device_view _r_dremel_device_view;
+    detail::dremel_device_view _l_dremel_device_view;
+    detail::dremel_device_view _r_dremel_device_view;
     PhysicalElementComparator const _comparator;
   };
 
@@ -480,8 +473,8 @@ class device_row_comparator {
         null_precedence,
         depth,
         _comparator,
-        (_l_dremel_device_views ? (*_l_dremel_device_views)[i] : dremel_device_view{}),
-        (_r_dremel_device_views ? (*_r_dremel_device_views)[i] : dremel_device_view{})};
+        (_l_dremel_device_views ? (*_l_dremel_device_views)[i] : detail::dremel_device_view{}),
+        (_r_dremel_device_views ? (*_r_dremel_device_views)[i] : detail::dremel_device_view{})};
 
       weak_ordering state;
       cuda::std::tie(state, last_null_depth) =
@@ -506,8 +499,8 @@ class device_row_comparator {
   PhysicalElementComparator const _comparator;
 
   // List related members
-  std::optional<device_span<dremel_device_view const>> _l_dremel_device_views;
-  std::optional<device_span<dremel_device_view const>> _r_dremel_device_views;
+  std::optional<device_span<detail::dremel_device_view const>> _l_dremel_device_views;
+  std::optional<device_span<detail::dremel_device_view const>> _r_dremel_device_views;
 };  // class device_row_comparator
 
 /**
@@ -615,8 +608,8 @@ struct preprocessed_table {
                      rmm::device_uvector<order>&& column_order,
                      rmm::device_uvector<null_order>&& null_precedence,
                      rmm::device_uvector<size_type>&& depths,
-                     std::vector<io::parquet::gpu::dremel_data>&& dremel_data,
-                     rmm::device_uvector<dremel_device_view>&& dremel_device_views)
+                     std::vector<detail::dremel_data>&& dremel_data,
+                     rmm::device_uvector<detail::dremel_device_view>&& dremel_device_views)
     : _t(std::move(table)),
       _column_order(std::move(column_order)),
       _null_precedence(std::move(null_precedence)),
@@ -672,10 +665,11 @@ struct preprocessed_table {
   }
 
   // TODO: span of spans?
-  [[nodiscard]] std::optional<device_span<dremel_device_view const>> dremel_device_views() const
+  [[nodiscard]] std::optional<device_span<detail::dremel_device_view const>> dremel_device_views()
+    const
   {
     return _dremel_device_views.size()
-             ? std::optional<device_span<dremel_device_view const>>(_dremel_device_views)
+             ? std::optional<device_span<detail::dremel_device_view const>>(_dremel_device_views)
              : std::nullopt;
   }
 
@@ -686,8 +680,8 @@ struct preprocessed_table {
   rmm::device_uvector<size_type> const _depths;
 
   // List related pre-computation
-  std::vector<io::parquet::gpu::dremel_data> _dremel_data;
-  rmm::device_uvector<dremel_device_view> _dremel_device_views;
+  std::vector<detail::dremel_data> _dremel_data;
+  rmm::device_uvector<detail::dremel_device_view> _dremel_device_views;
 };
 
 /**
