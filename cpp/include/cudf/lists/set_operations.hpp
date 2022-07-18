@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/types.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -62,12 +63,14 @@ std::unique_ptr<column> have_overlap(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Find the intersection without duplicate between lists at each row of the given lists
- *        columns.
+ * @brief Create a column of sets containing list elements that are found on both sides of the given
+ * columns.
  *
- * Given two input lists columns, an output lists column is created in a way such that each row
- * contains the common elements (without duplicates) of the lists from the input columns at the
- * corresponding row.
+ * Given two input lists columns `lhs` and `rhs`, an output lists column is created in a way such
+ * that each of its row `i` contains a list of distinct elements that can be found in both `lhs[i]`
+ * and `rhs[i]`.
+ *
+ * The order of distinct elements in the output rows is undefined.
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
@@ -96,14 +99,14 @@ std::unique_ptr<column> intersect_distinct(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Find the union (without duplicate) between lists at each row of the given lists
- *        columns.
+ * @brief Create a column of sets containing list elements that are found on either side of the
+ * given columns.
  *
- * Given two input lists columns, an output lists column is created by concatenating each pair of
- * lists at the same row from the input columns then removing duplicates.
+ * Given two input lists columns `lhs` and `rhs`, an output lists column is created in a way such
+ * that each of its row `i` contains a list of distinct elements that can be found in either
+ * `lhs[i]` or `rhs[i]`.
  *
- * each pair of lists at the same row is concatenated then the result
- * is extracted without duplicates to the corresponding row in the output lists column.
+ * The order of distinct elements in the output rows is undefined.
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
@@ -132,13 +135,14 @@ std::unique_ptr<column> union_distinct(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Find the elements (without duplicates) from each list of the left column that do not exist
- *        in the corresponding list of the right column.
+ * @brief Create a column of sets containing list elements that are found only in the left side the
+ * given columns.
  *
- * Given two input lists columns, an output lists column is created by finding the difference of
- * lists in the left column against the corresponding lists in the right column. Specifically, find
- * the elements (without duplicates) in each list of the left column such that they do not exist in
- * the corresponding list of the right column.
+ * Given two input lists columns `lhs` and `rhs`, an output lists column is created in a way such
+ * that each of its row `i` contains a list of distinct elements that can be found in `lhs[i]` but
+ * are not found in `rhs[i]`.
+ *
+ * The order of distinct elements in the output rows is undefined.
  *
  * A null input row in any of the input lists columns will result in a null output row.
  *
