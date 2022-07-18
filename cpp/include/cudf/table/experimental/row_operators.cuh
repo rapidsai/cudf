@@ -214,9 +214,6 @@ struct dremel_device_view {
   uint8_t max_def_level;
 };
 
-// #define PRINTF(...) printf(__VA_ARGS__)
-#define PRINTF(...)
-
 /**
  * @brief Computes the lexicographic comparison between 2 rows.
  *
@@ -412,37 +409,16 @@ class device_row_comparator {
       auto const r_def_levels    = _r_dremel_device_view.def_levels;
       auto const l_rep_levels    = _l_dremel_device_view.rep_levels;
       auto const r_rep_levels    = _r_dremel_device_view.rep_levels;
-      PRINTF("max_def_level: %d\n", l_max_def_level);
-
-      PRINTF("t: %d, lhs_element_index: %d, rhs_element_index: %d\n",
-             threadIdx.x,
-             lhs_element_index,
-             rhs_element_index);
-      PRINTF("t: %d, l_start: %d, l_end: %d, r_start: %d, r_end: %d\n",
-             threadIdx.x,
-             l_start,
-             l_end,
-             r_start,
-             r_end);
       weak_ordering state{weak_ordering::EQUIVALENT};
       for (int i = l_start, j = r_start, k = 0; i < l_end and j < r_end; ++i, ++j) {
-        PRINTF("t: %d, i: %d, j: %d, k: %d\n", threadIdx.x, i, j, k);
-        PRINTF("t: %d, def_l: %d, def_r: %d, rep_l: %d, rep_r: %d\n",
-               threadIdx.x,
-               l_def_levels[i],
-               r_def_levels[j],
-               l_rep_levels[i],
-               r_rep_levels[j]);
         if (l_def_levels[i] != r_def_levels[j]) {
           state =
             (l_def_levels[i] < r_def_levels[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
-          PRINTF("t: %d, def, state: %d\n", threadIdx.x, state);
           return cuda::std::pair(state, _depth);
         }
         if (l_rep_levels[i] != r_rep_levels[j]) {
           state =
             (l_rep_levels[i] < r_rep_levels[j]) ? weak_ordering::LESS : weak_ordering::GREATER;
-          PRINTF("t: %d, rep, state: %d\n", threadIdx.x, state);
           return cuda::std::pair(state, _depth);
         }
         if (l_def_levels[i] == l_max_def_level) {
@@ -450,10 +426,7 @@ class device_row_comparator {
           int last_null_depth = _depth;
           cuda::std::tie(state, last_null_depth) =
             cudf::type_dispatcher<dispatch_void_if_nested>(lcol.type(), comparator, k, k);
-          if (state != weak_ordering::EQUIVALENT) {
-            PRINTF("t: %d, leaf, state: %d\n", threadIdx.x, state);
-            return cuda::std::pair(state, _depth);
-          }
+          if (state != weak_ordering::EQUIVALENT) { return cuda::std::pair(state, _depth); }
           ++k;
         } else if (lcol.nullable() and l_def_levels[i] == l_max_def_level - 1) {
           ++k;
