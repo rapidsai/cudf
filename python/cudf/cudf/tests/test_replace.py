@@ -798,7 +798,7 @@ def test_series_where(data_dtype, fill_value):
         assert_eq(
             expect,
             got,
-            check_dtype=False if expect.dtype.kind in ("f") else True,
+            check_dtype=expect.dtype.kind not in ("f"),
         )
 
     if sr.dtype.type(fill_value) != fill_value:
@@ -811,7 +811,7 @@ def test_series_where(data_dtype, fill_value):
         assert_eq(
             expect,
             got,
-            check_dtype=False if expect.dtype.kind in ("f") else True,
+            check_dtype=expect.dtype.kind not in ("f"),
         )
 
     if sr.dtype.type(fill_value) != fill_value:
@@ -824,7 +824,7 @@ def test_series_where(data_dtype, fill_value):
         assert_eq(
             expect,
             got,
-            check_dtype=False if expect.dtype.kind in ("f") else True,
+            check_dtype=expect.dtype.kind not in ("f"),
         )
 
 

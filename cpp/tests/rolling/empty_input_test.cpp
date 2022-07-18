@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,15 +60,21 @@ auto udf()
 }
 
 // Constants for rolling_window.
-auto const min_periods      = 1;
-auto const preceding        = 2;
-auto const following        = 2;
-auto const preceding_scalar = cudf::numeric_scalar<cudf::size_type>(preceding);
-auto const following_scalar = cudf::numeric_scalar<cudf::size_type>(following);
-auto const preceding_column = cudf::test::fixed_width_column_wrapper<cudf::size_type>{}.release();
-auto const following_column = cudf::test::fixed_width_column_wrapper<cudf::size_type>{}.release();
-auto const preceding_col    = preceding_column -> view();
-auto const following_col    = following_column -> view();
+auto constexpr min_periods = 1;
+auto constexpr preceding   = 2;
+auto constexpr following   = 2;
+
+auto preceding_scalar() { return cudf::numeric_scalar<cudf::size_type>(preceding); }
+auto following_scalar() { return cudf::numeric_scalar<cudf::size_type>(following); }
+auto preceding_column()
+{
+  return cudf::test::fixed_width_column_wrapper<cudf::size_type>{}.release();
+}
+auto following_column()
+{
+  return cudf::test::fixed_width_column_wrapper<cudf::size_type>{}.release();
+}
+
 }  // namespace
 
 struct RollingEmptyInputTest : cudf::test::BaseFixture {
@@ -109,6 +115,9 @@ void rolling_output_type_matches(cudf::column_view const& empty_input,
   using namespace cudf;
   using namespace cudf::test;
 
+  auto const preceding_col = preceding_column();
+  auto const following_col = following_column();
+
   for (auto const& agg : aggs) {
     auto rolling_output_numeric_bounds =
       rolling_window(empty_input, preceding, following, min_periods, *agg);
@@ -116,7 +125,7 @@ void rolling_output_type_matches(cudf::column_view const& empty_input,
       rolling_output_numeric_bounds->view(), expected_type, expected_child_type);
 
     auto rolling_output_columnar_bounds =
-      rolling_window(empty_input, preceding_col, following_col, min_periods, *agg);
+      rolling_window(empty_input, *preceding_col, *following_col, min_periods, *agg);
     rolling_output_type_matches(
       rolling_output_columnar_bounds->view(), expected_type, expected_child_type);
 
@@ -129,8 +138,8 @@ void rolling_output_type_matches(cudf::column_view const& empty_input,
                                    empty_input,
                                    order::ASCENDING,
                                    empty_input,
-                                   range_window_bounds::get(preceding_scalar),
-                                   range_window_bounds::get(following_scalar),
+                                   range_window_bounds::get(preceding_scalar()),
+                                   range_window_bounds::get(following_scalar()),
                                    min_periods,
                                    *agg);
     rolling_output_type_matches(

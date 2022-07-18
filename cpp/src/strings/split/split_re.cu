@@ -65,8 +65,7 @@ struct token_reader_fn {
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) { return; }
-    auto const d_str  = d_strings.element<string_view>(idx);
-    auto const nchars = d_str.length();
+    auto const d_str = d_strings.element<string_view>(idx);
 
     auto const token_offset = d_token_offsets[idx];
     auto const token_count  = d_token_offsets[idx + 1] - token_offset;
@@ -74,7 +73,7 @@ struct token_reader_fn {
 
     size_type token_idx = 0;
     size_type begin     = 0;  // characters
-    size_type end       = nchars;
+    size_type end       = -1;
     size_type last_pos  = 0;  // bytes
     while (prog.find(prog_idx, d_str, begin, end) > 0) {
       // get the token (characters just before this match)
@@ -93,7 +92,7 @@ struct token_reader_fn {
       // setup for next match
       last_pos = d_str.byte_offset(end);
       begin    = end + (begin == end);
-      end      = nchars;
+      end      = -1;
     }
 
     // set the last token to the remainder of the string

@@ -61,8 +61,9 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}"
 )
 
-# TODO: Finding NumPy requires finding Development as well. Once this is fixed in CMake (no date
-# yet) we can remove the extra component spec.
+# TODO: Finding NumPy currently requires finding Development due to a bug in CMake. This bug was
+# fixed in https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7410 and will be available in
+# CMake 3.24, so we can remove the Development component once we upgrade to CMake 3.24.
 find_package(Python REQUIRED COMPONENTS Development NumPy)
 set(targets_using_numpy gpuarrow interop avro csv orc json parquet)
 foreach(target IN LISTS targets_using_numpy)

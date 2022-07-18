@@ -406,7 +406,7 @@ std::vector<size_type> segmented_null_count(const bitmask_type* bitmask,
 
 // Inplace Bitwise AND of the masks
 cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
-                                    host_span<bitmask_type const*> masks,
+                                    host_span<bitmask_type const* const> masks,
                                     host_span<size_type const> begin_bits,
                                     size_type mask_size,
                                     rmm::cuda_stream_view stream)
@@ -421,7 +421,7 @@ cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
 }
 
 // Bitwise AND of the masks
-std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type const*> masks,
+std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type const* const> masks,
                                                      host_span<size_type const> begin_bits,
                                                      size_type mask_size,
                                                      rmm::cuda_stream_view stream,

@@ -573,6 +573,29 @@ def test_series_value_counts(dropna, normalize):
         assert_eq(expect, got, check_dtype=False, check_index_type=False)
 
 
+@pytest.mark.parametrize("bins", [1, 2, 3])
+def test_series_value_counts_bins(bins):
+    psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0])
+    gsr = cudf.from_pandas(psr)
+
+    expected = psr.value_counts(bins=bins)
+    got = gsr.value_counts(bins=bins)
+
+    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
+
+
+@pytest.mark.parametrize("bins", [1, 2, 3])
+@pytest.mark.parametrize("dropna", [True, False])
+def test_series_value_counts_bins_dropna(bins, dropna):
+    psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, np.nan])
+    gsr = cudf.from_pandas(psr)
+
+    expected = psr.value_counts(bins=bins, dropna=dropna)
+    got = gsr.value_counts(bins=bins, dropna=dropna)
+
+    assert_eq(expected.sort_index(), got.sort_index(), check_dtype=False)
+
+
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("dropna", [True, False])
 @pytest.mark.parametrize("normalize", [True, False])
@@ -1569,6 +1592,28 @@ def test_series_nunique_index(data):
     expected = pd_s.index.nunique()
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [1, 2, 3, 4],
+        ["a", "b", "c"],
+        [1.2, 2.2, 4.5],
+        [np.nan, np.nan],
+        [None, None, None],
+    ],
+)
+def test_axes(data):
+    csr = cudf.Series(data)
+    psr = csr.to_pandas()
+
+    expected = psr.axes
+    actual = csr.axes
+
+    for e, a in zip(expected, actual):
+        assert_eq(e, a)
 
 
 @pytest.mark.parametrize(
