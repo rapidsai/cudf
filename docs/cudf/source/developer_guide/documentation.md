@@ -150,7 +150,6 @@ These pages are all written using MyST, a superset of Markdown.
 MyST allows developers to write using familiar Markdown syntax,
 while also providing the full power of reST where needed.
 These pages do not conform to any specific style or set of use cases.
-**Does it make sense to request this?**: 
 However, if you develop any sufficiently complex new features,
 consider whether users would benefit from a more complete demonstration of them.
 
@@ -195,5 +194,3 @@ Documenting internals is strongly encouraged, but not enforced in any particular
 Regarding style, either full numpy-style docstrings or regular `#` comments are acceptable.
 The former can be useful for complex or widely used functionality,
 while the latter is fine for small one-off functions.
-In general, the degree of documentation required for internals is determined by PR review.
-Use your best judgment when writing such functions, then expect to iterate as needed during review.
