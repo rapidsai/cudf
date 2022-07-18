@@ -2079,10 +2079,15 @@ def as_column(
                 else:
                     # Relying on pyarrow's type inference to infer the dtype
                     # If default 32-bit is set, override as 32-bit
-                    if cudf.get_option("default_integer_bitwidth") == 32 and infer_dtype(arbitrary) == "integer":
-                        pa_type = pa.int32()
-                    if cudf.get_option("default_float_bitwidth") == 32 and infer_dtype(arbitrary) in ("floating", "mixed-integer-float"):
-                        pa_type = pa.float32()
+                    if  cudf.get_option("default_integer_bitwidth") == 32:
+                        if infer_dtype(arbitrary) == "integer":
+                            pa_type = pa.int32()
+                    if cudf.get_option("default_float_bitwidth") == 32:
+                        if infer_dtype(arbitrary) in (
+                            "floating",
+                            "mixed-integer-float",
+                        ):
+                            pa_type = pa.float32()
 
                 data = as_column(
                     pa.array(
