@@ -327,7 +327,6 @@ std::unique_ptr<cudf::table> full_join(
  * @code{.pseudo}
  * TableA: {{0, 1, 2}}
  * TableB: {{1, 2, 3}}
- * right_on: {1}
  * Result: {1, 2}
  * @endcode
  *

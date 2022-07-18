@@ -16,12 +16,11 @@
 
 #pragma once
 
-#include "lead_lag_nested_detail.cuh"
+#include "lead_lag_nested.cuh"
 #include "nth_element.cuh"
-#include "rolling/rolling_collect_list.cuh"
-#include "rolling/rolling_detail.hpp"
-#include "rolling/rolling_jit_detail.hpp"
-#include "rolling_detail.hpp"
+#include "rolling.hpp"
+#include "rolling_collect_list.cuh"
+#include "rolling_jit.hpp"
 
 #include <reductions/struct_minmax_util.cuh>
 
@@ -39,7 +38,7 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/lists/detail/drop_list_duplicates.hpp>
+#include <cudf/lists/detail/stream_compaction.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
@@ -929,8 +928,8 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                                                      stream,
                                                      rmm::mr::get_current_device_resource());
 
-    result = lists::detail::drop_list_duplicates(
-      lists_column_view(collected_list->view()), agg._nulls_equal, agg._nans_equal, stream, mr);
+    result = lists::detail::distinct(
+      lists_column_view{collected_list->view()}, agg._nulls_equal, agg._nans_equal, stream, mr);
   }
 
   // perform the element-wise square root operation on result of VARIANCE
