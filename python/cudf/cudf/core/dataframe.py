@@ -3807,6 +3807,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
+        if on is not None:
+            raise NotImplementedError("The on parameter is not yet supported")
 
         df = self.merge(
             other,
