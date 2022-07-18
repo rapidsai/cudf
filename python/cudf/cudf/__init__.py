@@ -82,7 +82,7 @@ from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
 
-from .options import (
+from cudf.options import (
     get_option,
     set_option,
     describe_option,
@@ -173,4 +173,7 @@ __all__ = [
     "to_datetime",
     "to_numeric",
     "unstack",
+    "get_option",
+    "set_option",
+    "describe_option",
 ]

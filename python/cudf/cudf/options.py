@@ -1,46 +1,46 @@
 # Copyright (c) 2022, NVIDIA CORPORATION.
 
+import textwrap
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Union
 
 
 @dataclass
-class CUDFOption:
+class Option:
+    default: Any
     value: Any
     description: str
     validator: Callable
 
 
-_CUDF_OPTIONS: Dict[str, CUDFOption] = {}
+_OPTIONS: Dict[str, Option] = {}
 
 
 def _register_option(
     name: str, default_value: Any, description: str, validator: Callable
 ):
-    """Register an entry in the option dictionary.
+    """Register an option.
 
     Parameters
     ----------
     name : str
-        The name of the option. Also used as the key in the dictionary.
-
+        The name of the option.
     default_value : Any
         The default value of the option.
-
     description : str
         A text description of the option.
-
     validator : Callable
-        A function that returns ``True`` if a given value is valid for the
-        option, ``False`` otherwise.
+        Called on the option value to check its validity. Should raise an
+        error if the value is invalid.
+
     """
-    if not validator(default_value):
-        raise ValueError(f"Invalid default value: {default_value}")
+    validator(default_value)
+    _OPTIONS[name] = Option(
+        default_value, default_value, description, validator
+    )
 
-    _CUDF_OPTIONS[name] = CUDFOption(default_value, description, validator)
 
-
-def get_option(key: str) -> Any:
+def get_option(name: str) -> Any:
     """Get the value of option.
 
     Parameters
@@ -52,44 +52,53 @@ def get_option(key: str) -> Any:
     -------
     The value of the option.
     """
-    return _CUDF_OPTIONS[key].value
+    return _OPTIONS[name].value
 
 
-def set_option(key: str, val: Any):
+def set_option(name: str, val: Any):
     """Set the value of option.
 
     Raises ``ValueError`` if the provided value is invalid.
 
     Parameters
     ----------
-    key : str
+    name : str
         The name of the option.
     val : Any
         The value to set.
     """
-    config = _CUDF_OPTIONS[key]
-    if not config.validator(val):
-        raise ValueError(f"Invalid option {val}")
-    config.value = val
+    option = _OPTIONS[name]
+    option.validator(val)
+    option.value = val
 
 
-def describe_option(key: Optional[str] = None) -> Union[str, Dict[str, str]]:
-    """Returns a specific option description or all option descriptions.
+def _build_option_description(name, opt):
+    return (
+        f"{name}:\n"
+        f"\t{opt.description}\n"
+        f"\t[Default: {opt.default}] [Current: {opt.value}]"
+    )
+
+
+def describe_option(name: Optional[str] = None):
+    """Prints a specific option description or all option descriptions.
+
+    If `name` is unspecified, prints all available option descriptions.
 
     Parameters
     ----------
-    key : str
+    name : Optional[str]
         The name of the option.
-
-    Returns
-    -------
-    A string description of the option or a dictionary of all option
-    descriptions.
     """
-    if key is None:
-        return {key: _CUDF_OPTIONS[key].description for key in _CUDF_OPTIONS}
-
-    return _CUDF_OPTIONS[key].description
+    s = ""
+    if name is None:
+        s = "\n".join(
+            _build_option_description(name, opt)
+            for name, opt in _OPTIONS.items()
+        )
+    else:
+        s = _build_option_description(name, _OPTIONS[name])
+    print(s)
 
 
 _register_option(
