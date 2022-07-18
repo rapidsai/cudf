@@ -83,24 +83,30 @@ Examples
 doc_read_avro = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
-Read a Parquet file's metadata and schema
+Read a Parquet file's metadata
 
 Parameters
 ----------
 path : string or path object
     Path of file to be read
+fs : fsspec.AbstractFileSystem, optional
+    Fsspec file-system object.
+storage_options : dict, optional
+    Extra options that make sense for a particular storage connection,
+    e.g. host, port, username, password, etc. For HTTP(S) URLs the
+    key-value pairs are forwarded to urllib as header options. For
+    other URLs (e.g. starting with “s3://”, and “gcs://”) the key-value
+    pairs are forwarded to fsspec. Please see fsspec and urllib for more details.
 
 Returns
 -------
-Total number of rows
-List of column names
-List of metadata of each row-group
+pyarrow.parquet.FileMetaData
 
 Examples
 --------
 >>> import cudf
->>> num_rows, names, row_group_metadatas = cudf.io.read_parquet_metadata(filename)
->>> df = [cudf.read_parquet(fname, row_group=i) for i in range(len(row_group_metadatas))]
+>>> parquet_metadata = cudf.io.read_parquet_metadata(filename)
+>>> df = [cudf.read_parquet(fname, row_group=i) for i in range(parquet_metadata.num_row_groups)]
 >>> df = cudf.concat(df)
 >>> df
   num1                datetime text
